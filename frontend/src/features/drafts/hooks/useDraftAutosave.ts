@@ -46,6 +46,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
   const token = useRef(etag);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const halted = useRef(false);
+  const sendRef = useRef<() => Promise<void>>(async () => undefined);
   const [state, setState] = useState<AutosaveState>({
     status: "idle",
     message: null,
@@ -139,12 +140,11 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
 
     /* Whatever arrived while that request was open goes now, against the token it just
        returned. */
-    void send();
+    void sendRef.current();
   }, [onConflict, onSaved, publish, restore, workingDraftId]);
-  const latestSend = useRef(send);
 
   useEffect(() => {
-    latestSend.current = send;
+    sendRef.current = send;
   }, [send]);
 
   const schedule = useCallback(() => {

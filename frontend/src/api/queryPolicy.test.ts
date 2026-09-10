@@ -102,7 +102,7 @@ describe("query cache policy", () => {
       .filter(({ source }) => /invalidateQueries\(\{ queryKey: applicationDetailQueryKey\(/.test(source))
       .map(({ file }) => file)
       .filter((file) => file !== "api/applications.ts")
-      .sort();
+      .toSorted();
 
     expect(detailOnly.filter((file) => !Object.hasOwn(detailOnlyByDesign, file))).toEqual([]);
     /* An exception that no longer describes anything is a rule nobody is following any

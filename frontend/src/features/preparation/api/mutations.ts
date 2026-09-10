@@ -149,7 +149,7 @@ export const useAutomaticDraft = ({
       dispatchedSourcesRef.current = dispatchKey;
       automaticDraft.mutate({ sources, triggerOperationId: operationId });
     }
-  }, [attemptedOperationId, detail, operation, operationId, settingsQuery.data]);
+  }, [attemptedOperationId, automaticDraft, detail, operation, operationId, settingsQuery.data]);
 
   /* Applying review decisions is synchronous, so there is no analyze Operation to
      trigger the continuation above. Once the refreshed projection confirms that every
@@ -182,7 +182,7 @@ export const useAutomaticDraft = ({
       },
       triggerOperationId,
     });
-  }, [applicationId, attemptedOperationId, detail, settingsQuery.data]);
+  }, [applicationId, attemptedOperationId, automaticDraft, detail, settingsQuery.data]);
 
   /* A queued response only says that generation may begin. Move to the editor after the
      durable Operation reports success, when its WorkingDraft has been activated.

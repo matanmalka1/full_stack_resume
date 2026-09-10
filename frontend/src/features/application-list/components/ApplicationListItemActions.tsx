@@ -159,6 +159,7 @@ export const ApplicationRecordActions = ({
             items[nextIndex]?.focus();
           }}
           role="menu"
+          tabIndex={-1}
         >
           <button
             className="flex min-h-9 w-full items-center gap-2 rounded-control px-3 text-start text-support font-medium text-cv-text hover:bg-cv-surface-muted"

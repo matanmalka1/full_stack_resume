@@ -65,7 +65,7 @@ export const DraftRenderPanel = ({
     if (!autoStart || automaticAttempted.current || revision === undefined || ready) return;
     automaticAttempted.current = true;
     render.mutate();
-  }, [autoStart, ready, revision]);
+  }, [autoStart, ready, render, revision]);
 
   /* While the render is under way, this panel steps aside for the one that is actually
      reporting it. `ActiveOperationPanel` shows the live status and owns cancel and retry;

@@ -74,16 +74,16 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
   const stage_counts =
     counts.stageCounts ??
     items.reduce<Record<string, number>>(
-      (totals, item) => ({
-        ...totals,
-        [item.preparation_state]: (totals[item.preparation_state] ?? 0) + 1,
-      }),
+      (totals, entry) => {
+        totals[entry.preparation_state] = (totals[entry.preparation_state] ?? 0) + 1;
+        return totals;
+      },
       {},
     );
   const recruitment_status_counts =
     counts.recruitmentStatusCounts ??
-    items.reduce<Record<string, number>>((totals, item) => {
-      totals[item.recruitment_status] = (totals[item.recruitment_status] ?? 0) + 1;
+    items.reduce<Record<string, number>>((totals, entry) => {
+      totals[entry.recruitment_status] = (totals[entry.recruitment_status] ?? 0) + 1;
       return totals;
     }, {});
   const preset_counts = counts.presetCounts ?? {
@@ -473,7 +473,7 @@ describe("ApplicationListPage", () => {
           const requestUrl = new URL(String(url), "http://localhost");
           return (
             requestUrl.searchParams.get("limit") === "25" &&
-            requestUrl.searchParams.getAll("recruitment_status").sort().join(",") === "assignment,interview"
+            requestUrl.searchParams.getAll("recruitment_status").toSorted().join(",") === "assignment,interview"
           );
         }),
       ).toBe(true),

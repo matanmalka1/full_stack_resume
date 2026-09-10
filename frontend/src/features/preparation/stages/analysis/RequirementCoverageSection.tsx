@@ -29,7 +29,7 @@ const coveragePriority: Record<RequirementCoverage, number> = {
 };
 
 const orderedRequirements = (requirements: Requirement[]): Requirement[] =>
-  [...requirements].sort(
+  requirements.toSorted(
     (left, right) =>
       Number(right.mandatory) - Number(left.mandatory) ||
       coveragePriority[left.coverage] - coveragePriority[right.coverage],
@@ -43,7 +43,10 @@ export const RequirementCoverageSummary = ({
   unreadableRequirementCount: number;
 }) => {
   const counts = requirements.reduce(
-    (result, requirement) => ({ ...result, [requirement.coverage]: result[requirement.coverage] + 1 }),
+    (result, requirement) => {
+      result[requirement.coverage] += 1;
+      return result;
+    },
     { matched: 0, partial: 0, unsupported: 0, undetermined: 0 } satisfies Record<RequirementCoverage, number>,
   );
   const uncoveredMandatory = requirements.filter(

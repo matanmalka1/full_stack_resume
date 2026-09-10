@@ -30,11 +30,17 @@ export const useServerSyncedField = ({
 
     if (!isDirty || localValue === serverValue) {
       if (isDirty || localValue !== serverValue) sync.current(serverValue);
+      // This hook intentionally reconciles local form state with a new server version.
+      // oxlint-disable-next-line react/set-state-in-effect
       setServerChangedWhileDirty(false);
       return;
     }
 
-    if (serverChanged) setServerChangedWhileDirty(true);
+    if (serverChanged) {
+      // Preserve a dirty local value while surfacing that the server changed underneath it.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setServerChangedWhileDirty(true);
+    }
   }, [isDirty, localValue, serverValue, serverVersion]);
 
   return serverChangedWhileDirty && isDirty && localValue !== serverValue;

@@ -39,13 +39,19 @@ export const useWatchedOperation = (
 
   useEffect(() => {
     if (activeOperationId !== null) {
+      // The projection is an external server snapshot; retain the operation it exposes.
+      // oxlint-disable-next-line react/set-state-in-effect
       setWatchedId(activeOperationId);
     }
   }, [activeOperationId]);
 
   /* Cleared when the user moves to another Application: the previous one's finished work
      is not this one's. */
-  useEffect(() => setWatchedId(null), [applicationId]);
+  useEffect(() => {
+    // A route change starts a new watch scope.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setWatchedId(null);
+  }, [applicationId]);
 
   const watchedQuery = useQuery({
     ...operationQueryOptions(watchedId ?? ""),
@@ -72,7 +78,7 @@ export const useWatchedOperation = (
     if (terminal) {
       void invalidateApplicationViews(queryClient, applicationId);
     }
-  }, [applicationId, queryClient, terminal, operation?.id]);
+  }, [applicationId, queryClient, terminal]);
 
   const watch = useCallback((operationId: string) => setWatchedId(operationId), []);
 

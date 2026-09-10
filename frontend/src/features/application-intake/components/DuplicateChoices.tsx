@@ -25,7 +25,7 @@ const matchReasons: Record<DuplicateMatchReason, ReasonPresentation> = {
 };
 
 const strongestReason = (match: DuplicateMatch): DuplicateMatchReason | undefined =>
-  [...match.matched_on].sort((left, right) => matchReasons[right].strength - matchReasons[left].strength)[0];
+  match.matched_on.toSorted((left, right) => matchReasons[right].strength - matchReasons[left].strength)[0];
 
 const matchStrength = (match: DuplicateMatch): number => {
   const reason = strongestReason(match);
@@ -43,7 +43,7 @@ interface DuplicateChoicesProps {
 export const DuplicateChoices = ({ matches }: DuplicateChoicesProps) => {
   /* Sorted for reading, not scored: every match the server returned is still shown, in
      the order that puts the most specific evidence first. */
-  const ranked = [...matches].sort((left, right) => matchStrength(right) - matchStrength(left));
+  const ranked = matches.toSorted((left, right) => matchStrength(right) - matchStrength(left));
 
   return (
     <Callout

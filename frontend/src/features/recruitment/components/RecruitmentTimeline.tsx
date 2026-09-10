@@ -40,7 +40,7 @@ export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[
 
   if (items.length === 0) return <p className="mt-3 text-support text-cv-text-muted">עדיין אין אירועים.</p>;
 
-  const newestFirst = [...items].reverse();
+  const newestFirst = items.toReversed();
   const visibleItems = expanded ? newestFirst : newestFirst.slice(0, initialTimelineItems);
 
   return (

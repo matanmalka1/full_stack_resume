@@ -43,7 +43,7 @@ const TechnicalProblems = ({ problems }: { problems: string[] }) =>
 
 export const ReconciliationReport = ({ report }: { report: ReconciliationReportData }) => {
   const lifecycle = report.fact_lifecycle;
-  const factCounts = Object.entries(lifecycle.fact_counts).sort(([left], [right]) => left.localeCompare(right));
+  const factCounts = Object.entries(lifecycle.fact_counts).toSorted(([left], [right]) => left.localeCompare(right));
   const factCount = factCounts.reduce((total, [, count]) => total + count, 0);
   const missingArtifacts = report.problems.filter((problem) => problem.startsWith(MISSING_ARTIFACT_PREFIX));
   const otherArtifactProblems = report.problems.length - missingArtifacts.length;

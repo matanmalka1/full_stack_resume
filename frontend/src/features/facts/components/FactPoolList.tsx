@@ -36,8 +36,7 @@ const FactPoolRow = ({ entry: { fact, outOfSync } }: { entry: FactPoolEntry }) =
 export const FactPoolList = ({ entries }: { entries: FactPoolEntry[] }) => (
   <ul
     aria-label="רשימת העובדות הקנוניות"
-    className="max-h-[32rem] divide-y divide-cv-border overflow-y-auto rounded-control border border-cv-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus"
-    tabIndex={0}
+    className="max-h-[32rem] divide-y divide-cv-border overflow-y-auto rounded-control border border-cv-border"
   >
     {entries.map((entry) => (
       <FactPoolRow entry={entry} key={entry.fact.fact_id} />

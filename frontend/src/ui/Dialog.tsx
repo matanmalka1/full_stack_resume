@@ -70,6 +70,7 @@ export const Dialog = ({
           onClose();
         }
       }}
+      onKeyDown={() => undefined}
       onClose={(event) => {
         /* A child dialog can close while this dialog remains open. React delegates the
            close event, so without stopping it here the child's event reaches an owning

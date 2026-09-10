@@ -45,10 +45,6 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
   const items = query.data?.items ?? [];
   const selected = items[selectedIndex];
 
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [search]);
-
   /* Opening is also what resets the palette: the previous search is a transient answer to
      a question already asked, and reopening on it would hide the "what needs me" list the
      empty state is for. */
@@ -58,6 +54,8 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
       return;
     }
 
+    // Opening a native dialog synchronizes this transient UI with the `open` prop.
+    // oxlint-disable-next-line react/set-state-in-effect
     setSearch("");
     setSelectedIndex(0);
     dialog.showModal();
@@ -106,6 +104,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           onClose();
         }
       }}
+      onKeyDown={() => undefined}
       onClose={onClose}
       ref={dialogRef}
     >
@@ -118,7 +117,10 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           aria-expanded="true"
           className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0"
           dir="auto"
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setSelectedIndex(0);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="חברה, תפקיד או מילת מפתח…"
           ref={inputRef}
@@ -132,6 +134,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
             className="rounded-control p-1 text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text"
             onClick={() => {
               setSearch("");
+              setSelectedIndex(0);
               inputRef.current?.focus();
             }}
             type="button"
@@ -186,11 +189,15 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
               id={optionId(item)}
               key={item.id}
               onClick={() => selectItem(item)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") selectItem(item);
+              }}
               onMouseEnter={() => setSelectedIndex(index)}
               // Same combobox pattern as the listbox above: rich item content a native
               // <option> can't render.
               // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
               role="option"
+              tabIndex={-1}
             >
               <ApplicationSummary item={item} />
             </div>

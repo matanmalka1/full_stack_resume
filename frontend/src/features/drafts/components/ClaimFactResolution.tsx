@@ -71,8 +71,8 @@ export const ClaimFactResolution = ({
      step instead of offering to capture the same claim twice. */
   const recoveredFactId = useMemo(
     () =>
-      [...(historyQuery.data?.events ?? [])]
-        .reverse()
+      (historyQuery.data?.events ?? [])
+        .toReversed()
         .find((event) => event.application_id === applicationId && event.claim_id === claim.claim_id)?.fact_id ?? null,
     [applicationId, claim.claim_id, historyQuery.data],
   );
