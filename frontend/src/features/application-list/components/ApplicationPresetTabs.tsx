@@ -18,21 +18,21 @@ interface ApplicationPresetTabsProps {
    the title, ahead of the filter bar, because it is the first cut the reader makes.
    The screen's weight belongs to the rows underneath.
 
-   `דורש טיפול` keeps a warning tint on its count while it is unselected, because that
-   slice is the only one the reader needs to notice without looking for it. */
-const presetTabs: readonly { id: PresetSelection; label: string; urgent: boolean }[] = [
-  { id: "all", label: "הכול", urgent: false },
-  { id: "active_interviews", label: "ראיונות פעילים", urgent: false },
-  { id: "ready_to_send", label: "מוכן לשליחה", urgent: false },
-  { id: "needs_attention", label: "דורש טיפול", urgent: true },
+   Each option is one compact pill. The count stays typographically distinct without
+   becoming a second badge inside the control. */
+const presetTabs: readonly { id: PresetSelection; label: string }[] = [
+  { id: "all", label: "הכל" },
+  { id: "active_interviews", label: "ראיונות פעילים" },
+  { id: "ready_to_send", label: "מוכן לשליחה" },
+  { id: "needs_attention", label: "דורש טיפול" },
 ];
 
 export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPresetTabsProps) => (
   // A non-form group of toggle buttons; role="group" is the ARIA authoring-practices
   // pattern here, and none of the suggested native tags (fieldset, etc.) fit.
   // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-  <div aria-label="סינון מהיר לפי מצב" className="flex flex-wrap items-center gap-1" role="group">
-    {presetTabs.map(({ id, label, urgent }) => {
+  <div aria-label="סינון מהיר לפי מצב" className="flex flex-wrap items-center gap-1.5" role="group">
+    {presetTabs.map(({ id, label }) => {
       const active = id === value;
       const count = counts?.[id];
 
@@ -40,8 +40,10 @@ export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPr
         <button
           aria-pressed={active}
           className={cx(
-            "inline-flex min-h-9 items-center gap-2 rounded-control px-2.5 text-support font-semibold transition-colors",
-            active ? "bg-cv-accent text-cv-on-accent" : "bg-cv-surface-muted text-cv-text-muted hover:text-cv-text",
+            "inline-flex min-h-9 items-center gap-2 rounded-pill border px-3 text-support font-medium transition-colors",
+            active
+              ? "border-cv-accent bg-cv-accent text-cv-on-accent"
+              : "border-cv-border bg-cv-surface-muted text-cv-text-muted hover:border-cv-border-strong hover:text-cv-text",
           )}
           key={id}
           onClick={() => onSelect(id)}
@@ -50,12 +52,8 @@ export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPr
           {label}
           <span
             className={cx(
-              "rounded-pill px-1.5 text-support font-bold tabular-nums",
-              active
-                ? "bg-cv-on-accent/20 text-cv-on-accent"
-                : urgent && count !== undefined && count > 0
-                  ? "bg-cv-warning-soft text-cv-warning"
-                  : "bg-cv-surface text-cv-text-muted",
+              "text-support font-semibold tabular-nums",
+              active ? "text-cv-on-accent" : "text-cv-text-muted",
             )}
           >
             {count ?? "—"}

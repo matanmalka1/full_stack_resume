@@ -56,7 +56,7 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
           className="inline-flex items-center gap-1.5 text-support font-semibold text-cv-text"
           id="fact-attachment-heading"
         >
-          <Link2 aria-hidden="true" className="size-4 text-cv-accent" />
+          <Link2 aria-hidden="true" className="size-icon-md text-cv-accent" />
           שיוך לפרופיל
         </h3>
         <p className="text-support text-cv-text-muted">בחרו היכן העובדה תוכל להשתתף בבניית קורות החיים.</p>

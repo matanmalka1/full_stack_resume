@@ -1,6 +1,8 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { cx } from "@/ui/cx";
+
 import { GlobalSearchDialog } from "./GlobalSearchDialog";
 
 /* Typing "k" while composing text - with a modifier held incidentally, as some IME and
@@ -15,7 +17,7 @@ const isTypingTarget = (target: EventTarget | null): boolean => {
 /* The palette and the two ways in: the trigger the header shows and the shortcut that
    works anywhere. Both live here so the header composes one element and holds no state
    about a dialog it does not otherwise know. */
-export const GlobalSearch = ({ showTrigger = true }: { showTrigger?: boolean }) => {
+export const GlobalSearch = ({ className, showTrigger = true }: { className?: string; showTrigger?: boolean }) => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -41,12 +43,15 @@ export const GlobalSearch = ({ showTrigger = true }: { showTrigger?: boolean }) 
       {showTrigger ? (
         <button
           aria-label="מעבר מהיר למועמדות (Cmd+K)"
-          className="inline-flex items-center gap-2 rounded-control border border-cv-border bg-cv-surface-muted px-3 py-1.5 text-support text-cv-text-muted transition-colors hover:border-cv-border-strong hover:bg-cv-surface hover:text-cv-text"
+          className={cx(
+            "inline-flex min-h-11 items-center gap-2 rounded-control border border-cv-border bg-cv-surface-muted px-3 text-support text-cv-text-muted transition-colors hover:border-cv-border-strong hover:bg-cv-surface hover:text-cv-text",
+            className,
+          )}
           onClick={() => setOpen(true)}
           type="button"
         >
-          <Search aria-hidden="true" className="size-4 shrink-0 text-cv-accent" />
-          <span className="hidden md:inline">מעבר מהיר…</span>
+          <Search aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
+          <span className="hidden truncate md:inline">מעבר מהיר…</span>
           <kbd className="hidden rounded border border-cv-border bg-cv-surface px-1.5 py-0.5 text-support font-mono text-cv-text-muted sm:inline-block">
             ⌘K
           </kbd>

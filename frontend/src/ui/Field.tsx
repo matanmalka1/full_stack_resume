@@ -41,7 +41,7 @@ export const Field = ({ children, className, error, hint, label, optional = fals
              control name a reader or a test can no longer address by the field's own
              name alone. As a sibling it stays exactly where it was drawn - same row,
              same gap - without joining the name the label puts on the control. */
-          <span className="rounded-pill bg-cv-surface-sunken px-2 py-0.5 text-[0.75rem] font-normal text-cv-text-muted">
+          <span className="rounded-pill bg-cv-surface-sunken px-2 py-0.5 text-caption font-normal text-cv-text-muted">
             אופציונלי
           </span>
         ) : null}

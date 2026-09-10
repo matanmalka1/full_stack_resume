@@ -65,7 +65,7 @@ export const RecruitmentUpdateForm = ({
       <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
         <div className="mb-4 flex items-start gap-3">
           <span className={sectionIconClasses}>
-            <Milestone aria-hidden="true" className="size-4" />
+            <Milestone aria-hidden="true" className="size-icon-md" />
           </span>
           <div>
             <h3 className="font-semibold text-cv-text">שלב בתהליך</h3>
@@ -105,7 +105,7 @@ export const RecruitmentUpdateForm = ({
       <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
         <div className="mb-4 flex items-start gap-3">
           <span className={sectionIconClasses}>
-            <ListTodo aria-hidden="true" className="size-4" />
+            <ListTodo aria-hidden="true" className="size-icon-md" />
           </span>
           <div>
             <h3 className="font-semibold text-cv-text">הפעולה הבאה</h3>
@@ -127,7 +127,7 @@ export const RecruitmentUpdateForm = ({
       <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
         <div className="mb-4 flex items-start gap-3">
           <span className={sectionIconClasses}>
-            <NotebookPen aria-hidden="true" className="size-4" />
+            <NotebookPen aria-hidden="true" className="size-icon-md" />
           </span>
           <div>
             <h3 className="font-semibold text-cv-text">הערות</h3>

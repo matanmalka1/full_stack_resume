@@ -42,19 +42,25 @@ export const AppHeader = () => {
             <AppNavigation />
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 lg:mt-auto lg:flex-wrap">
-            <ThemeToggle />
-
-            <GlobalSearch showTrigger />
+          {/* In the sidebar this wraps into exactly two rows: the palette takes the
+              column's full width - it is the one control here with a label to read - and
+              the new-job command shares the row below it with the theme toggle. Left to
+              free wrapping at a 15rem measure each control claimed a row of its own, and
+              the toggle, the only one narrower than the column, sat alone against the
+              opening edge reading as a stray control rather than as part of the group. */}
+          <div className="flex items-center gap-2 sm:gap-3 lg:mt-auto lg:flex-wrap lg:gap-2">
+            <GlobalSearch className="lg:w-full" showTrigger />
 
             <Link
               aria-label="קליטת משרה חדשה"
-              className={buttonClasses("primary", "lg:flex-1", "compact")}
+              className={buttonClasses("primary", "lg:min-h-11 lg:flex-1", "compact")}
               to={routePaths.newApplication}
             >
-              <Plus aria-hidden="true" className="size-4" />
+              <Plus aria-hidden="true" className="size-icon-md" />
               <span className="hidden sm:inline">משרה חדשה</span>
             </Link>
+
+            <ThemeToggle />
           </div>
         </div>
       </div>

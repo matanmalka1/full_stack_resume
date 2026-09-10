@@ -78,7 +78,7 @@ export const FactTagsField = ({ errors, picker, register }: FactFormControl & { 
                     type="button"
                   >
                     <span dir="auto">{tag}</span>
-                    <X aria-hidden="true" className="size-3.5" />
+                    <X aria-hidden="true" className="size-icon-sm" />
                   </button>
                 </li>
               ))}

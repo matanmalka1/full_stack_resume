@@ -81,7 +81,7 @@ export const Button = ({
         </span>
         {pending ? (
           <span className="col-start-1 row-start-1 inline-flex items-center gap-2">
-            <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin" />
+            <LoaderCircle aria-hidden="true" className="size-icon-md shrink-0 animate-spin" />
             {pendingLabel ?? children}
           </span>
         ) : null}

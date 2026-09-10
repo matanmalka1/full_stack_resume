@@ -55,7 +55,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
                       >
                         פתיחת מודעת המקור
                         <LtrText>({sourceHostname(snapshot.source_url) ?? "המקור השמור"})</LtrText>
-                        <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+                        <ExternalLink aria-hidden="true" className="size-icon-sm shrink-0" />
                       </a>
                     ),
                   },

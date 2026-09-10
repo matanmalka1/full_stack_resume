@@ -46,7 +46,7 @@ export const FactsIntegrityCheck = () => {
         <Icon
           aria-hidden="true"
           className={cx(
-            "size-4 shrink-0",
+            "size-icon-md shrink-0",
             report === undefined ? "text-cv-text-muted" : report.passed ? "text-cv-success" : "text-cv-blocker",
           )}
         />

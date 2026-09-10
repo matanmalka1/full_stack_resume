@@ -58,7 +58,7 @@ export const FactManagementDetail = ({ detail, mutationsBlocked = false, onCreat
               נוסח שגוי או לא מדויק? התיקון נוצר כעובדה ממתינה חדשה, והעובדה הקנונית הזו נשארת כפי שהיא.
             </p>
             <Button onClick={() => setCorrecting(true)} size="compact" variant="secondary">
-              <PenLine aria-hidden="true" className="size-4 shrink-0" />
+              <PenLine aria-hidden="true" className="size-icon-md shrink-0" />
               יצירת תיקון לעובדה
             </Button>
           </div>

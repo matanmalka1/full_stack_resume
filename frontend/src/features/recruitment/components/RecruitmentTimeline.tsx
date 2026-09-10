@@ -64,7 +64,7 @@ export const RecruitmentTimeline = ({ items }: { items: RecruitmentTimelineItem[
                   marker.classes,
                 )}
               >
-                <Icon className="size-4" />
+                <Icon className="size-icon-md" />
               </span>
               <div className="min-w-0 pt-0.5">
                 <p className="font-medium text-cv-text" dir="auto">

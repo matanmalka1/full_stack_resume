@@ -43,7 +43,7 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
       divided={false}
       title={
         <span className="inline-flex items-center gap-2">
-          <FileText aria-hidden="true" className="size-4 text-cv-accent" />
+          <FileText aria-hidden="true" className="size-icon-md text-cv-accent" />
           תיאור המשרה
         </span>
       }

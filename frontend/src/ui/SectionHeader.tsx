@@ -88,13 +88,13 @@ export const SectionHeader = ({
       ) : iconPresentation === "badge" ? (
         <div className="flex min-w-0 items-start gap-2.5">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-            <Icon aria-hidden="true" className="size-4" />
+            <Icon aria-hidden="true" className="size-icon-md" />
           </span>
           {text}
         </div>
       ) : (
         <div className="flex min-w-0 items-center gap-2">
-          <Icon aria-hidden="true" className="size-4 shrink-0 text-cv-accent" />
+          <Icon aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
           {text}
         </div>
       )}

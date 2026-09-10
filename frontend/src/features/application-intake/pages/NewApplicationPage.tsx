@@ -72,7 +72,7 @@ export const NewApplicationPage = () => {
       <CommitBar
         back={
           <Link className={buttonClasses("ghost")} to={boardPath()}>
-            <ArrowRight aria-hidden="true" className="size-4" />
+            <ArrowRight aria-hidden="true" className="size-icon-md" />
             חזרה ללוח המועמדויות
           </Link>
         }
@@ -93,7 +93,7 @@ export const NewApplicationPage = () => {
               pendingLabel="בודק כפילויות…"
               type="submit"
             >
-              <Sparkles aria-hidden="true" className="size-4" />
+              <Sparkles aria-hidden="true" className="size-icon-md" />
               יצירת מועמדות
             </Button>
           ) : (

@@ -80,7 +80,7 @@ export const ApplicationListToolbar = ({
   onSortChange,
   onViewModeChange,
 }: ApplicationListToolbarProps) => (
-  <div className="flex flex-col gap-2">
+  <div className="flex flex-col gap-3">
     <search
       aria-label="סינון וחיפוש מועמדויות"
       className={flatSurfaceClasses("flex flex-wrap items-center gap-2 bg-cv-surface px-3 py-2.5")}
@@ -88,10 +88,13 @@ export const ApplicationListToolbar = ({
       <label className="sr-only" htmlFor="list-search">
         חיפוש במועמדויות
       </label>
-      <div className="relative w-full sm:w-72">
+      {/* The question grows into whatever the filters leave: the four controls are sized
+          by their own labels, so on a wide board they used to sit against the reading
+          edge with the rest of the surface empty beside them. */}
+      <div className="relative w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1">
         <Search
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 start-3 my-auto size-4 text-cv-text-muted"
+          className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
         />
         <Input
           className="ps-9"
@@ -164,7 +167,26 @@ export const ApplicationListToolbar = ({
         ))}
       </Select>
 
-      <div className="flex items-center gap-2 sm:ms-auto">
+    </search>
+
+    {/* What matched, and how it is drawn, on one line under the bar. The presentation
+        controls used to sit inside the filter surface behind `ms-auto`, which held on a
+        very wide window and broke everywhere else: below about 1500px the group wrapped
+        to a second line of its own and left most of that line empty, so the bar drew a
+        blank band across the page. Reading the count and choosing the view are also two
+        different questions from narrowing the board, and the row they now share has no
+        width at which it goes ragged. */}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
+        {resultSummary}
+      </p>
+      {filtered ? (
+        <Button onClick={onClearFilters} size="compact" variant="ghost">
+          ניקוי סינון
+        </Button>
+      ) : null}
+
+      <div className="flex items-center gap-2 ms-auto">
         <label className="sr-only" htmlFor="list-sort">
           סדר
         </label>
@@ -187,17 +209,6 @@ export const ApplicationListToolbar = ({
           value={viewMode}
         />
       </div>
-    </search>
-
-    <div className="flex items-center justify-end gap-2">
-      <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
-        {resultSummary}
-      </p>
-      {filtered ? (
-        <Button onClick={onClearFilters} size="compact" variant="ghost">
-          ניקוי סינון
-        </Button>
-      ) : null}
     </div>
   </div>
 );

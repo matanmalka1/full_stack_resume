@@ -27,7 +27,7 @@ export const IntakeFeedback = ({ error, isStale }: IntakeFeedbackProps) => (
       />
     )}
     <div className="flex items-start gap-2 rounded-control border border-cv-success/25 bg-cv-success-soft p-3 text-support text-cv-text">
-      <FileCheck2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-cv-success" />
+      <FileCheck2 aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-cv-success" />
       <p>יצירת המועמדות שומרת את הטקסט בדיוק כפי שהוזן בתצלום משרה קבוע, ואז מתחילה את ניתוח ההתאמה.</p>
     </div>
   </>

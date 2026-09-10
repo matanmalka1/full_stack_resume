@@ -63,7 +63,7 @@ const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarP
           children
         ) : (
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-[0.75rem] font-bold text-cv-text-muted">{label}</span>
+            <span className="text-caption font-bold text-cv-text-muted">{label}</span>
             {children}
           </div>
         )}
@@ -103,9 +103,9 @@ export const CommitChecklist = ({ entries, label }: { entries: readonly Checklis
     {entries.map((entry) => (
       <li className="flex items-center gap-2 text-support font-medium" key={entry.label}>
         {entry.done ? (
-          <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-cv-success" />
+          <CircleCheck aria-hidden="true" className="size-icon-md shrink-0 text-cv-success" />
         ) : (
-          <Circle aria-hidden="true" className="size-4 shrink-0 text-cv-text-muted" />
+          <Circle aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
         )}
         <span className={cx(entry.done ? "text-cv-text" : "text-cv-text-muted")}>{entry.label}</span>
         <span className="sr-only">{entry.done ? "הושלם" : "טרם הושלם"}</span>

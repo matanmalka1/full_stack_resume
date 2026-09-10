@@ -42,7 +42,7 @@ export const CopyableTextDisclosure = ({
           {copyState === "copied" ? `${label} הועתק` : copyState === "failed" ? "לא ניתן להעתיק" : null}
         </span>
         <IconButton aria-label={`העתקת ${label}`} onClick={() => void copySourceText()} title={`העתקת ${label}`}>
-          <Copy aria-hidden="true" className="size-5 shrink-0" />
+          <Copy aria-hidden="true" className="size-icon-lg shrink-0" />
         </IconButton>
       </div>
       {/* Preserve the supplied direction and line breaks. Cap long content so opening the

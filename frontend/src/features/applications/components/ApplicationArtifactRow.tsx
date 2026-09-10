@@ -33,7 +33,7 @@ export const ApplicationArtifactRow = ({ artifact }: { artifact: ArtifactVersion
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-surface-muted text-cv-text-muted">
-            <Icon aria-hidden="true" className="size-4" />
+            <Icon aria-hidden="true" className="size-icon-md" />
           </span>
           <div className="min-w-0">
             <p className="font-medium text-cv-text" dir="auto">

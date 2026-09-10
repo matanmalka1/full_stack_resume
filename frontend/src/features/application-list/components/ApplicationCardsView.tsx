@@ -61,7 +61,7 @@ const ApplicationCard = ({
             )}
             to={preparationResumeDestination(item)}
           >
-            <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <AlertTriangle aria-hidden="true" className="mt-0.5 size-icon-md shrink-0" />
             <span className="line-clamp-2">{attention.label}</span>
           </Link>
         )}
@@ -77,7 +77,7 @@ const ApplicationCard = ({
         <div className="flex items-center gap-1">
           <ApplicationRecordActions item={item} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
           <span className="ms-1 inline-flex items-center gap-1 text-support text-cv-text-muted">
-            <Clock aria-hidden="true" className="size-3.5" />
+            <Clock aria-hidden="true" className="size-icon-sm" />
             {formatApplicationDate(item.updated_at)}
           </span>
         </div>

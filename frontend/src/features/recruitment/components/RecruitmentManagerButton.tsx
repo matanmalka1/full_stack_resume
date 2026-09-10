@@ -11,7 +11,7 @@ export const RecruitmentManagerButton = ({ application }: { application: Recruit
   return (
     <>
       <Button onClick={() => setOpen(true)} variant="secondary">
-        <SlidersHorizontal aria-hidden="true" className="size-4" />
+        <SlidersHorizontal aria-hidden="true" className="size-icon-md" />
         עדכון סטטוס ומשימות
       </Button>
       <RecruitmentUpdateDialog application={open ? application : null} onClose={() => setOpen(false)} />

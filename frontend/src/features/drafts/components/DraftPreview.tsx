@@ -34,11 +34,11 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-preview-heading">
-            <FileText aria-hidden="true" className="size-4 text-cv-accent" />
+            <FileText aria-hidden="true" className="size-icon-md text-cv-accent" />
             תצוגה מקדימה
           </h2>
           <span className="mt-2 flex items-center gap-2 text-support text-cv-text-muted">
-            {loading ? <RefreshCw aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+            {loading ? <RefreshCw aria-hidden="true" className="size-icon-sm animate-spin" /> : null}
             {loading ? "מרענן את התצוגה…" : "מעודכן לגרסה השמורה"}
           </span>
           <LiveRegion>{loading ? null : "התצוגה המקדימה עודכנה"}</LiveRegion>

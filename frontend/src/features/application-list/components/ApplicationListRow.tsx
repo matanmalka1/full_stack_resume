@@ -71,7 +71,7 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
         title={attention.items.map((entry) => entry.title).join(" · ")}
         to={href}
       >
-        <TriangleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        <TriangleAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0" />
         <span className="min-w-0 line-clamp-2 lg:line-clamp-1">{attention.label}</span>
       </Link>
     );
@@ -107,7 +107,7 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
       </td>
       <td className="col-start-2 row-start-5 whitespace-nowrap px-0 pt-3 align-bottom text-support text-cv-text-muted lg:px-3 lg:py-3 lg:align-top">
         <span className="inline-flex items-center gap-1.5" title={`נפתחה ב־${formatApplicationDate(item.created_at)}`}>
-          <Clock aria-hidden="true" className="size-3.5 shrink-0" />
+          <Clock aria-hidden="true" className="size-icon-sm shrink-0" />
           {formatApplicationDate(item.updated_at)}
         </span>
       </td>

@@ -56,7 +56,7 @@ const ArtifactGroupCard = ({ group, latest }: { group: ArtifactGroup; latest: bo
       <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-surface-muted text-cv-text-muted">
-            <Layers3 aria-hidden="true" className="size-4" />
+            <Layers3 aria-hidden="true" className="size-icon-md" />
           </span>
           <div className="min-w-0">
             <p className="text-support font-semibold text-cv-text">{title}</p>

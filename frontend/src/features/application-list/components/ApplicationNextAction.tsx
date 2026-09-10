@@ -46,7 +46,7 @@ export const ApplicationNextAction = ({
               </StatusBadge>
             ) : null}
             <span className="inline-flex items-center gap-1.5">
-              <Clock aria-hidden="true" className="size-3.5 shrink-0" />
+              <Clock aria-hidden="true" className="size-icon-sm shrink-0" />
               {formatApplicationDate(item.next_action_date)}
             </span>
           </span>
@@ -66,7 +66,7 @@ export const ApplicationNextAction = ({
     >
       <div className="mb-1 flex items-center justify-between gap-2 font-semibold">
         <span className="inline-flex items-center gap-1.5 text-cv-text-muted">
-          <Clock aria-hidden="true" className="size-3.5 text-cv-accent" />
+          <Clock aria-hidden="true" className="size-icon-sm text-cv-accent" />
           הצעד הבא
         </span>
         {item.next_action_date == null ? null : (

@@ -60,7 +60,7 @@ export const DraftSectionCard = ({
     >
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border pb-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Layers3 aria-hidden="true" className="size-4 shrink-0 text-cv-accent" />
+          <Layers3 aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
           <h3 className="truncate text-heading-sm font-bold text-cv-text" dir="auto" id={headingId}>
             {section.name}
           </h3>
@@ -69,7 +69,7 @@ export const DraftSectionCard = ({
           </span>
         </div>
         <Button disabled={actions.regenerationDisabled} onClick={onRegenerate} variant="secondary">
-          <RefreshCw aria-hidden="true" className="size-4" />
+          <RefreshCw aria-hidden="true" className="size-icon-md" />
           יצירה מחדש של הפרק
         </Button>
       </div>
@@ -123,7 +123,7 @@ export const DraftSectionCard = ({
       ) : (
         <div className="border-t border-cv-border pt-3">
           <Button onClick={() => setAdding(true)} variant="secondary">
-            <Plus aria-hidden="true" className="size-4" />
+            <Plus aria-hidden="true" className="size-icon-md" />
             הוספת שורה לפרק
           </Button>
         </div>

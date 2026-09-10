@@ -86,13 +86,13 @@ export const DuplicateChoices = ({ matches }: DuplicateChoicesProps) => {
                       {match.target_role}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-cv-warning">
-                      {ReasonIcon === undefined ? null : <ReasonIcon aria-hidden="true" className="size-4 shrink-0" />}
+                      {ReasonIcon === undefined ? null : <ReasonIcon aria-hidden="true" className="size-icon-md shrink-0" />}
                       {match.matched_on.map((matchedReason) => matchReasons[matchedReason].label).join(" · ")}
                     </span>
                   </span>
                   <ChevronLeft
                     aria-hidden="true"
-                    className="size-5 shrink-0 text-cv-text-muted transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:text-cv-accent"
+                    className="size-icon-lg shrink-0 text-cv-text-muted transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:text-cv-accent"
                   />
                 </Link>
               </li>

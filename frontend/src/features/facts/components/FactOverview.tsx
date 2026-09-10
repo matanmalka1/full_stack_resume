@@ -48,7 +48,7 @@ export const FactOverview = ({ fact }: { fact: Fact }) => {
           how the fact got its status. Neither value changed - they are simply not what
           this panel is for. */}
       <dl className="mt-4 flex flex-wrap items-start gap-x-2.5 gap-y-1 border-y border-cv-border py-3">
-        <FileText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-cv-text-muted" />
+        <FileText aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-cv-text-muted" />
         <dt className="text-support font-medium text-cv-text-muted">מקור וסוג</dt>
         <dd className="min-w-0 text-support text-cv-text">
           {factSourceLabel(fact.source)} · {factStyleLabel(fact.resume_style)}
@@ -57,7 +57,7 @@ export const FactOverview = ({ fact }: { fact: Fact }) => {
 
       {fact.tags.length === 0 ? null : (
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
-          <Tags aria-hidden="true" className="me-0.5 size-4 text-cv-text-muted" />
+          <Tags aria-hidden="true" className="me-0.5 size-icon-md text-cv-text-muted" />
           <span className="me-1 text-support font-medium text-cv-text-muted">תגיות</span>
           {fact.tags.map((tag) => (
             <span

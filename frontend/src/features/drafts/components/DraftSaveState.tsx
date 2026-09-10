@@ -44,7 +44,7 @@ export const DraftSaveState = ({ dirty, state }: DraftSaveStateProps) => {
                   : "bg-cv-accent-soft text-cv-accent",
           )}
         >
-          <Icon aria-hidden="true" className="size-3.5" />
+          <Icon aria-hidden="true" className="size-icon-sm" />
           {label}
         </span>
       )}

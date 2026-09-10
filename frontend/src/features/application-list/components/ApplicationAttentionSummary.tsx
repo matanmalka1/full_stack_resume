@@ -37,7 +37,7 @@ export const ApplicationAttentionSummary = ({
       <details className="group/attention" open>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 hover:bg-cv-surface-muted">
           <span className="flex min-w-0 items-baseline gap-2">
-            <Sparkles aria-hidden="true" className="size-4 shrink-0 self-center text-cv-warning" />
+            <Sparkles aria-hidden="true" className="size-icon-md shrink-0 self-center text-cv-warning" />
             <h2 className="text-support font-bold text-cv-text" id="urgent-action-heading">
               מוקד פעולות
             </h2>
@@ -47,7 +47,7 @@ export const ApplicationAttentionSummary = ({
           </span>
           <ChevronDown
             aria-hidden="true"
-            className="size-4 shrink-0 text-cv-text-muted transition-transform group-open/attention:rotate-180"
+            className="size-icon-md shrink-0 text-cv-text-muted transition-transform group-open/attention:rotate-180"
           />
         </summary>
 
@@ -95,7 +95,7 @@ export const ApplicationAttentionSummary = ({
                     title="הסרת התזכורת, ללא רישום השלמה"
                     variant="ghost"
                   >
-                    <BellOff aria-hidden="true" className="size-3.5" />
+                    <BellOff aria-hidden="true" className="size-icon-sm" />
                     הסרת תזכורת
                   </Button>
                 ) : null}
@@ -108,7 +108,7 @@ export const ApplicationAttentionSummary = ({
                     variant="secondary"
                   >
                     {item.actionLabel}
-                    <ChevronLeft aria-hidden="true" className="size-3.5" />
+                    <ChevronLeft aria-hidden="true" className="size-icon-sm" />
                   </Button>
                 ) : (
                   <Link
@@ -116,7 +116,7 @@ export const ApplicationAttentionSummary = ({
                     to={item.actionTo}
                   >
                     {item.actionLabel}
-                    <ChevronLeft aria-hidden="true" className="size-3.5" />
+                    <ChevronLeft aria-hidden="true" className="size-icon-sm" />
                   </Link>
                 )}
               </div>

@@ -37,7 +37,7 @@ export const Disclosure = ({ children, className, summary }: DisclosureProps) =>
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-control font-medium text-cv-text-muted transition-colors hover:text-cv-text [&::-webkit-details-marker]:hidden">
         <ChevronDown
           aria-hidden="true"
-          className={cx("size-4 shrink-0 transition-transform duration-200", open ? "rotate-0" : "rotate-90")}
+          className={cx("size-icon-md shrink-0 transition-transform duration-200", open ? "rotate-0" : "rotate-90")}
         />
         <span>{summary}</span>
       </summary>

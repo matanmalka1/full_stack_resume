@@ -28,7 +28,7 @@ export const RevisionSummary = ({ detail, revision, submittedAt }: RevisionSumma
     <Card aria-labelledby="revision-summary-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
       <div className="flex min-w-0 items-start gap-3">
         <span className="grid size-11 shrink-0 place-items-center rounded-pill bg-cv-success-soft text-cv-success">
-          <FileCheck2 aria-hidden="true" className="size-5" />
+          <FileCheck2 aria-hidden="true" className="size-icon-lg" />
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

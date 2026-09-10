@@ -24,7 +24,7 @@ const QuietStatus = ({ children, icon, tone }: { children: ReactNode; icon?: Luc
 
   return (
     <span className={cx("inline-flex items-start gap-1.5 text-support font-medium", quietToneClasses[tone])}>
-      <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <Icon aria-hidden="true" className="mt-0.5 size-icon-md shrink-0" />
       <span className="min-w-0">{children}</span>
     </span>
   );

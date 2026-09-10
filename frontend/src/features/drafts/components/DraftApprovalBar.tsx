@@ -53,7 +53,7 @@ export const DraftApprovalBar = ({
     <CommitBar
       back={
         <Link className={buttonClasses("ghost")} to={applicationHref}>
-          <ArrowRight aria-hidden="true" className="size-4" />
+          <ArrowRight aria-hidden="true" className="size-icon-md" />
           חזרה להכנת קורות החיים
         </Link>
       }
@@ -61,7 +61,7 @@ export const DraftApprovalBar = ({
       result={validationResult}
       primary={
         <Button disabled={exactPassingRunId === null} onClick={onApprove}>
-          <ShieldCheck aria-hidden="true" className="size-4" />
+          <ShieldCheck aria-hidden="true" className="size-icon-md" />
           אישור הגרסה
         </Button>
       }

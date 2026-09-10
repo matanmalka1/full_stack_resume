@@ -40,7 +40,7 @@ export const RecruitmentSummary = ({ detail }: { detail: ApplicationDetail }) =>
         </p>
         {detail.application.next_action_date == null ? null : (
           <p className="mt-1 inline-flex items-center gap-1.5 text-support text-cv-text-muted">
-            <CalendarClock aria-hidden="true" className="size-4" />
+            <CalendarClock aria-hidden="true" className="size-icon-md" />
             יעד: {formatDate(detail.application.next_action_date)}
           </p>
         )}

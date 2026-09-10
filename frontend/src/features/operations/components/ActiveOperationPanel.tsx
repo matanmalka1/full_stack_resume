@@ -127,7 +127,7 @@ export const ActiveOperationPanel = ({
         aria-labelledby={settledHeadingId}
         className="cv-settle-in flex flex-wrap items-center gap-x-3 gap-y-2 bg-cv-surface-muted px-4 py-2.5 text-support text-cv-text-muted"
       >
-        <Check aria-hidden="true" className="size-4 shrink-0 text-cv-success" />
+        <Check aria-hidden="true" className="size-icon-md shrink-0 text-cv-success" />
         <h2 className="font-medium text-cv-text" id={settledHeadingId}>
           הרצת {operationTypeLabels[operation.operation_type]}
         </h2>

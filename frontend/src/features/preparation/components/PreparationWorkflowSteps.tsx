@@ -97,7 +97,7 @@ export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: Prepa
         className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text"
         to={boardPath()}
       >
-        <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
+        <ArrowRight aria-hidden="true" className="size-icon-md shrink-0" />
         חזרה ללוח המועמדויות
       </Link>
 

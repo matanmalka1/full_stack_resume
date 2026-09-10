@@ -40,7 +40,7 @@ const FactRowStatus = ({ status }: { status: FactStatus }) => {
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="img"
     >
-      <Icon aria-hidden="true" className="size-4" />
+      <Icon aria-hidden="true" className="size-icon-md" />
     </span>
   );
 };
@@ -97,7 +97,7 @@ const FactPoolRow = ({
             // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
             role="img"
           >
-            <AlertTriangle aria-hidden="true" className="size-4" />
+            <AlertTriangle aria-hidden="true" className="size-icon-md" />
           </span>
         ) : null}
       </Link>

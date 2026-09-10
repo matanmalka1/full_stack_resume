@@ -128,7 +128,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
           position in words, so this repeats it for sighted readers only. */}
       <div aria-hidden="true" className="flex shrink-0 items-baseline gap-x-2">
         <span className="text-heading-sm font-bold text-cv-text">{label}</span>
-        {progressText === null ? null : <span className="text-[0.75rem] text-cv-text-muted">{progressText}</span>}
+        {progressText === null ? null : <span className="text-caption text-cv-text-muted">{progressText}</span>}
       </div>
 
       {/* Every step, always drawn. This used to be a bar-less horizontal scroller, on the

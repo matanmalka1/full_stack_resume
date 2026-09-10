@@ -97,7 +97,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
           title="עדכון נוסח המשרה"
           variant="ghost"
         >
-          <Pencil aria-hidden="true" className="size-5 shrink-0" />
+          <Pencil aria-hidden="true" className="size-icon-lg shrink-0" />
         </Button>
       </div>
 

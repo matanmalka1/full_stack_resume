@@ -114,7 +114,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
       ref={dialogRef}
     >
       <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3">
-        <Search aria-hidden="true" className="size-5 shrink-0 text-cv-accent" />
+        <Search aria-hidden="true" className="size-icon-lg shrink-0 text-cv-accent" />
         <input
           aria-activedescendant={selected === undefined ? undefined : optionId(selected)}
           aria-autocomplete="list"
@@ -144,7 +144,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
             }}
             type="button"
           >
-            <X aria-hidden="true" className="size-4" />
+            <X aria-hidden="true" className="size-icon-md" />
           </button>
         )}
         <kbd className="hidden rounded border border-cv-border bg-cv-surface-muted px-1.5 py-0.5 text-support font-mono text-cv-text-muted sm:inline-block">
@@ -219,7 +219,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           }}
           type="button"
         >
-          <Plus aria-hidden="true" className="size-3.5" />
+          <Plus aria-hidden="true" className="size-icon-sm" />
           משרה חדשה
         </button>
 

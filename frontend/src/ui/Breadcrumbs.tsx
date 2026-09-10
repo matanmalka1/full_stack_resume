@@ -30,7 +30,7 @@ export const Breadcrumbs = ({ items }: BreadcrumbsProps) => (
         return (
           <li className="flex max-w-full shrink-0 items-center" key={`${index}:${item.to ?? "current"}`}>
             {index === 0 ? null : (
-              <ChevronLeft aria-hidden="true" className="mx-1 size-4 shrink-0 text-cv-text-muted" />
+              <ChevronLeft aria-hidden="true" className="mx-1 size-icon-md shrink-0 text-cv-text-muted" />
             )}
             {current ? (
               <span aria-current="page" className="px-1 font-semibold text-cv-text" dir={item.dir}>

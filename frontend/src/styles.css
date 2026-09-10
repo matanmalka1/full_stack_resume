@@ -100,6 +100,13 @@
      Line heights run slightly taller than the Latin defaults: Hebrew has no
      ascender/descender rhythm to lean on, so the extra leading is what keeps a
      paragraph legible rather than dense. */
+  /* One step below supporting text, for a label that names the control beside it
+     rather than being read as prose - a field's optional marker, the wizard's step
+     count, the commit bar's own name. It was three separate `text-[0.75rem]`
+     literals, which held their 12px while `[data-text-size="large"]` grew every
+     labelled thing around them. */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
   --text-support: 0.8125rem;
   --text-support--line-height: 1.6;
   --text-body: 0.9375rem;
@@ -242,6 +249,7 @@ select {
 
 [data-text-size="large"] {
   --text-field: 1.125rem;
+  --text-caption: 0.9375rem;
   --text-support: 1rem;
   --text-body: 1.125rem;
   --text-heading-sm: 1.375rem;

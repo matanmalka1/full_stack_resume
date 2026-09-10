@@ -32,12 +32,12 @@ export const ApplicationListPagination = ({
           onClick={() => onOffsetChange(Math.max(0, offset - pageSize))}
           variant="secondary"
         >
-          <ChevronRight aria-hidden="true" className="size-4" />
+          <ChevronRight aria-hidden="true" className="size-icon-md" />
           הקודם
         </Button>
         <Button disabled={!hasMore} onClick={() => onOffsetChange(offset + pageSize)} variant="secondary">
           הבא
-          <ChevronLeft aria-hidden="true" className="size-4" />
+          <ChevronLeft aria-hidden="true" className="size-icon-md" />
         </Button>
       </div>
     </nav>

@@ -125,7 +125,7 @@ export const DraftRenderPanel = ({
         back={
           revision === undefined ? undefined : (
             <Link className={buttonClasses("ghost")} to={routePaths.application(revision.application_id)}>
-              <ArrowRight aria-hidden="true" className="size-4" />
+              <ArrowRight aria-hidden="true" className="size-icon-md" />
               חזרה לניתוח ולהתאמה
             </Link>
           )

@@ -162,9 +162,9 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           variant="ghost"
         >
           {editing ? (
-            <Check aria-hidden="true" className="size-4 text-cv-accent" />
+            <Check aria-hidden="true" className="size-icon-md text-cv-accent" />
           ) : (
-            <Pencil aria-hidden="true" className="size-4 text-cv-text-muted" />
+            <Pencil aria-hidden="true" className="size-icon-md text-cv-text-muted" />
           )}
         </Button>
         <Button
@@ -175,7 +175,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           title="יצירה מחדש של השורה"
           variant="ghost"
         >
-          <RefreshCw aria-hidden="true" className="size-4 text-cv-text-muted" />
+          <RefreshCw aria-hidden="true" className="size-icon-md text-cv-text-muted" />
         </Button>
         {removal.route === "none" ? null : (
           <Button
@@ -189,7 +189,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
             }
             variant="ghost"
           >
-            <Trash2 aria-hidden="true" className="size-4 text-cv-text-muted" />
+            <Trash2 aria-hidden="true" className="size-icon-md text-cv-text-muted" />
           </Button>
         )}
       </div>

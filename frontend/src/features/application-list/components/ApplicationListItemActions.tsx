@@ -51,7 +51,7 @@ export const ApplicationRecommendedAction = ({
   const readyRevisionLink =
     item.latest_ready_revision_id == null ? null : (
       <Link className={revisionLinkClasses[variant]} to={routePaths.revision(item.latest_ready_revision_id)}>
-        <FileCheck2 aria-hidden="true" className={variant === "row" ? "size-3.5 shrink-0" : "size-4 shrink-0"} />
+        <FileCheck2 aria-hidden="true" className={variant === "row" ? "size-icon-sm shrink-0" : "size-icon-md shrink-0"} />
         הגרסה המוכנה
       </Link>
     );
@@ -63,7 +63,7 @@ export const ApplicationRecommendedAction = ({
           className="inline-flex max-w-full items-start gap-1.5 text-start text-support font-medium text-cv-blocker"
           title={`${operationTypeLabels[operation.operation_type]} · ${statusLabels[operation.status]}`}
         >
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <CircleAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0" />
           <span className="line-clamp-2">
             {operationTypeLabels[operation.operation_type]} · {statusLabels[operation.status]}
           </span>
@@ -80,7 +80,7 @@ export const ApplicationRecommendedAction = ({
           className={actionClasses[variant]}
           to={actionDestination(item.recommended_action, item.id) ?? routePaths.application(item.id)}
         >
-          <ArrowLeft aria-hidden="true" className="size-4" />
+          <ArrowLeft aria-hidden="true" className="size-icon-md" />
           {actionLabel(item.recommended_action)}
         </Link>
       ) : readyRevisionLink === null && variant === "row" ? (
@@ -138,7 +138,7 @@ export const ApplicationRecordActions = ({
           ref={triggerRef}
           type="button"
         >
-          <Ellipsis aria-hidden="true" className="size-4" />
+          <Ellipsis aria-hidden="true" className="size-icon-md" />
         </button>
       </Tooltip>
       {open ? (
@@ -170,7 +170,7 @@ export const ApplicationRecordActions = ({
             role="menuitem"
             type="button"
           >
-            <SlidersHorizontal aria-hidden="true" className="size-4 text-cv-text-muted" />
+            <SlidersHorizontal aria-hidden="true" className="size-icon-md text-cv-text-muted" />
             עדכון סטטוס ומשימות
           </button>
           {item.is_closed ? null : (
@@ -184,7 +184,7 @@ export const ApplicationRecordActions = ({
               role="menuitem"
               variant="ghost"
             >
-              <Archive aria-hidden="true" className="size-4" />
+              <Archive aria-hidden="true" className="size-icon-md" />
               סגירת מועמדות
             </Button>
           )}

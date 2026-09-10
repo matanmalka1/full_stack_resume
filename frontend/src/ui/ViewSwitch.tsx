@@ -58,7 +58,7 @@ export const ViewSwitch = <TValue extends string>({
             title={Icon === undefined || showLabels ? undefined : option.label}
             type="button"
           >
-            {Icon === undefined ? null : <Icon aria-hidden="true" className="size-4" />}
+            {Icon === undefined ? null : <Icon aria-hidden="true" className="size-icon-md" />}
             {Icon === undefined ? (
               option.label
             ) : showLabels ? (

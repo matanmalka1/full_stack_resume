@@ -46,7 +46,7 @@ export const FactsPage = () => {
       actions={
         mutationsBlocked ? undefined : (
           <Button onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" className="size-4 shrink-0" />
+            <Plus aria-hidden="true" className="size-icon-md shrink-0" />
             הוספת עובדה חדשה
           </Button>
         )

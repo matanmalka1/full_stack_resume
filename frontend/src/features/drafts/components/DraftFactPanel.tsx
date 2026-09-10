@@ -39,7 +39,7 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
     <section aria-labelledby="draft-facts-heading" className="flex flex-col gap-3 border-t border-cv-border pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-facts-heading">
-          <Database aria-hidden="true" className="size-4 text-cv-accent" />
+          <Database aria-hidden="true" className="size-icon-md text-cv-accent" />
           ביסוס עובדתי
         </h2>
         <p className="text-support text-cv-text-muted">
@@ -94,7 +94,7 @@ export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) 
                   onClick={() => onInclude(fact)}
                   variant="secondary"
                 >
-                  <Plus aria-hidden="true" className="size-4" />
+                  <Plus aria-hidden="true" className="size-icon-md" />
                   הכללה
                 </Button>
               </li>

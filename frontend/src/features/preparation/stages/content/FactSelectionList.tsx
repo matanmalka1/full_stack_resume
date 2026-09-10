@@ -131,7 +131,7 @@ export const FactSelectionList = ({
           </label>
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-cv-text-muted"
+            className="pointer-events-none absolute start-3.5 top-1/2 size-icon-md -translate-y-1/2 text-cv-text-muted"
           />
           <Input
             className="rtl-placeholder w-64 max-w-full ps-10"
@@ -173,7 +173,7 @@ export const FactSelectionList = ({
                     <ChevronDown
                       aria-hidden="true"
                       className={cx(
-                        "size-4 shrink-0 text-cv-text-muted transition-transform duration-200",
+                        "size-icon-md shrink-0 text-cv-text-muted transition-transform duration-200",
                         open ? "rotate-0" : "rotate-90",
                       )}
                     />

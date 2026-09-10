@@ -66,7 +66,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         className={buttonClasses("ghost")}
         to={draftReachable ? routePaths.draft(applicationId) : routePaths.application(applicationId)}
       >
-        <ArrowRight aria-hidden="true" className="size-4" />
+        <ArrowRight aria-hidden="true" className="size-icon-md" />
         {draftReachable ? "חזרה לעורך הטיוטה" : "חזרה להכנת קורות החיים"}
       </Link>
     );
@@ -86,7 +86,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       pendingLabel="יוצר טיוטה…"
       variant="secondary"
     >
-      <FilePlus2 aria-hidden="true" className="size-4" />
+      <FilePlus2 aria-hidden="true" className="size-icon-md" />
       יצירת טיוטה חדשה
     </Button>
   );
@@ -103,7 +103,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         key="download-pdf"
         onClick={() => setDownloadStarted(true)}
       >
-        <Download aria-hidden="true" className="size-4" />
+        <Download aria-hidden="true" className="size-icon-md" />
         {downloadStarted || submissionExists ? "הורדת PDF שוב" : "הורדת PDF"}
       </a>
     );
@@ -128,7 +128,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
               note: "הורידו את הקובץ ומסרו אותו למגייס, ואז רשמו כאן שההגשה בוצעה.",
               primary: (
                 <Button onClick={() => setSubmissionOpen(true)}>
-                  <Send aria-hidden="true" className="size-4" />
+                  <Send aria-hidden="true" className="size-icon-md" />
                   רישום הגשת הגרסה הזו
                 </Button>
               ),
@@ -201,7 +201,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
                   <div className="flex flex-wrap gap-3">
                     {submittedAt !== null ? (
                       <Button onClick={() => setSubmissionOpen(true)} variant="secondary">
-                        <Send aria-hidden="true" className="size-4" />
+                        <Send aria-hidden="true" className="size-icon-md" />
                         רישום הגשה נוספת
                       </Button>
                     ) : null}

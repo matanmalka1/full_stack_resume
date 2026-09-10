@@ -49,7 +49,7 @@ export const RevisionRecord = ({ decision, revision }: RevisionRecordProps) => {
         <Disclosure summary="פרטים טכניים וביקורת">
           <Card aria-labelledby="revision-record-heading" className="overflow-x-auto bg-cv-surface p-4 shadow-surface">
             <h2 className="flex items-center gap-2 font-semibold text-cv-text" id="revision-record-heading">
-              <Lock aria-hidden="true" className="size-4 text-cv-accent" />
+              <Lock aria-hidden="true" className="size-icon-md text-cv-accent" />
               הרשומה הקבועה
             </h2>
             <SummaryList
@@ -69,7 +69,7 @@ export const RevisionRecord = ({ decision, revision }: RevisionRecordProps) => {
 
         <Card aria-labelledby="ready-validation-heading" className="bg-cv-surface p-4 shadow-surface">
           <h2 className="mb-4 flex items-center gap-2 font-semibold text-cv-text" id="ready-validation-heading">
-            <ShieldCheck aria-hidden="true" className="size-4 text-cv-accent" />
+            <ShieldCheck aria-hidden="true" className="size-icon-md text-cv-accent" />
             אימות הגרסה המוכנה
           </h2>
           <ValidationReportView report={revision.ready_validation} />
@@ -88,7 +88,7 @@ export const RevisionRecord = ({ decision, revision }: RevisionRecordProps) => {
               {decision.content}
             </pre>
             <Button className="mt-3" onClick={downloadDecision} variant="secondary">
-              <Code2 aria-hidden="true" className="size-4" />
+              <Code2 aria-hidden="true" className="size-icon-md" />
               הורדת מסמך ההחלטה
             </Button>
           </details>
