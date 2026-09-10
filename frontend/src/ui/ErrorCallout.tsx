@@ -1,4 +1,6 @@
+import type { ProblemDetails } from "@/api/client";
 import { Callout } from "./Callout";
+import { localizedProblem, problemFieldIssues } from "./errorMessages";
 
 interface ErrorCalloutProps {
   className?: string;
@@ -10,7 +12,7 @@ interface ErrorCalloutProps {
 const defaultFallbackDetail = "הפנייה לשרת נכשלה. אפשר לרענן את העמוד ולנסות שוב.";
 export const briefServerFailureDetail = "הפנייה לשרת נכשלה.";
 
-const problemDetailsFrom = (error: unknown): { detail: string; title: string } | null => {
+const problemDetailsFrom = (error: unknown): ProblemDetails | null => {
   if (typeof error !== "object" || error === null || !("problem" in error)) {
     return null;
   }
@@ -20,20 +22,24 @@ const problemDetailsFrom = (error: unknown): { detail: string; title: string } |
     return null;
   }
 
-  return typeof problem.title === "string" && typeof problem.detail === "string"
-    ? { detail: problem.detail, title: problem.title }
+  return typeof problem.title === "string" &&
+    typeof problem.detail === "string" &&
+    typeof problem.code === "string" &&
+    typeof problem.type === "string" &&
+    typeof problem.status === "number"
+    ? (problem as ProblemDetails)
     : null;
 };
 
 /** One presentation boundary for failed API queries and mutations.
  *
- * API Problem Details remain authoritative when available. Local programming
- * errors get only the safe, contextual fallback supplied by the owning screen;
- * their exception text is never rendered into the page.
+ * Stable API codes select user-facing Hebrew copy. The server's safe detail is
+ * retained only as forward-compatible copy for a code this client does not yet
+ * know. Local programming errors get only the contextual fallback supplied by
+ * the owning screen; their exception text is never rendered into the page.
  *
- * The failure code is not shown. `problem.detail` is the server's own sentence about
- * what went wrong, and it is already the body of this callout; the code beside it named
- * the same failure in a vocabulary the reader has no use for.
+ * The code itself is not shown. Structured request issues are rendered as field
+ * errors instead of discarding the actionable part of a 422 response.
  */
 export const ErrorCallout = ({
   className,
@@ -42,10 +48,19 @@ export const ErrorCallout = ({
   fallbackTitle,
 }: ErrorCalloutProps) => {
   const problem = problemDetailsFrom(error);
+  const presentation = problem === null ? null : localizedProblem(problem);
+  const fieldIssues = problem === null ? [] : problemFieldIssues(problem);
 
   return (
-    <Callout className={className} role="alert" title={problem?.title ?? fallbackTitle} tone="blocker">
-      {problem?.detail ?? fallbackDetail}
+    <Callout className={className} role="alert" title={presentation?.title ?? fallbackTitle} tone="blocker">
+      <p dir={presentation?.known === false ? "auto" : undefined}>{presentation?.detail ?? fallbackDetail}</p>
+      {fieldIssues.length === 0 ? null : (
+        <ul className="mt-2 list-disc space-y-1 ps-5">
+          {fieldIssues.map((issue, index) => (
+            <li key={`${index}:${issue}`}>{issue}</li>
+          ))}
+        </ul>
+      )}
     </Callout>
   );
 };

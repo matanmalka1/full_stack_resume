@@ -48,7 +48,7 @@
       ירוקים ו"הושלם 4 מתוך 4" מעל `unknown approved revision: …`, כי הרצועה והכותרת מצוירות
       מחוץ ל-`QueryState` · ענף 404 ב-`QueryState` שמציג את מסגור `NotFoundPage`, ו-
       `WizardStepShell` לא מצייר רצועה כשהשאילתה נחתה בשגיאה.
-- [ ] **P1-2** אנגלית גולמית של השרת מוצגת כהודעה למשתמש —
+- [x] **P1-2** אנגלית גולמית של השרת מוצגת כהודעה למשתמש —
       `ui/ErrorCallout.tsx` · `problemDetailsFrom()` מחזיר `{title, detail}` ללא תנאי והפולבקים
       משמשים רק כשהצורה לא נפרסת; נצפו חיים: `Not Found / unknown application: 0000…`,
       `Operation execution failed.`, `extractive derived wording must link exactly one canonical

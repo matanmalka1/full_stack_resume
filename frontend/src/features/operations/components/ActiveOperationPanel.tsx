@@ -159,7 +159,9 @@ export const ActiveOperationPanel = ({
             title={failure?.title ?? statusLabels[operation.status]}
             tone={failureTones[operation.status] ?? "warning"}
           >
-            {operation.safe_failure_detail == null ? null : <p dir="auto">{operation.safe_failure_detail}</p>}
+            {failure === null && operation.safe_failure_detail != null ? (
+              <p dir="auto">{operation.safe_failure_detail}</p>
+            ) : null}
             {failure === null ? null : (
               <p className="mt-2" dir="auto">
                 {failure.guidance}

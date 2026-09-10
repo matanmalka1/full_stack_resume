@@ -58,4 +58,19 @@ describe("ActiveOperationPanel progress", () => {
     expect(screen.getByRole("status")).toHaveTextContent("הושלמה");
     expect(screen.queryByText("מפעילה את התוצר")).not.toBeInTheDocument();
   });
+
+  it("does not expose safe English detail for a known failure code", () => {
+    renderPanel(
+      operation({
+        status: "failed",
+        phase: "completed",
+        is_terminal: true,
+        failure_code: "VALIDATION_EXECUTION_FAILED",
+        safe_failure_detail: "Operation execution failed.",
+      }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן להשלים את בדיקות הפעולה");
+    expect(screen.queryByText("Operation execution failed.")).not.toBeInTheDocument();
+  });
 });

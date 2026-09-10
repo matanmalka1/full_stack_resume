@@ -3,6 +3,7 @@ import { CircleCheck, ShieldAlert, TriangleAlert } from "lucide-react";
 import type { ValidationReport } from "@/api/contracts";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { localizedValidationIssue } from "@/ui/errorMessages";
 
 const blockerResolution = (code: string): string => {
   if (code === "unlinked-claim" || code === "pending-claim") {
@@ -49,7 +50,9 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
           only text on the screen that says how. */}
       {hard.map((issue) => (
         <Callout key={`${issue.code}:${issue.message}`} title="חסימת אימות" tone="blocker">
-          <p dir="auto">{issue.message}</p>
+          <p dir={localizedValidationIssue(issue.code, issue.message) === issue.message ? "auto" : undefined}>
+            {localizedValidationIssue(issue.code, issue.message)}
+          </p>
           <p className="mt-2">{blockerResolution(issue.code)}</p>
         </Callout>
       ))}
@@ -66,7 +69,7 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
           <ul className="mt-2 flex flex-col gap-1.5">
             {warnings.map((issue) => (
               <li className="text-support leading-6 text-cv-text" dir="auto" key={`${issue.code}:${issue.message}`}>
-                {issue.message}
+                {localizedValidationIssue(issue.code, issue.message)}
               </li>
             ))}
           </ul>

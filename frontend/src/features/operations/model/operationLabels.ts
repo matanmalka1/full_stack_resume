@@ -101,9 +101,9 @@ const providerOutputGuidance =
 
 /* Failure codes are decisions a person must be able to distinguish, not technical
    decoration. This map is exhaustive over the generated union: adding a backend code
-   fails the build until the screen says what it means and what remains safe. The
-   backend-authored safe detail is still shown verbatim; this copy explains the next
-   choice without exposing logs, paths, or provider text. */
+   fails the build until the screen says what it means and what remains safe. Its
+   Hebrew title and guidance replace the backend-authored detail; that detail is used
+   only as a forward-compatible fallback for a future code. */
 export const failurePresentations: Record<OperationFailureCode, FailurePresentation> = {
   SOURCE_CHANGED: {
     title: "המקור השתנה בזמן הפעולה",
