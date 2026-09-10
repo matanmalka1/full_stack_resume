@@ -24,7 +24,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.company.customers",
@@ -44,7 +45,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.role.field.title",
@@ -64,7 +66,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": "2019-03/2020-08",
       "replaces": null,
       "source_file": "",
-      "resume_style": "heading"
+      "resume_style": "heading",
+      "link_target": null
     },
     {
       "fact_id": "sales.role.field.dates",
@@ -83,7 +86,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": "2019-03/2020-08",
       "replaces": null,
       "source_file": "",
-      "resume_style": "date"
+      "resume_style": "date",
+      "link_target": null
     },
     {
       "fact_id": "sales.role.leader.title",
@@ -103,7 +107,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": "2020-08/2025-01",
       "replaces": null,
       "source_file": "",
-      "resume_style": "heading"
+      "resume_style": "heading",
+      "link_target": null
     },
     {
       "fact_id": "sales.role.leader.dates",
@@ -123,7 +128,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": "2020-08/2025-01",
       "replaces": null,
       "source_file": "",
-      "resume_style": "date"
+      "resume_style": "date",
+      "link_target": null
     },
     {
       "fact_id": "sales.summary.field",
@@ -143,7 +149,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "paragraph"
+      "resume_style": "paragraph",
+      "link_target": null
     },
     {
       "fact_id": "sales.summary.account",
@@ -163,7 +170,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "paragraph"
+      "resume_style": "paragraph",
+      "link_target": null
     },
     {
       "fact_id": "sales.summary.new_business",
@@ -184,7 +192,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "paragraph"
+      "resume_style": "paragraph",
+      "link_target": null
     },
     {
       "fact_id": "sales.summary.leadership",
@@ -204,7 +213,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "paragraph"
+      "resume_style": "paragraph",
+      "link_target": null
     },
     {
       "fact_id": "sales.summary.tech",
@@ -225,7 +235,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "paragraph"
+      "resume_style": "paragraph",
+      "link_target": null
     },
     {
       "fact_id": "sales.summary.tenure",
@@ -246,7 +257,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": "2019-03/2025-01",
       "replaces": null,
       "source_file": "",
-      "resume_style": "paragraph"
+      "resume_style": "paragraph",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.prospecting",
@@ -266,7 +278,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.outreach",
@@ -286,7 +299,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.discovery",
@@ -306,7 +320,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.quotations",
@@ -326,7 +341,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.negotiation",
@@ -346,7 +362,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.closing",
@@ -366,7 +383,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.account_management",
@@ -386,7 +404,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.metric.recurring_customers",
@@ -406,7 +425,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.metric.new_customers",
@@ -426,7 +446,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.metric.team_size",
@@ -446,7 +467,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": "legacy.team_size.3-4",
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.metric.performance",
@@ -466,7 +488,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": "legacy.revenue.30-yoy",
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.metric.portfolio_growth",
@@ -486,7 +509,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.leadership.player_coach",
@@ -506,7 +530,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.leadership.pipeline",
@@ -527,7 +552,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.leadership.coaching",
@@ -547,7 +573,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.leadership.commercial_approval",
@@ -567,7 +594,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.leadership.strategic_customers",
@@ -587,7 +615,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.tool.priority",
@@ -607,7 +636,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "item"
+      "resume_style": "item",
+      "link_target": null
     },
     {
       "fact_id": "sales.tool.excel",
@@ -627,7 +657,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "item"
+      "resume_style": "item",
+      "link_target": null
     },
     {
       "fact_id": "sales.tool.communication",
@@ -647,7 +678,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "item"
+      "resume_style": "item",
+      "link_target": null
     },
     {
       "fact_id": "sales.activity.lead_mix",
@@ -667,7 +699,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.activity.work_mode",
@@ -687,7 +720,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "item"
+      "resume_style": "item",
+      "link_target": null
     },
     {
       "fact_id": "sales.cycle.velocity",
@@ -707,7 +741,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.achievement.account_expansion",
@@ -727,7 +762,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.achievement.reactivation",
@@ -747,7 +783,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.achievement.retention",
@@ -767,7 +804,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.achievement.complex_deals",
@@ -787,7 +825,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.achievement.difficult_market",
@@ -807,7 +846,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.achievement.process",
@@ -827,7 +867,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.achievement.performance",
@@ -848,7 +889,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "bullet"
+      "resume_style": "bullet",
+      "link_target": null
     },
     {
       "fact_id": "sales.tech_sales.boundary",
@@ -869,7 +911,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "item"
+      "resume_style": "item",
+      "link_target": null
     },
     {
       "fact_id": "sales.career_narrative",
@@ -889,7 +932,27 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "effective_dates": null,
       "replaces": null,
       "source_file": "",
-      "resume_style": "paragraph"
+      "resume_style": "paragraph",
+      "link_target": null
+    },
+    {
+      "fact_id": "56572e59-6f08-4570-b088-1c5827f93717",
+      "meaning": "ההגגה",
+      "renderings": {
+        "en": "הגהג",
+        "he": "הגהג"
+      },
+      "tags": [
+        "גהה"
+      ],
+      "status": "pending",
+      "provenance": "גהגה",
+      "confirmed_at": null,
+      "effective_dates": null,
+      "replaces": null,
+      "source_file": "",
+      "resume_style": "bullet",
+      "link_target": null
     }
   ]
 }

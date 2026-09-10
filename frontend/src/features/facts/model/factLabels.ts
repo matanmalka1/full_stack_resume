@@ -47,6 +47,8 @@ export const factStatusLabel = (status: string): string => factStatusLabels[stat
 
 export const factSourceLabel = (source: string): string => factSourceLabels[source as FactSource] ?? source;
 
+export const factStyleLabel = (style: string): string => factStyleLabels[style as FactStyle] ?? style;
+
 /* What a person calls this fact, for display only - the persisted renderings are never
    rewritten to match it. The reading language wins where the caller knows one (the draft
    editor reads a claim in the draft's own language); otherwise Hebrew leads, since this

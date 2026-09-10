@@ -243,13 +243,6 @@ select {
   font-size: var(--text-field);
 }
 
-/* A multiline editor is a member of the field family, not a separate control: it takes
-   the same tinted fill as input and select so a form of mixed fields reads as one row of
-   siblings. The dark `border-strong` edge it used to carry made it the heaviest thing on
-   a page whose cards are held by a hairline. On focus the fill lifts to plain surface
-   white - the field the caret sits in becomes the page's one sheet of paper - and the
-   edge takes the focus blue underneath the outline, so the active editor is legible even
-   where the platform draws a thin ring. */
 .cv-field-textarea {
   --cv-field-fill: var(--color-cv-field-background);
   font-size: var(--text-field);
@@ -271,6 +264,17 @@ select {
     field-sizing: content;
     max-height: 30rem;
   }
+}
+
+.cv-fields-compact .cv-field {
+  padding-block: 0.375rem;
+  padding-inline: 0.625rem;
+  font-size: var(--text-support);
+}
+
+.cv-fields-compact .cv-field-textarea {
+  min-height: 4.5rem;
+  line-height: 1.6;
 }
 
 /* Browsers paint autofilled values on their own internal layer. Repaint that layer with

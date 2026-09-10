@@ -1,9 +1,8 @@
-import { FileText, Fingerprint, Quote, Tags } from "lucide-react";
+import { FileText, Tags } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Fact } from "@/api/contracts";
-import { LtrText } from "@/ui/LtrText";
-import { factLabel, factSourceLabel, factStyleLabels } from "../model/factLabels";
+import { factLabelInLanguage, factSourceLabel, factStyleLabel } from "../model/factLabels";
 import { FactStatusBadge } from "./FactStatusBadge";
 
 const DetailBlock = ({ children, label }: { children: ReactNode; label: string }) => (
@@ -16,8 +15,11 @@ const DetailBlock = ({ children, label }: { children: ReactNode; label: string }
 );
 
 export const FactOverview = ({ fact }: { fact: Fact }) => {
-  const title = factLabel(fact);
-  const english = fact.renderings.en === title ? null : fact.renderings.en;
+  /* Both renderings, English first: it is the one the CV is built from, and the Hebrew
+     one reads as its companion rather than as a second title. Neither is rewritten to
+     match the other - they are separate stored values and stay that way. */
+  const english = factLabelInLanguage(fact, "en");
+  const hebrew = fact.renderings.he === english ? undefined : fact.renderings.he;
 
   return (
     <section aria-labelledby="selected-fact-heading">
@@ -25,49 +27,32 @@ export const FactOverview = ({ fact }: { fact: Fact }) => {
         <div className="min-w-0 flex-1">
           <p className="mb-1.5 text-support font-semibold text-cv-accent">עובדת מועמד</p>
           <h2 className="text-heading-sm font-bold leading-7 text-cv-text" dir="auto" id="selected-fact-heading">
-            {title}
+            {english}
           </h2>
+          {hebrew === undefined ? null : (
+            <p className="mt-1 text-support text-cv-text-muted" dir="rtl">
+              {hebrew}
+            </p>
+          )}
         </div>
         <FactStatusBadge className="px-2.5 py-0.5" status={fact.status} />
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <div className="mt-4">
         <DetailBlock label="משמעות עובדתית">{fact.meaning}</DetailBlock>
-        {english === null ? null : <DetailBlock label="ניסוח באנגלית">{english}</DetailBlock>}
       </div>
 
-      <dl className="mt-4 grid gap-3 border-y border-cv-border py-4 sm:grid-cols-2">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <FileText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-cv-text-muted" />
-          <div className="min-w-0">
-            <dt className="text-support font-medium text-cv-text-muted">מקור וסוג</dt>
-            <dd className="mt-0.5 text-support text-cv-text">
-              {factSourceLabel(fact.source)} · {factStyleLabels[fact.resume_style]}
-            </dd>
-          </div>
-        </div>
-        <div className="flex min-w-0 items-start gap-2.5">
-          <Quote aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-cv-text-muted" />
-          <div className="min-w-0">
-            <dt className="text-support font-medium text-cv-text-muted">אסמכתה</dt>
-            <dd className="mt-0.5 text-support text-cv-text" dir="auto">
-              {fact.provenance}
-            </dd>
-          </div>
-        </div>
-        <div className="flex min-w-0 items-start gap-2.5 sm:col-span-2">
-          <Fingerprint aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-cv-text-muted" />
-          <div className="min-w-0">
-            <dt className="text-support font-medium text-cv-text-muted">מזהה קנוני</dt>
-            <dd className="mt-0.5 flex flex-wrap items-center gap-x-2 text-support text-cv-text">
-              <LtrText mono>{fact.fact_id}</LtrText>
-              <span aria-hidden="true" className="text-cv-text-muted">
-                ·
-              </span>
-              <LtrText>{fact.source}</LtrText>
-            </dd>
-          </div>
-        </div>
+      {/* Source and presentation type, and nothing else. The attestation and the canonical
+          id used to sit here too: both are record-keeping rather than reading, the id is a
+          string nobody reads off a screen, and the lifecycle history below already says
+          how the fact got its status. Neither value changed - they are simply not what
+          this panel is for. */}
+      <dl className="mt-4 flex flex-wrap items-start gap-x-2.5 gap-y-1 border-y border-cv-border py-3">
+        <FileText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-cv-text-muted" />
+        <dt className="text-support font-medium text-cv-text-muted">מקור וסוג</dt>
+        <dd className="min-w-0 text-support text-cv-text">
+          {factSourceLabel(fact.source)} · {factStyleLabel(fact.resume_style)}
+        </dd>
       </dl>
 
       {fact.tags.length === 0 ? null : (

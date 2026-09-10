@@ -41,22 +41,25 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
   const crossTrack = isCrossTrackFact(fact.source, defaultFactSource(profile.profile));
 
   return (
+    /* A panel, not a page. It carried a 32px icon tile, a heading, a paragraph under it,
+       full-size selects and a button on a row of its own - four stacked bands for one
+       command with two inputs, in the same column as the fact it belongs to. Now it is a
+       titled strip: one header line, the two selects, and the confirmation and the
+       command sharing the row under them. Nothing was removed - the guidance moved onto
+       the header line and the fields are the compact size the dialogs use. */
     <section
       aria-labelledby="fact-attachment-heading"
-      className="flex flex-col gap-4 rounded-control border border-cv-border bg-cv-surface-muted p-4"
+      className="cv-fields-compact flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface-muted p-3"
     >
-      <div className="flex items-start gap-2.5">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-          <Link2 aria-hidden="true" className="size-4" />
-        </span>
-        <div>
-          <h3 className="text-body font-semibold text-cv-text" id="fact-attachment-heading">
-            שיוך לפרופיל
-          </h3>
-          <p className="mt-0.5 text-support text-cv-text-muted">
-            בחרו היכן העובדה תוכל להשתתף בבניית קורות החיים.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h3
+          className="inline-flex items-center gap-1.5 text-support font-semibold text-cv-text"
+          id="fact-attachment-heading"
+        >
+          <Link2 aria-hidden="true" className="size-4 text-cv-accent" />
+          שיוך לפרופיל
+        </h3>
+        <p className="text-support text-cv-text-muted">בחרו היכן העובדה תוכל להשתתף בבניית קורות החיים.</p>
       </div>
       {attachment.error === null ? null : (
         <ErrorCallout
@@ -99,15 +102,6 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
           )}
         </Field>
       </div>
-      {section.attached ? (
-        <Callout title="העובדה כבר משויכת ליעד הזה" tone="neutral">
-          {section.pinned ? "העובדה גם מקובעת בסעיף." : "אפשר לבחור פרופיל או סעיף אחר."}
-        </Callout>
-      ) : (
-        <Checkbox checked={pinned} onChange={(event) => setPinned(event.currentTarget.checked)}>
-          קיבוע העובדה במבחר של הסעיף
-        </Checkbox>
-      )}
       {crossTrack ? (
         <Callout title="מקור העובדה שייך למסלול קריירה אחר" tone="warning">
           <p>מקור העובדה: {factSourceLabel(fact.source)}.</p>
@@ -120,14 +114,26 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
           </Checkbox>
         </Callout>
       ) : null}
-      <Button
-        className="self-start sm:self-end"
-        disabled={section.attached || (crossTrack && !crossTrackAccepted)}
-        onClick={() => attachment.mutate({ pin: pinned, profile: profile.profile, section: section.section })}
-        pending={attachment.isPending}
-      >
-        צירוף העובדה לסעיף
-      </Button>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {section.attached ? (
+          <p className="text-support text-cv-text-muted">
+            {section.pinned ? "העובדה כבר משויכת ליעד הזה ומקובעת בסעיף." : "העובדה כבר משויכת ליעד הזה."}
+          </p>
+        ) : (
+          <Checkbox checked={pinned} onChange={(event) => setPinned(event.currentTarget.checked)}>
+            קיבוע העובדה במבחר של הסעיף
+          </Checkbox>
+        )}
+        <Button
+          className="ms-auto"
+          disabled={section.attached || (crossTrack && !crossTrackAccepted)}
+          onClick={() => attachment.mutate({ pin: pinned, profile: profile.profile, section: section.section })}
+          pending={attachment.isPending}
+          size="compact"
+        >
+          צירוף העובדה לסעיף
+        </Button>
+      </div>
       {attachment.isSuccess ? (
         // role="status" is a Callout prop; Callout renders a semantic <output>.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
