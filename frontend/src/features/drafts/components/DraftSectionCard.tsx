@@ -47,7 +47,9 @@ export const DraftSectionCard = ({
         <h3 className="truncate text-heading-sm font-bold text-cv-text" dir="auto" id={headingId}>
           {section.name}
         </h3>
-        <span className="shrink-0 text-support text-cv-text-muted">{section.claims.length} שורות</span>
+        <span className="shrink-0 text-support text-cv-text-muted">
+          {section.claims.length === 1 ? "שורה אחת" : `${section.claims.length} שורות`}
+        </span>
       </div>
       <Button disabled={actions.regenerationDisabled} onClick={onRegenerate} variant="secondary">
         <RefreshCw aria-hidden="true" className="size-4" />

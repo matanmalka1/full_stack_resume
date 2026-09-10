@@ -50,6 +50,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
   const revertTarget = editing && editOriginal !== null && text !== editOriginal ? editOriginal : null;
 
   const evidenceLabel = facts.length === 1 ? "העובדה שמאחורי השורה" : `${facts.length} עובדות שמאחורי השורה`;
+  const distinctFacts = facts.filter((fact) => fact.text !== null && fact.text !== claim.text);
 
   return (
     <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5 py-3 first:pt-0">
@@ -108,9 +109,12 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           </Callout>
         )}
 
-        {facts.length === 0 ? null : (
+        {/* A fact identical to the line it backs adds nothing next to it - only the ones
+            whose wording actually differs from the claim's canonical text are worth a
+            second line. */}
+        {distinctFacts.length === 0 ? null : (
           <ul aria-label={evidenceLabel} className="mt-1 flex flex-col gap-1 px-2">
-            {facts.map((fact) => (
+            {distinctFacts.map((fact) => (
               <li className="flex items-start gap-2" dir="auto" key={fact.fact_id}>
                 <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-pill bg-cv-success" />
                 <span className="text-support leading-6 text-cv-text-muted">

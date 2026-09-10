@@ -86,7 +86,7 @@ export const ApplicationPipelineView = ({ items, onRequestUpdate }: ApplicationP
   return (
     <ul
       aria-label="מועמדויות לפי שלב גיוס"
-      className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-4"
+      className="grid grid-flow-col auto-cols-[minmax(16rem,1fr)] items-start gap-4 overflow-x-auto pb-2"
     >
       {columns.map((column) => {
         const stageItems = items.filter((item) => column.statuses.includes(item.recruitment_status));

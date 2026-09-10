@@ -1,12 +1,21 @@
 import { useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigationType } from "react-router-dom";
 
 export const RouteFocusManager = () => {
   const { pathname } = useLocation();
+  const navigationType = useNavigationType();
   const entryPathname = useRef<string | null>(pathname);
 
   useEffect(() => {
     if (entryPathname.current === pathname) {
+      return;
+    }
+
+    /* A POP (back/forward) restores a page the reader already scrolled and focused -
+       resetting either here would throw away what the browser's own history just gave
+       back. */
+    if (navigationType === "POP") {
+      entryPathname.current = pathname;
       return;
     }
 

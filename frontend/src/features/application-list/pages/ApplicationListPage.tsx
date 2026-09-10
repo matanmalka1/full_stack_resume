@@ -18,7 +18,7 @@ import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { useApplicationListMutations } from "../api/mutations";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
 import { PAGE_SIZE } from "../model/applicationListParams";
-import { initialViewMode, type ViewMode } from "../model/applicationViews";
+import { initialViewMode, rememberViewMode, type ViewMode } from "../model/applicationViews";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../model/recruitmentStages";
 
 const findApplication = (items: readonly ApplicationListItem[], id: string | null) =>
@@ -40,7 +40,11 @@ interface ClosedResult {
    on yet, so the offer is the only thing on the page. */
 export const ApplicationListPage = () => {
   const { listQuery, query, searchInput, setSearchInput, updateQuery } = useApplicationListQuery();
-  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const [viewMode, setViewModeState] = useState<ViewMode>(initialViewMode);
+  const setViewMode = (next: ViewMode) => {
+    rememberViewMode(next);
+    setViewModeState(next);
+  };
   const [closingApplicationId, setClosingApplicationId] = useState<string | null>(null);
   const [closedResult, setClosedResult] = useState<ClosedResult | null>(null);
   const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
@@ -176,7 +180,11 @@ export const ApplicationListPage = () => {
               recruitmentStage={selectedStage(query.recruitmentStatuses)}
               recruitmentStageCounts={recruitmentStageCounts}
               resultSummary={
-                page.matched === page.total ? `${page.total} מועמדויות` : `${page.matched} מתוך ${page.total} מועמדויות`
+                page.matched === page.total
+                  ? `${page.total} מועמדויות`
+                  : !filtered
+                    ? `${page.matched} מתוך ${page.total} מועמדויות · תהליכים סגורים מוסתרים`
+                    : `${page.matched} מתוך ${page.total} מועמדויות`
               }
               search={searchInput}
               sort={query.sort ?? "updated"}

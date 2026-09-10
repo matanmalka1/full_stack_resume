@@ -30,7 +30,7 @@ export const DraftHeaderCard = ({ detail, dirty, draft, saveState }: DraftHeader
           mono
           title={draft.content_hash}
         >
-          v{draft.edit_version} · {draft.content_hash.slice(0, 10)}
+          v{draft.edit_version}
         </LtrText>
       )}
       <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
