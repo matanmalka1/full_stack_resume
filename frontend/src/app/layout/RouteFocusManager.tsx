@@ -27,7 +27,7 @@ export const RouteFocusManager = () => {
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [pathname]);
+  }, [pathname, navigationType]);
 
   return null;
 };
