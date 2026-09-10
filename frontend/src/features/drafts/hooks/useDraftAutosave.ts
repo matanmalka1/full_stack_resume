@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiProblem } from "@/api/client";
 import { type DraftPatch, updateWorkingDraft } from "@/api/drafts";
-import type { ClaimPatch, WorkingDraftUpdate } from "@/api/contracts";
+import type { ClaimAddition, ClaimPatch, WorkingDraftUpdate } from "@/api/contracts";
 
 const AUTOSAVE_DEBOUNCE_MS = 700;
 
@@ -17,6 +17,7 @@ export interface AutosaveState {
      explicit choice, never dropped. */
   pending: ClaimPatch[];
   pendingRemovals: string[];
+  pendingAdditions: ClaimAddition[];
 }
 
 interface UseDraftAutosaveOptions {
@@ -26,13 +27,15 @@ interface UseDraftAutosaveOptions {
   onSaved: (update: WorkingDraftUpdate, etag: string | null) => void;
 }
 
-const emptyPatch = (patch: DraftPatch): boolean => patch.claim_edits.length === 0 && patch.claim_removals.length === 0;
+const emptyPatch = (patch: DraftPatch): boolean =>
+  patch.claim_edits.length === 0 && patch.claim_removals.length === 0 && patch.claim_additions.length === 0;
 
 const storageKey = (workingDraftId: string): string => `cv-engine:autosave:${workingDraftId}`;
 
 interface StoredBuffer {
   edits: ClaimPatch[];
   removals: string[];
+  additions: ClaimAddition[];
 }
 
 /* Best-effort only: a full or disabled storage must never block typing or saving. */
@@ -47,7 +50,7 @@ const readStoredBuffer = (workingDraftId: string): StoredBuffer | null => {
 
 const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void => {
   try {
-    if (buffer.edits.length === 0 && buffer.removals.length === 0) {
+    if (buffer.edits.length === 0 && buffer.removals.length === 0 && buffer.additions.length === 0) {
       window.sessionStorage.removeItem(storageKey(workingDraftId));
       return;
     }
@@ -71,6 +74,7 @@ const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void =
 export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: UseDraftAutosaveOptions) => {
   const edits = useRef(new Map<string, ClaimPatch>());
   const removals = useRef(new Set<string>());
+  const additions = useRef<ClaimAddition[]>([]);
   const inFlight = useRef(false);
   const token = useRef(etag);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -81,6 +85,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     message: null,
     pending: [],
     pendingRemovals: [],
+    pendingAdditions: [],
   });
 
   useEffect(() => {
@@ -97,6 +102,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       message,
       pending: [...edits.current.values()],
       pendingRemovals: [...removals.current],
+      pendingAdditions: [...additions.current],
     });
   }, []);
 
@@ -110,13 +116,14 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     writeStoredBuffer(workingDraftId, {
       edits: [...edits.current.values()],
       removals: [...removals.current],
+      additions: [...additions.current],
     });
   }, [workingDraftId]);
 
   /* Warns before the tab or navigation discards text the buffer has not yet sent. */
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
-      if (edits.current.size === 0 && removals.current.size === 0) {
+      if (edits.current.size === 0 && removals.current.size === 0 && additions.current.length === 0) {
         return;
       }
       event.preventDefault();
@@ -137,6 +144,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       for (const claimId of patch.claim_removals) {
         removals.current.add(claimId);
       }
+      additions.current = [...patch.claim_additions, ...additions.current];
       mirror();
     },
     [mirror],
@@ -150,6 +158,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     const patch: DraftPatch = {
       claim_edits: [...edits.current.values()],
       claim_removals: [...removals.current],
+      claim_additions: [...additions.current],
     };
 
     if (emptyPatch(patch) || token.current === null) {
@@ -158,6 +167,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
 
     edits.current.clear();
     removals.current.clear();
+    additions.current = [];
     inFlight.current = true;
     publish("saving");
 
@@ -233,6 +243,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     for (const claimId of stored.removals) {
       removals.current.add(claimId);
     }
+    additions.current = [...additions.current, ...stored.additions];
     publish("idle");
     schedule();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,6 +271,16 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     [mirror, publish, schedule],
   );
 
+  const queueAddition = useCallback(
+    (addition: ClaimAddition) => {
+      additions.current = [...additions.current, addition];
+      mirror();
+      publish(halted.current ? "conflict" : "idle");
+      schedule();
+    },
+    [mirror, publish, schedule],
+  );
+
   /* Blur: the debounce is a convenience for typing, not a reason to hold a finished edit. */
   const flush = useCallback(() => {
     if (timer.current !== null) {
@@ -274,6 +295,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
   const discardLocal = useCallback(() => {
     edits.current.clear();
     removals.current.clear();
+    additions.current = [];
     halted.current = false;
     mirror();
     publish("idle");
@@ -319,6 +341,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     ...state,
     discardLocal,
     flush,
+    queueAddition,
     queueEdit,
     queueRemoval,
     reapplyLocal,

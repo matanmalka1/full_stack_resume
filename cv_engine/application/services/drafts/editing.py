@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ....domain.drafts import apply_claim_edit, draft_claims, remove_claim
+from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import EditResult, UpdateWorkingDraftCommand, WorkingDraftUpdateResult
 from ...errors import (
@@ -122,9 +122,20 @@ class DraftEditing(DraftServiceBase):
                 raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
             except ValueError as exc:
                 raise PreconditionFailed(f"claim removal rejected: {exc}") from exc
+        # Additions land last: a brand-new line has no prior identity an edit or
+        # removal in the same patch could have named.
+        added_claim_ids: set[str] = set()
+        for addition in command.claim_additions:
+            try:
+                patched, new_claim_id = add_claim(patched, addition.section, addition.text, facts)
+            except KeyError as exc:
+                raise UnknownRecord(f"unknown section in the working draft: {addition.section}") from exc
+            except ValueError as exc:
+                raise PreconditionFailed(f"claim addition rejected: {exc}") from exc
+            added_claim_ids.add(new_claim_id)
         changed = self._commit_edit(working, patched)
         self.store_working_draft(changed.source)
-        edited = {edit.claim_id for edit in command.claim_edits}
+        edited = {edit.claim_id for edit in command.claim_edits} | added_claim_ids
         return WorkingDraftUpdateResult(
             application_id=changed.application_id,
             working_draft_id=changed.id,

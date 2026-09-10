@@ -9,6 +9,9 @@ export interface DraftClaimActions {
   /* The edit is finished - a blur, or the row being closed - so the buffer may go now
      instead of waiting out the debounce. */
   onCommit: () => void;
+  /* A brand-new line, written free-hand into a named section. It lands `pending`, same
+     as any other line nothing has authorized yet. */
+  onAdd: (section: string, text: string) => void;
   onRegenerate: (claim: DraftClaim) => void;
   onRemove: (claim: DraftClaim) => void;
   /* Regeneration freezes the saved version, so it is withheld while anything is unsaved

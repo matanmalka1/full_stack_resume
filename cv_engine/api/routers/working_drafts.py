@@ -29,6 +29,7 @@ from ...application.commands import (
     ApplySelectionChangeCommand,
     ApproveDraftCommand,
     ArchiveWorkingDraftCommand,
+    ClaimAddition,
     ClaimPatch,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
@@ -162,6 +163,10 @@ def update_working_draft(
                 ClaimPatch(**edit.model_dump(mode="python")) for edit in request.claim_edits
             ],
             claim_removals=list(request.claim_removals),
+            claim_additions=[
+                ClaimAddition(**addition.model_dump(mode="python"))
+                for addition in request.claim_additions
+            ],
         )
     )
     response.headers["ETag"] = draft_etag(result.edit_version, result.content_hash)

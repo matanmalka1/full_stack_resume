@@ -247,6 +247,7 @@ export const DraftEditorPage = () => {
             onReapplyLocal={editing.conflict.reapplyLocal}
             open={editing.conflict.open}
             pending={editing.conflict.pending}
+            pendingAdditions={editing.conflict.pendingAdditions}
             pendingRemovals={editing.conflict.pendingRemovals}
           />
         </>

@@ -109,6 +109,14 @@ def _remove(harness, working_draft_id: str, etag: str, claim_removals: list[str]
     )
 
 
+def _add(harness, working_draft_id: str, etag: str, claim_additions: list[dict]):
+    return harness.client.patch(
+        f"{API_PREFIX}/working-drafts/{working_draft_id}",
+        json={"claim_additions": claim_additions},
+        headers={**MUTATION_HEADERS, "If-Match": etag},
+    )
+
+
 def _state(harness, application_id: str) -> dict:
     response = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
     assert response.status_code == 200, response.text
@@ -304,6 +312,62 @@ def test_free_text_no_fact_authorizes_is_kept_as_a_pending_claim(api_worker) -> 
     assert saved["claim_type"] == "pending"
     assert saved["text"] == UNSUPPORTED_WORDING
     assert saved["pending_reason"]
+
+
+def test_a_manually_added_line_lands_pending_and_is_removable(api_worker) -> None:
+    """A free-hand line the user writes has no fact behind it, so it follows the
+    same pending resolution as free text an edit could not authorize - and the
+    same removal is what a person takes back with.
+    """
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Manual Line Co")
+    read = _read(api_worker, working_draft_id)
+    section_name = read.json()["outline"]["sections"][0]["name"]
+    new_text = "שורה שנכתבה ידנית ואינה מבוססת על עובדה קיימת."
+
+    response = _add(
+        api_worker,
+        working_draft_id,
+        read.headers["ETag"],
+        [{"section": section_name, "text": new_text}],
+    )
+
+    assert response.status_code == 200, response.text
+    after = _read(api_worker, working_draft_id).json()
+    section = next(
+        section for section in after["outline"]["sections"] if section["name"] == section_name
+    )
+    added = next(claim for claim in section["claims"] if claim["text"] == new_text)
+    assert added["claim_type"] == "pending"
+    assert added["fact_ids"] == []
+    assert added["pending_reason"]
+    assert added["claim_id"] in response.json()["pending_claim_ids"]
+
+    removed = _remove(
+        api_worker,
+        working_draft_id,
+        _read(api_worker, working_draft_id).headers["ETag"],
+        [added["claim_id"]],
+    )
+    assert removed.status_code == 200, removed.text
+    final = _read(api_worker, working_draft_id).json()
+    assert added["claim_id"] not in {
+        claim["claim_id"] for section in final["outline"]["sections"] for claim in section["claims"]
+    }
+
+
+def test_adding_a_line_to_an_unknown_section_is_refused(api_worker) -> None:
+    application_id, working_draft_id, _sources = _drafted(api_worker, "Unknown Section Co")
+    read = _read(api_worker, working_draft_id)
+
+    response = _add(
+        api_worker,
+        working_draft_id,
+        read.headers["ETag"],
+        [{"section": "לא קיים", "text": "טקסט כלשהו"}],
+    )
+
+    assert response.status_code == 404, response.text
+    assert _read(api_worker, working_draft_id).headers["ETag"] == read.headers["ETag"]
 
 
 # --- M4 Stage D: the editor's read, its preview, and claim removal -----------

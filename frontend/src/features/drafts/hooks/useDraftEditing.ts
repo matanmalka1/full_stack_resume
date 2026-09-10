@@ -42,6 +42,7 @@ export interface DraftEditing {
     discardLocal: () => void;
     open: boolean;
     pending: AutosaveState["pending"];
+    pendingAdditions: AutosaveState["pendingAdditions"];
     pendingRemovals: AutosaveState["pendingRemovals"];
     reapplyLocal: () => void;
   };
@@ -185,6 +186,7 @@ export const useDraftEditing = ({
          re-authorize a line the user only rephrased. */
       onEdit: (claim, text) => autosave.queueEdit({ claim_id: claim.claim_id, fact_ids: claim.fact_ids, text }),
       onCommit: autosave.flush,
+      onAdd: (section, text) => autosave.queueAddition({ section, text }),
       onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
       onRemove: removeClaim,
       regenerationDisabled: dirty || regeneration.isPending || !regenerationAvailable,
@@ -193,6 +195,7 @@ export const useDraftEditing = ({
       discardLocal: autosave.discardLocal,
       open: autosave.status === "conflict",
       pending: autosave.pending,
+      pendingAdditions: autosave.pendingAdditions,
       pendingRemovals: autosave.pendingRemovals,
       reapplyLocal: autosave.reapplyLocal,
     },

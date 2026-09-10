@@ -1536,6 +1536,11 @@ export interface components {
              */
             pinned_fact_ids: string[];
             profile_override?: components["schemas"]["ProfileName"] | null;
+            /**
+             * Requirement Interpretations
+             * @default []
+             */
+            requirement_interpretations: components["schemas"]["InterpretationOverride"][];
             track_override?: components["schemas"]["Track"] | null;
         };
         /**
@@ -1800,6 +1805,20 @@ export interface components {
             source: "common.md" | "sales.md" | "development.md" | "situational_skills.md";
             /** Tags */
             tags: string[];
+        };
+        /**
+         * ClaimAdditionRequest
+         * @description One manually written line to append to a named section.
+         *
+         *     It is saved as a `pending` claim, exactly like free text an edit could not
+         *     authorize: resolved by linking it to a fact, editing it into wording a
+         *     fact does authorize, or removing it.
+         */
+        ClaimAdditionRequest: {
+            /** Section */
+            section: string;
+            /** Text */
+            text: string;
         };
         /**
          * ClaimPatchRequest
@@ -2464,6 +2483,25 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * InterpretationOverride
+         * @description One user-submitted correction to a requirement's interpretation (§3.5).
+         *
+         *     Submitted through `apply_analysis_decisions` like any other classification
+         *     decision. `prior_requirement_id` names the requirement, on the analysis
+         *     being decided on, whose interpretation the user is correcting - not a
+         *     requirement id on some other analysis, since identity is scoped to one
+         *     analysis's snapshot and extractor namespace.
+         */
+        InterpretationOverride: {
+            /** Demanded */
+            demanded?: string | null;
+            interpretation: components["schemas"]["RequirementInterpretation"];
+            /** Prior Requirement Id */
+            prior_requirement_id: string;
+            /** Reason */
+            reason?: string | null;
+        };
         /** JobAnalysisResponse */
         JobAnalysisResponse: {
             /** Analysis */
@@ -2855,6 +2893,75 @@ export interface components {
             selection_plan_id: string;
             /** Working Draft Id */
             working_draft_id: string;
+        };
+        /**
+         * RequirementAttestation
+         * @description The source gate's proof: offsets into the signed snapshot text as read
+         *     from the payload store, and the quote they are supposed to name.
+         *
+         *     A gate failure is not represented here - it is a rejected proposal, never
+         *     a partially-populated attestation. When this is present, `quote` was
+         *     already verified to equal `text[start:end]` in the exact snapshot string.
+         */
+        RequirementAttestation: {
+            /** End */
+            end: number;
+            /** Quote */
+            quote: string;
+            /** Start */
+            start: number;
+        };
+        /**
+         * RequirementInterpretation
+         * @description A provider's declared reading of one requirement. All-or-nothing: a
+         *     `Requirement` either carries a complete interpretation or none at all -
+         *     see `interpretation_of()` in `requirements/compat.py` for why a legacy
+         *     record's absence of these fields is never filled in with a default.
+         */
+        RequirementInterpretation: {
+            /**
+             * Composition
+             * @enum {string}
+             */
+            composition: "single" | "any-of" | "all-of";
+            /** Context Quote */
+            context_quote?: string | null;
+            /**
+             * Members
+             * @default []
+             */
+            members: components["schemas"]["RequirementMember"][];
+            /** Negation */
+            negation: boolean;
+            /**
+             * Obligation
+             * @enum {string}
+             */
+            obligation: "mandatory" | "preferred" | "unspecified";
+            /**
+             * Source Role
+             * @enum {string}
+             */
+            source_role: "requirement" | "responsibility" | "company-description" | "benefit" | "other";
+        };
+        /**
+         * RequirementMember
+         * @description One member of an `any-of`/`all-of` requirement.
+         *
+         *     `label` is display text a provider proposes; it is never used to decide
+         *     coverage. `attestation`, when present, is what a member is actually
+         *     mapped against - the same verified-quote mechanism the requirement itself
+         *     uses (stage-1 plan §3.5a addendum) - because a bare label is exactly as
+         *     unverifiable as a requirement's own text would be without a source gate.
+         *     A member with no attestation, or one that fails verification, cannot be
+         *     mapped to a concept and stays `undetermined`.
+         */
+        RequirementMember: {
+            attestation?: components["schemas"]["RequirementAttestation"] | null;
+            /** Label */
+            label: string;
+            /** Member Id */
+            member_id: string;
         };
         /**
          * SelectionCandidate
@@ -3287,10 +3394,16 @@ export interface components {
          *     against a single expected version - a second command would need its own
          *     token and could interleave with the save already in flight.
          *
-         *     Only one of the two lists has to be non-empty. Requiring both would make
-         *     "remove this line" impossible to express without also rewriting one.
+         *     At least one of the three lists has to be non-empty. Requiring all three
+         *     would make "remove this line" impossible to express without also
+         *     rewriting or adding one.
          */
         UpdateWorkingDraftRequest: {
+            /**
+             * Claim Additions
+             * @default []
+             */
+            claim_additions: components["schemas"]["ClaimAdditionRequest"][];
             /**
              * Claim Edits
              * @default []

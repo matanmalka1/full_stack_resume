@@ -294,6 +294,18 @@ class ClaimPatch(BoundaryDTO):
     template_version: str | None = None
 
 
+class ClaimAddition(BoundaryDTO):
+    """One manually written line to append to a named section.
+
+    It lands `pending` - nothing has authorized it yet - and is resolved the
+    same way any other pending line is: linked to a fact, edited into
+    something a fact authorizes, or removed.
+    """
+
+    section: str
+    text: str
+
+
 class UpdateWorkingDraftCommand(BoundaryDTO):
     """§14 autosave: one exact draft version, and a structured patch.
 
@@ -308,6 +320,7 @@ class UpdateWorkingDraftCommand(BoundaryDTO):
     expected_content_hash: str
     claim_edits: list[ClaimPatch] = []
     claim_removals: list[str] = []
+    claim_additions: list[ClaimAddition] = []
 
     @model_validator(mode="after")
     def validate_patch(self) -> UpdateWorkingDraftCommand:
@@ -319,8 +332,8 @@ class UpdateWorkingDraftCommand(BoundaryDTO):
         against a single expected version. A separate command would need its own
         token and could interleave with the save the user is already making.
         """
-        if not self.claim_edits and not self.claim_removals:
-            raise ValueError("a working draft patch must edit or remove at least one claim")
+        if not self.claim_edits and not self.claim_removals and not self.claim_additions:
+            raise ValueError("a working draft patch must edit, remove, or add at least one claim")
         both = {edit.claim_id for edit in self.claim_edits} & set(self.claim_removals)
         if both:
             raise ValueError(f"a patch cannot both edit and remove the same claim: {sorted(both)}")

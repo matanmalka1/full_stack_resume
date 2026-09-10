@@ -19,6 +19,7 @@ CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")
 CANONICAL_JOIN_TEMPLATE = ("canonical-renderings", "1.0.0")
 EXTRACTIVE_DERIVATION = ("extractive-clauses", "1.0.0")
 EDITABLE_STYLES = frozenset({"paragraph", "bullet", "item"})
+MANUAL_CLAIM_PENDING_REASON = "שורה שנוספה ידנית וטרם קושרה לעובדה מאומתת."
 
 
 @dataclass(frozen=True)
@@ -561,6 +562,41 @@ def remove_claim(draft: DraftDocument, claim_id: str, facts: FactStore) -> Draft
             del section.claims[index]
             return _refresh_selection(draft, facts)
     raise KeyError(claim_id)
+
+
+def add_claim(
+    draft: DraftDocument,
+    section: str,
+    text: str,
+    facts: FactStore,
+    *,
+    style: ClaimStyle = "bullet",
+) -> tuple[DraftDocument, str]:
+    """Append a free-text line a person wrote, with nothing yet authorizing it.
+
+    It lands as `pending`, on the same footing as any other line nothing could
+    authorize: product-spec §10 already defines how a pending claim is resolved
+    (linked to a fact, edited into something a fact does authorize, or
+    removed), and the fact-resolution flow built for that case is exactly what
+    a manually added line needs.
+    """
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("manual claim text cannot be empty")
+    target = next((candidate for candidate in draft.sections if candidate.name == section), None)
+    if target is None:
+        raise KeyError(section)
+    claim = ClaimLine(
+        claim_id=str(uuid.uuid4()),
+        style=style,
+        text=stripped,
+        fact_ids=[],
+        claim_type="pending",
+        text_hash=sha256_text(stripped),
+        pending_reason=MANUAL_CLAIM_PENDING_REASON,
+    )
+    target.claims.append(claim)
+    return _refresh_selection(draft, facts), claim.claim_id
 
 
 def register_linked_claim(

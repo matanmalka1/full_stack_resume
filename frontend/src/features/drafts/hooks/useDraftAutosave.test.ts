@@ -78,6 +78,7 @@ describe("useDraftAutosave", () => {
     expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
       claim_edits: [patch("c-1", "second"), patch("c-2", "other")],
       claim_removals: [],
+      claim_additions: [],
     });
     expect(headerOf(fetchMock.mock.calls[0], "If-Match")).toBe('"4-hash-4"');
   });
@@ -110,6 +111,7 @@ describe("useDraftAutosave", () => {
     expect(bodyOf(fetchMock.mock.calls[1])).toEqual({
       claim_edits: [patch("c-1", "while saving")],
       claim_removals: [],
+      claim_additions: [],
     });
     /* The token is the one the first response returned, not the one this edit was made
        against. */
@@ -162,6 +164,7 @@ describe("useDraftAutosave", () => {
     expect(bodyOf(fetchMock.mock.calls[1])).toEqual({
       claim_edits: [patch("c-1", "mine")],
       claim_removals: [],
+      claim_additions: [],
     });
   });
 
@@ -208,6 +211,7 @@ describe("useDraftAutosave", () => {
     expect(bodyOf(fetchMock.mock.calls[1])).toEqual({
       claim_edits: [patch("c-1", "mine")],
       claim_removals: [],
+      claim_additions: [],
     });
   });
 
@@ -228,6 +232,7 @@ describe("useDraftAutosave", () => {
     expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
       claim_edits: [],
       claim_removals: ["c-1"],
+      claim_additions: [],
     });
   });
 
@@ -247,6 +252,7 @@ describe("useDraftAutosave", () => {
     expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
       claim_edits: [patch("c-1", "leaving the editor")],
       claim_removals: [],
+      claim_additions: [],
     });
   });
 });

@@ -1,4 +1,4 @@
-import type { ClaimPatch, WorkingDraft } from "@/api/contracts";
+import type { ClaimAddition, ClaimPatch, WorkingDraft } from "@/api/contracts";
 import { outlineClaims } from "@/api/drafts";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
@@ -9,6 +9,7 @@ interface DraftConflictDialogProps {
   onReapplyLocal: () => void;
   open: boolean;
   pending: ClaimPatch[];
+  pendingAdditions: ClaimAddition[];
   pendingRemovals: string[];
 }
 
@@ -22,6 +23,7 @@ export const DraftConflictDialog = ({
   onReapplyLocal,
   open,
   pending,
+  pendingAdditions,
   pendingRemovals,
 }: DraftConflictDialogProps) => {
   const texts = new Map(
@@ -71,6 +73,20 @@ export const DraftConflictDialog = ({
         <p className="text-support leading-6 text-cv-text-muted">
           ההסרה שביקשת עדיין ממתינה. החלת הטקסט שלי תבצע גם אותה על הגרסה הנוכחית.
         </p>
+      )}
+
+      {pendingAdditions.length === 0 ? null : (
+        <ul className="flex flex-col gap-2">
+          {pendingAdditions.map((addition) => (
+            <li
+              className="text-support leading-6 text-cv-text-muted"
+              dir="auto"
+              key={`${addition.section}:${addition.text}`}
+            >
+              שורה חדשה שהוספתי ל"{addition.section}" עדיין ממתינה: {addition.text}
+            </li>
+          ))}
+        </ul>
       )}
     </Dialog>
   );

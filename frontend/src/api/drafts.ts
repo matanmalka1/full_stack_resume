@@ -5,6 +5,7 @@ import { type QueuedOperation, queuedOperation } from "./operations";
 import type {
   ApplySelectionChangeRequest,
   ArchivedWorkingDraft,
+  ClaimAddition,
   ClaimPatch,
   DraftClaim,
   Operation,
@@ -94,6 +95,7 @@ export const outlineClaims = (draft: WorkingDraft): DraftClaim[] => [
 export interface DraftPatch {
   claim_edits: ClaimPatch[];
   claim_removals: string[];
+  claim_additions: ClaimAddition[];
 }
 
 export interface DraftUpdate {

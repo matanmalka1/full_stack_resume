@@ -89,6 +89,18 @@ class ClaimPatchRequest(HttpSchema):
     template_version: str | None = None
 
 
+class ClaimAdditionRequest(HttpSchema):
+    """One manually written line to append to a named section.
+
+    It is saved as a `pending` claim, exactly like free text an edit could not
+    authorize: resolved by linking it to a fact, editing it into wording a
+    fact does authorize, or removing it.
+    """
+
+    section: str = Field(max_length=200)
+    text: str = Field(max_length=2000)
+
+
 class UpdateWorkingDraftRequest(HttpSchema):
     """The structured patch `PATCH /working-drafts/{id}` applies as one edit.
 
@@ -98,8 +110,9 @@ class UpdateWorkingDraftRequest(HttpSchema):
     against a single expected version - a second command would need its own
     token and could interleave with the save already in flight.
 
-    Only one of the two lists has to be non-empty. Requiring both would make
-    "remove this line" impossible to express without also rewriting one.
+    At least one of the three lists has to be non-empty. Requiring all three
+    would make "remove this line" impossible to express without also
+    rewriting or adding one.
     """
 
     claim_edits: list[ClaimPatchRequest] = []
@@ -112,6 +125,7 @@ class UpdateWorkingDraftRequest(HttpSchema):
             "are structural."
         ),
     )
+    claim_additions: list[ClaimAdditionRequest] = []
 
     @model_validator(mode="after")
     def validate_patch(self) -> UpdateWorkingDraftRequest:
@@ -121,8 +135,8 @@ class UpdateWorkingDraftRequest(HttpSchema):
         that only surfaced there would reach the client as a 500 rather than as
         the `422` an unusable request deserves.
         """
-        if not self.claim_edits and not self.claim_removals:
-            raise ValueError("a patch must edit or remove at least one claim")
+        if not self.claim_edits and not self.claim_removals and not self.claim_additions:
+            raise ValueError("a patch must edit, remove, or add at least one claim")
         both = {edit.claim_id for edit in self.claim_edits} & set(self.claim_removals)
         if both:
             raise ValueError(f"a patch cannot both edit and remove the same claim: {sorted(both)}")

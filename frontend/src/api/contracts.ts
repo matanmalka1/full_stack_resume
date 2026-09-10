@@ -110,6 +110,7 @@ export type SelectionOutcome = NonNullable<DraftFact["outcome"]>;
 export type OmissionReason = NonNullable<DraftFact["reason"]>;
 
 export type ClaimPatch = ApiSchemas["ClaimPatchRequest"];
+export type ClaimAddition = ApiSchemas["ClaimAdditionRequest"];
 export type WorkingDraftUpdate = ApiSchemas["WorkingDraftUpdateResponse"];
 
 export type Fact = ApiSchemas["FactResponse"];

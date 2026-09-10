@@ -19,6 +19,7 @@ const claim: DraftClaim = {
 const facts: DraftFact[] = [{ fact_id: "fact-1", linked_claim_ids: ["claim-1"], text: "חמש שנות ניסיון" }];
 
 const actions = (overrides: Partial<DraftClaimActions> = {}): DraftClaimActions => ({
+  onAdd: vi.fn(),
   onCommit: vi.fn(),
   onEdit: vi.fn(),
   onRegenerate: vi.fn(),
