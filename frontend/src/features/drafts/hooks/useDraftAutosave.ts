@@ -28,6 +28,35 @@ interface UseDraftAutosaveOptions {
 
 const emptyPatch = (patch: DraftPatch): boolean => patch.claim_edits.length === 0 && patch.claim_removals.length === 0;
 
+const storageKey = (workingDraftId: string): string => `cv-engine:autosave:${workingDraftId}`;
+
+interface StoredBuffer {
+  edits: ClaimPatch[];
+  removals: string[];
+}
+
+/* Best-effort only: a full or disabled storage must never block typing or saving. */
+const readStoredBuffer = (workingDraftId: string): StoredBuffer | null => {
+  try {
+    const raw = window.sessionStorage.getItem(storageKey(workingDraftId));
+    return raw === null ? null : (JSON.parse(raw) as StoredBuffer);
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void => {
+  try {
+    if (buffer.edits.length === 0 && buffer.removals.length === 0) {
+      window.sessionStorage.removeItem(storageKey(workingDraftId));
+      return;
+    }
+    window.sessionStorage.setItem(storageKey(workingDraftId), JSON.stringify(buffer));
+  } catch {
+    /* ignore */
+  }
+};
+
 /* A.4 autosave, and the serialisation debounce alone does not give.
 
    Two saves in flight let an older response install an older ETag over a newer one, and
@@ -71,18 +100,47 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     });
   }, []);
 
+  /* Mirrors the in-memory buffer so a refresh or crash does not lose text the "saved in
+     the browser" message already promises. Writes on every mutation and is cleared the
+     moment a save actually lands, so it never outlives what it stands in for. */
+  const mirror = useCallback(() => {
+    if (workingDraftId === null) {
+      return;
+    }
+    writeStoredBuffer(workingDraftId, {
+      edits: [...edits.current.values()],
+      removals: [...removals.current],
+    });
+  }, [workingDraftId]);
+
+  /* Warns before the tab or navigation discards text the buffer has not yet sent. */
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (edits.current.size === 0 && removals.current.size === 0) {
+        return;
+      }
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
   /* Put a rejected patch back so nothing the user wrote is lost - but never over a newer
      edit to the same claim. The buffer is the latest intent, and a restore is older. */
-  const restore = useCallback((patch: DraftPatch) => {
-    for (const edit of patch.claim_edits) {
-      if (!edits.current.has(edit.claim_id)) {
-        edits.current.set(edit.claim_id, edit);
+  const restore = useCallback(
+    (patch: DraftPatch) => {
+      for (const edit of patch.claim_edits) {
+        if (!edits.current.has(edit.claim_id)) {
+          edits.current.set(edit.claim_id, edit);
+        }
       }
-    }
-    for (const claimId of patch.claim_removals) {
-      removals.current.add(claimId);
-    }
-  }, []);
+      for (const claimId of patch.claim_removals) {
+        removals.current.add(claimId);
+      }
+      mirror();
+    },
+    [mirror],
+  );
 
   const send = useCallback(async (): Promise<void> => {
     if (inFlight.current || halted.current || workingDraftId === null) {
@@ -108,6 +166,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       token.current = result.etag;
       onSaved(result.update, result.etag);
       publish("saved");
+      mirror();
     } catch (error) {
       restore(patch);
 
@@ -141,7 +200,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     /* Whatever arrived while that request was open goes now, against the token it just
        returned. */
     void sendRef.current();
-  }, [onConflict, onSaved, publish, restore, workingDraftId]);
+  }, [mirror, onConflict, onSaved, publish, restore, workingDraftId]);
 
   useEffect(() => {
     sendRef.current = send;
@@ -157,24 +216,48 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     }, AUTOSAVE_DEBOUNCE_MS);
   }, [send]);
 
+  /* Recovers a buffer left behind by a reload or crash before the draft's own state
+     finished loading. Runs once per draft id; the save it schedules is a normal save,
+     and success clears the entry like any other. */
+  useEffect(() => {
+    if (workingDraftId === null) {
+      return;
+    }
+    const stored = readStoredBuffer(workingDraftId);
+    if (stored === null) {
+      return;
+    }
+    for (const edit of stored.edits) {
+      edits.current.set(edit.claim_id, edit);
+    }
+    for (const claimId of stored.removals) {
+      removals.current.add(claimId);
+    }
+    publish("idle");
+    schedule();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workingDraftId]);
+
   const queueEdit = useCallback(
     (patch: ClaimPatch) => {
       edits.current.set(patch.claim_id, patch);
       removals.current.delete(patch.claim_id);
+      mirror();
       publish(halted.current ? "conflict" : "idle");
       schedule();
     },
-    [publish, schedule],
+    [mirror, publish, schedule],
   );
 
   const queueRemoval = useCallback(
     (claimId: string) => {
       edits.current.delete(claimId);
       removals.current.add(claimId);
+      mirror();
       publish(halted.current ? "conflict" : "idle");
       schedule();
     },
-    [publish, schedule],
+    [mirror, publish, schedule],
   );
 
   /* Blur: the debounce is a convenience for typing, not a reason to hold a finished edit. */
@@ -192,8 +275,9 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     edits.current.clear();
     removals.current.clear();
     halted.current = false;
+    mirror();
     publish("idle");
-  }, [publish]);
+  }, [mirror, publish]);
 
   /* The user chose to apply their text over the current version. The token now in hand
      came from a fresh read, so this is a new save against what the server actually holds,

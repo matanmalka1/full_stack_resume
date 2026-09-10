@@ -220,10 +220,13 @@ describe("the review decision, on the Application screen", () => {
 
     expect(await screen.findByRole("heading", { name: "החלטות נדרשות כדי להמשיך" })).toBeInTheDocument();
     const save = screen.getByRole("button", { name: "שמירת ההחלטות" });
+    const commitBarLayout = save.parentElement?.parentElement;
+    expect(commitBarLayout).toHaveClass("grid", "grid-cols-[minmax(0,1fr)_max-content]");
     fireEvent.change(screen.getByLabelText("מסלול"), { target: { value: "tech-sales" } });
     expect(save).toBeDisabled();
     fireEvent.click(screen.getByRole("switch", { name: /הדרישות לא נקראו/ }));
     expect(save).toBeEnabled();
+    expect(save.parentElement?.parentElement).toBe(commitBarLayout);
   });
 
   /* The decision a hard gap takes is per requirement and is recorded on the SelectionPlan.

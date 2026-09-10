@@ -56,7 +56,7 @@ export const CommitBarTargetContext = createContext<HTMLElement | null | undefin
    screen - and it is this component, at all three, that makes the answer one shape. */
 const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarProps) => (
   <div className="sticky bottom-4 z-20 rounded-surface border border-cv-border bg-cv-surface/95 p-4 shadow-floating backdrop-blur-xl">
-    <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)_max-content] items-center gap-4">
       <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
         {back}
         {label === undefined ? (
@@ -68,7 +68,7 @@ const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarP
           </div>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-3">{primary}</div>
+      <div className="flex flex-wrap items-center justify-self-end gap-3">{primary}</div>
     </div>
     {result === undefined ? null : (
       <LiveRegion
