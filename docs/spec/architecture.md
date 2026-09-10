@@ -469,8 +469,10 @@ temporary browser-startup failures.
 
 ## 11. AI adapter
 
-The existing provider-neutral protocol is retained and expanded for the seven tasks
-defined in product-spec §12, including `assess_claim_support` under D1 (2026-09-06).
+The provider-neutral protocol currently implements six of the seven target tasks defined
+in product-spec §12. `assess_claim_support`, the seventh task introduced by D1
+(2026-09-06), remains design work and must not be represented as an available provider
+capability until its evidence lifecycle and activation rules are implemented.
 The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.

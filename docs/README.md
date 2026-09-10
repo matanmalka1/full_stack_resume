@@ -11,25 +11,23 @@ Binding on what the product does. Changes by an approved decision.
 | `architecture.md` | Layer boundaries, filesystem layout, schema shape, dependency baseline |
 | `test-and-acceptance-plan.md` | Test layers, golden matrix, release gates |
 
-## State and process
+## Decisions, acceptance, and active work
 
-- [Tailoring behavior change](tailoring-behavior-change.md) — approved tailoring principles
-  and remaining design work for development and sales; §8 organizes execution into
-  three deliveries: correct analysis, tailored writing, and the final experience/PDF.
+- [Tailoring behavior change](tailoring-behavior-change.md) — approved decisions D1–D4
+  and the three-delivery roadmap. Delivery 1 is implemented with explicitly recorded
+  acceptance gaps; deliveries 2–3 remain future work.
 - [Acceptance cases](tailoring-acceptance-cases.md) — Connecteam SDR and WeDev Junior
   Fullstack: source mappings, proposed outputs, and editing scenarios.
 - [Wording validation design](tailoring-wording-validation.md) — approved acceptance
-  decision D1 and evidence/staleness design; storage and command details remain to be completed.
-- [Analysis contract extension](tailoring-analysis-contract.md) — D2–D4 are closed and
-  incorporated into the binding specifications: primary AI requirement extraction,
-  the explicit deterministic path, and material professional choices. Remaining
-  evidence-matching and selection/budget proposals are not blanket-approved.
-- [Delivery 1 implementation plan](tailoring-stage-1-plan.md) — correct job analysis,
-  with internal tasks rather than separate waves. Structural decisions are resolved; threshold/member contracts,
-  evidence/boundary mapping, and interpretation enforcement remain to be completed.
-  This supporting plan does not override `spec/` or claim runtime implementation.
-- `m5-remaining.md` — M5 closure status and only the work explicitly carried forward.
-- `process/execution-protocol.md` — how work is split across parallel agents.
+  decision D1 and evidence/staleness design. It is the active design record for the
+  unimplemented seventh AI task, `assess_claim_support`, and its storage/command/UI flow.
+- [Delivery 1 status](tailoring-stage-1-plan.md) — what landed for correct job analysis,
+  the evidence reported at delivery time, and the remaining acceptance/configuration gaps.
+- [Execution protocol](process/execution-protocol.md) — optional coordination rules for
+  work that can be split safely across isolated worktrees.
+
+Closed milestone plans and superseded analysis-design drafts are retained in Git history,
+not in the active documentation tree.
 
 ## Baseline
 

@@ -160,8 +160,8 @@ Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidenc
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
-5. Update the current milestone tracker — `docs/m5-remaining.md` — with what landed and
-   what remains. It is the only record of state, and it moves with the milestone.
+5. Update the active delivery/status document named by `docs/README.md` with what landed
+   and what remains. Closed milestone trackers stay in Git history.
 6. Report per package, with command evidence.
 
 ## 7. When not to use this
@@ -169,11 +169,8 @@ Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidenc
 Parallel lanes are justified only when file ownership can be made disjoint. They are the
 wrong shape when:
 
-- the work converges on one shared file (M1's second round converged on
-  `tests/conftest.py`, so it ran with a single executor);
-- the packages are sequentially dependent (M2's schema boundary had to land before
-  records, and records before projections, while Operations touched different tables and
-  ran alongside; the current milestone tracker holds the current order);
+- the work converges on one shared file;
+- the packages are sequentially dependent and cannot expose stable intermediate contracts;
 - the change is small enough that the coordination costs more than the work.
 
 Saying "this does not need three lanes" is a valid and expected outcome of planning.

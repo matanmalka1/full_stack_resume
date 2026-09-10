@@ -171,8 +171,9 @@ bucket alike.
 ## Optional AI provider
 
 The deterministic engine completes the entire workflow offline. Configuring a key
-enables OpenAI classification proposals through the provider-neutral structured task
-contract. The Web settings page then offers a closed model catalog and
+enables six structured OpenAI proposal tasks: requirement extraction, classification,
+selection, initial draft wording, section regeneration, and claim regeneration. The Web
+settings page then offers a closed model catalog and
 low/medium/high reasoning effort; those defaults are frozen onto each queued AI
 Operation:
 
@@ -270,7 +271,7 @@ The pre-v1 generation scripts have been retired, and the v1 submission data they
 it was generated from — `base/cv_base.md`, `base/cv-formatted.md`, `base/cv-pdf/` — and
 the superseded `ai/prompts/system-v1.md` were removed with it. Nothing in v2 read them:
 the canonical fact sources are `common.md`, `sales.md`, `development.md`, and
-`situational_skills.md`, and the task contract names `system-v2.md`.
+`situational_skills.md`, and the task contract names `system-v3.md`.
 
 Facts migrated out of `cv_base.md` still cite it in their `provenance`. Those strings are
 the historical record of where a fact came from and are deliberately left unchanged; the

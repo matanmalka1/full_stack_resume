@@ -122,5 +122,3 @@ Report what passed, what failed, and what remains. Never claim completion with
 - Add a dependency only when it enforces a contract, reduces rendering risk, or gives a
   concrete portability benefit. The baseline is `docs/spec/architecture.md` section 2.
 - One agent at a time per worktree.
-
-## Keeping this file small
