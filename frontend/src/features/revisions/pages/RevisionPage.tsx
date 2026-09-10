@@ -9,7 +9,9 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
+import { Skeleton } from "@/ui/Skeleton";
 import { ActiveOperationPanel } from "@/features/operations";
 import { applicationLabel } from "@/features/applications";
 import { CommitBar, NEXT_STEP_LABEL, WizardStepShell } from "@/features/preparation";
@@ -19,6 +21,19 @@ import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog
 import { RevisionSummary } from "../components/RevisionSummary";
 import { useRevisionData } from "../api/queries";
 import { useRevisionDraftGeneration } from "../api/mutations";
+
+/* The two records this step is read for - the summary of the finished CV and the immutable
+   revision behind it - held at their own size while they load. The step is the end of the
+   flow and the page arrives at it directly, so the wait is the reader's first sight of it;
+   a line of muted text made that first sight look like a different application than the
+   three steps that led here. */
+const revisionLoading = (
+  <div className="flex flex-col gap-6">
+    <LiveRegion>טוען את הגרסה…</LiveRegion>
+    <Skeleton className="block h-40 w-full" />
+    <Skeleton className="block h-64 w-full" />
+  </div>
+);
 
 /* One approved revision, addressed by revision rather than Application because the
    immutable record can remain current while work on a newer draft continues. */
@@ -126,7 +141,9 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       description="הגרסה המאושרת נשארת זמינה גם כאשר העבודה על המועמדות ממשיכה."
       detail={detail}
       eyebrow={
-        detail === undefined ? undefined : (
+        detail === undefined ? (
+          <Skeleton className="inline-block w-56 max-w-full align-middle" />
+        ) : (
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
@@ -141,7 +158,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         error={pageQueryError}
         fallbackTitle="לא ניתן לטעון את הגרסה המוכנה"
         loading={revision === undefined}
-        loadingLabel="טוען את הגרסה…"
+        loadingState={revisionLoading}
       >
         {revision === undefined ? null : (
           <>

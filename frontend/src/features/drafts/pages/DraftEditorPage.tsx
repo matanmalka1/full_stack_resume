@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
+import { Skeleton } from "@/ui/Skeleton";
 import { ActiveOperationPanel } from "@/features/operations";
 import { applicationLabel } from "@/features/applications";
 import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
@@ -22,6 +24,25 @@ import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWork
 import { useDraftDocument } from "../api/queries";
 import { useDraftEditing } from "../hooks/useDraftEditing";
 import { useDraftValidation } from "../hooks/useDraftValidation";
+
+/* The workspace's own shape, held while the document behind it is read.
+
+   It opens in `document` mode, so what is coming is the view switch on its own line and
+   the rendered draft at full width beneath it - which is what this stands in for. Drawn
+   this way the arrival is the placeholder filling in rather than a screen's worth of
+   panels appearing at once against a line of muted text.
+
+   Not an Operation card: nothing is running. The read is a read, and the only thing worth
+   saying about it is where the document will be. */
+const draftLoading = (
+  <div className="flex flex-col gap-6">
+    <LiveRegion>טוען את הטיוטה…</LiveRegion>
+    <div className="flex justify-end">
+      <Skeleton className="block h-10 w-72 max-w-full" />
+    </div>
+    <Skeleton className="block h-[32rem] w-full" />
+  </div>
+);
 
 /* A.4 frame 3: read the draft, check what stands behind each line, validate, sign, and
    render - on the one screen that holds the draft all five act on.
@@ -116,7 +137,9 @@ export const DraftEditorPage = () => {
       applicationId={applicationId}
       detail={detail}
       eyebrow={
-        detail === undefined ? undefined : (
+        detail === undefined ? (
+          <Skeleton className="inline-block w-56 max-w-full align-middle" />
+        ) : (
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }
@@ -179,7 +202,7 @@ export const DraftEditorPage = () => {
       ) : null}
 
       {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftError === null ? (
-        <QueryState loading loadingLabel="טוען את הטיוטה…" />
+        <QueryState loading loadingState={draftLoading} />
       ) : null}
 
       {renderRevisionId !== null || draft === undefined ? null : (

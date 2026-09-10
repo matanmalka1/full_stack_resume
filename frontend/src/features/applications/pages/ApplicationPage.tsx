@@ -8,6 +8,7 @@ import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { QueryState } from "@/ui/QueryState";
+import { Skeleton } from "@/ui/Skeleton";
 import { ActiveOperationPanel, PendingWorkCard, operationTypeLabels } from "@/features/operations";
 import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
 import { applicationLabel } from "../model/applicationPresentation";
@@ -89,8 +90,13 @@ export const ApplicationPage = () => {
     <WizardStepShell
       applicationId={applicationId}
       detail={detail}
+      /* Held at one line's width while the projection is in flight. Absent, the masthead
+         drew the heading a line higher and dropped it when the name arrived - the page's
+         own title moving under the reader as the first thing it did. */
       eyebrow={
-        detail === undefined ? undefined : (
+        detail === undefined ? (
+          <Skeleton className="inline-block w-56 max-w-full align-middle" />
+        ) : (
           <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
         )
       }

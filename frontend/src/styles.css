@@ -394,6 +394,39 @@ dialog::backdrop {
   background-size: 6px 4px;
 }
 
+/* Content on its way, drawn as the shape it is about to become.
+
+   The alternative was a line of muted text, which is honest but reads as a different
+   application: every other wait in this flow is a card with a tag and a live status, and
+   a bare sentence in the middle of that is a hole in the surface rather than a lighter
+   version of it. A skeleton keeps the page's own vocabulary without claiming what the
+   Operation card claims - it says "this region is coming", not "work is running".
+
+   The sweep travels from the end because the interface is RTL. `prefers-reduced-motion`
+   above sets `animation-iteration-count: 1`, so this settles on a plain muted block
+   rather than flickering. */
+@keyframes cv-skeleton-sweep {
+  from {
+    background-position: -150% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
+}
+
+.cv-skeleton {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-cv-surface) 45%,
+    var(--color-cv-surface) 55%,
+    transparent 100%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  animation: cv-skeleton-sweep 1.6s ease-in-out infinite;
+}
+
 /* The few moments where a region genuinely changes shape rather than merely changing
    words: a run that finished collapsing to its one-line result, and the cancel control
    arriving into the space held for it. Both are real news, so they are eased in over a
