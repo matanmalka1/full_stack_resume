@@ -13,88 +13,53 @@ import { claimTypeExplanations, claimTypeLabels, claimTypeTones } from "../model
 interface DraftClaimRowProps {
   actions: DraftClaimActions;
   claim: DraftClaim;
-  /* Rendered under a `pending` line: the flow that turns unsupported text into a
-     confirmed fact. Supplied by the section, which knows the Application context it
-     needs. */
+  /* The confirmation flow for a `pending` line, supplied by the section. */
   factResolution?: ReactNode;
   /* The facts the accounting says stand behind this line, resolved by the list. */
   facts: DraftFact[];
-  /* Which command removes this line, or why none does. Decided once per claim by the
-     list rather than re-derived inside every row's markup. */
+  /* Which command removes this line, or why none does - decided once by the list. */
   removal: Removability;
 }
 
-/* An action on one line of sixty. Spelled out, the labels were wider than most of the
-   lines they acted on and repeated themselves down the whole page; as icons they carry
-   the same accessible name and stop competing with the text for width. */
+/* Icons instead of spelled-out labels: on sixty stacked rows the labels were wider than
+   the lines they acted on. */
 const rowActionClasses = "min-h-9 px-2";
 
-/* The margin column is a fixed width rather than shrink-to-fit, because each row is its
-   own grid and an auto width would set the text column to a different place on every
-   line. A fixed margin is what makes the statuses read as one column and the text as
-   another. It is wide enough for the longest label the backend can send - "מורכב מכמה
-   עובדות" - so a status wraps inside its own badge rather than pushing the text column
-   somewhere else. Below `sm` it is the full row and the line follows underneath, which
-   the row's own wrapping does; a second copy of the badge for narrow screens would be
-   announced twice on every line. */
+/* Fixed rather than shrink-to-fit, so every row's status lands in the same column; wide
+   enough for the longest backend label, "מורכב מכמה עובדות". */
 const marginClasses = "w-full shrink-0 pt-0.5 sm:w-36";
 
-/* A.4 frame 3: one line of the draft - the claim, its status in words, the facts behind
-   it, and what may be done to it.
-
-   The status leads: a fixed margin at the row's start, so a page of sixty lines shows one
-   straight column of statuses that can be scanned without reading a word, and the text
-   always begins at the same place beside it. The controls keep the far edge - a thing
-   said about the line and a thing done to it are not the same kind of thing and do not
-   share a corner.
-
-   The facts are marked lines rather than a bracketed block: each fact carries its own
-   small mark in the tone of a verified thing, so backing is counted per fact rather than
-   implied by one rule around all of them. Editing rings the text column instead of
-   changing the field's own chrome, because what changed is the line, not the widget.
-
-   It computes nothing about the draft. Removability and the linked facts are the list's
-   answers, so one policy is applied per claim in one place. */
+/* One line of the draft: status, text, backing facts, actions. Computes nothing about the
+   draft itself - removability and linked facts are the list's answers. */
 export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }: DraftClaimRowProps) => {
   const [text, setText] = useState(claim.text);
-  /* The server's text wins whenever it changes underneath: a regeneration, a rebuilt
-     selection, or the version the user kept after a conflict. Adjusted during render
-     rather than in an effect - the row must never paint the superseded line first, and an
-     unsaved edit is not lost by this, because it is held in the autosave buffer. */
+  /* The server's text wins on an underlying change (regeneration, rebuild, conflict
+     resolution). Set during render, not an effect, so the row never paints a superseded
+     line; an in-flight edit survives in the autosave buffer regardless. */
   const [syncedText, setSyncedText] = useState(claim.text);
   if (claim.text !== syncedText) {
     setSyncedText(claim.text);
     setText(claim.text);
   }
 
-  /* Per row, because that is the size of the decision. The screen is for reading a
-     document and signing it; changing one line does not need the whole page to turn into
-     a form, and the pencil is on every row so it is never somewhere else. */
   const [editing, setEditing] = useState(false);
+
+  /* The line as it stood when this edit began, so a revert hands back exactly what the
+     backend still counts as canonical rather than a value guessed after the fact. */
+  const [editOriginal, setEditOriginal] = useState<string | null>(null);
+  const revertTarget = editing && editOriginal !== null && text !== editOriginal ? editOriginal : null;
 
   const evidenceLabel = facts.length === 1 ? "העובדה שמאחורי השורה" : `${facts.length} עובדות שמאחורי השורה`;
 
   return (
-    /* A row, not a card. Every line of the draft used to be its own bordered, shadowed,
-       lifting surface, so a document of sixty lines was sixty stacked boxes and the text
-       inside them - the only thing on the screen the user came to read - was the least
-       prominent part. The rows are separated by the list's own hairline instead. */
     <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5 py-3 first:pt-0">
-      {/* The status, in the margin, drawn once. It is the backend's `claim_type`, not a
-          judgement made here. */}
       <div className={marginClasses}>
         <StatusBadge tone={claimTypeTones[claim.claim_type]}>{claimTypeLabels[claim.claim_type]}</StatusBadge>
       </div>
 
       <div className="min-w-0 flex-1">
-        {/* `text` rather than `claim.text` in both branches: an edit still sitting in the
-            autosave buffer is what the user last typed, and a row that reverted to the
-            server's copy would show a line the user did not write and is about to approve
-            something else.
-
-            An open row is marked by the surface under it rather than by a ring, and the
-            field keeps the focus ring every control in this application draws, so a
-            keyboard user tabbing through the rows can see where they are. */}
+        {/* `text`, not `claim.text`: an edit still in the autosave buffer is what the user
+            last typed. */}
         <div className={editing ? "rounded-control bg-cv-surface-muted" : undefined}>
           {editing ? (
             <Textarea
@@ -115,11 +80,32 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           )}
         </div>
 
-        {/* The facts behind the line, marked one by one. Approval is a signature on every
-            line, so the evidence is not something the reader should go looking for one row
-            at a time - but neither is it a second heading per row. Each mark says: this
-            sentence is backed by this. The sentence naming the set stays in the
-            accessibility tree. */}
+        {/* Only once typed text actually diverges from the line this edit opened with -
+            not on entering edit mode, and not before it has actually disconnected. */}
+        {revertTarget === null ? null : (
+          <Callout
+            action={
+              <Button
+                onClick={() => {
+                  setText(revertTarget);
+                  actions.onEdit(claim, revertTarget);
+                  actions.onCommit();
+                }}
+                size="compact"
+                variant="secondary"
+              >
+                שחזור הטקסט הקודם
+              </Button>
+            }
+            className="mt-2"
+            role="alert"
+            title="השורה מנותקת מהעובדה הקנונית"
+            tone="warning"
+          >
+            <p dir="auto">העריכה משנה את הניסוח בלי לשנות את מה שעומד מאחורי השורה. שחזור הטקסט הקודם מחבר אותה מחדש.</p>
+          </Callout>
+        )}
+
         {facts.length === 0 ? null : (
           <ul aria-label={evidenceLabel} className="mt-1 flex flex-col gap-1 px-2">
             {facts.map((fact) => (
@@ -133,10 +119,6 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           </ul>
         )}
 
-        {/* The badge in the margin already names the claim type in a word, and the marks
-            under the line show what backs it. `pending` has neither backing nor anything
-            to show, so its blocker carries the backend's own reason for why approval is
-            shut. */}
         {claim.claim_type === "pending" ? (
           <>
             <Callout className="mt-2" title="הטקסט הזה חוסם אישור" tone="blocker">
@@ -146,26 +128,22 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
           </>
         ) : null}
 
-        {/* What removal would do rides on the removal button itself. A line that cannot be
-            removed has no button to carry its reason, so that one stays where the reader
-            can see it. */}
         {removal.route === "none" && removal.reason !== undefined ? (
           <p className="mt-1.5 px-2 text-support leading-6 text-cv-text-muted">{removal.reason}</p>
         ) : null}
       </div>
 
-      {/* What may be done to the line, at the row's far edge and nothing else with it. All
-          three controls are always drawn: a control that appears only under the pointer is
-          one the reader has to already know is there, and on a touch screen there is no
-          pointer to reveal it with. */}
       <div className="flex shrink-0 items-center gap-1">
         <Button
           aria-label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
           className={rowActionClasses}
           onClick={() => {
-            /* Closing the field settles what is buffered, the way a blur does, so the line
-               the reader returns to is the line they typed. */
-            if (editing) actions.onCommit();
+            if (editing) {
+              actions.onCommit();
+              setEditOriginal(null);
+            } else {
+              setEditOriginal(text);
+            }
             setEditing(!editing);
           }}
           title={editing ? "סיום עריכת השורה" : "עריכת השורה"}
