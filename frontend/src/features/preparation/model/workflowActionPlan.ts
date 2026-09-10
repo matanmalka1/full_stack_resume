@@ -25,9 +25,16 @@ export interface WorkflowActionPlan {
      is not in the projection and is read separately by whoever sends the command.
 
      Offered on two conditions, not one. `available_actions` is the authority on whether
-     the workflow permits the command at all, and `stale_reasons` is why this screen puts
-     it in front of the reader: replacing a draft that is not stale is a command the
-     workflow may well allow, but it is not what this screen is answering. */
+     the workflow permits the command at all; the second condition is why this screen puts
+     it in front of the reader, and it is "this draft cannot be validated as it stands" -
+     either `stale_reasons`, or a `working_draft_state` of `validation_failed`.
+
+     The failed-validation half is not symmetry for its own sake. Editing a claim's text
+     detaches it from its canonical fact, which fails validation without producing a stale
+     reason, and the only other repair offered in that state is an AI regeneration that can
+     fail. Withholding the deterministic rebuild there leaves a draft that cannot be
+     approved and cannot be rebuilt from any screen. Archiving keeps the `stale_reasons`
+     gate: discarding the work is not a repair. */
   archiveDraft: { workingDraftId: string } | null;
   replaceDraft: { analysisId: string; emphasized: boolean; selectionPlanId: string; workingDraftId: string } | null;
   /* `update_working_draft`, `validate`, `approve`, and `render` all resolve to the draft
@@ -134,8 +141,9 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
 
   const workingDraftId = detail.active_working_draft_id ?? null;
   const stale = detail.stale_reasons.length > 0;
+  const rebuildable = stale || detail.working_draft_state === "validation_failed";
   const replaceDraft =
-    stale &&
+    rebuildable &&
     available("replace_working_draft") &&
     workingDraftId !== null &&
     analysisId !== null &&

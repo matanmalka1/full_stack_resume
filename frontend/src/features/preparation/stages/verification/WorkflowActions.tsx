@@ -198,13 +198,17 @@ export const WorkflowActions = ({ detail, onQueued, plan }: WorkflowActionsProps
         </p>
       )}
 
-      {/* What separates the two stale-draft commands. They appear only beside a stale-draft
-          alert, so the reader has already been told the draft is out of date; what they
-          have not been told is that the two buttons are not variants of one another. */}
+      {/* What each of the two draft-level commands does. Beside a stale-draft alert both
+          are offered and what the reader has not been told is that they are not variants
+          of one another; after a failed validation only replacement is offered, and naming
+          an archive button that is not on the screen would send the reader looking for it.
+          So each sentence is tied to the button it explains. */}
       {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
         <p className="text-support leading-6 text-cv-text-muted">
-          החלפה בונה טיוטה חדשה מהניתוח ומתוכנית הבחירה הפעילים. העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות
-          בלי טיוטה פעילה.
+          {plan.replaceDraft === null ? null : "החלפה בונה טיוטה חדשה מהניתוח ומתוכנית הבחירה הפעילים. "}
+          {plan.archiveDraft === null
+            ? null
+            : "העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה."}
         </p>
       )}
 

@@ -88,6 +88,25 @@ describe("the way out of a stale draft (§14)", () => {
     expect(plan.archiveDraft).toBeNull();
   });
 
+  /* The other state in which the rebuild is what this screen is answering. Editing a claim
+     detaches it from its canonical fact, which fails validation without producing a stale
+     reason; the only other repair offered there is an AI regeneration that can fail, so a
+     replacement withheld here leaves a draft that can neither be approved nor rebuilt.
+     Archive stays withheld: nothing is out of date, and discarding is not a repair. */
+  it("offers the rebuild - and only the rebuild - when validation failed without a stale reason", () => {
+    const plan = workflowActionPlan(
+      staleDetail({ stale_reasons: [], working_draft_state: "validation_failed" }),
+    );
+
+    expect(plan.replaceDraft).toEqual({
+      analysisId: "analysis-1",
+      emphasized: false,
+      selectionPlanId: "plan-1",
+      workingDraftId: "draft-1",
+    });
+    expect(plan.archiveDraft).toBeNull();
+  });
+
   /* Replacement builds a new draft, so it needs the two sources to build it from. Archive
      builds nothing and needs neither - it only has to name the draft it is setting aside.
      Asserted in one act because the difference between them is the point: the same missing
@@ -169,6 +188,32 @@ describe("recommended action destinations", () => {
       selectionPlanId: null,
     });
     expect(plan.unbuiltRecommendation).toBeNull();
+  });
+
+  /* The claim-level commands are controls in the editor, so a recommendation naming one of
+     them is not unbuilt: this screen has nothing to offer for it, but a screen exists and
+     the reason callouts beside this one link to it. Reporting it as having no screen told
+     the reader the app could not do what it had just told them to do. */
+  it("does not call a claim-level recommendation unbuilt", () => {
+    for (const recommended of [
+      "confirm_and_use_fact",
+      "apply_selection_change",
+      "regenerate_claim",
+      "regenerate_section",
+    ]) {
+      const plan = workflowActionPlan(
+        staleDetail({
+          preparation_state: "needs_review",
+          working_draft_state: "validation_failed",
+          stale_reasons: [],
+          available_actions: ["update_working_draft", recommended],
+          recommended_action: recommended,
+        }),
+      );
+
+      expect(plan.unbuiltRecommendation).toBeNull();
+      expect(plan.draftScreen?.href).toBe("/applications/app-1/draft");
+    }
   });
 
   it("routes rendering back to the editor that recovers the exact approved revision", () => {

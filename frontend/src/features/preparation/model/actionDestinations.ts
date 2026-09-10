@@ -21,11 +21,18 @@ const destinations: Record<string, (applicationId: string) => string> = {
   create_draft: routePaths.application,
   archive_working_draft: routePaths.application,
   replace_working_draft: routePaths.application,
-  /* The Draft Editor is where the patch is issued, so the three commands it carries all
-     lead to it. `apply_selection_change` and the removal path are controls on that
-     screen rather than screens of their own: they act on the claim the user is looking
-     at, and a separate destination would ask them to find it twice. */
+  /* The Draft Editor is where the patch is issued, so the commands it carries all lead
+     to it. `apply_selection_change`, the regeneration commands and the fact resolution
+     are controls on that screen rather than screens of their own: they act on the claim
+     the user is looking at, and a separate destination would ask them to find it twice.
+     `confirm_and_use_fact` in particular is the terminal state of an ordinary editing
+     mistake - a claim that lost its fact link - and its control is `ClaimFactResolution`,
+     which is already on that screen beside the claim it repairs. */
   update_working_draft: routePaths.draft,
+  apply_selection_change: routePaths.draft,
+  confirm_and_use_fact: routePaths.draft,
+  regenerate_claim: routePaths.draft,
+  regenerate_section: routePaths.draft,
   /* Validation and approval are states of the draft editor, not screens beside it.
      Both act on the exact draft the editor is holding, so they resolve to that one
      destination: the panel that reports the result and the dialog that approves it are
