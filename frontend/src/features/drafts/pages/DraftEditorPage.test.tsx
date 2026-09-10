@@ -263,7 +263,7 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByText("Owned the CRM migration.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
     /* The headline is a line of the document rather than a field: it is drawn as text

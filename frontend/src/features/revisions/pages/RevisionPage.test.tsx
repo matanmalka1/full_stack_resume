@@ -223,11 +223,12 @@ describe("RevisionPage", () => {
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     fireEvent.click(await screen.findByText("אפשרויות נוספות"));
     const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
-    /* The immutable revision keeps the complete route back to its Application - one step,
-       because the preparation screen it used to name in between is that same record. */
-    expect(screen.getByRole("link", { name: "Acme — Engineer" })).toHaveAttribute("href", "/applications/app-1");
-    expect(screen.queryByText("הכנת קורות החיים")).toBeNull();
-    expect(screen.getByText("גרסה מוכנה")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "חזרה לשלב ניתוח והתאמה" })).toHaveAttribute(
+      "href",
+      "/applications/app-1",
+    );
+    expect(screen.getByRole("heading", { name: "מוכן למסירה" })).toBeInTheDocument();
     fireEvent.click(newDraft);
     await waitFor(() => expect(fetchMock.mock.calls.some((call) => call[1]?.method === "POST")).toBe(true));
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");

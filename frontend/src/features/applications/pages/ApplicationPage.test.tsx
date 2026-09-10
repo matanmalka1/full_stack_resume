@@ -121,7 +121,7 @@ describe("ApplicationPage", () => {
     expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
   });
 
-  it("links a Ready application to the exact immutable revision, from the preparation tab", async () => {
+  it("links a Ready application to the exact immutable revision from the workflow spine", async () => {
     renderPage((input) =>
       Promise.resolve(
         String(input).endsWith("/artifacts")
@@ -134,55 +134,36 @@ describe("ApplicationPage", () => {
       ),
     );
 
-    fireEvent.click(await screen.findByRole("tab", { name: /הכנת קורות חיים/ }));
-    expect(await screen.findByRole("link", { name: "צפייה בגרסה המוכנה" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: /מוכן למסירה/ })).toHaveAttribute(
       "href",
       "/revisions/revision-7",
     );
   });
 
-  it("reports preparation and recruitment as two separate axes", async () => {
+  it("keeps recruitment state off the CV preparation step", async () => {
     renderPage();
 
-    /* Two headings, two states, and neither is a step of the other: the CV can be Ready
-       while the recruitment status is still a first call, so a single merged "status"
-       would be claiming a sequence that does not exist. */
-    const preparation = await screen.findByRole("heading", { name: "הכנת קורות חיים" });
-    const recruitment = screen.getByRole("heading", { name: "גיוס" });
-    expect(preparation.compareDocumentPosition(recruitment) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(screen.getByText("שיחת מגייס")).toBeInTheDocument();
-
-    /* Reading the recruitment state is not the same as changing it: the transitions and
-       the timeline stay in the manager dialog. */
-    expect(screen.queryByRole("heading", { name: "מעקב גיוס" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    expect(await screen.findByRole("dialog", { name: "ניהול מועמדות: Acme" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "ניתוח והתאמה" })).toBeInTheDocument();
+    expect(screen.queryByText("שיחת מגייס")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
   });
 
-  it("offers the recommended action as one destination beside the record", async () => {
+  it("offers the recommended action once inside the active step", async () => {
     renderPage();
 
-    /* The projection recommends `analyze`; the masthead offers it as the way into the
-       screen that runs it, never as a second copy of the command itself. */
-    expect(await screen.findByRole("link", { name: /ניתוח המשרה/ })).toHaveAttribute("href", "/applications/app-1");
+    expect(await screen.findByRole("button", { name: /ניתוח המשרה/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /ניתוח המשרה/ })).not.toBeInTheDocument();
   });
 
-  it("keeps recruitment details in the manager without duplicating application metadata", async () => {
+  it("keeps the saved posting as collapsed reference material", async () => {
     renderPage();
 
-    const jobHeading = await screen.findByRole("heading", { name: "מודעת המשרה" });
-    const updateButton = screen.getByRole("button", { name: "עדכון נוסח המשרה" });
-    const textDisclosure = screen.getByText("הצגת נוסח המשרה השמור");
-    expect(jobHeading.compareDocumentPosition(updateButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(updateButton.compareDocumentPosition(textDisclosure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.queryByText("פרטים נוספים על המועמדות")).not.toBeInTheDocument();
-    expect(screen.queryByText("מקור המועמדות")).not.toBeInTheDocument();
-
-    expect(screen.queryByRole("heading", { name: "מעקב גיוס" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    expect(await screen.findByLabelText("תוכן ההערה")).toHaveValue("Referral from a former colleague");
-    expect(screen.queryByRole("heading", { name: "פרטי המועמדות" })).not.toBeInTheDocument();
+    const postingSummary = await screen.findByText("צפייה בנוסח המשרה שנשמר");
+    expect(postingSummary.closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(postingSummary);
+    expect(postingSummary.closest("details")).toHaveAttribute("open");
+    expect(screen.getByRole("heading", { name: "מודעת המשרה" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
   });
 
   it("keeps artifact files and previous CV revisions collapsed until requested", async () => {
@@ -213,11 +194,15 @@ describe("ApplicationPage", () => {
     ];
     renderPage((input) =>
       Promise.resolve(
-        String(input).endsWith("/artifacts") ? jsonResponse({ items: artifacts }) : jsonResponse(detail()),
+        String(input).endsWith("/artifacts")
+          ? jsonResponse({ items: artifacts })
+          : jsonResponse({ ...detail(), preparation_state: "ready", latest_ready_revision_id: "revision-2" }),
       ),
     );
 
-    fireEvent.click(await screen.findByRole("tab", { name: /תוצרים/ }));
+    const artifactsSummary = (await screen.findAllByText("גרסאות וקבצים"))[0];
+    expect(artifactsSummary.closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(artifactsSummary);
     expect(await screen.findByText("הגרסה האחרונה")).toBeInTheDocument();
     expect(screen.queryByText("גרסה קודמת")).not.toBeInTheDocument();
     expect(screen.queryByText("קובץ PDF של קורות החיים")).not.toBeInTheDocument();

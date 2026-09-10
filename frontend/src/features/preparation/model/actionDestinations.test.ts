@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { ApplicationListItem } from "@/api/contracts";
@@ -50,7 +51,7 @@ describe("preparationResumeDestination", () => {
 const UNBUILT: { action: string; reason: string }[] = [];
 
 const preparationActions = (): string[] => {
-  const source = readFileSync(new URL("../../../../../cv_engine/application/state.py", import.meta.url), "utf8");
+  const source = readFileSync(resolve(process.cwd(), "../cv_engine/application/state.py"), "utf8");
   const tuple = /PREPARATION_ACTIONS = \(([^)]*)\)/.exec(source);
 
   if (tuple === null) {

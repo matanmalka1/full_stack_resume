@@ -173,14 +173,19 @@ describe("NewApplicationPage", () => {
     window.sessionStorage.setItem("cv:board-query", "activity=all&stage=approved");
     renderPage("/");
 
-    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/?activity=all&stage=approved");
-    expect(screen.getByText("משרה חדשה")).toHaveAttribute("aria-current", "page");
+    expect(screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveLength(2);
+    for (const link of screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })) {
+      expect(link).toHaveAttribute("href", "/?activity=all&stage=approved");
+    }
+    expect(screen.getByRole("heading", { name: "קליטת משרה" })).toBeInTheDocument();
   });
 
   it("returns to the bare board when nothing was remembered", () => {
     renderPage("/");
 
-    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
+    for (const link of screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })) {
+      expect(link).toHaveAttribute("href", "/");
+    }
   });
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {

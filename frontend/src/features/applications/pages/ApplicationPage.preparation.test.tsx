@@ -189,11 +189,11 @@ describe("ApplicationPage at the preparation route", () => {
       createdApplication: { analysisProblem: null, analysisQueued: true },
     });
 
-    expect(await screen.findByText("הושלמה")).toBeInTheDocument();
+    expect((await screen.findAllByText("הושלמה")).length).toBeGreaterThan(0);
     expect(screen.queryByText("המועמדות נוצרה, הניתוח רץ")).not.toBeInTheDocument();
   });
 
-  it("shows the complete hierarchy above CV preparation", async () => {
+  it("names the application without restoring the old record hierarchy", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(jsonResponse(detail()))),
@@ -201,12 +201,10 @@ describe("ApplicationPage at the preparation route", () => {
 
     renderPage();
 
-    /* The Application is the open page, so its trail names it rather than offering it as
-       a destination - it used to link to itself, because the screen answered to a second
-       URL and the crumb pointed at the other one. */
-    expect(await screen.findByText("Acme — Backend Engineer")).toHaveAttribute("aria-current", "page");
+    expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Acme — Backend Engineer" })).toBeNull();
-    expect(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "פירורי לחם" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
   });
 
   /* The Web automation opt-in, which moved here with the flow: queueing no longer
