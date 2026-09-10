@@ -33,8 +33,8 @@ const TechnicalProblems = ({ problems }: { problems: string[] }) =>
     <p className="mt-2 text-support text-cv-text-muted">לא נרשמו בעיות.</p>
   ) : (
     <ul className="mt-2 list-disc space-y-2 ps-5 text-caption text-cv-text" dir="auto">
-      {problems.map((problem, index) => (
-        <li className="break-all font-mono" key={`${index}-${problem}`}>
+      {problems.map((problem) => (
+        <li className="break-all font-mono" key={problem}>
           {problem}
         </li>
       ))}

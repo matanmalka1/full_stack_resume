@@ -47,11 +47,14 @@ export const useWatchedOperation = (
 
   /* Cleared when the user moves to another Application: the previous one's finished work
      is not this one's. */
+  /* oxlint-disable react/exhaustive-effect-dependencies */
   useEffect(() => {
+    void applicationId;
     // A route change starts a new watch scope.
     // oxlint-disable-next-line react/set-state-in-effect
     setWatchedId(null);
   }, [applicationId]);
+  /* oxlint-enable react/exhaustive-effect-dependencies */
 
   const watchedQuery = useQuery({
     ...operationQueryOptions(watchedId ?? ""),

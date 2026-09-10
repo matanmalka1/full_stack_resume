@@ -3,6 +3,10 @@ import type { ReactNode } from "react";
 import { cx } from "./cx";
 import { LtrText } from "./LtrText";
 
+/* Summary rows accept arbitrary React nodes and therefore have no universal semantic id;
+   their order is static within each rendered definition. */
+/* oxlint-disable react/no-array-index-key */
+
 export interface SummaryItem {
   /* Renders the value as an A.3 LTR island: version ids, ETags, filenames, timestamps. */
   ltr?: boolean;

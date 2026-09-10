@@ -5,6 +5,9 @@ import { Link } from "react-router-dom";
 
 import { cx } from "./cx";
 
+/* The current breadcrumb has no route key and the ordered path is static for a render. */
+/* oxlint-disable react/no-array-index-key */
+
 export interface BreadcrumbItem {
   dir?: "auto" | "ltr" | "rtl";
   label: ReactNode;

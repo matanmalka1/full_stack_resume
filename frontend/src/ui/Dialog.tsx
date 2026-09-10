@@ -2,6 +2,10 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 import { surfaceClasses } from "./surface";
 import { cx } from "./cx";
+
+/* Native <dialog> backdrop clicks are valid interaction; the lint rule classifies the
+   element as non-interactive despite its built-in keyboard and cancel behavior. */
+/* oxlint-disable jsx-a11y/no-noninteractive-element-interactions */
 import { IconButton } from "./IconButton";
 
 interface DialogProps {

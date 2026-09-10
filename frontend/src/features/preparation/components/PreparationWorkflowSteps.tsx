@@ -43,15 +43,14 @@ const stepsFor = (stage: WorkflowStage | undefined, destinations: StageDestinati
   return workflowStages.map((entry, index) => {
     const state = index < completed ? "complete" : index === current ? "current" : "upcoming";
 
-    return {
-      label: workflowStageLabels[entry],
-      state,
+    return Object.assign(
+      { label: workflowStageLabels[entry], state },
       /* Never forward. The current stage is included because "current" is a position in
          the projection, not a claim about which screen is open: at `ready_for_approval`
          read from the preparation screen, טיוטה ואימות is current and its screen is the
          editor, one the reader is not on. A future stage has no record to open. */
-      ...(state !== "upcoming" && destinations[entry] !== undefined ? { href: destinations[entry] } : {}),
-    };
+      state !== "upcoming" && destinations[entry] !== undefined ? { href: destinations[entry] } : {},
+    );
   });
 };
 
@@ -73,12 +72,13 @@ export const PreparationWorkflowSteps = ({
   const hereIndex = currentHere !== -1 ? currentHere : steps.findIndex((step) => step.href === pathname);
 
   /* A stage whose screen is the one being read is not a way back. */
-  const located = steps.map((step, index) => ({
-    ...(index === hereIndex ? { here: true } : {}),
-    ...(step.href === pathname ? {} : { href: step.href }),
-    label: step.label,
-    state: step.state,
-  }));
+  const located = steps.map((step, index) =>
+    Object.assign(
+      { label: step.label, state: step.state },
+      index === hereIndex ? { here: true } : {},
+      step.href === pathname ? {} : { href: step.href },
+    ),
+  );
 
   /* One way out, above the spine, and the wizard's only navigation besides it.
 

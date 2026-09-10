@@ -5,7 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions } from "@/api/applications";
 import { workingDraftQueryOptions } from "@/api/drafts";
-import { detail, draft, json, operation, renderRoute, revision, validation } from "@/test/fixtures";
+import {
+  detail,
+  draft,
+  json,
+  operation,
+  renderRoute,
+  revision,
+  validation as validationFixture,
+} from "@/test/fixtures";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftValidationPanel } from "./DraftValidationPanel";
@@ -66,7 +74,7 @@ const DraftFlow = () => {
 
 describe("DraftValidationPanel", () => {
   it("renders hard issues as blockers and soft issues as warnings without dropping unknown values", async () => {
-    const run = validation({
+    const run = validationFixture({
       passed: false,
       report: {
         passed: false,
@@ -108,7 +116,7 @@ describe("DraftValidationPanel", () => {
   it("posts the exact edit version and exposes approval only after a passing response", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST") return Promise.resolve(json(validation()));
+      if (init?.method === "POST") return Promise.resolve(json(validationFixture()));
       return Promise.resolve(
         json(
           url.includes("working-drafts")
@@ -132,7 +140,7 @@ describe("DraftValidationPanel", () => {
 
 describe("DraftApprovalDialog", () => {
   it("requires the local warning checkbox and never sends an acknowledgement field", async () => {
-    const warned = validation({
+    const warned = validationFixture({
       report: {
         passed: true,
         groups: {},
@@ -206,7 +214,7 @@ describe("DraftApprovalDialog", () => {
           : Promise.resolve(
               json(
                 String(input).includes("validation-runs")
-                  ? validation()
+                  ? validationFixture()
                   : String(input).includes("working-drafts")
                     ? draft()
                     : detail(),
@@ -244,7 +252,7 @@ describe("DraftApprovalDialog", () => {
           : Promise.resolve(
               json(
                 String(input).includes("validation-runs")
-                  ? validation()
+                  ? validationFixture()
                   : String(input).includes("working-drafts")
                     ? draft()
                     : detail(),
@@ -282,7 +290,7 @@ describe("DraftApprovalDialog", () => {
         : Promise.resolve(
             json(
               String(input).includes("validation-runs")
-                ? validation()
+                ? validationFixture()
                 : String(input).includes("working-drafts")
                   ? draft()
                   : detail(),

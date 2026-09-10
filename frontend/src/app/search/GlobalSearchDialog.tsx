@@ -10,6 +10,10 @@ import { preparationResumeDestination } from "@/features/preparation";
 import { cx } from "@/ui/cx";
 import { routePaths } from "../routePaths";
 
+/* Native <dialog> backdrop clicks are valid interaction; Escape is handled by the
+   element's built-in cancel behavior. */
+/* oxlint-disable jsx-a11y/no-noninteractive-element-interactions */
+
 interface GlobalSearchDialogProps {
   onClose: () => void;
   open: boolean;
@@ -60,7 +64,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
     setSelectedIndex(0);
     dialog.showModal();
     inputRef.current?.focus();
-  }, [open]);
+  }, []);
 
   const selectItem = (item: ApplicationListItem) => {
     onClose();

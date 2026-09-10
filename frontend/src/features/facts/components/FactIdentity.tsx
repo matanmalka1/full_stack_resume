@@ -52,8 +52,8 @@ export const FactTags = ({ className, tags }: { className?: string; tags: string
   tags.length === 0 ? null : (
     <p className={cx("flex flex-wrap items-center gap-1.5 text-support text-cv-text-muted", className)}>
       <Tags aria-hidden="true" className="size-3.5" />
-      {tags.map((tag, index) => (
-        <span className="rounded-pill bg-cv-surface-sunken px-2 py-0.5" dir="auto" key={`${index}-${tag}`}>
+      {tags.map((tag) => (
+        <span className="rounded-pill bg-cv-surface-sunken px-2 py-0.5" dir="auto" key={tag}>
           {tag}
         </span>
       ))}

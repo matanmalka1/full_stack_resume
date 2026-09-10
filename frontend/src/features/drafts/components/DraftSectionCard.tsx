@@ -7,6 +7,10 @@ import type { ClaimFactContext, DraftClaimActions } from "../model/drafts.types"
 import { ClaimFactResolution } from "./ClaimFactResolution";
 import { DraftClaimList } from "./DraftClaimList";
 
+/* DraftClaimList intentionally receives a render callback so this section can inject its
+   own fact-resolution context for each claim. */
+/* oxlint-disable react/no-unstable-nested-components */
+
 type DraftOutlineSection = WorkingDraft["outline"]["sections"][number];
 
 interface DraftSectionCardProps {

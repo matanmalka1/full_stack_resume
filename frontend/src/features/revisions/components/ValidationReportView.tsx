@@ -47,8 +47,8 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
 
       {/* Blockers in full: each is a thing to go and fix, and its resolution line is the
           only text on the screen that says how. */}
-      {hard.map((issue, index) => (
-        <Callout key={`${issue.code}-${index}`} title="חסימת אימות" tone="blocker">
+      {hard.map((issue) => (
+        <Callout key={`${issue.code}:${issue.message}`} title="חסימת אימות" tone="blocker">
           <p dir="auto">{issue.message}</p>
           <p className="mt-2">{blockerResolution(issue.code)}</p>
         </Callout>
@@ -64,8 +64,8 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
             {warnings.length} אזהרות שאינן חוסמות אישור
           </summary>
           <ul className="mt-2 flex flex-col gap-1.5">
-            {warnings.map((issue, index) => (
-              <li className="text-support leading-6 text-cv-text" dir="auto" key={`${issue.code}-${index}`}>
+            {warnings.map((issue) => (
+              <li className="text-support leading-6 text-cv-text" dir="auto" key={`${issue.code}:${issue.message}`}>
                 {issue.message}
               </li>
             ))}

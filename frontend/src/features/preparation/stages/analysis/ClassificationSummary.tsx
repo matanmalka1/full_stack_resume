@@ -55,7 +55,7 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
       {extras.length === 0 ? null : (
         <p className="mt-3 text-support leading-7" dir="auto">
           {extras.map((item, index) => (
-            <span key={index}>
+            <span key={`${item.term}:${item.value}`}>
               {index === 0 ? null : <span className="text-cv-text-muted"> · </span>}
               <span className="text-cv-text-muted">{item.term}</span>{" "}
               <span className="font-medium text-cv-text">{item.value}</span>

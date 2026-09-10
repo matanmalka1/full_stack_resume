@@ -144,8 +144,8 @@ export const DraftApprovalDialog = ({
       {warnings.length === 0 ? null : (
         <Callout className="mt-4" title="נותרו אזהרות לא חוסמות" tone="warning">
           <ul className="mb-3 list-disc ps-5">
-            {warnings.map((warning, index) => (
-              <li dir="auto" key={`${warning.code}-${index}`}>
+            {warnings.map((warning) => (
+              <li dir="auto" key={`${warning.code}:${warning.message}`}>
                 {warning.message}
               </li>
             ))}
