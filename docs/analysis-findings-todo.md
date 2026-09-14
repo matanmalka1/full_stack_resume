@@ -51,10 +51,20 @@ narrow fix to one without the others just moves the false-green to a neighboring
 
 `D3`, `A1`, `A3` — once Stage 0/1 land, these are largely the *same* change: unmatched
 requirement-bearing text (deterministic) and `unmapped_statements` (AI) both need to
-enter the same list `fit_score` reads, at zero credit. `A1` requires no separate code
-change beyond what Stage 1/2 already does to the deterministic path, because the AI
-path calls the identical `requirement_lines()` function — verify with a regression test
-instead of a new fix.
+enter the same list `fit_score` reads, at zero credit.
+
+**A1 — תיקון חלקי בלבד, סיכון שיורי.** תיקון הסגמנטר (למשל השלמת
+`requirement_block_markers`, או המרת שורה שזוהתה-אך-לא-מופתה ל-`undetermined` לפי
+החלטה #1) סוגר את *המופע הנוכחי* של A1 — התרחיש הספציפי שבו "What we're looking
+for" לא הכיר. הוא **לא** סוגר את התלות המעגלית עצמה: `by_ai`
+([ai_extraction.py:557-562](../cv_engine/domain/analysis/requirements/ai_extraction.py#L557-L562))
+ו-`extraction_is_failed`
+([ai_extraction.py:580-582](../cv_engine/domain/analysis/requirements/ai_extraction.py#L580-L582))
+ימשיכו, גם אחרי התיקון, להימדד מול הפלט של אותו `requirement_lines()` דטרמיניסטי —
+לא מול מה שה-AI עצמו קרא. כל שורה עתידית שה-segmentation לא יזהה (ניסוח חדש, שפה
+שלישית, כותרת לא-צפויה) תישאר בלתי-נראית לחלוטין למדדי ה-AI, ללא קשר לאיכות ה-AI
+עצמו — כי אין לנתיב ה-AI שום מדד עצמאי שלא עובר דרך פונקציית הסגמנטציה
+הדטרמיניסטית. זהו סיכון מבני קבוע, לא תקלה חד-פעמית שנסגרת ב-Stage 2.
 
 ### Stage 3 — AI-path bookkeeping bugs (independent of Stage 0-2)
 
@@ -99,7 +109,7 @@ current code path, and a dedup check whose two sides can never produce equal str
 
 | id | חומרה | קבצים (file:line) | תרחיש הכשל | תלות | סטטוס אימות |
 |----|--------|---------------------|--------------|------|----------------|
-| **D1** | קריטי — ירוק מלא, 0 approval reasons | [confidence.py:42-45,66-68,96](../cv_engine/domain/analysis/requirements/confidence.py#L42-L96), [gaps.py:62-63](../cv_engine/domain/analysis/gaps.py#L62-L63) | `requirement_lines(text)==[]` → `extraction_completeness` returns `None` → state `"absent"` (not `"unparsed"`) → `extraction_failed` returns `False` (only checks `state=="unparsed"`) → `fit_score_from_requirements([])==1.0` | שורש; מוזג עם D2/A4 בשלב 1 | **CONFIRMED** — קראתי כל שרשרת הקריאות; ההתנהגות תואמת בדיוק את התיאור, כולל ההודאה בדוקסטרינג של gaps.py:53-60 שהמנגנון סומך על `extraction_failed` להבחין בין "אין דרישות" ל"דרישות שלא זוהו" — הבחנה שלא קיימת בפועל בין `"absent"` ל־ track שהופך False. |
+| **D1** | קריטי — ירוק מלא, 0 approval reasons | [confidence.py:42-45,66-68,96](../cv_engine/domain/analysis/requirements/confidence.py#L42-L96), [gaps.py:62-63](../cv_engine/domain/analysis/gaps.py#L62-L63) | `requirement_lines(text)==[]` → `extraction_completeness` returns `None` → state `"absent"` (not `"unparsed"`) → `extraction_failed` returns `False` (only checks `state=="unparsed"`) → `fit_score_from_requirements([])==1.0` | שורש; מוזג עם D2/A4 בשלב 1 | **CONFIRMED** — קראתי כל שרשרת הקריאות; ההתנהגות תואמת בדיוק את התיאור, כולל ההודאה בדוקסטרינג של gaps.py:53-60 שהמנגנון סומך על `extraction_failed` להבחין בין "אין דרישות בכלל" ל"דרישות שלא זוהו". ההבחנה הזו לא קיימת בפועל: `extraction_failed` (confidence.py:96) בודק אך ורק `state=="unparsed"`; `state=="absent"` (0 שורות זוהו) עובר תמיד כ-`False`, בלי שום דרך להבדיל "משרה שבאמת לא מציבה דרישות" מ"משרה שהסגמנטר פשוט לא זיהה בה אף שורת דרישה". |
 | **D2** | גבוה — extraction_failed מנוטרל ע"י gap-כלל יחיד | [classification.py:441-444](../cv_engine/domain/analysis/classification.py#L441-L444), [confidence.py:94-95](../cv_engine/domain/analysis/requirements/confidence.py#L94-L95), [gaps.py:262-270](../cv_engine/domain/analysis/gaps.py#L262-L270) | `understood_elsewhere=bool(rule_gaps)` → `if understood_elsewhere: return False` **לפני** even בדיקת ה-state — כלומר גם `state=="unparsed"` (שורות זוהו, 0 הובנו, לא רק "absent") מנוטרל | שורש; שלב 1 | **CONFIRMED, והיקף רחב מהמתואר**: קראתי `confidence.py:94-96` — ה-short-circuit קורה *לפני* חישוב ה-state בכלל, כך שהבאג לא מוגבל למקרה "0 requirements" (כפי שהדוגמה המקורית תיארה) אלא לכל מקרה שבו נמצא ולו gap-כלל אחד (salesforce/crm/saas/partnership/years-threshold) — גם אם 20 שורות דרישה זוהו ואף אחת לא הובנה. |
 | **D3** | גבוה — סף האישור עובר בקריאה חלקית | [approval.py:14](../cv_engine/domain/analysis/approval.py#L14), [confidence.py:99-123](../cv_engine/domain/analysis/requirements/confidence.py#L99-L123), [classification.py:153-168,450-454](../cv_engine/domain/analysis/classification.py#L153-L168) | עם `classified=1.0` (ר' D7) והנוסחה `(0.4+0.6·completeness)·classified`, מספיק `completeness≈0.56` כדי לחצות `0.72/0.98≈0.735` | תלוי בהחלטת מדיניות #1 (Stage 0) + Stage 1/2 | **CONFIRMED** — שחזרתי את החשבון ישירות מהנוסחאות; מספרי הדוגמה (0.735, c≥0.558) עקביים עם קריאת הקוד, בהנחת `classification_confidence` גבוה טיפוסי. |
 | **D4** | בינוני-גבוה — בולט עם 3 בקשות נספר כיחידת "הבנה" אחת | [confidence.py:14-25](../cv_engine/domain/analysis/requirements/confidence.py#L14-L25), [extraction.py:118-167](../cv_engine/domain/analysis/requirements/extraction.py#L118-L167), [segmentation.py:241](../cv_engine/domain/analysis/requirements/segmentation.py#L241) | `_understood` בודק חפיפת offset בין ה-`StatementLine` המלא (כל המשפט) לבין ה-`ExtractedRequirement.span` שהוא רק תת-מחרוזת שהרג'קס תפס — משפט אחד ארוך עם 3 דרישות, רק 1 חולצה, נספר כ"מובן" במלואו | עצמאי | **CONFIRMED** — `item.start`/`item.end` הם offsets של ה-regex match בלבד (extraction.py:141-165), לא של המשפט; `_understood` (confidence.py:21-25) סופר overlap ברמת ה-line, לא ברמת המושג. `segmentation.py:241` מוסיף אפקט נלווה: שורה שממשיכה משפט קודם (lowercase, ללא bullet) ממוזגת לאותה יחידה. |
@@ -120,6 +130,333 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **A11** | גבוה — ordinal=0 קבוע ⇒ ID כפול ⇒ ניפוח מכנה | [ai_extraction.py:520-528](../cv_engine/domain/analysis/requirements/ai_extraction.py#L520-L528) | `ordinal=0` בכל שורה; `requirement_id` נבנה מ-hash של interpretation+kind+demanded+identity_span+ordinal — הצעה כפולה (אותו quote+interpretation) מייצרת שני `Requirement` שונים ברשימה עם **אותו** requirement_id, בלי דה-דופ | Stage 3 | **CONFIRMED** — קראתי את `verify_and_cover_extraction`: אין שום בדיקת ייחודיות על `req_id`/span לפני `requirements.append(...)`. |
 | **C1** | בינוני — האזהרה שכן נדלקה (low-confidence) ניתנת לביטול בטעות | [approval.py:52-76](../cv_engine/domain/analysis/approval.py#L52-L76) | `"low-confidence": ApprovalReason(frozenset({"track","profile"}), ...)` — בחירת Profile מנקה אזהרת confidence נמוך גם כשהסיבה האמיתית היא extraction_score נמוך, לא classification | Stage 5 | **CONFIRMED** מהטבלה עצמה — ואימתתי שההערה הפנימית בקוד (שורות 65-67) חלה ניסוחית בדיוק על `extraction-failed` בלבד, לא הורחבה ל-`low-confidence` שסובל מאותה בעיה. |
 | **C2** | בינוני — dedup בין rule-gap ל-requirement-gap כמעט אף פעם לא תואם | [classification.py:461-465](../cv_engine/domain/analysis/classification.py#L461-L465) | `covered_text = {requirement.text ...}` מול `gap.requirement` (תווית כתובה ביד כמו `"Salesforce"`, `"Direct SaaS Sales preference"`) — אין קונספט בשם salesforce/saas ב-`requirements.json`, כך שהמחרוזות האלה לעולם לא ייווצרו כ-`requirement.text` | Stage 8 | **CONFIRMED**: סרקתי את כל `config/requirements.json` — אין concept בשם salesforce/saas; המחרוזות היחידות שיכולות להגיע ל-`requirement.text` הן span-ים שחולצו מהטקסט (via `item.span`/`normalize_span`), לא התוויות הקבועות מ-`derive_gaps`. |
+
+---
+
+## בדיקות אדומות לכל ממצא
+
+לכל ממצא: קלט קונקרטי, הערך הצפוי (מה שהמערכת *אמורה* להחזיר לפי הכוונה המוצהרת
+בקוד/בדוקסטרינג), והערך שמתקבל היום בפועל. רוב הבדיקות הן קטע טקסט משרה שעובר דרך
+`classify_job`. כשמדובר בבאג שדורש שני שלבים (deterministic → AI rebase) או פרופוזל
+מדומה מספק, זה כתוב במפורש — אלה עדיין טסטים יחידה תקינים, רק לא מסוג "טקסט משרה
+יחיד", ומצוין למה.
+
+### D1
+קלט (עברית, ללא אף cue מוכר):
+```
+אנחנו מחפשים אשת/איש מכירות למשרה מלאה.
+
+מה תעשו:
+- ניהול תיק לקוחות קיים
+- סגירת עסקאות חדשות
+
+מה חשוב לנו:
+• זמינות מיידית למשרה מלאה
+• מגורים באזור המרכז
+```
+"מה חשוב לנו:" אינה ב-`requirement_block_markers`/`mandatory_markers`/`preferred_markers`
+→ section="other"; אף אחת מהשורות מכילה cue מרשימת `requirement_cues`/`soft_skill_cues`
+(he) → שתי הבולטים מקבלים `kind=None` ונשמטים לגמרי מ-`statement_lines`.
+**צפוי:** אין להחזיר ירוק מלא בלי אף איתות על משרה עם תוכן שלא נקרא.
+**בפועל:** `requirement_lines(text)==[]` → `fit_score=1.0`, `fit=HIGH`,
+`extraction_confidence` (מרכיב ה-extraction) `=1.0`, `approval_reasons=[]` (בהנחת
+classification_confidence מעל 0.72).
+
+### D2
+קלט (אנגלית, 3 שורות דרישה אמיתיות שלא ממופות לאף concept, + אזכור "Salesforce" בפרק לא-קשור):
+```
+Requirements:
+- Excellent time-management and organizational skills
+- Strong communication skills
+- Comfortable working under pressure
+
+Perks
+- We use Salesforce and Slack daily
+```
+3 השורות הראשונות מכילות cue "skills" → `requirement_lines` בגודל 3; אף concept
+ב-`config/requirements.json` לא תואם אותן → `extracted=[]` → `completeness=0.0` →
+`state="unparsed"`. `derive_gaps` מזהה "salesforce" ב-lowered (גם בפרק Perks) →
+`rule_gaps` לא ריק → `understood_elsewhere=True`.
+**צפוי:** `extraction_failed=True` (3 דרישות נאמרו, 0 הובנו) → `fit_score=None`,
+`fit=UNKNOWN`, `approval_reasons` כולל `extraction-failed`.
+**בפועל:** `confidence.py:94-95` מחזיר `False` לפני שבכלל בודק את ה-state → `fit_score=
+fit_score_from_requirements([])=1.0`, `fit=HIGH`, ה-gap היחיד הוא warning (לא חוסם),
+confidence≈`0.4×classification_confidence` (נמוך, אך fit עדיין 100%).
+
+### D3
+זה נכון יותר לבדוק ברמת הפונקציה הטהורה מאשר טקסט משרה מלא, כי השאלה היא ישירות על
+הנוסחה: `extraction_confidence(completeness=0.56, classified=1.0, understood_elsewhere=False)`
+מול `classification_confidence(top=5, second=0)`.
+**צפוי:** קריאה של 56% מהדרישות לא אמורה לעבור סף אישור של 0.72.
+**בפועל:** `(0.4+0.6·0.56)·1.0 = 0.736`; `classification_confidence(5,0)=min(0.98,0.58+0.4)=0.98`;
+`round(0.736·0.98,4)=0.7213 ≥ 0.72` → עובר, אפס approval reasons מ-confidence.
+(תרחיש טקסט-משרה מלא לאותה נקודה: 9 בוליטים בסגנון D2 שבהם 5 ממופים ותואמים כ-matched —
+דורש facts fixture קיים ב-`tests/test_analysis.py`, לא מצוטט כאן כדי לא להמציא fact IDs.)
+
+### D4
+קלט:
+```
+Requirements:
+- 5+ years of B2B sales experience, comfortable in a fast-paced startup, and hands-on Salesforce administration.
+```
+בולט אחד, cue "experience" → `StatementLine` יחיד לכל המשפט. רק "5+ years...sales"
+תואם concept (`sales-closing-experience-years`); "fast-paced startup" ו-"Salesforce
+administration" לא ממודלים כלל.
+**צפוי:** רק חלק מהבקשות בבולט הובנו — ציון השלמות אמור לשקף זאת (למשל לפי-concept, לא
+לפי-statement).
+**בפועל:** `_understood` בודק חפיפת offset ברמת ה-line השלם → הבולט כולו נספר "מובן
+במלואו" (`completeness=1.0`, `state="parsed"`), למרות ש-2 מתוך 3 הבקשות בו לא נקראו כלל.
+
+### D5
+קלט:
+```
+About Us
+Our team combines deep sales experience with technical rigor. Full sales cycle exposure is a plus for this role.
+
+Requirements:
+- Must own the full sales cycle end to end
+```
+המשפט הראשון (About Us) מכיל cue "experience" → `kind="requirement"` **למרות שהוא לא
+תחת section דרישות** (ר' segmentation.py:169-171 — cue גובר על section, ללא תלות
+בכיוון). הוא תואם `full-sales-cycle`, preferred (יש "a plus" בקלוז). הדה-דופ
+(extraction.py:132-136, מפתח `concept`+`demanded`) נרשם ראשון. הבולט השני, תחת
+"Requirements:", תואם אותו concept באותו `demanded=None` → מדולג לגמרי.
+**צפוי:** ל-"Must own the full sales cycle" תחת Requirements: אמורה להיווצר `Requirement`
+עם `mandatory=True`.
+**בפועל:** נוצר `Requirement` יחיד בלבד לconcept הזה, עם `mandatory=False` — הבולט
+המפורש עם "Must" לא קיים ברשימה כלל.
+
+### D6
+קלט (משפט אחד, ללא נקודה/פסיקה חוצצת):
+```
+Requirements:
+- Must have 5+ years of B2B sales experience, European market experience is an advantage.
+```
+`_SENTENCE=[.;\n]` לא חותך על פסיק → הקלוז של "5+ years...sales" הוא המשפט השלם, שמכיל
+"advantage" (preferred_markers).
+**צפוי:** "Must have 5+ years" מסומן במפורש כ-mandatory.
+**בפועל:** `mandatory=False` (הודגם לpreferred) בגלל "advantage" שמתייחס בפועל רק ל-European
+market, לא לדרישת השנים.
+
+### D7
+לא ניתן לבטא כ-diff של קלט/פלט על טקסט משרה — זהו מדד שקבוע מתמטית תחת כל נתיב קוד קיים,
+לא באג שמייצר ערך שגוי על קלט ספציפי. הטסט המתאים הוא assertion מבני: לכל
+`ExtractedRequirement` שנוצר ע"י `extract_requirements` (כל קלט), `item.concept` הוא
+תמיד מחרוזת לא ריקה (extraction.py:148-166 בונה אותו כך תמיד) → `concept_classification_
+completeness(extracted)` שווה 1.0 עבור **כל** קלט לא-ריק. **צפוי מול בפועל:** אין הבדל —
+זו הבעיה: אין שום קלט שמזיז את המדד הזה מ-1.0.
+
+### D8
+דורש facts/profiles fixture קיים (לא ממציא fact IDs כאן) — התבנית: טקסט משרה עשיר
+באוצר מילים טכני ("developer", "software", "API" חוזרים) כך ש-`term_scores` מעדיף
+DEVELOPMENT בפער גדול, בעוד שה-Requirements בפועל (שנקבעים ע"י coverage מול facts) 
+תומכים חזק יותר ב-ACCOUNT_MANAGER.
+**צפוי:** confidence אמור לשקף חוסר-ודאות לגבי ההחלטה שהתקבלה בפועל (coverage-based).
+**בפועל:** `top`/`second` מגיעים אך ורק מ-`term_scores` (classification.py:416-418) —
+`classification_confidence` מדווח ודאות גבוהה (0.9+) על סמך אוצר מילים שלא הכריע כלום.
+
+### A1
+קלט (אנגלית, כותרת לא-מוכרת, בוליטים ללא אף cue):
+```
+What we're looking for:
+- A natural closer who loves working with people
+- Hungry, proactive, and comfortable building your own pipeline
+```
+"What we're looking for:" לא ב-`requirement_block_markers`; אף בולט לא מכיל cue מוכר
+("comfortable building" ≠ "comfortable with"). שני הבוליטים מקבלים `kind=None`.
+**צפוי:** `requirement_lines()` אמור לכלול את שני הבוליטים (הם דרישות אמיתיות).
+**בפועל:** `requirement_lines(text, concepts) == []` — ולכן גם `by_ai`
+(ai_extraction.py:557-562) וגם `extraction_is_failed` (ai_extraction.py:580-582) עיוורים
+לשתי השורות האלה **ללא קשר למה שה-AI עצמו הציע**, כי שתיהן קוראות לאותה פונקציית
+סגמנטציה דטרמיניסטית.
+
+### A2
+טסט יחידה טהור על `rebase_requirements` (לא דורש טקסט משרה): בונים `JobAnalysis`
+בסיסי עם `confidence=0.9`, קוראים
+`rebase_requirements(deterministic, requirements=[], extraction_version="ai:1:1", facts=..., extraction_failed=True)`.
+**צפוי:** confidence של תוצאה שה-AI קבע שאין בה אף requirement מאומת (אחרי extraction
+דטרמיניסטי "בטוח" ב-0.9) אמור להשתנות/להתעדכן.
+**בפועל:** `result.confidence == 0.9` — זהה ל-deterministic, כי מילון ה-`update=` ב-
+rebase_requirements (classification.py:289-304) לא כולל מפתח `confidence` כלל.
+
+### A3
+טסט יחידה על `extraction_is_failed` (לא דורש טקסט משרה מלא, רק שתי גרסאות פרופוזל):
+אותו `requirements=[]`, פעם עם `unmapped_statements=[]` ופעם עם
+`unmapped_statements=[UnmappedStatement(text="5+ years of enterprise negotiation
+experience", start=.., end=.., reason="no concept")]` על אותו job_text.
+**צפוי:** ספק שמצהיר ביושר על דרישה שלא הצליח למפות אמור לקבל תוצאה שונה (למשל gap/
+approval reason נפרד) מספק ששותק.
+**בפועל:** שתי הקריאות מחזירות `JobAnalysis` זהה ב-fit/confidence/gaps/approval_reasons
+— `_unmapped` "מתקבל ומכוון לא נקרא" (ai_extraction.py:575-576), אין קורא שלישי
+שמייחס לו משקל (מאומת ב-grep).
+
+### A4
+קלט:
+```
+Requirements:
+- 5+ years of B2B sales experience
+- Native-level English proficiency
+- Strong negotiation and closing skills
+- Comfortable working from our Tel Aviv office
+```
+4 requirement_lines (הרביעי נכנס כ-list-item תחת section="requirements", לא דרך cue),
+רק הראשון ממופה. **צפוי:** קריאה של 1 מתוך 4 (25%) אמורה להיחשב חלקית/חשודה, לא "לא
+נכשל" סתמי. **בפועל:** `extraction_is_failed` מחזיר `False` (`not any(...)` — מתקיים
+כבר ע"י המיפוי היחיד), זהה בדיוק למה שהיה מחזיר גם על 1 מתוך 20 — אין רגישות ליחס.
+
+### A5
+קלט:
+```
+Requirements:
+- Must have 10+ years of enterprise SaaS sales experience
+```
+פרופוזל מדומה מהספק: `attestation.quote="10+ years of enterprise SaaS sales experience"`
+(אמיתי, byte-exact), `demanded="2"` (משקר לגבי הערך שבציטוט עצמו), מועמד עם ~2.5 שנות
+ותק (`sales.summary.tenure`).
+**צפוי:** דרישת סף של 10 שנים לא אמורה להיסגר ע"י מועמד עם 2.5.
+**בפועל:** `threshold_coverage` (coverage.py) משתמש ב-`demanded="2"` כפי שנשלח, ללא שום
+בדיקה מול הטקסט המצוטט → `coverage="matched"`.
+
+### A6
+קלט:
+```
+Requirements:
+- Communication skills
+
+Benefits:
+- Free lunch and snacks every day
+```
+פרופוזל מדומה: `attestation.quote="Free lunch and snacks every day"` (מ-section
+"other"), `interpretation={source_role:"requirement", obligation:"mandatory",
+composition:"single"}`.
+**צפוי:** לא אמור להתקבל "requirement חובה" מציטוט מתוך פרק הטבות.
+**בפועל:** `verify_interpretation` לא זורק שום exception (שני התנאים ב-שורות 61-65,
+72-75 דורשים section שהוא "requirements"/"preferred" או marker בציטוט — "other" בלי
+marker לא מפעיל אף אחד מהם) → עובר, נכנס ל-fit_score כ-mandatory requirement מומצא.
+
+### A7
+קלט:
+```
+Requirements:
+- Must have 5+ years of sales experience.
+- Fluent in English.
+```
+פרופוזל מדומה: attestation span שמתחיל בתוך הבולט הראשון ומסתיים בתוך השני (חוצה
+statement boundary).
+**צפוי:** ציטוט שחוצה שני statements נפרדים אמור להידחות (או לפחות לא לקבל "single"
+בשקט).
+**בפועל:** הלולאה ב-`verify_interpretation` (שורה 54-56) לא מוצאת אף statement שמכיל
+את כל הספאן → יוצאת בלי לבדוק דבר; כל obligation/source_role שהספק הצהיר עובר.
+
+### A8
+קלט (עם "Must have" חוזר, כמו כל מודעה אמיתית):
+```
+Requirements:
+- Must have 5+ years of B2B sales experience
+- Must have native-level English
+```
+פרופוזל שממלא **בדיוק** את הנחיית system-v3.md:27-28: `context_quote="Must have"`.
+**צפוי:** ציטוט מרקר מנדטורי אמיתי, verbatim, כפי שהפרומפט מורה לספק לספק — אמור
+להתקבל.
+**בפועל:** "Must have" מופיע פעמיים במקור → `_verify_context_quote_occurs`
+(interpretation.py:153-156) זורק `InvalidRequirementInterpretation` → כל הפרופוזל
+נדחה (`RequirementExtractionRejected`), לא רק הפריט הזה.
+
+### A9
+קלט:
+```
+Requirements:
+- Must own the full sales cycle at a SaaS company
+```
+פרופוזל: `composition="any-of"`, member1="full sales cycle" (מועמד: matched, יש
+sales.summary.new_business), member2="SaaS company" (מועמד: לא SaaS, unsupported/partial
+דרך ה-boundary fact).
+**צפוי:** דרישה ל"מחזור מכירות מלא **בחברת SaaS**" לא אמורה להיסגר ע"י מועמד בלי ניסיון
+SaaS.
+**בפועל:** `"matched" in member_coverages` מספיק → הדרישה כולה matched, האילוץ "at a
+SaaS company" נעלם.
+
+### A10
+קלט:
+```
+Requirements:
+- 5+ years of sales experience at a technology company with fluent English
+```
+ציטוט טבעי, שלם, כפי שהפרומפט מבקש (בולט אחד). 3 concepts תואמים בו-זמנית
+(sales-closing-experience-years, technology-company-sales, english-proficiency).
+**צפוי:** ציטוט חד-משמעי לבן-אדם אמור לפחות לקבל את אחד הconcepts שתואמים.
+**בפועל:** `concept_for_quote` מחזיר `None` כש-`len(matches)>1` → `coverage="undetermined"`,
+אפס קרדיט, ללא קשר לעובדות המועמד.
+
+### A11
+פרופוזל מדומה עם אותה requirement פעמיים (attestation/interpretation/kind/demanded
+זהים) — תרחיש ריאליסטי של ספק ש"הכפיל" הצעה.
+**צפוי:** כפילות אמורה להצטמצם לאובייקט אחד (כמו ב-extraction.py:132-136 בנתיב
+הדטרמיניסטי), או לפחות לא להיספר פעמיים.
+**בפועל:** `verify_and_cover_extraction` לא בודק ייחודיות לפני `append` → שני
+`Requirement` עם אותו `requirement_id` (אותו hash קלט) ברשימה; `fit_score` סופר את
+שניהם, ו-`_acceptable_requirement_ids` לא יכול להבדיל ביניהם.
+
+### C1
+קלט: תרחיש D2 (למעלה) + `AnalyzeCommand(profile_override="account-executive", ...)`
+באותה בקשה.
+**צפוי:** `low-confidence` שמקורו ב-extraction_score נמוך אמור להישאר פתוח גם אחרי
+בחירת Profile — בחירת Profile לא "קראה" יותר מהמשרה.
+**בפועל:** `unresolved_approval_reasons` (approval.py:98-101) מנקה `low-confidence`
+ברגע ש-`"profile"` ב-`user_override`, כי `APPROVAL_REASONS["low-confidence"].overrides
+== frozenset({"track","profile"})` (approval.py:54) — בלי קשר למקור הבעיה.
+
+### C2
+לא ניתן לבטא כטסט-על-קלט-בודד — זו טענה מבנית על שני מרחבי מחרוזות שלעולם לא נחתכים.
+הטסט המתאים: `set(gap.requirement for gap in derive_gaps(lowered, track) for any lowered)`
+(התוויות הקשיחות: "Salesforce", "Direct SaaS Sales preference", "Sales CRM usage",
+"Strategic partnerships / channel Sales experience") מול `{concept["label"] for concept
+in config["concepts"].values()}` — assert אין חיתוך, לכל טקסט אפשרי, כי אין concept
+בשם salesforce/saas/crm/partnerships ב-`config/requirements.json`.
+**צפוי מול בפועל:** אין הבדל בין הטקסטים — זו בדיוק הבעיה: `covered_text` (שנבנה מ-
+`requirement.text`, תמיד span שחולץ) ו-`gap.requirement` (תווית קשיחה) הם שני עולמות
+נפרדים שה-dedup ב-classification.py:461 מעולם לא יכול לגשר ביניהם.
+
+---
+
+## מה מתייתר אם החלטה #1 היא כן
+
+("החלטה #1" = שורת דרישה שזוהתה כ-`requirement_line` אך לא מופתה לקונספט הופכת ל-
+`Requirement(coverage="undetermined")` באותה רשימה ש-`fit_score` קורא.)
+
+**נסגרים ישירות (הפתרון *הוא* ההחלטה, לא תיקון נוסף):**
+- **A3** — חיווט `unmapped_statements`/`unmapped_statement_ids` לרשימת ה-undetermined
+  הוא בדיוק התיקון; אין עוד עבודה מעבר לזה.
+- חלק מ-**D3**'s הסימפטום (לא הבעיה כולה — ר' "נשארים פתוחים" למטה): denominator שכולל
+  שורות שלא הובנו מקטין fit_score בפועל, לא רק completeness.
+
+**נשארים פתוחים למרות זאת:**
+- **D3 נשאר פתוח** — כפי שצוין, גם עם denominator מתוקן: הדוגמה `completeness≈0.56`
+  שכבר מחושבת בטבלה למעלה (`(0.4+0.6·0.56)=0.736`) עדיין חוצה את `0.72/0.98≈0.735`.
+  תיקון הדנומינטור מוריד completeness במקרים שהיו קודם מוסתרים לגמרי (D1-style), אבל
+  אינו נוגע בבעיית כיול-הסף עצמה — זו נשארת שאלה נפרדת (החלטה #2 בהמשך המסמך).
+- **D1 נשאר פתוח לגמרי** — הדוגמה שלו (שני בוליטים בעברית שלא מקבלים אף `kind`)
+  אף פעם לא נכנסת ל-`requirement_lines()` מלכתחילה, כי הבעיה שם היא בסגמנטציה
+  (`kind=None`), לא ב"זוהה אך לא מופתה". החלטה #1 פועלת רק על השלב השני; D1 דורש
+  תיקון נפרד ב-Stage 1 (state `"absent"` מול `"unparsed"`).
+- **D2 נשאר פתוח כבאג לוגי**, אך הסימפטום המסוכן שלו מוחלש מאוד: עם denominator
+  מתוקן, `requirements` לא יהיה `[]` אלא רשימה של undetermined items → `fit_score_
+  from_requirements` יחזיר `≈0.0`, לא `1.0`, גם כש-`extraction_failed` עדיין `False`
+  בטעות. שווה לרשום את זה כ"משנה משמעות" (ר' למטה) ולא סתם "נשאר פתוח" — הכיוון
+  הפוך מ-D7.
+- **A1's סיכון השיורי** (ר' Stage 2 למעלה) נשאר — לא תלוי בהחלטה #1.
+- **A2, A4, A11, D4, D5, D6, A5-A10, C1, C2, D8** — כולם עצמאיים לחלוטין מהחלטה #1;
+  שום דבר בהם לא נסגר או משתנה על ידה.
+
+**משנים משמעות (לא "נסגר", לא "נשאר זהה" — המדד עצמו הופך לבעל תוכן):**
+- **D7** — כרגע `concept_classification_completeness` קבוע מתמטית ל-1.0 כי כל
+  `ExtractedRequirement` נבנה עם concept לא-ריק. ברגע שנוצרות ישויות `Requirement`
+  עם `concept=None` (מדרישות שזוהו אך לא מופתו), המדד **מתחיל לזוז** בפועל בפעם
+  הראשונה — אבל אז צריך לבדוק מחדש אם הנוסחה שלו (`sum(item.concept)/len(extracted)`)
+  עדיין אומרת משהו נכון, כי היא נכתבה כשהיה בלתי אפשרי להזיז אותה. ייתכן שצריך
+  ניסוח מחדש, לא רק "הפעלה".
+- **D2** (ר' למעלה) — מ"מייצר fit=100% שגוי" ל"boolean שגוי בלי תוצאה מסוכנת בפועל".
+  שווה עדיין לתקן את ה-boolean עצמו (Stage 1), אבל דחיפות התיקון יורדת אחרי Stage 2.
 
 ---
 
