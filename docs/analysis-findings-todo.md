@@ -16,15 +16,14 @@ this session (file:line cited), independent of the external review's own citatio
 
 ‏23 ממצאים מאומתים (‏D1-D10, ‏A1-A12, ‏C1-C2; ‏A4 ו-D10 אינם באגים עצמאיים),
 סדר תיקון ב-8 שלבים. ‏`A12` נוסף ב-Stage 3, מתוך היישום ולא מהסקירה המקורית.
-**סגורים:** ‏D1, ‏D2, ‏D4, ‏D5, ‏D6, ‏D9, ‏D10, ‏A3, ‏A4, ‏A11, ‏C2, והחלטות
-‏#1-#4 ו-#7-#12.
+**סגורים:** ‏D1, ‏D2, ‏D4, ‏D5, ‏D6, ‏D9, ‏D10, ‏A3, ‏A4, ‏A11, ‏C2, והחלטות ‏#1-#12.
 
 **מה פתוח, ומה חוסם כל אחד:**
 
 | פתוח | חסום על |
 | --- | --- |
 | **Stage 7** (`A5`-`A10`, `A12`) | **שוחרר.** החלטה #4 נפתרה — פיצול לשלושה צירים. נשארו שלוש הכרעות יישום קטנות: **#16** (A12), **#17** (A7), **#18** (A10) |
-| **Stage 5** (`D8`, `C1`) | החלטות **#5** ו-**#6**, שתיהן פתוחות |
+| **Stage 5** (`D8`, `C1`) | **שוחרר.** #5 ו-#6 נפתרו — ר' **Open product decisions** |
 | **A2** | שלוש שאלותיו — מועמדות להיות **#13-#15**. ר' "A2 — למה נעצר" |
 | **D7** | ‏A2 (הוא הגורם `classified` של `extraction_confidence`) |
 | **D3** | כיול הסף `0.72` — אף החלטה שנפתרה לא נגעה בו |
@@ -298,10 +297,10 @@ no automatic full suite). Within a stage, order is not significant.
 
 ### Stage 0 — Product decisions
 
-Decisions #1-#4 and #7-#12 are resolved; each carries its full reasoning in place under
-**Open product decisions**. Still open: **#5** and **#6** (both → Stage 5), the three
-implementation forks #4's split created (**#16**-**#18** → Stage 7), and A2's three
-questions (candidates for **#13**-**#15**).
+Decisions #1-#12 are resolved; each carries its full reasoning in place under **Open
+product decisions**. Still open: the three implementation forks #4's split created
+(**#16**-**#18** → Stage 7), and A2's three questions (**#13**-**#15**), which also
+block `D7`.
 
 ### Stages 1, 2, 3, 4, 6 — landed
 
@@ -312,11 +311,14 @@ they closed are held by named tests. The decisions themselves are in the table u
 live, is `D3` (threshold calibration), `A1`'s residual structural risk, and `A2`.
 
 
-### Stage 5 — Confidence-formula correctness — **inputs now trustworthy, blocked on #5/#6**
+### Stage 5 — Confidence-formula correctness — **unblocked, #5 and #6 resolved**
 
 Its stated precondition is met: retuning a formula before its inputs are trustworthy is
-wasted work, and Stages 1-4 and 6 have landed. What blocks it now is only decisions
-**#5** and **#6**.
+wasted work, and Stages 1-4 and 6 have landed. Both decisions it waited on are now
+answered in place, and neither needs a new tuned constant — #5 keeps
+`classification_confidence`'s scale and changes only whose term counts it is handed,
+and #6 derives its split point from `CONFIDENCE_APPROVAL_THRESHOLD` and the formula's
+own `0.98` ceiling. `D8` and `C1` are ready to implement together.
 
 `D8`, `C1` — `classification_confidence` measuring a signal (vocabulary) other than the
 one that actually decided (coverage), and the one approval reason that *did* fire
@@ -578,7 +580,7 @@ proposal"): `RequirementExtractionRejected`.
 
 ## Open product decisions
 
-**RESOLVED:** #1-#4, #7-#12. **OPEN:** #5, #6 (Stage 5), #16-#18 (Stage 7, created by
+**RESOLVED:** #1-#12. **OPEN:** #5, #6 (Stage 5), #16-#18 (Stage 7, created by
 #4's split), and #13-#15 held for A2's three questions.
 
 1. **RESOLVED — YES.** שורת דרישה שזוהתה כ-`requirement_line` אך לא הצליחה להתמפות
@@ -684,9 +686,45 @@ proposal"): `RequirementExtractionRejected`.
      (החלטה #6) ונשקל שם, לא כאן. אומת שהסדר מאפשר זאת: `profile` סופי (כולל
      override) לפני שהקלטים ל-confidence מחושבים.
 
-6. **C1 — `low-confidence` צריך reason-code נפרד** לפי מקור הבעיה (extraction מול
-   classification), בדומה להפרדה שכבר קיימת בין `extraction-failed` ל-
-   `coverage-undetermined`. מי "עונה" על כל reason חדש כזה?
+6. **RESOLVED — שני reason-codes, והגבול ביניהם הוא "האם ה-override בכלל יכול
+   לנקות את זה".**
+   - `"low-confidence-extraction"` → `frozenset({"analysis"})`, `ANALYSIS_INCOMPLETE`
+   - `"low-confidence-classification"` → `frozenset({"track","profile"})`,
+     `CLASSIFICATION_AMBIGUITY`
+
+   **ההנמקה כבר כתובה בקוד, שתי שורות מעל הרשומה הפגומה.** approval.py:65-67,
+   על `extraction-failed`: *"Naming the Track or Profile does not recover a
+   requirement that was never read, so those do not answer this one."* זה תקף
+   מילה-במילה ל-`low-confidence` שמקורו ב-extraction, והוא פשוט לא הורחב לשם.
+   הטבלה כבר מחזיקה את התבנית הנכונה (`{track,profile}`/`CLASSIFICATION_AMBIGUITY`
+   מול `{analysis}`/`ANALYSIS_INCOMPLETE`); C1 הוא ההפרדה הזו שלא הגיעה לשורה
+   אחת.
+
+   **הגבול נגזר מהנוסחה, לא מקבוע חדש.** `classification_confidence` חסום
+   ב-`min(0.98, ...)`, ולכן:
+
+   ```
+   extraction_score < CONFIDENCE_APPROVAL_THRESHOLD / 0.98 ≈ 0.735
+      ⇒ שום ערך של classification לא יחצה את הסף ⇒ ה-extraction הוא החוסם
+   ```
+
+   זו בדיוק השאלה שמעניינת — לא "איזה גורם נמוך יותר" (שרירותי בשוליים) אלא
+   "האם בחירת Profile בכלל **יכולה** לפתוח את השער". ה-override שעונה על reason
+   הוא ה-override שיכול באמת לנקות אותו. **התקרה `0.98` צריכה לעלות לקבוע
+   בעל-שם** כשזה מיושם, כי היא הופכת מפרט-מימוש לחלק מהגדרת הגבול.
+
+   **רשומות היסטוריות: `"low-confidence"` נשאר רשום בטבלה בדיוק כפי שהוא**
+   (`{track,profile}`/`CLASSIFICATION_AMBIGUITY`). ניתוחים שכבר נכתבו נושאים את
+   הקוד הזה, והחלטה #8 אוסרת לגעת בהם; הידוק שלו ל-`{analysis}` היה חוסם
+   רטרואקטיבית ניתוחים שהיו ניתנים לאישור. שני הקודים החדשים הם לניתוחים חדשים
+   בלבד. **הגארד הנגזר** ("every reason the engine records is registered") יתפוס
+   את שניהם אם יישכחו.
+
+   **אינטראקציה עם החלטה #5, שנבדקה ואינה יוצרת קיפאון:** אחרי #5,
+   `profile_override` שסותר את הווקבולרי מוריד את `classification_score` ועלול
+   להדליק `low-confidence`. הוא יהיה מסוג **classification**, וה-override שגרם
+   לו *הוא* ה-override שעונה עליו — המשתמש בחר, הציון מדווח ביושר תמיכה
+   ווקבולרית נמוכה יותר, והשער נפתח באותה בקשה.
 
 7. **RESOLVED — reason חדש: `"requirements-absent"`.** `fit_score=None` שנוצר
    כתוצאה מ-`not requirements` (D1, ר' Stage 1 למעלה) חייב approval_reason משלו —
