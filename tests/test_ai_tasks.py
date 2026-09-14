@@ -1355,3 +1355,120 @@ def test_a_requirement_statement_the_ai_never_touched_enters_the_score(
     # The splice is not credited as reading: `by_ai` still counts only what the
     # proposal attested.
     assert analysis.understanding.by_ai == 1
+
+
+def test_a_requirement_proposed_twice_is_one_requirement(ai_services, fake_openai) -> None:
+    """One demand stated twice is one requirement, carrying one id.
+
+    `requirement_id` folds in the quote, the interpretation, the kind and the
+    demanded value and nothing else, so two proposals reading one statement the
+    same way produced two entries under a single id: `fit_score` counted the
+    demand twice, and nothing holding that id - an acceptance, a correction -
+    could say which of the two entries it named.
+    """
+    job_text = (
+        "Account Manager.\n"
+        "Requirements:\n"
+        "- Must have enterprise sales experience.\n"
+        "About the team:\n"
+        "- Must have enterprise sales experience."
+    )
+    quote = "Must have enterprise sales experience"
+    first = job_text.index(quote)
+    second = job_text.index(quote, first + 1)
+
+    def proposed(start: int) -> ProposedRequirement:
+        return ProposedRequirement(
+            attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+            interpretation=RequirementInterpretation(
+                source_role="requirement",
+                obligation="mandatory",
+                composition="single",
+                negation=False,
+            ),
+            kind="presence",
+            label=quote,
+        )
+
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(
+            requirements=[proposed(first), proposed(second)], unmapped_statements=[]
+        ),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+
+    identifiers = [requirement.requirement_id for requirement in analysis.requirements]
+    assert len(identifiers) == len(set(identifiers))
+    assert len(analysis.requirements) == 1
+    # Collapsing the duplicate does not un-read the statement it attested: both
+    # offsets still count as covered, so the second statement is not left over
+    # for the `undetermined` splice. The 2 here is the two requirement-bearing
+    # statements this posting makes, not the two proposals - see the
+    # same-offsets case below, where one statement proposed twice still counts
+    # once.
+    assert analysis.understanding.by_ai == 2
+    assert "requirements-unmapped" not in analysis.approval_reasons
+
+
+def test_one_statement_proposed_twice_is_read_once(ai_services, fake_openai) -> None:
+    """`by_ai` counts statements read, never proposals made.
+
+    The companion to the test above, and the reason collecting every verified
+    proposal's span is safe: `by_ai` asks of each requirement-bearing statement
+    whether *any* span touches it, so repeating one span cannot inflate the
+    numerator of the completeness measure built on it. The posting is the same;
+    only the duplicate's offsets move onto the statement already proposed.
+    """
+    job_text = (
+        "Account Manager.\n"
+        "Requirements:\n"
+        "- Must have enterprise sales experience.\n"
+        "About the team:\n"
+        "- Must have enterprise sales experience."
+    )
+    quote = "Must have enterprise sales experience"
+    first = job_text.index(quote)
+
+    def proposed() -> ProposedRequirement:
+        return ProposedRequirement(
+            attestation=RequirementAttestation(quote=quote, start=first, end=first + len(quote)),
+            interpretation=RequirementInterpretation(
+                source_role="requirement",
+                obligation="mandatory",
+                composition="single",
+                negation=False,
+            ),
+            kind="presence",
+            label=quote,
+        )
+
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(
+            requirements=[proposed(), proposed()], unmapped_statements=[]
+        ),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+
+    assert analysis.understanding.by_ai == 1
+    # The second statement was never proposed, so it is still left over for the
+    # splice - one verified requirement plus one synthetic entry.
+    assert len(analysis.requirements) == 2
+    synthetic = [
+        requirement for requirement in analysis.requirements if requirement.attestation is None
+    ]
+    assert len(synthetic) == 1
+    assert "requirements-unmapped" in analysis.approval_reasons

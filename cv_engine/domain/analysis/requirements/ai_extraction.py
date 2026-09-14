@@ -488,6 +488,11 @@ def verify_and_cover_extraction(
     partially-applied edit, and invariant 12/13 draw the line at "nothing here
     can save state" rather than "most of it is fine".
 
+    Requirements are deduplicated by `requirement_id`, so the returned list
+    carries each id once. A provider that proposes one requirement twice is
+    stating it twice, not demanding it twice; see the loop for why the id is
+    the key and why a duplicate is collapsed rather than rejected.
+
     `UnderstandingSources.by_ai` counts requirement-bearing statements this
     extraction actually covered, using the identical `requirement_lines`
     denominator the deterministic path uses, so completeness is comparable
@@ -516,6 +521,7 @@ def verify_and_cover_extraction(
     """
     extractor = f"ai:{task_version}:{prompt_version}"
     requirements: list[Requirement] = []
+    seen_ids: set[str] = set()
     mapped_spans: list[tuple[int, int]] = []
 
     for proposed in proposal.requirements:
@@ -533,6 +539,14 @@ def verify_and_cover_extraction(
 
         quote = proposed.attestation.quote
         identity_span = normalize_span(quote)
+        # `ordinal` is constant deliberately. The deterministic extractor needs
+        # one because its dedup key (concept and demanded value) is *narrower*
+        # than its id key (the matched substring), so two genuinely different
+        # requirements can normalize to one `identity_span`
+        # (`extract_requirements`'s `seen`). Here every field that separates
+        # two proposed requirements - quote, interpretation, kind, demanded
+        # value - is already folded into the id, and a position on top would
+        # only make two statements of one requirement look like two.
         req_id = requirement_id(
             normalized_hash=normalized_hash,
             extraction_version=extractor,
@@ -542,6 +556,24 @@ def verify_and_cover_extraction(
             kind=proposed.kind,
             demanded=proposed.demanded,
         )
+        # Every verified proposal's span counts as read, the duplicates
+        # included. The posting really does state this requirement at both
+        # offsets, and dropping the second would make `unmatched_requirement_
+        # lines` below synthesize an `undetermined` entry for a statement the
+        # extraction did cover.
+        mapped_spans.append(span)
+        # A provider restating one requirement is one requirement - the answer
+        # `extract_requirements` already gives. Both copies passed both gates,
+        # so a duplicate is collapsed rather than rejected; keeping both would
+        # price one demand into `fit_score` twice and leave two entries under
+        # one id, which nothing holding an id could tell apart. The key is the
+        # id itself rather than a hand-copied tuple of its inputs, because
+        # `requirement_id` *is* the definition of when two readings are one
+        # requirement, so a dedup derived from it cannot drift out of step
+        # with it.
+        if req_id in seen_ids:
+            continue
+        seen_ids.add(req_id)
         covered = cover_ai_requirement(
             quote,
             proposed.interpretation,
@@ -554,7 +586,6 @@ def verify_and_cover_extraction(
         requirements.append(
             covered.model_copy(update={"attestation": proposed.attestation, "extractor": extractor})
         )
-        mapped_spans.append(span)
 
     unmapped: list[UnmappedStatement] = []
     for statement in proposal.unmapped_statements:
