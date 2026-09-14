@@ -173,7 +173,7 @@ describe("FactsPage", () => {
       section: "Experience",
     });
 
-    fireEvent.click(screen.getByText("יצירת תיקון לעובדה"));
+    fireEvent.click(screen.getByRole("button", { name: "יצירת תיקון לעובדה" }));
     fireEvent.click(screen.getByRole("button", { name: "יצירת עובדת תיקון ממתינה" }));
     await waitFor(() => expect(requests.some((request) => request.url === "/api/v1/facts")).toBe(true));
     const correction = requests.find((request) => request.url === "/api/v1/facts");

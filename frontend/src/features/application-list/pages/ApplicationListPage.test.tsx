@@ -322,7 +322,7 @@ describe("ApplicationListPage", () => {
         expect.objectContaining({ method: "GET" }),
       ),
     );
-    expect(screen.getByRole("button", { name: /הכול/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /הכל/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   /* The row was painted on hover while only three of its cells were clickable. */

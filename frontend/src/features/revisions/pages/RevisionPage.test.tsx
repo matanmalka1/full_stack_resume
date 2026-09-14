@@ -193,7 +193,7 @@ describe("RevisionPage", () => {
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
     const revisionAside = await screen.findByRole("complementary", { name: "פרטי הגרסה והאימות" });
-    fireEvent.click(within(revisionAside).getByText("אפשרויות נוספות"));
+    fireEvent.click(await within(revisionAside).findByText("אפשרויות נוספות"));
     fireEvent.click(await screen.findByRole("button", { name: "רישום הגשה נוספת" }));
     expect(await screen.findByText("הגרסה הזו כבר נרשמה כמוגשת")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "אישור ורישום ההגשה" })).toBeDisabled();
