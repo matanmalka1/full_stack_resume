@@ -1,6 +1,6 @@
 {
   "policy_version": "1.0.0",
-  "extraction_version": "2",
+  "extraction_version": "3",
   "scales": {
     "language_proficiency": [
       "basic",
@@ -187,8 +187,8 @@
       "label": "Sales experience at a technology company",
       "kind": "compositional",
       "patterns": [
-        "sales[^.;]{0,120}(?:technology|tech|software|saas)\\s+compan\\w*",
-        "(?:technology|tech|software|saas)\\s+compan\\w*[^.;]{0,120}sales"
+        "sales[^.;]{0,120}(?:technology|tech|software|saas)(?:[\\s-]related)?\\s+(?:compan\\w*|industry|sector|vertical|space)",
+        "(?:technology|tech|software|saas)(?:[\\s-]related)?\\s+(?:compan\\w*|industry|sector|vertical|space)[^.;]{0,120}sales"
       ],
       "components": [
         {

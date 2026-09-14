@@ -12,8 +12,8 @@ this session (file:line cited), independent of the external review's own citatio
 ## מצב נוכחי (למי שממשיך מכאן)
 
 **Stage 1+2 נחת בקוד** (הסשן שאחרי התכנון). **Stage 3 נחת חלקית: A11 נסגר,
-A2 נעצר כשאלת מדיניות פתוחה** (ר' להלן). **Stage 4 נחת חלקית: D4 סגור, D10
-מוגדר-מחדש ונעצר כהכרעת מוצר** (ר' להלן). כל השאר — Stage 5-8 — עדיין תכנון
+A2 נעצר כשאלת מדיניות פתוחה** (ר' להלן). **Stage 4 נחת במלואו: D4 סגור,
+D10 הוגדר-מחדש ואז נסגר** (ר' להלן). כל השאר — Stage 5-8 — עדיין תכנון
 בלבד. 23 ממצאים מאומתים (D1-D10, A1-A12, C1-C2; ‏A4 ו-D10 אינם באגים עצמאיים),
 סדר תיקון ב-8 שלבים. ‏`A12` נוסף ב-Stage 3, מתוך היישום ולא מהסקירה המקורית.
 
@@ -22,7 +22,7 @@ A2 נעצר כשאלת מדיניות פתוחה** (ר' להלן). **Stage 4 נ�
 | ממצא | סטטוס | מה נחת |
 | --- | --- | --- |
 | **D4** | **סגור** | יחידת המדידה של `extraction_completeness` היא ה-**בקשה** בתוך הסטייטמנט, לא הסטייטמנט |
-| **D10** | **מוגדר-מחדש — נעצר, דורש הכרעת מוצר** | הפרמיסה שלו מתקיימת אחרי D4 והתשובה לא משתנה. ר' "D10 — למה נעצר" למטה. שום קוד לא שונה בגללו |
+| **D10** | **סגור** | הוגדר-מחדש (הפרמיסה מתקיימת אחרי D4, התשובה לא זזה), ואז נסגר בהרחבת התבנית של `technology-company-sales` + העלאת `extraction_version` ל-`"3"`. ר' "D10 — איך נסגר" |
 
 **D4 — ההכרעה: דרך (ב), לא (א).** הסגמנטציה לא נגעה; מה שהשתנה הוא *מה נספר
 בתוך יחידה*. `statement_asks(text, line)` (segmentation.py) חותך סטייטמנט
@@ -78,7 +78,7 @@ the same one `_understood` ... ask their version of this question with".
 (ai_extraction.py) הבטיחה "the identical measure"; זה כבר לא נכון — ר' פריט
 מעקב 9.
 
-### D10 — למה נעצר (תנאי עצירה, לא עבודה שלא נעשתה)
+### D10 — איך נסגר (הוגדר מחדש, ואז נסגר בהכרעת מוצר)
 
 **הפרמיסה של D10 מתקיימת אחרי D4, והתשובה לא זזה. הממצא מוגדר-מחדש בדיוק כמו
 A4: המסגור של המסמך היה שגוי, לא הקוד.**
@@ -100,26 +100,49 @@ tech-related **industry**". הווקבולרי פשוט לא מודל את הד�
 יכול לשנות את זה, כי `0` במונה אינו תלוי במכנה. אימתתי גם את (א): פיצול לפי
 משפט משאיר `requirement_lines == [S4]` ו-`extracted == []`, כלומר `0/1`.
 
-**הטסט האדום נשאר אדום, ובכוונה לא נגעתי בו.**
-`tests/test_selection.py::test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations`
-עדיין `fit=UNKNOWN` במקום `HIGH`. הוא נשבר ב-**Stage 1** (מחיקת ה-short-circuit
-של `understood_elsewhere`, החלטה #3) ולא ב-Stage 4; D4 הוא no-op מוחלט על
-הקלט הזה (‏`0/1 → 0/12`, אותו `0.0`). להפוך אותו לירוק דורש הכרעת מוצר שאף
-החלטה שנפתרה לא עונה עליה:
+**הטסט האדום נסגר — בשתי הדרכים יחד, כפי שהומלץ, וההכרעה אושרה.**
 
-1. **לקבל את `fit=UNKNOWN`** ולעדכן את הטענה בטסט. הנושא האמיתי של הטסט הוא
-   בחירת ראיות ("Selection must actually select"), ו-`fit == "high"` אינו
-   הנושא שלו — אבל זו עדיין קביעה מוצרית שמודעה כזו לא אמורה להפיק מסמך בלי
-   אישור מפורש של "המנוע לא קרא דרישות" (פריט מעקב 1).
-2. **להוסיף קונספט ל-`config/requirements.json`** שמודל "SaaS / tech-related
-   industry experience". זה התיקון האמיתי לתלונה, אבל הוא משנה את
-   `extraction_version`, ולכן **ממפתח מחדש כל `requirement_id` בקורפוס** —
-   שינוי משמעות של ערך מאוחסן, לא עבודה של Stage 4.
-3. **החלטה #2 עצמה** (אין ratio threshold ל-`extraction_failed`) — סגורה,
-   ובמפורש מחוץ לתחום; D10 אינו שינוי לבוליאן.
+**(2) — הווקבולרי הורחב, וזה היה התיקון האמיתי.** לא נוסף קונספט חדש: המודעה
+מבקשת בדיוק את מה ש-`technology-company-sales` כבר מייצג — מכירה בחברת
+טכנולוגיה — והתבנית פשוט דרשה את המילה `compan\w*` ליטרלית. קונספט שני היה
+מפצל משמעות אחת לשתיים ומאפשר ספירה כפולה על מודעה שאומרת גם "company" וגם
+"industry". לכן הורחבה התבנית הקיימת:
 
-**ההמלצה:** (2) הוא התיקון הנכון לתופעה, (1) הוא התיקון הנכון לטסט. הם לא
-סותרים וכדאי לעשות את שניהם, אבל שניהם מחוץ ל-Stage 4.
+```
+(?:technology|tech|software|saas)(?:[\s-]related)?\s+(?:compan\w*|industry|sector|vertical|space)
+```
+
+`extraction_version` הועלה `"2" → "3"`, כמתחייב: `requirement_id` נגזר ממנו,
+ושינוי משמעות שלא ממפתח מחדש היה מאפשר ל-acceptance שנרשם מול המשמעות הישנה
+לענות בשקט על החדשה (ר' הדוקסטרינג של `requirement_id`). **כל ה-ids בקורפוס
+ממופתחים מחדש.** רשומות שכבר נכתבו אינן נגעות — הן קפואות תחת `"2"`.
+
+**התוצאה על PAYME:** ‏`technology-company-sales` נתפס, `completeness = 1/12 ≈
+0.0833`, ‏`state="partial"` (לא `unparsed`), ‏`extraction-failed` נעלם,
+`confidence 0.0 → 0.297`, ‏`fit_score = 0.5`, ‏`fit = LOW`.
+
+**(1) — שתי הטענות עודכנו, ו-`HIGH` היה שגוי מלכתחילה.** זו הנקודה החשובה:
+`fit=HIGH` המקורי **מעולם לא הורווח** — הוא בא מ-`requirements == []` ומ-
+`fit_score_from_requirements([]) == 1.0` ("nothing demanded, nothing missing"),
+כלומר **בדיוק ה-false green של D1**. הטסט קיבע באג. אחרי Stage 1 זה הפך ל-
+`UNKNOWN` — כן, אבל לא אינפורמטיבי. `LOW` הוא התשובה הנכונה: מה שהמודעה מבקשת
+הוא מכירה *בחברת טכנולוגיה*, וזה גבול מוצהר של המועמד
+(`sales.tech_sales.boundary`), ולכן הדרישה מכוסה `partial` — לא חסרה ולא
+מלאה.
+
+שני טסטים עודכנו לטענה, לא למספר:
+- `tests/test_selection.py::test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations`
+  → `fit == "low"`, ‏`fit_score == 0.5`, ו-`extraction-failed` לא ברשימה.
+  בחירת הראיות — הנושא האמיתי של הטסט — לא זזה בכלל.
+- `tests/test_analysis.py::test_tech_sales_analysis_records_preference_gaps_and_selection_concepts`
+  → אותו דבר, ובנוסף מקבע עכשיו `[("technology-company-sales", "partial")]`
+  כרשימת ה-requirements, כי זו הטענה שהתשובה נשענת עליה.
+
+**(3) — החלטה #2 לא נגעה.** אין ratio threshold, והבוליאן לא שונה. D10 נסגר
+בלי לגעת בו, כפי שנדרש.
+
+**מה נשאר פתוח מתוך D10: כלום.** פריט מעקב 10 (מכנה מנופח של שברי-פרוזה)
+נשאר פתוח כפריט עצמאי, אבל הוא של הסגמנטציה, לא של D10.
 
 ### מה נחת ב-Stage 3
 
@@ -249,9 +272,12 @@ concepts, *, understood_elsewhere)`. **לנתיב ה-AI אין `list[ExtractedRe
 - **D4-D10 (פרט ל-D2), A2, A5-A11, C1, C2 — ללא שינוי.** שייכים ל-Stage 3-8.
   (‏D4 ו-D10 נסגרו מאז ב-Stage 4; ר' למעלה.)
 
-**הצעד הבא:** Stage 5 (`D8`, `C1`) — תקינות נוסחת ה-confidence, שתלוי
-ב-Stage 1-4 שנחתו. A2 ו-D10 חוזרים לשולחן כשההכרעות שלהם נסגרות, ואינם חוסמים
-את Stage 5.
+**הצעד הבא:** **Stage 6** (`D5`, `D6`, `D9`) — באגי סדר בחילוץ הדטרמיניסטי,
+עצמאיים מהכול ו**ללא אף החלטה פתוחה**. Stage 5 (`D8`, `C1`) חסום על החלטות
+#5 ו-#6 שעדיין פתוחות, ולכן אינו הצעד הבא למרות מיקומו ברשימה. ל-Stage 6 יש
+כבר פריט נכנס פתוח מ-Stage 2 (החלטה #10): כש-`line.section` נעשה אמין, להחליט
+מחדש אם `undetermined_requirement` עובר מ-`mandatory=False` קבוע ל-
+`line.section == "requirements"`. A2 חוזר לשולחן כשההכרעות שלו נסגרות.
 
 **החלטות #1-#3 ו-#7-#12 סגורות (RESOLVED)**, כל אחת עם נימוק מלא במקום — ראה
 **Open product decisions** למטה. הן מכסות: מה קורה לשורת דרישה שלא מופתה
@@ -292,8 +318,8 @@ implementation file plan" למטה, שבע קבצים בסדר עריכה מוג
 4. **D7 מתחיל לזוז.** `concept_classification_completeness` כבר לא קבוע 1.0
    מתמטית ברגע שקיימות ישויות עם `concept=None`. ר' "משנים משמעות" למטה.
 5. **~~D10 — `0 מתוך N` אינו מדד קטסטרופלי אמין כש-N הוא מספר פסקאות.~~
-   נסגר כפריט מעקב ב-Stage 4 — הפרמיסה התקיימה והתשובה לא זזה; ר' "D10 — למה
-   נעצר" בראש המסמך. הטקסט המקורי נשמר להקשר:**
+   נסגר ב-Stage 4 — הפרמיסה התקיימה, התשובה לא זזה, והכשל האמיתי התברר
+   כווקבולרי; ר' "D10 — איך נסגר" בראש המסמך. הטקסט המקורי נשמר להקשר:**
    `PAYME_TECH_SALES_JOB` הוא קטע מודעה ריאליסטי שבו הסגמנטר מחזיר
    `requirement_line` יחיד עבור הפסקה השלמה. שום concept אינו ממפה אותה, ולכן
    `0/1` מדליק `requirements-unmapped` ו-`extraction-failed` בדיוק כמו `0/20`.
@@ -327,8 +353,9 @@ implementation file plan" למטה, שבע קבצים בסדר עריכה מוג
 10. **פסקת פרוזה עם cue יחיד מייצרת מכנה גדול של שברי-תיאור.** ב-PAYME,
     12 בקשות שרק האחרונה בהן היא דרישה; 11 האחרות הן תיאור תפקיד שנכנס
     למכנה כי cue אחד (`experience`) סיווג את כל הפסקה כ-`requirement_line`.
-    כאן זה לא משנה תוצאה (`0` במונה בכל מקרה), אבל על מודעה דומה שכן נקראה
-    חלקית זה יוריד completeness חזק. **זו החצי של הסגמנטציה — דרך (א)** —
+    אחרי שהווקבולרי הורחב (D10) המונה שם הוא `1`, ולכן `completeness` של
+    PAYME הוא `1/12 ≈ 0.083` — כלומר ההשפעה כבר לא תיאורטית: 11 שברי תיאור
+    מדללים דרישה אחת אמיתית. **זו החצי של הסגמנטציה — דרך (א)** —
     ובמכוון לא נעשתה ב-Stage 4. מדד להחלטה: אם מודעות פרוזה עם הבנה חלקית
     מתחילות ליפול מתחת לסף ה-`low-confidence`, זה הטריגר לשקול פיצול לפי
     משפט ב-`_segments`, מול ההערה ב-segmentation.py:232-241.
@@ -336,6 +363,17 @@ implementation file plan" למטה, שבע קבצים בסדר עריכה מוג
     להיות סטייטמנט" ו-"קטע קצר מדי כדי להיות בקשה". זה מכוון (אותה שאלה
     בשני קני מידה) ומתועד ב-`statement_asks`, אבל אם אחד מהם יזדקק לכיול
     נפרד, זו הנקודה שבה הם צריכים להיפרד לשני קבועים.
+12. **`extraction_version` עלה ל-`"3"` — כל `requirement_id` בקורפוס ממופתח
+    מחדש.** רשומות שכבר נכתבו קפואות תחת `"2"` ולא נגעו. המשמעות המעשית:
+    acceptance שנרשם מול ניתוח ישן לא יענה על ניתוח חדש של אותה מודעה — וזה
+    בדיוק מה ש-versioning נועד לעשות, לא תקלה. אם יתברר שזה מייצר חיכוך על
+    מודעות שעדיין בטיפול, זו נקודת החלטה ולא באג.
+13. **`technology-company-sales-context` אינו ניתן לסיפוק** —
+    `satisfied_by_fact_ids` ו-`satisfied_by_tags` ריקים שניהם, ולכן הקונספט
+    לעולם `partial` ולעולם לא `met`. זה **מכוון** (`sales.tech_sales.boundary`
+    הוא גבול מוצהר של המועמד, ו-`REVIEW_DECISION_JOB` מתועד כך במפורש), אבל
+    זה גם הסיבה שכל מודעה שמבקשת מכירה בחברת טכנולוגיה מקבלת `fit` לכל היותר
+    בינוני. ראוי לוודא שזו עדיין העמדה הרצויה כשנוגעים בכיול הסף (D3).
 
 ## Root cause, restated precisely
 
@@ -504,7 +542,11 @@ no concept pattern matches anywhere in that text, so `0` is the numerator regard
 the denominator, and `extraction_failed` is firing correctly. Reclassified the way `A4`
 was: the document's framing was wrong, not the code. The red test stays red pending a
 product decision (accept `fit=UNKNOWN`, or model the requirement in the vocabulary and
-re-key the corpus); full statement at the top, under "D10 — למה נעצר".
+re-key the corpus). Both were then taken: the existing `technology-company-sales`
+pattern was widened (not a second concept - it is the same meaning) and
+`extraction_version` bumped to `"3"`, which re-keys every `requirement_id`. The
+posting now reads `partial` and the analysis answers `fit=LOW`. Full statement at
+the top, under "D10 — איך נסגר".
 
 ### Stage 5 — Confidence-formula correctness (depends on Stage 1-4 landing — retuning a
 formula before its inputs are trustworthy is wasted work)
@@ -547,7 +589,7 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **D2** | גבוה — extraction_failed מנוטרל ע"י gap-כלל יחיד | [classification.py:441-444](../cv_engine/domain/analysis/classification.py#L441-L444), [confidence.py:94-95](../cv_engine/domain/analysis/requirements/confidence.py#L94-L95), [gaps.py:262-270](../cv_engine/domain/analysis/gaps.py#L262-L270) | `understood_elsewhere=bool(rule_gaps)` → `if understood_elsewhere: return False` **לפני** even בדיקת ה-state — כלומר גם `state=="unparsed"` (שורות זוהו, 0 הובנו, לא רק "absent") מנוטרל | שורש; Stage 1. **תיקון (החלטה #3 RESOLVED):** מחיקת ה-short-circuit לגמרי; `understood_elsewhere` נשאר קלט ל-`extraction_confidence` בלבד (רצפת 0.4) | **CONFIRMED, והיקף רחב מהמתואר**: קראתי `confidence.py:94-96` — ה-short-circuit קורה *לפני* חישוב ה-state בכלל, כך שהבאג לא מוגבל למקרה "0 requirements" (כפי שהדוגמה המקורית תיארה) אלא לכל מקרה שבו נמצא ולו gap-כלל אחד (salesforce/crm/saas/partnership/years-threshold) — גם אם 20 שורות דרישה זוהו ואף אחת לא הובנה. |
 | **D3** | גבוה — סף האישור עובר בקריאה חלקית | [approval.py:14](../cv_engine/domain/analysis/approval.py#L14), [confidence.py:99-123](../cv_engine/domain/analysis/requirements/confidence.py#L99-L123), [classification.py:153-168,450-454](../cv_engine/domain/analysis/classification.py#L153-L168) | עם `classified=1.0` (ר' D7) והנוסחה `(0.4+0.6·completeness)·classified`, מספיק `completeness≈0.56` כדי לחצות `0.72/0.98≈0.735` | Stage 1+2 (החלטה #1 **RESOLVED=YES**) — אך הסף `0.72` עצמו לא מושפע מהחלטות #1-#3 (אלה קבעו *איך* partial extraction מיוצג, לא *מה הסף* לאישור על ייצוג כזה); D3 נשאר שאלת כיול פתוחה, לא מכוסה ע"י אף החלטה שנפתרה | **CONFIRMED** — שחזרתי את החשבון ישירות מהנוסחאות; מספרי הדוגמה (0.735, c≥0.558) עקביים עם קריאת הקוד, בהנחת `classification_confidence` גבוה טיפוסי. |
 | **D4** | בינוני-גבוה — בולט עם 3 בקשות נספר כיחידת "הבנה" אחת | [confidence.py:14-25](../cv_engine/domain/analysis/requirements/confidence.py#L14-L25), [extraction.py:118-167](../cv_engine/domain/analysis/requirements/extraction.py#L118-L167), [segmentation.py:241](../cv_engine/domain/analysis/requirements/segmentation.py#L241) | `_understood` בודק חפיפת offset בין ה-`StatementLine` המלא (כל המשפט) לבין ה-`ExtractedRequirement.span` שהוא רק תת-מחרוזת שהרג'קס תפס — משפט אחד ארוך עם 3 דרישות, רק 1 חולצה, נספר כ"מובן" במלואו | עצמאי | **CONFIRMED** — `item.start`/`item.end` הם offsets של ה-regex match בלבד (extraction.py:141-165), לא של המשפט; `_understood` (confidence.py:21-25) סופר overlap ברמת ה-line, לא ברמת המושג. `segmentation.py:241` מוסיף אפקט נלווה: שורה שממשיכה משפט קודם (lowercase, ללא bullet) ממוזגת לאותה יחידה. **סגור ב-Stage 4** — דרך (ב): `statement_asks` היא יחידת המדידה, הסגמנטציה לא נגעה. ר' "מה נחת ב-Stage 4". |
-| **D10** | גבוה — פסקה ריאליסטית שלמה נספרת כ-N=1 ומדליקה כשל קטסטרופלי | [segmentation.py:181-248](../cv_engine/domain/analysis/requirements/segmentation.py#L181-L248), [confidence.py:42-96](../cv_engine/domain/analysis/requirements/confidence.py#L42-L96), [helpers.py:48-56](../tests/helpers.py#L48-L56) | `PAYME_TECH_SALES_JOB` נשמר כפסקה פיזית אחת ובה כמה משפטים ותיאור תפקיד לצד "Prefer inside Sales experience...". ה-cue `experience` מסווג את כל הפסקה כ-`requirement_line` יחיד; אף concept אינו ממפה אותה → `completeness=0/1`, `state="unparsed"`, ‏`requirements-unmapped` ו-`extraction-failed`. בוליאן החלטה #2 מבחין רק בין 0 ליותר מ-0 ואינו יכול לדעת ש-N=1 אינו דרישה יחידה אלא פסקה שלמה | תלוי D4; Stage 4 | **CONFIRMED** על הקלט הריאלי הקיים: `requirement_lines==1`, ‏`extracted==0`. הטסט האדום: `tests/test_selection.py::test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations` (`fit=UNKNOWN` במקום `HIGH`). החלטה #2 (`0 מתוך N`) משמעותית רק לאחר ש-N מייצג דרישות ולא פסקאות. **מוגדר-מחדש ב-Stage 4 — לא באג עצמאי, כמו A4.** אחרי D4 ‏`N=12` בקשות ולא פסקה אחת, והתשובה נשארת `0/12`: אף תבנית קונספט אינה מתאימה לשום מקום בטקסט, ולכן `extraction_failed=True` הוא הבוליאן **עובד**. הטסט האדום נשאר אדום ודורש הכרעת מוצר — ר' "D10 — למה נעצר". |
+| **D10** | גבוה — פסקה ריאליסטית שלמה נספרת כ-N=1 ומדליקה כשל קטסטרופלי | [segmentation.py:181-248](../cv_engine/domain/analysis/requirements/segmentation.py#L181-L248), [confidence.py:42-96](../cv_engine/domain/analysis/requirements/confidence.py#L42-L96), [helpers.py:48-56](../tests/helpers.py#L48-L56) | `PAYME_TECH_SALES_JOB` נשמר כפסקה פיזית אחת ובה כמה משפטים ותיאור תפקיד לצד "Prefer inside Sales experience...". ה-cue `experience` מסווג את כל הפסקה כ-`requirement_line` יחיד; אף concept אינו ממפה אותה → `completeness=0/1`, `state="unparsed"`, ‏`requirements-unmapped` ו-`extraction-failed`. בוליאן החלטה #2 מבחין רק בין 0 ליותר מ-0 ואינו יכול לדעת ש-N=1 אינו דרישה יחידה אלא פסקה שלמה | תלוי D4; Stage 4 | **CONFIRMED** על הקלט הריאלי הקיים: `requirement_lines==1`, ‏`extracted==0`. הטסט האדום: `tests/test_selection.py::test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations` (`fit=UNKNOWN` במקום `HIGH`). החלטה #2 (`0 מתוך N`) משמעותית רק לאחר ש-N מייצג דרישות ולא פסקאות. **הוגדר-מחדש ואז נסגר ב-Stage 4.** אחרי D4 ‏`N=12` בקשות ולא פסקה אחת, והתשובה נשארה `0/12` — כלומר `extraction_failed=True` היה הבוליאן **עובד**, לא נכשל. הכשל האמיתי היה בווקבולרי: התבנית דרשה `compan\w*` והמודעה אומרת "tech-related industry". התבנית הורחבה ו-`extraction_version` עלה ל-`"3"`; PAYME עכשיו `partial` ו-`fit=LOW`. ‏`HIGH` המקורי היה ה-false green של D1 ולא הורווח מעולם. ר' "D10 — איך נסגר". |
 | **D5** | גבוה — dedup קובע mandatory/preferred לפי המופע הראשון | [extraction.py:132-147](../cv_engine/domain/analysis/requirements/extraction.py#L132-L147), [requirements.json:43-68](../config/requirements.json#L43-L68) | דה-דופ (שורה 132-136, `concept`+`demanded`) רץ **לפני** חישוב mandatory/preferred (שורה 147) → אזכור ראשון תחת "About us" (preferred) "בולע" את המופע השני תחת "Requirements:" (mandatory) | עצמאי | **CONFIRMED, עם תנאי מוקדם שאומת**: cue-word matching ב-`_statement_kind` ([segmentation.py:169-171](../cv_engine/domain/analysis/requirements/segmentation.py#L169-L171)) הוא **ללא תלות בסקשן** — מילה כמו "experience" (ברשימת `requirement_cues`, config:51) בפסקת "About us" גם היא מסמנת את המשפט כ-`kind="requirement"`, ולכן נכנס בכלל למנוע ה-extraction (extraction.py:111: `if span.kind != "requirement": continue`). זה מה שהופך את התרחיש לריאלי, לא תיאורטי בלבד. |
 | **D6** | גבוה — clause משותף מאפשר ל"advantage" סמוך לבטל "must have" מפורש | [extraction.py:20,57-80,140,147](../cv_engine/domain/analysis/requirements/extraction.py#L20-L147) | `_SENTENCE=[.;\n]` לא חותך על פסיק; "Must have 5+ years..., European market an advantage." — אין parenthetical, אז ה-clause הוא כל המשפט; `"advantage"∈preferred_markers` (config:36) הופך את **כל** ה-clause, כולל ה-5+ שנים, ל-preferred | עצמאי | **CONFIRMED** ישירות מהרג'קס והקונפיג — `_SENTENCE` אינו כולל פסיק, ו-`_clause_around` (extraction.py:57-80) מחזיר את המשפט השלם פחות parentheticals כש-ה-match אינו בתוך aside. אותה א-סימטריה חוזרת ב-[interpretation.py:58-61](../cv_engine/domain/analysis/requirements/interpretation.py#L58-L61) בנתיב ה-AI, על ה-quote המצוטט. |
 | **D9** | גבוה — כותרת ללא נקודתיים לא סוגרת section, בולט הטבות יורש `mandatory=True` | [segmentation.py:96-120](../cv_engine/domain/analysis/requirements/segmentation.py#L96-L120) (`_heading_section`), [segmentation.py:123-142](../cv_engine/domain/analysis/requirements/segmentation.py#L123-L142) (`_section_of`), [extraction.py:147](../cv_engine/domain/analysis/requirements/extraction.py#L147) | כותרת כמו "Perks"/"Benefits" (בלי `:`) שאינה matches מדויק לאף marker מוגדר מחזירה `None` מ-`_heading_section`; `None` לא סוגר section פתוח (רק heading לא-`None` משנה `section`) → הbulletים שתחתיה יורשים את ה-section הקודם. אם זה "requirements", בולט הטבות תמים שמזדמן להתאים ל-concept pattern מקבל `mandatory=True` ב-extraction.py:147 בלי אף מרקר | עצמאי; שלב 6 עם D5/D6 | **CONFIRMED** — עקבתי את `_segments` (segmentation.py:181-248) שורה-שורה: `section` משתנה רק ב-`if heading is not None: ...; section=heading` (שורה 219-226); heading=`None` פשוט `continue`-ת בלי לגעת ב-section. אין קוד שסוגר section על heading לא-מזוהה. |

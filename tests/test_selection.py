@@ -244,7 +244,20 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
     )
     draft = setup.draft
 
-    assert setup.analysis.fit.value == "high"
+    # `high` here was never earned. This posting states its one requirement -
+    # "inside Sales experience in a SaaS or tech-related industry" - in prose,
+    # and the vocabulary matched nothing in it, so `requirements` came out
+    # empty and `fit_score_from_requirements([])` answered `1.0`: "nothing
+    # demanded, nothing missing". That is exactly D1's false green, and the
+    # assertion was pinning it. Now the requirement is read, and the honest
+    # answer is `low`: what the posting asks for is sales *at a technology
+    # company*, and that context is a declared boundary of the candidate
+    # (`sales.tech_sales.boundary`), so the requirement is covered `partial`.
+    # What this test is actually about is the evidence selection below, which
+    # is unchanged either way.
+    assert setup.analysis.fit.value == "low"
+    assert setup.analysis.fit_score == 0.5
+    assert "extraction-failed" not in setup.analysis.approval_reasons
     # `sales.cycle.closing` is deliberately absent: five lines per role is the
     # ceiling, and closing evidence already reaches the page through the merged
     # negotiation/tenders bullet and the leadership block. Outreach has no such

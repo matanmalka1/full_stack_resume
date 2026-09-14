@@ -93,13 +93,21 @@ def test_tech_sales_analysis_records_preference_gaps_and_selection_concepts(clas
         emphasis_override="new-business",
     )
 
-    # UNKNOWN, not HIGH. The concept vocabulary reads none of this posting's one
-    # requirement-bearing statement, which is `extraction_failed` - the rule gaps
-    # below no longer clear that, they only earn the confidence floor. The old
-    # HIGH came from `fit_score_from_requirements([])` returning 1.0 for a
-    # posting nothing had been read from.
-    assert result.fit.value == "unknown"
-    assert "extraction-failed" in result.approval_reasons
+    # LOW, and neither of the two answers this assertion held before. HIGH came
+    # from `fit_score_from_requirements([])` returning 1.0 for a posting nothing
+    # had been read from - D1's false green. UNKNOWN replaced it once that was
+    # fixed, and was honest but uninformative: the vocabulary required the
+    # literal word "company" and this posting says "SaaS or tech-related
+    # industry", so its one requirement went unread and the whole analysis was
+    # `extraction_failed`. Now it is read, and LOW is what the posting and the
+    # candidate actually produce: sales *at a technology company* is a declared
+    # boundary (`sales.tech_sales.boundary`), so the requirement is covered
+    # `partial`, not missing and not met.
+    assert result.fit.value == "low"
+    assert "extraction-failed" not in result.approval_reasons
+    assert [(requirement.concept, requirement.coverage) for requirement in result.requirements] == [
+        ("technology-company-sales", "partial")
+    ]
     gaps = {gap.requirement: gap for gap in result.gaps}
     assert gaps["Direct SaaS Sales preference"].severity == "warning"
     assert gaps["Sales CRM usage"].substitute_fact_ids == [
