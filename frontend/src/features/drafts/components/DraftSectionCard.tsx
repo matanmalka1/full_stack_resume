@@ -81,6 +81,7 @@ export const DraftSectionCard = ({
         emptyLabel="אין כרגע שורות בסעיף הזה."
         factResolution={(claim) => (
           <ClaimFactResolution
+            beforeResolve={factContext.beforeResolve}
             analysisId={factContext.analysisId}
             applicationId={factContext.applicationId}
             claim={claim}

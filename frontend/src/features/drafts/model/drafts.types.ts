@@ -22,6 +22,7 @@ export interface DraftClaimActions {
 /* What turning an unsupported line into a confirmed fact needs from the Application,
    passed as a settled contract rather than by handing the whole projection downward. */
 export interface ClaimFactContext {
+  beforeResolve?: () => Promise<void>;
   analysisId: string | null;
   applicationId: string;
   language: string;

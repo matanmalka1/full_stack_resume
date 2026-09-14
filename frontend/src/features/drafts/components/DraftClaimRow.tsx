@@ -59,7 +59,11 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
   const distinctFacts = facts.filter((fact) => fact.text !== null && fact.text !== claim.text);
 
   return (
-    <li className="flex flex-wrap items-start gap-x-3 gap-y-1.5 py-3 first:pt-0">
+    <li
+      id={`draft-claim-${claim.claim_id}`}
+      tabIndex={-1}
+      className="scroll-mt-24 flex flex-wrap items-start gap-x-3 gap-y-1.5 py-3 first:pt-0"
+    >
       <div className={marginClasses}>
         <StatusBadge tone={claimTypeTones[claim.claim_type]}>{claimTypeLabels[claim.claim_type]}</StatusBadge>
       </div>

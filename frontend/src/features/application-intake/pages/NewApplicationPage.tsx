@@ -61,6 +61,7 @@ export const NewApplicationPage = () => {
     submission.submit(intakeFromFields(submittedFields), true),
   );
   const onInputChanged = (field: keyof ApplicationIntakeFields) => {
+    intakeDraft.updateDraft(form.getValues());
     form.clearErrors(field);
     submission.resetSettledResult();
   };

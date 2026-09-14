@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { acknowledgementApplies, duplicateCheck, duplicateMatchesFromProblem } from "@/api/applications";
 import { ApiProblem } from "@/api/client";
@@ -52,7 +52,14 @@ const validationFieldErrors = (error: Error | null): IntakeFieldErrors | null =>
     const location = (issue as Record<string, unknown>).location;
     if (!Array.isArray(location)) continue;
 
-    const field = location.findLast(isIntakeField);
+    let field: keyof ApplicationIntakeFields | undefined;
+    for (let index = location.length - 1; index >= 0; index -= 1) {
+      const part: unknown = location[index];
+      if (isIntakeField(part)) {
+        field = part;
+        break;
+      }
+    }
     if (field !== undefined) errors[field] = fieldMessages[field];
   }
   return Object.keys(errors).length === 0 ? null : errors;
@@ -63,7 +70,9 @@ const validationFieldErrors = (error: Error | null): IntakeFieldErrors | null =>
 export const useApplicationIntakeSubmission = ({ currentIntake, onCreated }: UseApplicationIntakeSubmissionOptions) => {
   const queryClient = useQueryClient();
   const currentIntakeRef = useRef(currentIntake);
-  currentIntakeRef.current = currentIntake;
+  useLayoutEffect(() => {
+    currentIntakeRef.current = currentIntake;
+  }, [currentIntake]);
   const mutation = useMutation<SubmissionResult, Error, SubmissionInput>({
     mutationFn: async ({ acknowledged, intake }) => {
       if (!acknowledged) {

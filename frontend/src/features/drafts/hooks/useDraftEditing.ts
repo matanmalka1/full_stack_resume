@@ -10,6 +10,7 @@ import {
   regenerateSection,
   selectionOverlay,
   workingDraftFactsQueryKey,
+  workingDraftFactsQueryOptions,
   workingDraftQueryKey,
   workingDraftQueryOptions,
 } from "@/api/drafts";
@@ -50,6 +51,7 @@ export interface DraftEditing {
      halted queue. */
   dirty: boolean;
   flush: () => void;
+  settle: () => Promise<boolean>;
   includeFact: (fact: DraftFact) => void;
   regenerateSection: (section: string) => void;
   regenerationError: unknown;
@@ -117,8 +119,15 @@ export const useDraftEditing = ({
       if (draft === undefined || facts === undefined) {
         throw new Error("a selection change was offered before the draft and its facts arrived");
       }
-      const overlay = selectionOverlay(facts);
-      return applySelectionChange(draft.id, draft.edit_version, {
+      if (!(await autosave.settle())) {
+        throw new Error("Selection cannot change until local draft edits are saved");
+      }
+      const [current, currentFacts] = await Promise.all([
+        queryClient.fetchQuery(workingDraftQueryOptions(draft.id)),
+        queryClient.fetchQuery(workingDraftFactsQueryOptions(draft.id)),
+      ]);
+      const overlay = selectionOverlay(currentFacts);
+      return applySelectionChange(draft.id, current.draft.edit_version, {
         pinned_fact_ids: [...new Set([...overlay.pinned_fact_ids, ...(change.pinned ?? [])])],
         excluded_fact_ids: [...new Set([...overlay.excluded_fact_ids, ...(change.excluded ?? [])])],
       });
@@ -159,7 +168,8 @@ export const useDraftEditing = ({
     autosave.status === "saving" ||
     autosave.status === "conflict" ||
     autosave.pending.length > 0 ||
-    autosave.pendingRemovals.length > 0;
+    autosave.pendingRemovals.length > 0 ||
+    autosave.pendingAdditions.length > 0;
 
   /* Which command removes a line is `removability`'s answer, not a guess made here: the
      patch takes the unauthorized claims, and a fact-authorized one is removed by
@@ -201,6 +211,7 @@ export const useDraftEditing = ({
     },
     dirty,
     flush: autosave.flush,
+    settle: autosave.settle,
     /* Including an omitted fact is a pin: in a budgeted deterministic selection, holding
        it is the only way to say "keep this one". */
     includeFact: (fact) => selection.mutate({ pinned: [fact.fact_id] }),

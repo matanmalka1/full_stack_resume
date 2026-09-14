@@ -67,22 +67,21 @@ const ReasonCallout = ({
 export const PreparationAlerts = ({
   detail,
   screen = "preparation",
+  showReviewReasons = true,
 }: {
   detail: ApplicationDetail;
-  /* Which screen is rendering the region. The preparation screen carries the decision
-     form, so a reason that form answers is left to it; the draft editor carries none, so
-     the same reason is stated there with the way back to the control that resolves it.
-     The editor used to render its own two `map`s over the same arrays - title only, no
-     server message, no resolution - which turned every blocker into a dead end on the one
-     screen where approval is refused. */
+  /* The current screen decides whether a reason's resolution is already beside it.
+     Review controls owned by another region can suppress this read-only copy below. */
   screen?: PreparationScreen;
+  /* The editor renders review reasons with their inline resolution controls. */
+  showReviewReasons?: boolean;
 }) => {
   const currentPath = screenPath(screen, detail.application.id);
   /* A reason resolved by the decision form is presented with its control instead of
      once here as an alert and once again below as a decision - but only where that form
      is actually rendered. */
   const reviewReasons = detail.review_reasons.filter(
-    (reason) => !(screen === "preparation" && resolvedByReviewDecision(reason)),
+    (reason) => showReviewReasons && !(screen === "preparation" && resolvedByReviewDecision(reason)),
   );
   const statedReasonCodes = new Set([...detail.review_reasons, ...detail.stale_reasons].map((reason) => reason.code));
   /* `blocked_actions` contains the normal future workflow as well as exceptional

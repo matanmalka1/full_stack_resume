@@ -43,22 +43,30 @@ The user runs every gate. You never run tests — you hand over the commands.
 Every change needs the focused tests for what it touched. A **boundary** is a delivery
 point — the work handed back to the user as done, whether that's a task, a PR, or an
 explicit checkpoint the user names. It is not any internal step inside that work.
-At the end of a boundary, the non-browser suite once.
+Choose gates from the actual diff and affected behavior:
 
-Three things earn more than that, and only these:
+- Frontend-only changes need frontend checks only.
+- Backend-only changes need backend checks only.
+- Changes affecting both need checks for both, including shared contracts where touched.
+- Prefer focused tests for the affected behavior. A boundary does not automatically
+  require a full frontend, backend, or combined suite. Broaden only for a concrete
+  uncovered risk, a failure, or an explicit CI/release requirement; state why.
+- Documentation-only changes need consistency review, not product test suites.
+
+Three kinds of change need additional focused evidence:
 
 - **A schema change** (`alembic/`) also needs the migration-topology and empty-database
   upgrade checks, with the generated schema diff stated.
 - **A change to rendering or an artifact path** also needs the golden hashes and the
-  browser suite.
-- **A change to a stored value's meaning, a public signature, or a projection field**
+  relevant browser tests.
+- **A change to a stored value's meaning, a public application/API signature, or a projection field**
   also needs the deterministic no-AI pipeline test against a fresh PostgreSQL database
   (`tests/test_pipeline_end_to_end.py`) — `ingest → analyze → draft → validate → approve
   → render → ready → reconcile`, `OPENAI_API_KEY` unset. It drives the application
   services directly, so it proves the engine works rather than that one client knows how
   to call it.
 
-While iterating, hand over only the focused commands. Hand over the boundary's full gate
+While iterating, hand over only the focused commands. Hand over the boundary's scoped gates
 once, when the work closes, ordered, with what each command proves. A gate that already
 passed under the same conditions is not fresh evidence — check the diff and the test count
 against its baseline before asking for a re-run.

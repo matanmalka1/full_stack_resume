@@ -1,6 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
+import { workingDraftQueryOptions } from "@/api/drafts";
+import { ErrorCallout } from "@/ui/ErrorCallout";
+import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -54,6 +59,10 @@ const draftLoading = (
 export const DraftEditorPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [resolutionError, setResolutionError] = useState<unknown>(null);
+  const [resolving, setResolving] = useState(false);
+  const [claimTarget, setClaimTarget] = useState<{ claimId: string } | null>(null);
   const { applicationError, detail, draft, draftError, etag, facts, operation, watch, workingDraftId } =
     useDraftDocument(applicationId);
   const editing = useDraftEditing({
@@ -127,173 +136,272 @@ export const DraftEditorPage = () => {
 
   const applicationHref = routePaths.application(applicationId);
 
+  const beforeResolve = async () => {
+    setResolutionError(null);
+    setApprovalOpen(false);
+    try {
+      if (!(await editing.settle())) {
+        throw new Error("העריכות לא נשמרו. יש לפתור את שגיאת השמירה או הקונפליקט ולנסות שוב; הטקסט המקומי נשמר בעורך.");
+      }
+      await invalidateApplicationViews(queryClient, applicationId);
+      const current = await queryClient.fetchQuery(applicationDetailQueryOptions(applicationId));
+      if (
+        current.active_analysis_id !== detail?.active_analysis_id ||
+        current.active_selection_plan_id !== detail?.active_selection_plan_id ||
+        current.active_working_draft_id !== workingDraftId
+      ) {
+        throw new Error("הקשר המועמדות השתנה. המצב רוענן; יש לבדוק את ההחלטות והטיוטה לפני ניסיון נוסף.");
+      }
+      if (workingDraftId !== null) await queryClient.fetchQuery(workingDraftQueryOptions(workingDraftId));
+      // Refreshing may have taken time; do not change context over newly buffered edits.
+      if (!(await editing.settle())) throw new Error("יש להשלים את שמירת העריכות לפני המשך.");
+    } catch (error) {
+      setResolutionError(error);
+      throw error;
+    }
+  };
+
+  const navigateSaved = async (href: string) => {
+    setResolutionError(null);
+    setResolving(true);
+    try {
+      await beforeResolve();
+      navigate(href);
+    } catch (error) {
+      setResolutionError(error);
+    } finally {
+      setResolving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (claimTarget === null) return;
+    const target = document.getElementById(`draft-claim-${claimTarget.claimId}`);
+    target?.scrollIntoView?.({ block: "center" });
+    target?.focus();
+  }, [claimTarget]);
+
+  const approvalUnavailable =
+    editing.dirty ||
+    resolving ||
+    applicationError != null ||
+    draftError != null ||
+    detail === undefined ||
+    detail.review_reasons.length > 0 ||
+    detail.working_draft_state === "stale" ||
+    detail.stale_reasons.length > 0 ||
+    validation.stale;
+  // A blocker closes this explicit choice permanently; clearing it never reopens approval.
+  if (approvalOpen && approvalUnavailable) setApprovalOpen(false);
+
   return (
     /* No description: `DraftHeaderCard` below names the company and the target role
        together, and the heading repeated the role on its own a line above it. The step's
        name is the shell's, from the same table the spine marks it with - it used to be
        "קריאה, אימות ואישור", three words the rail does not use, so the reader's position
        had two names depending on which of the two they read. */
-    <WizardStepShell
-      applicationId={applicationId}
-      detail={detail}
-      eyebrow={
-        detail === undefined ? (
-          <Skeleton className="inline-block w-56 max-w-full align-middle" />
-        ) : (
-          <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
-        )
-      }
-      /* The one step whose body is a document beside the evidence for each of its lines.
-         Two readable columns need the wide frame the other steps do not. */
-      measure="wide"
-      stage="draft"
+    <div
+      className="contents"
+      onClickCapture={(event) => {
+        const anchor = (event.target as Element).closest("a");
+        const href = anchor?.getAttribute("href");
+        if (href?.startsWith("/") && !href.startsWith("//")) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!resolving) void navigateSaved(href);
+        }
+      }}
     >
-      <QueryState
-        error={applicationError}
-        fallbackTitle="לא ניתן לטעון את מצב המועמדות"
-        loading={detail === undefined}
-        loadingLabel="טוען את מצב המועמדות…"
-      />
-      {draftError === null || draftError === undefined ? null : (
-        <QueryState error={draftError} fallbackTitle="לא ניתן לטעון את הטיוטה" />
-      )}
+      <WizardStepShell
+        applicationId={applicationId}
+        detail={detail}
+        eyebrow={
+          detail === undefined ? (
+            <Skeleton className="inline-block w-56 max-w-full align-middle" />
+          ) : (
+            <span dir="auto">{applicationLabel(detail.application.company, detail.application.target_role)}</span>
+          )
+        }
+        /* The one step whose body is a document beside the evidence for each of its lines.
+         Two readable columns need the wide frame the other steps do not. */
+        measure="wide"
+        stage="draft"
+      >
+        <QueryState
+          error={applicationError}
+          fallbackTitle="לא ניתן לטעון את מצב המועמדות"
+          loading={detail === undefined}
+          loadingLabel="טוען את מצב המועמדות…"
+        />
+        {draftError === null || draftError === undefined ? null : (
+          <QueryState error={draftError} fallbackTitle="לא ניתן לטעון את הטיוטה" />
+        )}
 
-      {detail === undefined ? null : (
-        <>
-          <DraftHeaderCard
-            detail={detail}
-            dirty={editing.dirty}
-            draft={draft}
-            saveState={workingDraftId === null ? null : editing.saveState}
-          />
+        {detail === undefined ? null : (
+          <>
+            <DraftHeaderCard
+              detail={detail}
+              dirty={editing.dirty}
+              draft={draft}
+              saveState={workingDraftId === null ? null : editing.saveState}
+            />
 
-          {/* Live work, reported beside the draft it is rewriting rather than on a screen
+            {/* Live work, reported beside the draft it is rewriting rather than on a screen
               the user has to leave the text for. */}
-          {operation === undefined ? null : (
-            <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={operation} />
-          )}
+            {operation === undefined ? null : (
+              <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={operation} />
+            )}
 
-          {/* The projection's own blockers, reported by the one region that reports them.
+            {/* The projection's own blockers, reported by the one region that reports them.
               A claim with no fact behind it raises PENDING_FACT_REQUIRES_RESOLUTION there,
               and it is shown here as the reason it already is rather than as an approval
               rule this screen invented. This screen used to map the same two arrays into
               bare titles of its own - no server message, no control - which named what
               refuses approval without naming anything the reader could do about it. */}
-          <PreparationAlerts detail={detail} screen="draft" />
+            <PreparationAlerts detail={detail} screen="draft" showReviewReasons={false} />
+            {resolutionError === null ? null : (
+              <ErrorCallout
+                error={resolutionError}
+                fallbackTitle="לא ניתן להמשיך לפני שמירת העריכות"
+                fallbackDetail="יש לפתור את שגיאת השמירה או הקונפליקט, ולבדוק את ההקשר המעודכן לפני ניסיון נוסף. הטקסט המקומי נשמר בעורך."
+              />
+            )}
 
-          {workingDraftId === null && renderRevisionId === null && !draftArriving ? (
-            <DraftEmptyState applicationId={applicationId} />
-          ) : null}
-        </>
-      )}
+            {workingDraftId === null && renderRevisionId === null && !draftArriving ? (
+              <DraftEmptyState applicationId={applicationId} />
+            ) : null}
+          </>
+        )}
 
-      {renderRevisionId !== null ? (
-        <DraftRenderPanel
-          approvedRevisionId={renderRevisionId}
-          autoStart={approvedRevisionId !== null}
-          onQueued={watch}
-          /* The render is reported once, by `ActiveOperationPanel` above. This tells the
+        {renderRevisionId !== null ? (
+          <DraftRenderPanel
+            approvedRevisionId={renderRevisionId}
+            autoStart={approvedRevisionId !== null}
+            onQueued={watch}
+            /* The render is reported once, by `ActiveOperationPanel` above. This tells the
              render panel whether that is happening, so the approved box and its "create the
              files" CTA never appear beside the operation already creating them - and so the
              render panel knows to report the wait itself in the window before there is an
              Operation to report. */
-          rendering={operation?.operation_type === "render_revision"}
-        />
-      ) : null}
+            rendering={operation?.operation_type === "render_revision"}
+          />
+        ) : null}
 
-      {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftError === null ? (
-        <QueryState loading loadingState={draftLoading} />
-      ) : null}
+        {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftError === null ? (
+          <QueryState loading loadingState={draftLoading} />
+        ) : null}
 
-      {renderRevisionId !== null || draft === undefined ? null : (
-        <>
-          <DraftWorkspace
-            editor={
-              <>
-                <DraftOutlineEditor
-                  actions={editing.claimActions}
-                  draft={draft}
-                  factContext={{
-                    analysisId: detail?.active_analysis_id ?? null,
-                    applicationId,
-                    language: facts?.language ?? detail?.application.language ?? "en",
-                    profile: detail?.application.profile ?? null,
-                  }}
-                  facts={facts}
-                  onRegenerateSection={editing.regenerateSection}
-                />
+        {renderRevisionId !== null || draft === undefined ? null : (
+          <>
+            {detail === undefined ? null : (
+              <DraftReviewPanel
+                detail={detail}
+                draft={draft}
+                beforeResolve={beforeResolve}
+                onNavigate={(href) => {
+                  if (!resolving) void navigateSaved(href);
+                }}
+                onShowClaim={(claimId) => {
+                  setMode("read");
+                  // A fresh request also supports jumping to the same claim again.
+                  setClaimTarget({ claimId });
+                }}
+              />
+            )}
+            <DraftWorkspace
+              editor={
+                <>
+                  <DraftOutlineEditor
+                    actions={editing.claimActions}
+                    draft={draft}
+                    factContext={{
+                      beforeResolve,
+                      analysisId: detail?.active_analysis_id ?? null,
+                      applicationId,
+                      language: facts?.language ?? detail?.application.language ?? "en",
+                      profile: detail?.application.profile ?? null,
+                    }}
+                    facts={facts}
+                    onRegenerateSection={editing.regenerateSection}
+                  />
 
-                <DraftEditorNotices
-                  aiUnavailable={editing.aiUnavailable}
-                  dirty={editing.dirty}
-                  regenerationError={editing.regenerationError}
-                  selectionError={editing.selectionError}
-                />
+                  <DraftEditorNotices
+                    aiUnavailable={editing.aiUnavailable}
+                    dirty={editing.dirty}
+                    regenerationError={editing.regenerationError}
+                    selectionError={editing.selectionError}
+                  />
 
-                <DraftFactPanel busy={editing.selectionPending} facts={facts} onInclude={editing.includeFact} />
-              </>
-            }
-            mode={mode}
-            onModeChange={changeMode}
-            preview={
-              /* The right pane is the document and everything said about it: the live
+                  <DraftFactPanel busy={editing.selectionPending} facts={facts} onInclude={editing.includeFact} />
+                </>
+              }
+              mode={mode}
+              onModeChange={changeMode}
+              preview={
+                /* The right pane is the document and everything said about it: the live
                  preview and the validation result for the exact version shown. The
                  decision those two gate is pinned to the screen instead, in one place
                  across both modes. */
-              <>
-                <DraftPreview draft={draft} />
-                <DraftValidationPanel validation={validation} />
-              </>
-            }
-          />
+                <>
+                  <DraftPreview draft={draft} />
+                  <DraftValidationPanel validation={validation} />
+                </>
+              }
+            />
 
-          <DraftApprovalBar
-            applicationHref={applicationHref}
-            exactPassingRunId={validation.exactPassingRunId}
-            onApprove={() => setApprovalOpen(true)}
-            reviewBlocked={(detail?.review_reasons ?? []).length > 0}
-            stale={validation.stale}
-            validationResult={
-              validation.error !== null && validation.error !== undefined
-                ? "לא ניתן להשלים את האימות. פרטי השגיאה מופיעים לצד הטיוטה."
-                : validation.lastRun === undefined
-                  ? undefined
-                  : validation.lastRun.passed && validation.exactPassingRunId !== null
-                    ? "האימות הושלם בהצלחה. הטיוטה מוכנה לאישור."
-                    : validation.lastRun.passed
-                      ? "האימות הושלם, אך הטיוטה השתנתה מאז. יש להריץ אימות חדש."
-                      : "האימות הושלם והטיוטה לא עברה. פרטי הכשל מופיעים לצד הטיוטה."
-            }
-          />
+            <DraftApprovalBar
+              applicationHref={applicationHref}
+              exactPassingRunId={validation.exactPassingRunId}
+              onApprove={() => {
+                if (!approvalUnavailable && validation.exactPassingRunId !== null) setApprovalOpen(true);
+              }}
+              unavailable={approvalUnavailable}
+              reviewBlocked={(detail?.review_reasons ?? []).length > 0}
+              stale={validation.stale}
+              validationResult={
+                validation.error !== null && validation.error !== undefined
+                  ? "לא ניתן להשלים את האימות. פרטי השגיאה מופיעים לצד הטיוטה."
+                  : validation.lastRun === undefined
+                    ? undefined
+                    : validation.lastRun.passed && validation.exactPassingRunId !== null
+                      ? approvalUnavailable
+                        ? "האימות עבר על הגרסה המוצגת. יש לפתור את החסמים לפני אישור."
+                        : "האימות הושלם בהצלחה. הטיוטה מוכנה לאישור."
+                      : validation.lastRun.passed
+                        ? "האימות הושלם, אך הטיוטה השתנתה מאז. יש להריץ אימות חדש."
+                        : "האימות הושלם והטיוטה לא עברה. פרטי הכשל מופיעים לצד הטיוטה."
+              }
+            />
 
-          <DraftApprovalDialog
-            applicationId={applicationId}
-            detail={detail}
-            draft={draft}
-            onApproved={(revisionId) => {
-              setApprovalOpen(false);
-              setApprovedRevisionId(revisionId);
-            }}
-            onClose={() => setApprovalOpen(false)}
-            onStale={() => {
-              setApprovalOpen(false);
-              validation.reportStaleRefusal();
-            }}
-            open={approvalOpen}
-            validationRunId={validation.exactPassingRunId}
-          />
+            <DraftApprovalDialog
+              applicationId={applicationId}
+              detail={detail}
+              draft={draft}
+              onApproved={(revisionId) => {
+                setApprovalOpen(false);
+                setApprovedRevisionId(revisionId);
+              }}
+              onClose={() => setApprovalOpen(false)}
+              onStale={() => {
+                setApprovalOpen(false);
+                validation.reportStaleRefusal();
+              }}
+              open={approvalOpen && !approvalUnavailable}
+              validationRunId={validation.exactPassingRunId}
+            />
 
-          <DraftConflictDialog
-            current={draft}
-            onDiscardLocal={editing.conflict.discardLocal}
-            onReapplyLocal={editing.conflict.reapplyLocal}
-            open={editing.conflict.open}
-            pending={editing.conflict.pending}
-            pendingAdditions={editing.conflict.pendingAdditions}
-            pendingRemovals={editing.conflict.pendingRemovals}
-          />
-        </>
-      )}
-    </WizardStepShell>
+            <DraftConflictDialog
+              current={draft}
+              onDiscardLocal={editing.conflict.discardLocal}
+              onReapplyLocal={editing.conflict.reapplyLocal}
+              open={editing.conflict.open}
+              pending={editing.conflict.pending}
+              pendingAdditions={editing.conflict.pendingAdditions}
+              pendingRemovals={editing.conflict.pendingRemovals}
+            />
+          </>
+        )}
+      </WizardStepShell>
+    </div>
   );
 };

@@ -69,13 +69,12 @@ const persist = (fields: ApplicationIntakeFields): boolean => {
 /* Debounced during typing, synchronous at the page boundary. The latter closes the gap
    where SPA navigation unmounts the page before the timer fires. Storage is best effort:
    quota/private-mode failures are surfaced but never prevent editing or submission. */
-export const useApplicationIntakeDraft = (fields: ApplicationIntakeFields, restored: boolean) => {
-  const latestFields = useRef(fields);
+export const useApplicationIntakeDraft = (initialFields: ApplicationIntakeFields, restored: boolean) => {
+  const latestFields = useRef(initialFields);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previousFingerprint = useRef(fingerprint(fields));
+  const previousFingerprint = useRef(fingerprint(initialFields));
   const clearedAfterCreation = useRef(false);
   const [status, setStatus] = useState<IntakeDraftStatus>(restored ? "restored" : "idle");
-  latestFields.current = fields;
 
   const clearDraft = useCallback(() => {
     clearedAfterCreation.current = true;
@@ -89,13 +88,17 @@ export const useApplicationIntakeDraft = (fields: ApplicationIntakeFields, resto
     setStatus("idle");
   }, []);
 
-  useEffect(() => {
+  /* Called after React Hook Form records an input change. Capture the values in the
+     event itself so navigation can flush them even before another render commits. */
+  const updateDraft = useCallback((fields: ApplicationIntakeFields) => {
     const nextFingerprint = fingerprint(fields);
     if (previousFingerprint.current === nextFingerprint) return;
     previousFingerprint.current = nextFingerprint;
+    latestFields.current = fields;
 
     clearedAfterCreation.current = false;
     if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = null;
 
     if (!hasContent(fields)) {
       setStatus(persist(fields) ? "idle" : "failed");
@@ -107,12 +110,7 @@ export const useApplicationIntakeDraft = (fields: ApplicationIntakeFields, resto
       timer.current = null;
       setStatus(persist(latestFields.current) ? "saved" : "failed");
     }, AUTOSAVE_DEBOUNCE_MS);
-
-    return () => {
-      if (timer.current !== null) clearTimeout(timer.current);
-      timer.current = null;
-    };
-  }, [fields.company, fields.job_text, fields.source_url, fields.target_role]);
+  }, []);
 
   useEffect(() => {
     const flush = () => {
@@ -135,9 +133,11 @@ export const useApplicationIntakeDraft = (fields: ApplicationIntakeFields, resto
       window.removeEventListener("pagehide", flush);
       window.removeEventListener("beforeunload", onBeforeUnload);
       document.removeEventListener("visibilitychange", onVisibilityChanged);
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = null;
       flush();
     };
   }, []);
 
-  return { clearDraft, status };
+  return { clearDraft, status, updateDraft };
 };

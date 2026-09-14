@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ClaimPatch } from "@/api/contracts";
 import { useDraftAutosave } from "./useDraftAutosave";
@@ -54,6 +54,10 @@ const bodyOf = (call: unknown[] | undefined) => JSON.parse(String((call?.[1] as 
 const headerOf = (call: unknown[] | undefined, name: string) =>
   ((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get(name);
 
+beforeEach(() => {
+  window.sessionStorage.clear();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -102,9 +106,19 @@ describe("useDraftAutosave", () => {
       result.current.flush();
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    let settled = false;
+    let settling = Promise.resolve(false);
+    act(() => {
+      settling = result.current.settle().then((saved) => {
+        settled = true;
+        return saved;
+      });
+    });
+    expect(settled).toBe(false);
 
     await act(async () => {
       first.resolve(updateResponse(5));
+      expect(await settling).toBe(true);
     });
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -139,6 +153,9 @@ describe("useDraftAutosave", () => {
     act(() => {
       result.current.flush();
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => expect(await result.current.settle()).toBe(false));
+    expect(result.current.pending).toEqual([patch("c-1", "mine")]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

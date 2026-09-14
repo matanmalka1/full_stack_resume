@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Classification } from "@/api/analyses";
 import { applyAnalysisDecisions } from "@/api/analyses";
 import { invalidateApplicationViews } from "@/api/applications";
+import { workingDraftFactsQueryKey, workingDraftQueryKey } from "@/api/drafts";
 import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
@@ -38,11 +39,15 @@ import { ReviewDecisionForm } from "./ReviewDecisionForm";
 export const ReviewDecisionPanel = ({
   classification,
   detail,
+  beforeApply,
+  inline = false,
 }: {
   /* Read both to name the values the override selects would replace and to render the
      gap list a hard-gap acceptance is taken against. */
   classification: Classification | null;
   detail: ApplicationDetail;
+  beforeApply?: () => Promise<void>;
+  inline?: boolean;
 }) => {
   const queryClient = useQueryClient();
   const [decisions, setDecisions] = useState(emptyDecisions);
@@ -119,6 +124,7 @@ export const ReviewDecisionPanel = ({
       if (analysisId === null) {
         throw new Error("apply_analysis_decisions was offered without an active analysis");
       }
+      await beforeApply?.();
       return applyAnalysisDecisions(analysisId, applicationId, submitted, selectionPlanId);
     },
     /* Nothing from the response body is seeded into the cache. `created_analysis` is read
@@ -127,8 +133,14 @@ export const ReviewDecisionPanel = ({
     onSuccess: async () => {
       setDecisions(emptyDecisions);
       setAcceptedRequirementIds([]);
-      continueAutomaticallyAfterDecisions(applicationId);
+      if (!inline) continueAutomaticallyAfterDecisions(applicationId);
       await invalidateApplicationViews(queryClient, applicationId);
+      if (detail.active_working_draft_id != null) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(detail.active_working_draft_id) }),
+          queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(detail.active_working_draft_id) }),
+        ]);
+      }
     },
   });
 
@@ -199,7 +211,7 @@ export const ReviewDecisionPanel = ({
           {apply.error === null ? null : (
             <ErrorCallout
               error={apply.error}
-              fallbackDetail="הפנייה לשרת נכשלה. שום החלטה לא נרשמה ואפשר לנסות שוב."
+              fallbackDetail="ההחלטות לא נשמרו. יש לוודא שעריכות הטיוטה נשמרו ושההקשר מעודכן, לפתור שגיאת שמירה או קונפליקט אם קיימים, ואז לנסות שוב."
               fallbackTitle="ההחלטות לא הוחלו"
             />
           )}
@@ -207,6 +219,7 @@ export const ReviewDecisionPanel = ({
       </section>
 
       <CommitBar
+        inline={inline}
         primary={
           <Button
             disabled={!decisionReady}

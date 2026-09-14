@@ -76,6 +76,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
   const removals = useRef(new Set<string>());
   const additions = useRef<ClaimAddition[]>([]);
   const inFlight = useRef(false);
+  const activeSave = useRef<Promise<void> | null>(null);
   const token = useRef(etag);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const halted = useRef(false);
@@ -150,66 +151,74 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     [mirror],
   );
 
-  const send = useCallback(async (): Promise<void> => {
-    if (inFlight.current || halted.current || workingDraftId === null) {
-      return;
-    }
+  const send = useCallback((): Promise<void> => {
+    if (activeSave.current !== null) return activeSave.current;
+    if (halted.current || workingDraftId === null) return Promise.resolve();
 
-    const patch: DraftPatch = {
-      claim_edits: [...edits.current.values()],
-      claim_removals: [...removals.current],
-      claim_additions: [...additions.current],
-    };
+    const task = (async () => {
+      const patch: DraftPatch = {
+        claim_edits: [...edits.current.values()],
+        claim_removals: [...removals.current],
+        claim_additions: [...additions.current],
+      };
 
-    if (emptyPatch(patch) || token.current === null) {
-      return;
-    }
-
-    edits.current.clear();
-    removals.current.clear();
-    additions.current = [];
-    inFlight.current = true;
-    publish("saving");
-
-    try {
-      const result = await updateWorkingDraft(workingDraftId, token.current, patch);
-      token.current = result.etag;
-      onSaved(result.update, result.etag);
-      publish("saved");
-      mirror();
-    } catch (error) {
-      restore(patch);
-
-      if (error instanceof ApiProblem && error.problem.status === 409) {
-        /* The queue stops here. Nothing is resent automatically and nothing is merged:
-           the dialog owns what happens next, and the user's text is still in the
-           buffer. Its comparison and the token must come from the same fresh read. */
-        halted.current = true;
-        try {
-          const currentToken = await onConflict();
-          if (currentToken !== null) {
-            token.current = currentToken;
-          }
-        } catch {
-          /* The conflict remains an explicit choice even if its refresh failed. Reapply
-             performs another fresh read, so it can recover without losing local text. */
-        }
-        publish("conflict", error.problem.detail);
+      if (emptyPatch(patch) || token.current === null) {
         return;
       }
 
-      publish(
-        "failed",
-        error instanceof ApiProblem ? error.problem.detail : "השמירה נכשלה. הטקסט נשמר בדפדפן ואפשר לנסות שוב.",
-      );
-      return;
-    } finally {
-      inFlight.current = false;
-    }
+      edits.current.clear();
+      removals.current.clear();
+      additions.current = [];
+      inFlight.current = true;
+      publish("saving");
 
-    /* Whatever arrived while that request was open goes now, against the token it just
+      try {
+        const result = await updateWorkingDraft(workingDraftId, token.current, patch);
+        token.current = result.etag;
+        onSaved(result.update, result.etag);
+        publish("saved");
+        mirror();
+      } catch (error) {
+        restore(patch);
+
+        if (error instanceof ApiProblem && error.problem.status === 409) {
+          /* The queue stops here. Nothing is resent automatically and nothing is merged:
+           the dialog owns what happens next, and the user's text is still in the
+           buffer. Its comparison and the token must come from the same fresh read. */
+          halted.current = true;
+          try {
+            const currentToken = await onConflict();
+            if (currentToken !== null) {
+              token.current = currentToken;
+            }
+          } catch {
+            /* The conflict remains an explicit choice even if its refresh failed. Reapply
+             performs another fresh read, so it can recover without losing local text. */
+          }
+          publish("conflict", error.problem.detail);
+          return;
+        }
+
+        publish(
+          "failed",
+          error instanceof ApiProblem ? error.problem.detail : "השמירה נכשלה. הטקסט נשמר בדפדפן ואפשר לנסות שוב.",
+        );
+        return;
+      } finally {
+        inFlight.current = false;
+        activeSave.current = null;
+      }
+
+      /* Whatever arrived while that request was open goes now, against the token it just
        returned. */
-    void sendRef.current();
+      await sendRef.current();
+    })();
+    activeSave.current = task;
+    void task.then(() => {
+      if (activeSave.current === task) activeSave.current = null;
+      return undefined;
+    });
+    return task;
   }, [mirror, onConflict, onSaved, publish, restore, workingDraftId]);
 
   useEffect(() => {
@@ -290,6 +299,22 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     void send();
   }, [send]);
 
+  /* Wait for the serial queue before changing context. Refusals retain local text. */
+  const settle = useCallback(async (): Promise<boolean> => {
+    if (timer.current !== null) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    await send();
+    return (
+      !halted.current &&
+      !inFlight.current &&
+      edits.current.size === 0 &&
+      removals.current.size === 0 &&
+      additions.current.length === 0
+    );
+  }, [send]);
+
   /* The user chose the server's version. Their text is discarded because they said so -
      which is the only way it is ever discarded. */
   const discardLocal = useCallback(() => {
@@ -345,5 +370,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     queueEdit,
     queueRemoval,
     reapplyLocal,
+    settle,
   };
 };

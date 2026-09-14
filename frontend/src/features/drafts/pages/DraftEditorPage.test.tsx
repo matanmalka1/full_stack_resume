@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
@@ -153,7 +153,10 @@ const updateResponse = (editVersion: number): Response =>
    the order the screen happens to request them in. */
 const stubReads = (
   answers: Partial<
-    Record<"detail" | "draft" | "facts" | "selectionChange" | "regenerate" | "validation", () => Response>
+    Record<
+      "detail" | "draft" | "facts" | "selectionChange" | "regenerate" | "validation" | "validationRun",
+      () => Response
+    >
   >,
 ): ReturnType<typeof vi.fn> => {
   const fetchMock = vi.fn((input: unknown) => {
@@ -175,6 +178,9 @@ const stubReads = (
           }),
       );
     }
+    if (url.startsWith("/api/v1/validation-runs/")) {
+      return Promise.resolve(answers.validationRun?.() ?? answers.validation?.() ?? jsonResponse({}, 404));
+    }
     if (url.endsWith("/validate")) {
       return Promise.resolve(answers.validation?.() ?? jsonResponse({}, 500));
     }
@@ -192,6 +198,44 @@ const stubReads = (
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 };
+
+const reviewDetail = (
+  codes = [
+    "HARD_GAP_REQUIRES_DECISION",
+    "MATERIAL_CLASSIFICATION_AMBIGUITY",
+    "PENDING_FACT_REQUIRES_RESOLUTION",
+    "KNOWLEDGE_RECONCILIATION_REQUIRED",
+  ],
+): ApplicationDetail =>
+  detail({
+    review_reasons: codes.map((code) => ({
+      code,
+      message: `Reason: ${code}`,
+      entity_references: {},
+      allowed_resolution_actions:
+        code === "PENDING_FACT_REQUIRES_RESOLUTION"
+          ? ["confirm_and_use_fact", "update_working_draft"]
+          : code === "KNOWLEDGE_RECONCILIATION_REQUIRED"
+            ? []
+            : ["apply_analysis_decisions"],
+    })),
+    latest_analysis: {
+      id: "an-1",
+      application_id: "app-1",
+      job_snapshot_id: "snap-1",
+      version_number: 1,
+      analysis: {
+        track: "sales",
+        profile: "account-manager",
+        fit: "medium",
+        user_override: {},
+        gaps: [{ requirement: "Kubernetes", severity: "hard", reason: "missing", requirement_id: "req-1" }],
+      },
+      provider: "deterministic",
+      model: "rules-v1",
+      created_at: "2026-08-24T07:00:00Z",
+    } as ApplicationDetail["latest_analysis"],
+  });
 
 const renderPage = (aiEnabled = true) => {
   const client = new QueryClient({
@@ -234,8 +278,14 @@ const renderPage = (aiEnabled = true) => {
 /* The screen shows the draft as text; a line becomes a field when its own pencil is
    pressed. Tests that type into a line open that line first, the way a user does. */
 const editRow = async (index = 0) => {
+  fireEvent.click(await screen.findByRole("button", { name: "בדיקת עובדות ועריכה" }));
   fireEvent.click((await screen.findAllByRole("button", { name: "עריכת השורה" }))[index]!);
 };
+
+// Failure scenarios deliberately retain buffers; a new test represents a fresh session.
+beforeEach(() => {
+  window.sessionStorage.clear();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -556,46 +606,186 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    /* The projection's reason reaches the screen as its own code, titled from the code
-       rather than by the backend's sentence: the message is written to be complete, and
-       several of them stacked was what made this screen open with a wall of prose. It is
-       kept rather than dropped - folded behind its disclosure, so the evidence is one
-       press away instead of gone. What the test guards is unchanged - the blocker shown
-       is the projection's, not a rule this screen invented.
-
-       No resolution link: both resolution actions this reason allows are answered on this
-       very screen, and a link to the page the reader is reading is not an answer. */
     expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeInTheDocument();
-    expect(screen.getByText("A claim in the active draft depends on a pending fact.")).not.toBeVisible();
+    expect(screen.getByText("A claim in the active draft depends on a pending fact.")).toBeVisible();
     expect(screen.queryByRole("link", { name: "עריכת הטיוטה" })).toBeNull();
   });
 
-  it("routes a blocker it cannot answer to the screen that owns the control", async () => {
+  it("offers analysis decisions inline and takes pending facts to their own row with focus", async () => {
+    stubReads({
+      detail: () => jsonResponse(reviewDetail()),
+      draft: () =>
+        jsonResponse(
+          draft({
+            sections: [
+              {
+                name: "Core Skills",
+                claims: [
+                  {
+                    ...draft().outline.sections[0]!.claims[0]!,
+                    claim_type: "pending",
+                    fact_ids: [],
+                  },
+                ],
+              },
+            ],
+          }),
+        ),
+    });
+    renderPage();
+    expect(await screen.findByRole("heading", { name: "החלטות נדרשות כדי להמשיך" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "שמירת ההחלטות" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "החלת החלטות הסקירה" })).toBeNull();
+    expect(screen.getByText(/נדרשת השלמת התאמה של מאגר הידע/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "מעבר לפתרון השורה" }));
+    await waitFor(() => expect(document.activeElement?.id).toBe("draft-claim-c-1"));
+    expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeVisible();
+  });
+
+  it("takes a deleted dependency to its row and withholds unrelated fact confirmation", async () => {
     stubReads({
       detail: () =>
         jsonResponse(
           detail({
             review_reasons: [
               {
-                code: "HARD_GAP_REQUIRES_DECISION",
-                message: "A hard requirement has no canonical fact behind it.",
-                entity_references: {},
-                allowed_resolution_actions: ["apply_analysis_decisions"],
+                code: "FACT_DELETED_REQUIRES_RESOLUTION",
+                message: "A selected fact was deleted.",
+                entity_references: { fact_id: "f-1" },
+                allowed_resolution_actions: ["apply_selection_change"],
               },
             ],
-          } as Partial<ApplicationDetail>),
+          }),
         ),
     });
-
     renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "מעבר לשורה להסרת התלות בעובדה" }));
+    await waitFor(() => expect(document.activeElement?.id).toBe("draft-claim-c-1"));
+    expect(screen.queryByText("הפיכת הטקסט לעובדה מאושרת")).toBeNull();
+    expect(screen.queryByRole("button", { name: "שמירת ההחלטות" })).toBeNull();
+  });
 
-    /* The decision form lives on the preparation screen. Naming the blocker here without
-       naming a way to it left approval refused with nothing to press - the editor used to
-       render its own bare title for exactly this case. */
-    expect(await screen.findByRole("link", { name: "החלת החלטות הסקירה" })).toHaveAttribute(
-      "href",
-      "/applications/app-1",
+  it.each(["MATERIAL_CLASSIFICATION_AMBIGUITY", "HARD_GAP_REQUIRES_DECISION", "ANALYSIS_INCOMPLETE"])(
+    "keeps approval closed with an exact passing run and an open %s decision",
+    async (code) => {
+      const fetchMock = stubReads({
+        detail: () => jsonResponse(reviewDetail([code])),
+        validation: () =>
+          jsonResponse({
+            application_id: "app-1",
+            working_draft_id: "wd-1",
+            content_hash: "hash-4",
+            edit_version: 4,
+            passed: true,
+            validation_run_id: "run-1",
+            report: { evidence: {}, groups: {}, issues: [] },
+          }),
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: "אימות הטיוטה" }));
+      await screen.findByText("האימות עבר על הגרסה המוצגת. יש לפתור את החסמים לפני אישור.");
+      await waitFor(() =>
+        expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/api/v1/validation-runs/run-1")).toBe(true),
+      );
+      await waitFor(() => expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled());
+      expect(screen.queryByRole("dialog", { name: "אישור גרסה קבועה" })).toBeNull();
+    },
+  );
+
+  it("saves local wording before decisions, refreshes the draft and keeps approval closed after context changes", async () => {
+    let resolveSave: (response: Response) => void = () => {};
+    const save = new Promise<Response>((resolve) => {
+      resolveSave = resolve;
+    });
+    let applied = false;
+    let saved = false;
+    let draftReads = 0;
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url === DRAFT_PATH && init?.method === "PATCH") return save;
+      if (url.endsWith("/apply-decisions")) {
+        applied = true;
+        return Promise.resolve(
+          jsonResponse({ job_analysis_id: "an-1", selection_plan_id: "sp-2", created_analysis: false }),
+        );
+      }
+      if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(facts()));
+      if (url === DRAFT_PATH) {
+        draftReads += 1;
+        return Promise.resolve(
+          jsonResponse({ ...draft(), edit_version: saved ? 5 : 4, content_hash: saved ? "hash-5" : "hash-4" }),
+        );
+      }
+      if (url === "/api/v1/facts/history") return Promise.resolve(jsonResponse({ events: [] }));
+      return Promise.resolve(
+        jsonResponse(
+          applied
+            ? detail({
+                active_selection_plan_id: "sp-2",
+                working_draft_state: "stale",
+                stale_reasons: [
+                  {
+                    code: "SELECTION_PLAN_REPLACED",
+                    message: "The selection plan changed.",
+                    entity_references: {},
+                    allowed_resolution_actions: ["replace_working_draft"],
+                  },
+                ],
+              })
+            : reviewDetail(["MATERIAL_CLASSIFICATION_AMBIGUITY"]),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    await editRow(2);
+    const editor = await screen.findByDisplayValue("Owned the CRM migration.");
+    fireEvent.change(editor, { target: { value: "My local wording." } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((call) => (call[1] as RequestInit)?.method === "PATCH")).toBe(true),
     );
+    expect(applied).toBe(false);
+    await act(async () => {
+      saved = true;
+      resolveSave(updateResponse(5));
+    });
+    await waitFor(() => expect(applied).toBe(true));
+    expect(await screen.findByText("The selection plan changed.")).toBeInTheDocument();
+    expect(draftReads).toBeGreaterThan(1);
+    expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
+    expect(screen.queryByRole("dialog", { name: "אישור גרסה קבועה" })).toBeNull();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/generate"))).toBe(false);
+    const patch = fetchMock.mock.calls.find((call) => (call[1] as RequestInit)?.method === "PATCH");
+    expect(JSON.parse(String((patch![1] as RequestInit).body)).claim_edits[0].text).toBe("My local wording.");
+  });
+
+  it.each(["conflict", "failure"])("preserves local text and stops navigation after a save %s", async (outcome) => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url === DRAFT_PATH && init?.method === "PATCH")
+        return Promise.resolve(outcome === "conflict" ? conflictResponse() : jsonResponse({}, 503));
+      if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(facts()));
+      if (url === DRAFT_PATH) return Promise.resolve(jsonResponse(draft()));
+      if (url === "/api/v1/facts/history") return Promise.resolve(jsonResponse({ events: [] }));
+      return Promise.resolve(jsonResponse(detail()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    await editRow(2);
+    fireEvent.change(await screen.findByDisplayValue("Owned the CRM migration."), {
+      target: { value: "Keep my text." },
+    });
+    fireEvent.click(screen.getByRole("link", { name: "חזרה להכנת קורות החיים" }));
+    expect(await screen.findByText("לא ניתן להמשיך לפני שמירת העריכות")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "הכנת קורות החיים" })).toBeNull();
+    expect(screen.getByDisplayValue("Keep my text.")).toBeInTheDocument();
+    if (outcome === "conflict") {
+      // The refusal announcement and native showModal effect can settle separately.
+      const dialog = await screen.findByRole("dialog", { name: "הטיוטה השתנתה בזמן העריכה" });
+      expect(dialog).toBeVisible();
+      expect(within(dialog).getByText("Keep my text.")).toBeInTheDocument();
+    }
   });
 
   it("says plainly when there is no active draft instead of reading one that does not exist", async () => {
@@ -673,6 +863,27 @@ describe("DraftEditorPage selection changes", () => {
         reason: "below_section_budget",
       },
     ],
+  });
+
+  it("refuses a selection change when saving local wording failed", async () => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url === DRAFT_PATH && init?.method === "PATCH") return Promise.resolve(jsonResponse({}, 503));
+      if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(omittedFacts()));
+      if (url === DRAFT_PATH) return Promise.resolve(jsonResponse(draft()));
+      if (url === "/api/v1/facts/history") return Promise.resolve(jsonResponse({ events: [] }));
+      return Promise.resolve(jsonResponse(detail()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    await editRow(2);
+    fireEvent.change(await screen.findByDisplayValue("Owned the CRM migration."), {
+      target: { value: "Keep before selection." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "הכללת העובדה" }));
+    await screen.findByText("שינוי הבחירה לא בוצע");
+    expect(screen.getByDisplayValue("Keep before selection.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
   });
 
   it("includes an omitted fact as a pin, carrying every decision already recorded", async () => {

@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 /* Cached history is copied before reversal; ES2022 does not expose Array#toReversed. */
 /* oxlint-disable unicorn/no-array-reverse */
 
-import { applicationDetailQueryKey } from "@/api/applications";
+import { invalidateApplicationViews } from "@/api/applications";
 import type { DraftClaim, WorkingDraft } from "@/api/contracts";
 import {
   confirmAndUseFact,
@@ -14,7 +14,7 @@ import {
   factHistoryQueryOptions,
   factsQueryPrefix,
 } from "@/api/facts";
-import { workingDraftFactsQueryKey } from "@/api/drafts";
+import { workingDraftFactsQueryKey, workingDraftQueryKey } from "@/api/drafts";
 import { routePaths } from "@/app/routePaths";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import {
@@ -38,6 +38,7 @@ import { Checkbox } from "@/ui/Checkbox";
 import { QueryState } from "@/ui/QueryState";
 
 interface ClaimFactResolutionProps {
+  beforeResolve?: () => Promise<void>;
   analysisId: string | null;
   applicationId: string;
   claim: DraftClaim;
@@ -52,6 +53,7 @@ interface ClaimFactResolutionProps {
    the person supplies what it means and how it is attested. A fact captured here is
    still pending; the second step confirms it and puts it into a fresh selection plan. */
 export const ClaimFactResolution = ({
+  beforeResolve,
   analysisId,
   applicationId,
   claim,
@@ -89,10 +91,11 @@ export const ClaimFactResolution = ({
   const detailQuery = useFactDetail(factId);
 
   const useFact = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (factId === null || analysisId === null || profile === null) {
         throw new Error("Confirm and use requires the active analysis and Profile");
       }
+      await beforeResolve?.();
       return confirmAndUseFact(factId, {
         application_id: applicationId,
         job_analysis_id: analysisId,
@@ -103,14 +106,17 @@ export const ClaimFactResolution = ({
     },
     /* Confirming reaches past the fact store: it writes a new selection plan, so the
        application and the draft's own fact list are stale too. */
-    onSuccess: () => {
+    onSuccess: async () => {
       void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
       void queryClient.invalidateQueries({ queryKey: factHistoryQueryKey });
       if (factId !== null) {
         void queryClient.invalidateQueries({ queryKey: factDetailQueryKey(factId) });
       }
-      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-      void queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(draft.id) });
+      await Promise.all([
+        invalidateApplicationViews(queryClient, applicationId),
+        queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(draft.id) }),
+        queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(draft.id) }),
+      ]);
     },
   });
 
@@ -137,7 +143,7 @@ export const ClaimFactResolution = ({
         <ErrorCallout
           className="mt-4"
           error={error}
-          fallbackDetail="מחזור החיים לא השתנה ואפשר לנסות שוב."
+          fallbackDetail="יש לוודא שעריכות הטיוטה נשמרו ושההקשר מעודכן, ולפתור שגיאת שמירה או קונפליקט לפני ניסיון נוסף."
           fallbackTitle="לא ניתן לעדכן את העובדה"
         />
       )}

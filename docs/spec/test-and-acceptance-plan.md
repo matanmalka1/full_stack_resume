@@ -491,6 +491,19 @@ Cover:
 
 ## 16. CI and release gates
 
+### Task delivery gates
+
+The user runs tests; agents hand over commands. For an ordinary task or checkpoint,
+select checks from the actual diff and affected behavior: frontend checks for
+frontend-only changes, backend checks for backend-only changes, and both when both
+are affected, including changed shared contracts. Prefer focused tests. Delivery does
+not automatically require a full suite; broader checks need a concrete uncovered risk,
+a failure, or an explicit CI/release requirement. Documentation-only changes need
+consistency review rather than product tests. The schema, rendering/artifact, and
+application/API contract triggers in `AGENTS.md` still require their relevant evidence.
+
+### CI and release requirements
+
 CI must include:
 
 - Python formatting/static checks selected by implementation

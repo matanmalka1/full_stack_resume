@@ -10,13 +10,14 @@ interface DraftApprovalBarProps {
      panels - so going back was a different gesture depending on what the reader happened
      to be looking at. */
   applicationHref: string;
-  /* Null until a passing run describes the exact version on screen. It is the only thing
-     that opens approval, and the sentence beside the button says so. */
+  /* Null until a passing run describes the exact version on screen. Approval also waits for saved edits,
+     current context and the projection's blockers to clear. */
   exactPassingRunId: string | null;
   onApprove: () => void;
   /* The projection's own blockers. Approval is refused by the backend either way; what
      the bar owes the reader is the reason it is shut, not a second rule. */
   reviewBlocked: boolean;
+  unavailable?: boolean;
   /* An approval was refused because the draft moved after the run it named. */
   stale: boolean;
   validationResult?: string;
@@ -40,14 +41,17 @@ export const DraftApprovalBar = ({
   reviewBlocked,
   stale,
   validationResult,
+  unavailable,
 }: DraftApprovalBarProps) => {
   const reason = reviewBlocked
     ? "יש חסימה שדורשת החלטה לפני אישור."
     : stale
       ? "הטיוטה השתנתה מאז האימות. יש להריץ אימות חדש."
-      : exactPassingRunId === null
-        ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
-        : "האימות עבר על הגרסה המוצגת.";
+      : unavailable
+        ? "יש להשלים את שמירת העריכות ורענון ההקשר לפני אישור."
+        : exactPassingRunId === null
+          ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
+          : "האימות עבר על הגרסה המוצגת.";
 
   return (
     <CommitBar
@@ -60,7 +64,7 @@ export const DraftApprovalBar = ({
       label={NEXT_STEP_LABEL}
       result={validationResult}
       primary={
-        <Button disabled={exactPassingRunId === null} onClick={onApprove}>
+        <Button disabled={exactPassingRunId === null || reviewBlocked || stale || unavailable} onClick={onApprove}>
           <ShieldCheck aria-hidden="true" className="size-icon-md" />
           אישור הגרסה
         </Button>

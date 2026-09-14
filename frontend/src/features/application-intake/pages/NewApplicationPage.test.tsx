@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -168,6 +168,8 @@ const submitForm = () => {
 };
 
 afterEach(() => {
+  /* Unmount flushes the intake; clear storage only after that write completes. */
+  cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
@@ -609,14 +611,15 @@ describe("NewApplicationPage", () => {
     expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("https://example.com/jobs/keep-this-value");
     expect(jobTextArea()).toHaveValue(pastedText);
 
-    await waitFor(() => expect(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY)).not.toBeNull());
-    expect(JSON.parse(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY) ?? "null")).toMatchObject({
-      fields: {
-        company: " Acme ",
-        target_role: "Backend Engineer",
-        source_url: "https://example.com/jobs/keep-this-value",
-        job_text: pastedText,
-      },
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY) ?? "null")).toMatchObject({
+        fields: {
+          company: " Acme ",
+          target_role: "Backend Engineer",
+          source_url: "https://example.com/jobs/keep-this-value",
+          job_text: pastedText,
+        },
+      });
     });
   });
 

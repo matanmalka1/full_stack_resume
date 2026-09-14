@@ -12,6 +12,8 @@ import { LiveRegion } from "@/ui/LiveRegion";
 export const NEXT_STEP_LABEL = "מה עושים עכשיו";
 
 interface CommitBarProps {
+  /* The draft's embedded decision keeps its commit beside the form. */
+  inline?: boolean;
   /* The way back to the previous step, ahead of everything else on the opening edge. A
      wizard that only goes forward is a form; what makes the spine navigable in both
      directions has to be true of the bar as well.
@@ -54,8 +56,13 @@ export const CommitBarTargetContext = createContext<HTMLElement | null | undefin
    do now" in a shape of its own - a row of buttons in the flow on the preparation screen,
    a pinned approval in the editor, a download inside the identity card on the ready
    screen - and it is this component, at all three, that makes the answer one shape. */
-const CommitBarSurface = ({ back, children, label, primary, result }: CommitBarProps) => (
-  <div className="sticky bottom-4 z-(--cv-z-sticky) rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl">
+const CommitBarSurface = ({ back, children, inline, label, primary, result }: CommitBarProps) => (
+  <div
+    className={cx(
+      !inline && "sticky bottom-4 z-(--cv-z-sticky)",
+      "rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl",
+    )}
+  >
     {/* Two sides only where there is room for two. The action column is `max-content`, so
         on a phone it took the width of "רישום הגשת הגרסה הזו" plus "הורדת PDF" and left
         the sentence beside it about ninety pixels - one word per line, for four lines.
@@ -89,7 +96,7 @@ export const CommitBar = (props: CommitBarProps) => {
   const target = useContext(CommitBarTargetContext);
   const surface = <CommitBarSurface {...props} />;
 
-  if (target === undefined) return surface;
+  if (props.inline || target === undefined) return surface;
   if (target === null) return null;
   return createPortal(surface, target);
 };
