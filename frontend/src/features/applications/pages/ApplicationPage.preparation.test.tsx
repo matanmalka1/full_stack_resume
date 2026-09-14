@@ -176,10 +176,8 @@ const clickEnabledButton = async (name: string) => {
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  /* The auto-draft dispatch record is session-scoped and survives a remount by design,
-     which is the point of the guard - so it is cleared between tests rather than leaking
-     an "already continued" answer into the next one. */
   sessionStorage.clear();
 });
 
@@ -280,7 +278,7 @@ describe("ApplicationPage at the preparation route", () => {
       auto_generate_when_review_not_required: true,
     });
 
-    await waitFor(() => expect(sessionStorage.getItem("stage-e:auto-draft:op-1")).toBe("accepted"));
+    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
     const posts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
     expect(posts).toHaveLength(1);
     expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({
@@ -349,7 +347,6 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
 
     expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
-    expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBe("completed");
   });
 
   /* The same move, for the generate a reader pressed. It used to belong to the automation
@@ -870,10 +867,15 @@ describe("ApplicationPage at the preparation route", () => {
     await act(async () => resolveOld(acceptedResponse(queued({ id: "op-draft", operation_type: "create_draft" }))));
     expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "הרצת יצירת טיוטה" })).not.toBeInTheDocument();
-    expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBeNull();
   });
 
   it("waits for the exact activated draft on refresh and does not repeat completed navigation on Back", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
     const generated = queued({
       id: "op-draft",
       operation_type: "create_draft",
@@ -888,8 +890,9 @@ describe("ApplicationPage at the preparation route", () => {
         Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
       ),
     );
-    sessionStorage.setItem("stage-e:draft-navigation:op-draft", "pending");
-    const { client } = renderPage();
+    const { client } = renderPage(deterministicSettings, {
+      preparationContinuation: { applicationId: "app-1", draftOperationId: "op-draft" },
+    });
     expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
     expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
     await waitFor(() => expect(client.isFetching()).toBe(0));
@@ -902,7 +905,6 @@ describe("ApplicationPage at the preparation route", () => {
       }),
     );
     expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
-    expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBe("completed");
     fireEvent.click(screen.getByRole("button", { name: "Analysis" }));
     expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
@@ -943,11 +945,54 @@ describe("ApplicationPage at the preparation route", () => {
           Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
         ),
       );
-      sessionStorage.setItem("stage-e:draft-navigation:op-draft", "pending");
-      renderPage();
+      renderPage(deterministicSettings, {
+        preparationContinuation: { applicationId: "app-1", draftOperationId: "op-draft" },
+      });
       expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
       expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
-      expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBe("pending");
     },
   );
 });
+
+it.each(["matching", "other-application", "other-analysis", "other-plan"] as const)(
+  "restores only an exact decision continuation with Storage blocked: %s",
+  async (scenario) => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const preferences = { ...deterministicSettings, auto_generate_when_review_not_required: true };
+    const projection = analyzed_detail({ active_selection_plan_id: "plan-1", latest_operation: null });
+    const drafting = queued({ id: "op-draft", operation_type: "create_draft", status: "queued", is_terminal: false });
+    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
+      if (String(input).includes("/settings")) return Promise.resolve(jsonResponse(preferences));
+      if (String(input).includes("/operations/")) return Promise.resolve(jsonResponse(drafting));
+      return Promise.resolve(jsonResponse(projection));
+    });
+    vi.stubGlobal("fetch", fetch);
+    const { client } = renderPage(preferences, {
+      preparationContinuation: {
+        applicationId: scenario === "other-application" ? "app-2" : "app-1",
+        decisionSources: {
+          applicationId: "app-1",
+          analysisId: scenario === "other-analysis" ? "old-analysis" : "analysis-1",
+          planId: scenario === "other-plan" ? "old-plan" : "plan-1",
+        },
+      },
+    });
+    await screen.findByText("Acme — Backend Engineer");
+    if (scenario === "matching") {
+      await waitFor(() => expect(fetch.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
+      const request = fetch.mock.calls.find((call) => call[1]?.method === "POST");
+      expect((request?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
+        "auto-draft:analysis-1:plan-1",
+      );
+    } else {
+      await waitFor(() => expect(client.isFetching()).toBe(0));
+      expect(fetch.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(0);
+    }
+  },
+);

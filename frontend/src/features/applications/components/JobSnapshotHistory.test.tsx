@@ -17,13 +17,11 @@ const item = (
   job_text: text,
 });
 const mount = (items: History["items"]) => {
-  const fetch = vi
-    .fn()
-    .mockResolvedValue(
-      new Response(JSON.stringify({ active_job_snapshot_id: items.at(-1)?.id, items }), {
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+  const fetch = vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ active_job_snapshot_id: items.at(-1)?.id, items }), {
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
   vi.stubGlobal("fetch", fetch);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(

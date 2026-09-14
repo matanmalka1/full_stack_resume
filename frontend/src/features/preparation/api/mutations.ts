@@ -17,6 +17,7 @@ import { executionProvider, settingsQueryOptions } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { type AutoDraftSources, autoDraftIsContinuing, autoDraftSources } from "../model/autoDraft";
+import { usePreparationContinuation } from "../model/usePreparationContinuation";
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 
 /* Every command the preparation screen sends, and the guards that say when each may be
@@ -56,20 +57,6 @@ export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operatio
   return { analyze, provider, settings };
 };
 
-const autoDraftReceiptKey = (operationId: string): string => `stage-e:auto-draft:${operationId}`;
-/* A generate this session queued and therefore owes the reader a move to the editor when
-   it succeeds - whether the automation sent it or a press did. It is keyed by the queued
-   Operation rather than by how it was started, because the question the navigation effect
-   asks is "did this screen start this run", not "which path started it": a reader who
-   returns to the analysis screen later, with that same run long finished, must stay where
-   they navigated to rather than be bounced forward again. */
-const draftNavigationKey = (operationId: string): string => `stage-e:draft-navigation:${operationId}`;
-const decisionContinuationKey = (applicationId: string): string => `stage-e:auto-draft-decision:${applicationId}`;
-
-export const continueAutomaticallyAfterDecisions = (applicationId: string): void => {
-  sessionStorage.setItem(decisionContinuationKey(applicationId), "pending");
-};
-
 interface AutomaticDraftAttempt {
   sources: AutoDraftSources;
   triggerOperationId: string;
@@ -83,9 +70,7 @@ interface AutomaticDraftAttempt {
    same continuation while this hook is mounted; across reloads, the stable command key
    makes a repeated request the same command at the API boundary.
 
-   The session entry is a success receipt retained for the existing screen contract. It is
-   deliberately write-only here: it no longer participates in deciding whether work may
-   start, so it cannot disagree with the projection or the watched Operation. */
+   History entry state retains only the tab's explicit continuation intent. */
 export const useAutomaticDraft = ({
   applicationId,
   detail,
@@ -102,6 +87,7 @@ export const useAutomaticDraft = ({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const settingsQuery = useQuery(settingsQueryOptions);
+  const { intent, mark } = usePreparationContinuation(applicationId);
 
   /* One auto-draft per analysis-and-plan pair, whichever effect reaches it first.
      Continuation after a plain analysis and continuation after a decision are two entry
@@ -140,8 +126,7 @@ export const useAutomaticDraft = ({
         queued.application_id !== scopeRef.current
       )
         return;
-      sessionStorage.setItem(autoDraftReceiptKey(attempt.triggerOperationId), "accepted");
-      sessionStorage.setItem(draftNavigationKey(queued.id), "pending");
+      if (!mark({ applicationId: attempt.sources.applicationId, draftOperationId: queued.id })) return;
       watch(queued.id);
     },
   });
@@ -174,7 +159,9 @@ export const useAutomaticDraft = ({
       detail.active_working_draft_id != null ||
       (operation !== undefined && (operation.application_id !== applicationId || !isTerminalOperation(operation))) ||
       settingsQuery.data?.settings.auto_generate_when_review_not_required !== true ||
-      sessionStorage.getItem(decisionContinuationKey(applicationId)) !== "pending" ||
+      intent?.decisionSources?.applicationId !== applicationId ||
+      intent.decisionSources.analysisId !== detail.active_analysis_id ||
+      intent.decisionSources.planId !== detail.active_selection_plan_id ||
       detail.preparation_state !== "ready_to_draft" ||
       detail.review_reasons.length !== 0 ||
       detail.working_draft_state !== "none" ||
@@ -189,7 +176,6 @@ export const useAutomaticDraft = ({
     const dispatchKey = `${applicationId}:${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
     if (dispatchedSourcesRef.current === dispatchKey) return;
     dispatchedSourcesRef.current = dispatchKey;
-    sessionStorage.setItem(decisionContinuationKey(applicationId), "dispatched");
     automaticDraft.mutate({
       sources: {
         applicationId,
@@ -198,7 +184,7 @@ export const useAutomaticDraft = ({
       },
       triggerOperationId,
     });
-  }, [applicationId, attemptedOperationId, automaticDraft, detail, operation, settingsQuery.data]);
+  }, [applicationId, attemptedOperationId, automaticDraft, detail, intent, operation, settingsQuery.data]);
 
   /* A navigation receipt is intent, not proof of activation. Wait for this exact
      WorkingDraft in the current projection and never consume another URL's late result. */
@@ -216,12 +202,11 @@ export const useAutomaticDraft = ({
     detail.review_reasons.length === 0 &&
     (detail.active_operation == null || detail.active_operation.id === operation.id) &&
     activatedDraftId !== undefined &&
-    sessionStorage.getItem(draftNavigationKey(operation.id)) === "pending";
+    intent?.draftOperationId === operation.id;
 
   useEffect(() => {
     if (!navigationPending || operation === undefined || detail?.active_working_draft_id !== activatedDraftId) return;
-    sessionStorage.setItem(draftNavigationKey(operation.id), "completed");
-    navigate(routePaths.draft(applicationId), { replace: true });
+    navigate(routePaths.draft(applicationId), { replace: true, state: null });
   }, [activatedDraftId, applicationId, detail?.active_working_draft_id, navigate, navigationPending, operation]);
 
   /* What the screen reporting this Application's work should say instead of reporting a
@@ -236,7 +221,7 @@ export const useAutomaticDraft = ({
 
      A dispatch that failed ends the first: with no continuation coming, the analysis has
      genuinely finished and its run settles like any other. The second is keyed on the
-     navigation marker rather than on the Operation's type, for the reason the effect above
+     history entry intent rather than on the Operation's type, for the reason the effect above
      gives - the marker says this screen started the generate, which a reload arriving at a
      long-finished one does not, and only the screen that started it is going anywhere. */
   const continuation =
@@ -266,6 +251,7 @@ export const useWorkflowCommands = (
   onQueued: (operationId: string) => void,
 ) => {
   const queryClient = useQueryClient();
+  const { mark } = usePreparationContinuation(detail.application.id);
 
   /* Whether durable work is in flight for this Application, and therefore whether the
      two stale-draft commands may be sent at all.
@@ -302,7 +288,7 @@ export const useWorkflowCommands = (
      not marked - it stays on this screen, which is where its verdict is read. */
   const followQueued = ({ operation }: QueuedOperation) => {
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
-    sessionStorage.setItem(draftNavigationKey(operation.id), "pending");
+    if (!mark({ applicationId: operation.application_id, draftOperationId: operation.id })) return;
     follow(operation.id);
     void invalidateApplicationViews(queryClient, detail.application.id);
   };

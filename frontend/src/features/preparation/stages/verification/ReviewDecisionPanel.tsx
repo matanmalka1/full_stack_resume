@@ -10,7 +10,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
-import { continueAutomaticallyAfterDecisions } from "../../api/mutations";
+import { usePreparationContinuation } from "../../model/usePreparationContinuation";
 import { emptyDecisions, hasDecision, openDecisions, resolvedByReviewDecision } from "../../model/reviewDecisions";
 import { type ChecklistEntry, CommitBar, CommitChecklist } from "../../components/CommitBar";
 import { GapsSection } from "../analysis/GapsSection";
@@ -57,6 +57,7 @@ export const ReviewDecisionPanel = ({
       current.includes(requirementId) ? current.filter((id) => id !== requirementId) : [...current, requirementId],
     );
   const applicationId = detail.application.id;
+  const { mark } = usePreparationContinuation(applicationId);
 
   /* The analysis being decided on is the one the projection calls active, which is also
      the one every review reason names in its entity references. */
@@ -130,10 +131,18 @@ export const ReviewDecisionPanel = ({
     /* Nothing from the response body is seeded into the cache. `created_analysis` is read
        as what happened rather than assumed, and the refreshed projection confirms whether
        every decision actually closed before the page-level automation may create a draft. */
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setDecisions(emptyDecisions);
       setAcceptedRequirementIds([]);
-      if (!inline) continueAutomaticallyAfterDecisions(applicationId);
+      if (!inline)
+        mark({
+          applicationId: result.application_id,
+          decisionSources: {
+            applicationId: result.application_id,
+            analysisId: result.job_analysis_id,
+            planId: result.selection_plan_id,
+          },
+        });
       await invalidateApplicationViews(queryClient, applicationId);
       if (detail.active_working_draft_id != null) {
         await Promise.all([

@@ -12,13 +12,7 @@ import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
 import { actionLabel } from "../../model/preparationLabels";
-import {
-  emphasisLabels,
-  languageLabels,
-  optionsFrom,
-  profileLabels,
-  trackLabels,
-} from "../../model/analysisLabels";
+import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../../model/analysisLabels";
 
 interface MatchingValues {
   emphasis: Emphasis;
@@ -60,9 +54,7 @@ const changedSubmission = (current: MatchingValues, next: MatchingValues): Class
 });
 
 const consequence = (detail: ApplicationDetail, createsAnalysis: boolean): string => {
-  const replacement = createsAnalysis
-    ? "ניתוח ותוכנית בחירה חדשים"
-    : "תוכנית בחירה חדשה, בלי להחליף את הניתוח";
+  const replacement = createsAnalysis ? "ניתוח ותוכנית בחירה חדשים" : "תוכנית בחירה חדשה, בלי להחליף את הניתוח";
   if (detail.active_working_draft_id != null) {
     return `השמירה תיצור ${replacement}. הטיוטה הפעילה לא תימחק, אך תהיה לא מעודכנת מול ההקשר החדש ותידרש החלפה מפורשת לפני המשך האישור.`;
   }
@@ -87,12 +79,7 @@ const ConfigurationSelect = <T extends string>({
 }) => (
   <Field label={label}>
     {(control) => (
-      <Select
-        {...control}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value as T)}
-        value={value}
-      >
+      <Select {...control} disabled={disabled} onChange={(event) => onChange(event.target.value as T)} value={value}>
         {optionsFrom(labels).map(([option, optionLabel]) => (
           <option key={option} value={option}>
             {optionLabel}
@@ -130,12 +117,7 @@ export const MatchingConfigurationEditor = ({
 
   const save = useMutation({
     mutationFn: async () => {
-      if (
-        !canEdit ||
-        submission === null ||
-        detail.active_analysis_id == null ||
-        !changed
-      ) {
+      if (!canEdit || submission === null || detail.active_analysis_id == null || !changed) {
         throw new Error("matching configuration is not available for this context");
       }
       return applyAnalysisDecisions(
@@ -171,8 +153,8 @@ export const MatchingConfigurationEditor = ({
             מסלול, פרופיל ודגשים
           </h2>
           <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            הערכים המוצגים הם ההקשר הפעיל. רק שדות ששונו יישלחו, והשרת יוודא שהניתוח ותוכנית הבחירה לא התחלפו
-            מאז פתיחת הטופס.
+            הערכים המוצגים הם ההקשר הפעיל. רק שדות ששונו יישלחו, והשרת יוודא שהניתוח ותוכנית הבחירה לא התחלפו מאז פתיחת
+            הטופס.
           </p>
         </div>
 
@@ -213,9 +195,7 @@ export const MatchingConfigurationEditor = ({
           />
         </div>
 
-        <p className="text-support leading-6 text-cv-text-muted">
-          {consequence(detail, createsAnalysis)}
-        </p>
+        <p className="text-support leading-6 text-cv-text-muted">{consequence(detail, createsAnalysis)}</p>
 
         {changed ? (
           <p className="text-support font-medium text-cv-text">זוהו שינויים שלא נשמרו.</p>
@@ -244,7 +224,12 @@ export const MatchingConfigurationEditor = ({
         <LiveRegion>{save.isPending ? "שומר את הגדרות ההתאמה…" : undefined}</LiveRegion>
 
         <div className="flex flex-wrap gap-3">
-          <Button disabled={!canEdit || !changed} pending={save.isPending} pendingLabel="שומר…" onClick={() => save.mutate()}>
+          <Button
+            disabled={!canEdit || !changed}
+            pending={save.isPending}
+            pendingLabel="שומר…"
+            onClick={() => save.mutate()}
+          >
             שמירת הגדרות ההתאמה
           </Button>
           <Button
