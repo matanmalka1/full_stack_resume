@@ -143,7 +143,7 @@ export const MatchingConfigurationEditor = ({
       if (
         !canEdit ||
         submission === null ||
-        detail.active_analysis_id === null ||
+        detail.active_analysis_id == null ||
         !changed
       ) {
         throw new Error("matching configuration is not available for this context");
@@ -243,7 +243,7 @@ export const MatchingConfigurationEditor = ({
 
         {save.data === undefined ? null : (
           <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
-            {save.data.state.recommended_action === null
+            {save.data.state.recommended_action == null
               ? "מצב המועמדות עודכן לפי ההקשר החדש."
               : `הצעד הבא לפי השרת: ${actionLabel(save.data.state.recommended_action)}.`}
           </Callout>

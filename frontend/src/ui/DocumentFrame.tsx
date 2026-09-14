@@ -86,13 +86,16 @@ export const DocumentFrame = ({ className, frameClassName, onLoad, src, title }:
         </Button>
       </div>
 
-      <div
+      <section
         aria-label="מסמך קורות החיים — ניתן לגלול"
         className="w-full overflow-auto overscroll-contain"
         dir="ltr"
         ref={viewportRef}
-        role="region"
         style={{ height: PAGE_HEIGHT_PX * scale, maxHeight: "75vh" }}
+        /* A scrollable document must be focusable for arrow/PageUp/PageDown navigation.
+           It is intentionally not an application control, so no interactive ARIA role
+           describes it more accurately than its named section semantics. */
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={0}
       >
         <div
@@ -116,7 +119,7 @@ export const DocumentFrame = ({ className, frameClassName, onLoad, src, title }:
             title={title}
           />
         </div>
-      </div>
+      </section>
     </div>
   );
 };

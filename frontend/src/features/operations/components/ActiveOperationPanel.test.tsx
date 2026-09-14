@@ -112,9 +112,11 @@ describe("ActiveOperationPanel progress", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel(operation({ available_actions: ["cancel"] }));
     act(() => vi.advanceTimersByTime(4_000));
+    vi.useRealTimers();
 
     const cancel = screen.getByRole("button", { name: "ביטול הפעולה" });
     fireEvent.click(cancel);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     fireEvent.click(cancel);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(cancel).toBeDisabled();

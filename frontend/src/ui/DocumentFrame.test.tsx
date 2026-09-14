@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DocumentFrame } from "./DocumentFrame";
@@ -16,7 +16,7 @@ class ResizeObserverMock {
 }
 
 const reportWidth = (width: number) => {
-  resizeCallback?.([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
+  act(() => resizeCallback?.([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver));
 };
 
 describe("DocumentFrame", () => {
