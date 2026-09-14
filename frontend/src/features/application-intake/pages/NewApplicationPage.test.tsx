@@ -71,6 +71,14 @@ const match = (overrides: Partial<DuplicateMatch> = {}): DuplicateMatch => ({
 const DUPLICATE_CHECK_PATH = "/api/v1/applications/duplicate-check";
 const CREATE_PATH = "/api/v1/applications";
 const ANALYSES_PATH = "/api/v1/applications/app-new/analyses";
+const INTAKE_DRAFT_STORAGE_KEY = "cv-engine:application-intake-draft";
+
+const storeIntakeDraft = (fields: { company: string; target_role: string; source_url: string; job_text: string }) => {
+  window.localStorage.setItem(
+    INTAKE_DRAFT_STORAGE_KEY,
+    JSON.stringify({ fields, savedAt: "2026-09-14T07:00:00.000Z", version: 1 }),
+  );
+};
 
 const queuedAnalysisResponse = (): Response =>
   jsonResponse(
@@ -160,8 +168,10 @@ const submitForm = () => {
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
+  window.localStorage.clear();
 });
 
 describe("NewApplicationPage", () => {
@@ -186,6 +196,75 @@ describe("NewApplicationPage", () => {
     for (const link of screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })) {
       expect(link).toHaveAttribute("href", "/");
     }
+  });
+
+  it("restores an intake draft from persistent browser storage without changing its text", () => {
+    storeIntakeDraft({
+      company: " Acme Israel ",
+      target_role: "Platform Engineer",
+      source_url: "https://example.com/jobs/platform",
+      job_text: "First line\n\nדרישות מורכבות — exactly as pasted.",
+    });
+
+    renderPage();
+
+    expect(screen.getByText("טיוטה קודמת שוחזרה מהדפדפן.")).toBeInTheDocument();
+    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme Israel ");
+    expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Platform Engineer");
+    expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("https://example.com/jobs/platform");
+    expect(jobTextArea()).toHaveValue("First line\n\nדרישות מורכבות — exactly as pasted.");
+  });
+
+  it("flushes the latest intake to persistent storage when the page unmounts before the debounce", () => {
+    const view = renderPage();
+    fillIntake("A long posting that must survive immediate navigation");
+
+    view.unmount();
+
+    const stored = JSON.parse(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY) ?? "null") as {
+      fields?: { job_text?: string };
+    } | null;
+    expect(stored?.fields?.job_text).toBe("A long posting that must survive immediate navigation");
+
+    window.sessionStorage.clear();
+    renderPage();
+    expect(jobTextArea()).toHaveValue("A long posting that must survive immediate navigation");
+    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme ");
+  });
+
+  it.each(["not valid JSON", "null", JSON.stringify({ version: 1, fields: { job_text: 42 } })])(
+    "ignores malformed recovery data (%s) without breaking editing",
+    (stored) => {
+      window.localStorage.setItem(INTAKE_DRAFT_STORAGE_KEY, stored);
+      renderPage();
+
+      expect(jobTextArea()).toHaveValue("");
+      fillIntake("A replacement intake");
+      expect(jobTextArea()).toHaveValue("A replacement intake");
+    },
+  );
+
+  it("reports a persistent-storage failure without losing input or blocking submission", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage quota exceeded", "QuotaExceededError");
+    });
+    const calls = stubFetch({
+      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match()] })],
+    });
+    renderPage();
+    fillIntake("Keep this posting even when storage is full");
+
+    expect(
+      await screen.findByText("לא ניתן לשמור את הטיוטה בדפדפן. אין לסגור את העמוד לפני השליחה."),
+    ).toBeInTheDocument();
+    expect(jobTextArea()).toHaveValue("Keep this posting even when storage is full");
+    const closing = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(closing);
+    expect(closing.defaultPrevented).toBe(true);
+
+    submitForm();
+    expect(await screen.findByText("נמצאה מועמדות דומה")).toBeInTheDocument();
+    expect(calls[0].body).toMatchObject({ job_text: "Keep this posting even when storage is full" });
   });
 
   it("creates the application and queues its analysis when the precheck finds nothing", async () => {
@@ -291,6 +370,9 @@ describe("NewApplicationPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת מועמדות נוספת" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת מועמדות" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme ");
+    expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Backend Engineer");
+    expect(jobTextArea()).toHaveValue("Job description text");
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH]);
   });
 
@@ -346,6 +428,7 @@ describe("NewApplicationPage", () => {
     expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
     expect(screen.getByText("הניתוח לא הופעל")).toBeInTheDocument();
     expect(screen.getByText(/analysis could not be queued/)).toBeInTheDocument();
+    expect(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY)).toBeNull();
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH, ANALYSES_PATH]);
   });
 
@@ -399,6 +482,30 @@ describe("NewApplicationPage", () => {
     expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
     expect(screen.queryByText("נמצאה מועמדות דומה")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת מועמדות נוספת" })).not.toBeInTheDocument();
+  });
+
+  it("does not create from a zero-match check after the intake changed", async () => {
+    let answer!: (response: Response) => void;
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    fillIntake();
+    submitForm();
+
+    /* handleSubmit validates asynchronously; edit only after the old intake has
+       actually been sent and the deferred response's resolver exists. */
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fireEvent.change(jobTextArea(), { target: { value: "The posting now on screen" } });
+    answer(jsonResponse({ matches: [] }));
+
+    expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(jobTextArea()).toHaveValue("The posting now on screen");
   });
 
   it("clears the stale-answer notice once the intake is edited again", async () => {
@@ -469,6 +576,142 @@ describe("NewApplicationPage", () => {
        refusal is reported as a blocker carrying the server's safe detail - never the
        exception text, and never a message this screen invented. */
     expect(screen.queryByText(/UNRECOGNIZED_REFUSAL/)).toBeNull();
+  });
+
+  it("maps server validation locations to fields and preserves every entered value", async () => {
+    stubFetch({
+      [DUPLICATE_CHECK_PATH]: [
+        problemResponse(422, "REQUEST_VALIDATION_FAILED", "The request did not match the API contract.", {
+          issues: [
+            { location: ["body", "company"], type: "string_too_long" },
+            { location: ["body", "source_url"], type: "string_too_long" },
+            { location: ["body", "job_text"], type: "string_type" },
+          ],
+        }),
+      ],
+    });
+    renderPage();
+    const pastedText = "Line one\n\nשורה שנייה עם סימנים — keep me";
+
+    fillIntake(pastedText);
+    fireEvent.change(screen.getByLabelText("כתובת המשרה"), {
+      target: { value: "https://example.com/jobs/keep-this-value" },
+    });
+    submitForm();
+
+    expect(await screen.findByText("יש לתקן את השדות המסומנים")).toBeInTheDocument();
+    expect(screen.getByLabelText("שם החברה")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("כתובת המשרה")).toHaveAttribute("aria-invalid", "true");
+    expect(jobTextArea()).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("תפקיד היעד")).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme ");
+    expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Backend Engineer");
+    expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("https://example.com/jobs/keep-this-value");
+    expect(jobTextArea()).toHaveValue(pastedText);
+
+    await waitFor(() => expect(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY)).not.toBeNull());
+    expect(JSON.parse(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY) ?? "null")).toMatchObject({
+      fields: {
+        company: " Acme ",
+        target_role: "Backend Engineer",
+        source_url: "https://example.com/jobs/keep-this-value",
+        job_text: pastedText,
+      },
+    });
+  });
+
+  it("highlights the field named by deterministic intake validation", async () => {
+    stubFetch({
+      [DUPLICATE_CHECK_PATH]: [
+        problemResponse(412, "APPLICATION_INTAKE_INVALID", "source URL must be an http or https URL", {
+          field: "source_url",
+        }),
+      ],
+    });
+    renderPage();
+    fillIntake();
+    fireEvent.change(screen.getByLabelText("כתובת המשרה"), { target: { value: "ftp://example.com/job" } });
+
+    submitForm();
+
+    expect(await screen.findByText("יש לתקן את השדות המסומנים")).toBeInTheDocument();
+    expect(screen.getByLabelText("כתובת המשרה")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("ftp://example.com/job");
+    expect(jobTextArea()).toHaveValue("Job description text");
+
+    fireEvent.change(screen.getByLabelText("כתובת המשרה"), { target: { value: "https://example.com/job" } });
+    await waitFor(() => expect(screen.getByLabelText("כתובת המשרה")).not.toHaveAttribute("aria-invalid"));
+    expect(jobTextArea()).toHaveValue("Job description text");
+  });
+
+  it("removes the recovery draft only after application creation succeeds", async () => {
+    storeIntakeDraft({
+      company: "Acme",
+      target_role: "Backend Engineer",
+      source_url: "",
+      job_text: "Job description text",
+    });
+    stubFetch({
+      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [CREATE_PATH]: [
+        jsonResponse(
+          {
+            application_id: "app-new",
+            job_snapshot_id: "snap-1",
+            warnings: [],
+            duplicate_matches: [],
+          },
+          201,
+        ),
+      ],
+      [ANALYSES_PATH]: [queuedAnalysisResponse()],
+    });
+    renderPage();
+
+    submitForm();
+
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
+    expect(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY)).toBeNull();
+  });
+
+  it("keeps newer text as a recovery draft when an older acknowledged creation finishes", async () => {
+    let finishCreation!: (response: Response) => void;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === DUPLICATE_CHECK_PATH) return Promise.resolve(jsonResponse({ matches: [match()] }));
+      if (path === CREATE_PATH) {
+        return new Promise<Response>((resolve) => {
+          finishCreation = resolve;
+        });
+      }
+      if (path === ANALYSES_PATH) return Promise.resolve(queuedAnalysisResponse());
+      throw new Error(`unexpected request to ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    fillIntake("The posting submitted for creation");
+    submitForm();
+    fireEvent.click(await screen.findByRole("button", { name: "יצירת מועמדות נוספת" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    fireEvent.change(jobTextArea(), { target: { value: "Newer unsent posting" } });
+    finishCreation(
+      jsonResponse(
+        {
+          application_id: "app-new",
+          job_snapshot_id: "snap-1",
+          warnings: ["DUPLICATE_COMPANY_TITLE"],
+          duplicate_matches: [match()],
+        },
+        201,
+      ),
+    );
+
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
+    const stored = JSON.parse(window.localStorage.getItem(INTAKE_DRAFT_STORAGE_KEY) ?? "null") as {
+      fields?: { job_text?: string };
+    } | null;
+    expect(stored?.fields?.job_text).toBe("Newer unsent posting");
   });
 
   it("refuses to submit an empty form and never calls the API", async () => {

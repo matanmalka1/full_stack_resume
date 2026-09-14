@@ -350,19 +350,29 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(servic
             "target_role": "Developer",
             "job_text": "A safe posting",
         }
-        controlled = api.post(
-            f"{API_PREFIX}/applications/duplicate-check",
-            headers=MUTATION_HEADERS,
-            json={**base, "source_url": "https://jobs.example/unsafe\u0000"},
-        )
+        for field, value in (
+            ("company", "unsafe company\u0000"),
+            ("target_role", "unsafe role\u0000"),
+            ("job_text", "unsafe posting\u0000"),
+            ("source_url", "https://jobs.example/unsafe\u0000"),
+        ):
+            for endpoint in ("applications/duplicate-check", "applications"):
+                controlled = api.post(
+                    f"{API_PREFIX}/{endpoint}",
+                    headers=MUTATION_HEADERS,
+                    json={**base, field: value},
+                )
+                assert controlled.status_code == 412
+                assert controlled.json()["code"] == "APPLICATION_INTAKE_INVALID"
+                assert controlled.json()["context"] == {"field": field}
+                assert value not in controlled.json()["detail"]
+        assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
         too_long = api.post(
             f"{API_PREFIX}/applications/duplicate-check",
             headers=MUTATION_HEADERS,
             json={**base, "source_url": "https://jobs.example/" + "x" * 2048},
         )
 
-        assert controlled.status_code == 412
-        assert controlled.json()["code"] == "PRECONDITION_FAILED"
         assert too_long.status_code == 422
 
 

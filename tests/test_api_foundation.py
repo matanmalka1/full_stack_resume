@@ -24,6 +24,7 @@ from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.api.problems import PROBLEM_CONTENT_TYPE, status_for
 from cv_engine.api.security import BodySizeLimitMiddleware
 from cv_engine.application.errors import (
+    ApplicationIntakeInvalid,
     DependencyUnavailable,
     InfrastructureFailure,
     KnowledgeRejected,
@@ -152,6 +153,7 @@ def test_every_refusal_maps_to_one_status_and_one_code() -> None:
         (UnknownRecord("gone"), 404, "UNKNOWN_RECORD"),
         (StateConflict("moved"), 409, "STATE_CONFLICT"),
         (PreconditionFailed("not yet"), 412, "PRECONDITION_FAILED"),
+        (ApplicationIntakeInvalid("job_text", "invalid text"), 412, "APPLICATION_INTAKE_INVALID"),
         (ValidationBlocked("blocked"), 412, "VALIDATION_BLOCKED"),
         (LineageBroken("wrong owner"), 412, "LINEAGE_BROKEN"),
         (KnowledgeRejected("refused"), 412, "KNOWLEDGE_REJECTED"),

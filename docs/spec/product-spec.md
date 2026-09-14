@@ -310,6 +310,13 @@ form. An optional source label, when supplied by a snapshot-creation client, is
 JobSnapshot provenance inside `source_metadata`; it is not a second mutable Application
 field and the primary Web UI need not expose it.
 
+The Web intake form autosaves an exact browser-local recovery copy that survives a page
+reload or a later browser session. Duplicate choices, network failures, and validation
+refusals do not discard entered values. Storage failures are visible and never block
+editing or submission. Successful creation clears only the recovery copy for the intake
+that was created; newer unsent edits remain recoverable. This copy is not a JobSnapshot
+and grants no lifecycle or approval authority.
+
 The `create_application` command is deterministic and fast. It creates the Application
 and its first immutable JobSnapshot and does not call AI. In the Web intake flow, a
 successful creation is immediately followed by a separate `analyze_job` Operation for

@@ -1,4 +1,5 @@
 import { ArrowRight, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { boardPath } from "@/app/boardReturn";
@@ -8,6 +9,7 @@ import { useAppForm } from "@/hooks/useAppForm";
 import { Button, buttonClasses } from "@/ui/Button";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
+import { readApplicationIntakeDraft, useApplicationIntakeDraft } from "../hooks/useApplicationIntakeDraft";
 import {
   emptyApplicationIntake,
   intakeFromFields,
@@ -19,7 +21,8 @@ const INTAKE_FORM_ID = "application-intake-form";
 
 export const NewApplicationPage = () => {
   const navigate = useNavigate();
-  const form = useAppForm<ApplicationIntakeFields>({ defaultValues: emptyApplicationIntake });
+  const [recoveredDraft] = useState(readApplicationIntakeDraft);
+  const form = useAppForm<ApplicationIntakeFields>({ defaultValues: recoveredDraft ?? emptyApplicationIntake });
   /* `watch()` rather than `useWatch`: without a field name `useWatch` reports every value
      as optional, which is not what this form holds - it is registered from
      `emptyApplicationIntake`, so every field is a string from the first render. The
@@ -27,10 +30,12 @@ export const NewApplicationPage = () => {
      `watch()` returns a fresh object every time and the memo could never hit. */
   const fields = form.watch();
   const currentIntake = intakeFromFields(fields);
+  const intakeDraft = useApplicationIntakeDraft(fields, recoveredDraft !== null);
 
   const submission = useApplicationIntakeSubmission({
     currentIntake,
-    onCreated: (result) => {
+    onCreated: (result, createdInputIsCurrent) => {
+      if (createdInputIsCurrent) intakeDraft.clearDraft();
       void navigate(routePaths.application(result.applicationId), {
         replace: true,
         state: {
@@ -40,10 +45,25 @@ export const NewApplicationPage = () => {
     },
   });
 
+  useEffect(() => {
+    if (submission.fieldErrors === null) return;
+
+    const entries = Object.entries(submission.fieldErrors) as [keyof ApplicationIntakeFields, string][];
+    for (const [field, message] of entries) {
+      form.setError(field, { type: "server", message });
+    }
+    const firstInvalidField = entries[0]?.[0];
+    if (firstInvalidField !== undefined) form.setFocus(firstInvalidField);
+  }, [form, submission.fieldErrors]);
+
   const submit = form.handleSubmit((submittedFields) => submission.submit(intakeFromFields(submittedFields)));
   const createAnyway = form.handleSubmit((submittedFields) =>
     submission.submit(intakeFromFields(submittedFields), true),
   );
+  const onInputChanged = (field: keyof ApplicationIntakeFields) => {
+    form.clearErrors(field);
+    submission.resetSettledResult();
+  };
 
   return (
     /* The first step, and the only one with no Application to read its position from - the
@@ -59,14 +79,16 @@ export const NewApplicationPage = () => {
       <div className="mx-auto max-w-3xl">
         <ApplicationIntakeForm
           duplicates={submission.duplicateMatches}
+          draftStatus={intakeDraft.status}
           error={submission.error}
           errors={form.formState.errors}
           formId={INTAKE_FORM_ID}
           isStale={submission.isStale}
           jobText={fields.job_text}
-          onInputChanged={submission.resetSettledResult}
+          onInputChanged={onInputChanged}
           onSubmit={submit}
           register={form.register}
+          serverValidationFailed={submission.fieldErrors !== null}
         />
       </div>
       <CommitBar

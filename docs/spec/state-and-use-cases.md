@@ -378,6 +378,8 @@ Input:
 Behavior:
 
 - validate size/control-character constraints
+- report a deterministic intake validation refusal with the rejected field name in safe
+  Problem Details context; never reflect the rejected value
 - compute source and normalized hashes
 - rerun duplicate detection
 - create Application in `saved`

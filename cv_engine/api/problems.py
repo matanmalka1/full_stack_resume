@@ -22,6 +22,7 @@ from starlette.exceptions import HTTPException
 
 from ..application.errors import (
     ApplicationError,
+    ApplicationIntakeInvalid,
     DependencyUnavailable,
     DuplicateAcknowledgementRequired,
     InfrastructureFailure,
@@ -166,6 +167,8 @@ def _safe_context(error: ApplicationError) -> dict[str, Any] | None:
     this is the blocked-approval path, where the client needs to know *that* it
     is blocked.
     """
+    if isinstance(error, ApplicationIntakeInvalid):
+        return {"field": error.field}
     if isinstance(error, DuplicateAcknowledgementRequired):
         return {"matches": error.matches}
     if isinstance(error, ValidationBlocked) and error.report is not None:

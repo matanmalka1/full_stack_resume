@@ -16,7 +16,7 @@ there. Nothing in this module knows about HTTP.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 _CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
 
@@ -50,6 +50,16 @@ class StateConflict(ApplicationError):
 
 class PreconditionFailed(ApplicationError):
     """The named state exists but cannot legally satisfy the command."""
+
+
+class ApplicationIntakeInvalid(PreconditionFailed):
+    """One intake field failed deterministic application validation."""
+
+    def __init__(
+        self, field: Literal["company", "target_role", "job_text", "source_url"], message: str
+    ):
+        self.field = field
+        super().__init__(message)
 
 
 class MissingFactRendering(PreconditionFailed):

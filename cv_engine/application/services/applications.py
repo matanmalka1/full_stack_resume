@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from ...domain.contracts.records import AuditRecord
 from ...util import new_id, normalized_text, sha256_text, utc_now
@@ -19,6 +20,7 @@ from ..commands import (
 from ..errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
+    ApplicationIntakeInvalid,
     DuplicateAcknowledgementRequired,
     InfrastructureFailure,
     PreconditionFailed,
@@ -236,35 +238,43 @@ def _validate_intake(
     job_text: str,
     source_url: str | None,
 ) -> None:
-    for label, value in (("company", company), ("target role", target_role)):
+    labels: tuple[tuple[Literal["company", "target_role"], str, str], ...] = (
+        ("company", "company", company),
+        ("target_role", "target role", target_role),
+    )
+    for field, label, value in labels:
         if not value.strip():
-            raise PreconditionFailed(f"{label} is required")
+            raise ApplicationIntakeInvalid(field, f"{label} is required")
         if len(value) > _LABEL_MAX_CHARACTERS:
-            raise PreconditionFailed(f"{label} is too long")
+            raise ApplicationIntakeInvalid(field, f"{label} is too long")
         if _has_forbidden_control(value, allow_job_whitespace=False):
-            raise PreconditionFailed(f"{label} contains control characters")
+            raise ApplicationIntakeInvalid(field, f"{label} contains control characters")
     _validate_job_text(job_text)
     _validate_source_url(source_url)
 
 
 def _validate_job_text(job_text: str) -> None:
     if not job_text.strip():
-        raise PreconditionFailed("job text is required")
+        raise ApplicationIntakeInvalid("job_text", "job text is required")
     if len(job_text.encode("utf-8")) > JOB_TEXT_MAX_BYTES:
-        raise PreconditionFailed(f"job text exceeds {JOB_TEXT_MAX_BYTES} bytes")
+        raise ApplicationIntakeInvalid("job_text", f"job text exceeds {JOB_TEXT_MAX_BYTES} bytes")
     if _has_forbidden_control(job_text, allow_job_whitespace=True):
-        raise PreconditionFailed("job text contains unsupported control characters")
+        raise ApplicationIntakeInvalid(
+            "job_text", "job text contains unsupported control characters"
+        )
 
 
 def _validate_source_url(source_url: str | None) -> None:
     if source_url is None:
         return
     if len(source_url) > SOURCE_URL_MAX_CHARACTERS:
-        raise PreconditionFailed(f"source URL exceeds {SOURCE_URL_MAX_CHARACTERS} characters")
+        raise ApplicationIntakeInvalid(
+            "source_url", f"source URL exceeds {SOURCE_URL_MAX_CHARACTERS} characters"
+        )
     if _has_forbidden_control(source_url, allow_job_whitespace=False):
-        raise PreconditionFailed("source URL contains control characters")
+        raise ApplicationIntakeInvalid("source_url", "source URL contains control characters")
     if _SOURCE_URL.fullmatch(source_url) is None:
-        raise PreconditionFailed("source URL must be an http or https URL")
+        raise ApplicationIntakeInvalid("source_url", "source URL must be an http or https URL")
 
 
 def _has_forbidden_control(value: str, *, allow_job_whitespace: bool) -> bool:

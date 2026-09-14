@@ -22,7 +22,7 @@ const IconField = ({ children, icon: Icon }: { children: ReactNode; icon: Lucide
 
 interface JobDetailsFieldsProps {
   errors: FieldErrors<ApplicationIntakeFields>;
-  onInputChanged: () => void;
+  onInputChanged: (field: keyof ApplicationIntakeFields) => void;
   register: UseFormRegister<ApplicationIntakeFields>;
 }
 
@@ -35,7 +35,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
             <Input
               {...control}
               {...register("company", {
-                onChange: onInputChanged,
+                onChange: () => onInputChanged("company"),
                 validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
               })}
               autoComplete="organization"
@@ -53,7 +53,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
             <Input
               {...control}
               {...register("target_role", {
-                onChange: onInputChanged,
+                onChange: () => onInputChanged("target_role"),
                 validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
               })}
               className="rtl-placeholder ps-10"
@@ -65,12 +65,17 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
         )}
       </Field>
     </div>
-    <Field hint="נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט." label="כתובת המשרה" optional>
+    <Field
+      error={errors.source_url?.message}
+      hint="נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."
+      label="כתובת המשרה"
+      optional
+    >
       {(control) => (
         <IconField icon={Link2}>
           <Input
             {...control}
-            {...register("source_url", { onChange: onInputChanged })}
+            {...register("source_url", { onChange: () => onInputChanged("source_url") })}
             className="ltr-island ps-10"
             dir="ltr"
             inputMode="url"

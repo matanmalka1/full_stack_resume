@@ -15,7 +15,7 @@ const NOTICE_RATIO = 0.8;
 interface JobTextFieldProps {
   error?: string;
   jobText: string;
-  onInputChanged: () => void;
+  onInputChanged: (field: keyof ApplicationIntakeFields) => void;
   register: UseFormRegister<ApplicationIntakeFields>;
 }
 
@@ -61,7 +61,7 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
           <Textarea
             {...control}
             {...register("job_text", {
-              onChange: onInputChanged,
+              onChange: () => onInputChanged("job_text"),
               validate: {
                 required: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
                 withinBudget: (value) =>
