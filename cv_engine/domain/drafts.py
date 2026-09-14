@@ -306,10 +306,14 @@ def reorder_draft(
         if len(claims) != len(section.claims):
             raise ValueError(f"claim IDs in section {section_name!r} must be unique")
         if len(requested) != len(set(requested)) or set(requested) != set(claims):
-            raise ValueError(f"claim order for section {section_name!r} must contain every claim exactly once")
+            raise ValueError(
+                f"claim order for section {section_name!r} must contain every claim exactly once"
+            )
         section.claims = [claims[claim_id] for claim_id in requested]
 
-    return reordered.model_copy(update={"content_hash": sha256_text(_serialize_markdown(reordered))})
+    return reordered.model_copy(
+        update={"content_hash": sha256_text(_serialize_markdown(reordered))}
+    )
 
 
 def manually_edited(draft: DraftDocument) -> bool:

@@ -614,7 +614,9 @@ def test_reorder_preserves_section_membership_and_survives_a_fresh_read(api_work
     after = _read(api_worker, working_draft_id)
     assert [section["name"] for section in after.json()["outline"]["sections"]] == section_order
     reordered = next(
-        section for section in after.json()["outline"]["sections"] if section["name"] == target["name"]
+        section
+        for section in after.json()["outline"]["sections"]
+        if section["name"] == target["name"]
     )
     assert [claim["claim_id"] for claim in reordered["claims"]] == claim_order
     assert after.json()["edit_version"] == before.json()["edit_version"] + 1
