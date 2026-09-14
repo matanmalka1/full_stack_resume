@@ -1,11 +1,12 @@
 import ast
 import inspect
 import json
+from collections import Counter
 from pathlib import Path
 from typing import get_args
 
 import pytest
-from helpers import AMBIGUOUS_HEBREW_JOB, PAYME_TECH_SALES_JOB
+from helpers import AMBIGUOUS_HEBREW_JOB, PAYME_TECH_SALES_JOB, REVIEW_DECISION_JOB
 
 from cv_engine.domain.analysis.approval import (
     ACCEPTED_INCOMPLETE_ANALYSIS,
@@ -15,6 +16,7 @@ from cv_engine.domain.analysis.approval import (
     unresolved_approval_reasons,
 )
 from cv_engine.domain.analysis.classification import (
+    MAX_CLASSIFICATION_CONFIDENCE,
     PROFILE_TERMS,
     classification_confidence,
     classify_job,
@@ -946,21 +948,26 @@ def test_accepting_an_incomplete_analysis_resolves_it_and_nothing_else(
         }
     )
     # It settles extraction and leaves everything else exactly where it was.
-    # An unread posting also scores no confidence, and that is a different
-    # question with a different answer: this decision does not pretend to know
-    # what the job is, so `low-confidence` still stands.
-    assert "extraction-failed" not in unresolved_approval_reasons(accepted)
-    assert "low-confidence" in unresolved_approval_reasons(accepted)
+    # An unread posting also scores no confidence - and since Stage 5 that is
+    # recorded as `low-confidence-extraction`, which is the same statement in
+    # another register: the product is below the threshold because the
+    # extraction half is, and no classification value could have lifted it. So
+    # this one decision answers both, and neither is answered by naming a
+    # Track or Profile.
+    assert "low-confidence-extraction" in analysis.approval_reasons
+    assert unresolved_approval_reasons(accepted) == []
     # It is a decision to proceed, not a claim that the posting was understood.
     assert accepted.fit is FitLevel.UNKNOWN
     assert accepted.requirements == analysis.requirements
     assert accepted.gaps == analysis.gaps
-    # And no classification override reaches it.
+    # And no classification override reaches either of them.
     for key in ("track", "profile", "emphasis", "language", "fit"):
         overridden = JobAnalysis.model_validate(
             {**analysis.model_dump(mode="json"), "user_override": {key: "anything"}}
         )
-        assert "extraction-failed" in unresolved_approval_reasons(overridden), key
+        unresolved = unresolved_approval_reasons(overridden)
+        assert "extraction-failed" in unresolved, key
+        assert "low-confidence-extraction" in unresolved, key
 
 
 def test_successful_extraction_never_records_extraction_failed(
@@ -1038,6 +1045,146 @@ def test_the_two_confidence_components_are_separately_diagnosable(
     # The product is the stored contract; neither half is recoverable from it
     # alone, which is why both functions stay callable.
     assert analysis.confidence < extraction
+
+
+def _confidence_inputs(text: str, digest: str, analysis, concepts):
+    """The two numbers `classify_job` multiplies, rebuilt from the same inputs.
+
+    Derived here rather than pinned as literals so these tests keep asking
+    whether the stored confidence is the product of *these* two scores, which
+    is the claim, instead of whether it still equals a number someone wrote
+    down once.
+    """
+    extracted = extract_requirements(text, normalized_hash=digest, concepts=concepts)
+    extraction = extraction_confidence(
+        text,
+        extracted,
+        concepts,
+        understood_elsewhere=bool(derive_gaps(text.casefold(), analysis.track)),
+    )
+    term_scores = Counter(
+        {
+            profile: sum(text.casefold().count(term) for term in terms)
+            for profile, terms in PROFILE_TERMS.items()
+        }
+    )
+    return extraction, term_scores
+
+
+def test_confidence_measures_the_vocabulary_behind_the_profile_that_was_chosen(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """D8: the term counts reported are the chosen Profile's, not the leader's.
+
+    Requirement coverage outranks the vocabulary in the ranking that decides,
+    so the Profile the terms lead with is often not the Profile on the record -
+    as here. Reporting the vocabulary's own margin then states near-certainty
+    about a decision the vocabulary did not make, and states it about a
+    different Profile than the one the user is shown.
+    """
+    analysis = classify_job(
+        REVIEW_DECISION_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="review-decision",
+    )
+    extraction, term_scores = _confidence_inputs(
+        REVIEW_DECISION_JOB, "review-decision", analysis, requirement_concepts
+    )
+    (leader, leader_terms), (_, runner_up_terms) = term_scores.most_common(2)
+    # The finding's precondition, asserted rather than assumed: coverage picked
+    # a Profile the vocabulary does not lead with, and says nothing about.
+    assert leader is not analysis.profile
+    assert term_scores[analysis.profile] == 0
+
+    supporting = max(count for name, count in term_scores.items() if name is not analysis.profile)
+    chosen = classification_confidence(top=term_scores[analysis.profile], second=supporting)
+    assert analysis.confidence == pytest.approx(round(extraction * chosen, 4))
+    # What the vocabulary's own two highest counts would have reported, which
+    # is what this posting stored before: strictly more confidence, about a
+    # Profile that was not chosen.
+    vocabulary = classification_confidence(top=leader_terms, second=runner_up_terms)
+    assert chosen < vocabulary
+    assert analysis.confidence < round(extraction * vocabulary, 4)
+
+
+def test_a_confidence_the_extraction_sank_is_not_cleared_by_naming_a_profile(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """C1: the reason recorded names the half that is blocking.
+
+    An override is offered because it can answer the reason it is offered for.
+    One reason for both halves of the product meant choosing a Profile cleared
+    a warning about requirements that were never read.
+    """
+    analysis = classify_job(
+        UNREADABLE_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="unreadable",
+    )
+    assert "low-confidence-extraction" in analysis.approval_reasons
+    assert "low-confidence" not in analysis.approval_reasons
+    # Why that is the right half, derived from the formula rather than read off
+    # the reason: no classification score that exists could have lifted this
+    # product over the threshold.
+    extraction, _ = _confidence_inputs(UNREADABLE_JOB, "unreadable", analysis, requirement_concepts)
+    assert extraction * MAX_CLASSIFICATION_CONFIDENCE < CONFIDENCE_APPROVAL_THRESHOLD
+
+    named = classify_job(
+        UNREADABLE_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="unreadable",
+        profile_override="account-manager",
+    )
+    assert "low-confidence-extraction" in unresolved_approval_reasons(named)
+    # What does answer it is the decision to proceed with an analysis that did
+    # not read the posting - the same one `extraction-failed` asks for.
+    accepted = JobAnalysis.model_validate(
+        {
+            **analysis.model_dump(mode="json"),
+            "user_override": {"analysis": ACCEPTED_INCOMPLETE_ANALYSIS},
+        }
+    )
+    assert "low-confidence-extraction" not in unresolved_approval_reasons(accepted)
+
+
+def test_a_confidence_the_classification_sank_is_cleared_by_naming_a_profile(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """The other side of the same split, and the reason the bare code was wrong.
+
+    Here the extraction score leaves room for a classification confident enough
+    to pass, so the vocabulary is what holds the gate - and naming the Profile
+    is exactly the answer to it.
+    """
+    analysis = classify_job(
+        REVIEW_DECISION_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="review-decision",
+    )
+    assert "low-confidence-classification" in analysis.approval_reasons
+    extraction, _ = _confidence_inputs(
+        REVIEW_DECISION_JOB, "review-decision", analysis, requirement_concepts
+    )
+    assert extraction * MAX_CLASSIFICATION_CONFIDENCE >= CONFIDENCE_APPROVAL_THRESHOLD
+
+    settled = classify_job(
+        REVIEW_DECISION_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="review-decision",
+        profile_override="account-manager",
+    )
+    assert "low-confidence-classification" in settled.approval_reasons
+    assert "low-confidence-classification" not in unresolved_approval_reasons(settled)
 
 
 def test_a_legacy_analysis_is_never_reinterpreted_as_unknown() -> None:

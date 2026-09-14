@@ -51,7 +51,30 @@ class ApprovalReason:
 # the guard that derives this table's key set from the code that emits reasons.
 APPROVAL_REASONS: dict[str, ApprovalReason] = {
     "ambiguous-signals": ApprovalReason(frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY),
+    # Kept exactly as it was, and still recorded, for the two cases that cannot
+    # be attributed. Analyses written before the split carry it, and tightening
+    # it to `analysis` would retroactively block records that were approvable.
+    # `merge_classification` records it too: it sees only
+    # `min(deterministic, proposal)` - a product of products - and has no access
+    # to either factor, so what it can honestly report there is a provider that
+    # declared itself unsure, which neither our extraction nor our
+    # classification caused and which choosing a Profile does answer.
     "low-confidence": ApprovalReason(frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY),
+    # The stored confidence is a product of two independently diagnosable
+    # scores, and one reason used to speak for both - so a Profile override
+    # cleared a warning about requirements that were never read. Which half is
+    # the blocker decides what can answer it, and the sentence already written
+    # against `extraction-failed` below holds word for word here: naming the
+    # Track or Profile does not recover a requirement that was never read.
+    #
+    # The boundary is `classify_job`'s, derived from `CONFIDENCE_APPROVAL_
+    # THRESHOLD` and the ceiling of `classification_confidence` rather than
+    # tuned as a constant of its own: below it no classification score can
+    # reach the threshold, so the extraction is what holds the gate shut.
+    "low-confidence-extraction": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
+    "low-confidence-classification": ApprovalReason(
+        frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY
+    ),
     "track-disagreement": ApprovalReason(frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY),
     "profile-disagreement": ApprovalReason(frozenset({"profile"}), CLASSIFICATION_AMBIGUITY),
     "emphasis-disagreement": ApprovalReason(frozenset({"emphasis"}), CLASSIFICATION_AMBIGUITY),
@@ -193,7 +216,16 @@ def merge_classification(
             reasons.append("profile-disagreement")
     if emphasis is not deterministic.emphasis:
         reasons.append("emphasis-disagreement")
-    if confidence < CONFIDENCE_APPROVAL_THRESHOLD:
+    # The unattributed reason, because this site cannot attribute: `confidence`
+    # here is a product of products, and neither factor of the deterministic
+    # half is in reach. It is recorded only when the *proposal* is what falls
+    # short - a deterministic confidence below the threshold already recorded
+    # its own attributed reason in `classify_job` and it is inherited above, so
+    # adding the bare code beside it would claim a provider uncertainty the
+    # provider never declared. Which analyses carry a confidence reason at all
+    # is unchanged: `min(a, b)` is below the threshold exactly when one of them
+    # is.
+    if proposal.confidence < CONFIDENCE_APPROVAL_THRESHOLD:
         reasons.append("low-confidence")
     reasons = list(dict.fromkeys(reasons))
     gaps = merge_gaps(deterministic.gaps, proposal.gaps)

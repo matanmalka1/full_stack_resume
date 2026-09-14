@@ -115,6 +115,9 @@ export const overrideKeyLabels: Record<string, string> = {
 const approvalReasonLabels: Record<string, string> = {
   "ambiguous-signals": "המשרה נושאת סימנים של יותר ממסלול אחד.",
   "low-confidence": "רמת הביטחון בסיווג נמוכה מהסף.",
+  "low-confidence-classification": "רמת הביטחון בסיווג נמוכה מהסף: אוצר המילים של המשרה תומך חלשות בפרופיל שנבחר.",
+  "low-confidence-extraction":
+    "רמת הביטחון נמוכה מהסף בגלל קריאת הדרישות ולא בגלל הסיווג. בחירת מסלול או פרופיל לא תפתח את השער.",
   "track-disagreement": "המודל הציע מסלול אחר מזה שהחוקים קבעו.",
   "profile-disagreement": "המודל הציע פרופיל אחר מזה שהחוקים קבעו.",
   "emphasis-disagreement": "המודל הציע דגש אחר מזה שהחוקים קבעו.",

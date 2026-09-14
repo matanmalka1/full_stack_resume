@@ -253,13 +253,15 @@ def test_an_unregistered_reason_blocks_and_advertises_nothing(knowledge) -> None
 def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided(
     services,
 ) -> None:
-    """The decidable half is offered once, taken, and does not come back.
+    """A classification decision is not offered for, and does not settle, this.
 
-    Both reasons stand at first, because a posting that could not be read also
-    scores no confidence, and "what is this job?" is a different question from
-    "proceed although nothing was read?". Each is reported on its own terms and
-    each is answered separately: after the classification decision the analysis
-    is still incomplete, and the acceptance is what settles that.
+    A posting that could not be read also scores no confidence - but that
+    confidence is sunk by the extraction half of the product, and since Stage 5
+    it is recorded as `low-confidence-extraction` under ANALYSIS_INCOMPLETE
+    rather than as a classification ambiguity. So only one reason stands here,
+    and the Track/Profile decision taken below - which the user may still make
+    for their own reasons - answers none of it. The acceptance is what settles
+    it, and that is the whole point of attributing the reason.
     """
     ingested = services.applications.ingest(
         IngestCommand(
@@ -278,9 +280,9 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_REVIEW
     offered = {reason.code: reason.allowed_resolution_actions for reason in detail.review_reasons}
-    # Two reasons, two decisions, each advertising the command that takes it.
+    # One reason, advertising the one command that takes the decision it needs.
     assert offered[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
-    assert offered[CLASSIFICATION_AMBIGUITY] == ["apply_analysis_decisions"]
+    assert CLASSIFICATION_AMBIGUITY not in offered
 
     services.analysis.apply_analysis_decisions(
         ApplyAnalysisDecisionsCommand(
@@ -295,6 +297,7 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
 
     after = services.queries.application_detail(ingested.application_id)
     offered = {reason.code: reason.allowed_resolution_actions for reason in after.review_reasons}
+    # It was never offered, and naming the pair did not open anything.
     assert CLASSIFICATION_AMBIGUITY not in offered
     assert offered[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
     assert after.preparation_state is PreparationState.NEEDS_REVIEW

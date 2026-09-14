@@ -9,9 +9,14 @@ deterministic warning gaps. These tests pin the policy that replaced it.
 from __future__ import annotations
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, REVIEW_DECISION_JOB
 
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    ApplyAnalysisDecisionsCommand,
+    DraftCommand,
+    IngestCommand,
+)
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.analysis.approval import (
     ANALYSIS_INCOMPLETE,
@@ -69,20 +74,35 @@ def test_provider_cannot_relax_approval_confidence_or_language(
     assert analysis.classification_requires_approval
     assert analysis.language == "he"
     assert analysis.confidence == deterministic.confidence
-    with pytest.raises(WorkflowError, match="ambiguous classification"):
-        services.drafts.draft(
-            DraftCommand(
-                application_id=application_id,
-                job_analysis_id=setup.analysis_id,
-                selection_plan_id=setup.services.repository.latest_selection_plan(
-                    application_id
-                ).id,
-            )
-        )
 
     _, stored = services.repository.latest_analysis(application_id)
     assert stored == analysis
     assert services.repository.get_application(application_id)["language"] == "he"
+
+    # This posting's confidence is held below the threshold by its extraction
+    # score, so the analysis also records `low-confidence-extraction` and
+    # generation refuses on that first. That gate is a precondition here, not
+    # the subject - so it is answered the way the product offers, through
+    # `apply_analysis_decisions`, rather than by weakening the shared fixture
+    # posting. What refuses below is then the classification ambiguity alone.
+    decided = services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=application_id,
+            job_analysis_id=setup.analysis_id,
+            expected_analysis_id=setup.analysis_id,
+            expected_selection_plan_id=services.repository.latest_selection_plan(application_id).id,
+            accept_low_fit=True,
+            accept_incomplete_analysis=True,
+        )
+    )
+    with pytest.raises(WorkflowError, match="ambiguous classification"):
+        services.drafts.draft(
+            DraftCommand(
+                application_id=application_id,
+                job_analysis_id=decided.job_analysis_id,
+                selection_plan_id=decided.selection_plan_id,
+            )
+        )
 
 
 def test_explicit_user_override_beats_the_provider(
@@ -247,6 +267,35 @@ def test_inconsistent_proposal_is_rejected_rather_than_applied(
     assert "was not applied" in merged.rationale
 
 
+def test_a_merged_confidence_reason_names_the_source_the_merge_can_see(
+    profile_store: ProfileStore, classification_proposal, classify
+) -> None:
+    """The unattributed reason is recorded here, and only for the provider.
+
+    `merge_classification` stores `min(deterministic, proposal)` - a product of
+    products - and cannot reach either factor, so it cannot say which half of
+    our own pipeline is weak. It does not have to: a deterministic confidence
+    below the threshold already recorded its attributed reason, and that reason
+    is inherited. What is left for the bare code is the one source this merge
+    can actually attest - a provider that declared itself unsure - and choosing
+    a Profile is the right answer to that.
+    """
+    deterministic = classify(REVIEW_DECISION_JOB)
+    assert "low-confidence-classification" in deterministic.approval_reasons
+
+    confident = merge_classification(
+        deterministic, classification_proposal(confidence=0.99), profile_store
+    )
+    assert "low-confidence-classification" in confident.approval_reasons
+    assert "low-confidence" not in confident.approval_reasons
+
+    unsure = merge_classification(
+        deterministic, classification_proposal(confidence=0.2), profile_store
+    )
+    assert "low-confidence" in unsure.approval_reasons
+    assert APPROVAL_REASONS["low-confidence"].overrides == frozenset({"track", "profile"})
+
+
 def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification(classify) -> None:
     ambiguous = classify(AMBIGUOUS_HEBREW_JOB)
     # `extraction-failed` now stands on this posting: its requirement statement
@@ -257,16 +306,23 @@ def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification(clas
         "extraction-failed",
         "requirements-unmapped",
         "ambiguous-signals",
-        "low-confidence",
+        "low-confidence-extraction",
     ]
     assert ambiguous.classification_requires_approval
 
     # The reasons stay on the record; the override is what marks them answered -
-    # the ambiguity ones. The two analysis-completeness reasons are a different
-    # question, and naming a Track was never an answer to them.
+    # the ambiguity one. The analysis-completeness reasons are a different
+    # question, and naming a Track was never an answer to them. The confidence
+    # reason is now among them: this posting's confidence is held down by its
+    # extraction score, so it is recorded as the extraction reason it is, and
+    # the Track override that used to clear it no longer does.
     resolved = classify(AMBIGUOUS_HEBREW_JOB, track_override="sales")
     assert resolved.approval_reasons == ambiguous.approval_reasons
-    assert unresolved_approval_reasons(resolved) == ["extraction-failed", "requirements-unmapped"]
+    assert unresolved_approval_reasons(resolved) == [
+        "extraction-failed",
+        "requirements-unmapped",
+        "low-confidence-extraction",
+    ]
 
     unrelated = classify(AMBIGUOUS_HEBREW_JOB, emphasis_override="balanced-sales")
     assert unrelated.classification_requires_approval

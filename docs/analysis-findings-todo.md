@@ -7,7 +7,7 @@ Account Executive, application `90787e94-1401-44ba-b8e3-ef4e8aecccde`) where
 `confidence=0.429`. Every finding below was re-verified directly against the code in
 this session (file:line cited), independent of the external review's own citations.
 
-**התכנון נוחת בגלים.** נחתו: Stage 1+2, ‏3 (חלקית), ‏4, ‏6, ו-C2 מ-Stage 8.
+**התכנון נוחת בגלים.** נחתו: Stage 1+2, ‏3 (חלקית), ‏4, ‏5, ‏6, ו-C2 מ-Stage 8.
 המסמך התכווץ פעם אחת: הפירוט של *איך* כל תיקון נחת עבר לדוקסטרינגים שליד הקוד,
 ורפרודוקציות של ממצאים סגורים עברו לטסטים שמחזיקים אותן. מה שנשאר כאן הוא מה
 שפתוח, מה שחוסם אותו, וההנמקה של כל הכרעה — כדי שלא תיפתח מחדש.
@@ -16,20 +16,29 @@ this session (file:line cited), independent of the external review's own citatio
 
 ‏23 ממצאים מאומתים (‏D1-D10, ‏A1-A12, ‏C1-C2; ‏A4 ו-D10 אינם באגים עצמאיים),
 סדר תיקון ב-8 שלבים. ‏`A12` נוסף ב-Stage 3, מתוך היישום ולא מהסקירה המקורית.
-**סגורים:** ‏D1, ‏D2, ‏D4, ‏D5, ‏D6, ‏D9, ‏D10, ‏A3, ‏A4, ‏A11, ‏C2, והחלטות ‏#1-#12.
+**סגורים:** ‏D1, ‏D2, ‏D4, ‏D5, ‏D6, ‏D8, ‏D9, ‏D10, ‏A3, ‏A4, ‏A11, ‏C1, ‏C2,
+והחלטות ‏#1-#15.
 
 **מה פתוח, ומה חוסם כל אחד:**
 
 | פתוח | חסום על |
 | --- | --- |
-| **Stage 7** (`A5`-`A10`, `A12`) | **שוחרר.** החלטה #4 נפתרה — פיצול לשלושה צירים. נשארו שלוש הכרעות יישום קטנות: **#16** (A12), **#17** (A7), **#18** (A10) |
-| **Stage 5** (`D8`, `C1`) | **שוחרר.** #5 ו-#6 נפתרו — ר' **Open product decisions** |
-| **A2** | שלוש שאלותיו — מועמדות להיות **#13-#15**. ר' "A2 — למה נעצר" |
-| **D7** | ‏A2 (הוא הגורם `classified` של `extraction_confidence`) |
+| **Stage 7** (`A5`-`A10`, `A12`) | **שוחרר, והשלב הפתוח היחיד שנשאר.** החלטה #4 נפתרה — פיצול לשלושה צירים. נשארו שלוש הכרעות יישום: **#16** (A12 לממש-או-למחוק), **#17** (A7 לדחות-או-להכיל), **#18** (A10 — היחידה שדורשת מדידה על מודעות אמת) |
+| **A2** | **הוכרע עקרונית** (#13-#15). נשאר תלוי ב-**#18**, בהפרדת שני תפקידי `mapped_spans`, ובחסם המבני (פרמטר/שדה חדש) |
+| **D7** | ‏A2 — נסגר יחד איתו. #13 קבעה שאין אנלוג בנתיב ה-AI, ולכן הגורם ניתן להסרה |
 | **D3** | כיול הסף `0.72` — אף החלטה שנפתרה לא נגעה בו |
 | **A1** | סיכון מבני קבוע, לא נסגר ע"י שום שלב |
 
-### מה נחת, ולמה — Stage 1+2, 3, 4, 6
+**אחרי Stage 5 נשאר Stage 7 בלבד.** הוא **משוחרר עקרונית** — החלטה #4 פיצלה אותו
+לשלושה צירים, ושניים מהם אינם שואלים שאלת מוצר כלל — אבל תלוי בשלוש הכרעות יישום
+פתוחות: **#16** (`A12` לממש-או-למחוק), **#17** (`A7` לדחות-או-להכיל), ו-**#18**
+(`A10` — היחידה מהשלוש שעדיין דורשת מדידה על מודעות אמת). **‏`A2` ו-`D7` מוכרעים
+עקרונית** (#13-#15) וממתינים ל-**#18** ולשתי חתיכות העבודה המבנית שמתוארות תחת
+#15: הפרדת שני תפקידי `mapped_spans`, והפרמטר/שדה החדש שהחסם המבני מחייב.
+‏`D3` (כיול `0.72`) ו-`A1` (הסיכון המבני) אינם משויכים לשום שלב ונשארים פתוחים
+בפני עצמם.
+
+### מה נחת, ולמה — Stage 1+2, 3, 4, 5, 6
 
 **הפירוט המלא של כל תיקון נמצא בדוקסטרינג של הפונקציה שהוא נגע בה**, שם הוא
 נשמר ליד הקוד ולא יכול להיסחף ממנו. כאן רק ההכרעות עצמן, כדי שלא ייפתחו מחדש.
@@ -47,6 +56,8 @@ this session (file:line cited), independent of the external review's own citatio
 | 6 | **D6** | `_SENTENCE` נמחק; `_clause_around` חותך לפי `ask_bounds` — **הגדרה אחת** משותפת עם `extraction_completeness`. פסיק לבדו היה הופך את "Salesforce, a plus." ל-mandatory; `ask_bounds` נושא את השומרים (שבר קצר מ-`_MIN_STATEMENT`, ו-`\s+` עבור `3.5`). ‏`_ASK_BREAK` לא שונה, ולכן המכנה של D4 לא זז |
 | 6 | **D9** | כותרת ערומה לא-מוגדרת פותחת `other` — מה ש-`Benefits:` כבר עושה; הנקודתיים שם טיפוגרפיה. ארבעה שומרים, והראשון הוא **ווקבולרי הדרישות עצמו** (`_statement_kind is None`), ולכן "SaaS experience preferred" לא נבלע |
 | 6 | **#10** | נשקל מחדש אחרי D9, והתשובה **לא זזה**: `mandatory=False`. הנימוק הישן ("`section` שגוי") פג; החדש לא: הישות קיימת כי שום דבר לא קרא מה השורה מבקשת, ו-`mandatory=True` היה טוען חובה על דרישה שלא זוהתה |
+| 5 | **D8** | הקלט ל-`classification_confidence` הוא הפרופיל **שנבחר** (`top = term_scores[profile]`, ‏`second` = הטוב שבאחרים), לא שני המובילים בווקבולרי. **הנוסחה והיחידה לא נגעו** — ההסתייגות המתועדת (הסקאלה כוילה למספרי-מונחים, coverage מרווה אותה) נשמרת במלואה; מה שהשתנה הוא הנושא. משמעות המספר: "כמה הווקבולרי תומך בהחלטה שהתקבלה", לא "כמה הווקבולרי הפריד" |
+| 5 | **C1** | `low-confidence` מפוצל לפי **מי חוסם**: ‏`low-confidence-extraction` (`{analysis}`/`ANALYSIS_INCOMPLETE`) ו-`low-confidence-classification` (`{track,profile}`/`CLASSIFICATION_AMBIGUITY`). הגבול נגזר — `extraction_score < CONFIDENCE_APPROVAL_THRESHOLD / MAX_CLASSIFICATION_CONFIDENCE` — ולא כויל כקבוע חדש. הקוד הערום נשאר רשום ונפלט, לרשומות היסטוריות ול-`merge_classification` |
 | 8 | **C2** | הדה-דופ המת נמחק. `gap.requirement` הוא תווית ש-`derive_gaps` כותבת, `requirement.text` הוא ספן מהמודעה — שוויון ביניהם צירוף מקרים, ומודעה שניסחה בולט כתווית הייתה **מאבדת** את ה-gap. ציר אמיתי דורש קונספט משותף, ולכללים אין |
 
 **‏`fit=HIGH` של PAYME מעולם לא הורווח** — הוא בא מ-`requirements == []` ומ-
@@ -59,6 +70,57 @@ this session (file:line cited), independent of the external review's own citatio
 בו) ו-**הסיכון השיורי של `A1`**: `by_ai` ו-`extraction_is_failed` נמדדים מול
 `requirement_lines()` הדטרמיניסטי, לא מול מה שה-AI קרא, ולכן שורה שהסגמנטציה לא
 מזהה נשארת בלתי-נראית לשני הנתיבים. זה סיכון **מבני קבוע**, לא תקלה שנסגרה.
+
+### מה זז בפועל ב-Stage 5 — ערכים וקודים, כמצופה
+
+**‏`confidence` זז בכל מודעה שבה הווקבולרי לא בחר את הפרופיל שנבחר**, ותמיד כלפי
+מטה (‏`max(0, top − second)` מאפס את בונוס-המרווח כשהמרווח שלילי):
+
+| פיקסצ'ר | פרופיל שנבחר | מוביל הווקבולרי | לפני | אחרי |
+| --- | --- | --- | --- | --- |
+| `REVIEW_DECISION_JOB` | tech-sales | account-manager (1) | 0.66 | 0.58 |
+| `PAYME_TECH_SALES_JOB` | tech-sales | development (1) | 0.297 | 0.261 |
+| `RIVERSIDE_JOB` | tech-sales | account-executive (1) | 0.37 | 0.3066 |
+| `PARTLY_MAPPED_JOB` | tech-sales | account-executive (2) | 0.574 | 0.406 |
+
+בכל ארבעתן `term_scores[profile] == 0` — כלומר המספר שדווח קודם לא היה "ודאות
+נמוכה בהחלטה", הוא היה ודאות **בפרופיל אחר**. ‏`ACCOUNT_MANAGER_JOB` ו-`THIN_JOB`,
+שבהן הווקבולרי והכיסוי מסכימים, לא זזו כלל — המקרה הראשון משלושת המקרים בהחלטה #5.
+
+**ארבעה טסטים עודכנו לטענה החדשה, אף אחד לא "הוחזר" למספר ישן:**
+
+- `test_accepting_an_incomplete_analysis_resolves_it_and_nothing_else` — קיבע
+  ש-`low-confidence` **נשאר** אחרי `accept_incomplete_analysis`. אחרי C1 הקוד
+  על מודעה לא-נקראת הוא `low-confidence-extraction`, ואותה קבלה **כן** עונה
+  עליו: זו אותה טענה בדיוק ("ה-extraction הוא שמחזיק את השער"). ה-"nothing
+  else" של הטסט נשאר — אף override של סיווג לא נוגע באף אחד משניהם.
+- `test_deterministic_ambiguity_is_resolved_by_choosing_the_classification` —
+  ‏`track_override` כבר לא מנקה את reason ה-confidence. זה C1 עצמו.
+- `test_provider_cannot_relax_approval_confidence_or_language` — נחסם עכשיו
+  קודם ע"י שער ה-completeness, שאינו הנושא שלו. **הפיקסצ'ר לא נגע**; הטסט עובר
+  דרך `apply_analysis_decisions` בדיוק כמו משתמש, ואז מוודא שמה שחוסם הוא
+  הסתירה בסיווג.
+- `test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided`
+  (‏`test_state_projection.py`) — הדוקסטרינג שלו טען ש"מודעה שלא נקראה גם לא
+  מקבלת confidence, וזו שאלה אחרת" ולכן מוקרן גם `MATERIAL_CLASSIFICATION_
+  AMBIGUITY`. **זו בדיוק המסגור ש-C1 מבטל:** ה-confidence שם שקוע בחצי
+  ה-extraction, ולכן מוקרן reason אחד בלבד.
+
+**הכרעה אחת נדרשה מעבר למה שהמסמך כתב, ב-`merge_classification`.** הקוד שם היה
+`if confidence < THRESHOLD: reasons.append("low-confidence")` על ה-`min`. אחרי
+הפיצול, ניתוח דטרמיניסטי חלש כבר נושא את הקוד המיוחס שלו (יורש דרך
+`reasons = list(deterministic.approval_reasons)`), וה-append היה מוסיף לצידו קוד
+ערום שמשמעותו המתועדת היא "הספק הצהיר על אי-ודאות" — טענה על הספק שהספק לא
+הצהיר. לכן התנאי הוא עכשיו `proposal.confidence < THRESHOLD`. **קבוצת הניתוחים
+שנושאים reason כלשהו של confidence לא זזה**: `min(a,b)` מתחת לסף בדיוק כאשר אחד
+מהם מתחת לסף. אין כאן שכפול של לוגיקת הפיצול, שהמסמך אסר — האתר הזה עדיין אינו
+מפצל דבר, הוא רק מפסיק להעיד על מה שאינו רואה.
+
+**מה לא נגע:** ‏`extraction_version` (‏D8/C1 אינם משנים סמנטיקת חילוץ ולא את זהות
+`requirement_id`), הסף `0.72` עצמו (‏D3, פתוח), ומבנה `extraction_confidence`
+(גבול A2 — `confidence.py` לא נגע כלל). התקרה `0.98` עלתה לקבוע בעל-שם
+`MAX_CLASSIFICATION_CONFIDENCE` כי היא כעת חלק מהגדרת הגבול של C1, לא רק פרט
+בנוסחה.
 
 ### מה זז בפועל ב-Stage 6 — אפס, וזה היה הממצא
 
@@ -258,6 +320,37 @@ concepts, *, understood_elsewhere)`. **לנתיב ה-AI אין `list[ExtractedRe
     אם בולטי הטבות שמזדמנים להכיל cue מתבררים כשכיחים, זו שאלת כיול של
     `requirement_cues`, לא של הסגמנטציה.
 
+17. **~~‏`docs/spec/state-and-use-cases.md` §7 כבר לא תואם את `APPROVAL_REASONS`.~~
+    נסגר ב-Stage 5.** §7 מנה תחת `ANALYSIS_INCOMPLETE` את `extraction-failed`
+    ו-`coverage-undetermined` בלבד, בזמן ש-Stage 1+2 כבר הוסיף
+    `requirements-absent` ו-`requirements-unmapped` תחת אותו `review_code`.
+    הסחף קדם ל-C1; C1 הוסיף חמישי (`low-confidence-extraction`), והפסקה עודכנה
+    למנות את כל החמישה. **הספק הוא הבעלים של הרשימה** לפי CLAUDE.md, ולכן היא
+    נכתבה שם ולא הוסברה בשקט בקוד.
+18. **מחלוקת בין coverage לווקבולרי אינה מדווחת.** `ambiguous-signals` נדלק על
+    **תיקו** בדירוג; אחרי החלטה #5 המצב שבו ה-coverage בחר פרופיל אחד
+    והווקבולרי דוחף לאחר מוריד את ה-confidence, אבל אף reason לא אומר *למה*.
+    מועמד ל-reason נפרד אם יתברר כשכיח. לא לפעולה עכשיו. **נצפה בפועל
+    ב-Stage 5:** ארבעה מהפיקסצ'רים (`REVIEW_DECISION`, ‏`PAYME`, ‏`RIVERSIDE`,
+    ‏`PARTLY_MAPPED`) הם בדיוק המצב הזה — `term_scores[profile] == 0` בכולם —
+    כלומר זו לא תופעה נדירה בקורפוס הקיים. המשתמש רואה היום confidence נמוך
+    ו-`low-confidence-classification`, בלי שנאמר לו שהכיסוי והווקבולרי הצביעו
+    על פרופילים שונים.
+
+### פריטי מעקב שנוספו ב-Stage 5
+
+19. **‏`approvalReasonLabels` בפרונט חסר תוויות לשלושת הקודים של Stage 1+2.**
+    `frontend/src/features/preparation/model/analysisLabels.ts` מכיל תווית ל-
+    `extraction-failed` אך **לא** ל-`requirements-absent`,
+    ‏`requirements-unmapped` ו-`coverage-undetermined` — ולכן משתמש שנתקל בהם
+    רואה קוד גולמי. המפה נבנתה במכוון כ-`Record<string,string>` פתוח שנופל חזרה
+    לקוד עצמו, כך שזה לא שובר את המסך, אבל זה סחף שקדם ל-Stage 5 בדיוק כמו
+    פריט 17. **Stage 5 הוסיף תוויות לשני הקודים שלו בלבד** ולא נגע בשלושת
+    האחרים, כי הם מחוץ להיקף שלו. **מדד להחלטה:** זה תיקון של ארבע שורות; שווה
+    לסגור עם הנגיעה הבאה בקובץ. אין היום גארד נגזר שיתפוס קוד חדש בלי תווית —
+    הגארד `test_every_approval_reason_the_engine_records_is_registered` מכסה את
+    ה-backend בלבד.
+
 ## Root cause, restated precisely
 
 Two different denominators are computed from the same job text and never reconciled:
@@ -297,12 +390,11 @@ no automatic full suite). Within a stage, order is not significant.
 
 ### Stage 0 — Product decisions
 
-Decisions #1-#12 are resolved; each carries its full reasoning in place under **Open
-product decisions**. Still open: the three implementation forks #4's split created
-(**#16**-**#18** → Stage 7), and A2's three questions (**#13**-**#15**), which also
-block `D7`.
+Decisions #1-#15 are resolved; each carries its full reasoning in place under **Open
+product decisions**. Still open: **#16**-**#18**, the three implementation forks #4's
+split created, all inside Stage 7.
 
-### Stages 1, 2, 3, 4, 6 — landed
+### Stages 1, 2, 3, 4, 5, 6 — landed
 
 Their designs were written here before they shipped and are no longer the record: the
 reasoning lives in the docstrings of the functions each one touched, and the findings
@@ -311,19 +403,16 @@ they closed are held by named tests. The decisions themselves are in the table u
 live, is `D3` (threshold calibration), `A1`'s residual structural risk, and `A2`.
 
 
-### Stage 5 — Confidence-formula correctness — **unblocked, #5 and #6 resolved**
+### Stage 5 — Confidence-formula correctness — **landed**
 
-Its stated precondition is met: retuning a formula before its inputs are trustworthy is
-wasted work, and Stages 1-4 and 6 have landed. Both decisions it waited on are now
-answered in place, and neither needs a new tuned constant — #5 keeps
-`classification_confidence`'s scale and changes only whose term counts it is handed,
-and #6 derives its split point from `CONFIDENCE_APPROVAL_THRESHOLD` and the formula's
-own `0.98` ceiling. `D8` and `C1` are ready to implement together.
-
-`D8`, `C1` — `classification_confidence` measuring a signal (vocabulary) other than the
-one that actually decided (coverage), and the one approval reason that *did* fire
-(`low-confidence`) being clearable by an override that doesn't address its actual cause
-when the cause is extraction rather than classification.
+Its stated precondition held: retuning a formula before its inputs are trustworthy is
+wasted work, and Stages 1-4 and 6 landed first. Neither decision needed a new tuned
+constant — #5 kept `classification_confidence`'s scale and changed only whose term
+counts it is handed, and #6 derived its split point from
+`CONFIDENCE_APPROVAL_THRESHOLD` and the formula's own ceiling, now
+`MAX_CLASSIFICATION_CONFIDENCE`. `D8` and `C1` landed together, as one delivery: they
+touch the same formula and the same approval gate. See "מה זז בפועל ב-Stage 5" at the
+top for what moved and which tests were restated.
 
 ### Stage 7 — AI interpretation/attestation gate integrity — **unblocked, decision #4 resolved**
 
@@ -373,7 +462,7 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **D6** | גבוה — clause משותף מאפשר ל"advantage" סמוך לבטל "must have" מפורש | [extraction.py:20,57-80,140,147](../cv_engine/domain/analysis/requirements/extraction.py#L20-L147) | `_SENTENCE=[.;\n]` לא חותך על פסיק; "Must have 5+ years..., European market an advantage." — אין parenthetical, אז ה-clause הוא כל המשפט; `"advantage"∈preferred_markers` (config:36) הופך את **כל** ה-clause, כולל ה-5+ שנים, ל-preferred | עצמאי | **CONFIRMED** ישירות מהרג'קס והקונפיג — `_SENTENCE` אינו כולל פסיק, ו-`_clause_around` (extraction.py:57-80) מחזיר את המשפט השלם פחות parentheticals כש-ה-match אינו בתוך aside. אותה א-סימטריה חוזרת ב-[interpretation.py:58-61](../cv_engine/domain/analysis/requirements/interpretation.py#L58-L61) בנתיב ה-AI, על ה-quote המצוטט.  ‏**סגור ב-Stage 6** — `_SENTENCE` נמחק; הקלוז נחתך לפי `ask_bounds`, הגדרה אחת משותפת עם ה-completeness. הנתיב ה-AI (`interpretation.py`) נשאר מחוץ להיקף במפורש — פריט מעקב 15. |
 | **D9** | גבוה — כותרת ללא נקודתיים לא סוגרת section, בולט הטבות יורש `mandatory=True` | [segmentation.py:96-120](../cv_engine/domain/analysis/requirements/segmentation.py#L96-L120) (`_heading_section`), [segmentation.py:123-142](../cv_engine/domain/analysis/requirements/segmentation.py#L123-L142) (`_section_of`), [extraction.py:147](../cv_engine/domain/analysis/requirements/extraction.py#L147) | כותרת כמו "Perks"/"Benefits" (בלי `:`) שאינה matches מדויק לאף marker מוגדר מחזירה `None` מ-`_heading_section`; `None` לא סוגר section פתוח (רק heading לא-`None` משנה `section`) → הbulletים שתחתיה יורשים את ה-section הקודם. אם זה "requirements", בולט הטבות תמים שמזדמן להתאים ל-concept pattern מקבל `mandatory=True` ב-extraction.py:147 בלי אף מרקר | עצמאי; שלב 6 עם D5/D6 | **CONFIRMED** — עקבתי את `_segments` (segmentation.py:181-248) שורה-שורה: `section` משתנה רק ב-`if heading is not None: ...; section=heading` (שורה 219-226); heading=`None` פשוט `continue`-ת בלי לגעת ב-section. אין קוד שסוגר section על heading לא-מזוהה.  ‏**סגור ב-Stage 6** — כותרת ערומה לא-מוגדרת פותחת `other` תחת ארבעה תנאים, שהראשון בהם (`_statement_kind is None`) הוא הווקבולרי עצמו ולכן מונע את הבליעה ההפוכה. |
 | **D7** | בינוני — מדד מת, קבוע 1.0 בכל נתיב קיים | [confidence.py:48-57](../cv_engine/domain/analysis/requirements/confidence.py#L48-L57), [extraction.py:148-166](../cv_engine/domain/analysis/requirements/extraction.py#L148-L166) | `concept_classification_completeness` סופר `item.concept` לא-ריק; כל `ExtractedRequirement` נבנה תמיד עם `concept=concept.concept` (מחרוזת לא ריקה) — אין היום שום נתיב מייצר item ללא concept | Stage 8 (cleanup; ייתכן ותלוי בהחלטה #1 אם ייווצר נתיב חדש) | **CONFIRMED** — grep/read מלא של extraction.py לא מצא בנאי `ExtractedRequirement` עם `concept=""`/`None`. המדד קבוע מתמטית בקוד הנוכחי. |
-| **D8** | בינוני — confidence מודד וקטור שלא קיבל את ההחלטה | [classification.py:336-348,414-418,453-454](../cv_engine/domain/analysis/classification.py#L336-L454) | הבחירה בפועל (`best()`) מדורגת לפי `(coverage_scores, term_scores)` — coverage קודם; אבל `top`/`second` שמוזנים ל-`classification_confidence` מגיעים אך ורק מ-`term_scores.most_common(2)` (שורה 416-418), בלי קשר ל-coverage | Stage 5 (אחרי שהדנומינטורים מתוקנים) | **CONFIRMED** — קראתי את כל `classify_job`; `ranking` (משמש להחלטה ול-ambiguity) ו-`top/second` (משמש ל-confidence) הם שני חישובים נפרדים לחלוטין מאותו טקסט. |
+| **D8** | בינוני — confidence מודד וקטור שלא קיבל את ההחלטה | [classification.py:336-348,414-418,453-454](../cv_engine/domain/analysis/classification.py#L336-L454) | הבחירה בפועל (`best()`) מדורגת לפי `(coverage_scores, term_scores)` — coverage קודם; אבל `top`/`second` שמוזנים ל-`classification_confidence` מגיעים אך ורק מ-`term_scores.most_common(2)` (שורה 416-418), בלי קשר ל-coverage | Stage 5 — **סגור** | **CONFIRMED** — קראתי את כל `classify_job`; `ranking` (משמש להחלטה ול-ambiguity) ו-`top/second` (משמש ל-confidence) היו שני חישובים נפרדים לחלוטין מאותו טקסט.  ‏**סגור ב-Stage 5** — הקלט הוא הפרופיל שנבחר; הנוסחה, הסקאלה והיחידה לא נגעו. ר' "מה זז בפועל ב-Stage 5". |
 | **A1** | קריטי — נתיב AI לא יכול לגלות את באג הסגמנטציה | [analysis.py:234-241](../cv_engine/application/services/analysis.py#L234-L241), [ai_extraction.py:557-562,580-582](../cv_engine/domain/analysis/requirements/ai_extraction.py#L557-L582) | הספק מקבל `requirement_lines(job_text,...)` כ-hint; `by_ai` (understanding) ו-`extraction_is_failed` נמדדים מול **אותה** `requirement_lines()` — שורה שהסגמנטר לא מזהה (למשל תחת כותרת לא ב-`requirement_block_markers`) לא יכולה להוריד את `by_ai`, לא תדליק כשל, ולא תופיע כפער בשום מקום | Stage 1+2 (החלטות #1-#3 **RESOLVED**), עם תנאי מפורש ש-Stage 2 מיושם בנתיב ה-AI עצמו (ר' Stage 2 למעלה) — הסיכון השיורי (סגמנטציה שלא מזהה שורה מלכתחילה) נשאר גם אז, ר' Stage 2 | **CONFIRMED** — אימתתי את כל שלוש נקודות הקריאה; אין שום נתיב אחר ב-ai_extraction.py שממדל את הטקסט המלא ללא תלות ב-`requirement_lines`. |
 | **A2** | גבוה — confidence לא מחושב מחדש אחרי rebase | [classification.py:221-305](../cv_engine/domain/analysis/classification.py#L221-L305) (`rebase_requirements`), [analysis.py:280-295](../cv_engine/application/services/analysis.py#L280-L295) | `rebase_requirements`'s `model_copy(update={...})` מעדכן requirements/gaps/fit/fit_score/approval_reasons — **לא** confidence; לאחר מכן `merge_classification` עושה `min(deterministic.confidence, proposal.confidence)` על אותו confidence-לא-מעודכן | עצמאי (Stage 3) — **נעצר, פתוח** | **CONFIRMED** — קראתי את מילון ה-`update=` המלא ב-rebase_requirements (classification.py:289-304): אין מפתח `confidence`. עקבתי את הזרימה המלאה ב-analysis.py:280-328 — אין קריאה חוזרת ל-`extraction_confidence` אחרי rebase בשום מקום. **עדכון Stage 3: ההגדרה "באג פשוט, לא שאלת מדיניות" הופרכה** — `extraction_confidence` חתומה על `list[ExtractedRequirement]` שאין בנתיב ה-AI, ותיקון דורש שלוש הכרעות מוצר פתוחות ועוד שינוי חתימה/סכמה. ר' "A2 — למה נעצר" בראש המסמך. |
 | **A3** | גבוה — unmapped_statements נאסף, מאומת, ולא נקרא ע"י אף לוגיקת ניקוד | [ai_extraction.py:309-323,543-554](../cv_engine/domain/analysis/requirements/ai_extraction.py#L309-L554), [approval.py:197](../cv_engine/domain/analysis/approval.py#L197) | `unmapped_statement_ids()` מוגדרת ואף פעם לא נקראת (grep מלא בכל הפרויקט); `analysis.unmapped_statements` רק "עובר דרך" ב-merge_classification, לא נבדק ע"י שום approval reason או חישוב fit/confidence | Stage 2 (החלטה #1 **RESOLVED=YES**) — התיקון *הוא* חיווט זה, בתנאי המפורש שנוסף ל-Stage 2: `verify_and_cover_extraction` עצמה בונה `Requirement(undetermined)` לכל שורה לא-ממופה, לא רק שומרת unmapped_statements בצד | **CONFIRMED via grep**: `grep -rn "unmapped_statement_ids"` מחזיר רק את שורת ההגדרה. `grep -rn "\.unmapped_statements"` מחזיר רק "pass-through" ב-approval.py ו-האיסוף עצמו ב-ai_extraction.py — אין קורא שלישי. |
@@ -386,7 +475,7 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **A10** | בינוני — כיוון הפוך: ≥2 concepts תואמים ⇒ undetermined, גם בציטוט "טבעי" | [ai_extraction.py:56-71](../cv_engine/domain/analysis/requirements/ai_extraction.py#L56-L71) | `concept_for_quote` מחזיר `None` (⇒ undetermined) כש-יותר מקונספט אחד תואם — בולט שלם עם 3 מושגים (בדיוק מה שהפרומפט מבקש לצטט) נופל תמיד | Stage 7 | **CONFIRMED** ישירות מהקוד — `matches[0] if len(matches)==1 else None`. |
 | **A11** | גבוה — ordinal=0 קבוע ⇒ ID כפול ⇒ ניפוח מכנה | [ai_extraction.py:520-528](../cv_engine/domain/analysis/requirements/ai_extraction.py#L520-L528) | `ordinal=0` בכל שורה; `requirement_id` נבנה מ-hash של interpretation+kind+demanded+identity_span+ordinal — הצעה כפולה (אותו quote+interpretation) מייצרת שני `Requirement` שונים ברשימה עם **אותו** requirement_id, בלי דה-דופ | Stage 3 — **סגור** | **CONFIRMED** — קראתי את `verify_and_cover_extraction`: אין שום בדיקת ייחודיות על `req_id`/span לפני `requirements.append(...)`. **תוקן ב-Stage 3:** דה-דופ לפי `requirement_id` לפני ה-append, `ordinal=0` נשאר קבוע במכוון, `mapped_spans` ממשיך לקלוט גם כפולות. הנימוק המלא, כולל למה *לא* ordinal, בראש המסמך. |
 | **A12** | גבוה — דוקסטרינג מבטיח שער שלא קיים; `topic_tags` מתקבל ולא נקרא | [ai_extraction.py:11](../cv_engine/domain/analysis/requirements/ai_extraction.py#L11), [contracts/providers.py:38-48](../cv_engine/domain/contracts/providers.py#L38-L48) | שני דוקסטרינגים מצהירים ש-`topic_tags` נקרא ואף אוכף: "consulted only as a boundary-association hint" ו-"a hint to fact-boundary association, **not a grant: a foreign tag disqualifies the proposal** rather than being trusted as scoping". בפועל השדה מתקבל מהספק, נשמר בחוזה, **ואף שורת קוד לא קוראת אותו** — כולל השער המובטח. ספק שמצרף tag זר לא נדחה ולא מסומן | Stage 7 (נושא: שלמות שערי ה-AI) | **CONFIRMED via grep** — `grep -rn "topic_tags" cv_engine ai config` מחזיר בדיוק שלוש שורות: שתי ההצהרות בדוקסטרינגים והגדרת השדה עצמה (providers.py:48). אין קורא רביעי. **חמור מ-A3:** ב-A3 פונקציה (`unmapped_statement_ids`) הוגדרה ולא נקראה — קוד מת, שקוף למי שקורא. כאן התיעוד מבטיח הגנה אקטיבית, כך שקורא הקובץ מאמין שיש שער שאין. **התיקון הוא הכרעה, לא שורה:** או לממש את השער שהדוקסטרינג מבטיח, או למחוק את ההבטחה (ואולי את השדה) — שתי הדרכים לגיטימיות, ואסור להשאיר את הפער. נמצא תוך יישום A11 (Stage 3), לא בסקירה המקורית. |
-| **C1** | בינוני — האזהרה שכן נדלקה (low-confidence) ניתנת לביטול בטעות | [approval.py:52-76](../cv_engine/domain/analysis/approval.py#L52-L76) | `"low-confidence": ApprovalReason(frozenset({"track","profile"}), ...)` — בחירת Profile מנקה אזהרת confidence נמוך גם כשהסיבה האמיתית היא extraction_score נמוך, לא classification | Stage 5 | **CONFIRMED** מהטבלה עצמה — ואימתתי שההערה הפנימית בקוד (שורות 65-67) חלה ניסוחית בדיוק על `extraction-failed` בלבד, לא הורחבה ל-`low-confidence` שסובל מאותה בעיה. |
+| **C1** | בינוני — האזהרה שכן נדלקה (low-confidence) ניתנת לביטול בטעות | [approval.py:52-76](../cv_engine/domain/analysis/approval.py#L52-L76) | `"low-confidence": ApprovalReason(frozenset({"track","profile"}), ...)` — בחירת Profile מנקה אזהרת confidence נמוך גם כשהסיבה האמיתית היא extraction_score נמוך, לא classification | Stage 5 — **סגור** | **CONFIRMED** מהטבלה עצמה — ואימתתי שההערה הפנימית בקוד (שורות 65-67) חלה ניסוחית בדיוק על `extraction-failed` בלבד, לא הורחבה ל-`low-confidence` שסובל מאותה בעיה.  ‏**סגור ב-Stage 5** — שני קודים חדשים, גבול נגזר, והקוד הערום נשאר לשני תפקידיו. |
 | **C2** | בינוני — dedup בין rule-gap ל-requirement-gap כמעט אף פעם לא תואם | [classification.py:461-465](../cv_engine/domain/analysis/classification.py#L461-L465) | `covered_text = {requirement.text ...}` מול `gap.requirement` (תווית כתובה ביד כמו `"Salesforce"`, `"Direct SaaS Sales preference"`) — אין קונספט בשם salesforce/saas ב-`requirements.json`, כך שהמחרוזות האלה לעולם לא ייווצרו כ-`requirement.text` | Stage 8 | **CONFIRMED**: סרקתי את כל `config/requirements.json` — אין concept בשם salesforce/saas; המחרוזות היחידות שיכולות להגיע ל-`requirement.text` הן span-ים שחולצו מהטקסט (via `item.span`/`normalize_span`), לא התוויות הקבועות מ-`derive_gaps`.  ‏**סגור ב-Stage 6** — נמחק כקוד מת, עם הנמקה במקום הקוד וגארד נגזר ב-`test_no_concept_shadows_a_legacy_rule_gap`. |
 
 ---
@@ -416,6 +505,8 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **A4** | `מוגדר-מחדש, אין קוד לתקן — ר' שורתו בטבלה` |
 | **A11** | `tests/test_ai_tasks.py::test_a_requirement_proposed_twice_is_one_requirement (+ ::test_one_statement_proposed_twice_is_read_once)` |
 | **C2** | `tests/test_analysis.py::test_no_concept_shadows_a_legacy_rule_gap — הגארד הנגזר` |
+| **D8** | `tests/test_analysis.py::test_confidence_measures_the_vocabulary_behind_the_profile_that_was_chosen` |
+| **C1** | `tests/test_analysis.py::test_a_confidence_the_extraction_sank_is_not_cleared_by_naming_a_profile (+ ::test_a_confidence_the_classification_sank_is_cleared_by_naming_a_profile, ‏tests/test_classification_policy.py::test_a_merged_confidence_reason_names_the_source_the_merge_can_see)` |
 
 ### D3
 זה נכון יותר לבדוק ברמת הפונקציה הטהורה מאשר טקסט משרה מלא, כי השאלה היא ישירות על
@@ -434,15 +525,6 @@ current code path, and a dedup check whose two sides can never produce equal str
 תמיד מחרוזת לא ריקה (extraction.py:148-166 בונה אותו כך תמיד) → `concept_classification_
 completeness(extracted)` שווה 1.0 עבור **כל** קלט לא-ריק. **צפוי מול בפועל:** אין הבדל —
 זו הבעיה: אין שום קלט שמזיז את המדד הזה מ-1.0.
-
-### D8
-דורש facts/profiles fixture קיים (לא ממציא fact IDs כאן) — התבנית: טקסט משרה עשיר
-באוצר מילים טכני ("developer", "software", "API" חוזרים) כך ש-`term_scores` מעדיף
-DEVELOPMENT בפער גדול, בעוד שה-Requirements בפועל (שנקבעים ע"י coverage מול facts) 
-תומכים חזק יותר ב-ACCOUNT_MANAGER.
-**צפוי:** confidence אמור לשקף חוסר-ודאות לגבי ההחלטה שהתקבלה בפועל (coverage-based).
-**בפועל:** `top`/`second` מגיעים אך ורק מ-`term_scores` (classification.py:416-418) —
-`classification_confidence` מדווח ודאות גבוהה (0.9+) על סמך אוצר מילים שלא הכריע כלום.
 
 ### A1
 קלט (אנגלית, כותרת לא-מוכרת, בוליטים ללא אף cue):
@@ -569,19 +651,11 @@ proposal"): `RequirementExtractionRejected`.
 מקום, כך שכל ערך בו, זר או לא, זהה לרשימה ריקה. הטסט ייכשל כל עוד הפער פתוח,
 וזו הנקודה: הוא מתעד איזו משתי הדרכים (לממש את השער / למחוק את ההבטחה) נבחרה.
 
-### C1
-קלט: תרחיש D2 (למעלה) + `AnalyzeCommand(profile_override="account-executive", ...)`
-באותה בקשה.
-**צפוי:** `low-confidence` שמקורו ב-extraction_score נמוך אמור להישאר פתוח גם אחרי
-בחירת Profile — בחירת Profile לא "קראה" יותר מהמשרה.
-**בפועל:** `unresolved_approval_reasons` (approval.py:98-101) מנקה `low-confidence`
-ברגע ש-`"profile"` ב-`user_override`, כי `APPROVAL_REASONS["low-confidence"].overrides
-== frozenset({"track","profile"})` (approval.py:54) — בלי קשר למקור הבעיה.
-
 ## Open product decisions
 
-**RESOLVED:** #1-#12. **OPEN:** #5, #6 (Stage 5), #16-#18 (Stage 7, created by
-#4's split), and #13-#15 held for A2's three questions.
+**RESOLVED:** #1-#15. **OPEN:** #16-#18 only — the three implementation forks #4's
+split created, all in Stage 7. `A2`/`D7` are decided but wait on #18 and on two pieces
+of structural work named under #15.
 
 1. **RESOLVED — YES.** שורת דרישה שזוהתה כ-`requirement_line` אך לא הצליחה להתמפות
    לקונספט הופכת ל-`Requirement(coverage="undetermined", concept=None)` שנכנס לאותה
@@ -719,6 +793,21 @@ proposal"): `RequirementExtractionRejected`.
    רטרואקטיבית ניתוחים שהיו ניתנים לאישור. שני הקודים החדשים הם לניתוחים חדשים
    בלבד. **הגארד הנגזר** ("every reason the engine records is registered") יתפוס
    את שניהם אם יישכחו.
+
+   **מקור שלישי שהתגלה בקוד ולא היה במסמך — `merge_classification`.** יש **שני**
+   אתרי פליטה ל-`low-confidence`, לא אחד: `classify_job` (classification.py:573)
+   ו-`merge_classification` (approval.py:196-197). השני מחשב
+   `confidence = min(deterministic.confidence, proposal.confidence)` — מכפלה של
+   מכפלות — **ואין לו גישה לשני הגורמים כלל**, ולכן אינו יכול לפצל.
+
+   זה לא פגם בהכרעה אלא מקרה שלישי שהיא לא צפתה, ויש לו תשובה טובה: כש-`min`
+   מגיע מה-**proposal**, המקור אינו extraction ואינו classification של הצינור
+   שלנו — זו אי-ודאות שהספק הצהיר על עצמו. **הקוד הערום `"low-confidence"` נשאר
+   בדיוק בשביל זה**, ומשרת שני תפקידים לגיטימיים: רשומות היסטוריות, והמקרה
+   הזה. `{track,profile}` הוא ה-override הנכון עבורו — ספק שלא היה בטוח בסיווג
+   נענה בבחירת Profile. **שים לב:** `merge_classification` כבר יורש
+   `reasons = list(deterministic.approval_reasons)`, ולכן הקוד המפוצל
+   מ-`classify_job` זורם דרכו מעצמו; אין צורך לשכפל את הלוגיקה שם.
 
    **אינטראקציה עם החלטה #5, שנבדקה ואינה יוצרת קיפאון:** אחרי #5,
    `profile_override` שסותר את הווקבולרי מוריד את `classification_score` ועלול
@@ -980,9 +1069,48 @@ proposal"): `RequirementExtractionRejected`.
     זה בדיוק הפער ש-`requirements-unmapped` נועד לסגור. שלושתן נענות ע"י
     `apply_analysis_decisions(accept_incomplete_analysis=True)` ורק על ידו.
 
-**#13-#15 — שמורות לשלוש שאלותיו של A2** (ר' "A2 — למה נעצר"): האם יש גורם
-`classified` בנתיב ה-AI ומעל מה; האם ישויות undetermined סינתטיות נספרות בו;
-והאם רצפת ה-0.4 של `understood_elsewhere` חלה שם. נשארות פתוחות.
+13. **RESOLVED — אין גורם `classified` בנתיב ה-AI. ציטוט מאומת שאף קונספט לא
+    הצליח לסווג אינו נספר כ"נקרא", ומחויב ל-completeness — בדיוק כמו בנתיב
+    הדטרמיניסטי.**
+
+    **האסימטריה שלא נוסחה עד כה, והיא הממצא האמיתי:** בנתיב הדטרמיניסטי שורה
+    שאי אפשר לסווג **אינה הופכת** ל-`ExtractedRequirement` כלל, ולכן נופלת
+    ב-`completeness`. בנתיב ה-AI אותה שורה הופכת ל-`Requirement(concept=None)`
+    **ונכנסת ל-`mapped_spans`**, כלומר נספרת כ*נקראה* ב-`by_ai` — ואף מדד לא
+    מחייב אותה. זה החור; לא היעדרו של גורם, אלא זקיפת קרדיט על מה שלא הובן.
+
+    **ולכן התשובה אינה "להוסיף גורם" אלא לסגור את החור במקום שנפער.** ‏`D7`
+    מוכיח ש-`concept_classification_completeness` קבוע `1.0` בנתיב הדטרמיניסטי
+    **מבנית ולא במקרה** — אי אפשר לחלץ שם בלי לסווג. בניית אנלוג חי בנתיב ה-AI
+    הייתה הופכת את שתי המכפלות ללא-ברות-השוואה, וזה ההפך ממה ש-`confidence`
+    מאוחסן בודד אמור לאפשר.
+
+    **מה שזה עושה לשתי השאלות האחרות — הן מתמוססות, ולכן נסגרות איתה:**
+
+14. **RESOLVED (נגזרת מ-#13) — ישויות `undetermined` סינתטיות: מחוץ למונה,
+    בתוך המכנה.** השאלה הייתה חיה רק אם #13 נענית בחיוב. משאין גורם `classified`,
+    אין עונש כפול שצריך למנוע, ו-`by_ai / len(requirement_lines)` נשאר בדיוק
+    צורת הנתיב הדטרמיניסטי — מה שכבר מתקיים היום.
+
+15. **RESOLVED (נגזרת מ-#13) — רצפת ה-0.4 של `understood_elsewhere` חלה, באותו
+    אופן.** משזו אותה נוסחה על אותה יחידה, אין שאלה נפרדת: `bool(rule_gaps)`
+    מועבר פנימה כמו בנתיב הדטרמיניסטי.
+
+    **‏`D7` משתחרר עם #13:** הגורם קבוע `1.0` בנתיב היחיד שיש לו אותו, ולא נוצר
+    שני. אפשר להסירו — אבל **רק יחד עם A2**, כי עד אז הוא עדיין הגורם `classified`
+    של הנוסחה החיה.
+
+    **שני תנאים מוקדמים שנשארים ל-A2, ואינם הכרעות מוצר אלא עבודה:**
+    - **‏#18 חייבת להיפתר קודם.** `concept_for_quote` מחזיר `None` גם כששני
+      קונספטים תואמים (`A10`), כלומר הציטוט שהפרומפט עצמו מבקש ייזקף כלא-נקרא.
+      בנייה על המדידה הזו לפני שהיא תוקנה היא בנייה על מדידה שבורה.
+    - **‏`mapped_spans` משרת היום שני תפקידים** — "מה נקרא" (למדידה) ו"מה לא
+      דורש splice סינתטי" (‏A11 דרש זאת מפורשות). ההכרעה מפרידה ביניהם, וזה
+      מבנה חדש ולא שורה.
+    - **החסם המבני נשאר בכל תרחיש:** מאוחסנת רק המכפלה, ו-
+      `deterministic_confidence`/`proposal_confidence` מפצלים deterministic מול
+      ספק, לא extraction מול classification. נדרש פרמטר מפורש חדש או שדה מאוחסן
+      חדש.
 
 16. **OPEN — `A12`: לממש את השער ש-`topic_tags` מבטיח, או למחוק את ההבטחה?**
     נוצרה מפיצול החלטה #4 (ציר 1). הדוקסטרינגים מצהירים "a foreign tag

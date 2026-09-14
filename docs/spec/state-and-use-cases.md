@@ -174,9 +174,13 @@ KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
 
 `ANALYSIS_INCOMPLETE` reports an approval reason that no classification decision
-answers: `extraction-failed` for unread requirements, and under D2
-`coverage-undetermined` for mandatory requirements whose coverage cannot be resolved.
-Naming the Track or Profile resolves neither. Repeating the unchanged deterministic
+answers: `extraction-failed` for requirements that were stated and none of them read,
+`requirements-absent` for a posting that stated nothing readable as a requirement at
+all, `requirements-unmapped` for requirement-bearing statements no concept matched,
+under D2 `coverage-undetermined` for mandatory requirements whose coverage cannot be
+resolved, and `low-confidence-extraction` for a stored confidence the extraction score
+alone holds below the threshold - one no classification score could lift over it.
+Naming the Track or Profile resolves none of them. Repeating the unchanged deterministic
 path is not a resolution. A corrected, newly validated analysis may remove the reason;
 otherwise proceeding requires the explicit `analysis` override, which answers nothing
 else. Missing evidence is not evidence of missing experience.

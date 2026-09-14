@@ -152,22 +152,36 @@ def _identified(
     ]
 
 
+#: The ceiling of `classification_confidence`. Named because it stopped being a
+#: detail of that formula: `classify_job` divides the approval threshold by it
+#: to decide which half of the stored product is holding the gate shut, so the
+#: two readings of this number have to be one number.
+MAX_CLASSIFICATION_CONFIDENCE = 0.98
+
+
 def classification_confidence(top: int, second: int) -> float:
-    """How clearly the profile vocabulary picked one Profile over the next.
+    """How much the profile vocabulary supports the Profile that was chosen.
 
     Separated from extraction confidence so a low stored `confidence` can be
     attributed: a strong score here with a weak one there means the job was
     recognised but its requirements were not read.
 
-    It measures the vocabulary, which since requirement coverage began deciding
-    the Profile is no longer always what chose it. It is left measuring the
-    vocabulary rather than fed the coverage scores, because this scale was
-    tuned for small term counts and a coverage separation saturates it: 12
-    against 9 would report near-certainty for a two-fact margin. What a
-    coverage-decided classification should report instead is an open question,
-    not something to answer by handing the same formula a different unit.
+    `top` is the term count of the Profile the analysis settled on and `second`
+    the best count among the others - not the two highest counts in the
+    vocabulary. Requirement coverage outranks the vocabulary in `ranking`, so
+    the Profile the terms like best is frequently not the one that was chosen,
+    and the vocabulary's own margin then reports certainty about a decision the
+    vocabulary did not make. Read this way the number answers how much the
+    vocabulary backs the decision on record: unchanged when the two agree, and
+    down to the base when the terms pointed elsewhere, because a negative
+    margin drops the separation bonus through `max(0, top - second)`.
+
+    The unit is still term counts, and deliberately so. This scale was tuned
+    for small term counts and a coverage separation saturates it - 12 against 9
+    would report near-certainty for a two-fact margin - so the coverage scores
+    are still not fed to it. What changed is the subject, not the unit.
     """
-    return min(0.98, 0.58 + 0.08 * top + 0.04 * max(0, top - second))
+    return min(MAX_CLASSIFICATION_CONFIDENCE, 0.58 + 0.08 * top + 0.04 * max(0, top - second))
 
 
 def detect_language(text: str) -> Language:
@@ -459,9 +473,11 @@ def classify_job(
     # so this is the same question it always asked for those postings.
     ordered = sorted(ranking.values(), reverse=True)
     ambiguous = len(ordered) > 1 and ordered[0] == ordered[1] and ordered[0] != (0, 0)
-    term_ranked = term_scores.most_common(2)
-    top = term_ranked[0][1] if term_ranked else 0
-    second = term_ranked[1][1] if len(term_ranked) > 1 else 0
+    # Measured on the Profile that was actually settled on, overrides included -
+    # which is why this reads `profile` rather than the vocabulary's own leader.
+    # Every branch that can still move the Profile is above this line.
+    top = term_scores[profile]
+    second = max((term_scores[name] for name in ProfileName if name is not profile), default=0)
 
     default_emphasis = {
         ProfileName.DEVELOPMENT: Emphasis.DEVELOPMENT_BACKEND
@@ -499,6 +515,16 @@ def classify_job(
     )
     classification_score = classification_confidence(top, second)
     confidence = round(extraction_score * classification_score, 4)
+    # Which half of the product is the blocker, derived from the formula and the
+    # existing threshold rather than tuned as a new constant: a classification
+    # score cannot exceed `MAX_CLASSIFICATION_CONFIDENCE`, so below this
+    # extraction score no classification value reaches the threshold at all.
+    # That is the question worth asking - not "which half is lower", arbitrary
+    # at the margin, but "can naming the Track or Profile open this gate", so
+    # that the reason recorded is one the offered override can actually answer.
+    extraction_blocks_approval = (
+        extraction_score < CONFIDENCE_APPROVAL_THRESHOLD / MAX_CLASSIFICATION_CONFIDENCE
+    )
     boundary_meanings = {
         fact_id: facts.facts[fact_id].meaning
         for requirement in requirements
@@ -570,7 +596,15 @@ def classify_job(
         *(["requirements-unmapped"] if requirements_unmapped else []),
         *(["coverage-undetermined"] if mandatory_undetermined else []),
         *(["ambiguous-signals"] if ambiguous else []),
-        *(["low-confidence"] if confidence < CONFIDENCE_APPROVAL_THRESHOLD else []),
+        *(
+            [
+                "low-confidence-extraction"
+                if extraction_blocks_approval
+                else "low-confidence-classification"
+            ]
+            if confidence < CONFIDENCE_APPROVAL_THRESHOLD
+            else []
+        ),
     ]
     return JobAnalysis(
         track=track,
