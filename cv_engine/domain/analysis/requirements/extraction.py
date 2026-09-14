@@ -188,11 +188,15 @@ def unmatched_requirement_lines(
 ) -> list[StatementLine]:
     """Requirement-bearing statements no extracted span touches.
 
-    The denominator every completeness measure already uses
-    (`requirement_lines`), minus the statements something was read inside. The
+    `requirement_lines`, minus the statements something was read inside. The
     overlap predicate is the same one `_understood`/`unmapped_statement_ids`/
     `extraction_is_failed` ask their version of this question with, so a
     statement counted as read there is never counted unmatched here.
+    `_understood` now asks it of the separate demands inside a statement
+    (`statement_asks`) rather than of the statement, which only narrows the
+    span it overlaps: those demands tile the statement exactly, so anything
+    reaching one of them reaches the statement, and the invariant holds
+    unchanged in the direction that matters.
 
     `mapped_spans` is posting offsets, not normalized text: an extracted span
     carries text a posting wrapping the requirement across a line no longer

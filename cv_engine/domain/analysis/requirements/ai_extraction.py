@@ -317,9 +317,16 @@ def unmapped_statement_ids(
 ) -> list[tuple[int, int, str]]:
     """Requirement-bearing statements no verified requirement's offsets touch.
 
-    Same completeness denominator the deterministic path uses
-    (`requirement_lines`), so an AI extraction is judged for completeness
-    against the identical measure (stage-1 plan §3.3).
+    Same statement set the deterministic path measures against
+    (`requirement_lines`), so an AI extraction is judged against the same
+    reading of the posting (stage-1 plan §3.3).
+
+    Not the same *unit*: the deterministic completeness measure counts the
+    separate demands inside each statement (`statement_asks`), while this - and
+    `by_ai`, and `extraction_is_failed` - still counts statements. Aligning
+    them is part of the open question of what the AI path reports as its own
+    completeness, which is unresolved (A2), so the unit stays where it was
+    rather than being moved as a side effect.
     """
     lines = requirement_lines(text, concepts)
     return [

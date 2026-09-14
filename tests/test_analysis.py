@@ -50,6 +50,7 @@ from cv_engine.domain.analysis.requirements.extraction import (
 )
 from cv_engine.domain.analysis.requirements.segmentation import (
     requirement_lines,
+    statement_asks,
     statement_lines,
 )
 from cv_engine.domain.models import (
@@ -1217,11 +1218,15 @@ def test_the_two_completeness_measures_are_independently_callable(
     )
     completeness = extraction_completeness(RIVERSIDE_JOB, extracted, requirement_concepts)
     classified = concept_classification_completeness(extracted)
-    assert completeness == 0.5
+    # Three of the fourteen demands the six requirement statements make, not
+    # three of six statements: the bullet whose "track record of top
+    # performance (must)" nothing read used to be paid in full by the
+    # technology-company match beside it.
+    assert completeness == 3 / 14
     assert classified == 1.0
-    # Riverside's drop is entirely "read half of what was required", not
+    # Riverside's drop is entirely "read a fraction of what was required", not
     # "read plenty and understood none of it".
-    assert extraction_confidence(RIVERSIDE_JOB, extracted, requirement_concepts) == 0.7
+    assert extraction_confidence(RIVERSIDE_JOB, extracted, requirement_concepts) == 0.5286
 
 
 def test_a_failed_extraction_earns_no_partial_credit(requirement_concepts) -> None:
@@ -1270,6 +1275,34 @@ def test_unpunctuated_bullets_are_separate_requirements(requirement_concepts) ->
     assert extraction_completeness(listed, extracted, requirement_concepts) == pytest.approx(1 / 3)
 
 
+def test_one_bullet_stating_three_things_is_not_understood_by_reading_one(
+    requirement_concepts,
+) -> None:
+    """The same claim as the bullets above, inside a single bullet.
+
+    Coverage was decided by overlapping the whole statement with an extracted
+    span, and the span is only the substring the pattern matched. So a bullet
+    demanding three things of which the vocabulary models one scored
+    `completeness == 1.0` and `state == "parsed"` - the flattering direction,
+    and the one the metric exists to rule out. Splitting the statement in the
+    segmenter would not have caught this one: it is a single sentence.
+    """
+    bullet = (
+        "Requirements:\n"
+        "- 5+ years of B2B sales experience, comfortable in a fast-paced startup, "
+        "and hands-on Salesforce administration.\n"
+    )
+    assert len(requirement_lines(bullet, requirement_concepts)) == 1
+    extracted = extract_requirements(
+        bullet, normalized_hash="packed", concepts=requirement_concepts
+    )
+    # Only the years threshold is modelled; the startup pace and the Salesforce
+    # administration are demands nothing read.
+    assert [item.concept for item in extracted] == ["sales-closing-experience-years"]
+    assert extraction_completeness(bullet, extracted, requirement_concepts) == pytest.approx(1 / 3)
+    assert extraction_state(bullet, extracted, requirement_concepts) == "partial"
+
+
 def test_a_requirement_wrapped_across_a_line_is_counted_as_read(requirement_concepts) -> None:
     """Coverage is offset overlap, not a search for the normalized span.
 
@@ -1302,10 +1335,18 @@ def test_the_fixture_denominator_matches_production(requirement_concepts) -> Non
     lines = statement_lines(RIVERSIDE_JOB, requirement_concepts)
     assert sum(1 for line in lines if line.kind == "requirement") == 6
     assert sum(1 for line in lines if line.kind == "responsibility") == 1
+    # The denominator is the demands those statements make, not the statements
+    # themselves - six bullets stating fourteen things between them.
+    assert (
+        sum(
+            len(statement_asks(RIVERSIDE_JOB, line)) for line in lines if line.kind == "requirement"
+        )
+        == 14
+    )
     extracted = extract_requirements(
         RIVERSIDE_JOB, normalized_hash="riverside", concepts=requirement_concepts
     )
-    assert extraction_completeness(RIVERSIDE_JOB, extracted, requirement_concepts) == 0.5
+    assert extraction_completeness(RIVERSIDE_JOB, extracted, requirement_concepts) == 3 / 14
 
 
 def test_a_local_rule_hit_no_longer_clears_a_failed_extraction(

@@ -22,6 +22,12 @@ _BULLET = re.compile(r"^\s*(?:[-–—*•·‣▪◦]|\(?\d{1,2}[.)])\s+")
 #: What ends a statement rather than wrapping it.
 _TERMINAL = (".", "!", "?", ":", ";")
 
+#: What separates one demand from the next *inside* one statement. Punctuation
+#: followed by a space, optionally by a coordinator; `3.5` and `5+` carry no
+#: space and are never cut. A posting writes three demands into one bullet as
+#: readily as one per line, and the separator is the same either way.
+_ASK_BREAK = re.compile(r"[.;,]\s+(?:and\s+|or\s+)?")
+
 
 @dataclass(frozen=True)
 class StatementLine:
@@ -266,3 +272,53 @@ def statement_lines(text: str, concepts: RequirementConceptStore) -> list[Statem
 def requirement_lines(text: str, concepts: RequirementConceptStore) -> list[StatementLine]:
     """The requirement-bearing statements alone - the completeness denominator."""
     return [line for line in statement_lines(text, concepts) if line.kind == "requirement"]
+
+
+def statement_asks(text: str, line: StatementLine) -> list[tuple[int, int]]:
+    """The separate demands one statement makes, as posting offsets.
+
+    The statement is the unit a posting *formats*; it is not the unit it
+    *demands*. "5+ years of B2B sales experience, comfortable in a fast-paced
+    startup, and hands-on Salesforce administration" is one bullet stating
+    three things, and reading one of them used to score the bullet fully
+    understood, because coverage was decided by overlapping the whole
+    statement. These spans are what that question is asked of instead.
+
+    Splitting happens *here*, in the measure, and not in `_segments`, and the
+    choice is not a matter of taste:
+
+    - `_segments` splitting further would change `requirement_lines`, and with
+      it `unmatched_requirement_lines`, the `requirement_id` of every synthetic
+      undetermined requirement (built from `normalize_span(line.text)`), and
+      the AI path's `by_ai`/`extraction_is_failed` - none of which are asking a
+      granularity question. Measuring finely does not require segmenting
+      finely.
+    - It would also not fix the case that names the problem: that bullet is one
+      sentence, and the statement-level split `_segments` could make - by
+      sentence, or by relaxing the continuation rule at `_segments`' documented
+      bias - never cuts it.
+
+    The direction of the remaining error is deliberate and agrees with that
+    bias comment. An enumeration cut into more asks than the employer meant
+    reports *less* understood than it was; merging demands reports more. Of the
+    two, the flattering one is the one worth ruling out, so an ambiguous
+    separator cuts.
+
+    Cuts tile the statement exactly - a separator belongs to the ask that
+    follows it - so no extracted span can fall into a gap between asks and be
+    counted unread. A fragment shorter than a statement's own minimum is not a
+    demand but a list entry or a label, so it stays joined to the ask before
+    it, and a statement whose parts are all fragments is one ask: its whole
+    self.
+    """
+    raw = text[line.start : line.end]
+    cuts = [0]
+    for separator in _ASK_BREAK.finditer(raw):
+        if len(raw[cuts[-1] : separator.start()].strip()) >= _MIN_STATEMENT:
+            cuts.append(separator.end())
+    cuts.append(len(raw))
+    asks = [(cuts[index], cuts[index + 1]) for index in range(len(cuts) - 1)]
+    if len(asks) > 1 and len(raw[asks[-1][0] : asks[-1][1]].strip()) < _MIN_STATEMENT:
+        asks[-2] = (asks[-2][0], asks[-1][1])
+        asks.pop()
+    return [(line.start + start, line.start + end) for start, end in asks]

@@ -6,22 +6,32 @@ from typing import Literal
 
 from .concepts import RequirementConceptStore
 from .extraction import ExtractedRequirement
-from .segmentation import StatementLine, requirement_lines
+from .segmentation import StatementLine, requirement_lines, statement_asks
 
 ExtractionState = Literal["parsed", "partial", "unparsed", "absent"]
 
 
-def _understood(lines: list[StatementLine], extracted: list[ExtractedRequirement]) -> int:
-    """How many stated requirements had something read inside them.
+def _asks(text: str, lines: list[StatementLine]) -> list[tuple[int, int]]:
+    """Every demand the requirement statements make, as posting offsets.
+
+    The unit the measure counts. A statement is what the posting formatted,
+    not what it demanded: one bullet can state three things, and counting
+    statements scored such a bullet fully understood for one of the three.
+    See `statement_asks` for why the split lives in the measure rather than in
+    the segmenter.
+    """
+    return [ask for line in lines for ask in statement_asks(text, line)]
+
+
+def _understood(asks: list[tuple[int, int]], extracted: list[ExtractedRequirement]) -> int:
+    """How many stated demands had something read inside them.
 
     Offset overlap, not `text.find`. The extracted span carries normalized
     text that a posting wrapping the requirement across a line no longer
     contains, so the search failed and the statement was counted unread.
     """
     return sum(
-        1
-        for line in lines
-        if any(item.start < line.end and line.start < item.end for item in extracted)
+        1 for start, end in asks if any(item.start < end and start < item.end for item in extracted)
     )
 
 
@@ -38,11 +48,18 @@ def extraction_completeness(
 
     Deliberately not a function of `len(extracted)` - a short posting whose two
     requirements are both understood is fully understood.
+
+    Counted per demand, not per statement. `requirement_lines` still decides
+    *whether* the posting states requirements at all - so `None` still means
+    exactly what it meant - but a statement that packs three demands into one
+    bullet now owes three, and a match reaching one of them no longer pays for
+    the other two.
     """
     lines = requirement_lines(text, concepts)
     if not lines:
         return None
-    return _understood(lines, extracted) / len(lines)
+    asks = _asks(text, lines)
+    return _understood(asks, extracted) / len(asks)
 
 
 def concept_classification_completeness(extracted: list[ExtractedRequirement]) -> float:
