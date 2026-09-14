@@ -82,6 +82,8 @@ export const DraftSectionCard = ({
         factResolution={(claim) => (
           <ClaimFactResolution
             beforeResolve={factContext.beforeResolve}
+            afterResolve={factContext.afterResolve}
+            onResolvingChange={factContext.onResolvingChange}
             analysisId={factContext.analysisId}
             applicationId={factContext.applicationId}
             claim={claim}

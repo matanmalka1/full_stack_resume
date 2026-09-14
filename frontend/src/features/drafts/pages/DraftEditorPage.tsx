@@ -3,7 +3,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
-import { workingDraftQueryOptions } from "@/api/drafts";
+import {
+  workingDraftFactsQueryKey,
+  workingDraftFactsQueryOptions,
+  workingDraftQueryKey,
+  workingDraftQueryOptions,
+} from "@/api/drafts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { routePaths } from "@/app/routePaths";
@@ -73,7 +78,16 @@ export const DraftEditorPage = () => {
     onOperationQueued: watch,
     workingDraftId,
   });
-  const validation = useDraftValidation(applicationId, draft);
+  const validation = useDraftValidation(
+    applicationId,
+    draft,
+    editing.dirty ||
+      resolving ||
+      resolutionError != null ||
+      applicationError != null ||
+      draftError != null ||
+      detail?.working_draft_state === "stale",
+  );
 
   /* Open on the document the user is deciding about. Claim provenance and editing are
      one deliberate switch away instead of making every fact and advanced control part
@@ -161,6 +175,44 @@ export const DraftEditorPage = () => {
     }
   };
 
+  const afterFactResolved = async () => {
+    setResolutionError(null);
+    try {
+      // Confirmation has committed. Preserve edits made during that request before
+      // refreshing its consequences or choosing a version for validation.
+      const settled = await editing.settle();
+      await invalidateApplicationViews(queryClient, applicationId);
+      const currentDetail = await queryClient.fetchQuery({
+        ...applicationDetailQueryOptions(applicationId),
+        staleTime: 0,
+      });
+      const id = currentDetail.active_working_draft_id;
+      if (id === null || id !== workingDraftId) return;
+      // Do not join a read started before the confirmation committed.
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: workingDraftQueryKey(id) }),
+        queryClient.cancelQueries({ queryKey: workingDraftFactsQueryKey(id) }),
+      ]);
+      await Promise.all([
+        queryClient.fetchQuery({ ...workingDraftQueryOptions(id), staleTime: 0 }),
+        queryClient.fetchQuery({ ...workingDraftFactsQueryOptions(id), staleTime: 0 }),
+      ]);
+      // A stale context may refuse saving. Still show that context, keep the local
+      // buffer, and report the unfinished follow-up rather than undoing confirmation.
+      if (!settled)
+        throw new Error("מצב הטיוטה רוענן, אך יש לפתור את שגיאת השמירה או הקונפליקט. העריכות המקומיות נשמרו.");
+      if (currentDetail.working_draft_state === "stale" || !currentDetail.available_actions.includes("validate"))
+        return;
+      // Settle once more after the reads, then validate the exact version read back.
+      if (!(await editing.settle())) throw new Error("יש לשמור את העריכות לפני אימות הטיוטה.");
+      const latest = await queryClient.fetchQuery({ ...workingDraftQueryOptions(id), staleTime: 0 });
+      await validation.validateExact(latest.draft);
+    } catch (error) {
+      setResolutionError(error);
+      throw error;
+    }
+  };
+
   const navigateSaved = async (href: string) => {
     setResolutionError(null);
     setResolving(true);
@@ -184,6 +236,7 @@ export const DraftEditorPage = () => {
   const approvalUnavailable =
     editing.dirty ||
     resolving ||
+    resolutionError != null ||
     applicationError != null ||
     draftError != null ||
     detail === undefined ||
@@ -316,6 +369,8 @@ export const DraftEditorPage = () => {
                     draft={draft}
                     factContext={{
                       beforeResolve,
+                      afterResolve: afterFactResolved,
+                      onResolvingChange: setResolving,
                       analysisId: detail?.active_analysis_id ?? null,
                       applicationId,
                       language: facts?.language ?? detail?.application.language ?? "en",

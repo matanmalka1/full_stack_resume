@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions } from "@/api/applications";
@@ -135,6 +136,63 @@ describe("DraftValidationPanel", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "פתיחת אישור" })).toBeEnabled());
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_edit_version: 4 });
+  });
+  it("hides a late passing validation after a newer edit and reads the newer failed run", async () => {
+    let finishValidation: (response: Response) => void = () => {};
+    const response = new Promise<Response>((resolve) => {
+      finishValidation = resolve;
+    });
+    let edited = false;
+    let newRun = false;
+    const fetchMock = vi.fn((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/validate")) return response;
+      if (url.includes("validation-runs"))
+        return Promise.resolve(
+          json(
+            validationFixture({
+              validation_run_id: "run-new",
+              edit_version: 5,
+              content_hash: "new-hash",
+              passed: false,
+            }),
+          ),
+        );
+      if (url.includes("working-drafts"))
+        return Promise.resolve(
+          json(
+            draft({
+              edit_version: edited ? 5 : 4,
+              content_hash: edited ? "new-hash" : "draft-hash",
+              latest_validation_run_id: newRun ? "run-new" : null,
+            }),
+          ),
+        );
+      return Promise.resolve(json(detail()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <DraftFlow />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const validate = await screen.findByRole("button", { name: "אימות הטיוטה" });
+    await waitFor(() => expect(validate).toBeEnabled());
+    fireEvent.click(validate);
+    edited = true;
+    await act(async () => finishValidation(json(validationFixture())));
+    await waitFor(() => expect(screen.getByRole("button", { name: "אימות הטיוטה" })).toBeEnabled());
+    expect(screen.queryByRole("heading", { name: "הטיוטה עברה אימות" })).toBeNull();
+    expect(screen.getByRole("button", { name: "פתיחת אישור" })).toBeDisabled();
+    newRun = true;
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: workingDraftQueryOptions("draft-1").queryKey });
+    });
+    expect(await screen.findByRole("heading", { name: "הטיוטה לא עברה אימות" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "פתיחת אישור" })).toBeDisabled();
   });
 });
 

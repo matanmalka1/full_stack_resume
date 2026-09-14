@@ -39,6 +39,8 @@ import { QueryState } from "@/ui/QueryState";
 
 interface ClaimFactResolutionProps {
   beforeResolve?: () => Promise<void>;
+  afterResolve?: () => Promise<void>;
+  onResolvingChange?: (resolving: boolean) => void;
   analysisId: string | null;
   applicationId: string;
   claim: DraftClaim;
@@ -54,6 +56,8 @@ interface ClaimFactResolutionProps {
    still pending; the second step confirms it and puts it into a fresh selection plan. */
 export const ClaimFactResolution = ({
   beforeResolve,
+  afterResolve,
+  onResolvingChange,
   analysisId,
   applicationId,
   claim,
@@ -90,7 +94,26 @@ export const ClaimFactResolution = ({
   const factId = capture.data?.fact.fact_id ?? recoveredFactId;
   const detailQuery = useFactDetail(factId);
 
+  // Follow-up failures do not undo a fact that the server has already confirmed.
+  // Retrying this step refreshes/validates only; it never resends confirmation.
+  const refresh = useMutation({
+    onMutate: () => onResolvingChange?.(true),
+    mutationFn: async () => {
+      if (afterResolve !== undefined) {
+        await afterResolve();
+      } else {
+        await invalidateApplicationViews(queryClient, applicationId);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(draft.id) }, { throwOnError: true }),
+          queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(draft.id) }, { throwOnError: true }),
+        ]);
+      }
+    },
+    onSettled: () => onResolvingChange?.(false),
+  });
+
   const useFact = useMutation({
+    onMutate: () => onResolvingChange?.(true),
     mutationFn: async () => {
       if (factId === null || analysisId === null || profile === null) {
         throw new Error("Confirm and use requires the active analysis and Profile");
@@ -112,12 +135,9 @@ export const ClaimFactResolution = ({
       if (factId !== null) {
         void queryClient.invalidateQueries({ queryKey: factDetailQueryKey(factId) });
       }
-      await Promise.all([
-        invalidateApplicationViews(queryClient, applicationId),
-        queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(draft.id) }),
-        queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(draft.id) }),
-      ]);
+      await refresh.mutateAsync().catch(() => {});
     },
+    onSettled: () => onResolvingChange?.(false),
   });
 
   const error = historyQuery.error ?? detailQuery.error ?? capture.error ?? useFact.error;
@@ -147,6 +167,18 @@ export const ClaimFactResolution = ({
           fallbackTitle="לא ניתן לעדכן את העובדה"
         />
       )}
+      {refresh.error == null ? null : (
+        <div className="mt-4 flex flex-col gap-3">
+          <ErrorCallout
+            error={refresh.error}
+            fallbackTitle="העובדה אושרה, אך עדכון מצב הטיוטה לא הושלם"
+            fallbackDetail="אישור העובדה נשמר. יש לפתור שגיאת שמירה או קונפליקט, ולנסות שוב את הרענון והאימות בלבד."
+          />
+          <Button onClick={() => refresh.mutate()} pending={refresh.isPending} variant="secondary">
+            ניסיון נוסף לעדכון מצב הטיוטה
+          </Button>
+        </div>
+      )}
 
       {factId === null ? (
         <form className="mt-4 flex flex-col gap-3" onSubmit={captureForm.handleSubmit(submitCapture)}>
@@ -172,7 +204,8 @@ export const ClaimFactResolution = ({
         // <output> for it.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout className="mt-4" role="status" title="העובדה אושרה ונבחרה" tone="success">
-          נוצרה תוכנית בחירה חדשה. הטיוטה הנוכחית נשמרה, ומסך המועמדות יציע לבנות אותה מחדש מהתוכנית החדשה.
+          נוצרה תוכנית בחירה חדשה. אישור העובדה אינו אימות של השורה או הטיוטה. מצב ההקשר והאימות מוצגים במסך זה;
+          כשהטיוטה אינה עדכנית, יש להשתמש בפעולת התיקון המותרת בהתראת ההקשר.
         </Callout>
       ) : (
         <div className="mt-4 flex flex-col gap-4">

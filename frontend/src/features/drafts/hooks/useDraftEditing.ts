@@ -83,12 +83,27 @@ export const useDraftEditing = ({
      that now exists - and the reads are invalidated so the outline, the pending claims,
      and the projection's blockers all come back describing the same version. */
   const onSaved = useCallback(
-    (_update: WorkingDraftUpdate, nextEtag: string | null) => {
+    (update: WorkingDraftUpdate, nextEtag: string | null) => {
       if (workingDraftId === null) {
         return;
       }
       queryClient.setQueryData<DraftRead>(workingDraftQueryKey(workingDraftId), (previous) =>
-        previous === undefined ? previous : { ...previous, etag: nextEtag },
+        previous === undefined
+          ? previous
+          : {
+              ...previous,
+              etag: nextEtag,
+              draft:
+                update.working_draft_id === workingDraftId
+                  ? {
+                      ...previous.draft,
+                      edit_version: update.edit_version,
+                      content_hash: update.content_hash,
+                      latest_validation_run_id: null,
+                      latest_validation_passed: null,
+                    }
+                  : previous.draft,
+            },
       );
       void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(workingDraftId) });
       void queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(workingDraftId) });

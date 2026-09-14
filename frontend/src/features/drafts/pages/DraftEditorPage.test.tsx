@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { ApplicationDetail, FactDetail, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
 import { DraftEditorPage } from "./DraftEditorPage";
 
@@ -759,6 +759,197 @@ describe("DraftEditorPage", () => {
     const patch = fetchMock.mock.calls.find((call) => (call[1] as RequestInit)?.method === "PATCH");
     expect(JSON.parse(String((patch![1] as RequestInit).body)).claim_edits[0].text).toBe("My local wording.");
   });
+
+  it.each(["stale", "passed", "failed", "refresh-error", "validation-error", "edit-during-confirmation"])(
+    "updates draft state after fact confirmation: %s",
+    async (outcome) => {
+      let confirmed = false;
+      let retry = false;
+      let validated = false;
+      let editVersion = 4;
+      let wording = "Owned the CRM migration.";
+      let finishConfirmation: (response: Response) => void = () => {};
+      const confirmation = new Promise<Response>((resolve) => {
+        finishConfirmation = resolve;
+      });
+      const pendingDraft = draft({
+        sections: [
+          {
+            name: "Core Skills",
+            claims: [
+              {
+                ...draft().outline.sections[0]!.claims[0]!,
+                claim_type: "pending",
+                fact_ids: [],
+              },
+            ],
+          },
+        ],
+      });
+      const run = {
+        application_id: "app-1",
+        working_draft_id: "wd-1",
+        edit_version: 4,
+        content_hash: "hash-4",
+        validation_run_id: "run-new",
+        passed: outcome !== "failed",
+        report: {
+          passed: outcome !== "failed",
+          groups: {},
+          evidence: {},
+          issues:
+            outcome === "failed"
+              ? [{ code: "UNSUPPORTED", group: "facts", hard: true, message: "Still unsupported" }]
+              : [],
+        },
+      };
+      const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/confirm-and-use")) {
+          confirmed = true;
+          if (outcome === "edit-during-confirmation") return confirmation;
+          return Promise.resolve(jsonResponse({ fact_id: "f-captured", selection_plan_id: "sp-2" }));
+        }
+        if (url === "/api/v1/facts/history")
+          return Promise.resolve(
+            jsonResponse({
+              events: [{ application_id: "app-1", claim_id: "c-1", fact_id: "f-captured", event_type: "fact_created" }],
+            }),
+          );
+        if (url === "/api/v1/facts/f-captured")
+          return Promise.resolve(
+            jsonResponse({
+              fact: {
+                fact_id: "f-captured",
+                meaning: "Owned the CRM migration.",
+                renderings: { en: "Owned the CRM migration." },
+                resume_style: "bullet",
+                status: confirmed ? "canonical" : "pending",
+                tags: [],
+                provenance: "Candidate",
+                source: "sales.md",
+              },
+              events: [],
+            } satisfies FactDetail),
+          );
+        if (url === DRAFT_PATH && init?.method === "PATCH") {
+          editVersion += 1;
+          wording = JSON.parse(String(init.body)).claim_edits[0].text;
+          return Promise.resolve(updateResponse(editVersion));
+        }
+        if (url.endsWith("/validate")) {
+          if (outcome === "validation-error" && !retry) return Promise.resolve(jsonResponse({}, 503));
+          validated = true;
+          return Promise.resolve(
+            jsonResponse({ ...run, edit_version: editVersion, content_hash: `hash-${editVersion}` }),
+          );
+        }
+        if (url.startsWith("/api/v1/validation-runs/"))
+          return Promise.resolve(
+            jsonResponse({ ...run, edit_version: editVersion, content_hash: `hash-${editVersion}` }),
+          );
+        if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(facts()));
+        if (url === DRAFT_PATH) {
+          if (confirmed && outcome === "refresh-error" && !retry) return Promise.resolve(jsonResponse({}, 503));
+          return Promise.resolve(
+            jsonResponse({
+              ...pendingDraft,
+              edit_version: editVersion,
+              content_hash: `hash-${editVersion}`,
+              outline: {
+                ...pendingDraft.outline,
+                sections: [
+                  {
+                    name: "Core Skills",
+                    claims: [
+                      {
+                        ...pendingDraft.outline.sections[0]!.claims[0]!,
+                        text: wording,
+                      },
+                    ],
+                  },
+                ],
+              },
+              latest_validation_run_id: validated ? "run-new" : null,
+            }),
+          );
+        }
+        return Promise.resolve(
+          jsonResponse(
+            detail({
+              application: { ...detail().application, profile: "account-manager" },
+              active_selection_plan_id: confirmed ? "sp-2" : "sp-1",
+              working_draft_state: confirmed && outcome === "stale" ? "stale" : "editing",
+              available_actions: confirmed && outcome === "stale" ? ["replace_working_draft"] : ["validate"],
+              stale_reasons:
+                confirmed && outcome === "stale"
+                  ? [
+                      {
+                        code: "SELECTION_PLAN_REPLACED",
+                        message: "The fact changed the selection plan.",
+                        entity_references: {},
+                        allowed_resolution_actions: ["replace_working_draft"],
+                      },
+                    ]
+                  : [],
+            }),
+          ),
+        );
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: "בדיקת עובדות ועריכה" }));
+      fireEvent.click(await screen.findByText("הפיכת הטקסט לעובדה מאושרת"));
+      fireEvent.click(await screen.findByRole("checkbox"));
+      if (outcome === "edit-during-confirmation") {
+        fireEvent.click(screen.getAllByRole("button", { name: "עריכת השורה" })[2]!);
+        fireEvent.change(await screen.findByDisplayValue(wording), { target: { value: "Saved before confirmation." } });
+      }
+      fireEvent.click(screen.getByRole("button", { name: "אישור העובדה ושימוש בה" }));
+      if (outcome === "edit-during-confirmation") {
+        await waitFor(() => expect(confirmed).toBe(true));
+        expect(editVersion).toBe(5);
+        fireEvent.change(screen.getByRole("textbox", { name: "טקסט השורה" }), {
+          target: { value: "Edited during confirmation." },
+        });
+        await act(async () => finishConfirmation(jsonResponse({ fact_id: "f-captured", selection_plan_id: "sp-2" })));
+      }
+      expect(await screen.findByText("העובדה אושרה ונבחרה")).toBeInTheDocument();
+      if (outcome.endsWith("error")) {
+        const retryButton = await screen.findByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" });
+        expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
+        retry = true;
+        fireEvent.click(retryButton);
+        await waitFor(() => expect(screen.queryByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" })).toBeNull());
+      }
+      if (outcome === "stale") {
+        expect(await screen.findByText("The fact changed the selection plan.")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "אימות הטיוטה" })).toBeDisabled();
+        expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/validate"))).toBe(false);
+        expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
+      } else {
+        await screen.findByRole("heading", {
+          name: outcome === "failed" ? "הטיוטה לא עברה אימות" : "הטיוטה עברה אימות",
+        });
+        const request = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/validate"));
+        expect(JSON.parse(String(request![1]!.body))).toEqual({
+          expected_edit_version: outcome === "edit-during-confirmation" ? 6 : 4,
+        });
+        if (outcome === "edit-during-confirmation")
+          expect(screen.getByDisplayValue("Edited during confirmation.")).toBeInTheDocument();
+        if (outcome === "failed") expect(screen.getByText("Still unsupported")).toBeInTheDocument();
+      }
+      // Confirmation alone never relinks or authorizes this pending claim.
+      expect(screen.getByText("ללא ביסוס")).toBeInTheDocument();
+      expect(fetchMock.mock.calls.filter((call) => String(call[0]).endsWith("/confirm-and-use"))).toHaveLength(1);
+      expect(
+        fetchMock.mock.calls.some(
+          (call) => String(call[0]).endsWith("/approve") || String(call[0]).endsWith("/generate"),
+        ),
+      ).toBe(false);
+      expect(screen.queryByRole("dialog", { name: "אישור גרסה קבועה" })).toBeNull();
+    },
+  );
 
   it.each(["conflict", "failure"])("preserves local text and stops navigation after a save %s", async (outcome) => {
     const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {

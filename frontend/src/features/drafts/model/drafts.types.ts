@@ -23,6 +23,8 @@ export interface DraftClaimActions {
    passed as a settled contract rather than by handing the whole projection downward. */
 export interface ClaimFactContext {
   beforeResolve?: () => Promise<void>;
+  afterResolve?: () => Promise<void>;
+  onResolvingChange?: (resolving: boolean) => void;
   analysisId: string | null;
   applicationId: string;
   language: string;

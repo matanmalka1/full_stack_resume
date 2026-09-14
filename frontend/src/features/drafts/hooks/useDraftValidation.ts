@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { invalidateApplicationViews } from "@/api/applications";
+import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
+import { workingDraftQueryOptions } from "@/api/drafts";
 import type { ValidationRun, WorkingDraft } from "@/api/contracts";
 import { validateWorkingDraft, validationRunQueryOptions } from "@/api/validation";
 
@@ -14,8 +15,7 @@ export interface DraftValidation {
      value alone, and a copy kept in state could name a version that has since moved. */
   exactPassingRunId: string | null;
   isPending: boolean;
-  /* Only what this screen's own press produced: the announcement and the focus move
-     belong to a run the user asked for, not to one read back with the draft. */
+  /* The exact result produced by this screen, including contextual fact follow-up. */
   lastRun: ValidationRun | undefined;
   /* An approval was refused as `VALIDATION_STALE`: the backend judged the run this
      screen offered as evidence to be about a version the draft has moved past. It is
@@ -27,12 +27,17 @@ export interface DraftValidation {
      that is what clears it. */
   stale: boolean;
   validate: () => void;
+  validateExact: (current: WorkingDraft) => Promise<ValidationRun>;
 }
 
 /* A.4 frame 5's command and its result, beside the draft it describes rather than on a
    screen of its own. Every command, key, and staleness rule is the one the standalone
    screen used. */
-export const useDraftValidation = (applicationId: string, draft: WorkingDraft | undefined): DraftValidation => {
+export const useDraftValidation = (
+  applicationId: string,
+  draft: WorkingDraft | undefined,
+  unavailable = false,
+): DraftValidation => {
   const queryClient = useQueryClient();
   const [stale, setStale] = useState(false);
 
@@ -43,39 +48,49 @@ export const useDraftValidation = (applicationId: string, draft: WorkingDraft | 
   });
 
   const validation = useMutation({
-    mutationFn: async () => {
-      if (draft === undefined) throw new Error("Validation was offered before the draft loaded");
-      return validateWorkingDraft(draft.id, draft.edit_version);
+    mutationFn: async (current: WorkingDraft) => {
+      return validateWorkingDraft(current.id, current.edit_version);
     },
-    onSuccess: () => {
-      void invalidateApplicationViews(queryClient, applicationId);
+    onSuccess: async (_run, current) => {
+      await invalidateApplicationViews(queryClient, applicationId);
+      await Promise.all([
+        queryClient.fetchQuery({ ...workingDraftQueryOptions(current.id), staleTime: 0 }),
+        queryClient.fetchQuery({ ...applicationDetailQueryOptions(applicationId), staleTime: 0 }),
+      ]);
     },
   });
 
-  const run = validation.data ?? runQuery.data;
-  /* §14: approval names an exact version. A run that describes any other draft, edit
-     version, or content hash is evidence about a version that no longer exists. */
-  const exact =
+  // Late results cannot describe a newer edit. Prefer the current queried evidence
+  // over a response retained from a previous validation request.
+  const matches = (run: ValidationRun | undefined) =>
     run !== undefined &&
-    run.passed &&
     draft !== undefined &&
     run.application_id === applicationId &&
     run.working_draft_id === draft.id &&
     run.edit_version === draft.edit_version &&
     run.content_hash === draft.content_hash;
+  const candidate = matches(runQuery.data) ? runQuery.data : matches(validation.data) ? validation.data : undefined;
+  const run = unavailable ? undefined : candidate;
+  const exact = run?.passed === true;
 
   return {
-    canValidate: draft !== undefined,
+    canValidate: draft !== undefined && !unavailable && !validation.isPending,
     error: runQuery.error ?? validation.error,
     exactPassingRunId: exact && run !== undefined ? run.validation_run_id : null,
     isPending: validation.isPending,
-    lastRun: validation.data,
+    lastRun:
+      run !== undefined && run.validation_run_id === validation.data?.validation_run_id ? validation.data : undefined,
     reportStaleRefusal: () => setStale(true),
     run,
     stale,
     validate: () => {
+      if (draft === undefined || unavailable) return;
       setStale(false);
-      validation.mutate();
+      validation.mutate(draft);
+    },
+    validateExact: (current) => {
+      setStale(false);
+      return validation.mutateAsync(current);
     },
   };
 };
