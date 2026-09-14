@@ -1927,6 +1927,8 @@ export interface components {
             application_id: string;
             /** Current Status */
             current_status: string;
+            /** Event Id */
+            event_id?: string | null;
             /** Next Action */
             next_action?: string | null;
             /** Next Action Date */

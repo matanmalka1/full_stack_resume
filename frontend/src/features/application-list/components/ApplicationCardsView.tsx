@@ -95,7 +95,12 @@ const ApplicationCard = ({
   );
 };
 
-export const ApplicationCardsView = ({ items, onRequestClose, onRequestDelete, onRequestUpdate }: ApplicationCardsViewProps) => (
+export const ApplicationCardsView = ({
+  items,
+  onRequestClose,
+  onRequestDelete,
+  onRequestUpdate,
+}: ApplicationCardsViewProps) => (
   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
     {items.map((item) => (
       <ApplicationCard

@@ -49,12 +49,7 @@ export const FactDeletionControl = ({ fact }: { fact: Fact }) => {
         <Button onClick={() => setConfirming(false)} size="compact" variant="secondary">
           ביטול
         </Button>
-        <Button
-          onClick={() => deletion.mutate()}
-          pending={deletion.isPending}
-          size="compact"
-          variant="destructive"
-        >
+        <Button onClick={() => deletion.mutate()} pending={deletion.isPending} size="compact" variant="destructive">
           אישור מחיקת העובדה
         </Button>
       </div>

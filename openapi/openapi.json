@@ -2054,6 +2054,17 @@
             "title": "Current Status",
             "type": "string"
           },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
           "next_action": {
             "anyOf": [
               {

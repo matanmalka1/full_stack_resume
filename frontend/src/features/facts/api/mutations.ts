@@ -81,10 +81,7 @@ export const useTransitionFact = (
 /* One-way: nothing settles it back. Kept as its own hook rather than folded into
    `useTransitionFact` because deletion is terminal and needs its own confirmation
    step in the UI, not another value on the same toggle. */
-export const useDeleteFact = (
-  factId: string,
-  onSettled?: () => void,
-): UseMutationResult<FactMutation, Error, void> => {
+export const useDeleteFact = (factId: string, onSettled?: () => void): UseMutationResult<FactMutation, Error, void> => {
   const refresh = useFactCacheRefresh();
 
   return useMutation({

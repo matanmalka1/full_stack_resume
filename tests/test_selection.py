@@ -244,7 +244,7 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
     )
     draft = setup.draft
 
-    assert setup.analysis.fit.value == "medium"
+    assert setup.analysis.fit.value == "high"
     # `sales.cycle.closing` is deliberately absent: five lines per role is the
     # ceiling, and closing evidence already reaches the page through the merged
     # negotiation/tenders bullet and the leadership block. Outreach has no such

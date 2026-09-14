@@ -88,7 +88,7 @@ def test_tech_sales_analysis_records_preference_gaps_and_selection_concepts(clas
         emphasis_override="new-business",
     )
 
-    assert result.fit.value == "medium"
+    assert result.fit.value == "high"
     gaps = {gap.requirement: gap for gap in result.gaps}
     assert gaps["Direct SaaS Sales preference"].severity == "warning"
     assert gaps["Sales CRM usage"].substitute_fact_ids == [

@@ -251,6 +251,7 @@ class CloseApplicationResponse(HttpSchema):
     terminal_outcome: str | None = None
     next_action: str | None = None
     next_action_date: str | None = None
+    event_id: str | None = None
 
 
 class DeleteApplicationResponse(HttpSchema):

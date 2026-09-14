@@ -67,7 +67,7 @@ def fit_score_from_requirements(requirements: Sequence[Requirement]) -> float:
         weight = _MANDATORY_WEIGHT if requirement.mandatory else _PREFERRED_WEIGHT
         total_weight += weight
         total_value += weight * _COVERAGE_VALUE[requirement.coverage]
-    return round(total_value / total_weight, 4)
+    return total_value / total_weight
 
 
 def fit_level_from_score(fit_score: float | None, gaps: Sequence[Gap]) -> FitLevel:

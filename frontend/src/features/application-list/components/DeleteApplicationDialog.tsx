@@ -13,7 +13,12 @@ interface DeleteApplicationDialogProps {
 /* Terminal and one-way: there is no undelete command in this phase, unlike closing,
    which `CloseApplicationDialog`'s undo button can reverse. The copy says so plainly
    and spells out what is untouched, so confirming here is not a surprise later. */
-export const DeleteApplicationDialog = ({ application, pending, onCancel, onConfirm }: DeleteApplicationDialogProps) => (
+export const DeleteApplicationDialog = ({
+  application,
+  pending,
+  onCancel,
+  onConfirm,
+}: DeleteApplicationDialogProps) => (
   <Dialog
     footer={
       <>
