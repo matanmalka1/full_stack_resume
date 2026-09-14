@@ -15,7 +15,7 @@ from __future__ import annotations
 from ...contracts.analysis import RequirementAttestation, RequirementInterpretation
 from .attestation import InvalidRequirementAttestation, verify_attestation
 from .concepts import RequirementConceptStore
-from .segmentation import _Span, _segments
+from .segmentation import _segments, _Span
 
 
 class InvalidRequirementInterpretation(ValueError):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from ..contracts.analysis import JobAnalysis, JobClassificationProposal
 from .gaps import fit_level_from_score, merge_gaps
@@ -137,7 +137,10 @@ def resolving_actions(reason: str) -> tuple[str, ...]:
     return ("apply_analysis_decisions",) if approval_reason(reason).overrides else ()
 
 
-def unresolved_reasons(reasons: Sequence[str], overrides: Mapping[str, str]) -> list[str]:
+_OverrideKey = TypeVar("_OverrideKey", bound=str)
+
+
+def unresolved_reasons(reasons: Sequence[str], overrides: Mapping[_OverrideKey, str]) -> list[str]:
     return [
         reason for reason in reasons if not (approval_reason(reason).overrides & overrides.keys())
     ]
