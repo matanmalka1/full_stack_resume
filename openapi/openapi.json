@@ -5776,6 +5776,15 @@
             "title": "Ui Text Size",
             "type": "string"
           },
+          "ui_theme": {
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ],
+            "title": "Ui Theme",
+            "type": "string"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -5798,6 +5807,7 @@
           "available_ai_models",
           "ui_density",
           "ui_text_size",
+          "ui_theme",
           "provider_configured"
         ],
         "title": "SettingsResponse",
@@ -6090,6 +6100,15 @@
             ],
             "title": "Ui Text Size",
             "type": "string"
+          },
+          "ui_theme": {
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ],
+            "title": "Ui Theme",
+            "type": "string"
           }
         },
         "required": [
@@ -6098,7 +6117,8 @@
           "default_ai_model",
           "default_reasoning_effort",
           "ui_density",
-          "ui_text_size"
+          "ui_text_size",
+          "ui_theme"
         ],
         "title": "UpdateSettingsRequest",
         "type": "object"

@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
+    <script>
+      // A startup cache only; the server replaces it after Settings loads.
+      try {
+        const theme = localStorage.getItem("cv-theme-cache") ?? localStorage.getItem("cv-theme");
+        if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
     <!-- Hebrew-first face. Preconnect so the shell does not paint in the fallback
          first; styles.css keeps real Hebrew fallbacks for offline/local use. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

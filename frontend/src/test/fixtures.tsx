@@ -174,6 +174,7 @@ export const settings = (overrides: Partial<Settings> = {}): Settings => ({
   provider_configured: false,
   ui_density: "comfortable",
   ui_text_size: "normal",
+  ui_theme: "system",
   updated_at: null,
   ...overrides,
 });

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from api_harness import MUTATION_HEADERS
 
 from cv_engine.api.app import API_PREFIX
@@ -15,6 +17,7 @@ SETTINGS_FIELDS = {
     "available_ai_models",
     "ui_density",
     "ui_text_size",
+    "ui_theme",
     "provider_configured",
     "updated_at",
 }
@@ -29,6 +32,7 @@ def _update_body(**overrides) -> dict:
         "default_reasoning_effort": "medium",
         "ui_density": "comfortable",
         "ui_text_size": "normal",
+        "ui_theme": "system",
         **overrides,
     }
 
@@ -88,6 +92,7 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
         ],
         "ui_density": "comfortable",
         "ui_text_size": "normal",
+        "ui_theme": "system",
         "provider_configured": False,
         "updated_at": None,
     }
@@ -146,6 +151,7 @@ def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
         ui_text_size="large",
         default_ai_model="gpt-5.6-luna",
         default_reasoning_effort="low",
+        ui_theme="dark",
     )
 
     updated = _patch(api_worker, initial.headers["ETag"], requested)
@@ -200,3 +206,15 @@ def test_settings_reject_arbitrary_models_and_reasoning_values(api_worker) -> No
 
     unchanged = api_worker.client.get(f"{API_PREFIX}/settings")
     assert unchanged.headers["ETag"] == initial.headers["ETag"]
+
+
+@pytest.mark.parametrize("theme", ["system", "light", "dark"])
+def test_theme_settings_round_trip_and_reject_unknown_mode(api_worker, theme) -> None:
+    current = api_worker.client.get(f"{API_PREFIX}/settings")
+    saved = _patch(api_worker, current.headers["ETag"], _update_body(ui_theme=theme))
+    assert saved.status_code == 200
+    assert saved.json()["ui_theme"] == theme
+    assert api_worker.client.get(f"{API_PREFIX}/settings").json()["ui_theme"] == theme
+    refused = _patch(api_worker, saved.headers["ETag"], _update_body(ui_theme="sepia"))
+    assert refused.status_code == 422
+    assert api_worker.client.get(f"{API_PREFIX}/settings").json() == saved.json()

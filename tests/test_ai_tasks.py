@@ -235,6 +235,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
             default_reasoning_effort="high",
             ui_density="comfortable",
             ui_text_size="normal",
+            ui_theme="system",
         ),
     )
     fake_openai.script("propose_job_analysis", CLASSIFICATION)
@@ -254,6 +255,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
             default_reasoning_effort="low",
             ui_density="comfortable",
             ui_text_size="normal",
+            ui_theme="system",
         ),
     )
     completed = _run(ai_services, queued)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ...application.ai_configuration import AIModel, ReasoningEffort
-from ...application.settings import ExecutionMode, UiDensity, UiTextSize
+from ...application.settings import ExecutionMode, UiDensity, UiTextSize, UiTheme
 from .health import HttpSchema
 
 
@@ -27,6 +27,7 @@ class SettingsResponse(HttpSchema):
     available_ai_models: list[AIModelOptionResponse]
     ui_density: UiDensity
     ui_text_size: UiTextSize
+    ui_theme: UiTheme
     provider_configured: bool
     updated_at: str | None = None
 
@@ -39,3 +40,4 @@ class UpdateSettingsRequest(HttpSchema):
     default_reasoning_effort: ReasoningEffort
     ui_density: UiDensity
     ui_text_size: UiTextSize
+    ui_theme: UiTheme

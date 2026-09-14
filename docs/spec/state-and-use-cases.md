@@ -864,7 +864,11 @@ Fact or its eligibility must change first, so the Operation exposes no `retry` a
 Applies the safe UI settings named in `docs/spec/product-spec.md` section 15. The write
 is optimistic: `expected_edit_version` must match the stored one, and a mismatch is a
 conflict that changes nothing. Each successful write increments `edit_version`, which the
-transport carries as an ETag.
+transport carries as an ETag. The theme preference shares this version with density,
+text size, automation, and AI defaults. On conflict the client preserves its baseline
+and local edits, reads the current version, and lets the user explicitly discard or
+select local changes to apply over it. Unselected fields retain current server values;
+a subsequent save uses that read's ETag. There is no automatic overwrite retry.
 
 The default model and reasoning effort are settings only through their closed
 backend-supplied allowlists. Arbitrary model IDs, per-task overrides, timezone, and

@@ -1,66 +1,44 @@
-import { Moon, Sun } from "lucide-react";
+import { Moon } from "lucide-react";
 import { useState } from "react";
-
-import { buttonClasses } from "@/ui/Button";
+import { useQuery } from "@tanstack/react-query";
+import { settingsQueryOptions } from "@/api/settings";
+import { SettingsForm } from "@/features/settings/components/SettingsForm";
+import { buttonClasses, Button } from "@/ui/Button";
+import { Dialog } from "@/ui/Dialog";
 import { Tooltip } from "@/ui/Tooltip";
-
-type Theme = "dark" | "light";
-
-const STORAGE_KEY = "cv-theme";
-
-const systemTheme = (): Theme =>
-  typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-
-const storedTheme = (): Theme | undefined => {
-  try {
-    const value = window.localStorage.getItem(STORAGE_KEY);
-    return value === "dark" || value === "light" ? value : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const initialTheme = (): Theme => {
-  const theme = storedTheme() ?? systemTheme();
-  const saved = storedTheme();
-
-  if (saved === undefined) {
-    document.documentElement.removeAttribute("data-theme");
-  } else {
-    document.documentElement.dataset.theme = saved;
-  }
-
-  return theme;
-};
+import { settingValueLabel } from "@/features/settings/settings.model";
 
 export const ThemeToggle = () => {
-  const [theme, setTheme] = useState<Theme>(initialTheme);
-  const nextTheme: Theme = theme === "dark" ? "light" : "dark";
-  const Icon = theme === "dark" ? Sun : Moon;
-  const label = theme === "dark" ? "מעבר למצב בהיר" : "מעבר למצב כהה";
-
-  const toggle = () => {
-    document.documentElement.dataset.theme = nextTheme;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, nextTheme);
-    } catch {
-      // The selected theme still applies for this session when storage is unavailable.
-    }
-    setTheme(nextTheme);
-  };
-
+  const [open, setOpen] = useState(false);
+  const query = useQuery(settingsQueryOptions);
+  const label = `ערכת נושא: ${settingValueLabel(query.data?.settings.ui_theme ?? "system")}`;
   return (
-    <Tooltip label={label} placement="shell">
-      <button
-        aria-label={label}
-        className={buttonClasses("secondary", "shrink-0", "icon")}
-        onClick={toggle}
-        type="button"
+    <>
+      <Tooltip label={label} placement="shell">
+        <button
+          aria-label={label}
+          className={buttonClasses("secondary", "shrink-0", "icon")}
+          disabled={query.data === undefined}
+          onClick={() => setOpen(true)}
+          type="button"
+        >
+          <Moon aria-hidden="true" className="size-icon-md" />
+        </button>
+      </Tooltip>
+      <Dialog
+        dismissible={false}
+        open={open}
+        onClose={() => setOpen(false)}
+        headingId="theme-settings-heading"
+        title="ערכת נושא"
       >
-        <Icon aria-hidden="true" className="size-icon-md" />
-      </button>
-    </Tooltip>
+        {open && query.data !== undefined && (
+          <SettingsForm themeOnly settings={query.data.settings} etag={query.data.etag} />
+        )}
+        <Button className="mt-4" variant="secondary" onClick={() => setOpen(false)}>
+          סגירה וחזרה לערך השמור
+        </Button>
+      </Dialog>
+    </>
   );
 };

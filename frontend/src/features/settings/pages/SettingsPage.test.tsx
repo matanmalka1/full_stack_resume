@@ -77,8 +77,131 @@ describe("SettingsPage", () => {
       default_reasoning_effort: "high",
       ui_density: "compact",
       ui_text_size: "large",
+      ui_theme: "system",
     });
     await waitFor(() => expect(autoGenerate).not.toBeChecked());
     expect(saveButton).toBeDisabled();
   });
+});
+
+const conflictResponse = () =>
+  json(
+    {
+      type: "about:blank",
+      title: "Conflict",
+      status: 409,
+      code: "STATE_CONFLICT",
+      detail: "changed",
+      retryable: false,
+    },
+    409,
+  );
+
+it("preserves edits through refresh failure and repeated conflict, and merges only explicitly selected fields", async () => {
+  let reads = 0;
+  let writes = 0;
+  const fetch = vi.fn((_input: unknown, init?: RequestInit) => {
+    if (init?.method === "PATCH") {
+      writes++;
+      if (writes < 3) return Promise.resolve(conflictResponse());
+      return Promise.resolve(
+        json(settings({ ...JSON.parse(String(init.body)), edit_version: 3 }), 200, { ETag: '"settings-3"' }),
+      );
+    }
+    reads++;
+    if (reads === 2) return Promise.reject(new TypeError("offline"));
+    return Promise.resolve(
+      json(
+        settings(
+          reads === 1 ? {} : { ui_density: "compact", default_reasoning_effort: "high", edit_version: reads - 2 },
+        ),
+        200,
+        { ETag: `"settings-${Math.max(0, reads - 2)}"` },
+      ),
+    );
+  });
+  vi.stubGlobal("fetch", fetch);
+  renderRoute("/settings", "/settings", <SettingsPage />);
+  await screen.findByLabelText("ערכת נושא");
+  fireEvent.change(screen.getByLabelText("ערכת נושא"), { target: { value: "dark" } });
+  fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), { target: { value: "low" } });
+  fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
+  await screen.findByText("ההגדרות השתנו מאז שפתחת את הטופס");
+  expect(screen.getByRole("button", { name: "שמירת הגדרות" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
+  await screen.findByRole("alert");
+  expect(screen.getByLabelText("ערכת נושא")).toHaveValue("dark");
+  fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת נושא" }));
+  fireEvent.click(screen.getByRole("button", { name: "החלת הבחירה על הגרסה העדכנית" }));
+  expect(screen.getByLabelText("מאמץ חשיבה")).toHaveValue("high");
+  expect(screen.getByLabelText("צפיפות תצוגה")).toHaveValue("compact");
+  expect(writes).toBe(1);
+  fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
+  await screen.findByText("ההגדרות השתנו מאז שפתחת את הטופס");
+  fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת נושא" }));
+  fireEvent.click(screen.getByRole("button", { name: "החלת הבחירה על הגרסה העדכנית" }));
+  fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
+  await screen.findByText("ההגדרות נשמרו");
+  const patches = fetch.mock.calls.filter((call) => call[1]?.method === "PATCH");
+  expect(patches.map((call) => (call[1]?.headers as Headers | undefined)?.get("If-Match"))).toEqual([
+    '"settings-0"',
+    '"settings-1"',
+    '"settings-2"',
+  ]);
+  expect(JSON.parse(String(patches.at(-1)?.[1]?.body))).toMatchObject({
+    ui_theme: "dark",
+    ui_density: "compact",
+    default_reasoning_effort: "high",
+  });
+});
+
+it("discards local edits only by explicit choice and adopts the current server version", async () => {
+  let reads = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_input: unknown, init?: RequestInit) => {
+      if (init?.method === "PATCH") return Promise.resolve(conflictResponse());
+      reads++;
+      return Promise.resolve(
+        json(settings({ ui_theme: reads === 1 ? "system" : "light" }), 200, { ETag: `"settings-${reads}"` }),
+      );
+    }),
+  );
+  renderRoute("/settings", "/settings", <SettingsPage />);
+  fireEvent.change(await screen.findByLabelText("ערכת נושא"), { target: { value: "dark" } });
+  fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
+  fireEvent.click(await screen.findByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
+  fireEvent.click(await screen.findByRole("button", { name: "טעינת ערכי השרת והשלכת העריכות שלי" }));
+  expect(screen.getByLabelText("ערכת נושא")).toHaveValue("light");
+  expect(screen.getByRole("button", { name: "שמירת הגדרות" })).toBeDisabled();
+});
+
+it("keeps a non-conflict 412 as a validation failure and retains unsaved edits", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_input: unknown, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === "PATCH"
+          ? json(
+              {
+                type: "about:blank",
+                title: "Unavailable",
+                status: 412,
+                code: "PRECONDITION_FAILED",
+                detail: "AI unavailable",
+              },
+              412,
+            )
+          : json(settings(), 200, { ETag: '"settings-0"' }),
+      ),
+    ),
+  );
+  renderRoute("/settings", "/settings", <SettingsPage />);
+  fireEvent.change(await screen.findByLabelText("ערכת נושא"), { target: { value: "dark" } });
+  fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
+  await screen.findByText("לא ניתן לבצע את הפעולה כעת");
+  expect(screen.queryByText("ההגדרות השתנו מאז שפתחת את הטופס")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("ערכת נושא")).toHaveValue("dark");
 });

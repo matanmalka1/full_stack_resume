@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 
 import { settingsQueryOptions } from "@/api/settings";
+import { applyTheme, cacheTheme } from "./theme";
 import { AppHeader } from "./AppHeader";
 import { type DisplaySettings, DisplaySettingsPreviewProvider } from "./DisplaySettingsPreview";
 import { RouteFocusManager } from "./RouteFocusManager";
@@ -19,6 +20,11 @@ export const AppLayout = () => {
   const [displayPreview, setDisplayPreview] = useState<DisplaySettings | null>(null);
   const displaySettings = displayPreview ?? settings;
 
+  useLayoutEffect(() => {
+    if (settings !== undefined) cacheTheme(settings.ui_theme);
+    if (displaySettings !== undefined) applyTheme(displaySettings.ui_theme);
+  }, [settings, displaySettings]);
+
   return (
     <div
       className="min-h-screen text-cv-text lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]"
@@ -27,9 +33,8 @@ export const AppLayout = () => {
       data-text-size={displaySettings?.ui_text_size ?? "normal"}
     >
       <RouteFocusManager />
-      <AppHeader />
-
       <DisplaySettingsPreviewProvider onPreview={setDisplayPreview}>
+        <AppHeader />
         <main className="page-gutter min-w-0 py-5 sm:py-6 lg:col-start-2 lg:row-start-1">
           <Outlet />
         </main>

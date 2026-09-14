@@ -104,6 +104,7 @@ const settings = (ai: boolean): Settings =>
     provider_configured: ai,
     ui_density: "comfortable",
     ui_text_size: "normal",
+    ui_theme: "system",
     updated_at: null,
   }) as Settings;
 

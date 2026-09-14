@@ -110,6 +110,7 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         "default_reasoning_effort": "medium",
         "ui_density": "comfortable",
         "ui_text_size": "normal",
+        "ui_theme": "system",
         "updated_at": "2026",
     }
     invalid_values = (
@@ -120,6 +121,7 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         {**valid, "default_reasoning_effort": "maximum"},
         {**valid, "ui_density": "dense"},
         {**valid, "ui_text_size": "huge"},
+        {**valid, "ui_theme": "sepia"},
     )
     for values in invalid_values:
         with pytest.raises(IntegrityError):
@@ -137,6 +139,7 @@ def test_app_settings_default_read_is_pure(application_repo) -> None:
         "default_reasoning_effort": "medium",
         "ui_density": "comfortable",
         "ui_text_size": "normal",
+        "ui_theme": "system",
         "updated_at": None,
     }
     with application_repo.read_connection() as connection:
@@ -154,6 +157,7 @@ def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkey
             default_reasoning_effort="medium",
             ui_density="compact",
             ui_text_size="large",
+            ui_theme="system",
         ),
     )
     assert first.edit_version == 1
@@ -170,6 +174,7 @@ def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkey
                 default_reasoning_effort="medium",
                 ui_density="comfortable",
                 ui_text_size="normal",
+                ui_theme="system",
             ),
         )
     assert application_repo.app_settings() == first
@@ -188,6 +193,7 @@ def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkey
             default_reasoning_effort="low",
             ui_density="comfortable",
             ui_text_size="normal",
+            ui_theme="system",
         ),
     )
     assert second.edit_version == 2

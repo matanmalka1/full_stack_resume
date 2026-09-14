@@ -25,6 +25,7 @@ const settings = {
   provider_configured: false,
   ui_density: "comfortable",
   ui_text_size: "normal",
+  ui_theme: "system",
   updated_at: null,
 } satisfies Settings;
 
@@ -41,4 +42,40 @@ test.describe("the application shell", () => {
 
     await expect(page.getByRole("heading", { level: 1, name: "לוח מועמדויות" })).toBeFocused();
   });
+});
+
+test("shares the saved theme between the shell and Settings and follows system changes", async ({ page }) => {
+  let saved: Settings = { ...settings, ui_theme: "system" };
+  await page.addInitScript(() => localStorage.setItem("cv-theme", "dark"));
+  await page.route("**/api/v1/settings", async (route) => {
+    if (route.request().method() === "PATCH")
+      saved = { ...saved, ...route.request().postDataJSON(), edit_version: saved.edit_version + 1 };
+    await route.fulfill({
+      contentType: "application/json",
+      headers: { ETag: `"settings-${saved.edit_version}"` },
+      json: saved,
+    });
+  });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/settings");
+  await expect(page.getByRole("combobox", { name: "ערכת נושא", exact: true })).toHaveValue("system");
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+  const dark = await page.locator("html").evaluate((element) => getComputedStyle(element).backgroundColor);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+  const light = await page.locator("html").evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(light).not.toBe(dark);
+  await page.getByRole("combobox", { name: "ערכת נושא", exact: true }).selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "שמירת הגדרות" }).click();
+  await expect(page.getByText("ההגדרות נשמרו")).toBeVisible();
+  await expect(page.getByRole("button", { name: "ערכת נושא: כהה", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "ערכת נושא: כהה", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "ערכת נושא", exact: true });
+  await dialog.getByRole("combobox", { name: "ערכת נושא", exact: true }).selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await dialog.getByRole("button", { name: "סגירה וחזרה לערך השמור" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "ערכת נושא", exact: true })).toHaveValue("dark");
 });

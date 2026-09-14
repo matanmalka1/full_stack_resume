@@ -32,6 +32,7 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
             default_reasoning_effort=row["default_reasoning_effort"],
             ui_density=row["ui_density"],
             ui_text_size=row["ui_text_size"],
+            ui_theme=row["ui_theme"],
             updated_at=row["updated_at"],
         )
 
@@ -65,6 +66,7 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
                 "default_reasoning_effort": settings.default_reasoning_effort,
                 "ui_density": settings.ui_density,
                 "ui_text_size": settings.ui_text_size,
+                "ui_theme": settings.ui_theme,
                 "updated_at": now,
             }
             if current is None:
@@ -84,5 +86,6 @@ class SqlAlchemySettingsRepository(SqlAlchemyRepositoryBase):
             default_reasoning_effort=settings.default_reasoning_effort,
             ui_density=settings.ui_density,
             ui_text_size=settings.ui_text_size,
+            ui_theme=settings.ui_theme,
             updated_at=now,
         )

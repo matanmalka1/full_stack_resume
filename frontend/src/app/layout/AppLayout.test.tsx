@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { settingsQueryKey } from "@/api/settings";
 import { settings } from "@/test/fixtures";
@@ -11,7 +11,10 @@ import { useDisplaySettingsPreview } from "./DisplaySettingsPreview";
 const PreviewControl = () => {
   const setPreview = useDisplaySettingsPreview();
   return (
-    <button onClick={() => setPreview({ ui_density: "compact", ui_text_size: "large" })} type="button">
+    <button
+      onClick={() => setPreview({ ui_density: "compact", ui_text_size: "large", ui_theme: "system" })}
+      type="button"
+    >
       תצוגה מקדימה
     </button>
   );
@@ -46,4 +49,29 @@ describe("AppLayout display settings", () => {
       client.getQueryData<{ settings: ReturnType<typeof settings> }>(settingsQueryKey)?.settings.ui_text_size,
     ).toBe("normal");
   });
+});
+
+afterEach(() => {
+  localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
+  vi.restoreAllMocks();
+});
+it("applies the server theme even when local storage is blocked", () => {
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new Error("blocked");
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  client.setQueryData(settingsQueryKey, { settings: settings({ ui_theme: "dark" }), etag: '"settings-1"' });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<p>content</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(document.documentElement).toHaveAttribute("data-theme", "dark");
 });

@@ -21,6 +21,7 @@ from .errors import PreconditionFailed
 ExecutionMode = Literal["deterministic", "ai"]
 UiDensity = Literal["comfortable", "compact"]
 UiTextSize = Literal["normal", "large"]
+UiTheme = Literal["system", "light", "dark"]
 
 
 class StoredSettings(BoundaryDTO):
@@ -32,6 +33,7 @@ class StoredSettings(BoundaryDTO):
     default_reasoning_effort: ReasoningEffort = DEFAULT_REASONING_EFFORT
     ui_density: UiDensity = "comfortable"
     ui_text_size: UiTextSize = "normal"
+    ui_theme: UiTheme = "system"
     updated_at: str | None = None
 
 
@@ -46,6 +48,7 @@ class SettingsView(BoundaryDTO):
     available_ai_models: list[AIModelOption]
     ui_density: UiDensity
     ui_text_size: UiTextSize
+    ui_theme: UiTheme
     provider_configured: bool
     updated_at: str | None = None
 
@@ -58,6 +61,7 @@ class UpdateSettings(BoundaryDTO):
     default_reasoning_effort: ReasoningEffort
     ui_density: UiDensity
     ui_text_size: UiTextSize
+    ui_theme: UiTheme
 
 
 class SettingsRepository(Protocol):

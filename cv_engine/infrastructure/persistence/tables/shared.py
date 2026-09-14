@@ -355,6 +355,7 @@ app_settings = Table(
     Column("default_reasoning_effort", Text, nullable=False, server_default=text("'medium'")),
     Column("ui_density", Text, nullable=False),
     Column("ui_text_size", Text, nullable=False),
+    Column("ui_theme", Text, nullable=False, server_default=text("'system'")),
     Column("updated_at", Text, nullable=False),
     CheckConstraint("singleton_id = 1", name="singleton"),
     CheckConstraint("edit_version > 0", name="edit_version_positive"),
@@ -372,4 +373,5 @@ app_settings = Table(
     ),
     CheckConstraint("ui_density IN ('comfortable', 'compact')", name="ui_density"),
     CheckConstraint("ui_text_size IN ('normal', 'large')", name="ui_text_size"),
+    CheckConstraint("ui_theme IN ('system', 'light', 'dark')", name="ui_theme"),
 )

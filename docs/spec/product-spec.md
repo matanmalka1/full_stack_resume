@@ -660,7 +660,10 @@ fallback only and is never selected silently.
 
 Safe UI settings are limited to automatic generation when review is not required,
 `ai_enabled`, default execution mode (`ai` or `deterministic`), an allowlisted default
-AI model and reasoning effort, and basic UI preferences. Per-task overrides, timezone,
+AI model and reasoning effort, and basic UI preferences: density, text size, and
+shared theme (`system`, `light`, `dark`; default `system`). The server is authoritative
+for theme. A local cache is only for startup display; an old local preference can be
+imported only by explicit user selection under the current Settings ETag. Per-task overrides, timezone,
 arbitrary model IDs, and secrets remain unavailable to the client.
 
 ## 16. Storage, provenance, and retention

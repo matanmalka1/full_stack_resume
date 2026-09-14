@@ -3456,6 +3456,11 @@ export interface components {
              * @enum {string}
              */
             ui_text_size: "normal" | "large";
+            /**
+             * Ui Theme
+             * @enum {string}
+             */
+            ui_theme: "system" | "light" | "dark";
             /** Updated At */
             updated_at?: string | null;
         };
@@ -3586,6 +3591,11 @@ export interface components {
              * @enum {string}
              */
             ui_text_size: "normal" | "large";
+            /**
+             * Ui Theme
+             * @enum {string}
+             */
+            ui_theme: "system" | "light" | "dark";
         };
         /**
          * UpdateWorkingDraftRequest

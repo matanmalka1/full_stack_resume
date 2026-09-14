@@ -10,12 +10,14 @@ export interface SettingsRead {
 
 export const settingsQueryKey = ["settings"] as const;
 
+export const readSettings = async (signal?: AbortSignal): Promise<SettingsRead> => {
+  const response = await apiRequest<Settings>("/api/v1/settings", { signal });
+  return { settings: response.data, etag: response.etag };
+};
+
 export const settingsQueryOptions = queryOptions({
   queryKey: settingsQueryKey,
-  queryFn: async ({ signal }): Promise<SettingsRead> => {
-    const response = await apiRequest<Settings>("/api/v1/settings", { signal });
-    return { settings: response.data, etag: response.etag };
-  },
+  queryFn: ({ signal }) => readSettings(signal),
 });
 
 export const updateSettings = async (body: UpdateSettingsRequest, etag: string): Promise<SettingsRead> => {
