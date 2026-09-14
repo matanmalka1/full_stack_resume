@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ..contracts.analysis import JobAnalysis, JobClassificationProposal, OverrideKey
+from ..contracts.analysis import JobAnalysis, JobClassificationProposal
 from .gaps import fit_level_from_score, merge_gaps
 
 if TYPE_CHECKING:
@@ -137,7 +137,7 @@ def resolving_actions(reason: str) -> tuple[str, ...]:
     return ("apply_analysis_decisions",) if approval_reason(reason).overrides else ()
 
 
-def unresolved_reasons(reasons: Sequence[str], overrides: Mapping[OverrideKey, str]) -> list[str]:
+def unresolved_reasons(reasons: Sequence[str], overrides: Mapping[str, str]) -> list[str]:
     return [
         reason for reason in reasons if not (approval_reason(reason).overrides & overrides.keys())
     ]

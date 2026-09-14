@@ -15,7 +15,7 @@ from __future__ import annotations
 from ...contracts.analysis import RequirementAttestation, RequirementInterpretation
 from .attestation import InvalidRequirementAttestation, verify_attestation
 from .concepts import RequirementConceptStore
-from .segmentation import _segments
+from .segmentation import _Span, _segments
 
 
 class InvalidRequirementInterpretation(ValueError):
@@ -48,12 +48,28 @@ def verify_interpretation(
     elsewhere in the posting does not. Without this, a provider could quote a
     real mandatory marker from an unrelated sentence to fraudulently justify
     `mandatory` on a requirement whose own text never says so.
+
+    The source-structure check below reads the requirement's *home* statement:
+    the one it overlaps most. It used to demand containment, and a quote
+    spanning two bullets matched no statement, fell out of the loop, and was
+    never checked at all - so the gate was silently skipped by exactly the
+    quote that most needed it, while `_same_statement` answered the same
+    "which statement is this in" question by overlap two functions away (A7).
+    Both now rest on one overlap primitive so they cannot drift apart again.
+
+    Overlap rather than containment, and one home statement rather than every
+    statement touched, are both deliberate. A crossing quote is not proof of
+    bad faith: the prompt asks for the requirement verbatim and never promised
+    that a requirement lies inside one statement, so refusing it outright
+    would be a new rejection the provider was never told about. Testing it
+    against *every* statement it touches would be stricter still - a quote
+    reaching into a neighbouring "preferred" bullet would block a `mandatory`
+    reading the requirement's own bullet supports.
     """
     if requirement_span is not None:
         start, end = requirement_span
-        for statement in _segments(source_text, concepts):
-            if not (statement.start <= start < end <= statement.end):
-                continue
+        statement = _home_statement(requirement_span, source_text, concepts)
+        if statement is not None:
             quoted = source_text[start:end].casefold()
             preferred = statement.section == "preferred" or any(
                 marker in quoted for marker in concepts.preferred_markers
@@ -172,6 +188,43 @@ def _verify_context_quote_occurs(
         )
 
 
+def _overlap(span: tuple[int, int], statement_start: int, statement_end: int) -> int:
+    """How many characters a span and a statement share; 0 or less means neither.
+
+    The single definition of "this span is in that statement", used by both
+    questions this module asks - which statement a requirement belongs to, and
+    whether a context quote belongs to the same one. They were two different
+    definitions (containment here, overlap there) for one question, which is
+    what let a crossing quote skip the source-structure check entirely (A7).
+    """
+    return min(span[1], statement_end) - max(span[0], statement_start)
+
+
+def _home_statement(
+    span: tuple[int, int], source_text: str, concepts: RequirementConceptStore
+) -> _Span | None:
+    """The statement a span most belongs to, or `None` if it touches none.
+
+    Most-overlap rather than first-overlap: a quote that runs a few characters
+    into the next bullet belongs to the bullet it is mostly in, and reading it
+    against the neighbour it barely touches would judge the requirement by
+    wording that is not its own. Ties fall to the earlier statement, which is
+    the order `_segments` yields and the order the posting reads in.
+
+    `None` means no statement covers that region of the posting at all. That is
+    the segmenter not modelling the text (`A1`), not a claim about the
+    proposal, so the caller skips the check rather than rejecting on it.
+    """
+    overlapping = [
+        statement
+        for statement in _segments(source_text, concepts)
+        if _overlap(span, statement.start, statement.end) > 0
+    ]
+    if not overlapping:
+        return None
+    return max(overlapping, key=lambda statement: _overlap(span, statement.start, statement.end))
+
+
 def _same_statement(
     quote_span: tuple[int, int],
     requirement_span: tuple[int, int],
@@ -184,12 +237,16 @@ def _same_statement(
     rather than a character-distance heuristic: "nearby" is not well-defined
     across a posting's varied formatting, but "the same bullet, heading, or
     sentence" is exactly what the segmenter already decides for every other
-    purpose in this package. A quote is in a statement when it overlaps that
-    statement's collapsed-text offsets.
+    purpose in this package.
+
+    Any shared statement counts, not the requirement's home statement alone: a
+    context quote is offered as context, so a heading above the requirement's
+    own bullet is exactly what it should be allowed to be, and narrowing this
+    to the home statement would reject the legitimate case the parameter
+    exists for.
     """
-    for span in _segments(source_text, concepts):
-        overlaps_quote = quote_span[0] < span.end and span.start < quote_span[1]
-        overlaps_requirement = requirement_span[0] < span.end and span.start < requirement_span[1]
-        if overlaps_quote and overlaps_requirement:
-            return True
-    return False
+    return any(
+        _overlap(quote_span, statement.start, statement.end) > 0
+        and _overlap(requirement_span, statement.start, statement.end) > 0
+        for statement in _segments(source_text, concepts)
+    )
