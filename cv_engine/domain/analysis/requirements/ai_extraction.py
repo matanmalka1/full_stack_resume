@@ -7,9 +7,10 @@ and its `interpretation` has passed policy. What is decided here is coverage
 - whether canonical Knowledge verifies it - and that decision rests on one
 narrow, disclosed mechanism (stage-1 plan §3.5a): a proposed requirement maps
 to a concept in `config/requirements.json` only when that concept's own
-`patterns` match the *verified quote itself*, never on the provider's
-`topic_tags`, which are consulted only as a boundary-association hint
-elsewhere (`coverage.py`).
+`patterns` match the *verified quote itself*, never on anything the provider
+labels it. The proposal carries no tag field at all: it used to, described
+here as a hint consulted in `coverage.py`, and `coverage.py` never read it
+either (A12).
 
 A pattern match proves only that a concept's wording was **mentioned**. It is
 never evidence of coverage by itself: coverage is decided the same way the

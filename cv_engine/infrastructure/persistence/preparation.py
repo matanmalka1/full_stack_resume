@@ -276,11 +276,15 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
 
     def job_snapshots(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(job_snapshots)
-                .where(job_snapshots.c.application_id == application_id)
-                .order_by(job_snapshots.c.version_number)
-            ).mappings().all()
+            rows = (
+                connection.execute(
+                    select(job_snapshots)
+                    .where(job_snapshots.c.application_id == application_id)
+                    .order_by(job_snapshots.c.version_number)
+                )
+                .mappings()
+                .all()
+            )
         return [_snapshot_record(row) for row in rows]
 
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]:

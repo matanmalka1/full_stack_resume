@@ -15,7 +15,9 @@ def upgrade() -> None:
         "app_settings",
         sa.Column("ui_theme", sa.Text(), nullable=False, server_default=sa.text("'system'")),
     )
-    op.create_check_constraint("ui_theme", "app_settings", "ui_theme IN ('system', 'light', 'dark')")
+    op.create_check_constraint(
+        "ui_theme", "app_settings", "ui_theme IN ('system', 'light', 'dark')"
+    )
 
 
 def downgrade() -> None:

@@ -20,6 +20,7 @@ import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
 from foreground import foreground_executor
 from helpers import ACCOUNT_MANAGER_JOB, trivial_requirement_extraction
+from pydantic import ValidationError
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
@@ -37,6 +38,10 @@ from cv_engine.application.operations import OperationFailureCode
 from cv_engine.application.services.proposals import allowed_fact_pool
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.classification import classify_job
+from cv_engine.domain.analysis.requirements.interpretation import (
+    InvalidRequirementInterpretation,
+    verify_interpretation,
+)
 from cv_engine.domain.contracts.analysis import (
     RequirementAttestation,
     RequirementInterpretation,
@@ -1224,6 +1229,121 @@ def test_a_context_quote_from_elsewhere_cannot_justify_mandatory(ai_services, fa
     assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
     with pytest.raises(UnknownRecord):
         ai_services.repository.latest_analysis(completed.application_id)
+
+
+#: A posting whose preferred block comes before its Requirements block, so a span
+#: can cross from one section into the other without the crossing itself dragging a
+#: marker word along: "Requirements:" is not a `mandatory_marker`, while every
+#: heading that opens a preferred block necessarily contains a `preferred_marker`.
+#: That is what makes the two sections separable here and only here.
+TWO_SECTION_JOB = (
+    "Account Manager.\n"
+    "Nice to have:\n"
+    "- Salesforce administration certification.\n"
+    "Requirements:\n"
+    "- 5+ years of enterprise sales experience.\n"
+)
+#: Both cross the boundary between the two bullets. Neither is contained in a single
+#: statement, which is what used to make the source-structure check skip them.
+MOSTLY_PREFERRED = (40, 95)
+MOSTLY_REQUIRED = (70, 125)
+
+
+def _reading(**overrides) -> RequirementInterpretation:
+    return RequirementInterpretation(
+        **{
+            "source_role": "requirement",
+            "obligation": "mandatory",
+            "composition": "single",
+            "negation": False,
+            **overrides,
+        }
+    )
+
+
+def test_a_quote_crossing_two_statements_is_checked_against_the_one_it_is_mostly_in(
+    requirement_concepts,
+) -> None:
+    """A7: the gate used to skip exactly the quote that most needed it.
+
+    The source-structure check demanded that the requirement's span be
+    *contained* in one statement, and a span reaching from one bullet into the
+    next is contained in none - so the loop ended without checking anything and
+    every obligation the provider declared passed unexamined. It is now read
+    against its home statement: the one it overlaps most.
+    """
+    # Mostly inside the preferred bullet: calling it mandatory strengthens a
+    # requirement the posting marked optional.
+    with pytest.raises(InvalidRequirementInterpretation, match="strengthens"):
+        verify_interpretation(
+            _reading(),
+            source_text=TWO_SECTION_JOB,
+            concepts=requirement_concepts,
+            requirement_span=MOSTLY_PREFERRED,
+        )
+    # Mostly inside the Requirements bullet: calling it a responsibility
+    # contradicts a requirement the posting stated explicitly.
+    with pytest.raises(InvalidRequirementInterpretation, match="contradicts"):
+        verify_interpretation(
+            _reading(source_role="responsibility", obligation="preferred"),
+            source_text=TWO_SECTION_JOB,
+            concepts=requirement_concepts,
+            requirement_span=MOSTLY_REQUIRED,
+        )
+
+
+def test_the_home_statement_is_the_one_the_quote_is_mostly_in_not_every_one_it_touches(
+    requirement_concepts,
+) -> None:
+    """The gate did not become stricter than the posting supports.
+
+    Both spans touch the preferred bullet. Judging a requirement against every
+    statement it overlaps would refuse `mandatory` on both, because one of them
+    is optional - and would reject a reading the requirement's own bullet
+    states outright. A few characters of spill-over do not move a requirement
+    into the neighbouring section.
+    """
+    verify_interpretation(
+        _reading(),
+        source_text=TWO_SECTION_JOB,
+        concepts=requirement_concepts,
+        requirement_span=MOSTLY_REQUIRED,
+    )
+    # And a span touching no statement at all is the segmenter not modelling
+    # the text (A1), not a claim about the proposal: it is left unchecked here
+    # rather than rejected on evidence this gate does not have.
+    verify_interpretation(
+        _reading(),
+        source_text="   \n",
+        concepts=requirement_concepts,
+        requirement_span=(0, 3),
+    )
+
+
+def test_the_extraction_contract_carries_no_tag_field_for_a_gate_that_never_existed(
+    requirement_concepts,
+) -> None:
+    """A12: the promise is gone, and so is the field it promised a gate over.
+
+    Two docstrings stated that `topic_tags` was consulted - one of them naming
+    `coverage.py` as the consumer - and that "a foreign tag disqualifies the
+    proposal". Nothing read the field anywhere, while the strict output schema
+    still obliged every provider to fill it on every requirement. The field is
+    refused now rather than quietly accepted, so it cannot come back as data
+    before it comes back as a decision: nothing declares a tag vocabulary for
+    "foreign" to be measured against.
+    """
+    assert "topic_tags" not in ProposedRequirement.model_fields
+    quote = "5+ years of enterprise sales experience"
+    start = TWO_SECTION_JOB.index(quote)
+    with pytest.raises(ValidationError):
+        ProposedRequirement(
+            attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+            interpretation=_reading(),
+            kind="presence",
+            label="enterprise sales experience",
+            topic_tags=["quantum-photonics"],
+        )
 
 
 def test_an_any_of_member_with_no_attestation_cannot_be_silently_matched(

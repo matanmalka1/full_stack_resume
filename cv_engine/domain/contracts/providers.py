@@ -35,9 +35,23 @@ class ProposedRequirement(StrictModel):
 
     `attestation` and `interpretation` are unverified provider claims until
     the source and interpretation gates run over them; nothing here is trusted
-    before that. `topic_tags` is a hint to fact-boundary association, not a
-    grant: a foreign tag disqualifies the proposal rather than being trusted
-    as scoping (stage-1 plan §3.6).
+    before that.
+
+    `label` is the provider's own name for the requirement and is deliberately
+    not read: the requirement's text comes from the verified quote, for the
+    same reason `interpretation_identity_key` is preferred over a
+    `member_id` - a provider-chosen label has no verification behind it. It
+    stays in the contract because it is what makes a proposal legible in the
+    preserved response, not because anything downstream trusts it.
+
+    There is deliberately no topic/tag field. One existed, documented as a
+    boundary-association hint under which "a foreign tag disqualifies the
+    proposal", and no line of code ever read it - so the contract advertised a
+    gate that did not exist while `_strict_schema` still obliged every
+    provider to fill the field on every requirement. Concept recognition is
+    decided by the verified quote against `config/requirements.json`
+    (`ai_extraction`), the only mechanism disclosed to the provider, and no tag
+    vocabulary is declared anywhere for "foreign" to be measured against (A12).
     """
 
     attestation: RequirementAttestation
@@ -45,7 +59,6 @@ class ProposedRequirement(StrictModel):
     kind: Literal["threshold", "compositional", "presence"]
     label: str
     demanded: str | None = None
-    topic_tags: list[str] = []
 
 
 class RequirementExtractionProposal(StrictModel):

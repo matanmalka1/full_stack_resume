@@ -7,7 +7,8 @@ Account Executive, application `90787e94-1401-44ba-b8e3-ef4e8aecccde`) where
 `confidence=0.429`. Every finding below was re-verified directly against the code in
 this session (file:line cited), independent of the external review's own citations.
 
-**התכנון נוחת בגלים.** נחתו: Stage 1+2, ‏3 (חלקית), ‏4, ‏5, ‏6, ו-C2 מ-Stage 8.
+**התכנון נוחת בגלים.** נחתו: Stage 1+2, ‏3 (חלקית), ‏4, ‏5, ‏6, ‏7 (חלקית),
+ו-C2 מ-Stage 8.
 המסמך התכווץ פעם אחת: הפירוט של *איך* כל תיקון נחת עבר לדוקסטרינגים שליד הקוד,
 ורפרודוקציות של ממצאים סגורים עברו לטסטים שמחזיקים אותן. מה שנשאר כאן הוא מה
 שפתוח, מה שחוסם אותו, וההנמקה של כל הכרעה — כדי שלא תיפתח מחדש.
@@ -16,29 +17,31 @@ this session (file:line cited), independent of the external review's own citatio
 
 ‏23 ממצאים מאומתים (‏D1-D10, ‏A1-A12, ‏C1-C2; ‏A4 ו-D10 אינם באגים עצמאיים),
 סדר תיקון ב-8 שלבים. ‏`A12` נוסף ב-Stage 3, מתוך היישום ולא מהסקירה המקורית.
-**סגורים:** ‏D1, ‏D2, ‏D4, ‏D5, ‏D6, ‏D8, ‏D9, ‏D10, ‏A3, ‏A4, ‏A11, ‏C1, ‏C2,
-והחלטות ‏#1-#15.
+**סגורים:** ‏D1, ‏D2, ‏D4, ‏D5, ‏D6, ‏D8, ‏D9, ‏D10, ‏A3, ‏A4, ‏A7, ‏A11, ‏A12, ‏C1,
+‏C2, והחלטות ‏#1-#17.
 
 **מה פתוח, ומה חוסם כל אחד:**
 
 | פתוח | חסום על |
 | --- | --- |
-| **Stage 7** (`A5`-`A10`, `A12`) | **שוחרר, והשלב הפתוח היחיד שנשאר.** החלטה #4 נפתרה — פיצול לשלושה צירים. נשארו שלוש הכרעות יישום: **#16** (A12 לממש-או-למחוק), **#17** (A7 לדחות-או-להכיל), **#18** (A10 — היחידה שדורשת מדידה על מודעות אמת) |
+| **Stage 7** (`A5`, `A6`, `A8`, `A9`, `A10`) | **חלקית.** ‏`A7` ו-`A12` נחתו (#16, #17). נשארו: ציר 1 — `A5`, `A6`; ציר 2 — `A8`, `A10` (**#18** פתוחה, דורשת מדידה); ציר 3 — `A9`, שנשפט עם סמנטיקת coverage |
 | **A2** | **הוכרע עקרונית** (#13-#15). נשאר תלוי ב-**#18**, בהפרדת שני תפקידי `mapped_spans`, ובחסם המבני (פרמטר/שדה חדש) |
 | **D7** | ‏A2 — נסגר יחד איתו. #13 קבעה שאין אנלוג בנתיב ה-AI, ולכן הגורם ניתן להסרה |
 | **D3** | כיול הסף `0.72` — אף החלטה שנפתרה לא נגעה בו |
 | **A1** | סיכון מבני קבוע, לא נסגר ע"י שום שלב |
 
-**אחרי Stage 5 נשאר Stage 7 בלבד.** הוא **משוחרר עקרונית** — החלטה #4 פיצלה אותו
-לשלושה צירים, ושניים מהם אינם שואלים שאלת מוצר כלל — אבל תלוי בשלוש הכרעות יישום
-פתוחות: **#16** (`A12` לממש-או-למחוק), **#17** (`A7` לדחות-או-להכיל), ו-**#18**
-(`A10` — היחידה מהשלוש שעדיין דורשת מדידה על מודעות אמת). **‏`A2` ו-`D7` מוכרעים
+**‏Stage 7 נפתח ונחת חלקית.** ‏#16 ו-#17 הוכרעו ויושמו — `A12` ו-`A7` סגורים.
+מה שנשאר בשלב: **ציר 1** — `A5` (‏`demanded`/`kind` של הספק נכנסים ל-
+`threshold_coverage` בלי אימות מול הציטוט) ו-`A6` (ציטוט מ-`section == "other"`
+מותיר את שני התנאים `False`); **ציר 2** — `A8` (הסתירה מול `system-v3.md:27-28`,
+שתיקונה הזול הוא בפרומפט) ו-`A10`, שעליו **#18** פתוחה ודורשת מדידה על מודעות
+אמת; **ציר 3** — `A9`, סמנטיקת coverage של `any-of`. **‏`A2` ו-`D7` מוכרעים
 עקרונית** (#13-#15) וממתינים ל-**#18** ולשתי חתיכות העבודה המבנית שמתוארות תחת
 #15: הפרדת שני תפקידי `mapped_spans`, והפרמטר/שדה החדש שהחסם המבני מחייב.
 ‏`D3` (כיול `0.72`) ו-`A1` (הסיכון המבני) אינם משויכים לשום שלב ונשארים פתוחים
 בפני עצמם.
 
-### מה נחת, ולמה — Stage 1+2, 3, 4, 5, 6
+### מה נחת, ולמה — Stage 1+2, 3, 4, 5, 6, 7 (חלקית)
 
 **הפירוט המלא של כל תיקון נמצא בדוקסטרינג של הפונקציה שהוא נגע בה**, שם הוא
 נשמר ליד הקוד ולא יכול להיסחף ממנו. כאן רק ההכרעות עצמן, כדי שלא ייפתחו מחדש.
@@ -58,6 +61,8 @@ this session (file:line cited), independent of the external review's own citatio
 | 6 | **#10** | נשקל מחדש אחרי D9, והתשובה **לא זזה**: `mandatory=False`. הנימוק הישן ("`section` שגוי") פג; החדש לא: הישות קיימת כי שום דבר לא קרא מה השורה מבקשת, ו-`mandatory=True` היה טוען חובה על דרישה שלא זוהתה |
 | 5 | **D8** | הקלט ל-`classification_confidence` הוא הפרופיל **שנבחר** (`top = term_scores[profile]`, ‏`second` = הטוב שבאחרים), לא שני המובילים בווקבולרי. **הנוסחה והיחידה לא נגעו** — ההסתייגות המתועדת (הסקאלה כוילה למספרי-מונחים, coverage מרווה אותה) נשמרת במלואה; מה שהשתנה הוא הנושא. משמעות המספר: "כמה הווקבולרי תומך בהחלטה שהתקבלה", לא "כמה הווקבולרי הפריד" |
 | 5 | **C1** | `low-confidence` מפוצל לפי **מי חוסם**: ‏`low-confidence-extraction` (`{analysis}`/`ANALYSIS_INCOMPLETE`) ו-`low-confidence-classification` (`{track,profile}`/`CLASSIFICATION_AMBIGUITY`). הגבול נגזר — `extraction_score < CONFIDENCE_APPROVAL_THRESHOLD / MAX_CLASSIFICATION_CONFIDENCE` — ולא כויל כקבוע חדש. הקוד הערום נשאר רשום ונפלט, לרשומות היסטוריות ול-`merge_classification` |
+| 7 | **A12** | ההבטחה **והשדה** נמחקו. היו **שתי** הצהרות שקריות (השנייה נקבה ב-`coverage.py` כצרכן, והוא לא קורא אותו), `_strict_schema` חייב כל ספק לפלוט את השדה, הפרומפט מעולם לא ביקש אותו, ואין ווקבולר תגיות שמולו "זר" מוגדר. ‏`output_schema_version` עלה `"1.0.0"→"2.0.0"` |
+| 7 | **A7** | הגדרה אחת (`_overlap`) לשתי השאלות; הבדיקה רצה מול **סטייטמנט-הבית** (חפיפה מרבית) במקום לדרוש הכלה וליפול מהלולאה בשקט. לא דחייה (כלל חדש שהפרומפט לא הודיע עליו) ולא כל-סטייטמנט-חופף (הידוק, בניגוד לכיוון של פריט 15) |
 | 8 | **C2** | הדה-דופ המת נמחק. `gap.requirement` הוא תווית ש-`derive_gaps` כותבת, `requirement.text` הוא ספן מהמודעה — שוויון ביניהם צירוף מקרים, ומודעה שניסחה בולט כתווית הייתה **מאבדת** את ה-gap. ציר אמיתי דורש קונספט משותף, ולכללים אין |
 
 **‏`fit=HIGH` של PAYME מעולם לא הורווח** — הוא בא מ-`requirements == []` ומ-
@@ -121,6 +126,32 @@ this session (file:line cited), independent of the external review's own citatio
 (גבול A2 — `confidence.py` לא נגע כלל). התקרה `0.98` עלתה לקבוע בעל-שם
 `MAX_CLASSIFICATION_CONFIDENCE` כי היא כעת חלק מהגדרת הגבול של C1, לא רק פרט
 בנוסחה.
+
+### מה נחת ב-Stage 7, ומה עוד לא
+
+**‏`A12` — ההבטחה והשדה ירדו יחד.** ארבע עובדות הכריעו, וכולן נמצאו בקוד ולא
+היו במסמך: ההצהרה השנייה נקבה ב-`coverage.py` כצרכן והוא לא קורא את השדה (שתי
+הבטחות שקריות, לא אחת); `_strict_schema` הפך את השדה ל**חובה** בסכמה שנשלחה,
+כלומר כל ספק חויב לפלוט תגיות מתות; הפרומפט מעולם לא ביקש תגיות; ואין ווקבולר
+תגיות מוצהר שמולו "זר" מוגדר, כך שמימוש השער היה מתחיל בהמצאת ווקבולר. **מה
+שנלקח במודע:** ‏`output_schema_version` עלה `"1.0.0"→"2.0.0"`, ו-`extra="forbid"`
+אומר שספק שימשיך לשלוח `topic_tags` ייכשל ב-`INVALID_OUTPUT`. זה הכיוון הנכון:
+השדה לא יחזור כנתון לפני שיחזור כהחלטה.
+
+**‏`A7` — הבדיקה רצה עכשיו, במקום לדלג דווקא על המקרה שדרש אותה.** ‏`_overlap`
+הוא הפרימיטיב היחיד; `_home_statement` בוחר לפי חפיפה מרבית; `_same_statement`
+נשאר "כל סטייטמנט משותף" (‏context quote אמור להיות מותר להיות הכותרת שמעל
+הבולט) אבל נשען על אותו פרימיטיב, ולכן השתיים לא יכולות להיסחף שוב.
+
+**‏`label` תועד, ופריט מעקב 7 נסגר.** הוא נשאר בחוזה ואינו נקרא — מכוון, מאותו
+נימוק שמעדיף `interpretation_identity_key` על `member_id` — וזה כתוב עכשיו
+בדוקסטרינג במקום להיות ידע שבעל-פה.
+
+**מה שלא נגעתי בו ב-Stage 7, במפורש:** ציר 1 עדיין מחזיק את `A5` (‏`demanded`/
+`kind` נכנסים ל-`threshold_coverage` בלי אימות מול הציטוט) ואת `A6` (ציטוט
+מ-`section == "other"` משאיר את שני התנאים `False`); ציר 2 מחזיק את `A8`
+(שתיקונו הזול הוא בפרומפט) ואת `A10`, שעליו **#18** פתוחה ודורשת מדידה; וציר 3
+מחזיק את `A9`. אף אחד מהם אינו חסום על #16/#17 — הם פשוט לא היו ב-delivery הזה.
 
 ### מה זז בפועל ב-Stage 6 — אפס, וזה היה הממצא
 
@@ -247,7 +278,10 @@ concepts, *, understood_elsewhere)`. **לנתיב ה-AI אין `list[ExtractedRe
 
 6. **`ProposedRequirement.topic_tags` — קודם לממצא מלא, `A12`.** לא פריט מעקב:
    התיעוד מבטיח שער שלא קיים בקוד. ר' שורתו בטבלת הממצאים ו-Stage 7.
-7. **`ProposedRequirement.label` גם הוא אינו נקרא** ב-`verify_and_cover_
+7. **~~`ProposedRequirement.label` גם הוא אינו נקרא~~ — נסגר ב-Stage 7**
+   (החלטה #16 נגעה באותו דוקסטרינג, וזה בדיוק מה שהפריט ביקש): הוא נשאר בחוזה,
+   אינו נקרא, וזה כתוב שם עכשיו במפורש. הטקסט המקורי:
+   **`ProposedRequirement.label` אינו נקרא** ב-`verify_and_cover_
    extraction`/`cover_ai_requirement` (הטקסט מגיע מה-quote המאומת). זה נראה
    מכוון ותואם את הנימוק של `interpretation_identity_key` מול `member_id`
    ("a provider-chosen label with no verification behind it"), ולכן נרשם
@@ -414,7 +448,7 @@ counts it is handed, and #6 derived its split point from
 touch the same formula and the same approval gate. See "מה זז בפועל ב-Stage 5" at the
 top for what moved and which tests were restated.
 
-### Stage 7 — AI interpretation/attestation gate integrity — **unblocked, decision #4 resolved**
+### Stage 7 — AI interpretation/attestation gate integrity — **partially landed**
 
 These are about whether the *gate* can be satisfied by a claim the source text doesn't
 support, not about scoring arithmetic. They were grouped last on the premise that they
@@ -430,8 +464,11 @@ and two of the three ask no product question at all:
 - **Axis 3 — not a gate at all: `A9`.** `any-of` coverage semantics; judged with `D8`
   and `C1`.
 
-Residual: decisions **#16** (`A12` implement-or-delete), **#17** (`A7` reject-or-
-contain), **#18** (`A10`, the one that still wants measurement on real postings).
+**Landed:** `A12` and `A7`, under decisions #16 and #17 - see "מה נחת ב-Stage 7"
+at the top. **Residual:** `A5` and `A6` on axis 1, `A8` and `A10` on axis 2 (with
+decision **#18** still open and still wanting measurement on real postings), and
+`A9` on axis 3. None of them was blocked by #16 or #17; they were simply not in
+that delivery.
 
 ### Stage 8 — Cleanup — **C2 landed, D7 still blocked**
 
@@ -469,12 +506,12 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **A4** | **מוגדר-מחדש — לא באג עצמאי.** הממצא המקורי (וההגדרה שלו כ"שורש") היה שגוי, לא הקוד | [ai_extraction.py:567-593](../cv_engine/domain/analysis/requirements/ai_extraction.py#L567-L593) | `return not any(...)` — מיפוי מוצלח של שורה אחת מתוך N מונע `extraction_is_failed`, גם אם N=20. **זו ההתנהגות הנכונה לפי החלטה #2** (בוליאני לכשל קטסטרופלי בלבד, לא מדד שלמות); ההבדל בין 1/20 ל-20/20 אמור להיות מיוצג ב-`fit_score` (דרך `undetermined` requirements, החלטה #1), לא בבוליאני הזה | **תלוי Stage 1+2 בשני הנתיבים** (ר' התנאי המפורש ב-Stage 2 למעלה) — עד ש-Stage 2 נוחת בנתיב ה-AI במפורש (לא רק הדטרמיניסטי), ה-1/20 עדיין בלתי-מיוצג שם לגמרי, וזה עדיין false-green בפועל — רק שהוא כבר לא "A4 צריך תיקון", אלא "Stage 2 טרם נחת בנתיב ה-AI" | **CONFIRMED שהקוד עושה בדיוק את זה** (`any()` ללא סף יחס) — **אך התיקון המוצע בגרסה הקודמת של המסמך (סף יחס) שגוי**; אין צורך בו, ר' החלטה #2 RESOLVED וההסבר ב-Stage 1. |
 | **A5** | גבוה — demanded/kind מהספק לא מאומתים מול הציטוט | [ai_extraction.py:265-280](../cv_engine/domain/analysis/requirements/ai_extraction.py#L265-L280), [interpretation.py](../cv_engine/domain/analysis/requirements/interpretation.py) (כל הקובץ) | `cover_ai_requirement` מזין `demanded=demanded` (מהספק) ישירות ל-`threshold_coverage`; `verify_interpretation` בודק source_role/obligation/composition/members/negation — **לא** `demanded`, לא `kind` | Stage 7 | **CONFIRMED**: קראתי את כל `interpretation.py` — אין שום אזכור של `demanded` או `kind` בקובץ. ציטוט מאומת בת-byte של "10+ years" עם `demanded="2"` שנשלח ע"י הספק יעבור ללא בדיקה. |
 | **A6** | גבוה — שער חד-כיווני: אפשר לרומם ל-requirement, אי אפשר להכחיש | [interpretation.py:52-71](../cv_engine/domain/analysis/requirements/interpretation.py#L52-L71) | הלולאה (שורה 54-56) בודקת רק "אם ה-section אומר mandatory/preferred, אסור לסתור" — לציטוט מ-section `"other"` (בלוק הטבות) שני התנאים (`preferred`, `mandatory`) הם `False`, אז שום exception לא נזרק, ללא קשר למה שהספק הצהיר | Stage 7 | **CONFIRMED** ישירות מהלוגיקה — עקבתי את שני ה-if-ים; אף אחד לא תלוי ב-`interpretation.source_role`/`obligation` כשה-section הוא `"other"`. הבדיקה בשורות 87-96 (`obligation=="mandatory" and source_role!="requirement"`) גם לא תופסת את המקרה כי היא דורשת אי-התאמה בין obligation ל-source_role, לא בין source_role לתוכן בפועל. |
-| **A7** | בינוני — ציטוט שחוצה גבול-statement מדלג על הבדיקה בשקט | [interpretation.py:52-56,175-195](../cv_engine/domain/analysis/requirements/interpretation.py#L52-L195) | `for statement in _segments(...): if not (contained): continue` — אם אף statement לא מכיל את הספן במלואו, הלולאה מסתיימת בלי לבדוק דבר (לא raise, לא flag) | Stage 7 | **CONFIRMED** — קראתי את הלולאה; אין `else`/fallback אחרי שהלולאה מסתיימת ללא match. אימתתי גם את האי-עקביות מול `_same_statement` (שורה 190-195) שמשתמשת בחפיפה (overlap) ולא בהכלה (containment) — שתי פונקציות שונות לאותה שאלה. |
+| **A7** | בינוני — ציטוט שחוצה גבול-statement מדלג על הבדיקה בשקט | [interpretation.py:52-56,175-195](../cv_engine/domain/analysis/requirements/interpretation.py#L52-L195) | `for statement in _segments(...): if not (contained): continue` — אם אף statement לא מכיל את הספן במלואו, הלולאה מסתיימת בלי לבדוק דבר (לא raise, לא flag) | Stage 7 — **סגור** | **CONFIRMED** — קראתי את הלולאה; אין `else`/fallback אחרי שהלולאה מסתיימת ללא match. אימתתי גם את האי-עקביות מול `_same_statement` (שורה 190-195) שמשתמשת בחפיפה (overlap) ולא בהכלה (containment) — שתי פונקציות שונות לאותה שאלה.  ‏**סגור ב-Stage 7** (החלטה #17) — `_overlap` אחד, `_home_statement` לפי חפיפה מרבית. |
 | **A8** | בינוני — דרישת ייחודיות ל-context_quote מתנגשת עם הנחיית הפרומפט עצמו | [interpretation.py:130-156](../cv_engine/domain/analysis/requirements/interpretation.py#L130-L156), [system-v3.md:27-28](../ai/prompts/system-v3.md#L27-L28) | הפרומפט מנחה: "unless you quote an explicit mandatory marker ('must','required','חובה') in context_quote"; ה-gate דוחה `context_quote` שמופיע יותר מפעם אחת בטקסט המלא — מילים כמו "must"/"required" חוזרות כמעט תמיד במודעת עבודה אמיתית | Stage 7 | **CONFIRMED**: קראתי את `system-v3.md` ואת `_verify_context_quote_occurs` (interpretation.py:148-156, `source_text.find(quote, first+1) != -1` → raise). זו סתירה מובנית בין ההנחיה לספק לבין המדיניות שאוכפת אותה, לא תלוית-תרחיש ספציפי. |
 | **A9** | בינוני — any-of: חבר חלש-משמעות מנצח את הדרישה כולה | [ai_extraction.py:209-237](../cv_engine/domain/analysis/requirements/ai_extraction.py#L209-L237) | `"matched" if "matched" in member_coverages"` — אין בדיקה שהחבר שהתאים הוא זה שנושא את עיקר הדרישה | Stage 7 | **CONFIRMED** ישירות מהקוד. |
 | **A10** | בינוני — כיוון הפוך: ≥2 concepts תואמים ⇒ undetermined, גם בציטוט "טבעי" | [ai_extraction.py:56-71](../cv_engine/domain/analysis/requirements/ai_extraction.py#L56-L71) | `concept_for_quote` מחזיר `None` (⇒ undetermined) כש-יותר מקונספט אחד תואם — בולט שלם עם 3 מושגים (בדיוק מה שהפרומפט מבקש לצטט) נופל תמיד | Stage 7 | **CONFIRMED** ישירות מהקוד — `matches[0] if len(matches)==1 else None`. |
 | **A11** | גבוה — ordinal=0 קבוע ⇒ ID כפול ⇒ ניפוח מכנה | [ai_extraction.py:520-528](../cv_engine/domain/analysis/requirements/ai_extraction.py#L520-L528) | `ordinal=0` בכל שורה; `requirement_id` נבנה מ-hash של interpretation+kind+demanded+identity_span+ordinal — הצעה כפולה (אותו quote+interpretation) מייצרת שני `Requirement` שונים ברשימה עם **אותו** requirement_id, בלי דה-דופ | Stage 3 — **סגור** | **CONFIRMED** — קראתי את `verify_and_cover_extraction`: אין שום בדיקת ייחודיות על `req_id`/span לפני `requirements.append(...)`. **תוקן ב-Stage 3:** דה-דופ לפי `requirement_id` לפני ה-append, `ordinal=0` נשאר קבוע במכוון, `mapped_spans` ממשיך לקלוט גם כפולות. הנימוק המלא, כולל למה *לא* ordinal, בראש המסמך. |
-| **A12** | גבוה — דוקסטרינג מבטיח שער שלא קיים; `topic_tags` מתקבל ולא נקרא | [ai_extraction.py:11](../cv_engine/domain/analysis/requirements/ai_extraction.py#L11), [contracts/providers.py:38-48](../cv_engine/domain/contracts/providers.py#L38-L48) | שני דוקסטרינגים מצהירים ש-`topic_tags` נקרא ואף אוכף: "consulted only as a boundary-association hint" ו-"a hint to fact-boundary association, **not a grant: a foreign tag disqualifies the proposal** rather than being trusted as scoping". בפועל השדה מתקבל מהספק, נשמר בחוזה, **ואף שורת קוד לא קוראת אותו** — כולל השער המובטח. ספק שמצרף tag זר לא נדחה ולא מסומן | Stage 7 (נושא: שלמות שערי ה-AI) | **CONFIRMED via grep** — `grep -rn "topic_tags" cv_engine ai config` מחזיר בדיוק שלוש שורות: שתי ההצהרות בדוקסטרינגים והגדרת השדה עצמה (providers.py:48). אין קורא רביעי. **חמור מ-A3:** ב-A3 פונקציה (`unmapped_statement_ids`) הוגדרה ולא נקראה — קוד מת, שקוף למי שקורא. כאן התיעוד מבטיח הגנה אקטיבית, כך שקורא הקובץ מאמין שיש שער שאין. **התיקון הוא הכרעה, לא שורה:** או לממש את השער שהדוקסטרינג מבטיח, או למחוק את ההבטחה (ואולי את השדה) — שתי הדרכים לגיטימיות, ואסור להשאיר את הפער. נמצא תוך יישום A11 (Stage 3), לא בסקירה המקורית. |
+| **A12** | גבוה — דוקסטרינג מבטיח שער שלא קיים; `topic_tags` מתקבל ולא נקרא | [ai_extraction.py:11](../cv_engine/domain/analysis/requirements/ai_extraction.py#L11), [contracts/providers.py:38-48](../cv_engine/domain/contracts/providers.py#L38-L48) | שני דוקסטרינגים מצהירים ש-`topic_tags` נקרא ואף אוכף: "consulted only as a boundary-association hint" ו-"a hint to fact-boundary association, **not a grant: a foreign tag disqualifies the proposal** rather than being trusted as scoping". בפועל השדה מתקבל מהספק, נשמר בחוזה, **ואף שורת קוד לא קוראת אותו** — כולל השער המובטח. ספק שמצרף tag זר לא נדחה ולא מסומן | Stage 7 — **סגור** | **CONFIRMED via grep** — `grep -rn "topic_tags" cv_engine ai config` מחזיר בדיוק שלוש שורות: שתי ההצהרות בדוקסטרינגים והגדרת השדה עצמה (providers.py:48). אין קורא רביעי. **חמור מ-A3:** ב-A3 פונקציה (`unmapped_statement_ids`) הוגדרה ולא נקראה — קוד מת, שקוף למי שקורא. כאן התיעוד מבטיח הגנה אקטיבית, כך שקורא הקובץ מאמין שיש שער שאין. **התיקון הוא הכרעה, לא שורה:** או לממש את השער שהדוקסטרינג מבטיח, או למחוק את ההבטחה (ואולי את השדה) — שתי הדרכים לגיטימיות, ואסור להשאיר את הפער. נמצא תוך יישום A11 (Stage 3), לא בסקירה המקורית. |
 | **C1** | בינוני — האזהרה שכן נדלקה (low-confidence) ניתנת לביטול בטעות | [approval.py:52-76](../cv_engine/domain/analysis/approval.py#L52-L76) | `"low-confidence": ApprovalReason(frozenset({"track","profile"}), ...)` — בחירת Profile מנקה אזהרת confidence נמוך גם כשהסיבה האמיתית היא extraction_score נמוך, לא classification | Stage 5 — **סגור** | **CONFIRMED** מהטבלה עצמה — ואימתתי שההערה הפנימית בקוד (שורות 65-67) חלה ניסוחית בדיוק על `extraction-failed` בלבד, לא הורחבה ל-`low-confidence` שסובל מאותה בעיה.  ‏**סגור ב-Stage 5** — שני קודים חדשים, גבול נגזר, והקוד הערום נשאר לשני תפקידיו. |
 | **C2** | בינוני — dedup בין rule-gap ל-requirement-gap כמעט אף פעם לא תואם | [classification.py:461-465](../cv_engine/domain/analysis/classification.py#L461-L465) | `covered_text = {requirement.text ...}` מול `gap.requirement` (תווית כתובה ביד כמו `"Salesforce"`, `"Direct SaaS Sales preference"`) — אין קונספט בשם salesforce/saas ב-`requirements.json`, כך שהמחרוזות האלה לעולם לא ייווצרו כ-`requirement.text` | Stage 8 | **CONFIRMED**: סרקתי את כל `config/requirements.json` — אין concept בשם salesforce/saas; המחרוזות היחידות שיכולות להגיע ל-`requirement.text` הן span-ים שחולצו מהטקסט (via `item.span`/`normalize_span`), לא התוויות הקבועות מ-`derive_gaps`.  ‏**סגור ב-Stage 6** — נמחק כקוד מת, עם הנמקה במקום הקוד וגארד נגזר ב-`test_no_concept_shadows_a_legacy_rule_gap`. |
 
@@ -507,6 +544,8 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **C2** | `tests/test_analysis.py::test_no_concept_shadows_a_legacy_rule_gap — הגארד הנגזר` |
 | **D8** | `tests/test_analysis.py::test_confidence_measures_the_vocabulary_behind_the_profile_that_was_chosen` |
 | **C1** | `tests/test_analysis.py::test_a_confidence_the_extraction_sank_is_not_cleared_by_naming_a_profile (+ ::test_a_confidence_the_classification_sank_is_cleared_by_naming_a_profile, ‏tests/test_classification_policy.py::test_a_merged_confidence_reason_names_the_source_the_merge_can_see)` |
+| **A7** | `tests/test_ai_tasks.py::test_a_quote_crossing_two_statements_is_checked_against_the_one_it_is_mostly_in (+ ::test_the_home_statement_is_the_one_the_quote_is_mostly_in_not_every_one_it_touches — הגארד נגד ההידוק)` |
+| **A12** | `tests/test_ai_tasks.py::test_the_extraction_contract_carries_no_tag_field_for_a_gate_that_never_existed` |
 
 ### D3
 זה נכון יותר לבדוק ברמת הפונקציה הטהורה מאשר טקסט משרה מלא, כי השאלה היא ישירות על
@@ -580,20 +619,6 @@ composition:"single"}`.
 72-75 דורשים section שהוא "requirements"/"preferred" או marker בציטוט — "other" בלי
 marker לא מפעיל אף אחד מהם) → עובר, נכנס ל-fit_score כ-mandatory requirement מומצא.
 
-### A7
-קלט:
-```
-Requirements:
-- Must have 5+ years of sales experience.
-- Fluent in English.
-```
-פרופוזל מדומה: attestation span שמתחיל בתוך הבולט הראשון ומסתיים בתוך השני (חוצה
-statement boundary).
-**צפוי:** ציטוט שחוצה שני statements נפרדים אמור להידחות (או לפחות לא לקבל "single"
-בשקט).
-**בפועל:** הלולאה ב-`verify_interpretation` (שורה 54-56) לא מוצאת אף statement שמכיל
-את כל הספאן → יוצאת בלי לבדוק דבר; כל obligation/source_role שהספק הצהיר עובר.
-
 ### A8
 קלט (עם "Must have" חוזר, כמו כל מודעה אמיתית):
 ```
@@ -641,15 +666,6 @@ Requirements:
 **צפוי:** ציטוט חד-משמעי לבן-אדם אמור לפחות לקבל את אחד הconcepts שתואמים.
 **בפועל:** `concept_for_quote` מחזיר `None` כש-`len(matches)>1` → `coverage="undetermined"`,
 אפס קרדיט, ללא קשר לעובדות המועמד.
-
-### A12
-לא נדרש טקסט משרה: `ProposedRequirement(topic_tags=["quantum-photonics"], ...)`
-עם attestation ו-interpretation תקינים לחלוטין, דרך `verify_and_cover_extraction`.
-**צפוי לפי התיעוד** (contracts/providers.py:38-40, "a foreign tag disqualifies the
-proposal"): `RequirementExtractionRejected`.
-**בפועל:** ההצעה עוברת את שני השערים ומתכסה כרגיל — `topic_tags` לא נקרא בשום
-מקום, כך שכל ערך בו, זר או לא, זהה לרשימה ריקה. הטסט ייכשל כל עוד הפער פתוח,
-וזו הנקודה: הוא מתעד איזו משתי הדרכים (לממש את השער / למחוק את ההבטחה) נבחרה.
 
 ## Open product decisions
 
@@ -1112,20 +1128,41 @@ of structural work named under #15.
       ספק, לא extraction מול classification. נדרש פרמטר מפורש חדש או שדה מאוחסן
       חדש.
 
-16. **OPEN — `A12`: לממש את השער ש-`topic_tags` מבטיח, או למחוק את ההבטחה?**
-    נוצרה מפיצול החלטה #4 (ציר 1). הדוקסטרינגים מצהירים "a foreign tag
-    disqualifies the proposal"; אף שורה לא קוראת את השדה. **שתי הדרכים
-    לגיטימיות** — לממש שער אמיתי, או למחוק את ההבטחה ואולי את השדה — אבל
-    להשאיר את הפער אסור, כי הפער הזה גרוע מקוד מת: קורא הקובץ מאמין שיש הגנה
-    שאין. **מה שההכרעה תלויה בו:** האם ל-`topic_tags` יש בכלל צרכן מתוכנן, או
-    שהשדה נכנס לחוזה בלי תפקיד.
+16. **RESOLVED — למחוק את ההבטחה ואת השדה.** ‏`topic_tags` ירד מ-
+    `ProposedRequirement`, ושתי ההצהרות השקריות נמחקו והוחלפו בהסבר במקומן.
+    **מה שהכריע, ונמצא בקוד ולא במסמך:** (א) ההצהרה השנייה
+    (`ai_extraction.py:11`) נקבה בצרכן — "consulted only as a boundary-
+    association hint elsewhere (`coverage.py`)" — ו-`coverage.py` לא מזכיר
+    את השדה כלל, כלומר היו **שתי** הבטחות שקריות ולא אחת; (ב) `_strict_schema`
+    (`providers.py:241`) "rewrites `required` and closes every object", ולכן
+    השדה היה **חובה** בסכמה שנשלחה — כל ספק חויב לפלוט תגיות שאיש לא קורא;
+    (ג) הפרומפט (`system-v3.md`) לא מזכיר תגיות בכלל, ולכן הספק מעולם לא
+    הונחה מה לשלוח; (ד) **אין בשום מקום ווקבולר תגיות מוצהר**, ולכן "tag זר"
+    לא היה ניתן להגדרה — מימוש השער היה מחייב להמציא ווקבולר חדש, לא לכתוב
+    בדיקה. **מחיר שנלקח במודע:** סכמת הפלט השתנתה, ולכן
+    `output_schema_version` של `propose_requirement_extraction` עלה
+    `"1.0.0"→"2.0.0"` (חמשת שאר ה-tasks כבר ב-2.0.0). ‏`extra="forbid"` אומר
+    שספק שימשיך לשלוח `topic_tags` ייכשל ב-`INVALID_OUTPUT` — זה מכוון: השדה
+    לא יכול לחזור כנתון לפני שהוא חוזר כהחלטה. **נסגר גם פריט מעקב 7**:
+    ‏`ProposedRequirement.label` תועד במפורש כלא-נקרא-בכוונה, באותו דוקסטרינג.
+    **השאלה שנשאלה** (מפיצול #4, ציר 1): לממש את השער שהדוקסטרינג מבטיח, או
+    למחוק את ההבטחה — כשמה שאסור הוא להשאיר את הפער, שגרוע מקוד מת מפני
+    שקורא הקובץ מאמין שיש הגנה שאין.
 
-17. **OPEN — `A7`: ציטוט שחוצה גבול-statement — לדחות, או לבדוק בחפיפה?**
-    נוצרה מפיצול החלטה #4 (ציר 1). היום הלולאה ב-`verify_interpretation` מדלגת
-    בשקט (אין `else`), **ובנוסף** היא שואלת בהכלה בזמן ש-`_same_statement`
-    שואלת בחפיפה — שתי הגדרות לשאלה אחת, וזה באג בפני עצמו שיש לסגור בכל מקרה.
-    השאלה הפתוחה היא רק מה התשובה הנכונה: לדחות ציטוט שאינו מוכל בסטייטמנט
-    יחיד, או ליישר את שתיהן לחפיפה ולבדוק ממילא.
+17. **RESOLVED — סטייטמנט-בית לפי חפיפה מרבית, והגדרה אחת לשתי השאלות.**
+    ‏`_overlap` הוא עכשיו הפרימיטיב היחיד; `_home_statement` בוחר את
+    הסטייטמנט שהספן חופף לו הכי הרבה (תיקו → המוקדם), ו-`_same_statement`
+    נשאר "כל סטייטמנט משותף" אבל נשען על אותו פרימיטיב. **למה לא דחייה:**
+    הפרומפט אומר "quote the exact source text verbatim" ואינו מבטיח שדרישה
+    יושבת בסטייטמנט אחד — ולכן דחיית ספן חוצה אינה "הידוק עד להבטחה" (ציר 1)
+    אלא כלל חדש שהספק לא הוזהר עליו (ציר 2, שדורש מדידה). **למה לא כל
+    סטייטמנט חופף:** ספן שנכנס כמה תווים לבולט "preferred" שכן היה חוסם
+    פרשנות `mandatory` שהבולט של הדרישה עצמה תומך בה — הידוק, בזמן שפריט
+    מעקב 15 קובע שכיוון התיקון בנתיב ה-AI הוא הרפיה. **מה שהשתנה בפועל:**
+    הבדיקה **רצה** עכשיו על ספן חוצה, במקום ליפול מהלולאה בלי לבדוק דבר.
+    **השאלה שנשאלה** (מפיצול #4, ציר 1): הדילוג השקט ושתי ההגדרות היו באג
+    לסגירה בכל מקרה; מה שהיה פתוח הוא רק לאן ליישר — לדחות ספן שאינו מוכל
+    בסטייטמנט יחיד, או לשאול בחפיפה ולבדוק ממילא.
 
 18. **OPEN — `A10`: ציטוט שתואם שני קונספטים — מה הוא צריך להחזיר?**
     נוצרה מפיצול החלטה #4 (ציר 2), ו**זו היחידה מהשלוש שעדיין באמת דורשת מדידה

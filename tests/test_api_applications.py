@@ -469,31 +469,47 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(service
             assert refused.status_code == 422, params
 
 
-def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_content(services) -> None:
-    first = services.applications.ingest(IngestCommand(
-        company="History Co", target_role="Developer", job_text="עברית  English\n<script>x</script>\n",
-        source_url="https://jobs.example/first", client="web",
-    ))
+def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_content(
+    services,
+) -> None:
+    first = services.applications.ingest(
+        IngestCommand(
+            company="History Co",
+            target_role="Developer",
+            job_text="עברית  English\n<script>x</script>\n",
+            source_url="https://jobs.example/first",
+            client="web",
+        )
+    )
     path = f"{API_PREFIX}/applications/{first.application_id}/job-snapshots"
     with TestClient(create_app(build_api_services(services))) as api:
         initial = api.get(path)
         assert initial.status_code == 200
         assert initial.json()["active_job_snapshot_id"] == first.job_snapshot_id
         assert len(initial.json()["items"]) == 1
-        second = services.applications.create_job_snapshot(CreateJobSnapshotCommand(
-            application_id=first.application_id, job_text="עברית English\n<script>x</script>\n",
-            source_url="https://jobs.example/second", client="web",
-        ))
+        second = services.applications.create_job_snapshot(
+            CreateJobSnapshotCommand(
+                application_id=first.application_id,
+                job_text="עברית English\n<script>x</script>\n",
+                source_url="https://jobs.example/second",
+                client="web",
+            )
+        )
         records_before = services.repository.job_snapshots(first.application_id)
         history = api.get(path).json()
         assert history["active_job_snapshot_id"] == second.job_snapshot_id
-        assert [item["id"] for item in history["items"]] == [first.job_snapshot_id, second.job_snapshot_id]
+        assert [item["id"] for item in history["items"]] == [
+            first.job_snapshot_id,
+            second.job_snapshot_id,
+        ]
         assert [item["version_number"] for item in history["items"]] == [1, 2]
         assert [item["job_text"] for item in history["items"]] == [
-            "עברית  English\n<script>x</script>\n", "עברית English\n<script>x</script>\n",
+            "עברית  English\n<script>x</script>\n",
+            "עברית English\n<script>x</script>\n",
         ]
         assert [item["source_url"] for item in history["items"]] == [
-            "https://jobs.example/first", "https://jobs.example/second",
+            "https://jobs.example/first",
+            "https://jobs.example/second",
         ]
         assert "payload_path" not in history["items"][0]
         assert services.repository.job_snapshots(first.application_id) == records_before
