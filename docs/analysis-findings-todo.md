@@ -315,8 +315,14 @@ implementation file plan" למטה, שבע קבצים בסדר עריכה מוג
    ב-`correct_interpretation`.
 3. **`mandatory` של ישות סינתטית** — לשקול מחדש מעבר ל-`line.section ==
    "requirements"` אחרי ש-D9 מתוקן (Stage 6). ר' החלטה #10.
-4. **D7 מתחיל לזוז.** `concept_classification_completeness` כבר לא קבוע 1.0
-   מתמטית ברגע שקיימות ישויות עם `concept=None`. ר' "משנים משמעות" למטה.
+4. **~~D7 מתחיל לזוז.~~ שגוי — תוקן ב-Stage 4.**
+   `concept_classification_completeness` חתומה על
+   `list[ExtractedRequirement]`, לא על `list[Requirement]`, ו-
+   `extract_requirements` בונה כל `ExtractedRequirement` עם
+   `concept=concept.concept` (מחרוזת לא ריקה) תמיד. ישויות ה-`Requirement`
+   עם `concept=None` שנוצרו ב-Stage 2 **לעולם אינן מגיעות אליה** (נבדק
+   ב-grep: שני קוראים בלבד, `extraction_confidence` ו-טסט). **המדד עדיין
+   קבוע 1.0 מתמטית בכל נתיב קיים**, בדיוק כפי ש-D7 תיאר מלכתחילה.
 5. **~~D10 — `0 מתוך N` אינו מדד קטסטרופלי אמין כש-N הוא מספר פסקאות.~~
    נסגר ב-Stage 4 — הפרמיסה התקיימה, התשובה לא זזה, והכשל האמיתי התברר
    כווקבולרי; ר' "D10 — איך נסגר" בראש המסמך. הטקסט המקורי נשמר להקשר:**
@@ -578,6 +584,11 @@ gate be before it starts rejecting good-faith provider output — see decision #
 
 `D7`, `C2` — a completeness sub-score that is a mathematical constant under every
 current code path, and a dedup check whose two sides can never produce equal strings.
+
+**`D7` is blocked, and not by anything in Stage 8.** It *is* `extraction_confidence`'s
+`classified` factor, so removing, replacing, or reformulating it decides A2's open
+question 1 as a side effect — the exact thing A2's boundary forbids. `C2` carries no
+such constraint and can land on its own.
 
 ---
 
@@ -1069,12 +1080,14 @@ in config["concepts"].values()}` — assert אין חיתוך, לכל טקסט �
   מפורש להוסיף ל-scope של Stage 6 כשמגיעים אליו.
 
 **משנים משמעות (לא "נסגר", לא "נשאר זהה" — המדד עצמו הופך לבעל תוכן):**
-- **D7** — כרגע `concept_classification_completeness` קבוע מתמטית ל-1.0 כי כל
-  `ExtractedRequirement` נבנה עם concept לא-ריק. ברגע שנוצרות ישויות `Requirement`
-  עם `concept=None` (מדרישות שזוהו אך לא מופתו, Stage 2), המדד **מתחיל לזוז** בפועל
-  בפעם הראשונה — אבל אז צריך לבדוק מחדש אם הנוסחה שלו (`sum(item.concept)/
-  len(extracted)`) עדיין אומרת משהו נכון, כי היא נכתבה כשהיה בלתי אפשרי להזיז אותה.
-  ייתכן שצריך ניסוח מחדש, לא רק "הפעלה".
+- **D7 — ההערכה הזו הופרכה ב-Stage 4; המדד לא זז.**
+  `concept_classification_completeness` קבוע מתמטית ל-1.0 כי כל
+  `ExtractedRequirement` נבנה עם concept לא-ריק — וזה נשאר נכון אחרי Stage 2,
+  כי החתימה שלה היא `list[ExtractedRequirement]` ולא `list[Requirement]`.
+  ישויות ה-`Requirement` עם `concept=None` אינן עוברות דרכה בשום נתיב. D7
+  נשאר בדיוק מה שהיה: מדד מת ב-Stage 8. **ואזהרה נלווית:** הוא גם הגורם
+  `classified` של `extraction_confidence`, ולכן נגיעה בו מכריעה את שאלה 1
+  של A2 כתופעת לוואי — ר' "A2 — למה נעצר".
 
 ---
 
