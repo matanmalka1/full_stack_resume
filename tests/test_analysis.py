@@ -1453,7 +1453,12 @@ def test_only_canonical_facts_are_reported_as_supporting_evidence(fact_store) ->
     tagged = fact_store.get("sales.tool.excel").model_copy(
         update={"fact_id": "sales.tool.widget", "tags": ["widget"]}
     )
-    for status in (FactStatus.PENDING, FactStatus.CONFIRMED, FactStatus.CANONICAL):
+    for status in (
+        FactStatus.PENDING,
+        FactStatus.CONFIRMED,
+        FactStatus.CANONICAL,
+        FactStatus.DELETED,
+    ):
         store = FactStore(
             facts={
                 "sales.tool.priority": named.model_copy(update={"status": status}),

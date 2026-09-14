@@ -11,6 +11,7 @@ import {
   attachFact,
   captureClaimFact,
   createPendingFact,
+  deleteFact,
   factDetailQueryKey,
   factHistoryQueryKey,
   factsQueryPrefix,
@@ -70,6 +71,24 @@ export const useTransitionFact = (
         confirm: true,
         reason: command === "confirm" ? "explicit Web confirmation" : "explicit Web promotion",
       }),
+    onSuccess: () => {
+      refresh(factId);
+      onSettled?.();
+    },
+  });
+};
+
+/* One-way: nothing settles it back. Kept as its own hook rather than folded into
+   `useTransitionFact` because deletion is terminal and needs its own confirmation
+   step in the UI, not another value on the same toggle. */
+export const useDeleteFact = (
+  factId: string,
+  onSettled?: () => void,
+): UseMutationResult<FactMutation, Error, void> => {
+  const refresh = useFactCacheRefresh();
+
+  return useMutation({
+    mutationFn: () => deleteFact(factId, { confirm: true, reason: "explicit Web deletion" }),
     onSuccess: () => {
       refresh(factId);
       onSettled?.();

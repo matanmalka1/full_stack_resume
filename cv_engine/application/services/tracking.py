@@ -9,6 +9,7 @@ from ...util import new_id, utc_now
 from ..commands import (
     ApplicationMutationResult,
     CloseApplicationCommand,
+    DeleteApplicationCommand,
     ExternalSubmissionCommand,
     NextActionCommand,
     RecruitmentCorrectionCommand,
@@ -65,12 +66,10 @@ class TrackingService(ServiceBase[TrackingRepository]):
         )
 
     def transition_status(self, command: RecruitmentStatusCommand) -> ApplicationMutationResult:
+        application = self.load_active_application(command.application_id)
         try:
-            application = self.repo.get_application(command.application_id)
             current = ApplicationStatus(application["current_status"])
             target = ApplicationStatus(command.target_status)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown application: {command.application_id}") from exc
         except ValueError as exc:
             raise StateConflict(str(exc)) from exc
         if target is ApplicationStatus.APPLIED:
@@ -123,13 +122,41 @@ class TrackingService(ServiceBase[TrackingRepository]):
             )
         )
 
+    def delete_application(self, command: DeleteApplicationCommand) -> ApplicationMutationResult:
+        """Soft-delete: a terminal `deleted_at` disposition, orthogonal to `RecruitmentStatus`.
+
+        Callable from any current status including `closed` (product-spec.md
+        invariant #20). It does not transition `current_status` or
+        `terminal_outcome` and does not go through `transition_status` -
+        deletion is not a recruitment-status transition, so it gets its own
+        direct write and its own audit event rather than borrowing that path.
+        """
+        self.load_active_application(command.application_id)
+        now = utc_now()
+        with self.repo.unit_of_work() as uow:
+            transaction = self.repo.bind(uow)
+            transaction.set_application_deleted(command.application_id, now)
+            self._audit(
+                transaction,
+                application_id=command.application_id,
+                action="delete_application",
+                entity_type="application",
+                entity_id=command.application_id,
+                actor_type=command.actor_type,
+                client=command.client,
+                occurred_at=now,
+                details={},
+            )
+            uow.commit()
+        return self._result(command.application_id)
+
     def correct_recruitment_status(
         self, command: RecruitmentCorrectionCommand
     ) -> ApplicationMutationResult:
         if not command.reason.strip():
             raise StateConflict("recruitment correction reason is required")
+        application = self.load_active_application(command.application_id)
         try:
-            application = self.repo.get_application(command.application_id)
             current = ApplicationStatus(application["current_status"])
             target = ApplicationStatus(command.target_status)
             corrected = self.repo.recruitment_event(command.corrects_event_id)
@@ -184,6 +211,7 @@ class TrackingService(ServiceBase[TrackingRepository]):
 
     def set_next_action(self, command: NextActionCommand) -> ApplicationMutationResult:
         now = command.occurred_at or utc_now()
+        self.load_active_application(command.application_id)
         try:
             with self.repo.unit_of_work() as uow:
                 transaction = self.repo.bind(uow)
@@ -215,8 +243,8 @@ class TrackingService(ServiceBase[TrackingRepository]):
         return self._result(command.application_id, event_id=event_id)
 
     def submit_application(self, command: SubmissionCommand) -> SubmissionResult:
+        application = self.load_active_application(command.application_id)
         try:
-            application = self.repo.get_application(command.application_id)
             revision = self.repo.approved_revision(command.approved_revision_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown submission source: {exc.args[0]}") from exc
@@ -256,8 +284,8 @@ class TrackingService(ServiceBase[TrackingRepository]):
         )
 
     def record_external_submission(self, command: ExternalSubmissionCommand) -> SubmissionResult:
+        application = self.load_active_application(command.application_id)
         try:
-            application = self.repo.get_application(command.application_id)
             if command.artifact_version_id is not None:
                 artifact = self.repo.artifact_version(command.artifact_version_id)
                 if artifact["application_id"] != command.application_id:

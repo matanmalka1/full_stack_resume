@@ -19,10 +19,17 @@ interface ApplicationListRowProps {
   ambiguous: boolean;
   item: ApplicationListItem;
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestUpdate }: ApplicationListRowProps) => {
+export const ApplicationListRow = ({
+  ambiguous,
+  item,
+  onRequestClose,
+  onRequestDelete,
+  onRequestUpdate,
+}: ApplicationListRowProps) => {
   const navigate = useNavigate();
   const href = preparationResumeDestination(item);
   const attention = applicationAttention(item);
@@ -116,7 +123,12 @@ export const ApplicationListRow = ({ ambiguous, item, onRequestClose, onRequestU
         </span>
       </td>
       <td className="col-start-2 row-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3">
-        <ApplicationRecordActions item={item} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
+        <ApplicationRecordActions
+          item={item}
+          onRequestClose={onRequestClose}
+          onRequestDelete={onRequestDelete}
+          onRequestUpdate={onRequestUpdate}
+        />
       </td>
     </tr>
   );

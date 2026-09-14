@@ -107,6 +107,11 @@ applications = Table(
     Column("created_at", Text, nullable=False),
     Column("updated_at", Text, nullable=False),
     Column("terminal_outcome", Text),
+    # Soft-delete disposition (product-spec.md invariant #20), orthogonal to
+    # `current_status`: NULL means active, set means `delete_application` ran.
+    # `applications` is already a mutable-exception table, so a nullable
+    # column here needs no change to the immutability trigger set.
+    Column("deleted_at", Text),
     CheckConstraint("language IN ('en', 'he')", name="language"),
     CheckConstraint(
         f"current_status IN ({sql_values(RECRUITMENT_STATUSES)})",

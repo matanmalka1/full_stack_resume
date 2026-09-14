@@ -20,10 +20,16 @@ const columns = [
 interface ApplicationListTableProps {
   items: readonly ApplicationListItem[];
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
-export const ApplicationListTable = ({ items, onRequestClose, onRequestUpdate }: ApplicationListTableProps) => {
+export const ApplicationListTable = ({
+  items,
+  onRequestClose,
+  onRequestDelete,
+  onRequestUpdate,
+}: ApplicationListTableProps) => {
   const ambiguous = duplicatedApplicationIdentityIds(items);
 
   return (
@@ -54,6 +60,7 @@ export const ApplicationListTable = ({ items, onRequestClose, onRequestUpdate }:
               item={item}
               key={item.id}
               onRequestClose={onRequestClose}
+              onRequestDelete={onRequestDelete}
               onRequestUpdate={onRequestUpdate}
             />
           ))}

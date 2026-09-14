@@ -29,6 +29,7 @@ class DraftEditing(DraftServiceBase):
         template_id: str | None = None,
         template_version: str | None = None,
     ) -> EditResult:
+        self.load_active_application(application_id)
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         working = working_draft_record(self.repo, application_id)
@@ -85,6 +86,7 @@ class DraftEditing(DraftServiceBase):
         make `validated` mean "recently saved" instead of "recently checked".
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
+        self.load_active_application(working.application_id)
         if working.content_hash != command.expected_content_hash:
             raise StateConflict(
                 f"working draft {working.id} has content hash {working.content_hash}, "

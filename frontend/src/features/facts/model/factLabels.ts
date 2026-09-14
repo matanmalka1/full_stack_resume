@@ -1,4 +1,4 @@
-import { BadgeCheck, Clock3, ShieldCheck, type LucideIcon } from "lucide-react";
+import { BadgeCheck, Clock3, ShieldCheck, Trash2, type LucideIcon } from "lucide-react";
 
 import type { CreateFactRequest, Fact, FactStatus } from "@/api/contracts";
 import type { Tone } from "@/ui/tone";
@@ -26,18 +26,21 @@ export const factStatusLabels: Record<FactStatus, string> = {
   pending: "ממתינה לאישור",
   confirmed: "אושרה",
   canonical: "מקור אמת",
+  deleted: "נמחקה",
 };
 
 export const factStatusTones: Record<FactStatus, Tone> = {
   pending: "warning",
   confirmed: "progress",
   canonical: "success",
+  deleted: "blocker",
 };
 
 export const factStatusIcons: Record<FactStatus, LucideIcon> = {
   pending: Clock3,
   confirmed: BadgeCheck,
   canonical: ShieldCheck,
+  deleted: Trash2,
 };
 
 /* The status/source unions are open strings on the wire, so a value the backend adds

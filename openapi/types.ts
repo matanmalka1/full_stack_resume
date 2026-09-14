@@ -212,6 +212,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Soft-delete an application without touching its immutable history
+         * @description No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
+         *
+         *     Callable from any current status, including `closed`. Every immutable
+         *     JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision,
+         *     Artifact, Submission, and Operation the application produced is untouched;
+         *     only default list/Dashboard projections and duplicate detection stop
+         *     surfacing it. The detail endpoint still returns it by ID.
+         */
+        post: operations["delete_application_api_v1_applications__application_id__delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/external-submissions": {
         parameters: {
             query?: never;
@@ -747,6 +773,31 @@ export interface paths {
          *     report, so there is no partial success status.
          */
         post: operations["confirm_and_use_fact_api_v1_facts__fact_id__confirm_and_use_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/facts/{fact_id}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Soft-delete a fact through the fact lifecycle
+         * @description One-way; `confirm: false` is refused rather than interpreted.
+         *
+         *     Always permitted, even for a fact attached to a Profile section or
+         *     referenced by an active SelectionPlan/claim/gap resolution: this command
+         *     does not pre-check those, the review reason and warning it produces do
+         *     (state-and-use-cases.md §17).
+         */
+        post: operations["delete_fact_api_v1_facts__fact_id__delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1324,10 +1375,13 @@ export interface components {
             created_at: string;
             /** Current Status */
             current_status: string;
+            /** Deleted At */
+            deleted_at?: string | null;
             /** Emphasis */
             emphasis?: string | null;
             /** Fit Level */
             fit_level?: string | null;
+            /** Fit Score */
             /** Id */
             id: string;
             /** Is Closed */
@@ -1470,10 +1524,13 @@ export interface components {
             created_at: string;
             /** Current Status */
             current_status: string;
+            /** Deleted At */
+            deleted_at?: string | null;
             /** Emphasis */
             emphasis?: string | null;
             /** Fit Level */
             fit_level?: string | null;
+            /** Fit Score */
             /** Id */
             id: string;
             /** Language */
@@ -1868,8 +1925,6 @@ export interface components {
             application_id: string;
             /** Current Status */
             current_status: string;
-            /** Event Id */
-            event_id?: string | null;
             /** Next Action */
             next_action?: string | null;
             /** Next Action Date */
@@ -2111,6 +2166,26 @@ export interface components {
             };
             /** Summary */
             summary: string;
+        };
+        /**
+         * DeleteApplicationResponse
+         * @description `current_status`/`terminal_outcome` are unchanged by deletion; they are
+         *     carried here only because they are part of the same mutation-result shape
+         *     every other tracking command returns.
+         */
+        DeleteApplicationResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Current Status */
+            current_status: string;
+            /** Event Id */
+            event_id?: string | null;
+            /** Next Action */
+            next_action?: string | null;
+            /** Next Action Date */
+            next_action_date?: string | null;
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
         };
         /**
          * DraftClaimResponse
@@ -2468,7 +2543,7 @@ export interface components {
          * FactStatus
          * @enum {string}
          */
-        FactStatus: "pending" | "confirmed" | "canonical";
+        FactStatus: "pending" | "confirmed" | "canonical" | "deleted";
         /**
          * FactTransitionRequest
          * @description A promotion along `pending -> confirmed -> canonical`.
@@ -3980,6 +4055,37 @@ export interface operations {
             };
         };
     };
+    delete_application_api_v1_applications__application_id__delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteApplicationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     record_external_submission_api_v1_applications__application_id__external_submissions_post: {
         parameters: {
             query?: never;
@@ -4813,6 +4919,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfirmAndUseFactResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    delete_fact_api_v1_facts__fact_id__delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactTransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

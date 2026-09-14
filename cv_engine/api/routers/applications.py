@@ -8,6 +8,7 @@ from ...application.commands import (
     AnalyzeCommand,
     CloseApplicationCommand,
     CreateJobSnapshotCommand,
+    DeleteApplicationCommand,
     DraftCommand,
     DuplicateCheckCommand,
     IngestCommand,
@@ -37,6 +38,7 @@ from ..schemas.applications import (
     CreateJobSnapshotRequest,
     CreateJobSnapshotResponse,
     DecisionRecordResponse,
+    DeleteApplicationResponse,
     DuplicateCheckRequest,
     DuplicateCheckResponse,
     UpdateApplicationNotesRequest,
@@ -313,3 +315,27 @@ def close_application(application_id: str, services: Services) -> CloseApplicati
         )
     )
     return CloseApplicationResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.post(
+    "/{application_id}/delete",
+    response_model=DeleteApplicationResponse,
+    summary="Soft-delete an application without touching its immutable history",
+)
+def delete_application(application_id: str, services: Services) -> DeleteApplicationResponse:
+    """No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
+
+    Callable from any current status, including `closed`. Every immutable
+    JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision,
+    Artifact, Submission, and Operation the application produced is untouched;
+    only default list/Dashboard projections and duplicate detection stop
+    surfacing it. The detail endpoint still returns it by ID.
+    """
+    result = services.tracking.delete_application(
+        DeleteApplicationCommand(
+            application_id=application_id,
+            actor_type="user",
+            client="web",
+        )
+    )
+    return DeleteApplicationResponse.model_validate(result.model_dump(mode="json"))

@@ -251,6 +251,50 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         assert final.json()["latest_snapshot"]["prior_snapshot_id"] == snapshot_id
         assert final.json()["recruitment_status"] == "closed"
 
+        # delete_application is orthogonal to RecruitmentStatus and callable
+        # from a terminal status: it neither requires nor changes `closed`.
+        deleted = api.post(
+            f"{API_PREFIX}/applications/{application_id}/delete",
+            headers=MUTATION_HEADERS,
+        )
+        assert deleted.status_code == 200
+        assert deleted.json()["current_status"] == "closed"
+
+        # Excluded from the default list, but still individually reachable by ID.
+        listed_after_delete = api.get(f"{API_PREFIX}/applications")
+        assert application_id not in [item["id"] for item in listed_after_delete.json()["items"]]
+        still_reachable = api.get(f"{API_PREFIX}/applications/{application_id}")
+        assert still_reachable.status_code == 200
+        assert still_reachable.json()["application"]["deleted_at"] is not None
+
+        delete_audit = services.repository.audit_records(application_id)[-1]
+        assert delete_audit["action"] == "delete_application"
+
+        # Idempotency: deleting an already-deleted Application is refused (409),
+        # not silently repeated - and no second `delete_application` audit event
+        # is appended for it.
+        redeleted = api.post(
+            f"{API_PREFIX}/applications/{application_id}/delete",
+            headers=MUTATION_HEADERS,
+        )
+        assert redeleted.status_code == 409
+        assert services.repository.audit_records(application_id)[-1]["id"] == delete_audit["id"]
+
+        # A duplicate application for the same posting is no longer flagged
+        # against a deleted Application.
+        duplicate = api.post(
+            f"{API_PREFIX}/applications/duplicate-check",
+            headers=MUTATION_HEADERS,
+            json={
+                "company": "HTTP Co",
+                "target_role": "Developer",
+                "job_text": "HTTP replacement text\n",
+                "source_url": "https://jobs.example/http",
+            },
+        )
+        assert duplicate.status_code == 200
+        assert duplicate.json()["matches"] == []
+
 
 def test_application_http_duplicate_precheck_and_acknowledgement_contract(services) -> None:
     payload = {

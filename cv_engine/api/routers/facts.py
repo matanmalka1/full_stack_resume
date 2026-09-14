@@ -226,6 +226,36 @@ def promote_fact(
 
 
 @router.post(
+    "/{fact_id}/delete",
+    response_model=FactMutationResponse,
+    summary="Soft-delete a fact through the fact lifecycle",
+)
+def delete_fact(
+    fact_id: str,
+    request: FactTransitionRequest,
+    services: Services,
+) -> FactMutationResponse:
+    """One-way; `confirm: false` is refused rather than interpreted.
+
+    Always permitted, even for a fact attached to a Profile section or
+    referenced by an active SelectionPlan/claim/gap resolution: this command
+    does not pre-check those, the review reason and warning it produces do
+    (state-and-use-cases.md §17).
+    """
+    result = services.knowledge.delete_fact(
+        fact_id,
+        explicitly_confirmed=request.confirm,
+        reason=request.reason,
+    )
+    return FactMutationResponse(
+        fact=FactResponse.of(result.fact),
+        event_id=result.event_id,
+        facts_version=result.facts_version,
+        lifecycle_version=result.lifecycle_version,
+    )
+
+
+@router.post(
     "/{fact_id}/attachments",
     response_model=FactAttachmentResponse,
     status_code=status.HTTP_201_CREATED,

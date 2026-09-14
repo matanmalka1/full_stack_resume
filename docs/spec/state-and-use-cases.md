@@ -167,7 +167,6 @@ LOW_FIT_REQUIRES_ACCEPTANCE
 HARD_GAP_REQUIRES_DECISION
 FACT_SELECTION_UNRESOLVED
 PENDING_FACT_REQUIRES_RESOLUTION
-FACT_DELETED_REQUIRES_RESOLUTION
 KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
 
@@ -189,13 +188,6 @@ gates catch rather than a blocker reported under the wrong name.
 claim, requested selection, or active gap resolution depends on that fact. Pending
 facts elsewhere in Knowledge do not affect unrelated Applications.
 
-`FACT_DELETED_REQUIRES_RESOLUTION` applies only when the active SelectionPlan, active
-claim, requested selection, or active gap resolution depends on a fact that has been
-deleted (`FactStatus.DELETED`, §17). A deleted fact not referenced by any active
-dependency of an Application produces no review reason for that Application; the
-immutable ApprovedRevision it may already appear in is unaffected and carries only the
-non-blocking `FACT_DELETED` warning (§8).
-
 Each reason includes a safe message, relevant entity references, and allowed resolution
 action identifiers.
 
@@ -213,17 +205,11 @@ READY_REVISION_FOR_OLDER_SNAPSHOT
 READY_REVISION_FOR_OLDER_ANALYSIS
 FACT_SUPERSEDED
 FACT_KNOWN_INCORRECT
-FACT_DELETED
 NEXT_ACTION_OVERDUE
 ```
 
 `FACT_KNOWN_INCORRECT` is materially stronger than supersession but does not rewrite an
 immutable historical revision.
-
-`FACT_DELETED` reports that an ApprovedRevision or WorkingDraft references a fact that
-has since been deleted. It is informational only where nothing active depends on the
-fact; it never rewrites the immutable revision that already carries the fact's
-rendered content. See `FACT_DELETED_REQUIRES_RESOLUTION` (§7) for the blocking case.
 
 ## 9. Action policy projection
 
@@ -396,33 +382,6 @@ does not mutate or delete them.
 
 Transitions a saved/non-terminal Application through the allowed policy to `closed`.
 There is no hard-delete command in the Web UI.
-
-### `delete_application(application_id)`
-
-Soft-deletes an Application: sets a terminal `deleted_at` disposition and appends an
-audit event. It is orthogonal to `RecruitmentStatus` — available from any status
-including `closed` — and does not itself transition `current_status`. A deleted
-Application is excluded from default list/dashboard/search projections and from
-duplicate detection, but its record and every immutable JobSnapshot, JobAnalysis,
-SelectionPlan, ValidationRun, ApprovedRevision, Artifact, Submission, and Operation it
-produced remain unchanged and individually reachable by ID. There is no hard delete and
-no `undelete` command in this phase; a mistaken deletion is corrected the same way a
-mistaken status is, by explicit reason, not by reversing the flag. Calling it on an
-Application already deleted is refused with `StateConflict` (409) — the same idempotency
-posture as `delete_fact` refusing an already-`deleted` fact — rather than silently
-succeeding again or appending a second `delete_application` audit event.
-
-Every command in §13–§16 that changes or produces state scoped to one Application
-(`analyze`, `create_selection_plan`, `apply_analysis_decisions`, the AI proposal forms
-of each, `create_draft`, `update_working_draft`, `apply_selection_change`,
-`regenerate_section`, `regenerate_claim`, `archive_working_draft`,
-`replace_working_draft`, `validate_draft`, `approve_draft`, `render_revision`) resolves
-its Application through one shared precondition rather than each service repeating its
-own check: 404 if the Application does not exist, 409 (`StateConflict`) if it is
-deleted, otherwise the record. A read that must still resolve a deleted Application's
-history on purpose — the detail-by-ID projection, `export_recruiter_pdf`,
-`export_decision_markdown` — is exempt by design, exactly as §17's `show_fact` stays
-exempt for a deleted fact.
 
 ## 13. Analysis commands
 
@@ -654,11 +613,9 @@ through the API but is not the primary human export.
 ### `list_facts(status=None)` / `show_fact(fact_id)` / `fact_history(fact_id=None)`
 
 Synchronous reads over the candidate Fact pool and its immutable lifecycle events.
-`list_facts` may filter by lifecycle status; with no filter it excludes `deleted` facts,
-which remain reachable by an explicit `status=deleted` filter or by `show_fact`.
-`show_fact` returns one fact with its events. The dedicated candidate-facts surface uses
-these reads without requiring an Application, JobAnalysis, WorkingDraft, or
-SelectionPlan context.
+`list_facts` may filter by lifecycle status. `show_fact` returns one fact with its events.
+The dedicated candidate-facts surface uses these reads without requiring an Application,
+JobAnalysis, WorkingDraft, or SelectionPlan context.
 
 ### `list_fact_attachment_targets`
 
@@ -688,28 +645,6 @@ It refuses every other source status and never resolves a latest fact implicitly
 Moves exactly one fact from `confirmed` to `canonical` after a second explicit user
 attestation. Promoting a replacement makes the original fact superseded for warning and
 staleness purposes; it does not rewrite or remove the original record or historical use.
-
-### `delete_fact(fact_id)`
-
-Moves a fact from `pending`, `confirmed`, or `canonical` to the terminal `deleted`
-status. Refuses a fact already `deleted`. It is a soft delete through the same
-Knowledge mutation journal as every other transition: the fact record and its full
-lifecycle history are preserved and remain reachable via `show_fact`/`fact_history`,
-but a deleted fact is excluded from `list_facts` by default, from
-`list_fact_attachment_targets` results, and is refused by `confirm_fact`,
-`promote_fact`, `attach_fact`, and `confirm_and_use_fact`.
-
-Deletion is always permitted, including for a fact currently attached to a Profile
-section or referenced by an active SelectionPlan/claim/gap resolution — it does not
-require detaching first. Instead, any Application whose active SelectionPlan, claim,
-requested selection, or gap resolution depends on the deleted fact reports
-`FACT_DELETED_REQUIRES_RESOLUTION` (§7) and is blocked from `approve_draft`/
-`ready_qualified` until the dependency is resolved (re-selection, replacement fact, or
-equivalent). An ApprovedRevision that already rendered the fact is unaffected and
-immutable; it carries only the non-blocking `FACT_DELETED` warning (§8). Deletion never
-rewrites, removes, or reassigns the fact's canonical content, and it is a separate
-disposition from `replaces`-based canonical correction: deleting a fact does not create
-a replacement, and creating a replacement does not delete the original.
 
 ### `attach_fact(fact_id, profile, section, pin=False)`
 
@@ -741,11 +676,11 @@ complete.
 Canonical correction creates a replacement fact carrying `replaces`; it never mutates
 the old fact content.
 
-`delete_fact` (above) is the only removal command in this lifecycle. Archive,
-withdrawal, retirement, and distinct `known-incorrect` transitions remain undefined:
-adding them requires a separate contract for their effects on Profile pools, selection,
-WorkingDraft staleness, warnings, validation, reconciliation, and immutable historical
-revisions. Their absence must not be presented by a client as an available action.
+Deletion, archive, withdrawal, retirement, and `known-incorrect` transitions are not
+commands in this lifecycle. Adding them requires a separate contract for their effects on
+Profile pools, selection, WorkingDraft staleness, warnings, validation, reconciliation,
+and immutable historical revisions. Their absence must not be presented by a client as
+an available removal action.
 
 ## 18. Tracking commands
 
@@ -833,9 +768,7 @@ Initial query contracts include:
 - Application list with search/filter/sort and Dashboard projection. Each row carries
   application-owned `is_closed`; the response carries preparation-state, preset, and
   recruitment-status counts computed from the same projected read. Each Dashboard facet
-  ignores its own selected value while respecting the other list filters. The list and
-  Dashboard exclude deleted Applications (`delete_application`, §12) by default; a
-  deleted Application remains reachable at its detail endpoint by ID.
+  ignores its own selected value while respecting the other list filters.
 - Application detail with consistent state/action policy and unified timeline
 - duplicate candidates for a proposed Application
 - active preparation context
@@ -872,7 +805,6 @@ POST   /api/v1/applications/{id}/analyses
 GET    /api/v1/applications/{id}/artifacts
 GET    /api/v1/applications/{id}/decision
 POST   /api/v1/applications/{id}/close
-POST   /api/v1/applications/{id}/delete
 POST   /api/v1/analyses/{id}/apply-decisions
 POST   /api/v1/analyses/{id}/selection-plans
 GET    /api/v1/selection-plans/{id}
@@ -912,7 +844,6 @@ GET    /api/v1/facts/{id}
 GET    /api/v1/facts/{id}/history
 POST   /api/v1/facts/{id}/confirm
 POST   /api/v1/facts/{id}/promote
-POST   /api/v1/facts/{id}/delete
 POST   /api/v1/facts/{id}/attachments
 POST   /api/v1/facts/{id}/confirm-and-use
 GET    /api/v1/settings

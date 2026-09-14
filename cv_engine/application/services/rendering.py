@@ -85,6 +85,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         return f"{head}/resume.md"
 
     def render(self, application_id: str) -> RenderResult:
+        self.load_active_application(application_id)
         try:
             revision_id = self.repo.latest_approved_revision(application_id).id
         except UnknownRecord as exc:

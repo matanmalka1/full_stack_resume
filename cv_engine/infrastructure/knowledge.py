@@ -33,6 +33,7 @@ from ..domain.facts import (
     parse_fact_source_document,
     render_fact_source,
     source_name_of,
+    with_deleted_fact,
     with_new_fact,
     with_promoted_fact,
 )
@@ -404,6 +405,20 @@ class FileKnowledge:
         )
         staged = self._stage(mutation_id, path, proposed)
         return staged, before, promoted.model_copy(update={"confirmed_at": confirmed_at})
+
+    def stage_delete_fact(
+        self,
+        mutation_id: str,
+        fact_id: str,
+    ) -> tuple[StagedKnowledgeFile, Fact, Fact]:
+        store = self.facts()
+        before = store.get(fact_id)
+        deleted = store.delete(fact_id)
+        path = resolve_within(self.base_dir, self.base_dir / source_name_of(before))
+        title, source = parse_fact_source_document(path.read_text("utf-8"), origin=str(path))
+        proposed = render_fact_source(title, with_deleted_fact(source, fact_id))
+        staged = self._stage(mutation_id, path, proposed)
+        return staged, before, deleted
 
     def stage_attach_fact(
         self,

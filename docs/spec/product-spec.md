@@ -268,13 +268,6 @@ scope decision.
 19. PostgreSQL owns structured state and relationships; the configured object store owns
     immutable/heavy payloads; Knowledge files own canonical knowledge. No mutable content
     has two simultaneous sources of truth.
-20. `delete_fact` and `delete_application` are soft deletes: a terminal disposition flag
-    on an otherwise-mutable row, appended to its audit trail like any other transition.
-    Neither ever removes a row, rewrites prior content, or touches an immutable table.
-    A deleted Fact or Application is excluded from default active listings but remains
-    individually reachable, and every immutable record already produced from it
-    (JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision, Artifact,
-    Submission) is preserved unchanged.
 20. Every approved output stores exact provenance sufficient to identify its candidate
     context, job context, knowledge context, policies, prompts, provider execution, and
     artifacts.
@@ -612,12 +605,7 @@ Overdue is a computed warning when the date is before today and the Application 
 terminal. There are no notifications.
 
 There is no hard delete through Web. Applications created by mistake may move from
-`saved` to `closed`, or be soft-deleted via `delete_application` (§12): the record is
-excluded from default listings but every immutable JobSnapshot, JobAnalysis,
-SelectionPlan, ValidationRun, ApprovedRevision, Artifact, Submission, and Operation
-record it produced is preserved unchanged and remains individually reachable.
-`delete_application` is orthogonal to `RecruitmentStatus`: it does not replace `closed`
-and is available regardless of the Application's current status.
+`saved` to `closed`.
 
 Audit actor identity is intentionally local and non-authenticated:
 

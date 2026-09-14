@@ -25,6 +25,7 @@ class DraftValidation(DraftServiceBase):
         as a report nobody produced.
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
+        self.load_active_application(working.application_id)
         knowledge = self.load_knowledge()
         report, validation_id = self._run_validation(working, knowledge)
         return ValidationRunResult(

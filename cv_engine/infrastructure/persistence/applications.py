@@ -66,12 +66,23 @@ class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
             raise UnknownRecord(application_id)
         return dict(row)
 
-    def list_applications(self) -> list[dict[str, Any]]:
+    def list_applications(self, *, include_deleted: bool = False) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
-            rows = connection.execute(
-                select(applications).order_by(applications.c.created_at, applications.c.id)
-            ).mappings()
+            query = select(applications).order_by(applications.c.created_at, applications.c.id)
+            if not include_deleted:
+                query = query.where(applications.c.deleted_at.is_(None))
+            rows = connection.execute(query).mappings()
             return [dict(row) for row in rows]
+
+    def set_application_deleted(self, application_id: str, deleted_at: str) -> None:
+        with self.transaction() as connection:
+            result = connection.execute(
+                update(applications)
+                .where(applications.c.id == application_id)
+                .values(deleted_at=deleted_at, updated_at=deleted_at)
+            )
+            if result.rowcount != 1:
+                raise UnknownRecord(application_id)
 
     def record_event(self, application_id: str, event_type: str, payload: dict[str, Any]) -> str:
         event_id = new_id()

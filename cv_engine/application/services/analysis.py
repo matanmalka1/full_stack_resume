@@ -118,6 +118,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         that picks its own source can silently analyse something other than
         what the caller was looking at.
         """
+        self.load_active_application(command.application_id)
         prepared = self.prepare(command)
         return self.activate(command, prepared)
 
@@ -456,6 +457,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         and passes the bound repository, so `apply_selection_change` gets one
         implementation of the overlay rather than a second copy of it.
         """
+        self.load_active_application(command.application_id)
         repo = repository or self.repo
         record = self._analysis_record(command.application_id, command.job_analysis_id, repo)
         analysis: JobAnalysis = record["analysis"]
@@ -744,6 +746,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         source analysis already carried, so a second decision does not silently
         drop the first, and withholding a field is not a retraction of it.
         """
+        self.load_active_application(command.application_id)
         record = self._analysis_record(command.application_id, command.job_analysis_id)
         analysis: JobAnalysis = record["analysis"]
 

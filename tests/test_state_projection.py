@@ -24,6 +24,7 @@ from cv_engine.domain.analysis.approval import (
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.knowledge import Knowledge
 from cv_engine.domain.models import (
+    FactStatus,
     FitLevel,
     JobAnalysis,
     ValidationIssue,
@@ -476,6 +477,41 @@ def test_unrelated_canonical_fact_change_does_not_stale_the_draft(
     detail = setup.services.queries.application_detail(setup.application_id)
     assert "FACT_CHANGED" not in {reason.code for reason in detail.stale_reasons}
     assert detail.working_draft_state is WorkingDraftState.VALIDATED
+
+
+def test_deleted_fact_dependency_blocks_review_and_warns_the_active_draft(
+    drafted_application, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mirrors `test_unrelated_canonical_fact_change_does_not_stale_the_draft`,
+    but the changed fact is one the active draft actually depends on: unlike a
+    generic change, a deletion of a *referenced* fact must produce the
+    dedicated blocking review reason (state-and-use-cases.md §7) and the
+    non-blocking warning (§8), not just staleness.
+    """
+    setup = drafted_application("Deleted Fact State Co")
+    knowledge = setup.services.knowledge.load()
+    working = setup.services.repository.active_working_draft(setup.application_id)
+    referenced = {
+        fact_id
+        for claim in (
+            working.source.headline,
+            *working.source.contacts,
+            *(claim for section in working.source.sections for claim in section.claims),
+        )
+        for fact_id in claim.fact_ids
+    }
+    deleted_id = next(iter(referenced))
+    facts = dict(knowledge.facts.facts)
+    facts[deleted_id] = facts[deleted_id].model_copy(update={"status": FactStatus.DELETED})
+    changed_facts = FactStore(facts, dict(knowledge.facts.source_versions))
+    changed = replace(knowledge, facts=changed_facts)
+    monkeypatch.setattr(setup.services.knowledge, "load", lambda: changed)
+
+    detail = setup.services.queries.application_detail(setup.application_id)
+    assert detail.preparation_state is PreparationState.NEEDS_REVIEW
+    assert "FACT_DELETED_REQUIRES_RESOLUTION" in {reason.code for reason in detail.review_reasons}
+    assert "FACT_DELETED" in {warning.code for warning in detail.warnings}
+    assert "approve" not in detail.available_actions
 
 
 def test_pending_claim_recommends_its_resolution_action(drafted_application) -> None:

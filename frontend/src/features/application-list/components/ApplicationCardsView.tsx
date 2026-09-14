@@ -18,16 +18,19 @@ import {
 interface ApplicationCardsViewProps {
   items: readonly ApplicationListItem[];
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
 const ApplicationCard = ({
   item,
   onRequestClose,
+  onRequestDelete,
   onRequestUpdate,
 }: {
   item: ApplicationListItem;
   onRequestClose: ApplicationCardsViewProps["onRequestClose"];
+  onRequestDelete: ApplicationCardsViewProps["onRequestDelete"];
   onRequestUpdate: ApplicationCardsViewProps["onRequestUpdate"];
 }) => {
   const attention = applicationAttention(item);
@@ -75,7 +78,12 @@ const ApplicationCard = ({
 
       <div className="mt-2 flex items-end justify-between gap-3 border-t border-cv-border pt-3">
         <div className="flex items-center gap-1">
-          <ApplicationRecordActions item={item} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
+          <ApplicationRecordActions
+            item={item}
+            onRequestClose={onRequestClose}
+            onRequestDelete={onRequestDelete}
+            onRequestUpdate={onRequestUpdate}
+          />
           <span className="ms-1 inline-flex items-center gap-1 text-support text-cv-text-muted">
             <Clock aria-hidden="true" className="size-icon-sm" />
             {formatApplicationDate(item.updated_at)}
@@ -87,10 +95,16 @@ const ApplicationCard = ({
   );
 };
 
-export const ApplicationCardsView = ({ items, onRequestClose, onRequestUpdate }: ApplicationCardsViewProps) => (
+export const ApplicationCardsView = ({ items, onRequestClose, onRequestDelete, onRequestUpdate }: ApplicationCardsViewProps) => (
   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
     {items.map((item) => (
-      <ApplicationCard item={item} key={item.id} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
+      <ApplicationCard
+        item={item}
+        key={item.id}
+        onRequestClose={onRequestClose}
+        onRequestDelete={onRequestDelete}
+        onRequestUpdate={onRequestUpdate}
+      />
     ))}
   </div>
 );

@@ -58,10 +58,15 @@ class KnowledgeService(KnowledgeMutationEngine):
     def list_facts(self, status: str | None = None) -> FactListResult:
         facts = self.fact_store()
         recorded = self.repo.latest_fact_statuses()
+        items = facts.by_status(status)
+        if status is None:
+            # No explicit filter excludes deleted facts by default (state-and-
+            # use-cases.md §17); `status=deleted` still reaches them.
+            items = [fact for fact in items if fact.status is not FactStatus.DELETED]
         return FactListResult(
             items=[
                 FactListItem(fact=fact, recorded_status=recorded.get(fact.fact_id))
-                for fact in facts.by_status(status)
+                for fact in items
             ]
         )
 
@@ -81,9 +86,13 @@ class KnowledgeService(KnowledgeMutationEngine):
         facts, profiles, _policies = self.knowledge()
         if fact_id is not None:
             try:
-                facts.get(fact_id)
+                target = facts.get(fact_id)
             except FactStoreError as exc:
                 raise UnknownRecord(str(exc)) from exc
+            if target.status is FactStatus.DELETED:
+                # Excluded from attachment-targets results, the same as it is
+                # excluded from `list_facts` by default (state-and-use-cases.md §17).
+                raise UnknownRecord(f"fact is deleted: {fact_id}")
         return FactAttachmentTargetsResult(
             profiles=[
                 FactAttachmentProfileTarget(
@@ -225,6 +234,40 @@ class KnowledgeService(KnowledgeMutationEngine):
             event_type="fact_promoted",
             from_status=before.status.value,
             reason=reason or f"explicit promotion to {after.status.value}",
+            facts_version=staged.proposed_versions["facts"],
+            lifecycle_version=staged.proposed_versions["facts_lifecycle"],
+        )
+        return self._run_fact_mutation(staged, after, action)
+
+    def delete_fact(
+        self,
+        fact_id: str,
+        *,
+        explicitly_confirmed: bool,
+        reason: str = "",
+    ) -> FactMutationResult:
+        """One-way transition to `deleted`, through the same mutation journal.
+
+        Always permitted regardless of Profile attachment or active
+        SelectionPlan/claim/gap-resolution dependency; downstream review reason
+        (`FACT_DELETED_REQUIRES_RESOLUTION`) and warning (`FACT_DELETED`)
+        report the consequence rather than this command refusing it.
+        """
+        self._ensure_mutations_allowed()
+        if not explicitly_confirmed:
+            raise KnowledgeRejected("fact deletion requires explicit confirmation")
+        mutation_id = new_id()
+        try:
+            staged, before, after = self._knowledge.stage_delete_fact(mutation_id, fact_id)
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not delete fact: {exc}") from exc
+        except (FactStoreError, ValueError) as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+        action = self._fact_event_action(
+            after,
+            event_type="fact_deleted",
+            from_status=before.status.value,
+            reason=reason or "explicit deletion",
             facts_version=staged.proposed_versions["facts"],
             lifecycle_version=staged.proposed_versions["facts_lifecycle"],
         )

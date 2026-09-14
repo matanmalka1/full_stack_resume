@@ -69,6 +69,7 @@ from .shared import ReconciliationResult
 from .tracking import (
     ApplicationMutationResult,
     CloseApplicationCommand,
+    DeleteApplicationCommand,
     ExternalSubmissionCommand,
     NextActionCommand,
     RecruitmentCorrectionCommand,
@@ -86,6 +87,7 @@ __all__ = [
     "CreateJobSnapshotCommand",
     "UpdateApplicationNotesCommand",
     "CloseApplicationCommand",
+    "DeleteApplicationCommand",
     "AnalyzeCommand",
     "SelectionOverlay",
     "CreateSelectionPlanCommand",

@@ -91,6 +91,7 @@ class DraftArchival(DraftServiceBase):
         state where the draft is gone and nothing records what it said.
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
+        self.load_active_application(working.application_id)
         payload = self.materialize_draft_snapshot(working)
         now = utc_now()
         with self.repo.unit_of_work() as uow:

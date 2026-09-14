@@ -123,7 +123,18 @@ export const ApplicationPage = () => {
         loading={detail === undefined}
         loadingState={viewState === "processing" ? analysisPending : preparationLoading}
       >
-        {detail === undefined ? null : (
+        {detail === undefined ? null : detail.application.deleted_at ? (
+          /* A deleted Application stays reachable by ID (product-spec.md invariant #20) so
+             its history is never orphaned, but this screen is the one place a stale link
+             or bookmark could otherwise let someone keep running the preparation workflow
+             - generate a draft, approve, submit - against a record the board no longer
+             lists. The block is unconditional and replaces the step entirely rather than
+             merely warning above it. */
+          <Callout role="alert" title="המועמדות הזו נמחקה" tone="warning">
+            המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות הכנה נוספות. תצלום המשרה, הניתוח, הטיוטות, הגרסאות
+            שאושרו וכל קובץ שהופק נשארים בדיוק כפי שהם.
+          </Callout>
+        ) : (
           <div className="space-y-6">
             {/* A successfully queued analysis is reported by the Operation panel below,
                 which follows the run through its current and terminal states. Route state

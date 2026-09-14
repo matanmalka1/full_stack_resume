@@ -16,6 +16,7 @@ class FactStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
     CANONICAL = "canonical"
+    DELETED = "deleted"
 
 
 class Fact(StrictModel):

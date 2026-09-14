@@ -194,6 +194,12 @@ class KnowledgeStore(Protocol):
         explicitly_confirmed: bool,
     ) -> tuple[StagedKnowledgeFile, Any, Any]: ...
 
+    def stage_delete_fact(
+        self,
+        mutation_id: str,
+        fact_id: str,
+    ) -> tuple[StagedKnowledgeFile, Any, Any]: ...
+
     def stage_attach_fact(
         self,
         mutation_id: str,

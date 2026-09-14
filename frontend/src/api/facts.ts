@@ -77,6 +77,16 @@ export const transitionFact = async (
     })
   ).data;
 
+/* One-way: pending/confirmed/canonical -> deleted. `confirm: false` is refused rather
+   than interpreted, the same as `transitionFact`. */
+export const deleteFact = async (factId: string, body: FactTransitionRequest): Promise<FactMutation> =>
+  (
+    await apiRequest<FactMutation>(`${factPath(factId)}/delete` as ApiPath, {
+      method: "POST",
+      body,
+    })
+  ).data;
+
 export const attachFact = async (factId: string, body: AttachFactRequest): Promise<FactAttachment> =>
   (
     await apiRequest<FactAttachment>(`${factPath(factId)}/attachments` as ApiPath, {

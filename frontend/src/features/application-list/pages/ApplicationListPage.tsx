@@ -16,6 +16,7 @@ import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
 import { ApplicationListTableSkeleton } from "../components/ApplicationListTable";
 import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
+import { DeleteApplicationDialog } from "../components/DeleteApplicationDialog";
 import { useApplicationListMutations } from "../api/mutations";
 import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
 import { PAGE_SIZE } from "../model/applicationListParams";
@@ -48,8 +49,10 @@ export const ApplicationListPage = () => {
   };
   const [closingApplicationId, setClosingApplicationId] = useState<string | null>(null);
   const [closedResult, setClosedResult] = useState<ClosedResult | null>(null);
+  const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
+  const [deletedLabel, setDeletedLabel] = useState<string | null>(null);
   const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
-  const { clearNextActionMutation, closeMutation, undoCloseMutation } = useApplicationListMutations({
+  const { clearNextActionMutation, closeMutation, deleteMutation, undoCloseMutation } = useApplicationListMutations({
     onApplicationClosed: (applicationId, eventId) => {
       const application = findApplication(items, applicationId);
       setClosingApplicationId(null);
@@ -62,6 +65,11 @@ export const ApplicationListPage = () => {
         });
       }
     },
+    onApplicationDeleted: (applicationId) => {
+      const application = findApplication(items, applicationId);
+      setDeletingApplicationId(null);
+      setDeletedLabel(application?.company ?? null);
+    },
     onCloseUndone: () => setClosedResult(null),
     onNextActionCleared: (applicationId) => {
       if (updatingApplicationId === applicationId) setUpdatingApplicationId(null);
@@ -71,6 +79,7 @@ export const ApplicationListPage = () => {
   const page = listQuery.data;
   const items = page?.items ?? [];
   const closingApplication = findApplication(items, closingApplicationId);
+  const deletingApplication = findApplication(items, deletingApplicationId);
   const updatingApplication = findApplication(items, updatingApplicationId);
   const recruitmentStageCounts = Object.fromEntries(
     recruitmentStages.map((stage) => [
@@ -127,6 +136,13 @@ export const ApplicationListPage = () => {
           )}
         </div>
       )}
+      {deletedLabel === null ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border bg-cv-surface-muted px-3.5 py-2.5 text-support text-cv-text">
+          <LiveRegion visuallyHidden={false}>
+            <span dir="auto">המועמדות של {deletedLabel} נמחקה והוסרה מלוח המועמדויות.</span>
+          </LiveRegion>
+        </div>
+      )}
       <ApplicationAttentionSummary
         clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
         onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
@@ -151,6 +167,13 @@ export const ApplicationListPage = () => {
           error={undoCloseMutation.error}
           fallbackDetail="הסגירה נשארה בתוקף. אפשר לנסות שוב או לתקן את האירוע מתוך המועמדות."
           fallbackTitle="לא ניתן לבטל את הסגירה"
+        />
+      )}
+      {deleteMutation.error === null ? null : (
+        <ErrorCallout
+          error={deleteMutation.error}
+          fallbackDetail="המועמדות לא נמחקה. אפשר לנסות שוב."
+          fallbackTitle="מחיקת המועמדות נכשלה"
         />
       )}
 
@@ -212,6 +235,7 @@ export const ApplicationListPage = () => {
               onClearFilters={clearFilters}
               onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
               onRequestClose={(item) => setClosingApplicationId(item.id)}
+              onRequestDelete={(item) => setDeletingApplicationId(item.id)}
               onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
               pageSize={PAGE_SIZE}
               viewMode={viewMode}
@@ -224,6 +248,12 @@ export const ApplicationListPage = () => {
         onCancel={() => setClosingApplicationId(null)}
         onConfirm={() => closingApplicationId && closeMutation.mutate(closingApplicationId)}
         pending={closeMutation.isPending}
+      />
+      <DeleteApplicationDialog
+        application={deletingApplication}
+        onCancel={() => setDeletingApplicationId(null)}
+        onConfirm={() => deletingApplicationId && deleteMutation.mutate(deletingApplicationId)}
+        pending={deleteMutation.isPending}
       />
       <RecruitmentUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplicationId(null)} />
     </PageShell>

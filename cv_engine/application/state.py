@@ -302,6 +302,41 @@ def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -
                 ["confirm_and_use_fact", "update_working_draft"],
             )
         )
+    # A deleted fact never blocks unrelated Applications (state-and-use-
+    # cases.md §7); only an active dependency does. "Active dependency" here
+    # is the active SelectionPlan's selected facts plus, once a draft exists,
+    # the facts its claims actually cite - mirroring the referenced-fact sets
+    # `derive_staleness`/`derive_warnings` already compute for FACT_CHANGED
+    # and FACT_SUPERSEDED.
+    dependent_fact_ids: set[str] = set(plan.plan.selected_fact_ids) if plan is not None else set()
+    if draft is not None:
+        dependent_fact_ids |= {
+            fact_id
+            for claim in (
+                draft.source.headline,
+                *draft.source.contacts,
+                *(claim for section in draft.source.sections for claim in section.claims),
+            )
+            for fact_id in claim.fact_ids
+        }
+    deleted_dependencies = sorted(
+        fact_id
+        for fact_id in dependent_fact_ids
+        if fact_id in context.knowledge.facts.facts
+        and context.knowledge.facts.facts[fact_id].status is FactStatus.DELETED
+    )
+    if deleted_dependencies:
+        reasons.append(
+            _reason(
+                "FACT_DELETED_REQUIRES_RESOLUTION",
+                "The active selection depends on a fact that has been deleted.",
+                {
+                    "job_analysis_id": context.active_analysis_id or "",
+                    "fact_id": deleted_dependencies[0],
+                },
+                ["confirm_and_use_fact", "apply_selection_change", "update_working_draft"],
+            )
+        )
     return reasons
 
 
@@ -429,6 +464,23 @@ def derive_warnings(
                     code="FACT_SUPERSEDED",
                     message="A fact used by the active draft has a canonical replacement.",
                     entity_references={"replacement_fact_id": superseded[0]},
+                )
+            )
+        deleted = sorted(
+            fact_id
+            for fact_id in referenced
+            if fact_id in context.knowledge.facts.facts
+            and context.knowledge.facts.facts[fact_id].status is FactStatus.DELETED
+        )
+        if deleted:
+            # Informational only: an ApprovedRevision that already rendered
+            # the fact is immutable and unaffected (state-and-use-cases.md
+            # §8). The blocking case is FACT_DELETED_REQUIRES_RESOLUTION (§7).
+            warnings.append(
+                WarningView(
+                    code="FACT_DELETED",
+                    message="A fact used by the active draft has been deleted.",
+                    entity_references={"fact_id": deleted[0]},
                 )
             )
     return warnings

@@ -109,6 +109,7 @@ class DraftApproval(DraftServiceBase):
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
         application_id = working.application_id
+        application = self.load_active_application(application_id)
         quarantined = self.repo.quarantined_knowledge_mutations()
         if quarantined:
             raise PreconditionFailed(
@@ -150,7 +151,6 @@ class DraftApproval(DraftServiceBase):
         recruiter_pdf_filename = self.renderer.filename_for(
             profiles.get(draft.profile).normalized_role, self.candidate()
         )
-        application = self.repo.get_application(application_id)
         structured = {
             "company": application["company"],
             "target_job": application["target_role"],

@@ -461,6 +461,44 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
     assert _reload(services).get("situational.postgres").status is FactStatus.PENDING
 
 
+def test_delete_fact_is_one_way_and_excluded_from_default_listing_and_targets(
+    services: Services,
+) -> None:
+    created = services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    fact_id = created.fact.fact_id
+
+    with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
+        services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=False)
+
+    deleted = services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=True)
+    assert deleted.fact.status is FactStatus.DELETED
+    stored = _reload(services).get(fact_id)
+    assert stored.status is FactStatus.DELETED
+
+    # One-way: deleting an already-deleted fact is refused.
+    with pytest.raises(KnowledgeRejected, match="already deleted"):
+        services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=True)
+
+    # Excluded from the default listing; still reachable by explicit filter and by ID.
+    default_listing = services.knowledge_lifecycle.list_facts()
+    assert fact_id not in {item.fact.fact_id for item in default_listing.items}
+    deleted_listing = services.knowledge_lifecycle.list_facts("deleted")
+    assert fact_id in {item.fact.fact_id for item in deleted_listing.items}
+    assert services.knowledge_lifecycle.show_fact(fact_id).fact.status is FactStatus.DELETED
+
+    # Excluded from attachment targets, and refused by confirm/promote/attach.
+    with pytest.raises(UnknownRecord, match="deleted"):
+        services.knowledge_lifecycle.fact_attachment_targets(fact_id)
+    with pytest.raises(KnowledgeRejected, match="invalid fact transition"):
+        services.knowledge_lifecycle.promote_fact(fact_id, "confirmed", explicitly_confirmed=True)
+    with pytest.raises(KnowledgeRejected, match="only canonical facts"):
+        services.knowledge_lifecycle.attach_fact(fact_id, "account-manager", "Work Experience")
+
+    # The lifecycle trail is preserved, not erased.
+    history = services.knowledge_lifecycle.fact_history(fact_id)
+    assert [event.to_status for event in history.events] == ["pending", "deleted"]
+
+
 def test_lifecycle_survives_process_boundaries_over_http(
     live_api_server, project_root: Path
 ) -> None:

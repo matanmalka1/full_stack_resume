@@ -10,6 +10,7 @@ import { useFactAttachmentTargets } from "../api/queries";
 import { replacementFactForm } from "../model/factForm";
 import { FactAttachmentControl } from "./FactAttachmentControl";
 import { FactCreationDialog } from "./FactCreationDialog";
+import { FactDeletionControl } from "./FactDeletionControl";
 import { FactEventHistory } from "./FactEventHistory";
 import { FactOverview } from "./FactOverview";
 import { FactPromotionControl } from "./FactPromotionControl";
@@ -94,6 +95,12 @@ export const FactManagementDetail = ({ detail, mutationsBlocked = false, onCreat
             <FactEventHistory events={detail.events} />
           )}
         </Disclosure>
+
+        {mutationsBlocked ? null : (
+          <div className="flex justify-end">
+            <FactDeletionControl fact={fact} />
+          </div>
+        )}
       </div>
     </div>
   );

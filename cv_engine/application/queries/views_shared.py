@@ -41,6 +41,7 @@ class ApplicationView(BoundaryDTO):
     source: str = "manual"
     created_at: str
     updated_at: str
+    deleted_at: str | None = None
 
 
 class ReasonView(BoundaryDTO):

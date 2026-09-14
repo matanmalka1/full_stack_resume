@@ -229,6 +229,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                             job_snapshots.c.application_id == applications.c.id,
                         )
                     )
+                    .where(applications.c.deleted_at.is_(None))
                     .order_by(
                         applications.c.created_at,
                         applications.c.id,

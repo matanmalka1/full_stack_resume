@@ -15,6 +15,12 @@ class CloseApplicationCommand(BoundaryDTO):
     client: WriteClient
 
 
+class DeleteApplicationCommand(BoundaryDTO):
+    application_id: str
+    actor_type: Literal["user", "system"] = "user"
+    client: WriteClient
+
+
 class RecruitmentStatusCommand(BoundaryDTO):
     application_id: str
     target_status: str

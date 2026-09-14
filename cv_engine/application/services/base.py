@@ -22,10 +22,12 @@ from ..errors import (
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
+    StateConflict,
     UnknownRecord,
 )
 from ..ports import (
     AIProvider,
+    ApplicationStore,
     ArtifactRegistry,
     ArtifactStore,
     DraftRepository,
@@ -64,6 +66,32 @@ class ServiceBase(Generic[RepoT]):
         self._renderer = renderer
         self._provider = provider
         self._snapshots = snapshots
+
+    def load_active_application(self, application_id: str) -> dict[str, Any]:
+        """The Application a mutating command acts on, or the refusal naming why.
+
+        Every command that changes or produces state scoped to one
+        Application is expected to resolve it through here first, rather
+        than calling `self.repo.get_application` directly: a single choke
+        point means a deleted Application (`delete_application`,
+        product-spec.md invariant #20) cannot keep accumulating new
+        Analysis/Draft/Validation/Approval/Render/Submission work through a
+        stale link without every service having to remember its own check.
+
+        A read that must still resolve a deleted Application's history on
+        purpose - the detail-by-ID projection, a fact-style history read, a
+        decision-markdown export - calls `self.repo.get_application` (or the
+        repository's own read) directly instead of this, because those are
+        exactly the reads product-spec.md invariant #20 requires to keep
+        working.
+        """
+        try:
+            application = cast(ApplicationStore, self.repo).get_application(application_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown application: {application_id}") from exc
+        if application.get("deleted_at") is not None:
+            raise StateConflict(f"application is deleted: {application_id}")
+        return application
 
     def load_knowledge(self) -> Knowledge:
         try:

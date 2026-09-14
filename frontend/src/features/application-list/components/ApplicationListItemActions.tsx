@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, CircleAlert, Ellipsis, FileCheck2, SlidersHorizontal } from "lucide-react";
+import { Archive, ArrowLeft, CircleAlert, Ellipsis, FileCheck2, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -97,10 +97,12 @@ export const ApplicationRecommendedAction = ({
 export const ApplicationRecordActions = ({
   item,
   onRequestClose,
+  onRequestDelete,
   onRequestUpdate,
 }: {
   item: ApplicationListItem;
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
   const [open, setOpen] = useState(false);
@@ -191,6 +193,19 @@ export const ApplicationRecordActions = ({
               סגירת מועמדות
             </Button>
           )}
+          <Button
+            aria-label={`מחיקת המועמדות ${item.company}`}
+            className="min-h-9 w-full justify-start rounded-control px-3 text-cv-blocker hover:bg-cv-blocker-soft"
+            onClick={() => {
+              setOpen(false);
+              onRequestDelete(item);
+            }}
+            role="menuitem"
+            variant="ghost"
+          >
+            <Trash2 aria-hidden="true" className="size-icon-md" />
+            מחיקת מועמדות
+          </Button>
         </div>
       ) : null}
     </div>

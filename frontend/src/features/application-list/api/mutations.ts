@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { closeApplication, invalidateApplicationViews } from "@/api/applications";
+import { closeApplication, deleteApplication, invalidateApplicationViews } from "@/api/applications";
 import type { RecruitmentStatus } from "@/api/contracts";
 import { correctRecruitmentStatus, setNextAction } from "@/api/tracking";
 
 interface ApplicationListMutationOptions {
   onApplicationClosed: (applicationId: string, eventId: string | null | undefined) => void;
+  onApplicationDeleted: (applicationId: string) => void;
   onCloseUndone: () => void;
   onNextActionCleared: (applicationId: string) => void;
 }
@@ -13,6 +14,7 @@ interface ApplicationListMutationOptions {
 /** Keeps command state and cache invalidation out of list presentation. */
 export const useApplicationListMutations = ({
   onApplicationClosed,
+  onApplicationDeleted,
   onCloseUndone,
   onNextActionCleared,
 }: ApplicationListMutationOptions) => {
@@ -22,6 +24,16 @@ export const useApplicationListMutations = ({
     mutationFn: closeApplication,
     onSuccess: async (result, applicationId) => {
       onApplicationClosed(applicationId, result.event_id);
+      await invalidateApplicationViews(queryClient, applicationId);
+    },
+  });
+
+  /* One-way: there is no undelete command in this phase, so unlike `closeMutation`
+     there is nothing analogous to `undoCloseMutation` to pair it with. */
+  const deleteMutation = useMutation({
+    mutationFn: deleteApplication,
+    onSuccess: async (_result, applicationId) => {
+      onApplicationDeleted(applicationId);
       await invalidateApplicationViews(queryClient, applicationId);
     },
   });
@@ -55,5 +67,5 @@ export const useApplicationListMutations = ({
     },
   });
 
-  return { clearNextActionMutation, closeMutation, undoCloseMutation };
+  return { clearNextActionMutation, closeMutation, deleteMutation, undoCloseMutation };
 };

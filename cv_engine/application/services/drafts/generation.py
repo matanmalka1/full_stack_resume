@@ -72,6 +72,7 @@ class DraftGeneration(DraftServiceBase):
         in `analyze`: a command that resolves `latest` itself can draft from an
         analysis the caller never saw.
         """
+        self.load_active_application(command.application_id)
         prepared = self.prepare(command)
         return self.activate(command, prepared)
 

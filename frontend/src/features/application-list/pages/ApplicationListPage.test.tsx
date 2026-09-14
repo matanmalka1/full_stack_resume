@@ -712,4 +712,33 @@ describe("ApplicationListPage", () => {
     );
     await waitFor(() => expect(screen.queryByText("המועמדות של Acme נסגרה")).not.toBeInTheDocument());
   });
+
+  it("invalidates every cached list and detail after deleting an Application, with no undo offered", async () => {
+    const { fetchMock } = stubList([item()]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const openListKey = applicationListQueryOptions({}).queryKey;
+    const detailKey = applicationDetailQueryOptions("app-1").queryKey;
+    queryClient.setQueryData(detailKey, detailBody());
+
+    renderPage({ queryClient });
+
+    fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "מחיקת מועמדות" }));
+    fireEvent.click(screen.getByRole("button", { name: "מחיקת המועמדות" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/v1/applications/app-1/delete",
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+    await waitFor(() => {
+      expect(queryClient.getQueryState(openListKey)?.isInvalidated).toBe(true);
+      expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("המועמדות של Acme נמחקה");
+    // One-way: unlike closing, deletion offers nothing to undo.
+    expect(screen.queryByRole("button", { name: "ביטול המחיקה" })).not.toBeInTheDocument();
+  });
 });

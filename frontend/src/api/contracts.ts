@@ -51,6 +51,7 @@ export type ApplicationIntake = ApiSchemas["DuplicateCheckRequest"];
 export type CreateApplicationRequest = ApiSchemas["CreateApplicationRequest"];
 export type CreatedApplication = ApiSchemas["CreateApplicationResponse"];
 export type ClosedApplication = ApiSchemas["CloseApplicationResponse"];
+export type DeletedApplication = ApiSchemas["DeleteApplicationResponse"];
 /* A new posting version for an Application that already exists. It creates a snapshot
    beside the ones on record rather than editing one, so the response names the new
    snapshot and nothing else. */

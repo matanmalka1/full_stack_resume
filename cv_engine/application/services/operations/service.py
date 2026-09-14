@@ -109,6 +109,7 @@ class OperationService(ServiceBase[OperationRepository]):
         idempotency_key: str,
         analysis_service: AnalysisService,
     ) -> OperationView:
+        self.load_active_application(command.application_id)
         if command.provider == "openai":
             command = self._freeze_ai_execution(command)
         elif command.provider == "deterministic":
@@ -147,6 +148,7 @@ class OperationService(ServiceBase[OperationRepository]):
         draft_service: DraftService,
         operation_id: str | None = None,
     ) -> OperationView:
+        self.load_active_application(command.application_id)
         command = (
             self._freeze_ai_execution(command)
             if command.provider == "openai"
@@ -243,6 +245,7 @@ class OperationService(ServiceBase[OperationRepository]):
         replaces the analysis while this is queued fails the source check
         instead of proposing a plan for an analysis nobody is looking at.
         """
+        self.load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
         preparation = cast(PreparationRepository, self.repo)
         try:
@@ -311,6 +314,7 @@ class OperationService(ServiceBase[OperationRepository]):
         so a regeneration cannot be launched against sources the client did not
         name.
         """
+        self.load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
         drafts = cast(DraftRepository, self.repo)
         try:
@@ -397,6 +401,7 @@ class OperationService(ServiceBase[OperationRepository]):
         the draft nor its version made a replacement of version 8 look like a
         replay of the one sent for version 7.
         """
+        self.load_active_application(command.application_id)
         draft_command = DraftCommand(
             application_id=command.application_id,
             job_analysis_id=command.job_analysis_id,
@@ -467,6 +472,7 @@ class OperationService(ServiceBase[OperationRepository]):
         idempotency_key: str,
         rendering_service: RenderingService,
     ) -> OperationView:
+        self.load_active_application(command.application_id)
         readiness = cast(ReadinessRepository, self.repo)
         try:
             revision = readiness.approved_revision(command.approved_revision_id)
@@ -611,6 +617,7 @@ class OperationService(ServiceBase[OperationRepository]):
         the original rather than creating a second attempt.
         """
         original = self.repo.operation(operation_id)
+        self.load_active_application(original.application_id)
         if not is_terminal_operation(original.status):
             raise StateConflict("only a terminal Operation can be retried")
         if original.failure_code is OperationFailureCode.MISSING_FACT_RENDERING:

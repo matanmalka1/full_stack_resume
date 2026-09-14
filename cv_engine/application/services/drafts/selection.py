@@ -43,6 +43,7 @@ class DraftSelectionChange(DraftServiceBase):
         that needs wording judgment.
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
+        self.load_active_application(working.application_id)
         if manually_edited(working.source):
             raise PreconditionFailed(
                 "this draft carries manual wording that a deterministic rebuild would "

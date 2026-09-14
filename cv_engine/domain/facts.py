@@ -112,6 +112,21 @@ class FactStore:
         self.facts[fact_id] = promoted
         return promoted
 
+    def delete(self, fact_id: str) -> Fact:
+        """One-way transition to `deleted` from any live status.
+
+        Deletion is always permitted, regardless of Profile attachment or
+        active SelectionPlan/claim/gap-resolution dependency (state-and-use-
+        cases.md §17): nothing here pre-checks those, the downstream review
+        reason and warning do. Only an already-deleted fact is refused.
+        """
+        fact = self.get(fact_id)
+        if fact.status is FactStatus.DELETED:
+            raise FactStoreError(f"fact is already deleted: {fact_id}")
+        deleted = fact.model_copy(update={"status": FactStatus.DELETED})
+        self.facts[fact_id] = deleted
+        return deleted
+
 
 def parse_fact_source(text: str, *, origin: str) -> FactSource:
     """Parse one fact source document. `origin` only names it in errors."""
@@ -219,3 +234,18 @@ def with_promoted_fact(
         else source.source_version
     )
     return FactSource(source_version=version, facts=facts)
+
+
+def with_deleted_fact(source: FactSource, fact_id: str) -> FactSource:
+    """The source file's next content with one fact marked `deleted`.
+
+    Unlike `with_promoted_fact`, deletion never sets `confirmed_at`: it is not
+    a confirmation and must not manufacture one for a fact that never had it.
+    """
+    facts = [
+        fact.model_copy(update={"status": FactStatus.DELETED}) if fact.fact_id == fact_id else fact
+        for fact in source.facts
+    ]
+    if all(fact.status is not FactStatus.DELETED or fact.fact_id != fact_id for fact in facts):
+        raise FactStoreError(f"fact {fact_id} is not present in this source")
+    return FactSource(source_version=source.source_version, facts=facts)

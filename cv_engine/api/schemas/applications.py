@@ -86,6 +86,7 @@ class ApplicationResponse(HttpSchema):
     source: str
     created_at: str
     updated_at: str
+    deleted_at: str | None = None
 
 
 class ReasonResponse(HttpSchema):
@@ -244,6 +245,19 @@ class DecisionRecordResponse(HttpSchema):
 
 
 class CloseApplicationResponse(HttpSchema):
+    application_id: str
+    current_status: str
+    terminal_outcome: str | None = None
+    next_action: str | None = None
+    next_action_date: str | None = None
+
+
+class DeleteApplicationResponse(HttpSchema):
+    """`current_status`/`terminal_outcome` are unchanged by deletion; they are
+    carried here only because they are part of the same mutation-result shape
+    every other tracking command returns.
+    """
+
     application_id: str
     current_status: str
     terminal_outcome: str | None = None

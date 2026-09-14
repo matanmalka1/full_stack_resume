@@ -13,6 +13,7 @@ import type {
   CreateJobSnapshotRequest,
   ClosedApplication,
   CreatedApplication,
+  DeletedApplication,
   CreatedJobSnapshot,
   UpdatedApplicationNotes,
   UpdateApplicationNotesRequest,
@@ -438,6 +439,20 @@ export const replaceWorkingDraft = async (
 export const closeApplication = async (applicationId: string): Promise<ClosedApplication> => {
   const response = await apiRequest<ClosedApplication>(
     `/api/v1/applications/${encodeURIComponent(applicationId)}/close`,
+    { method: "POST" },
+  );
+  return response.data;
+};
+
+/* §Tracking: soft-delete one Application, orthogonal to `RecruitmentStatus` and callable
+   from any current status including `closed`. Every immutable record it produced -
+   JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision, Artifact,
+   Submission, Operation - stays exactly as it is; only the default list/Dashboard
+   projection and duplicate detection stop surfacing the Application. There is no
+   undelete in this phase, so the caller confirms before this is sent. */
+export const deleteApplication = async (applicationId: string): Promise<DeletedApplication> => {
+  const response = await apiRequest<DeletedApplication>(
+    `/api/v1/applications/${encodeURIComponent(applicationId)}/delete`,
     { method: "POST" },
   );
   return response.data;

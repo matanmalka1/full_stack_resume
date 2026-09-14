@@ -17,6 +17,7 @@ interface ApplicationListResultsProps {
   onClearFilters: () => void;
   onOffsetChange: (offset: number) => void;
   onRequestClose: (item: ApplicationListItem) => void;
+  onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
@@ -37,6 +38,7 @@ export const ApplicationListResults = ({
   onClearFilters,
   onOffsetChange,
   onRequestClose,
+  onRequestDelete,
   onRequestUpdate,
 }: ApplicationListResultsProps) => {
   if (items.length === 0) {
@@ -58,11 +60,21 @@ export const ApplicationListResults = ({
        the first load and every failure. */
     <div aria-busy={fetching ? true : undefined} className={fetching ? "opacity-60 transition-opacity" : undefined}>
       {viewMode === "cards" ? (
-        <ApplicationCardsView items={items} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
+        <ApplicationCardsView
+          items={items}
+          onRequestClose={onRequestClose}
+          onRequestDelete={onRequestDelete}
+          onRequestUpdate={onRequestUpdate}
+        />
       ) : viewMode === "pipeline" ? (
         <ApplicationPipelineView items={items} onRequestUpdate={onRequestUpdate} />
       ) : (
-        <ApplicationListTable items={items} onRequestClose={onRequestClose} onRequestUpdate={onRequestUpdate} />
+        <ApplicationListTable
+          items={items}
+          onRequestClose={onRequestClose}
+          onRequestDelete={onRequestDelete}
+          onRequestUpdate={onRequestUpdate}
+        />
       )}
       <ApplicationListPagination
         matchedCount={matchedCount}
