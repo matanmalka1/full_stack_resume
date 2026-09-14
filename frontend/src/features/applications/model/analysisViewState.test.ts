@@ -108,4 +108,33 @@ describe("analysisViewState", () => {
       }),
     ).toBe("analysis_failed");
   });
+  it("preserves a failed re-analysis over the older active analysis", () => {
+    expect(
+      analysisViewState({
+        analysisWasQueuedOnCreate: false,
+        detail: detail({ active_analysis_id: "analysis-2" }),
+        operation: operation({ status: "failed", is_terminal: true }),
+      }),
+    ).toBe("analysis_failed");
+  });
+
+  it.each(["succeeded", "failed"] as const)(
+    "shows a newer posting instead of historical %s analysis work",
+    (status) => {
+      expect(
+        analysisViewState({
+          analysisWasQueuedOnCreate: false,
+          detail: detail({
+            latest_snapshot: { captured_at: "2026-09-10T08:01:00Z" } as ApplicationDetail["latest_snapshot"],
+          }),
+          operation: operation({
+            status,
+            is_terminal: true,
+            finished_at: "2026-09-10T08:00:10Z",
+            outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+          }),
+        }),
+      ).toBe("content");
+    },
+  );
 });

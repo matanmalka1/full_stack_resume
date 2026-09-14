@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Settings } from "@/api/contracts";
+import { applicationDetailQueryKey } from "@/api/applications";
+import { autoDraftSources } from "@/features/preparation/model/autoDraft";
 import { settingsQueryKey } from "@/api/settings";
 import { ApplicationPage } from "./ApplicationPage";
 
@@ -65,8 +67,8 @@ const queued = (overrides: Partial<Operation> = {}): Operation => ({
 const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   detail({
     preparation_state: "ready_to_draft",
-    available_actions: ["draft"],
-    recommended_action: "draft",
+    available_actions: ["create_draft"],
+    recommended_action: "create_draft",
     active_analysis_id: "analysis-1",
     latest_analysis: {
       id: "analysis-1",
@@ -128,6 +130,18 @@ const deterministicSettings: Settings = {
 
 /* Retries and the projection poll are off inside the test client: the interval is
    covered by its own unit test, and a live timer here would make every assertion racy. */
+const HistoryControls = () => {
+  const navigate = useNavigate();
+  return (
+    <>
+      <button onClick={() => navigate("/applications/app-2")}>Another application</button>
+      <button onClick={() => navigate("/applications/app-1")}>Analysis</button>
+      <button onClick={() => navigate(-1)}>Back</button>
+      <button onClick={() => navigate(1)}>Forward</button>
+    </>
+  );
+};
+
 const renderPage = (settings: Settings = deterministicSettings, routeState?: unknown) => {
   const client = new QueryClient({
     defaultOptions: {
@@ -140,9 +154,10 @@ const renderPage = (settings: Settings = deterministicSettings, routeState?: unk
   });
   client.setQueryData(settingsQueryKey, { settings, etag: '"settings-1"' });
 
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[{ pathname: "/applications/app-1", state: routeState }]}>
+        <HistoryControls />
         <Routes>
           <Route element={<ApplicationPage />} path="/applications/:applicationId" />
           <Route element={<p>Draft editor route</p>} path="/applications/:applicationId/draft" />
@@ -150,6 +165,7 @@ const renderPage = (settings: Settings = deterministicSettings, routeState?: unk
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...rendered, client };
 };
 
 const clickEnabledButton = async (name: string) => {
@@ -212,20 +228,25 @@ describe("ApplicationPage at the preparation route", () => {
 
   /* The Web automation opt-in, which moved here with the flow: queueing no longer
      navigates, so the Operation screen that used to run this chain is not on the path.
-     Once per successful analyze, and not again after a remount - the session record is
-     what makes a reload safe. */
+     This test proves one dispatch from the exact activated analysis and plan. Reload
+     idempotency and server-backed recovery are covered separately below. */
   it("auto-generates the draft once per successful analyze when Settings ask for it", async () => {
-    let projectionReads = 0;
+    let draftQueued = false;
     const analyzed = queued({
       status: "succeeded",
       is_terminal: true,
       phase: "completed",
       available_actions: [],
+      outputs: [
+        { output_type: "job_analysis", output_id: "analysis-1", active: true },
+        { output_type: "selection_plan", output_id: "plan-1", active: true },
+      ],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") {
+        draftQueued = true;
         return Promise.resolve(acceptedResponse(drafting));
       }
       if (url.endsWith("/operations/op-draft")) {
@@ -241,15 +262,11 @@ describe("ApplicationPage at the preparation route", () => {
       if (url.includes("/operations/")) {
         return Promise.resolve(jsonResponse(analyzed));
       }
-      /* The projection reports the analyze while it runs and lets go once it finishes -
-         which is also what the continuation guard waits for, since it refuses to queue a
-         draft while other work is live. The screen keeps watching the succeeded Operation
-         by id, which is what the chain reads. */
-      projectionReads += 1;
       return Promise.resolve(
         jsonResponse(
           analyzed_detail({
-            active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
+            active_operation: draftQueued ? drafting : null,
+            latest_operation: analyzed,
             active_selection_plan_id: "plan-1",
           }),
         ),
@@ -257,7 +274,7 @@ describe("ApplicationPage at the preparation route", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const first = renderPage({
+    renderPage({
       ...deterministicSettings,
       auto_generate_when_review_not_required: true,
     });
@@ -269,11 +286,6 @@ describe("ApplicationPage at the preparation route", () => {
       job_analysis_id: "analysis-1",
       selection_plan_id: "plan-1",
     });
-
-    first.unmount();
-    renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
-
-    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
   });
 
   it("moves to the editor after the automatically generated draft succeeds", async () => {
@@ -283,6 +295,10 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
+      outputs: [
+        { output_type: "job_analysis", output_id: "analysis-1", active: true },
+        { output_type: "selection_plan", output_id: "plan-1", active: true },
+      ],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const drafted = queued({
@@ -292,13 +308,18 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
+      outputs: [{ output_type: "working_draft", output_id: "draft-1", active: true }],
     });
+    let draftActivated = false;
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
-        if (url.endsWith("/operations/op-draft")) return Promise.resolve(jsonResponse(drafted));
+        if (url.endsWith("/operations/op-draft")) {
+          draftActivated = true;
+          return Promise.resolve(jsonResponse(drafted));
+        }
         if (url.includes("/settings")) {
           return Promise.resolve(
             jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
@@ -311,6 +332,13 @@ describe("ApplicationPage at the preparation route", () => {
             analyzed_detail({
               active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
               active_selection_plan_id: "plan-1",
+              ...(draftActivated
+                ? {
+                    active_working_draft_id: "draft-1",
+                    working_draft_state: "editing",
+                    preparation_state: "draft_in_progress",
+                  }
+                : {}),
             }),
           ),
         );
@@ -336,17 +364,29 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
+      outputs: [{ output_type: "working_draft", output_id: "draft-1", active: true }],
     });
+    let draftActivated = false;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
-      if (url.endsWith("/operations/op-draft")) return Promise.resolve(jsonResponse(drafted));
+      if (url.endsWith("/operations/op-draft")) {
+        draftActivated = true;
+        return Promise.resolve(jsonResponse(drafted));
+      }
       return Promise.resolve(
         jsonResponse(
           analyzed_detail({
             available_actions: ["create_draft"],
             recommended_action: "create_draft",
             active_selection_plan_id: "plan-1",
+            ...(draftActivated
+              ? {
+                  active_working_draft_id: "draft-1",
+                  working_draft_state: "editing",
+                  preparation_state: "draft_in_progress",
+                }
+              : {}),
           }),
         ),
       );
@@ -622,4 +662,291 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.getByText("האימות נכשל. צריך לתקן ולאמת מחדש.")).toBeInTheDocument();
     expect(screen.queryByText("WORKING_DRAFT_REQUIRED")).not.toBeInTheDocument();
   });
+  it("recovers a terminal analysis failure without route state and retries only the server-offered Operation", async () => {
+    const failed = queued({
+      status: "failed",
+      is_terminal: true,
+      failure_code: "PROVIDER_TIMEOUT",
+      available_actions: ["retry"],
+    });
+    const retrying = queued({ id: "op-retry", retry_of_operation_id: failed.id });
+    let resolveRetry: (response: Response) => void = () => {};
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST")
+        return new Promise<Response>((resolve) => {
+          resolveRetry = resolve;
+        });
+      if (url.endsWith("/operations/op-retry")) return Promise.resolve(jsonResponse(retrying));
+      if (url.includes("/operations/")) return Promise.resolve(jsonResponse(failed));
+      return Promise.resolve(jsonResponse(detail({ latest_operation: failed, active_operation: null })));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "ניסיון חוזר" }));
+    const pending = await screen.findByRole("button", { name: "יוצר ניסיון חדש…" });
+    expect(pending).toBeDisabled();
+    fireEvent.click(pending);
+    await act(async () => resolveRetry(acceptedResponse(retrying)));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument());
+    expect(screen.getByRole("heading", { name: "הרצת ניתוח המשרה" })).toBeInTheDocument();
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(posts).toHaveLength(1);
+    const retryRequest = posts[0];
+    expect(retryRequest).toBeDefined();
+    expect(retryRequest?.[0]).toBe("/api/v1/operations/op-1/retry");
+    expect(retryRequest?.[1]?.headers).toBeInstanceOf(Headers);
+    expect((retryRequest?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe("retry:op-1");
+  });
+
+  it("offers analysis after creation scheduling failed and does not retain creation news over later server work", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(detail()))),
+    );
+    const { client } = renderPage(deterministicSettings, { createdApplication: { analysisQueued: false } });
+    expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeEnabled();
+    act(() =>
+      client.setQueryData(applicationDetailQueryKey("app-1"), analyzed_detail({ active_selection_plan_id: "plan-1" })),
+    );
+    await waitFor(() => expect(screen.queryByText("המועמדות נוצרה, אך הניתוח לא הופעל")).not.toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
+  });
+
+  it("restores a completed analysis from the server and resends an uncertain continuation with the same idempotency key", async () => {
+    const analyzed = queued({
+      status: "succeeded",
+      is_terminal: true,
+      available_actions: [],
+      outputs: [
+        { output_type: "job_analysis", output_id: "analysis-1", active: true },
+        { output_type: "selection_plan", output_id: "plan-1", active: true },
+      ],
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return Promise.reject(new TypeError("response lost"));
+      if (String(input).includes("/settings"))
+        return Promise.resolve(
+          jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
+        );
+      if (String(input).includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
+      return Promise.resolve(
+        jsonResponse(analyzed_detail({ latest_operation: analyzed, active_selection_plan_id: "plan-1" })),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const settings = { ...deterministicSettings, auto_generate_when_review_not_required: true };
+    const first = renderPage(settings);
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText("הניתוח הושלם. יצירת הטיוטה מתחילה מיד.")).not.toBeInTheDocument());
+    first.unmount();
+    renderPage(settings);
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2));
+    const keys = fetchMock.mock.calls
+      .filter(([, init]) => init?.method === "POST")
+      .map(([, init]) => (init?.headers as Headers | undefined)?.get("Idempotency-Key"));
+    expect(keys).toEqual(["auto-draft:analysis-1:plan-1", "auto-draft:analysis-1:plan-1"]);
+  });
+
+  it.each([
+    "review",
+    "blocked",
+    "new-analysis",
+    "new-plan",
+    "inactive-output",
+    "cancelled",
+    "deleted",
+    "existing-draft",
+  ])("does not authorize a restored automatic draft with %s", (scenario) => {
+    const analyzed = queued({
+      status: "succeeded",
+      is_terminal: true,
+      outputs: [
+        { output_type: "job_analysis", output_id: "analysis-1", active: true },
+        { output_type: "selection_plan", output_id: "plan-1", active: true },
+      ],
+    });
+    const projection = analyzed_detail({ active_selection_plan_id: "plan-1" });
+    if (scenario === "review")
+      projection.review_reasons = [
+        {
+          code: "HARD_GAP_REQUIRES_DECISION",
+          message: "Decision required",
+          entity_references: {},
+          allowed_resolution_actions: ["apply_analysis_decisions"],
+        },
+      ];
+    if (scenario === "blocked")
+      projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
+    if (scenario === "new-analysis") projection.active_analysis_id = "analysis-2";
+    if (scenario === "new-plan") projection.active_selection_plan_id = "plan-2";
+    if (scenario === "inactive-output")
+      analyzed.outputs.forEach((output) => {
+        output.active = false;
+      });
+    if (scenario === "cancelled") analyzed.status = "cancelled";
+    if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
+    if (scenario === "existing-draft") projection.active_working_draft_id = "draft-1";
+    expect(
+      autoDraftSources(
+        analyzed,
+        { ...deterministicSettings, auto_generate_when_review_not_required: true },
+        projection,
+      ),
+    ).toBeNull();
+  });
+
+  it("isolates late watched analysis results across URL changes and Back / Forward", async () => {
+    let resolveOld: (response: Response) => void = () => {};
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/operations/"))
+        return new Promise<Response>((resolve) => {
+          resolveOld = resolve;
+        });
+      return Promise.resolve(
+        jsonResponse(
+          url.endsWith("/app-2")
+            ? detail({ application: { ...detail().application, id: "app-2", company: "Other" } })
+            : detail({ active_operation: queued() }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/operations/"))).toBe(true),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Another application" }));
+    expect(await screen.findByText("Other — Backend Engineer")).toBeInTheDocument();
+    await act(async () =>
+      resolveOld(jsonResponse(queued({ status: "failed", is_terminal: true, available_actions: ["retry"] }))),
+    );
+    expect(screen.queryByRole("heading", { name: "הרצת ניתוח המשרה" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    expect(await screen.findByText("Other — Backend Engineer")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "הרצת ניתוח המשרה" })).not.toBeInTheDocument();
+  });
+
+  it("does not watch or navigate an old application's late automatic acceptance", async () => {
+    let resolveOld: (response: Response) => void = () => {};
+    const analyzed = queued({
+      status: "succeeded",
+      is_terminal: true,
+      outputs: [
+        { output_type: "job_analysis", output_id: "analysis-1", active: true },
+        { output_type: "selection_plan", output_id: "plan-1", active: true },
+      ],
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST")
+        return new Promise<Response>((resolve) => {
+          resolveOld = resolve;
+        });
+      if (url.includes("/settings"))
+        return Promise.resolve(
+          jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
+        );
+      if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
+      return Promise.resolve(
+        jsonResponse(
+          url.endsWith("/app-2")
+            ? detail({ application: { ...detail().application, id: "app-2", company: "Other" } })
+            : analyzed_detail({ latest_operation: analyzed, active_selection_plan_id: "plan-1" }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "Another application" }));
+    expect(await screen.findByText("Other — Backend Engineer")).toBeInTheDocument();
+    await act(async () => resolveOld(acceptedResponse(queued({ id: "op-draft", operation_type: "create_draft" }))));
+    expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "הרצת יצירת טיוטה" })).not.toBeInTheDocument();
+    expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBeNull();
+  });
+
+  it("waits for the exact activated draft on refresh and does not repeat completed navigation on Back", async () => {
+    const generated = queued({
+      id: "op-draft",
+      operation_type: "create_draft",
+      status: "succeeded",
+      is_terminal: true,
+      outputs: [{ output_type: "working_draft", output_id: "draft-1", active: true }],
+    });
+    const projection = analyzed_detail({ active_selection_plan_id: "plan-1", latest_operation: generated });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
+      ),
+    );
+    sessionStorage.setItem("stage-e:draft-navigation:op-draft", "pending");
+    const { client } = renderPage();
+    expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
+    expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    act(() =>
+      client.setQueryData(applicationDetailQueryKey("app-1"), {
+        ...projection,
+        active_working_draft_id: "draft-1",
+        working_draft_state: "editing",
+        preparation_state: "draft_in_progress",
+      }),
+    );
+    expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
+    expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBe("completed");
+    fireEvent.click(screen.getByRole("button", { name: "Analysis" }));
+    expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
+    expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
+    expect(screen.queryByText("הטיוטה נוצרה. מעבר לעורך הטיוטה…")).not.toBeInTheDocument();
+  });
+  it.each(["inactive", "stale", "newer-draft", "review"])(
+    "does not consume a restored navigation receipt for %s work",
+    async (scenario) => {
+      const generated = queued({
+        id: "op-draft",
+        operation_type: "create_draft",
+        status: "succeeded",
+        is_terminal: true,
+        outputs: [{ output_type: "working_draft", output_id: "draft-1", active: scenario !== "inactive" }],
+      });
+      const projection = analyzed_detail({
+        active_selection_plan_id: "plan-1",
+        latest_operation: generated,
+        active_working_draft_id: scenario === "newer-draft" ? "draft-2" : "draft-1",
+        working_draft_state: scenario === "stale" ? "stale" : "editing",
+      });
+      if (scenario === "review")
+        projection.review_reasons = [
+          {
+            code: "HARD_GAP_REQUIRES_DECISION",
+            message: "Decision required",
+            entity_references: {},
+            allowed_resolution_actions: [],
+          },
+        ];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((input: RequestInfo | URL) =>
+          Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
+        ),
+      );
+      sessionStorage.setItem("stage-e:draft-navigation:op-draft", "pending");
+      renderPage();
+      expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
+      expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
+      expect(sessionStorage.getItem("stage-e:draft-navigation:op-draft")).toBe("pending");
+    },
+  );
 });

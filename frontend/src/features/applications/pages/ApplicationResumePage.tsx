@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 
+import { ApiProblem } from "@/api/client";
+import { Button } from "@/ui/Button";
 import { applicationDetailQueryOptions } from "@/api/applications";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { preparationResumeDestinationFromDetail } from "@/features/preparation";
@@ -14,7 +16,7 @@ export const ApplicationResumePage = () => {
   const applicationId = useRequiredParam("applicationId");
   const query = useQuery(applicationDetailQueryOptions(applicationId));
 
-  if (query.data !== undefined) {
+  if (query.data !== undefined && !query.isFetching && query.error === null) {
     return <Navigate replace to={preparationResumeDestinationFromDetail(applicationId, query.data)} />;
   }
 
@@ -25,9 +27,21 @@ export const ApplicationResumePage = () => {
       <QueryState
         error={query.error}
         fallbackTitle="לא ניתן לפתוח את המועמדות"
-        loading
+        loading={query.isPending || (query.data !== undefined && query.isFetching)}
         loadingLabel="בודק מהו השלב הפעיל…"
       />
+      {query.error === null || (query.error instanceof ApiProblem && query.error.problem.status === 404) ? null : (
+        <Button
+          onClick={() => {
+            if (!query.isFetching) void query.refetch({ cancelRefetch: false });
+          }}
+          pending={query.isFetching}
+          pendingLabel="בודק שוב…"
+          variant="secondary"
+        >
+          ניסיון חוזר
+        </Button>
+      )}
     </PageShell>
   );
 };

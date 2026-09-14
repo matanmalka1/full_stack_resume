@@ -113,6 +113,15 @@ export const useAutomaticDraft = ({
      lets exactly one through; the source-derived idempotency key below is the same guard at
      the API boundary, for a race this ref cannot see across reloads. */
   const dispatchedSourcesRef = useRef<string | null>(null);
+  const scopeRef = useRef(applicationId);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    scopeRef.current = applicationId;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [applicationId]);
 
   const automaticDraft = useMutation({
     mutationFn: ({ sources }: AutomaticDraftAttempt) =>
@@ -123,33 +132,34 @@ export const useAutomaticDraft = ({
         `auto-draft:${sources.analysisId}:${sources.planId}`,
       ),
     onSuccess: ({ operation: queued }, attempt) => {
+      queryClient.setQueryData(operationQueryKey(queued.id), queued);
+      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
+      if (
+        !mountedRef.current ||
+        scopeRef.current !== attempt.sources.applicationId ||
+        queued.application_id !== scopeRef.current
+      )
+        return;
       sessionStorage.setItem(autoDraftReceiptKey(attempt.triggerOperationId), "accepted");
       sessionStorage.setItem(draftNavigationKey(queued.id), "pending");
-      queryClient.setQueryData(operationQueryKey(queued.id), queued);
       watch(queued.id);
-      /* Only the board list is invalidated here, not this Application's detail. The
-         continuation watches the queued Operation directly and then moves to the editor,
-         which reads the detail fresh on arrival - so a detail invalidation now would only
-         race the Operation poll and that mount, and it is exactly those overlapping detail
-         reads that the dev proxy reports as superseded during the generate. The list has no
-         other refresh on this path, so it keeps its own. */
-      void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
     },
   });
 
-  const attemptedOperationId = automaticDraft.variables?.triggerOperationId ?? null;
+  const attemptInScope = automaticDraft.variables?.sources.applicationId === applicationId;
+  const attemptedOperationId = attemptInScope ? (automaticDraft.variables?.triggerOperationId ?? null) : null;
   useEffect(() => {
     if (operationId === null || attemptedOperationId === operationId) {
       return;
     }
     const sources = autoDraftSources(operation, settingsQuery.data?.settings, detail);
-    if (sources !== null) {
-      const dispatchKey = `${sources.analysisId}:${sources.planId}`;
+    if (sources !== null && sources.applicationId === applicationId) {
+      const dispatchKey = `${sources.applicationId}:${sources.analysisId}:${sources.planId}`;
       if (dispatchedSourcesRef.current === dispatchKey) return;
       dispatchedSourcesRef.current = dispatchKey;
       automaticDraft.mutate({ sources, triggerOperationId: operationId });
     }
-  }, [attemptedOperationId, automaticDraft, detail, operation, operationId, settingsQuery.data]);
+  }, [applicationId, attemptedOperationId, automaticDraft, detail, operation, operationId, settingsQuery.data]);
 
   /* Applying review decisions is synchronous, so there is no analyze Operation to
      trigger the continuation above. Once the refreshed projection confirms that every
@@ -157,6 +167,12 @@ export const useAutomaticDraft = ({
   useEffect(() => {
     if (
       detail === undefined ||
+      detail.application.id !== applicationId ||
+      detail.application.deleted_at != null ||
+      !detail.available_actions.includes("create_draft") ||
+      detail.blocked_actions.some(({ action }) => action === "create_draft") ||
+      detail.active_working_draft_id != null ||
+      (operation !== undefined && (operation.application_id !== applicationId || !isTerminalOperation(operation))) ||
       settingsQuery.data?.settings.auto_generate_when_review_not_required !== true ||
       sessionStorage.getItem(decisionContinuationKey(applicationId)) !== "pending" ||
       detail.preparation_state !== "ready_to_draft" ||
@@ -170,7 +186,7 @@ export const useAutomaticDraft = ({
     }
     const triggerOperationId = `decision:${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
     if (attemptedOperationId === triggerOperationId) return;
-    const dispatchKey = `${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
+    const dispatchKey = `${applicationId}:${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
     if (dispatchedSourcesRef.current === dispatchKey) return;
     dispatchedSourcesRef.current = dispatchKey;
     sessionStorage.setItem(decisionContinuationKey(applicationId), "dispatched");
@@ -182,28 +198,31 @@ export const useAutomaticDraft = ({
       },
       triggerOperationId,
     });
-  }, [applicationId, attemptedOperationId, automaticDraft, detail, settingsQuery.data]);
+  }, [applicationId, attemptedOperationId, automaticDraft, detail, operation, settingsQuery.data]);
 
-  /* A queued response only says that generation may begin. Move to the editor after the
-     durable Operation reports success, when its WorkingDraft has been activated.
+  /* A navigation receipt is intent, not proof of activation. Wait for this exact
+     WorkingDraft in the current projection and never consume another URL's late result. */
+  const activatedDraftId = operation?.outputs.find(
+    (output) => output.active && output.output_type === "working_draft",
+  )?.output_id;
+  const navigationPending =
+    operation?.application_id === applicationId &&
+    operation.operation_type === "create_draft" &&
+    operation.status === "succeeded" &&
+    detail?.application.id === applicationId &&
+    detail.application.deleted_at == null &&
+    detail.working_draft_state !== "stale" &&
+    detail.stale_reasons.length === 0 &&
+    detail.review_reasons.length === 0 &&
+    (detail.active_operation == null || detail.active_operation.id === operation.id) &&
+    activatedDraftId !== undefined &&
+    sessionStorage.getItem(draftNavigationKey(operation.id)) === "pending";
 
-     The marker is the whole condition, and the Operation's type is not consulted: it was
-     written by the code that queued the run, so it already says both that this screen
-     started the work and that the work was a generate. That is what lets one effect serve
-     the automatic continuation and a press on "יצירת טיוטה" alike - the two used to differ
-     only in that the press left the reader on the analysis screen with the draft it had
-     just written one link away, which is not where the work continues. */
   useEffect(() => {
-    if (
-      operation === undefined ||
-      operation.status !== "succeeded" ||
-      sessionStorage.getItem(draftNavigationKey(operation.id)) !== "pending"
-    ) {
-      return;
-    }
+    if (!navigationPending || operation === undefined || detail?.active_working_draft_id !== activatedDraftId) return;
     sessionStorage.setItem(draftNavigationKey(operation.id), "completed");
     navigate(routePaths.draft(applicationId), { replace: true });
-  }, [applicationId, navigate, operation]);
+  }, [activatedDraftId, applicationId, detail?.active_working_draft_id, navigate, navigationPending, operation]);
 
   /* What the screen reporting this Application's work should say instead of reporting a
      finished run, while this hook is about to start or move to the next one.
@@ -223,12 +242,13 @@ export const useAutomaticDraft = ({
   const continuation =
     operation?.status !== "succeeded"
       ? undefined
-      : !automaticDraft.isError &&
-          (automaticDraft.isPending || autoDraftIsContinuing(operation, settingsQuery.data?.settings, detail))
+      : !(attemptInScope && automaticDraft.isError) &&
+          ((attemptInScope && automaticDraft.isPending) ||
+            autoDraftIsContinuing(operation, settingsQuery.data?.settings, detail))
         ? "הניתוח הושלם. יצירת הטיוטה מתחילה מיד."
-        : sessionStorage.getItem(draftNavigationKey(operation.id)) === null
-          ? undefined
-          : "הטיוטה נוצרה. מעבר לעורך הטיוטה…";
+        : navigationPending
+          ? "הטיוטה נוצרה. מעבר לעורך הטיוטה…"
+          : undefined;
 
   return { continuation };
 };

@@ -19,11 +19,27 @@ export const autoDraftSources = (
     operation.status !== "succeeded" ||
     settings?.auto_generate_when_review_not_required !== true ||
     detail === undefined ||
+    operation.application_id !== detail.application.id ||
+    detail.application.deleted_at != null ||
+    detail.preparation_state !== "ready_to_draft" ||
+    !detail.available_actions.includes("create_draft") ||
+    detail.blocked_actions.some(({ action }) => action === "create_draft") ||
+    detail.active_working_draft_id != null ||
     detail.review_reasons.length !== 0 ||
     detail.working_draft_state !== "none" ||
     detail.active_operation != null ||
     detail.active_analysis_id == null ||
     detail.active_selection_plan_id == null
+  ) {
+    return null;
+  }
+  /* A historical successful analyze cannot authorize drafting a different active pair.
+     Inactive outputs (including those produced after cancellation) confer no authority. */
+  const activated = (type: string, id: string): boolean =>
+    operation.outputs.some((output) => output.active && output.output_type === type && output.output_id === id);
+  if (
+    !activated("job_analysis", detail.active_analysis_id) ||
+    !activated("selection_plan", detail.active_selection_plan_id)
   ) {
     return null;
   }
@@ -49,35 +65,34 @@ export const autoDraftIsAnticipated = (
   detail.working_draft_state === "none" &&
   detail.active_operation?.operation_type === "analyze_job";
 
-/* The same opt-in guard once more, asked at the moment between the two above: the analysis
-   has succeeded and the generate has not been sent yet. It answers "is this run's success
-   the end of the work, or is this screen about to start the next run", which is what
-   decides whether a finished Operation may be reported as finished.
-
-   Deliberately not `autoDraftSources`. That one is the dispatch authority and must be
-   certain, so it reads the projection's active analysis, selection plan and live work -
-   the exact fields that lag while the projection catches up with the Operation. Asked here
-   those absences would read as "no continuation" for the poll or two before the projection
-   arrives, which is the whole window this exists to cover.
-
-   The last clause is what keeps a looser question from latching. A continuation this
-   predicts must actually be able to happen, and the generate needs a selection plan: with
-   the projection caught up far enough to name the analysis but carrying no plan, no
-   dispatch is coming and the run has genuinely finished. Before that - no analysis on
-   record at all, while the run that just produced one is being reported succeeded - the
-   projection is still behind by construction, so its silence is not an answer yet.
-
-   A dispatch that then fails is not this function's to know: the caller holds the mutation
-   that would say so. */
+/* The continuation announcement uses the same source guard as dispatch. In the narrow
+   catch-up window with no active analysis yet, only a durable activated analysis output
+   can anticipate it; a posting captured after that run ended is already a new context. */
 export const autoDraftIsContinuing = (
   operation: Operation | undefined,
   settings: Settings | undefined,
   detail: ApplicationDetail | undefined,
-): boolean =>
-  settings?.auto_generate_when_review_not_required === true &&
-  operation?.operation_type === "analyze_job" &&
-  operation.status === "succeeded" &&
-  detail !== undefined &&
-  detail.working_draft_state === "none" &&
-  detail.review_reasons.length === 0 &&
-  (detail.active_selection_plan_id != null || detail.active_analysis_id == null);
+): boolean => {
+  if (autoDraftSources(operation, settings, detail) !== null) return true;
+  if (
+    settings?.auto_generate_when_review_not_required !== true ||
+    operation?.operation_type !== "analyze_job" ||
+    operation.status !== "succeeded" ||
+    detail === undefined ||
+    operation.application_id !== detail.application.id ||
+    detail.application.deleted_at != null ||
+    detail.working_draft_state !== "none" ||
+    detail.active_working_draft_id != null ||
+    detail.active_analysis_id != null ||
+    detail.review_reasons.length !== 0 ||
+    (detail.active_operation != null && detail.active_operation.id !== operation.id) ||
+    detail.blocked_actions.some(({ action }) => action === "create_draft")
+  )
+    return false;
+  const capturedTime = Date.parse(detail.latest_snapshot.captured_at);
+  const finishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
+  return (
+    !(capturedTime > finishedTime) &&
+    operation.outputs.some((output) => output.active && output.output_type === "job_analysis")
+  );
+};

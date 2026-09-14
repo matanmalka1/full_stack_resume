@@ -141,7 +141,9 @@ export const ApplicationPage = () => {
                 only owns the exceptional creation outcome where no Operation exists to
                 report; keeping its success message would freeze "running" beside the
                 Operation's later "completed" state. */}
-            {createdApplication?.analysisQueued !== false ? null : (
+            {createdApplication?.analysisQueued !== false ||
+            detail.preparation_state !== "needs_analysis" ||
+            watched !== undefined ? null : (
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
                 {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מהמסך הזה."} המועמדות שכבר נוצרה
                 לא תיווצר שוב.

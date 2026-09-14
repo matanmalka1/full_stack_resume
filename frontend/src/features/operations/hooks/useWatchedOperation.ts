@@ -13,6 +13,7 @@ import { isTerminalOperation, operationQueryOptions } from "@/api/operations";
    to say - a failure code, its guidance, the retry offer - and a failed run would leave
    no trace on the screen that started it.
 
+   The latest lifecycle record also opens the watch on a direct link or reload.
    So the projection opens the watch and a query of the Operation's own closes it. The id
    is held here across that transition, and the Operation query keeps reporting the record
    after the projection has let go of it.
@@ -34,27 +35,20 @@ export const useWatchedOperation = (
   watch: (operationId: string) => void;
 } => {
   const queryClient = useQueryClient();
-  const [watchedId, setWatchedId] = useState<string | null>(null);
-  const activeOperationId = detail?.active_operation?.id ?? null;
+  const [watched, setWatched] = useState<{ applicationId: string; id: string } | null>(null);
+  const projectedOperation = detail?.active_operation ?? detail?.latest_operation ?? undefined;
+  const projectedId = projectedOperation?.id ?? null;
+  /* Scope the local watch during render, before effects run. A late response or a cached
+     result from the previous URL must never become this Application's continuation. */
+  const watchedId = watched?.applicationId === applicationId ? watched.id : projectedId;
 
   useEffect(() => {
-    if (activeOperationId !== null) {
-      // The projection is an external server snapshot; retain the operation it exposes.
+    if (projectedId !== null) {
+      // Retain the server's latest lifecycle record, including terminal outcomes on reload.
       // oxlint-disable-next-line react/set-state-in-effect
-      setWatchedId(activeOperationId);
+      setWatched({ applicationId, id: projectedId });
     }
-  }, [activeOperationId]);
-
-  /* Cleared when the user moves to another Application: the previous one's finished work
-     is not this one's. */
-  /* oxlint-disable react/exhaustive-effect-dependencies */
-  useEffect(() => {
-    void applicationId;
-    // A route change starts a new watch scope.
-    // oxlint-disable-next-line react/set-state-in-effect
-    setWatchedId(null);
-  }, [applicationId]);
-  /* oxlint-enable react/exhaustive-effect-dependencies */
+  }, [applicationId, projectedId]);
 
   const watchedQuery = useQuery({
     ...operationQueryOptions(watchedId ?? ""),
@@ -67,7 +61,8 @@ export const useWatchedOperation = (
      The projection's copy is the fallback, and it earns its place at the other end of the
      Operation's life: it arrives with the page, so a reload mid-run paints the panel from
      the first render instead of after a second round trip. */
-  const operation = watchedQuery.data?.id === watchedId ? watchedQuery.data : (detail?.active_operation ?? undefined);
+  const candidate = watchedQuery.data?.id === watchedId ? watchedQuery.data : projectedOperation;
+  const operation = candidate?.application_id === applicationId ? candidate : undefined;
 
   /* The projection is refreshed once the watched Operation reaches a terminal status:
      what it produced - a new analysis, a draft, the stage that follows - is the
@@ -83,11 +78,11 @@ export const useWatchedOperation = (
     }
   }, [applicationId, queryClient, terminal]);
 
-  const watch = useCallback((operationId: string) => setWatchedId(operationId), []);
+  const watch = useCallback((operationId: string) => setWatched({ applicationId, id: operationId }), [applicationId]);
 
   return {
     operation,
-    operationId: watchedId,
+    operationId: operation?.id ?? watchedId,
     watch,
   };
 };

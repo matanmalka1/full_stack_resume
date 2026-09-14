@@ -1,4 +1,4 @@
-import type { ApplicationDetail, ApplicationListItem } from "@/api/contracts";
+import type { ApplicationDetail, ApplicationListItem, OperationType } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 
 /* Which backend action names this frontend has actually built a screen for.
@@ -53,10 +53,26 @@ export const actionDestination = (action: string, applicationId: string): string
    Availability and recommendation remain projection-owned. */
 type ResumeProjection = Pick<
   ApplicationListItem,
-  "id" | "latest_ready_revision_id" | "preparation_state" | "recommended_action"
+  "id" | "latest_ready_revision_id" | "preparation_state" | "recommended_action" | "active_operation"
 >;
 
+const operationActions: Record<OperationType, string> = {
+  analyze_job: "analyze",
+  propose_selection_plan: "create_selection_plan",
+  create_draft: "create_draft",
+  regenerate_section: "regenerate_section",
+  regenerate_claim: "regenerate_claim",
+  render_revision: "render",
+};
+
 const resumeDestination = (application: ResumeProjection): string => {
+  /* Running work owns the entry point even when a compatible Ready milestone exists.
+     This chooses its host screen, without creating work or changing permissions. */
+  const operation = application.active_operation;
+  if (operation != null && operation.application_id === application.id) {
+    const destination = actionDestination(operationActions[operation.operation_type], application.id);
+    if (destination !== null) return destination;
+  }
   const recommended =
     application.recommended_action == null ? null : actionDestination(application.recommended_action, application.id);
 
@@ -88,6 +104,7 @@ export const preparationResumeDestination = (application: ApplicationListItem): 
 export const preparationResumeDestinationFromDetail = (applicationId: string, detail: ApplicationDetail): string =>
   resumeDestination({
     id: applicationId,
+    active_operation: detail.active_operation,
     latest_ready_revision_id: detail.latest_ready_revision_id,
     preparation_state: detail.preparation_state,
     recommended_action: detail.recommended_action,

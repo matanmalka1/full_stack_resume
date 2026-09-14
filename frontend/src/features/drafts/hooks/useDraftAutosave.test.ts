@@ -272,4 +272,26 @@ describe("useDraftAutosave", () => {
       claim_additions: [],
     });
   });
+  it("restores a reload buffer without dropping local text on a server refresh", async () => {
+    sessionStorage.setItem(
+      "cv-engine:autosave:wd-1",
+      JSON.stringify({ edits: [patch("c-1", "unsaved local wording")], removals: [], additions: [] }),
+    );
+    const fetchMock = vi.fn().mockResolvedValue(updateResponse(6));
+    vi.stubGlobal("fetch", fetchMock);
+    const onSaved = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ etag }) => useDraftAutosave({ etag, onConflict: vi.fn(), onSaved, workingDraftId: "wd-1" }),
+      { initialProps: { etag: '"4-hash-4"' } },
+    );
+    expect(result.current.pending).toEqual([patch("c-1", "unsaved local wording")]);
+    rerender({ etag: '"5-hash-5"' });
+    expect(result.current.pending).toEqual([patch("c-1", "unsaved local wording")]);
+    act(() => result.current.flush());
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(headerOf(fetchMock.mock.calls[0], "If-Match")).toBe('"5-hash-5"');
+    expect(bodyOf(fetchMock.mock.calls[0]).claim_edits).toEqual([patch("c-1", "unsaved local wording")]);
+    expect(sessionStorage.getItem("cv-engine:autosave:wd-1")).toBeNull();
+  });
 });
