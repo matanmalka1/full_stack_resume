@@ -16,7 +16,12 @@ from ..contracts.taxonomy import Emphasis, ProfileName, Track
 from ..facts import FactStore
 from ..profiles import ProfileStore
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
-from .gaps import fit_level_from_score, fit_score_from_requirements, derive_gaps, gaps_from_requirements
+from .gaps import (
+    derive_gaps,
+    fit_level_from_score,
+    fit_score_from_requirements,
+    gaps_from_requirements,
+)
 from .requirements.concepts import RequirementConceptStore
 from .requirements.confidence import extraction_confidence, extraction_failed
 from .requirements.coverage import cover_requirements
