@@ -134,3 +134,5 @@ export type SelectionChange = ApiSchemas["SelectionChangeResponse"];
 
 export type RegenerateSectionRequest = ApiSchemas["RegenerateSectionRequest"];
 export type RegenerateClaimRequest = ApiSchemas["RegenerateClaimRequest"];
+
+export type JobSnapshotHistory = ApiSchemas["JobSnapshotHistoryResponse"];

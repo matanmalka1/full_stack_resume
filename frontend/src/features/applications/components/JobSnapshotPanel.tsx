@@ -6,6 +6,7 @@ import { LtrText } from "@/ui/LtrText";
 import { SectionHeader } from "@/ui/SectionHeader";
 import { SummaryList } from "@/ui/SummaryList";
 import { formatDateTime } from "@/utils/formatDateTime";
+import { JobSnapshotHistory } from "./JobSnapshotHistory";
 import { JobPostingUpdate } from "./JobPostingUpdate";
 import { CopyableTextDisclosure } from "@/ui/CopyableTextDisclosure";
 import { sourceHostname } from "../model/applicationPresentation";
@@ -71,6 +72,11 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
           text={snapshot.job_text}
         />
       </div>
+      <JobSnapshotHistory
+        key={detail.application.id}
+        applicationId={detail.application.id}
+        activeSnapshotId={snapshot.id}
+      />
     </Card>
   );
 };

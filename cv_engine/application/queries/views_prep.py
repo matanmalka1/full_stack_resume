@@ -24,6 +24,19 @@ class JobSnapshotView(BoundaryDTO):
     prior_snapshot_id: str | None = None
 
 
+class JobSnapshotHistoryItem(BoundaryDTO):
+    id: str
+    version_number: int
+    captured_at: str
+    source_url: str | None
+    job_text: str | None
+
+
+class JobSnapshotHistoryView(BoundaryDTO):
+    active_job_snapshot_id: str
+    items: list[JobSnapshotHistoryItem]
+
+
 class JobAnalysisView(BoundaryDTO):
     id: str
     application_id: str

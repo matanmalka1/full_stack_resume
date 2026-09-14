@@ -30,6 +30,7 @@ from ..responses import accepted_operation
 from ..schemas.analyses import CreateAnalysisRequest
 from ..schemas.applications import (
     ApplicationDetailResponse,
+    JobSnapshotHistoryResponse,
     ApplicationListResponse,
     ArtifactVersionsResponse,
     CloseApplicationResponse,
@@ -171,6 +172,16 @@ def artifact_versions(application_id: str, services: Services) -> ArtifactVersio
 def latest_decision(application_id: str, services: Services) -> DecisionRecordResponse:
     result = services.queries.latest_decision(application_id)
     return DecisionRecordResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.get(
+    "/{application_id}/job-snapshots",
+    response_model=JobSnapshotHistoryResponse,
+    summary="Read immutable job snapshot history",
+)
+def job_snapshot_history(application_id: str, services: Services) -> JobSnapshotHistoryResponse:
+    result = services.queries.job_snapshot_history(application_id)
+    return JobSnapshotHistoryResponse.model_validate(result.model_dump(mode="json"))
 
 
 @router.post(

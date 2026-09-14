@@ -3,6 +3,7 @@ import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { ApiProblem, type ApiPath, apiRequest } from "./client";
 import type {
   ActivityFilter,
+  JobSnapshotHistory,
   ApplicationDetail,
   ApplicationIntake,
   ApplicationListResponse,
@@ -291,6 +292,15 @@ export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
    Not idempotency-keyed. This is a synchronous command with no Operation behind it, and
    the engine already refuses a second snapshot carrying the exact content of one it holds,
    so a resent create cannot duplicate a posting. */
+export const jobSnapshotHistoryOptions = (applicationId: string, activeSnapshotId: string) =>
+  queryOptions({
+    queryKey: [...applicationDetailQueryKey(applicationId), "job-snapshots", activeSnapshotId],
+    queryFn: async ({ signal }) => {
+      const response = await apiRequest<JobSnapshotHistory>(jobSnapshotsPath(applicationId), { signal });
+      return response.data;
+    },
+  });
+
 export const createJobSnapshot = async (
   applicationId: string,
   posting: { jobText: string; sourceUrl: string | null },

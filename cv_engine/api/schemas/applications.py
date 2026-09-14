@@ -266,3 +266,16 @@ class DeleteApplicationResponse(HttpSchema):
     next_action: str | None = None
     next_action_date: str | None = None
     event_id: str | None = None
+
+
+class JobSnapshotHistoryItemResponse(HttpSchema):
+    id: str
+    version_number: int
+    captured_at: str
+    source_url: str | None
+    job_text: str | None
+
+
+class JobSnapshotHistoryResponse(HttpSchema):
+    active_job_snapshot_id: str
+    items: list[JobSnapshotHistoryItemResponse]

@@ -43,6 +43,7 @@ from ..queries import (
     selection_plan_detail_view,
     snapshot_view,
 )
+from ..queries.views_prep import JobSnapshotHistoryItem, JobSnapshotHistoryView
 from ..ready import qualify_ready_revision
 from ..state import ProjectionContext, project_application_state
 from .base import ServiceBase
@@ -186,6 +187,30 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             ),
             recruitment_timeline=timeline,
         )
+
+    def job_snapshot_history(self, application_id: str) -> JobSnapshotHistoryView:
+        with self.repo.read_transaction() as transaction:
+            transaction.get_application(application_id)
+            active = transaction.latest_snapshot(application_id)
+            items = []
+            for record in transaction.job_snapshots(application_id):
+                try:
+                    text = self.snapshot_payloads.read_snapshot(
+                        record["payload_path"], record["source_hash"]
+                    )
+                except (OSError, ValueError):
+                    # Missing, unreadable or unverified content is never reconstructed.
+                    text = None
+                items.append(
+                    JobSnapshotHistoryItem(
+                        id=record["id"],
+                        version_number=record["version_number"],
+                        captured_at=record["captured_at"],
+                        source_url=record.get("source_url"),
+                        job_text=text,
+                    )
+                )
+        return JobSnapshotHistoryView(active_job_snapshot_id=active["id"], items=items)
 
     def artifact_versions(self, application_id: str) -> ArtifactVersionsView:
         try:

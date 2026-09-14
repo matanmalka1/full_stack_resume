@@ -265,7 +265,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Read immutable job snapshot history */
+        get: operations["job_snapshot_history_api_v1_applications__application_id__job_snapshots_get"];
         put?: never;
         /** Create a new immutable job snapshot */
         post: operations["create_job_snapshot_api_v1_applications__application_id__job_snapshots_post"];
@@ -2704,6 +2705,26 @@ export interface components {
             /** Version Number */
             version_number: number;
         };
+        /** JobSnapshotHistoryItemResponse */
+        JobSnapshotHistoryItemResponse: {
+            /** Captured At */
+            captured_at: string;
+            /** Id */
+            id: string;
+            /** Job Text */
+            job_text: string | null;
+            /** Source Url */
+            source_url: string | null;
+            /** Version Number */
+            version_number: number;
+        };
+        /** JobSnapshotHistoryResponse */
+        JobSnapshotHistoryResponse: {
+            /** Active Job Snapshot Id */
+            active_job_snapshot_id: string;
+            /** Items */
+            items: components["schemas"]["JobSnapshotHistoryItemResponse"][];
+        };
         /** JobSnapshotResponse */
         JobSnapshotResponse: {
             /** Application Id */
@@ -4184,6 +4205,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmissionResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    job_snapshot_history_api_v1_applications__application_id__job_snapshots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobSnapshotHistoryResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

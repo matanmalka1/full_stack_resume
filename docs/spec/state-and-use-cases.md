@@ -910,6 +910,11 @@ Initial query contracts include:
 - the allowlisted model catalog, current AI defaults, and immutable execution
   model/reasoning/usage/cost metadata
 
+JobSnapshot history returns the active snapshot ID and all saved snapshots in version
+order, with explicit IDs, version numbers, capture times, source URLs, and exact verified
+text. Unreadable or unverified text is NULL; history never fetches the live posting,
+repairs a payload, or changes the active context. Storage paths are not exposed.
+
 Queries may use direct efficient joins and read models. They return DTOs, not database
 rows or local paths.
 
@@ -924,6 +929,7 @@ GET    /api/v1/applications
 POST   /api/v1/applications/duplicate-check
 GET    /api/v1/applications/{id}
 PATCH  /api/v1/applications/{id}/notes
+GET    /api/v1/applications/{id}/job-snapshots
 POST   /api/v1/applications/{id}/job-snapshots
 POST   /api/v1/applications/{id}/analyses
 GET    /api/v1/applications/{id}/artifacts
