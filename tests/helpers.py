@@ -30,7 +30,10 @@ def store_draft(root: Path, draft):
 
 ACCOUNT_MANAGER_JOB = (
     "Account Manager responsible for retention, portfolio growth, negotiation, "
-    "and customer relationships."
+    "and customer relationships.\n\n"
+    "Requirements:\n"
+    "- Experience owning the full sales cycle.\n"
+    "- Fluent English."
 )
 
 # Hebrew, low confidence, one hard gap and one warning gap: the deterministic
@@ -40,6 +43,17 @@ AMBIGUOUS_HEBREW_JOB = (
     "דרוש מנהל לקוחות עם ניסיון בפיתוח עסקי ובניהול תיק לקוחות מול ארגונים גדולים. "
     "התפקיד כולל אחריות על שימור, גיוס לקוחות חדשים והובלת תהליכי מכירה מורכבים. "
     "דרישות: account manager, business development, Salesforce, must have direct saas sales."
+)
+
+# A readable review-path posting: classification confidence still requires an
+# explicit Profile decision, while the technology-company requirement remains
+# a separate hard gap that the user must accept by its requirement ID.
+REVIEW_DECISION_JOB = (
+    "Account manager and business development role for enterprise customers.\n"
+    "התפקיד כולל אחריות על שימור, גיוס לקוחות חדשים והובלת תהליכי מכירה מורכבים.\n\n"
+    "Requirements:\n"
+    "- Experience owning the full sales cycle.\n"
+    "- Sales experience at a SaaS company."
 )
 
 PAYME_TECH_SALES_JOB = (

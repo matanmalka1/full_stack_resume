@@ -931,7 +931,7 @@ PROVIDER_OWNED_FIELDS = frozenset(JobClassificationProposal.model_fields)
 #: source gate (`attestation.py`) rejects before any of this is ever written,
 #: voiding the whole extraction.
 #:
-#: `requirements`, `gaps`, `fit`, `mandatory_requirements`, and
+#: `requirements`, `gaps`, `fit`, `fit_score`, `mandatory_requirements`, and
 #: `preferred_requirements` are here for the reason stage-1 plan §1.1 states
 #: directly: once AI extraction is authoritative for what a posting requires
 #: (D2), a verified extraction is *supposed* to diverge from the concept-only
@@ -964,6 +964,7 @@ NON_POLICY_FIELDS = frozenset(
         "requirements",
         "gaps",
         "fit",
+        "fit_score",
         "mandatory_requirements",
         "preferred_requirements",
         "approval_reasons",

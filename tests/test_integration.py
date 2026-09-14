@@ -150,7 +150,14 @@ def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application
 
 
 def test_render_revalidates_approved_markdown_before_browser(approved_application) -> None:
-    setup = approved_application("Acme", "Developer", "Python backend developer API React")
+    setup = approved_application(
+        "Acme",
+        "Developer",
+        "Python backend developer API React\n\n"
+        "Requirements:\n"
+        "- Fluent English.\n"
+        "- Media industry experience is preferred.",
+    )
     services, app_id = setup
     markdown_record = services.repository.latest_artifact_version(
         app_id, "resume_markdown", "approved"

@@ -13,7 +13,11 @@ from cv_engine.util import sha256_text
 
 def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
     facts, profile, analysis, draft, markdown = draft_factory(
-        "Account Manager retention portfolio customer relationships", write=True
+        "Account Manager retention portfolio customer relationships\n\n"
+        "Requirements:\n"
+        "- Experience owning the full sales cycle.\n"
+        "- Fluent English.",
+        write=True,
     )
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     assert report.passed, report.model_dump()
