@@ -1,5 +1,9 @@
+import { useState } from "react";
+
 import { classificationFromAnalysis, lowFitAcceptedFromAnalysis } from "@/api/analyses";
-import type { ApplicationDetail } from "@/api/contracts";
+import { actionLabel } from "../model/preparationLabels";
+import { Callout } from "@/ui/Callout";
+import type { AnalysisDecisions, ApplicationDetail } from "@/api/contracts";
 import { Disclosure } from "@/ui/Disclosure";
 import { openDecisionCount, openDecisions, resolvedByReviewDecision } from "../model/reviewDecisions";
 import { workflowActionPlan } from "../model/workflowActionPlan";
@@ -31,6 +35,11 @@ export const PreparationView = ({
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
 }) => {
+  const [matchingSaved, setMatchingSaved] = useState<AnalysisDecisions | null>(null);
+  const matchingSaveInContext =
+    matchingSaved?.application_id === detail.application.id &&
+    matchingSaved.job_analysis_id === detail.active_analysis_id &&
+    matchingSaved.selection_plan_id === detail.active_selection_plan_id;
   const classification = classificationFromAnalysis(detail);
   /* The active analysis as this screen reads it: an analysis of a superseded job snapshot
      is on record but is not what the workflow stands on, so it is reported as absent. */
@@ -93,8 +102,19 @@ export const PreparationView = ({
         <MatchingConfigurationEditor
           classification={classification}
           detail={detail}
+          onSaved={setMatchingSaved}
           key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
         />
+      )}
+
+      {matchingSaveInContext && matchingSaved !== null && (
+        // Callout renders a semantic output for its status prop.
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+        <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
+          {matchingSaved.state.recommended_action == null
+            ? "מצב המועמדות עודכן לפי ההקשר החדש."
+            : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
+        </Callout>
       )}
 
       {/* Adjusting which facts the CV carries is a refinement of the generate step, not a

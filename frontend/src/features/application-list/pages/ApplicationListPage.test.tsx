@@ -716,11 +716,13 @@ describe("ApplicationListPage", () => {
   it("invalidates every cached list and detail after deleting an Application, with no undo offered", async () => {
     const { fetchMock } = stubList([item()]);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const openListKey = applicationListQueryOptions({}).queryKey;
+    const otherListKey = applicationListQueryOptions({ activity: "closed" }).queryKey;
+    queryClient.setQueryData(otherListKey, listBody([]));
     const detailKey = applicationDetailQueryOptions("app-1").queryKey;
     queryClient.setQueryData(detailKey, detailBody());
 
     renderPage({ queryClient });
+    await waitFor(() => expect(boardReadCount(fetchMock)).toBe(1));
 
     fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "מחיקת המועמדות Acme" }));
@@ -733,7 +735,8 @@ describe("ApplicationListPage", () => {
       ),
     );
     await waitFor(() => {
-      expect(queryClient.getQueryState(openListKey)?.isInvalidated).toBe(true);
+      expect(boardReadCount(fetchMock)).toBe(2);
+      expect(queryClient.getQueryState(otherListKey)?.isInvalidated).toBe(true);
       expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
     });
 

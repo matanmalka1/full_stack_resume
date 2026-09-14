@@ -11,7 +11,6 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
-import { actionLabel } from "../../model/preparationLabels";
 import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../../model/analysisLabels";
 
 interface MatchingValues {
@@ -93,9 +92,11 @@ const ConfigurationSelect = <T extends string>({
 export const MatchingConfigurationEditor = ({
   classification,
   detail,
+  onSaved,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
+  onSaved: (result: Awaited<ReturnType<typeof applyAnalysisDecisions>>) => void;
 }) => {
   const queryClient = useQueryClient();
   const current = useMemo(() => valuesFrom(classification), [classification]);
@@ -127,7 +128,8 @@ export const MatchingConfigurationEditor = ({
         detail.active_selection_plan_id ?? null,
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      onSaved(result);
       await invalidateApplicationViews(queryClient, detail.application.id);
     },
   });
@@ -211,16 +213,6 @@ export const MatchingConfigurationEditor = ({
           />
         )}
 
-        {save.data === undefined ? null : (
-          // `Callout` renders an `<output>` when given status; this is a component prop,
-          // not a role placed on a generic DOM element.
-          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-          <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
-            {save.data.state.recommended_action == null
-              ? "מצב המועמדות עודכן לפי ההקשר החדש."
-              : `הצעד הבא לפי השרת: ${actionLabel(save.data.state.recommended_action)}.`}
-          </Callout>
-        )}
         <LiveRegion>{save.isPending ? "שומר את הגדרות ההתאמה…" : undefined}</LiveRegion>
 
         <div className="flex flex-wrap gap-3">
