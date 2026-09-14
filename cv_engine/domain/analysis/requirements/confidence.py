@@ -75,8 +75,6 @@ def extraction_failed(
     text: str,
     extracted: list[ExtractedRequirement],
     concepts: RequirementConceptStore,
-    *,
-    understood_elsewhere: bool = False,
 ) -> bool:
     """Requirements were stated in some form, and none of them were read.
 
@@ -85,14 +83,16 @@ def extraction_failed(
     is exactly as failed as one with a `Requirements:` block, and scoring it as
     a success was a false green.
 
-    `understood_elsewhere` is the deterministic gap rules having recognised a
-    requirement the concept vocabulary does not model yet. That is still the
-    engine reading a requirement, so it is not a failed extraction - only an
-    incompletely modelled one. Without this, every posting whose requirements
-    only the legacy rules understand would be declared unreadable.
+    Exactly `extraction_state(...) == "unparsed"`, with no override. A local gap
+    rule recognising one term the concept vocabulary does not model yet
+    (`understood_elsewhere`) used to short-circuit this to `False` - before the
+    state was even computed, so a single rule hit cleared the failure for a
+    posting whose twenty requirement statements were all unread. "The rules read
+    something" is a claim about how much credit the confidence score owes, not
+    about whether the extraction failed; it stays an input to
+    `extraction_confidence` alone, where it earns the coverage floor and
+    nothing more.
     """
-    if understood_elsewhere:
-        return False
     return extraction_state(text, extracted, concepts) == "unparsed"
 
 

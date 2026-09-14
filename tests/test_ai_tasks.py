@@ -14,6 +14,7 @@ prompt-injection fixtures. The transport half is `test_provider.py`.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
@@ -22,6 +23,7 @@ from helpers import ACCOUNT_MANAGER_JOB, trivial_requirement_extraction
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
+    ApplyAnalysisDecisionsCommand,
     CreateJobSnapshotCommand,
     CreateSelectionPlanCommand,
     DraftCommand,
@@ -96,8 +98,37 @@ def _analyzed(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
     return ingested, analysed
 
 
+def _accepting_incomplete_analysis(services, ingested, analysed):
+    """Answer the analysis-completeness gate the way a user answers it.
+
+    `ACCOUNT_MANAGER_JOB` states no requirement this engine reads, so its
+    analysis records `requirements-absent` and drafting stays blocked until
+    someone decides to proceed anyway. For a test whose subject is drafting or
+    regeneration, that gate is a precondition, not the thing under test - so it
+    is answered here through `apply_analysis_decisions`, the same command the
+    product offers, rather than by giving the shared fixture posting a
+    requirement. Editing the fixture would hide that the gate works at all, and
+    would change an input several other test files share.
+
+    A decision creates a new analysis and a new plan, so the caller must use the
+    ids this returns.
+    """
+    decided = services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            accept_incomplete_analysis=True,
+        )
+    )
+    return SimpleNamespace(
+        analysis_id=decided.job_analysis_id,
+        selection_plan_id=decided.selection_plan_id,
+    )
+
+
 def _drafted(services, company: str):
     ingested, analysed = _analyzed(services, company)
+    analysed = _accepting_incomplete_analysis(services, ingested, analysed)
     services.drafts.draft(
         DraftCommand(
             application_id=ingested.application_id,
@@ -325,6 +356,10 @@ def test_draft_resume_commits_wording_its_facts_support(
             emphasis_override="tech-consultative-sales",
         )
     )
+    # The posting states no requirement the engine reads, so the completeness
+    # gate blocks drafting until it is explicitly answered - a precondition for
+    # this test, not its subject. See `_accepting_incomplete_analysis`.
+    analysed = _accepting_incomplete_analysis(ai_services, ingested, analysed)
     # The deterministic document first, so the proposal can echo wording that is
     # known to be supported; the AI run then rebuilds the same draft.
     ai_services.drafts.draft(
@@ -1254,3 +1289,66 @@ def test_a_proposal_cannot_add_experience_that_is_not_in_the_facts(
     assert len(fake_openai.calls_for("regenerate_claim")) == 1
     unchanged = ai_services.repository.active_working_draft(ingested.application_id)
     assert unchanged.content_hash == working.content_hash
+
+
+def test_a_requirement_statement_the_ai_never_touched_enters_the_score(
+    ai_services, fake_openai
+) -> None:
+    """The AI path splices the same `undetermined` entry the deterministic one does.
+
+    A provider that reads one of two requirement statements and says nothing
+    about the other used to produce a `requirements` list of length one and a
+    `fit_score` computed over that one alone - the identical false green the
+    deterministic path closes, relocated. `unmapped_statements` did not close it
+    either: nothing downstream scored them.
+    """
+    job_text = (
+        "Account Manager.\n"
+        "Requirements:\n"
+        "- Must have enterprise sales experience.\n"
+        "- Must have exceptional gravitas in boardroom settings."
+    )
+    quote = "Must have enterprise sales experience"
+    start = job_text.index(quote)
+    proposal = RequirementExtractionProposal(
+        requirements=[
+            ProposedRequirement(
+                attestation=RequirementAttestation(
+                    quote=quote, start=start, end=start + len(quote)
+                ),
+                interpretation=RequirementInterpretation(
+                    source_role="requirement",
+                    obligation="mandatory",
+                    composition="single",
+                    negation=False,
+                ),
+                kind="presence",
+                label=quote,
+            )
+        ],
+        unmapped_statements=[],
+    )
+    completed = _extraction_operation(ai_services, fake_openai, job_text, proposal)
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+
+    # Two entries, not one: the statement the proposal never attested is in the
+    # list `fit_score` reads.
+    assert len(analysis.requirements) == 2
+    synthetic = [
+        requirement for requirement in analysis.requirements if requirement.attestation is None
+    ]
+    assert len(synthetic) == 1
+    assert synthetic[0].coverage == "undetermined"
+    assert synthetic[0].mandatory is False
+    assert synthetic[0].text == "Must have exceptional gravitas in boardroom settings."
+    assert [component.component_id for component in synthetic[0].missing_components] == [
+        "unmapped-statement"
+    ]
+    assert "requirements-unmapped" in analysis.approval_reasons
+    # The splice is not credited as reading: `by_ai` still counts only what the
+    # proposal attested.
+    assert analysis.understanding.by_ai == 1

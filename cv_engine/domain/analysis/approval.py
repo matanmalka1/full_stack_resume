@@ -73,6 +73,25 @@ APPROVAL_REASONS: dict[str, ApprovalReason] = {
     # else, because naming a Track or Profile does not resolve the undecided
     # scale (stage-1 plan §3.6).
     "coverage-undetermined": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
+    # The posting stated nothing this engine could read as a requirement at
+    # all, so `fit_score` is `None` rather than the 1.0 "nothing demanded,
+    # nothing missing" would otherwise report. Distinct from
+    # `extraction-failed`, which says requirements *were* stated and none were
+    # read: `extraction_state` separates "absent" from "unparsed" precisely so
+    # the two are not reported as one, and this reason is that separation
+    # surviving into approval. Same override, because the decision it asks the
+    # user for is the same one - proceed although the analysis is incomplete.
+    "requirements-absent": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
+    # Requirement-bearing statements were found and at least one of them could
+    # not be classified to any concept. Separate from `coverage-undetermined`,
+    # which stays reserved for a requirement whose `mandatory` is a verified
+    # value: a statement nothing mapped carries no trustworthy `mandatory` or
+    # `section` to test, so this fires on the statement existing at all.
+    # Separate from `accepted-low-fit` too, and deliberately: the zero such a
+    # statement contributes to `fit_score` is arithmetic, not an assessment of
+    # the candidate, and answering it with "the fit is low, proceed" would tell
+    # the user the candidate failed a check that was never run.
+    "requirements-unmapped": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
 }
 
 #: How an unregistered reason is treated: blocking, advertising nothing. It is

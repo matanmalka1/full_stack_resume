@@ -41,8 +41,12 @@ from cv_engine.domain.analysis.requirements.confidence import (
 )
 from cv_engine.domain.analysis.requirements.coverage import cover_requirements
 from cv_engine.domain.analysis.requirements.extraction import (
+    UNDETERMINED_INTERPRETATION,
     extract_requirements,
     normalize_span,
+    requirement_id,
+    undetermined_requirement,
+    unmatched_requirement_lines,
 )
 from cv_engine.domain.analysis.requirements.segmentation import (
     requirement_lines,
@@ -88,7 +92,13 @@ def test_tech_sales_analysis_records_preference_gaps_and_selection_concepts(clas
         emphasis_override="new-business",
     )
 
-    assert result.fit.value == "high"
+    # UNKNOWN, not HIGH. The concept vocabulary reads none of this posting's one
+    # requirement-bearing statement, which is `extraction_failed` - the rule gaps
+    # below no longer clear that, they only earn the confidence floor. The old
+    # HIGH came from `fit_score_from_requirements([])` returning 1.0 for a
+    # posting nothing had been read from.
+    assert result.fit.value == "unknown"
+    assert "extraction-failed" in result.approval_reasons
     gaps = {gap.requirement: gap for gap in result.gaps}
     assert gaps["Direct SaaS Sales preference"].severity == "warning"
     assert gaps["Sales CRM usage"].substitute_fact_ids == [
@@ -653,7 +663,12 @@ def test_extraction_failure_produces_unknown_fit(
         concepts=requirement_concepts,
         normalized_hash="unreadable",
     )
-    assert analysis.requirements == []
+    # Its three requirement statements are all read now - as `undetermined`,
+    # which is what they are: stated, and mapped to no concept. They used to
+    # exist only in the completeness denominator, invisible to `fit_score`.
+    assert [requirement.coverage for requirement in analysis.requirements] == ["undetermined"] * 3
+    assert all(requirement.concept is None for requirement in analysis.requirements)
+    assert all(not requirement.mandatory for requirement in analysis.requirements)
     assert analysis.fit is FitLevel.UNKNOWN
 
 
@@ -844,7 +859,15 @@ def test_successful_extraction_never_records_extraction_failed(
             normalized_hash=digest,
         )
         assert "extraction-failed" not in analysis.approval_reasons
-        assert analysis.fit is not FitLevel.UNKNOWN
+        # UNKNOWN only where the posting stated nothing readable as a
+        # requirement, and then it is stated as such rather than scored as a
+        # perfect fit. THIN_JOB is that case; RIVERSIDE_JOB states requirements
+        # and half of them are read, so it is assessed.
+        if "requirements-absent" in analysis.approval_reasons:
+            assert analysis.fit_score is None
+            assert analysis.fit is FitLevel.UNKNOWN
+        else:
+            assert analysis.fit is not FitLevel.UNKNOWN
 
 
 def test_a_short_posting_is_not_punished_for_being_short(fact_store, requirement_concepts) -> None:
@@ -1002,7 +1025,14 @@ def test_only_unparsed_is_an_extraction_failure(
             normalized_hash=digest,
         )
         assert "extraction-failed" not in analysis.approval_reasons, job[:40]
-        assert analysis.fit is not FitLevel.UNKNOWN
+        # `absent` is still not `extraction-failed` - the two diagnoses stay
+        # separate, which is the whole point of this test. What it no longer
+        # implies is an assessed Fit: a posting nothing was read from now says
+        # `requirements-absent` and UNKNOWN rather than reporting 1.0.
+        if "requirements-absent" in analysis.approval_reasons:
+            assert analysis.fit is FitLevel.UNKNOWN, job[:40]
+        else:
+            assert analysis.fit is not FitLevel.UNKNOWN, job[:40]
 
 
 def test_a_responsibility_does_not_enter_the_requirement_denominator(
@@ -1278,29 +1308,22 @@ def test_the_fixture_denominator_matches_production(requirement_concepts) -> Non
     assert extraction_completeness(RIVERSIDE_JOB, extracted, requirement_concepts) == 0.5
 
 
-def test_a_requirement_only_the_legacy_rules_understand_is_not_a_failure(
+def test_a_local_rule_hit_no_longer_clears_a_failed_extraction(
     fact_store, profile_store, requirement_concepts
 ) -> None:
-    """The rules are the other half of requirement understanding, for now.
+    """One rule reading one term is not the extraction having succeeded.
 
-    A posting whose requirements the concept vocabulary does not model but the
-    deterministic gap rules do has been read - incompletely modelled is not
-    unreadable. Declaring it failed would block drafting for every posting the
-    concepts have not caught up with yet.
+    `extraction_failed` used to short-circuit to `False` whenever the legacy
+    gap rules matched anything at all - and before the state was computed, so a
+    single `salesforce`/`saas` hit cleared the failure for a posting whose every
+    requirement statement went unread. Those are two different claims: "the
+    rules recognised something" is worth the confidence floor, and says nothing
+    about whether the posting was read. The floor is where it stays.
     """
     job = "Account Manager.\nYou must have proven direct saas sales experience and salesforce.\n"
     extracted = extract_requirements(job, normalized_hash="rules", concepts=requirement_concepts)
-    # The concept vocabulary reads nothing here, and says so on its own terms:
-    # the state and the unflagged call are the requirement model's view, and
-    # both must keep reporting that it covered none of this posting.
     assert extraction_state(job, extracted, requirement_concepts) == "unparsed"
     assert extraction_failed(job, extracted, requirement_concepts) is True
-    # The rules did read it, and only the caller that knows about them may say
-    # so - which is why the flag is a parameter rather than a lookup.
-    assert (
-        extraction_failed(job, extracted, requirement_concepts, understood_elsewhere=True) is False
-    )
-    # So the analysis is assessed rather than unknown.
     analysis = classify_job(
         job,
         facts=fact_store,
@@ -1308,9 +1331,19 @@ def test_a_requirement_only_the_legacy_rules_understand_is_not_a_failure(
         concepts=requirement_concepts,
         normalized_hash="rules",
     )
+    # The rule gaps are still derived and still reported - nothing about their
+    # own value changed.
     assert analysis.gaps
-    assert analysis.fit is not FitLevel.UNKNOWN
-    assert "extraction-failed" not in analysis.approval_reasons
+    assert "extraction-failed" in analysis.approval_reasons
+    assert analysis.fit_score is None
+    # And the requirement the vocabulary could not model is now in the list
+    # `fit_score` reads, instead of being visible only to `confidence`.
+    assert [requirement.coverage for requirement in analysis.requirements] == ["undetermined"]
+    # `extraction_confidence` is the one consumer `understood_elsewhere` keeps.
+    assert (
+        extraction_confidence(job, extracted, requirement_concepts, understood_elsewhere=True)
+        == 0.4
+    )
 
 
 def test_rule_understanding_earns_the_floor_and_no_more(fact_store, requirement_concepts) -> None:
@@ -1629,7 +1662,11 @@ def test_the_vocabulary_still_decides_a_posting_with_no_requirements_read(
         concepts=requirement_concepts,
         normalized_hash="ambiguous",
     )
-    assert analysis.requirements == []
+    # Nothing was *mapped*: every requirement this posting states is spliced in
+    # as `undetermined`, so coverage contributes no Profile score and the
+    # vocabulary is still the only signal deciding - which is what this test is
+    # about.
+    assert all(requirement.coverage == "undetermined" for requirement in analysis.requirements)
     assert all(score == 0 for score in requirement_profile_scores([], profile_store).values())
     # A three-way tie in the vocabulary, settled by declaration order as it
     # always was.
@@ -1692,6 +1729,258 @@ def test_rebased_coverage_removes_only_the_resolved_review_reason(
         extraction_version="ai:test",
         facts=fact_store,
         extraction_failed=True,
+        requirements_absent=False,
+        requirements_unmapped=False,
     )
     assert "coverage-undetermined" not in updated.approval_reasons
     assert "extraction-failed" in updated.approval_reasons
+
+
+# --------------------------------------------------------------------------
+# A requirement statement nothing mapped is a requirement, not an absence
+# --------------------------------------------------------------------------
+
+#: Two requirement statements, one the concept vocabulary reads and one it does
+#: not - the shape the whole denominator problem shows up in.
+PARTLY_MAPPED_JOB = (
+    "Account Executive.\n\n"
+    "Requirements:\n"
+    "- 3+ years of sales closing experience.\n"
+    "- You must have exceptional gravitas in boardroom settings.\n"
+)
+
+
+def test_unmatched_requirement_lines_are_the_statements_nothing_was_read_inside(
+    requirement_concepts,
+) -> None:
+    """Offset overlap against what was extracted, not a text search.
+
+    The same predicate `extraction_completeness` counts `_understood` with, so a
+    statement cannot be both credited as read there and returned as unmatched
+    here.
+    """
+    extracted = extract_requirements(
+        PARTLY_MAPPED_JOB, normalized_hash="partly", concepts=requirement_concepts
+    )
+    lines = requirement_lines(PARTLY_MAPPED_JOB, requirement_concepts)
+    unmatched = unmatched_requirement_lines(
+        PARTLY_MAPPED_JOB, requirement_concepts, [(item.start, item.end) for item in extracted]
+    )
+    assert len(lines) == 2
+    assert [line.text for line in unmatched] == [
+        "You must have exceptional gravitas in boardroom settings."
+    ]
+    # Everything the extractor did read stays out of it.
+    assert extraction_completeness(PARTLY_MAPPED_JOB, extracted, requirement_concepts) == 0.5
+
+
+def test_reading_one_of_two_requirements_no_longer_scores_like_reading_two(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """The two measures finally answer about the same posting.
+
+    `confidence` counted both statements and `fit_score` counted only the
+    mapped one, so a half-read posting could report a perfect fit. The unmapped
+    statement is now in the list `fit_score` reads, at zero credit.
+    """
+    analysis = classify_job(
+        PARTLY_MAPPED_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="partly",
+    )
+    mapped = [item for item in analysis.requirements if item.concept is not None]
+    synthetic = [item for item in analysis.requirements if item.concept is None]
+    assert len(mapped) == 1 and len(synthetic) == 1
+    assert synthetic[0].coverage == "undetermined"
+    assert synthetic[0].kind == "presence"
+    assert synthetic[0].mandatory is False
+    assert synthetic[0].text == "You must have exceptional gravitas in boardroom settings."
+    # The mapped requirement is mandatory and matched; without the splice this
+    # would have been a clean 1.0.
+    assert mapped[0].mandatory is True
+    assert analysis.fit_score is not None
+    assert analysis.fit_score < 1.0
+    assert "requirements-unmapped" in analysis.approval_reasons
+
+
+def test_an_unmatched_statement_never_becomes_a_hard_gap(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """ "We could not tell" is not "you lack this", in either direction.
+
+    `mandatory=False` keeps the synthetic entry out of `coverage-undetermined`
+    too: that reason is about a requirement whose `mandatory` is a verified
+    value, and a statement nothing mapped has no such value to read - the
+    `section` it sits under is exactly the field a bare, unrecognised heading
+    leaves pointing at the block above. `requirements-unmapped` is what
+    discloses it instead.
+    """
+    analysis = classify_job(
+        PARTLY_MAPPED_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="partly",
+    )
+    synthetic = next(item for item in analysis.requirements if item.concept is None)
+    projected = [gap for gap in analysis.gaps if gap.requirement_id == synthetic.requirement_id]
+    assert [gap.severity for gap in projected] == ["warning"]
+    assert "coverage-undetermined" not in analysis.approval_reasons
+
+
+def test_a_synthetic_requirement_id_cannot_collide_with_an_extracted_one(
+    requirement_concepts,
+) -> None:
+    """The discriminant, not luck about wording.
+
+    An unmatched statement's identity span is the *whole* statement, while an
+    extracted item's is the substring its pattern matched - so a posting that
+    repeats a phrase verbatim as its own bullet can produce the same normalized
+    span twice, at the same ordinal. `UNDETERMINED_INTERPRETATION` makes the two
+    ids distinct by construction, the way `RULE_INTERPRETATION` already does for
+    rule-derived gaps, rather than by having foreseen the wording.
+    """
+    line = requirement_lines(PARTLY_MAPPED_JOB, requirement_concepts)[0]
+    synthetic = undetermined_requirement(
+        line, normalized_hash="collide", extraction_version="concepts-v1", ordinal=0
+    )
+    collided = requirement_id(
+        normalized_hash="collide",
+        extraction_version="concepts-v1",
+        identity_span=normalize_span(line.text),
+        ordinal=0,
+    )
+    assert synthetic.requirement_id != collided
+    assert synthetic.requirement_id == requirement_id(
+        normalized_hash="collide",
+        extraction_version=f"concepts-v1:{UNDETERMINED_INTERPRETATION}",
+        identity_span=normalize_span(line.text),
+        ordinal=0,
+    )
+
+
+def test_two_identical_unmatched_statements_get_distinct_ids(requirement_concepts) -> None:
+    """Ordinal is position, mirroring `_identified`'s own `enumerate(gaps)`.
+
+    A posting that repeats the same bullet twice states it twice; both entries
+    must exist separately, because an acceptance recorded against one must not
+    silently answer for the other.
+    """
+    repeated = (
+        "Account Executive.\n\n"
+        "Requirements:\n"
+        "- You must have exceptional gravitas in boardroom settings.\n"
+        "- You must have exceptional gravitas in boardroom settings.\n"
+    )
+    lines = unmatched_requirement_lines(repeated, requirement_concepts, [])
+    assert len(lines) == 2
+    ids = {
+        undetermined_requirement(
+            line, normalized_hash="repeat", extraction_version="concepts-v1", ordinal=ordinal
+        ).requirement_id
+        for ordinal, line in enumerate(lines)
+    }
+    assert len(ids) == 2
+
+
+def test_rebase_reads_absence_and_unmapping_from_its_caller_not_from_the_list(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """Both are properties of the posting text, which this function never sees.
+
+    `rebase_requirements` cannot tell a `requirements` list freshly spliced
+    against the current text from one carried in off an existing record, so
+    deriving "the posting stated nothing" from `not requirements` would be
+    reading a property of the text out of an argument that may not have come
+    from it. The caller says, and an empty list with the flag off stays scored.
+    """
+    from cv_engine.domain.analysis.classification import rebase_requirements
+
+    analysis = classify_job(
+        PARTLY_MAPPED_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="partly",
+    )
+
+    absent = rebase_requirements(
+        analysis,
+        requirements=[],
+        extraction_version="ai:test",
+        facts=fact_store,
+        extraction_failed=False,
+        requirements_absent=True,
+        requirements_unmapped=False,
+    )
+    assert absent.fit_score is None
+    assert absent.fit is FitLevel.UNKNOWN
+    assert "requirements-absent" in absent.approval_reasons
+
+    # Same empty list, caller says it is not absent: the score is computed.
+    not_absent = rebase_requirements(
+        analysis,
+        requirements=[],
+        extraction_version="ai:test",
+        facts=fact_store,
+        extraction_failed=False,
+        requirements_absent=False,
+        requirements_unmapped=False,
+    )
+    assert not_absent.fit_score == 1.0
+    assert "requirements-absent" not in not_absent.approval_reasons
+
+    unmapped = rebase_requirements(
+        analysis,
+        requirements=list(analysis.requirements),
+        extraction_version="ai:test",
+        facts=fact_store,
+        extraction_failed=False,
+        requirements_absent=False,
+        requirements_unmapped=True,
+    )
+    assert "requirements-unmapped" in unmapped.approval_reasons
+    assert unmapped.fit_score is not None
+
+
+def test_rebase_recomputes_both_new_reasons_rather_than_inheriting_them(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """A stale `requirements-absent` must not survive a fresh AI extraction.
+
+    Same rule the two older analysis-completeness reasons already follow: the
+    deterministic analysis's answer is dropped and the caller's is recorded,
+    because the AI extraction read the posting again.
+    """
+    from cv_engine.domain.analysis.classification import rebase_requirements
+
+    analysis = classify_job(
+        PARTLY_MAPPED_JOB,
+        facts=fact_store,
+        profiles=profile_store,
+        concepts=requirement_concepts,
+        normalized_hash="partly",
+    ).model_copy(
+        update={
+            "approval_reasons": [
+                "requirements-absent",
+                "requirements-unmapped",
+                "ambiguous-signals",
+            ]
+        }
+    )
+    updated = rebase_requirements(
+        analysis,
+        requirements=list(analysis.requirements),
+        extraction_version="ai:test",
+        facts=fact_store,
+        extraction_failed=False,
+        requirements_absent=False,
+        requirements_unmapped=False,
+    )
+    assert "requirements-absent" not in updated.approval_reasons
+    assert "requirements-unmapped" not in updated.approval_reasons
+    # An unrelated decision is untouched.
+    assert "ambiguous-signals" in updated.approval_reasons

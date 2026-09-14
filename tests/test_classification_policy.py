@@ -13,7 +13,12 @@ from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
 
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.application.errors import WorkflowError
-from cv_engine.domain.analysis.approval import merge_classification
+from cv_engine.domain.analysis.approval import (
+    ANALYSIS_INCOMPLETE,
+    APPROVAL_REASONS,
+    merge_classification,
+    unresolved_approval_reasons,
+)
 from cv_engine.domain.contracts.analysis import RequirementAttestation, RequirementInterpretation
 from cv_engine.domain.contracts.providers import ProposedRequirement, RequirementExtractionProposal
 from cv_engine.domain.models import Emphasis, FitLevel, Gap, ProfileName, Track
@@ -129,7 +134,15 @@ def test_deterministic_gaps_survive_and_may_only_be_hardened(
 def test_fit_is_derived_from_merged_gaps_and_never_improved(
     profile_store: ProfileStore, classification_proposal, classify
 ) -> None:
-    clean = classify(ACCOUNT_MANAGER_JOB)
+    # The posting has to actually state a requirement the engine reads. An
+    # empty requirement list is no longer HIGH - it reports `requirements-absent`
+    # and no score at all, because "nothing demanded" and "nothing recognised"
+    # are not distinguishable from the list alone.
+    clean = classify(
+        "Account Manager responsible for retention, portfolio growth, negotiation, "
+        "and customer relationships.\n\nRequirements:\n"
+        "- 3+ years of sales closing experience.\n"
+    )
     assert clean.fit is FitLevel.HIGH and clean.gaps == []
 
     added = merge_classification(
@@ -147,6 +160,15 @@ def test_fit_is_derived_from_merged_gaps_and_never_improved(
     assert merge_classification(low, classification_proposal(), profile_store).fit is FitLevel.LOW
 
 
+#: Account Executive vocabulary *and* one requirement statement the concept
+#: vocabulary reads, so a test about a classification gate is not also testing
+#: `requirements-absent`.
+READ_ACCOUNT_EXECUTIVE_POSTING = (
+    "Account Executive closing quota new business.\n\n"
+    "Requirements:\n- Native English is required.\n"
+)
+
+
 def test_emphasis_disagreement_is_an_approval_gate(
     profile_store: ProfileStore, classification_proposal, classify
 ) -> None:
@@ -158,7 +180,9 @@ def test_emphasis_disagreement_is_an_approval_gate(
     routing as Track and Profile: two classifiers disagreeing means neither is
     authoritative, and only an Emphasis override settles it.
     """
-    deterministic = classify("Account Executive closing quota new business")
+    # With a requirement the engine reads, so the gate under test is Emphasis
+    # disagreement rather than `requirements-absent`.
+    deterministic = classify(READ_ACCOUNT_EXECUTIVE_POSTING)
     assert not deterministic.classification_requires_approval
     assert deterministic.emphasis is Emphasis.NEW_BUSINESS
 
@@ -194,7 +218,7 @@ def test_emphasis_disagreement_is_an_approval_gate(
     # Only an Emphasis override answers it; a Profile override does not.
     settled = merge_classification(
         classify(
-            "Account Executive closing quota new business",
+            READ_ACCOUNT_EXECUTIVE_POSTING,
             emphasis_override="tech-consultative-sales",
         ),
         classification_proposal(
@@ -225,16 +249,28 @@ def test_inconsistent_proposal_is_rejected_rather_than_applied(
 
 def test_deterministic_ambiguity_is_resolved_by_choosing_the_classification(classify) -> None:
     ambiguous = classify(AMBIGUOUS_HEBREW_JOB)
-    assert ambiguous.approval_reasons == ["ambiguous-signals", "low-confidence"]
+    # `extraction-failed` now stands on this posting: its requirement statement
+    # is unread by the concept vocabulary, and the legacy gap rules matching
+    # "Salesforce"/"saas" no longer clears that - they only earn the confidence
+    # floor. `requirements-unmapped` names the statement itself.
+    assert ambiguous.approval_reasons == [
+        "extraction-failed",
+        "requirements-unmapped",
+        "ambiguous-signals",
+        "low-confidence",
+    ]
     assert ambiguous.classification_requires_approval
 
-    # The reasons stay on the record; the override is what marks them answered.
+    # The reasons stay on the record; the override is what marks them answered -
+    # the ambiguity ones. The two analysis-completeness reasons are a different
+    # question, and naming a Track was never an answer to them.
     resolved = classify(AMBIGUOUS_HEBREW_JOB, track_override="sales")
     assert resolved.approval_reasons == ambiguous.approval_reasons
-    assert not resolved.classification_requires_approval
+    assert unresolved_approval_reasons(resolved) == ["extraction-failed", "requirements-unmapped"]
 
     unrelated = classify(AMBIGUOUS_HEBREW_JOB, emphasis_override="balanced-sales")
     assert unrelated.classification_requires_approval
+    assert "ambiguous-signals" in unresolved_approval_reasons(unrelated)
 
 
 #: Requirements stated in prose that neither the concept vocabulary nor the
@@ -280,3 +316,84 @@ def test_generation_refuses_an_unread_posting_in_its_own_terms(services) -> None
     message = str(refusal.value)
     assert "did not read this posting's requirements" in message
     assert "Track/Profile" not in message
+
+
+#: States nothing this engine reads as a requirement. Not a failed extraction:
+#: there was nothing to fail at.
+REQUIREMENT_FREE_POSTING = (
+    "Account Executive wanted for a growing team. We sell to small businesses.\n"
+)
+
+#: One requirement statement the concept vocabulary maps, one it does not.
+PARTLY_MAPPED_POSTING = (
+    "Account Executive.\n\n"
+    "Requirements:\n"
+    "- 3+ years of sales closing experience.\n"
+    "- You must have exceptional gravitas in boardroom settings.\n"
+)
+
+
+def test_a_posting_that_states_no_requirement_reports_unknown_with_a_reason(classify) -> None:
+    """`requirements-absent`, and not a fit score of 1.0.
+
+    An empty requirement list used to score 1.0 - "nothing demanded, nothing
+    missing" - which is only true if the posting really demanded nothing, and
+    indistinguishable from a segmenter that read a posting full of requirements
+    and recognised none of them. The score is withheld instead, and the reason
+    says which of the two this is: `extraction-failed` means requirements were
+    stated and none were read; this one means none were stated.
+    """
+    analysis = classify(REQUIREMENT_FREE_POSTING)
+    assert analysis.requirements == []
+    assert "requirements-absent" in analysis.approval_reasons
+    assert "extraction-failed" not in analysis.approval_reasons
+    assert "requirements-unmapped" not in analysis.approval_reasons
+    assert analysis.fit_score is None
+    assert analysis.fit is FitLevel.UNKNOWN
+    assert analysis.classification_requires_approval
+
+
+def test_a_requirement_statement_nothing_mapped_is_scored_and_disclosed(classify) -> None:
+    """`requirements-unmapped`, and a score computed over both statements.
+
+    The unmapped statement enters the same list `fit_score` reads, at zero
+    credit, so reading one of two requirements can no longer score the same as
+    reading two. `coverage-undetermined` deliberately does not fire with it: the
+    synthetic entry's `mandatory` is `False` by construction, not a verified
+    value, so that reason stays about requirements whose `mandatory` means
+    something. `accepted-low-fit` is not what answers this either - the zero is
+    arithmetic, not a judgement about the candidate.
+    """
+    analysis = classify(PARTLY_MAPPED_POSTING)
+    assert "requirements-unmapped" in analysis.approval_reasons
+    assert "requirements-absent" not in analysis.approval_reasons
+    assert "extraction-failed" not in analysis.approval_reasons
+    assert "coverage-undetermined" not in analysis.approval_reasons
+
+    synthetic = [
+        requirement for requirement in analysis.requirements if requirement.concept is None
+    ]
+    assert len(synthetic) == 1
+    assert synthetic[0].coverage == "undetermined"
+    assert synthetic[0].mandatory is False
+    assert [component.component_id for component in synthetic[0].missing_components] == [
+        "unmapped-statement"
+    ]
+    # Scored, not withheld - and scored below what the mapped statement alone
+    # would have produced.
+    assert analysis.fit_score is not None
+    assert analysis.fit_score < 1.0
+
+
+def test_both_new_reasons_are_answered_only_by_accepting_an_incomplete_analysis() -> None:
+    """Same override as `extraction-failed`, and no classification override.
+
+    Naming a Track or Profile does not make the engine have read the posting,
+    and `accepted-low-fit` answers a different claim entirely ("the candidate
+    fits poorly", not "we could not tell").
+    """
+    for reason in ("requirements-absent", "requirements-unmapped"):
+        entry = APPROVAL_REASONS[reason]
+        assert entry.overrides == frozenset({"analysis"}), reason
+        assert entry.review_code == ANALYSIS_INCOMPLETE, reason
+        assert not entry.overrides & {"track", "profile", "emphasis", "language", "fit"}, reason

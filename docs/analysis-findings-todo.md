@@ -11,9 +11,44 @@ this session (file:line cited), independent of the external review's own citatio
 
 ## מצב נוכחי (למי שממשיך מכאן)
 
-**שום דבר עדיין לא בקוד.** כל מה שלמטה הוא תכנון בלבד — 21 ממצאים מאומתים
-(D1-D9, A1-A11, C1-C2), סדר תיקון ב-8 שלבים, ותכנון מפורט ל-Stage 1+2 (שהוגדרו
-כחטיבה אחת שחייבת לנחות יחד).
+**Stage 1+2 נחת בקוד** (הסשן שאחרי התכנון). כל השאר — Stage 3-8 — עדיין תכנון
+בלבד. 21 ממצאים מאומתים (D1-D9, A1-A11, C1-C2), סדר תיקון ב-8 שלבים.
+
+### מה נחת בפועל ב-Stage 1+2
+
+שבעת הצעדים של "Stage 1+2 — implementation file plan" יושמו כלשונם, בסדר הכתוב:
+
+| # | קובץ | מה נחת |
+| --- | --- | --- |
+| 1 | `requirements/extraction.py` | קבוע `UNDETERMINED_INTERPRETATION`, `unmatched_requirement_lines()`, `undetermined_requirement()` (`mandatory=False`, `component_id="unmapped-statement"`). ה-discriminant מצורף **בתוך** ה-helper, לא אצל הקורא, כדי ששום קורא לא יוכל לשכוח אותו |
+| 2 | `requirements/confidence.py` | `understood_elsewhere` הוסר מ-`extraction_failed` לגמרי (חתימה וגוף). נשאר קלט יחיד ל-`extraction_confidence` (רצפת 0.4), ללא שינוי |
+| 3 | `gaps.py` | **לא נגעו.** כמתוכנן |
+| 4 | `analysis/approval.py` | שתי רשומות חדשות ב-`APPROVAL_REASONS`, שתיהן `frozenset({"analysis"})`/`ANALYSIS_INCOMPLETE` |
+| 5 | `analysis/classification.py` | `classify_job`: ספלייס, שני הבוליאנים inline, טרנרי ה-`fit_score`, שני ה-reasons, והערה מיושנת (שורות 466-470) תוקנה. `rebase_requirements`: שני פרמטרים מפורשים חדשים |
+| 6 | `application/services/analysis.py` | `prepare()` מחשב טרי; `_correct_interpretations()` יורש מ-`approval_reasons` — אותה תבנית של `extraction_failed` |
+| 7 | `requirements/ai_extraction.py` | ספלייס ב-`verify_and_cover_extraction`, ערך רביעי בהחזרה (`unmatched_lines`). `by_ai` ממשיך לספור `mapped_spans` בלבד. `extraction_is_failed` לא נגעו |
+
+**סטטוס הממצאים אחרי היישום:**
+
+- **D1 — סגור.** `fit_score=None` על `requirements_absent`, ב-`classify_job`
+  ו-ב-`rebase_requirements`, שניהם בקריאה; `fit_score_from_requirements`
+  ו-החוזה שלה (1.0 על רשימה ריקה) לא השתנו.
+- **D2 — סגור.** ה-short-circuit נמחק. `extraction_failed` הוא בדיוק
+  `extraction_state(...) == "unparsed"`.
+- **A3 — סגור.** `verify_and_cover_extraction` בונה `Requirement(undetermined)`
+  לכל שורה לא-ממופה בעצמה; `unmapped_statements` נשאר גילוי נלווה בלבד.
+- **A4 — ההנחה שלו מתקיימת עכשיו בשני הנתיבים.** Stage 2 נחת גם בנתיב ה-AI
+  במפורש, ולכן ההפרש בין 1/20 ל-20/20 מיוצג ב-`fit_score`. אין קוד לתקן.
+- **A1 — הסיכון השיורי נשאר בדיוק כפי שתואר.** המופע הנוכחי נסגר (שורה שזוהתה
+  ולא מופתה נכנסת לניקוד); התלות המעגלית של נתיב ה-AI ב-`requirement_lines()`
+  הדטרמיניסטי לא נגעה ולא נפתרה. שורה שהסגמנטר לא מזהה מלכתחילה עדיין
+  בלתי-נראית לחלוטין לשני הנתיבים.
+- **D3 — נשאר פתוח, כפי שנכתב.** הדנומינטור תוקן; כיול הסף `0.72` לא נגע בו
+  אף החלטה שנפתרה.
+- **D4-D9 (פרט ל-D2), A2, A5-A11, C1, C2 — ללא שינוי.** שייכים ל-Stage 3-8.
+
+**הצעד הבא:** Stage 3 (`A2`, `A11`) — שני באגים פשוטים בנתיב ה-AI, עצמאיים
+מכל מה שנחת כאן.
 
 **החלטות #1-#3 ו-#7-#12 סגורות (RESOLVED)**, כל אחת עם נימוק מלא במקום — ראה
 **Open product decisions** למטה. הן מכסות: מה קורה לשורת דרישה שלא מופתה
@@ -32,9 +67,27 @@ implementation file plan" למטה, שבע קבצים בסדר עריכה מוג
 יותר (#4→Stage 7, #5→Stage 5/D8, #6→Stage 5/C1) ולא צריך להכריע בהן כדי
 להתחיל לממש את Stage 1+2.
 
-**הצעד הבא לסשן שממשיך מכאן: לממש את הקוד לפי תוכנית הקבצים, שלב-שלב,
-לפי הסדר הרשום שם — לא לפני קריאת ההחלטות שמצדיקות כל צעד (ר' סעיף 4
-שנוסף לתוכנית הקבצים עצמה).**
+**#4-#6 עדיין פתוחות גם אחרי היישום** — Stage 1+2 לא הכריע בהן ולא נגע בהן.
+
+## פריטי מעקב שנפתחו ביישום (לא לתיקון עכשיו)
+
+1. **מודעה קצרה שבאמת לא מציבה דרישות חוסמת מעתה הפקת מסמך.**
+   `requirements-absent` הוא `ANALYSIS_INCOMPLETE`, ולכן
+   `drafts/generation.py` מסרב עד `apply_analysis_decisions(
+   accept_incomplete_analysis=True)`. זו ההתנהגות המכוונת לפי החלטה #7 — עדיף
+   שהמשתמש יאשר במפורש "המנוע לא קרא דרישות" מאשר שיקבל `fit=HIGH` שקרי — אבל
+   היא הופכת כל מודעה דלילה לשני צעדים במקום אחד. **מדד להחלטה:** אם מודעות
+   אמת ללא בלוק דרישות מתבררות כשכיחות, זה חיכוך יומיומי ששווה לשקול מחדש
+   (למשל reason שאינו חוסם generation, או סף מבוסס-אורך). לא לפעולה עכשיו.
+   נצפה לראשונה בתשעה טסטים ב-`tests/test_ai_tasks.py` שעברו דרך
+   `ACCOUNT_MANAGER_JOB` בדרך ל-drafting.
+2. **`undetermined_requirement()` לא קובעת `.extractor`** (נשאר `None`, כמו
+   בנתיב הדטרמיניסטי). ר' ההערה בסוף החלטה #11 — להשוות כש-Stage 3 נוגע
+   ב-`correct_interpretation`.
+3. **`mandatory` של ישות סינתטית** — לשקול מחדש מעבר ל-`line.section ==
+   "requirements"` אחרי ש-D9 מתוקן (Stage 6). ר' החלטה #10.
+4. **D7 מתחיל לזוז.** `concept_classification_completeness` כבר לא קבוע 1.0
+   מתמטית ברגע שקיימות ישויות עם `concept=None`. ר' "משנים משמעות" למטה.
 
 ## Root cause, restated precisely
 
@@ -950,6 +1003,32 @@ in config["concepts"].values()}` — assert אין חיתוך, לכל טקסט �
     `"requirements-unmapped" in analysis.approval_reasons` — אותו תבנית ירושה
     בדיוק כמו `extraction_failed`/`requirements_absent`.
 
+    **מה נחת בפועל (נוסף אחרי היישום; שתי נקודות שלא היו כתובות כאן מראש):**
+    - **הגארד `and not requirements_absent`.** התנאי בפועל ב-`classify_job` הוא
+      `bool(unmatched_lines) and not requirements_absent`. הוא הגנתי בלבד: אם
+      `requirements` ריקה אז `requirement_lines` ריקה ולכן `unmatched_lines`
+      ריקה גם היא, כך ששני ה-reasons לא יכולים להידלק יחד. הוא כתוב כדי שאם
+      ה-invariant הזה יישבר אי-פעם, תידלק אבחנה אחת ולא שתיים סותרות.
+    - **`requirements-unmapped` יכול להידלק יחד עם `extraction-failed`, וזה נכון.**
+      מודעה שבה זוהו שורות דרישה ואף אחת לא הובנה היא גם `state=="unparsed"`
+      (⇒ `extraction-failed`) וגם בעלת שורות לא-ממופות (⇒ `requirements-unmapped`).
+      שתי האבחנות נכונות בו-זמנית ואומרות דברים שונים: הראשונה "אפס מתוך N",
+      השנייה "הנה אילו שורות". אותו override עונה על שתיהן, כך שזה לא מוסיף
+      צעד למשתמש. `AMBIGUOUS_HEBREW_JOB` הוא בדיוק המקרה הזה
+      (`tests/test_classification_policy.py`).
+
+    **שלוש האבחנות זו מול זו, לסיכום:**
+
+    | reason | נדלק כש- | אומר |
+    | --- | --- | --- |
+    | `requirements-absent` | `requirement_lines(text) == []` | המודעה לא הציגה שום דבר שנקרא כדרישה |
+    | `requirements-unmapped` | `unmatched_requirement_lines(...)` לא ריקה | הוצגו דרישות, לפחות אחת לא מופתה לאף concept |
+    | `coverage-undetermined` | קיימת ישות `undetermined` שגם `mandatory=True` | דרישה **מאומתת** כחובה שלא ניתן היה להכריע את הכיסוי שלה |
+
+    השלישית **לעולם לא נדלקת מישות סינתטית** (`mandatory=False` קבוע, החלטה #10) —
+    זה בדיוק הפער ש-`requirements-unmapped` נועד לסגור. שלושתן נענות ע"י
+    `apply_analysis_decisions(accept_incomplete_analysis=True)` ורק על ידו.
+
 ---
 
 ## Stage 1+2 — implementation file plan
@@ -1134,8 +1213,7 @@ case is handled uniformly by step 5/6's explicit `requirements_absent`/
 `requirements_unmapped` parameters in `rebase_requirements`, not by touching this
 function.
 
-### 8. Tests (not written yet — named here so nothing is missed, not to be authored
-before your go-ahead on 1+2)
+### 8. Tests — **written; see "מה נחת" below the list**
 
 - `tests/test_analysis.py` — likely asserts `fit_score==1.0`/`fit=="high"` for
   currently-empty-requirements inputs; these need updating to the new expected values.
@@ -1148,5 +1226,29 @@ before your go-ahead on 1+2)
   `tests/test_ai_tasks.py:1048`'s existing `by_ai==0` assertion style (already read
   during verification — same file already exercises this shape).
 
-**Stopping here for approval, per your instruction — no source file above has been
-edited.**
+**מה נחת בפועל בטסטים:**
+
+- `tests/test_analysis.py` — נוספו: שני ה-helpers ברמת היחידה, אי-התנגשות
+  `requirement_id` מול הדיסקרימיננט ואורדינל פוזיציוני (#11), הספלייס והניקוד,
+  אי-הפיכה ל-hard gap ואי-הדלקת `coverage-undetermined` (#10), ושני כיווני
+  הפרמטרים המפורשים של `rebase_requirements` (#9/#12). עודכנו עשרה טסטים
+  שקיבעו בדיוק את ההתנהגות שהוחלפה (`requirements == []`, `fit == HIGH` על
+  רשימה ריקה, `understood_elsewhere=True`, חתימת `rebase_requirements`, ורשימת
+  ה-reasons של `AMBIGUOUS_HEBREW_JOB`).
+- `tests/test_classification_policy.py` — מקרה `requirements-absent` ומקרה
+  `requirements-unmapped` בנפרד, ובדיקה ששתיהן נענות רק ע"י
+  `accept_incomplete_analysis`.
+- `tests/test_ai_tasks.py` — ספלייס נתיב ה-AI דרך ה-Operation runner האמיתי,
+  כולל ש-`by_ai` לא מקבל קרדיט על ישות סינתטית.
+- **הגארד הנגזר הקיים** (`test_every_approval_reason_the_engine_records_is_registered`,
+  `tests/test_analysis.py`) קולט את שני ה-reasons החדשים מ-AST של
+  `classification.py` — לא נדרשה בו שום רשימה ידנית, וזה בדיוק הנוהל.
+- **תשעה טסטים ב-`tests/test_ai_tasks.py` שנשענו על `ACCOUNT_MANAGER_JOB`**
+  (מודעה ללא שורת דרישה) נחסמו ב-generation ע"י `requirements-absent`. הם
+  בודקים drafting/regeneration ולא analysis — ה-assertions שלהם הן על
+  `edit_version`/`content_hash`/`failure_code`/lifecycle, אף אחת לא על
+  `JobAnalysis`. הפתרון: הם עוברים את שער הניתוח דרך
+  `apply_analysis_decisions(accept_incomplete_analysis=True)` (helper
+  `_accepting_incomplete_analysis`), כלומר אותו מסלול בדיוק שמשתמש אמיתי עובר.
+  **`ACCOUNT_MANAGER_JOB` עצמו לא שונה** — שינוי הפיקסצ'ר היה מסתיר שהשער
+  עובד, ומשנה קלט משותף מחוץ לגבולות תוכנית הקבצים.

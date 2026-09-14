@@ -251,7 +251,12 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 extracted_answer.provenance,
             )
             try:
-                verified_requirements, unmapped, understanding = verify_and_cover_extraction(
+                (
+                    verified_requirements,
+                    unmapped,
+                    understanding,
+                    unmatched_lines,
+                ) = verify_and_cover_extraction(
                     extracted_answer.proposal,
                     source_text=job_text,
                     normalized_hash=snapshot["normalized_hash"],
@@ -285,6 +290,11 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 extraction_failed=extraction_is_failed(
                     job_text, verified_requirements, unmapped, knowledge.requirement_concepts
                 ),
+                # Both were just computed against this same `job_text`, in this
+                # same call, which is the condition `rebase_requirements` takes
+                # them explicitly for.
+                requirements_absent=not verified_requirements,
+                requirements_unmapped=bool(unmatched_lines) and bool(verified_requirements),
             ).model_copy(
                 update={
                     "analysis_version": "1.1",
@@ -917,6 +927,12 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # rather than re-derived, since only a fresh extraction run can
             # actually change it.
             extraction_failed="extraction-failed" in analysis.approval_reasons,
+            # Same reasoning, same inheritance: whether the posting stated any
+            # requirement, and whether one of its statements went unmapped, are
+            # properties of the text. A correction does not re-read the text, so
+            # neither can be re-derived here - only carried forward.
+            requirements_absent="requirements-absent" in analysis.approval_reasons,
+            requirements_unmapped="requirements-unmapped" in analysis.approval_reasons,
         )
         result = rebased.model_copy(
             update={

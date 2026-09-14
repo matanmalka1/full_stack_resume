@@ -6,15 +6,29 @@ import re
 from dataclasses import dataclass
 
 from ....util import canonical_json, sha256_text
-from ...contracts.analysis import RequirementInterpretation, RequirementKind
+from ...contracts.analysis import (
+    MissingComponent,
+    Requirement,
+    RequirementInterpretation,
+    RequirementKind,
+)
 from .concepts import RequirementConcept, RequirementConceptStore
-from .segmentation import _segments
+from .segmentation import StatementLine, _segments, requirement_lines
 
 #: The interpretation stamped on every rule-derived and concept-derived
 #: requirement's identity. Explicit rather than `None`: a `None` interpretation
 #: key would let a rule-derived gap and an AI-extracted requirement collide on
 #: the same wording and inherit each other's acceptances (stage-1 plan §5.5).
 RULE_INTERPRETATION = "rule-interpretation-v1"
+
+#: The interpretation stamped on a requirement synthesized for a
+#: requirement-bearing statement no extractor mapped to a concept. Same reason
+#: `RULE_INTERPRETATION` exists: such a statement's identity span is the *whole*
+#: statement, which can coincide with the matched substring some other extracted
+#: requirement was built from elsewhere in the same posting. Distinct extraction
+#: versions make that collision impossible by construction rather than by having
+#: foreseen every wording that could produce it.
+UNDETERMINED_INTERPRETATION = "undetermined-interpretation-v1"
 
 _WHITESPACE = re.compile(r"\s+")
 _SENTENCE = re.compile(r"[.;\n]")
@@ -165,6 +179,78 @@ def extract_requirements(
                         )
                     )
     return sorted(found, key=lambda item: (item.concept, item.ordinal))
+
+
+def unmatched_requirement_lines(
+    text: str,
+    concepts: RequirementConceptStore,
+    mapped_spans: list[tuple[int, int]],
+) -> list[StatementLine]:
+    """Requirement-bearing statements no extracted span touches.
+
+    The denominator every completeness measure already uses
+    (`requirement_lines`), minus the statements something was read inside. The
+    overlap predicate is the same one `_understood`/`unmapped_statement_ids`/
+    `extraction_is_failed` ask their version of this question with, so a
+    statement counted as read there is never counted unmatched here.
+
+    `mapped_spans` is posting offsets, not normalized text: an extracted span
+    carries text a posting wrapping the requirement across a line no longer
+    contains, so searching for it would report a statement as unmatched that
+    was read.
+    """
+    return [
+        line
+        for line in requirement_lines(text, concepts)
+        if not any(start < line.end and line.start < end for start, end in mapped_spans)
+    ]
+
+
+def undetermined_requirement(
+    line: StatementLine,
+    *,
+    normalized_hash: str,
+    extraction_version: str,
+    ordinal: int,
+) -> Requirement:
+    """The requirement a statement nothing could map to still states.
+
+    A requirement-bearing statement no concept matched used to exist in the
+    completeness denominator and nowhere else: it cost `confidence` and cost
+    `fit_score` nothing, because `fit_score` only ever saw the statements that
+    *were* mapped. Reading one of twenty requirements then scored the same as
+    reading twenty. This is the entry that closes that: zero credit,
+    `undetermined` coverage - "we could not tell", never "you lack this" -
+    counted in the same denominator as everything else.
+
+    `mandatory` is always `False`, deliberately, and not read off
+    `line.section`. `section` is the field a bare heading that matches no
+    configured marker still leaves pointing at the block above it, so a perk
+    bullet can carry `section == "requirements"`; taking `mandatory` from it
+    here would carry that into new code. `fit_score` already prices an
+    undetermined entry at zero either way, and it is the caller's
+    `requirements-unmapped` reason, not `mandatory`, that discloses one exists.
+
+    `extraction_version` is the caller's base version; the
+    `UNDETERMINED_INTERPRETATION` discriminant is appended here so no caller
+    can forget it - see that constant for the collision it rules out.
+    """
+    return Requirement(
+        requirement_id=requirement_id(
+            normalized_hash=normalized_hash,
+            extraction_version=f"{extraction_version}:{UNDETERMINED_INTERPRETATION}",
+            identity_span=normalize_span(line.text),
+            ordinal=ordinal,
+        ),
+        text=line.text,
+        kind="presence",
+        concept=None,
+        mandatory=False,
+        coverage="undetermined",
+        missing_components=[
+            MissingComponent(component_id="unmapped-statement", label="No recognised concept")
+        ],
+    )
 
 
 def interpretation_identity_key(interpretation: RequirementInterpretation) -> dict[str, object]:

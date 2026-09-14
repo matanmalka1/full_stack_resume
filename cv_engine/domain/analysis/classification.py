@@ -30,6 +30,8 @@ from .requirements.extraction import (
     extract_requirements,
     normalize_span,
     requirement_id,
+    undetermined_requirement,
+    unmatched_requirement_lines,
 )
 
 HEBREW = re.compile(r"[\u0590-\u05ff]")
@@ -225,6 +227,8 @@ def rebase_requirements(
     extraction_version: str,
     facts: FactStore,
     extraction_failed: bool,
+    requirements_absent: bool,
+    requirements_unmapped: bool,
 ) -> JobAnalysis:
     """Step 7 of the stage-1 pipeline (§3.7): swap in a verified requirement set.
 
@@ -256,6 +260,15 @@ def rebase_requirements(
     Boundary facts keep protecting what they actually limit, because
     `cover_requirements` already refuses to let a boundary fact satisfy a
     requirement independent of which extractor found it.
+
+    `requirements_absent` and `requirements_unmapped` are explicit for the same
+    reason `extraction_failed` is, and the reason is sharper than it looks: this
+    function never sees the posting text. It cannot tell a `requirements` list
+    freshly spliced against that text from one carried in off an existing
+    record, so deriving "the posting stated nothing" from `not requirements`
+    would be reading a property of the text out of an argument that may not
+    have been built from it. The caller that built the list knows; the caller
+    that inherited it reads the answer off the analysis it is correcting.
     """
     boundary_meanings = {
         fact_id: facts.facts[fact_id].meaning
@@ -274,15 +287,27 @@ def rebase_requirements(
         requirement.coverage == "undetermined" and requirement.mandatory
         for requirement in requirements
     )
-    fit_score = None if extraction_failed else fit_score_from_requirements(requirements)
+    fit_score = (
+        None
+        if (extraction_failed or requirements_absent)
+        else fit_score_from_requirements(requirements)
+    )
     fit = fit_level_from_score(fit_score, gaps)
     reasons = [
         *(
             reason
             for reason in deterministic.approval_reasons
-            if reason not in {"extraction-failed", "coverage-undetermined"}
+            if reason
+            not in {
+                "extraction-failed",
+                "coverage-undetermined",
+                "requirements-absent",
+                "requirements-unmapped",
+            }
         ),
         *(["extraction-failed"] if extraction_failed else []),
+        *(["requirements-absent"] if requirements_absent else []),
+        *(["requirements-unmapped"] if requirements_unmapped else []),
         *(["coverage-undetermined"] if mandatory_undetermined else []),
     ]
     reasons = list(dict.fromkeys(reasons))
@@ -332,6 +357,27 @@ def classify_job(
     extracted = extract_requirements(text, normalized_hash=normalized_hash, concepts=concepts)
     requirements: list[Requirement] = cover_requirements(extracted, facts=facts, concepts=concepts)
     extraction_version = concepts.extraction_version
+    # A requirement-bearing statement no concept matched is still a requirement
+    # the posting made. It used to exist only in the completeness denominator,
+    # where it cost `confidence` and cost `fit_score` nothing - so reading one
+    # of twenty requirements scored exactly as well as reading twenty. Splicing
+    # it in here, at zero credit, is what makes the two measures answer about
+    # the same posting. It happens before `requirement_profile_scores` and
+    # `gaps_from_requirements` read the list: both already handle an
+    # `undetermined` requirement with no supporting facts (no Profile score, a
+    # warning-severity gap), so neither needs to know these entries are new.
+    unmatched_lines = unmatched_requirement_lines(
+        text, concepts, [(item.start, item.end) for item in extracted]
+    )
+    requirements += [
+        undetermined_requirement(
+            line,
+            normalized_hash=normalized_hash,
+            extraction_version=extraction_version,
+            ordinal=ordinal,
+        )
+        for ordinal, line in enumerate(unmatched_lines)
+    ]
 
     term_scores = Counter(
         {
@@ -439,9 +485,10 @@ def classify_job(
     # still own the concepts they own, so they are computed before extraction
     # is judged. A posting the rules read is not one the engine failed to read.
     rule_gaps = _identified(derive_gaps(lowered, track), normalized_hash, concepts)
-    failed_extraction = extraction_failed(
-        text, extracted, concepts, understood_elsewhere=bool(rule_gaps)
-    )
+    # `rule_gaps` is not consulted here. A rule reading one term the concept
+    # vocabulary does not model is worth the confidence floor below, and no
+    # more; it never established that the extraction as a whole succeeded.
+    failed_extraction = extraction_failed(text, extracted, concepts)
 
     # Two independently diagnosable scores, multiplied. A strong keyword
     # classification cannot carry an analysis whose requirements were not
@@ -464,15 +511,30 @@ def classify_job(
         *(gap for gap in rule_gaps if gap.requirement not in covered_text),
     ]
     # Stage-1 plan §3.6: an undetermined mandatory requirement still blocks
-    # approval below (`coverage-undetermined`). The deterministic
-    # `cover_requirements` never itself emits `undetermined` today; this stays
-    # consistent with the AI path's rule in `rebase_requirements` in case that
-    # changes.
+    # approval below (`coverage-undetermined`). `cover_requirements` itself
+    # still never emits `undetermined`; the splice above now does, and those
+    # entries are `mandatory=False` by construction, so this stays the question
+    # it always was - about a requirement whose `mandatory` is a verified value.
     mandatory_undetermined = any(
         requirement.coverage == "undetermined" and requirement.mandatory
         for requirement in requirements
     )
-    fit_score = None if failed_extraction else fit_score_from_requirements(requirements)
+    # Both are computed from a `requirements` list built fresh against this
+    # text, a few lines above, so neither needs the explicit parameter
+    # `rebase_requirements` takes for the same two signals.
+    requirements_absent = not requirements and not failed_extraction
+    requirements_unmapped = bool(unmatched_lines) and not requirements_absent
+    # An empty list here means the posting stated nothing readable as a
+    # requirement, never that extraction dropped what it found: after the
+    # splice, every requirement-bearing statement produces an entry. So
+    # `fit_score_from_requirements`'s 1.0 on an empty list - correct in
+    # isolation, "nothing demanded, nothing missing" - is exactly the answer
+    # that must not be reported as certainty here. `gaps.py` is unchanged.
+    fit_score = (
+        None
+        if (failed_extraction or requirements_absent)
+        else fit_score_from_requirements(requirements)
+    )
     fit = fit_level_from_score(fit_score, gaps)
     candidate_overrides: dict[OverrideKey, str | None] = {
         "track": track_override,
@@ -491,6 +553,8 @@ def classify_job(
     )
     reasons = [
         *(["extraction-failed"] if failed_extraction else []),
+        *(["requirements-absent"] if requirements_absent else []),
+        *(["requirements-unmapped"] if requirements_unmapped else []),
         *(["coverage-undetermined"] if mandatory_undetermined else []),
         *(["ambiguous-signals"] if ambiguous else []),
         *(["low-confidence"] if confidence < CONFIDENCE_APPROVAL_THRESHOLD else []),

@@ -48,9 +48,15 @@ from ...facts import FactStore
 from .attestation import InvalidRequirementAttestation, verify_attestation
 from .concepts import RequirementConcept, RequirementConceptStore
 from .coverage import satisfied_evidence, threshold_coverage
-from .extraction import ExtractedRequirement, normalize_span, requirement_id
+from .extraction import (
+    ExtractedRequirement,
+    normalize_span,
+    requirement_id,
+    undetermined_requirement,
+    unmatched_requirement_lines,
+)
 from .interpretation import InvalidRequirementInterpretation, verify_interpretation
-from .segmentation import requirement_lines
+from .segmentation import StatementLine, requirement_lines
 
 
 def concept_for_quote(quote: str, concepts: RequirementConceptStore) -> RequirementConcept | None:
@@ -472,7 +478,7 @@ def verify_and_cover_extraction(
     concepts: RequirementConceptStore,
     task_version: str,
     prompt_version: str,
-) -> tuple[list[Requirement], list[UnmappedStatement], UnderstandingSources]:
+) -> tuple[list[Requirement], list[UnmappedStatement], UnderstandingSources, list[StatementLine]]:
     """Gate, identify, and cover every requirement an AI extraction proposed.
 
     The one entry point the application service calls (stage-1 plan §3.7 step
@@ -497,6 +503,16 @@ def verify_and_cover_extraction(
     part of what is being identified, because a prompt change can change what
     the same posting text is read to mean without the task contract itself
     changing.
+
+    The fourth return value is the requirement-bearing statements no verified
+    requirement's offsets touched. Each already has an `undetermined`
+    `Requirement` spliced into the returned list - a provider that reads one of
+    twenty requirements and says nothing about the other nineteen must not
+    produce a `fit_score` computed over that one, which is the same false green
+    the deterministic path closes the same way. They are returned as well as
+    spliced because the caller needs to know one existed, and re-deriving that
+    from the spliced list would mean inferring which entries this function
+    synthesized.
     """
     extractor = f"ai:{task_version}:{prompt_version}"
     requirements: list[Requirement] = []
@@ -554,14 +570,29 @@ def verify_and_cover_extraction(
         unmapped.append(statement)
         # Unmapped statements are disclosed separately, not credited as understood.
 
+    unmatched_lines = unmatched_requirement_lines(source_text, concepts, mapped_spans)
+    requirements += [
+        undetermined_requirement(
+            line,
+            normalized_hash=normalized_hash,
+            extraction_version=extractor,
+            ordinal=ordinal,
+        )
+        for ordinal, line in enumerate(unmatched_lines)
+    ]
+
     lines = requirement_lines(source_text, concepts)
+    # Still counted against `mapped_spans` alone. A statement this function
+    # synthesized an `undetermined` entry for was not read by the extraction;
+    # crediting it here would make `by_ai` report the denominator back to
+    # itself.
     by_ai = sum(
         1
         for line in lines
         if any(start < line.end and line.start < end for start, end in mapped_spans)
     )
     understanding = UnderstandingSources(by_concepts=0, by_rules=0, by_ai=by_ai)
-    return requirements, unmapped, understanding
+    return requirements, unmapped, understanding, unmatched_lines
 
 
 def extraction_is_failed(
