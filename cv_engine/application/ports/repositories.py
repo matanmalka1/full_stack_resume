@@ -129,7 +129,10 @@ class JobStore(Protocol):
         accepted_requirement_ids: list[str] | None = ...,
         acceptance_actor: str = ...,
         acceptance_reason: str | None = ...,
+        expected_analysis_id: str | None = ...,
         expected_selection_plan_id: str | None = ...,
+        enforce_expected_selection_plan: bool = ...,
+        refuse_matching_context_operation: bool = ...,
     ) -> tuple[str, SelectionPlan]: ...
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
@@ -152,6 +155,7 @@ class JobStore(Protocol):
         new_acceptances: list[AcceptedGap] | None = None,
         expected_selection_plan_id: str | None = None,
         enforce_expected_selection_plan: bool = False,
+        refuse_matching_context_operation: bool = False,
         plan_id: str | None = None,
         created_at: str | None = None,
     ) -> SelectionPlan: ...
@@ -310,6 +314,8 @@ class OperationRepository(Protocol):
     def operation(self, operation_id: str) -> PersistedOperation: ...
 
     def active_operation(self, application_id: str) -> OperationView | None: ...
+
+    def has_active_matching_context_operation(self, application_id: str) -> bool: ...
 
     def latest_operation(self, application_id: str) -> OperationView | None: ...
 

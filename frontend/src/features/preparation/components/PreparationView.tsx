@@ -6,6 +6,7 @@ import { workflowActionPlan } from "../model/workflowActionPlan";
 import { AnalysisStage } from "../stages/analysis/AnalysisStage";
 import { SelectionPlanPanel } from "../stages/content/SelectionPlanPanel";
 import { VerificationStage } from "../stages/verification/VerificationStage";
+import { MatchingConfigurationEditor } from "../stages/verification/MatchingConfigurationEditor";
 import { AnalysisStatusBanner } from "./AnalysisStatusBanner";
 import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 
@@ -81,6 +82,14 @@ export const PreparationView = ({
         onQueued={onQueued}
         plan={plan}
       />
+
+      {/* A voluntary configuration edit is a different intent from resolving a review
+          blocker even though both currently reach the same backend command. While this
+          screen already owns a required decision, its form is the single commit surface;
+          otherwise this disclosure is the explicit entry for changing a settled context. */}
+      {classification === null || detail.review_reasons.some(resolvedByReviewDecision) ? null : (
+        <MatchingConfigurationEditor classification={classification} detail={detail} />
+      )}
 
       {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
           parallel destination - offered where it is done, folded away until wanted. */}

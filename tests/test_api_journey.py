@@ -30,7 +30,7 @@ from __future__ import annotations
 import os
 
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, working_claim
+from helpers import ACCOUNT_MANAGER_JOB, REVIEW_DECISION_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
 
@@ -244,7 +244,7 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         {
             "company": "Review Journey Co",
             "target_role": "Account Manager",
-            "job_text": AMBIGUOUS_HEBREW_JOB,
+            "job_text": REVIEW_DECISION_JOB,
             "acknowledged_duplicates": True,
         },
     )
@@ -269,6 +269,8 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         f"/analyses/{original['job_analysis']}/apply-decisions",
         {
             "application_id": application_id,
+            "expected_analysis_id": original["job_analysis"],
+            "expected_selection_plan_id": original["selection_plan"],
             "profile_override": "account-manager",
             "accept_low_fit": True,
         },
@@ -290,6 +292,7 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         f"/analyses/{resolved['job_analysis_id']}/apply-decisions",
         {
             "application_id": application_id,
+            "expected_analysis_id": resolved["job_analysis_id"],
             "accepted_requirement_ids": [
                 gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"
             ],

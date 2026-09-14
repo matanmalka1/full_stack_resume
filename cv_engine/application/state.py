@@ -48,6 +48,7 @@ STALE_PRECEDENCE = (
 PREPARATION_ACTIONS = (
     "analyze",
     "apply_analysis_decisions",
+    "edit_matching_configuration",
     "create_selection_plan",
     "confirm_and_use_fact",
     "create_draft",
@@ -79,6 +80,7 @@ class ProjectionContext:
     today: date
     active_operation: OperationView | None = None
     latest_operation: OperationView | None = None
+    matching_context_operation_active: bool = False
 
 
 def _reason(
@@ -229,7 +231,16 @@ def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -
     # it, both come from one table in the domain. The projection asks it rather
     # than deciding for itself, so a reason cannot be advertised here as
     # something a command can settle when the table says nothing settles it.
-    unresolved = unresolved_approval_reasons(analysis) if analysis is not None else []
+    selection_overrides = (
+        {"emphasis": plan.plan.emphasis_override.value}
+        if plan is not None and plan.plan.emphasis_override is not None
+        else None
+    )
+    unresolved = (
+        unresolved_approval_reasons(analysis, selection_overrides)
+        if analysis is not None
+        else []
+    )
     grouped: dict[str, list[str]] = {}
     for reason in unresolved:
         grouped.setdefault(approval_reason(reason).review_code, []).append(reason)
@@ -378,11 +389,15 @@ def derive_states(
         revision.id in context.ready_revision_ids
         and revision.job_snapshot_id == context.active_job_snapshot_id
         and revision.job_analysis_id == context.active_analysis_id
+        and context.active_selection_plan is not None
+        and revision.selection_plan_id == context.active_selection_plan.id
         for revision in context.approved_revisions
     )
     compatible_approved = any(
         revision.job_snapshot_id == context.active_job_snapshot_id
         and revision.job_analysis_id == context.active_analysis_id
+        and context.active_selection_plan is not None
+        and revision.selection_plan_id == context.active_selection_plan.id
         for revision in context.approved_revisions
     )
     if not compatible_analysis:
@@ -421,6 +436,18 @@ def derive_warnings(
             WarningView(
                 code="READY_REVISION_FOR_OLDER_ANALYSIS",
                 message="The latest Ready revision belongs to an older analysis.",
+                entity_references={"approved_revision_id": latest_ready.id},
+            )
+        )
+    elif (
+        latest_ready is not None
+        and context.active_selection_plan is not None
+        and latest_ready.selection_plan_id != context.active_selection_plan.id
+    ):
+        warnings.append(
+            WarningView(
+                code="READY_REVISION_FOR_OLDER_SELECTION_PLAN",
+                message="The latest Ready revision belongs to an older selection plan.",
                 entity_references={"approved_revision_id": latest_ready.id},
             )
         )
@@ -497,6 +524,15 @@ def derive_actions(
     available: set[str] = {"analyze"}
     for reason in review:
         available.update(reason.allowed_resolution_actions)
+    # Voluntary editing is not a review-resolution action. It is offered for
+    # every live active analysis, including Draft/Approved/Ready, except while
+    # an Operation can replace either CAS source under the same form.
+    if (
+        context.application.get("deleted_at") is None
+        and context.active_analysis is not None
+        and not context.matching_context_operation_active
+    ):
+        available.add("edit_matching_configuration")
     # Before a draft exists, fact selection remains an explicit preparation choice: the
     # current deterministic plan may be reviewed/replaced or an AI proposal may create a
     # new immutable version. Once editing starts, selection changes belong to the draft's
@@ -538,8 +574,18 @@ def derive_actions(
         if action in available:
             continue
         reasons: list[str]
-        if action in {
-            "apply_analysis_decisions",
+        if action == "apply_analysis_decisions":
+            reasons = ["NO_REVIEW_DECISION_REQUIRED"]
+        elif action == "edit_matching_configuration":
+            if context.active_analysis is None:
+                reasons = ["ANALYSIS_REQUIRED"]
+            elif context.matching_context_operation_active:
+                reasons = ["MATCHING_CONTEXT_OPERATION_IN_PROGRESS"]
+            elif context.application.get("deleted_at") is not None:
+                reasons = ["APPLICATION_DELETED"]
+            else:
+                reasons = ["ACTION_NOT_AVAILABLE"]
+        elif action in {
             "create_selection_plan",
             "confirm_and_use_fact",
         }:

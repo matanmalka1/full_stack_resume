@@ -116,8 +116,12 @@ def build_draft(
 ) -> DraftDocument:
     if analysis.profile is not profile.profile or analysis.track is not profile.track:
         raise ValueError("analysis and profile do not match")
-    if analysis.emphasis not in profile.allowed_emphases:
-        raise ValueError(f"emphasis {analysis.emphasis} is not allowed for {profile.profile}")
+
+    # Emphasis is the SelectionPlan's policy decision. Older plans always
+    # mirror the analysis; newer ones may carry an explicit plan-only override.
+    effective_emphasis = selection.emphasis if selection is not None else analysis.emphasis
+    if effective_emphasis not in profile.allowed_emphases:
+        raise ValueError(f"emphasis {effective_emphasis} is not allowed for {profile.profile}")
 
     language = analysis.language
     contact_ids = candidate.contacts_for_track(analysis.track.value)
@@ -126,18 +130,16 @@ def build_draft(
         selected_by_section, selection = build_selection(
             analysis=analysis,
             profile=profile,
-            policy=policies.get(analysis.emphasis),
+            policy=policies.get(effective_emphasis),
             policy_store_version=policies.version,
             facts=facts,
             line_groups=(
-                presentations.line_groups(profile, analysis.emphasis)
+                presentations.line_groups(profile, effective_emphasis)
                 if presentations is not None
                 else None
             ),
         )
     else:
-        if selection.emphasis is not analysis.emphasis:
-            raise ValueError("selection plan emphasis does not match analysis")
         selected = set(selection.selected_fact_ids)
         # Plans written before the selection invariant existed are still valid
         # records, but they may not enter composition if their eligible facts
@@ -180,7 +182,7 @@ def build_draft(
             presentations.render_section(
                 profile=profile,
                 section=spec.name_en,
-                emphasis=analysis.emphasis,
+                emphasis=effective_emphasis,
                 selected_fact_ids=selected_ids,
                 language=language,
                 facts=facts,
@@ -239,7 +241,7 @@ def build_draft(
         language=language,
         track=analysis.track,
         profile=analysis.profile,
-        emphasis=analysis.emphasis,
+        emphasis=effective_emphasis,
         name=candidate.display_name(language),
         headline=headline,
         contacts=contacts,

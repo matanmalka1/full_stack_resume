@@ -602,8 +602,9 @@ the editor.
 PDF artifact, creates an immutable Submission, transitions to `applied` if necessary,
 and appends status/audit history in one PostgreSQL transaction. It never resolves `latest`
 inside the command. The revision need not match the current active snapshot/analysis;
-that case returns `READY_REVISION_FOR_OLDER_SNAPSHOT` or
-`READY_REVISION_FOR_OLDER_ANALYSIS` as a non-blocking historical-context warning.
+that case returns `READY_REVISION_FOR_OLDER_SNAPSHOT`,
+`READY_REVISION_FOR_OLDER_ANALYSIS`, or
+`READY_REVISION_FOR_OLDER_SELECTION_PLAN` as a non-blocking historical-context warning.
 Multiple submissions are append-only and do not reset recruitment state.
 
 `record_external_submission` is a distinct use-case. It may reference a file already

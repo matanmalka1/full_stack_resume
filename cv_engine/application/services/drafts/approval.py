@@ -130,6 +130,10 @@ class DraftApproval(DraftServiceBase):
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.
         analysis_id, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
+        selection_plan = self.repo.selection_plan(working.selection_plan_id)
+        decision_overrides = dict(analysis.user_override)
+        if selection_plan.plan.emphasis_override is not None:
+            decision_overrides["emphasis"] = selection_plan.plan.emphasis_override.value
         revision_id = revision_id or new_id()
         try:
             published = self.revision_payloads.commit_revision(
@@ -175,7 +179,7 @@ class DraftApproval(DraftServiceBase):
             ],
             # Kept as it was for records already written; it never described
             # per-gap acceptance, which now lives on the SelectionPlan.
-            "accepted_warnings_or_gaps": analysis.user_override,
+            "accepted_warnings_or_gaps": decision_overrides,
             # The gaps this CV was knowingly approved despite, with who accepted
             # each and when. An ApprovedRevision is immutable and is the one
             # record that cannot be regenerated, so a decision it was built on
@@ -183,9 +187,9 @@ class DraftApproval(DraftServiceBase):
             # joining through whichever plan happens to still be reachable.
             "accepted_gaps": [
                 accepted.model_dump(mode="json")
-                for accepted in self.repo.selection_plan(working.selection_plan_id).accepted_gaps
+                for accepted in selection_plan.accepted_gaps
             ],
-            "user_overrides": analysis.user_override,
+            "user_overrides": decision_overrides,
             "fact_store_version": facts.version,
             "job_snapshot_id": draft.job_snapshot_id,
             "job_analysis_id": analysis_id,

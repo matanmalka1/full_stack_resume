@@ -1305,6 +1305,7 @@ export interface components {
             plan: components["schemas"]["SelectionPlanResponse"];
             /** Selection Plan Id */
             selection_plan_id: string;
+            state: components["schemas"]["ApplicationStateResponse"];
         };
         /** ApplicationDetailResponse */
         ApplicationDetailResponse: {
@@ -1568,6 +1569,61 @@ export interface components {
          */
         ApplicationSort: "updated" | "created" | "company" | "stage";
         /**
+         * ApplicationStateResponse
+         * @description The §9 action policy projection, and nothing wider.
+         *
+         *     The two lifecycle states are typed as the application enums rather than
+         *     flattened to `str`, the same way `OperationResponse` spells its closed sets.
+         *     `preparation_state` drives the workflow landmark and the Hebrew label a user
+         *     reads; flattened to `string` the generated TypeScript cannot key a label map
+         *     by it, so a state added to the projection would reach a screen untranslated
+         *     instead of failing the frontend build.
+         *
+         *     The action fields stay `str` deliberately. They are not a closed set at this
+         *     boundary the way the states are - `available_actions` mixes preparation
+         *     commands with review-reason resolution actions - and a client that meets an
+         *     action it has no screen for reports exactly that, which is a correct
+         *     presentation rather than a failure.
+         */
+        ApplicationStateResponse: {
+            /** Active Analysis Id */
+            active_analysis_id?: string | null;
+            /** Active Job Snapshot Id */
+            active_job_snapshot_id: string;
+            active_operation?: components["schemas"]["OperationResponse"] | null;
+            /** Active Selection Plan Id */
+            active_selection_plan_id?: string | null;
+            /** Active Working Draft Id */
+            active_working_draft_id?: string | null;
+            /** Available Actions */
+            available_actions: string[];
+            /** Blocked Actions */
+            blocked_actions: components["schemas"]["BlockedActionResponse"][];
+            /** Latest Approved Revision Id */
+            latest_approved_revision_id?: string | null;
+            latest_operation?: components["schemas"]["OperationResponse"] | null;
+            /** Latest Ready Revision Id */
+            latest_ready_revision_id?: string | null;
+            /** Newer Draft In Progress */
+            newer_draft_in_progress: boolean;
+            preparation_state: components["schemas"]["PreparationState"];
+            /** Primary Stale Reason */
+            primary_stale_reason?: string | null;
+            /** Recommended Action */
+            recommended_action?: string | null;
+            /** Recruitment Status */
+            recruitment_status: string;
+            /** Review Reasons */
+            review_reasons: components["schemas"]["ReasonResponse"][];
+            /** Stale Reasons */
+            stale_reasons: components["schemas"]["ReasonResponse"][];
+            /** Terminal Outcome */
+            terminal_outcome?: string | null;
+            /** Warnings */
+            warnings: components["schemas"]["WarningResponse"][];
+            working_draft_state: components["schemas"]["WorkingDraftState"];
+        };
+        /**
          * ApplicationStatus
          * @enum {string}
          */
@@ -1576,8 +1632,8 @@ export interface components {
          * ApplyAnalysisDecisionsRequest
          * @description One review-form submission (§13).
          *
-         *     Carries both kinds of decision because one form does, and which branch runs
-         *     is decided by what actually changes rather than by which fields arrived.
+         *     Carries analysis and selection-policy decisions because one form may submit
+         *     both. Which immutable records are created is decided by what changed.
          */
         ApplyAnalysisDecisionsRequest: {
             /**
@@ -1605,6 +1661,8 @@ export interface components {
              * @default []
              */
             excluded_fact_ids: string[];
+            /** Expected Analysis Id */
+            expected_analysis_id: string;
             /** Expected Selection Plan Id */
             expected_selection_plan_id?: string | null;
             /** Language Override */
@@ -3164,6 +3222,7 @@ export interface components {
              */
             candidates: components["schemas"]["SelectionCandidate"][];
             emphasis: components["schemas"]["Emphasis"];
+            emphasis_override?: components["schemas"]["Emphasis"] | null;
             /** Emphasis Policy Version */
             emphasis_policy_version: string;
             /**

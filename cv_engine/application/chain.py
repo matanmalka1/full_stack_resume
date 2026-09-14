@@ -163,12 +163,15 @@ def check_draft_chain(
                 )
             )
 
+    expected_emphasis = (
+        draft.selection.emphasis if draft.selection is not None else analysis.emphasis
+    )
     drifted = [
         f"{name}: draft {left} vs analysis {right}"
         for name, left, right in (
             ("track", draft.track.value, analysis.track.value),
             ("profile", draft.profile.value, analysis.profile.value),
-            ("emphasis", draft.emphasis.value, analysis.emphasis.value),
+            ("emphasis", draft.emphasis.value, expected_emphasis.value),
             ("language", draft.language, analysis.language),
         )
         if left != right

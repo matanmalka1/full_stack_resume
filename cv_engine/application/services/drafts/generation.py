@@ -142,7 +142,12 @@ class DraftGeneration(DraftServiceBase):
         # do the one thing that cannot recover requirements the engine never
         # read - the same false advertisement the projection stopped making,
         # left standing in the layer that enforces it.
-        unresolved = unresolved_approval_reasons(analysis)
+        selection_overrides = (
+            {"emphasis": plan.plan.emphasis_override.value}
+            if plan.plan.emphasis_override is not None
+            else None
+        )
+        unresolved = unresolved_approval_reasons(analysis, selection_overrides)
         incomplete = [
             reason
             for reason in unresolved
@@ -250,7 +255,7 @@ class DraftGeneration(DraftServiceBase):
                 job_analysis={
                     "track": analysis.track.value,
                     "profile": analysis.profile.value,
-                    "emphasis": analysis.emphasis.value,
+                    "emphasis": draft.emphasis.value,
                     "language": analysis.language,
                     "keywords": list(analysis.keywords),
                 },

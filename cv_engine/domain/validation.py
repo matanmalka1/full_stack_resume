@@ -287,6 +287,12 @@ def _profile_matches(context: _ValidationContext) -> None:
         context.add_issue("profile", "profile-mismatch", "Draft and selected Profile disagree.")
     if draft.emphasis not in profile.allowed_emphases:
         context.add_issue("profile", "emphasis-not-allowed", draft.emphasis.value)
+    if context.plan is not None and draft.emphasis is not context.plan.plan.emphasis:
+        context.add_issue(
+            "profile",
+            "selection-plan-emphasis-mismatch",
+            "Draft Emphasis differs from its authoritative SelectionPlan.",
+        )
     if (
         context.analysis.fit.value == "low"
         and context.analysis.user_override.get("fit") != "accepted-low-fit"
@@ -311,7 +317,12 @@ def _profile_matches(context: _ValidationContext) -> None:
     # posting the engine could not read was reported as a classification
     # ambiguity, which named a decision that cannot resolve it - and the wrong
     # name was written into an immutable validation report.
-    unresolved = unresolved_approval_reasons(context.analysis)
+    selection_overrides = (
+        {"emphasis": context.plan.plan.emphasis_override.value}
+        if context.plan is not None and context.plan.plan.emphasis_override is not None
+        else None
+    )
+    unresolved = unresolved_approval_reasons(context.analysis, selection_overrides)
     incomplete = [
         reason
         for reason in unresolved

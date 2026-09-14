@@ -24,6 +24,8 @@ export const useRevisionData = (revisionId: string) => {
         ? "READY_REVISION_FOR_OLDER_SNAPSHOT"
         : revision.job_analysis_id !== detail.active_analysis_id
           ? "READY_REVISION_FOR_OLDER_ANALYSIS"
+          : revision.selection_plan_id !== detail.active_selection_plan_id
+            ? "READY_REVISION_FOR_OLDER_SELECTION_PLAN"
           : null;
   const otherWarnings = detail?.warnings.filter((warning) => warning.code !== displayedWarningCode) ?? [];
   const recordedSubmissions =

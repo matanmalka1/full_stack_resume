@@ -18,6 +18,7 @@ from ..schemas.analyses import (
     CreateSelectionPlanRequest,
     CreateSelectionPlanResponse,
 )
+from ..schemas.applications import ApplicationStateResponse
 from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
@@ -52,7 +53,17 @@ def apply_analysis_decisions(
             **request.model_dump(mode="json"),
         )
     )
-    return AnalysisDecisionsResponse.model_validate(result.model_dump(mode="json"))
+    state = services.queries.application_detail(request.application_id)
+    state_document = state.model_dump(mode="json")
+    projected = ApplicationStateResponse.model_validate(
+        {name: state_document[name] for name in ApplicationStateResponse.model_fields}
+    )
+    return AnalysisDecisionsResponse.model_validate(
+        {
+            **result.model_dump(mode="json"),
+            "state": projected,
+        }
+    )
 
 
 @router.post(

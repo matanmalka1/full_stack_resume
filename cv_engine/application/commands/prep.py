@@ -69,7 +69,14 @@ class AnalyzeCommand(BoundaryDTO):
     #: carries them, so a plain re-analysis starts with nothing accepted.
     accepted_requirement_ids: list[str] = []
     acceptance_reason: str | None = None
+    #: Present only when analysis is the write branch of an explicit decision
+    #: against an already active context. A fresh analysis has no prior
+    #: analysis to compare with.
+    expected_analysis_id: str | None = None
     expected_selection_plan_id: str | None = None
+    #: Internal flag carried to persistence so an explicit decision is refused
+    #: while an Operation that can replace its Analysis/SelectionPlan is active.
+    refuse_matching_context_operation: bool = False
     provider: str = "deterministic"
     model: str | None = None
     reasoning_effort: str | None = None
@@ -99,6 +106,10 @@ class CreateSelectionPlanCommand(SelectionOverlay):
 
     application_id: str
     job_analysis_id: str
+    #: Emphasis changes selection and presentation policy but not the meaning
+    #: of JobAnalysis. A value here creates a replacement plan and records the
+    #: explicit choice on its manifest.
+    emphasis_override: str | None = None
     #: Requirement IDs whose hard gaps the user knowingly proceeds past. Named
     #: one by one: accepting a deficiency the user has seen must never dismiss
     #: one they have not.
@@ -118,17 +129,25 @@ class CreateSelectionPlanCommand(SelectionOverlay):
     #: caller did not state an expectation", so a plan created while AI is running cannot
     #: be silently replaced at activation.
     enforce_expected_selection_plan: bool = False
+    #: Internal counterpart of AnalyzeCommand's guard, used by the plan-only
+    #: branch of apply_analysis_decisions.
+    refuse_matching_context_operation: bool = False
 
 
 class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     """One local review-form submission (§13).
 
-    Carries both kinds of decision because one form does. Which branch runs is
-    decided by what actually changes, not by which fields the client filled in.
+    Carries both kinds of decision because one form does. Track/Profile/
+    language and interpretation change analysis meaning; Emphasis, fact
+    selection and gap acceptance can replace only SelectionPlan.
     """
 
     application_id: str
     job_analysis_id: str
+    #: Explicit CAS source copied from the form read. It is deliberately not
+    #: inferred from job_analysis_id: naming what to mutate and naming what was
+    #: observed are separate claims at an optimistic boundary.
+    expected_analysis_id: str
     track_override: str | None = None
     profile_override: str | None = None
     emphasis_override: str | None = None

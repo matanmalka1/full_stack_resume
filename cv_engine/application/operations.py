@@ -77,6 +77,16 @@ class OperationType(StrEnum):
     RENDER_REVISION = "render_revision"
 
 
+#: Operations whose successful activation replaces one of the two records a
+#: matching-configuration decision is taken against.  Kept beside the closed
+#: OperationType vocabulary so both the action projection and the persistence
+#: CAS use one definition of "competing with this context".
+MATCHING_CONTEXT_OPERATION_TYPES = frozenset(
+    {
+        OperationType.ANALYZE_JOB,
+        OperationType.PROPOSE_SELECTION_PLAN,
+    }
+)
 class OperationPhase(StrEnum):
     QUEUED = "queued"
     WAITING_FOR_APPLICATION = "waiting_for_application"

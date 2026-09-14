@@ -31,18 +31,19 @@ from ...domain.contracts.taxonomy import (
     ProfileName,
     Track,
 )
+from .applications import ApplicationStateResponse
 from .health import HttpSchema
 
 
 class ClassificationOverrides(HttpSchema):
-    """The four explicit decisions a user may impose on a classification.
+    """The four explicit matching decisions accepted by analysis forms.
 
     Shared because both requests that accept them accept exactly the same four,
     and a second declaration is a second place to forget one.
 
-    Every field is optional and withholding one is not a retraction: the
-    application layer merges a submission over the overrides already recorded,
-    so a blank field keeps whatever was decided before rather than clearing it.
+    Every field is optional and withholding one is not a retraction. Track,
+    Profile and language are analysis-level decisions; Emphasis is committed
+    on SelectionPlan when it is the only change.
     """
 
     track_override: Track | None = None
@@ -110,11 +111,15 @@ class CreateSelectionPlanRequest(SelectionOverlayRequest):
 class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverrides):
     """One review-form submission (§13).
 
-    Carries both kinds of decision because one form does, and which branch runs
-    is decided by what actually changes rather than by which fields arrived.
+    Carries analysis and selection-policy decisions because one form may submit
+    both. Which immutable records are created is decided by what changed.
     """
 
     application_id: str
+    #: The active analysis shown by the form. Required separately from the path
+    #: identity so the write can compare the observation as well as resolve the
+    #: immutable source being addressed.
+    expected_analysis_id: str
     #: Deliberately here and not on `ClassificationOverrides`, which
     #: `CreateAnalysisRequest` also uses: accepting an analysis that read
     #: nothing is a decision about an analysis the user has seen. Offering it
@@ -181,3 +186,7 @@ class AnalysisDecisionsResponse(HttpSchema):
     created_analysis: bool
     analysis: dict[str, Any]
     plan: SelectionPlanResponse
+    #: Fresh authoritative projection after the immutable replacements were
+    #: activated. Clients choose the next step from this rather than predicting
+    #: whether the new context is reviewable, draftable, stale, or historical.
+    state: ApplicationStateResponse

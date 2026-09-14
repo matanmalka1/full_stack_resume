@@ -20,7 +20,9 @@ from ...domain.contracts.providers import SelectionProposal
 from ...domain.contracts.selection import (
     AcceptedGap,
     SelectionManifest,
+    SelectionPlan,
 )
+from ...domain.contracts.taxonomy import Emphasis
 from ...domain.profiles import ProfileStore
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.selection import build_selection
@@ -440,7 +442,10 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             ),
             acceptance_actor=ACCEPTANCE_ACTOR,
             acceptance_reason=command.acceptance_reason,
+            expected_analysis_id=command.expected_analysis_id,
             expected_selection_plan_id=command.expected_selection_plan_id,
+            enforce_expected_selection_plan=command.expected_analysis_id is not None,
+            refuse_matching_context_operation=command.refuse_matching_context_operation,
         )
         repo.set_normalized_role(command.application_id, prepared.normalized_role)
         return AnalysisResult(
@@ -471,18 +476,45 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         repo = repository or self.repo
         record = self._analysis_record(command.application_id, command.job_analysis_id, repo)
         analysis: JobAnalysis = record["analysis"]
+        try:
+            latest_plan = repo.latest_selection_plan(command.application_id)
+        except UnknownRecord:
+            latest_plan = None
+        active_plan = (
+            latest_plan
+            if latest_plan is not None and latest_plan.job_analysis_id == command.job_analysis_id
+            else None
+        )
+        try:
+            effective_emphasis = (
+                Emphasis(command.emphasis_override)
+                if command.emphasis_override is not None
+                else active_plan.plan.emphasis
+                if active_plan is not None
+                else analysis.emphasis
+            )
+        except ValueError as exc:
+            raise PreconditionFailed(f"unknown Emphasis: {command.emphasis_override}") from exc
+        explicit_emphasis = (
+            effective_emphasis
+            if command.emphasis_override is not None
+            else active_plan.plan.emphasis_override
+            if active_plan is not None
+            else None
+        )
+        selection_analysis = analysis.model_copy(update={"emphasis": effective_emphasis})
         knowledge = self.load_knowledge()
         self._refuse_moved_sources(command, knowledge)
-        selected_profile = self._consistent_profile(analysis, knowledge.profiles)
+        selected_profile = self._consistent_profile(selection_analysis, knowledge.profiles)
         try:
             _, manifest = build_selection(
-                analysis=analysis,
+                analysis=selection_analysis,
                 profile=selected_profile,
-                policy=knowledge.policies.get(analysis.emphasis),
+                policy=knowledge.policies.get(effective_emphasis),
                 policy_store_version=knowledge.policies.version,
                 facts=knowledge.facts,
                 line_groups=(
-                    knowledge.presentations.line_groups(selected_profile, analysis.emphasis)
+                    knowledge.presentations.line_groups(selected_profile, effective_emphasis)
                     if knowledge.presentations is not None
                     else None
                 ),
@@ -493,6 +525,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except ValueError as exc:
             raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
+        manifest = manifest.model_copy(update={"emphasis_override": explicit_emphasis})
         plan = repo.create_selection_plan(
             command.application_id,
             command.job_analysis_id,
@@ -503,11 +536,12 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             selection_policy_version=knowledge.policies.version,
             track_emphasis_dependencies={
                 "track": analysis.track.value,
-                "emphasis": analysis.emphasis.value,
+                "emphasis": effective_emphasis.value,
             },
             new_acceptances=self._new_acceptances(command, analysis),
             expected_selection_plan_id=command.expected_selection_plan_id,
             enforce_expected_selection_plan=command.enforce_expected_selection_plan,
+            refuse_matching_context_operation=command.refuse_matching_context_operation,
         )
         return SelectionPlanResult(
             application_id=command.application_id,
@@ -604,10 +638,26 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         """
         record = self._analysis_record(command.application_id, command.job_analysis_id)
         analysis: JobAnalysis = record["analysis"]
+        try:
+            latest_plan = self.repo.latest_selection_plan(command.application_id)
+        except UnknownRecord:
+            latest_plan = None
+        active_plan = (
+            latest_plan
+            if latest_plan is not None and latest_plan.job_analysis_id == command.job_analysis_id
+            else None
+        )
+        effective_analysis = (
+            analysis.model_copy(update={"emphasis": active_plan.plan.emphasis})
+            if active_plan is not None
+            else analysis
+        )
         knowledge = self.load_knowledge()
-        profile = self._consistent_profile(analysis, knowledge.profiles)
+        profile = self._consistent_profile(effective_analysis, knowledge.profiles)
         allowed = allowed_fact_pool(profile)
-        deterministic, manifest = self._deterministic_selection(analysis, profile, knowledge)
+        deterministic, manifest = self._deterministic_selection(
+            effective_analysis, profile, knowledge
+        )
         del deterministic
 
         answered = self.provider.propose_selection_plan(
@@ -615,12 +665,14 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 job_analysis={
                     "track": analysis.track.value,
                     "profile": analysis.profile.value,
-                    "emphasis": analysis.emphasis.value,
+                    "emphasis": effective_analysis.emphasis.value,
                     "language": analysis.language,
                     "keywords": list(analysis.keywords),
                     "gaps": [gap.model_dump(mode="json") for gap in analysis.gaps],
                 },
-                allowed_facts=fact_context(knowledge.facts, sorted(allowed), analysis.language),
+                allowed_facts=fact_context(
+                    knowledge.facts, sorted(allowed), effective_analysis.language
+                ),
                 deterministic_selection={
                     "selected_fact_ids": list(manifest.selected_fact_ids),
                     "emphasis_policy_version": manifest.emphasis_policy_version,
@@ -648,6 +700,12 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 job_analysis_id=command.job_analysis_id,
                 pinned_fact_ids=list(proposal.pinned_fact_ids),
                 excluded_fact_ids=list(proposal.excluded_fact_ids),
+                emphasis_override=(
+                    active_plan.plan.emphasis_override.value
+                    if active_plan is not None
+                    and active_plan.plan.emphasis_override is not None
+                    else None
+                ),
                 expected_candidate_context_hash=command.expected_candidate_context_hash,
                 expected_facts_version=command.expected_facts_version,
                 expected_profile_version=command.expected_profile_version,
@@ -735,10 +793,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
 
         Meaning changed -> one new immutable JobAnalysis carrying the overrides,
         together with its initial deterministic SelectionPlan, committed
-        atomically by `save_analysis`. Only the fact overlay changed -> one
-        replacement SelectionPlan against the same analysis. Neither branch
-        touches the analysis or plan the user decided against; both remain
-        readable history.
+        atomically by `save_analysis`. Only Emphasis, fact selection, or gap
+        acceptance changed -> one replacement SelectionPlan against the same
+        analysis. Neither branch touches the records the user decided against.
 
         Accepting a hard gap is a *selection* decision, not a meaning one. It
         does not change what the requirement means, what it covers, or how it
@@ -757,13 +814,17 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         drop the first, and withholding a field is not a retraction of it.
         """
         self.load_active_application(command.application_id)
+        if command.expected_analysis_id != command.job_analysis_id:
+            raise StateConflict(
+                "the analysis addressed by the request does not match the analysis "
+                "observed by the form"
+            )
         record = self._analysis_record(command.application_id, command.job_analysis_id)
         analysis: JobAnalysis = record["analysis"]
 
         candidates: dict[OverrideKey, str | None] = {
             "track": command.track_override,
             "profile": command.profile_override,
-            "emphasis": command.emphasis_override,
             "language": command.language_override,
         }
         submitted: dict[OverrideKey, str] = {
@@ -774,10 +835,47 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         if command.accept_incomplete_analysis:
             submitted["analysis"] = ACCEPTED_INCOMPLETE_ANALYSIS
         merged = {**analysis.user_override, **submitted}
+        active_plan: SelectionPlan | None = None
+        if command.expected_selection_plan_id is not None:
+            try:
+                observed_plan = self.repo.selection_plan(command.expected_selection_plan_id)
+            except UnknownRecord:
+                observed_plan = None
+            if (
+                observed_plan is not None
+                and observed_plan.application_id == command.application_id
+                and observed_plan.job_analysis_id == command.job_analysis_id
+            ):
+                active_plan = observed_plan
+        prior_emphasis_override = (
+            active_plan.plan.emphasis_override if active_plan is not None else None
+        )
+        requested_emphasis_override = (
+            Emphasis(command.emphasis_override)
+            if command.emphasis_override is not None
+            else None
+        )
+        emphasis_decision_changed = requested_emphasis_override is not None and (
+            prior_emphasis_override != requested_emphasis_override
+        )
         has_interpretation_corrections = bool(command.requirement_interpretations)
-        changes_meaning = merged != dict(analysis.user_override) or has_interpretation_corrections
+        previous_meaning = {
+            key: value for key, value in analysis.user_override.items() if key != "emphasis"
+        }
+        submitted_meaning = {key: value for key, value in merged.items() if key != "emphasis"}
+        changes_meaning = submitted_meaning != previous_meaning or has_interpretation_corrections
         has_fact_overlay = bool(command.pinned_fact_ids or command.excluded_fact_ids)
-        has_overlay = bool(has_fact_overlay or command.accepted_requirement_ids)
+        has_overlay = bool(
+            has_fact_overlay or command.accepted_requirement_ids or emphasis_decision_changed
+        )
+
+        # A plan-level Emphasis decision is folded into a newly-created
+        # analysis only when another decision already requires that new
+        # analysis. Otherwise the JobAnalysis stays immutable and only the
+        # SelectionPlan changes.
+        carried_emphasis = requested_emphasis_override or prior_emphasis_override
+        if changes_meaning and carried_emphasis is not None:
+            merged["emphasis"] = carried_emphasis.value
 
         if has_interpretation_corrections:
             # Stage-1 plan §3.5: a correction re-covers the named requirements
@@ -841,7 +939,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                     ),
                     accepted_requirement_ids=list(command.accepted_requirement_ids),
                     acceptance_reason=command.acceptance_reason,
+                    expected_analysis_id=command.expected_analysis_id,
                     expected_selection_plan_id=command.expected_selection_plan_id,
+                    refuse_matching_context_operation=True,
                 )
             )
             return AnalysisDecisionsResult(
@@ -865,9 +965,16 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 job_analysis_id=command.job_analysis_id,
                 pinned_fact_ids=list(command.pinned_fact_ids),
                 excluded_fact_ids=list(command.excluded_fact_ids),
+                emphasis_override=(
+                    requested_emphasis_override.value
+                    if requested_emphasis_override is not None
+                    else None
+                ),
                 accepted_requirement_ids=list(command.accepted_requirement_ids),
                 acceptance_reason=command.acceptance_reason,
                 expected_selection_plan_id=command.expected_selection_plan_id,
+                enforce_expected_selection_plan=True,
+                refuse_matching_context_operation=True,
             )
         )
         return AnalysisDecisionsResult(
@@ -989,7 +1096,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 job_snapshot_id=record["job_snapshot_id"],
                 accepted_requirement_ids=list(command.accepted_requirement_ids),
                 acceptance_reason=command.acceptance_reason,
+                expected_analysis_id=command.expected_analysis_id,
                 expected_selection_plan_id=command.expected_selection_plan_id,
+                refuse_matching_context_operation=True,
             ),
             prepared,
         )

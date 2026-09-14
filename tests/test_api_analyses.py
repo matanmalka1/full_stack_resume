@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import pytest
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB
+from helpers import ACCOUNT_MANAGER_JOB, AMBIGUOUS_HEBREW_JOB, REVIEW_DECISION_JOB
 
 from cv_engine.api.app import API_PREFIX
-from cv_engine.application.commands import IngestCommand
+from cv_engine.application.commands import DraftCommand, IngestCommand
 
 
 def _application(services, company: str, *, job_text: str = ACCOUNT_MANAGER_JOB) -> str:
@@ -136,7 +136,7 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
 ) -> None:
     """The meaning branch, and the history it does not touch."""
     application_id = _application(
-        api_worker.services, "Decided Classification Co", job_text=AMBIGUOUS_HEBREW_JOB
+        api_worker.services, "Decided Classification Co", job_text=REVIEW_DECISION_JOB
     )
     outputs = _outputs(_analyze(api_worker, application_id))
     original_analysis = api_worker.services.repository.get_analysis(outputs["job_analysis"])
@@ -146,6 +146,8 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
         json={
             "application_id": application_id,
+            "expected_analysis_id": outputs["job_analysis"],
+            "expected_selection_plan_id": outputs["selection_plan"],
             "profile_override": "account-manager",
             "accept_low_fit": True,
         },
@@ -170,6 +172,10 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
     state = _state(api_worker, application_id)
     assert state["active_analysis_id"] == body["job_analysis_id"]
     assert state["active_selection_plan_id"] == body["selection_plan_id"]
+    assert body["state"]["active_analysis_id"] == state["active_analysis_id"]
+    assert body["state"]["active_selection_plan_id"] == state["active_selection_plan_id"]
+    assert body["state"]["available_actions"] == state["available_actions"]
+    assert body["state"]["recommended_action"] == state["recommended_action"]
 
     # The classification is settled, but the hard gap is a separate decision and
     # is deliberately still standing: `accepted-low-fit` answers low Fit alone.
@@ -204,7 +210,12 @@ def test_a_fact_overlay_alone_creates_a_replacement_plan_for_the_same_analysis(
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-        json={"application_id": application_id, "excluded_fact_ids": [removed]},
+        json={
+            "application_id": application_id,
+            "expected_analysis_id": outputs["job_analysis"],
+            "expected_selection_plan_id": outputs["selection_plan"],
+            "excluded_fact_ids": [removed],
+        },
         headers=MUTATION_HEADERS,
     )
 
@@ -222,6 +233,49 @@ def test_a_fact_overlay_alone_creates_a_replacement_plan_for_the_same_analysis(
 
     assert api_worker.services.repository.get_analysis(outputs["job_analysis"]) == original_analysis
     assert api_worker.services.repository.selection_plan(outputs["selection_plan"]) == original
+
+
+def test_an_emphasis_decision_replaces_only_the_selection_plan(api_worker) -> None:
+    """Emphasis selects policy; it does not rewrite analysis meaning."""
+    application_id = _application(api_worker.services, "Emphasis Plan Co")
+    outputs = _outputs(_analyze(api_worker, application_id))
+    original_analysis = api_worker.services.repository.get_analysis(outputs["job_analysis"])
+    original_plan = api_worker.services.repository.selection_plan(outputs["selection_plan"])
+
+    response = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
+        json={
+            "application_id": application_id,
+            "expected_analysis_id": outputs["job_analysis"],
+            "expected_selection_plan_id": outputs["selection_plan"],
+            "emphasis_override": "new-business",
+        },
+        headers=MUTATION_HEADERS,
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["created_analysis"] is False
+    assert body["job_analysis_id"] == outputs["job_analysis"]
+    assert body["selection_plan_id"] != outputs["selection_plan"]
+    assert body["plan"]["plan"]["emphasis"] == "new-business"
+    assert body["plan"]["plan"]["emphasis_override"] == "new-business"
+    assert body["state"]["active_analysis_id"] == outputs["job_analysis"]
+    assert body["state"]["active_selection_plan_id"] == body["selection_plan_id"]
+    assert api_worker.services.repository.get_analysis(outputs["job_analysis"]) == original_analysis
+    assert api_worker.services.repository.selection_plan(outputs["selection_plan"]) == original_plan
+    assert _state(api_worker, application_id)["application"]["emphasis"] == "new-business"
+    drafted = api_worker.services.drafts.draft(
+        DraftCommand(
+            application_id=application_id,
+            job_analysis_id=outputs["job_analysis"],
+            selection_plan_id=body["selection_plan_id"],
+        )
+    )
+    working = api_worker.services.repository.working_draft(drafted.working_draft_id)
+    assert working.source.emphasis.value == "new-business"
+    assert working.source.selection is not None
+    assert working.source.selection.emphasis_override is not None
 
 
 def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> None:
@@ -248,6 +302,8 @@ def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> No
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
         json={
             "application_id": application_id,
+            "expected_analysis_id": outputs["job_analysis"],
+            "expected_selection_plan_id": outputs["selection_plan"],
             "profile_override": "account-manager",
             "excluded_fact_ids": ["sales.achievement.retention"],
         },
@@ -262,7 +318,11 @@ def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> No
 
     empty = api_worker.client.post(
         f"{API_PREFIX}/analyses/{empty_outputs['job_analysis']}/apply-decisions",
-        json={"application_id": empty_application_id},
+        json={
+            "application_id": empty_application_id,
+            "expected_analysis_id": empty_outputs["job_analysis"],
+            "expected_selection_plan_id": empty_outputs["selection_plan"],
+        },
         headers=MUTATION_HEADERS,
     )
 
@@ -274,7 +334,12 @@ def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> No
     outside_the_set = [
         (
             f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-            {"application_id": application_id, "profile_override": "not-a-profile"},
+            {
+                "application_id": application_id,
+                "expected_analysis_id": outputs["job_analysis"],
+                "expected_selection_plan_id": outputs["selection_plan"],
+                "profile_override": "not-a-profile",
+            },
         ),
         (
             f"{API_PREFIX}/applications/{application_id}/analyses",
@@ -432,6 +497,7 @@ def _accept(api_worker, application_id, analysis_id, requirement_ids, **extra):
     """
     body = {
         "application_id": application_id,
+        "expected_analysis_id": analysis_id,
         "accepted_requirement_ids": list(requirement_ids),
         **extra,
     }
@@ -519,7 +585,12 @@ def test_accepted_low_fit_no_longer_clears_a_hard_gap(api_worker) -> None:
     outputs = _outputs(_analyze(api_worker, application_id))
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-        json={"application_id": application_id, "accept_low_fit": True},
+        json={
+            "application_id": application_id,
+            "expected_analysis_id": outputs["job_analysis"],
+            "expected_selection_plan_id": outputs["selection_plan"],
+            "accept_low_fit": True,
+        },
         headers=MUTATION_HEADERS,
     )
     assert response.status_code == 201, response.text
@@ -538,12 +609,14 @@ def test_a_requirement_with_no_hard_gap_cannot_be_accepted(api_worker) -> None:
     assert "no hard gap to accept" in response.text
 
 
-def test_accepting_without_naming_the_plan_is_refused(api_worker) -> None:
-    """A decision has to name the plan it was made against.
+def test_deciding_without_naming_both_active_sources_is_refused(api_worker) -> None:
+    """A decision has to name the analysis and plan it was made against.
 
     Without it the acceptance is applied to whatever plan is active at the
     moment it arrives, which is the silent rebase the field exists to prevent.
-    Optional in general, because most submissions accept nothing.
+    The plan is conditional only on one existing; normal analyses always create
+    an initial plan, so omitting it is a stale-context conflict even for an
+    overlay that accepts no gap.
     """
     application_id = _application(
         api_worker.services, "Unnamed Plan Co", job_text=RIVERSIDE_POSTING
@@ -554,17 +627,34 @@ def test_accepting_without_naming_the_plan_is_refused(api_worker) -> None:
 
     refused = api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
-        json={"application_id": application_id, "accepted_requirement_ids": hard[:1]},
+        json={
+            "application_id": application_id,
+            "expected_analysis_id": analysis_id,
+            "accepted_requirement_ids": hard[:1],
+        },
         headers=MUTATION_HEADERS,
     )
     assert refused.status_code == 412, refused.text
     assert "expected_selection_plan_id" in refused.text
 
-    # A submission that accepts nothing still does not need it.
+    missing_analysis = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
+        json={
+            "application_id": application_id,
+            "expected_selection_plan_id": outputs["selection_plan"],
+            "profile_override": "account-manager",
+        },
+        headers=MUTATION_HEADERS,
+    )
+    assert missing_analysis.status_code == 422, missing_analysis.text
+
+    # A selection overlay names both sources too.
     overlay = api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
         json={
             "application_id": application_id,
+            "expected_analysis_id": analysis_id,
+            "expected_selection_plan_id": outputs["selection_plan"],
             "pinned_fact_ids": [
                 api_worker.services.repository.selection_plan(
                     outputs["selection_plan"]
@@ -595,3 +685,67 @@ def test_naming_a_plan_that_has_been_replaced_is_refused(api_worker) -> None:
     )
     assert stale.status_code == 409, stale.text
     assert "moved since this decision was made" in stale.text
+
+
+def test_naming_an_analysis_that_has_been_replaced_is_refused_without_writing(
+    api_worker,
+) -> None:
+    application_id = _application(api_worker.services, "Moved Analysis Co")
+    first = _outputs(_analyze(api_worker, application_id))
+    second = _outputs(
+        _analyze(api_worker, application_id, headers={"Idempotency-Key": "second-analysis"})
+    )
+    before = len(api_worker.services.repository.analyses(application_id))
+
+    stale = api_worker.client.post(
+        f"{API_PREFIX}/analyses/{first['job_analysis']}/apply-decisions",
+        json={
+            "application_id": application_id,
+            "expected_analysis_id": first["job_analysis"],
+            "expected_selection_plan_id": first["selection_plan"],
+            "emphasis_override": "new-business",
+        },
+        headers=MUTATION_HEADERS,
+    )
+
+    assert stale.status_code == 409, stale.text
+    assert "active JobAnalysis moved" in stale.text
+    assert len(api_worker.services.repository.analyses(application_id)) == before
+    assert _state(api_worker, application_id)["active_analysis_id"] == second["job_analysis"]
+
+
+def test_a_context_operation_blocks_voluntary_editing_and_the_command(
+    api_paused,
+) -> None:
+    application_id = _application(api_paused.services, "Busy Context Co")
+    active = _outputs(_analyze(api_paused, application_id))
+    before = len(api_paused.services.repository.analyses(application_id))
+    snapshot_id = _state(api_paused, application_id)["active_job_snapshot_id"]
+
+    queued = api_paused.client.post(
+        f"{API_PREFIX}/applications/{application_id}/analyses",
+        json={"job_snapshot_id": snapshot_id},
+        headers={**MUTATION_HEADERS, "Idempotency-Key": "competing-analysis"},
+    )
+    assert queued.status_code == 202, queued.text
+    state = _state(api_paused, application_id)
+    assert "edit_matching_configuration" not in state["available_actions"]
+    assert next(
+        blocked["reasons"]
+        for blocked in state["blocked_actions"]
+        if blocked["action"] == "edit_matching_configuration"
+    ) == ["MATCHING_CONTEXT_OPERATION_IN_PROGRESS"]
+
+    refused = api_paused.client.post(
+        f"{API_PREFIX}/analyses/{active['job_analysis']}/apply-decisions",
+        json={
+            "application_id": application_id,
+            "expected_analysis_id": active["job_analysis"],
+            "expected_selection_plan_id": active["selection_plan"],
+            "emphasis_override": "new-business",
+        },
+        headers=MUTATION_HEADERS,
+    )
+    assert refused.status_code == 409, refused.text
+    assert "context Operation is active" in refused.text
+    assert len(api_paused.services.repository.analyses(application_id)) == before

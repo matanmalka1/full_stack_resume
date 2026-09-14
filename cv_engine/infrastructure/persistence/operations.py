@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ...application.errors import IDEMPOTENCY_KEY_REUSED, StateConflict, UnknownRecord
 from ...application.operations import (
+    MATCHING_CONTEXT_OPERATION_TYPES,
     CreateOperation,
     OperationFailureCode,
     OperationOutputReference,
@@ -23,6 +24,7 @@ from ...application.operations import (
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqlAlchemyRepositoryBase
 from .tables import (
+    applications,
     artifact_versions,
     idempotency_receipts,
     operation_outputs,
@@ -128,6 +130,16 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         timestamp = created_at or utc_now()
         resources = required_operation_resources(request)
         with self.transaction() as connection:
+            # Serialize Operation admission with synchronous configuration
+            # decisions. The decision transaction checks for competing queued
+            # or running work while holding this same row lock, so a new
+            # context-changing Operation cannot slip in between its check and
+            # commit.
+            connection.execute(
+                select(applications.c.id)
+                .where(applications.c.id == request.application_id)
+                .with_for_update()
+            ).one_or_none()
             existing = (
                 connection.execute(
                     select(operations).where(
@@ -209,6 +221,30 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 return None
             return as_operation_view(
                 self._operation_record(row, self._outputs(connection, row["id"]))
+            )
+
+    def has_active_matching_context_operation(self, application_id: str) -> bool:
+        """Whether any queued/running Operation can replace matching context.
+
+        This is intentionally not derived from `active_operation`: several
+        Operations may be queued while that presentation field shows the one
+        currently running, and a hidden queued analysis still blocks a safe
+        configuration write.
+        """
+        with self.read_connection() as connection:
+            return (
+                connection.execute(
+                    select(operations.c.id)
+                    .where(
+                        operations.c.application_id == application_id,
+                        operations.c.status.in_(("queued", "running")),
+                        operations.c.operation_type.in_(
+                            tuple(kind.value for kind in MATCHING_CONTEXT_OPERATION_TYPES)
+                        ),
+                    )
+                    .limit(1)
+                ).scalar_one_or_none()
+                is not None
             )
 
     def latest_operation(self, application_id: str) -> OperationView | None:

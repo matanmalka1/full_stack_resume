@@ -133,6 +133,9 @@
           "selection_plan_id": {
             "title": "Selection Plan Id",
             "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ApplicationStateResponse"
           }
         },
         "required": [
@@ -141,7 +144,8 @@
           "selection_plan_id",
           "created_analysis",
           "analysis",
-          "plan"
+          "plan",
+          "state"
         ],
         "title": "AnalysisDecisionsResponse",
         "type": "object"
@@ -1113,6 +1117,187 @@
         "title": "ApplicationSort",
         "type": "string"
       },
+      "ApplicationStateResponse": {
+        "additionalProperties": false,
+        "description": "The §9 action policy projection, and nothing wider.\n\nThe two lifecycle states are typed as the application enums rather than\nflattened to `str`, the same way `OperationResponse` spells its closed sets.\n`preparation_state` drives the workflow landmark and the Hebrew label a user\nreads; flattened to `string` the generated TypeScript cannot key a label map\nby it, so a state added to the projection would reach a screen untranslated\ninstead of failing the frontend build.\n\nThe action fields stay `str` deliberately. They are not a closed set at this\nboundary the way the states are - `available_actions` mixes preparation\ncommands with review-reason resolution actions - and a client that meets an\naction it has no screen for reports exactly that, which is a correct\npresentation rather than a failure.",
+        "properties": {
+          "active_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Analysis Id"
+          },
+          "active_job_snapshot_id": {
+            "title": "Active Job Snapshot Id",
+            "type": "string"
+          },
+          "active_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "active_selection_plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Selection Plan Id"
+          },
+          "active_working_draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Working Draft Id"
+          },
+          "available_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Actions",
+            "type": "array"
+          },
+          "blocked_actions": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedActionResponse"
+            },
+            "title": "Blocked Actions",
+            "type": "array"
+          },
+          "latest_approved_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Approved Revision Id"
+          },
+          "latest_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OperationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_ready_revision_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Ready Revision Id"
+          },
+          "newer_draft_in_progress": {
+            "title": "Newer Draft In Progress",
+            "type": "boolean"
+          },
+          "preparation_state": {
+            "$ref": "#/components/schemas/PreparationState"
+          },
+          "primary_stale_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Stale Reason"
+          },
+          "recommended_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action"
+          },
+          "recruitment_status": {
+            "title": "Recruitment Status",
+            "type": "string"
+          },
+          "review_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonResponse"
+            },
+            "title": "Review Reasons",
+            "type": "array"
+          },
+          "stale_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonResponse"
+            },
+            "title": "Stale Reasons",
+            "type": "array"
+          },
+          "terminal_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Outcome"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/WarningResponse"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "working_draft_state": {
+            "$ref": "#/components/schemas/WorkingDraftState"
+          }
+        },
+        "required": [
+          "recruitment_status",
+          "preparation_state",
+          "working_draft_state",
+          "review_reasons",
+          "stale_reasons",
+          "warnings",
+          "active_job_snapshot_id",
+          "newer_draft_in_progress",
+          "available_actions",
+          "blocked_actions"
+        ],
+        "title": "ApplicationStateResponse",
+        "type": "object"
+      },
       "ApplicationStatus": {
         "enum": [
           "saved",
@@ -1132,7 +1317,7 @@
       },
       "ApplyAnalysisDecisionsRequest": {
         "additionalProperties": false,
-        "description": "One review-form submission (§13).\n\nCarries both kinds of decision because one form does, and which branch runs\nis decided by what actually changes rather than by which fields arrived.",
+        "description": "One review-form submission (§13).\n\nCarries analysis and selection-policy decisions because one form may submit\nboth. Which immutable records are created is decided by what changed.",
         "properties": {
           "accept_incomplete_analysis": {
             "default": false,
@@ -1185,6 +1370,10 @@
             },
             "title": "Excluded Fact Ids",
             "type": "array"
+          },
+          "expected_analysis_id": {
+            "title": "Expected Analysis Id",
+            "type": "string"
           },
           "expected_selection_plan_id": {
             "anyOf": [
@@ -1250,7 +1439,8 @@
           }
         },
         "required": [
-          "application_id"
+          "application_id",
+          "expected_analysis_id"
         ],
         "title": "ApplyAnalysisDecisionsRequest",
         "type": "object"
@@ -5031,6 +5221,16 @@
           },
           "emphasis": {
             "$ref": "#/components/schemas/Emphasis"
+          },
+          "emphasis_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Emphasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "emphasis_policy_version": {
             "title": "Emphasis Policy Version",

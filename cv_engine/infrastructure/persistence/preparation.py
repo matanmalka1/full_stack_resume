@@ -11,6 +11,7 @@ from ...application.errors import (
     StateConflict,
     UnknownRecord,
 )
+from ...application.operations import MATCHING_CONTEXT_OPERATION_TYPES
 from ...application.ports import UnitOfWork
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.selection import (
@@ -23,7 +24,7 @@ from ...util import canonical_json, new_id, utc_now
 from .applications import SqlAlchemyApplicationRepository
 from .base import SqlAlchemyRepositoryBase, sqlalchemy_unit_of_work
 from .connection import SqlAlchemyUnitOfWork
-from .tables import applications, job_analyses, job_snapshots, selection_plans
+from .tables import applications, job_analyses, job_snapshots, operations, selection_plans
 
 
 def _snapshot_record(row: Any) -> dict[str, Any]:
@@ -301,7 +302,10 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         accepted_requirement_ids: list[str] | None = None,
         acceptance_actor: str = "",
         acceptance_reason: str | None = None,
+        expected_analysis_id: str | None = None,
         expected_selection_plan_id: str | None = None,
+        enforce_expected_selection_plan: bool = False,
+        refuse_matching_context_operation: bool = False,
     ) -> tuple[str, SelectionPlan]:
         """Write one analysis and its initial plan as a single record.
 
@@ -316,6 +320,14 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         now = utc_now()
         with self.transaction() as connection:
             self._lock_application(connection, application_id)
+            self._assert_matching_context(
+                connection,
+                application_id,
+                expected_analysis_id=expected_analysis_id,
+                expected_selection_plan_id=expected_selection_plan_id,
+                enforce_expected_selection_plan=enforce_expected_selection_plan,
+                refuse_matching_context_operation=refuse_matching_context_operation,
+            )
             # Allocated under the lock. Read before it, the highest version is
             # whatever the snapshot happened to see, and the insert collides on
             # the unique constraint instead of taking the next number.
@@ -324,7 +336,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     (func.coalesce(func.max(job_analyses.c.version_number), 0) + 1).label("version")
                 ).where(job_analyses.c.application_id == application_id)
             ).scalar_one()
-            self._active_plan(connection, application_id, expected_selection_plan_id)
             connection.execute(
                 insert(job_analyses).values(
                     id=analysis_id,
@@ -402,6 +413,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         new_acceptances: list[AcceptedGap] | None = None,
         expected_selection_plan_id: str | None = None,
         enforce_expected_selection_plan: bool = False,
+        refuse_matching_context_operation: bool = False,
         plan_id: str | None = None,
         created_at: str | None = None,
     ) -> SelectionPlan:
@@ -434,6 +446,8 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     "the active JobAnalysis moved before the SelectionPlan was created: "
                     f"expected {job_analysis_id}, found {active_analysis_id or 'none'}"
                 )
+            if refuse_matching_context_operation:
+                self._refuse_matching_context_operation(connection, application_id)
             carried = self._standing_acceptances(
                 connection,
                 application_id,
@@ -481,6 +495,16 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 now,
                 accepted_gaps=accepted_gaps,
             )
+            if plan.emphasis_override is not None:
+                # Application.emphasis is the current matching configuration,
+                # not immutable analysis history. An Emphasis-only decision
+                # therefore advances it with the active plan while leaving the
+                # JobAnalysis row untouched.
+                connection.execute(
+                    update(applications)
+                    .where(applications.c.id == application_id)
+                    .values(emphasis=plan.emphasis.value, updated_at=now)
+                )
             row = (
                 connection.execute(
                     select(selection_plans).where(selection_plans.c.id == selection_plan_id)
@@ -564,11 +588,83 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             != expected_selection_plan_id
         ):
             raise StateConflict(
-                "the active SelectionPlan moved since this decision was made: expected "
+                "the active SelectionPlan moved since this decision was made "
+                "(expected_selection_plan_id): expected "
                 f"{expected_selection_plan_id}, found "
                 f"{guarded_latest.id if guarded_latest else 'none'}"
             )
         return latest
+
+    def _assert_matching_context(
+        self,
+        connection: Connection,
+        application_id: str,
+        *,
+        expected_analysis_id: str | None,
+        expected_selection_plan_id: str | None,
+        enforce_expected_selection_plan: bool,
+        refuse_matching_context_operation: bool,
+    ) -> None:
+        """CAS both active records while the Application row is locked.
+
+        A fresh analyze passes no expected analysis and is unaffected. An
+        explicit decision passes both observed identities; checking them in
+        the same transaction that inserts the replacements prevents a stale
+        browser tab from reviving an older context.
+        """
+        if expected_analysis_id is not None:
+            active_snapshot_id = connection.execute(
+                select(job_snapshots.c.id)
+                .where(job_snapshots.c.application_id == application_id)
+                .order_by(job_snapshots.c.version_number.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            active_analysis_id = connection.execute(
+                select(job_analyses.c.id)
+                .where(
+                    job_analyses.c.application_id == application_id,
+                    job_analyses.c.job_snapshot_id == active_snapshot_id,
+                )
+                .order_by(job_analyses.c.version_number.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if active_analysis_id != expected_analysis_id:
+                raise StateConflict(
+                    "the active JobAnalysis moved since this decision was made "
+                    "(expected_analysis_id): "
+                    f"expected {expected_analysis_id}, found {active_analysis_id or 'none'}"
+                )
+        self._active_plan(
+            connection,
+            application_id,
+            expected_selection_plan_id,
+            enforce_expected_selection_plan,
+            compatible_job_analysis_id=expected_analysis_id,
+        )
+        if refuse_matching_context_operation:
+            self._refuse_matching_context_operation(connection, application_id)
+
+    @staticmethod
+    def _refuse_matching_context_operation(
+        connection: Connection, application_id: str
+    ) -> None:
+        competing = connection.execute(
+            select(operations.c.id, operations.c.operation_type)
+            .where(
+                operations.c.application_id == application_id,
+                operations.c.status.in_(("queued", "running")),
+                operations.c.operation_type.in_(
+                    tuple(kind.value for kind in MATCHING_CONTEXT_OPERATION_TYPES)
+                ),
+            )
+            .order_by(operations.c.created_at, operations.c.id)
+            .limit(1)
+        ).mappings().one_or_none()
+        if competing is not None:
+            raise StateConflict(
+                "matching configuration cannot change while a context Operation is active: "
+                f"{competing['operation_type']} {competing['id']}"
+            )
 
     def _standing_acceptances(
         self,

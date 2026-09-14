@@ -120,7 +120,9 @@ def unresolved_reasons(reasons: Sequence[str], overrides: Mapping[OverrideKey, s
     ]
 
 
-def unresolved_approval_reasons(analysis: JobAnalysis) -> list[str]:
+def unresolved_approval_reasons(
+    analysis: JobAnalysis, additional_overrides: Mapping[str, str] | None = None
+) -> list[str]:
     """Reasons the classification still needs a decision from the user.
 
     A recorded reason clears only when the user overrode a field that actually
@@ -130,7 +132,10 @@ def unresolved_approval_reasons(analysis: JobAnalysis) -> list[str]:
     reasons = analysis.approval_reasons
     if not reasons and analysis.classification_requires_approval:
         reasons = ["unspecified-ambiguity"]
-    return unresolved_reasons(reasons, analysis.user_override)
+    return unresolved_reasons(
+        reasons,
+        {**analysis.user_override, **dict(additional_overrides or {})},
+    )
 
 
 def merge_classification(

@@ -232,6 +232,7 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
     assert submitted.warnings == [
         "READY_REVISION_FOR_OLDER_SNAPSHOT",
         "READY_REVISION_FOR_OLDER_ANALYSIS",
+        "READY_REVISION_FOR_OLDER_SELECTION_PLAN",
     ]
 
 

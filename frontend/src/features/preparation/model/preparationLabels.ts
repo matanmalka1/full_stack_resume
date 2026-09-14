@@ -74,6 +74,7 @@ export const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
 const actionLabels: Record<string, string> = {
   analyze: "ניתוח המשרה",
   apply_analysis_decisions: "החלת החלטות הסקירה",
+  edit_matching_configuration: "עריכת הגדרות ההתאמה",
   create_selection_plan: "בחירת העובדות",
   confirm_and_use_fact: "אישור עובדה ושימוש בה",
   create_draft: "יצירת טיוטה",
@@ -156,6 +157,7 @@ const warningTitles: Record<string, string> = {
   FACT_SUPERSEDED: "עובדה בטיוטה הוחלפה בגרסה חדשה יותר",
   READY_REVISION_FOR_OLDER_SNAPSHOT: "הגרסה המוכנה שייכת לנוסח משרה ישן",
   READY_REVISION_FOR_OLDER_ANALYSIS: "הגרסה המוכנה שייכת לניתוח ישן",
+  READY_REVISION_FOR_OLDER_SELECTION_PLAN: "הגרסה המוכנה שייכת לתוכנית בחירה ישנה",
 };
 
 export const warningTitle = (code: string): string => warningTitles[code] ?? "כדאי לשים לב";
@@ -165,6 +167,8 @@ const warningDetails: Record<string, string> = {
     "הגרסה המוכנה שייכת לתצלום משרה ישן יותר מהתצלום הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה.",
   READY_REVISION_FOR_OLDER_ANALYSIS:
     "הגרסה המוכנה שייכת לניתוח ישן יותר מהניתוח הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה.",
+  READY_REVISION_FOR_OLDER_SELECTION_PLAN:
+    "הגרסה המוכנה שייכת לתוכנית בחירה ישנה יותר מהתוכנית הפעילה. הקבצים שלה נשארים תקינים וזמינים להורדה.",
 };
 
 export const warningDetail = (code: string, fallback: string): string => warningDetails[code] ?? fallback;

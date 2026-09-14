@@ -17,7 +17,7 @@ import type {
 import { type QueuedOperation, queuedOperation } from "./operations";
 import { type FitLevel, isEmphasis, isFitLevel, isLanguage, isProfileName, isTrack } from "./classificationValues";
 
-/* What this screen may submit: the four classification decisions, the two acceptances
+/* What this screen may submit: matching decisions and the two acceptances
    recorded on the analysis, and the per-gap acceptance recorded on the SelectionPlan.
    The fact overlay is deliberately absent from this classification form. It has its own
    SelectionPlan query and command: the backend refuses a submission carrying a fact
@@ -82,15 +82,9 @@ export const createSelectionPlan = async (
   throw new Error("SelectionPlan creation returned an unexpected status");
 };
 
-/* The gap acceptance, with the plan id it is only ever valid against. The two travel
-   together because the server refuses them apart: an acceptance without
-   `expected_selection_plan_id` is a decision applied to whatever plan is active now
-   rather than to the one the reader was shown, and that rebase is exactly what the check
-   exists to prevent.
-
-   An empty acceptance therefore carries no plan id, so an unrelated decision - a Track
-   override on a screen that also shows gaps - is not turned into an optimistic write
-   against a plan it says nothing about.
+/* The gap-specific fields. The active plan id is now a CAS source for every decision and
+   is added by `applyAnalysisDecisions` below; this helper only validates that a gap
+   acceptance cannot exist when the projection showed no plan at all.
 
    Marking a gap with no active SelectionPlan is refused here rather than sent and refused
    there. It cannot be reached from the screen, which withholds the controls in that state;
@@ -99,7 +93,7 @@ const acceptanceFields = (
   decisions: ClassificationDecisions,
   activeSelectionPlanId: string | null,
 ): Pick<ApplyAnalysisDecisionsRequest, "accepted_requirement_ids"> &
-  Partial<Pick<ApplyAnalysisDecisionsRequest, "acceptance_reason" | "expected_selection_plan_id">> => {
+  Partial<Pick<ApplyAnalysisDecisionsRequest, "acceptance_reason">> => {
   const accepted = decisions.accepted_requirement_ids;
   if (accepted.length === 0) {
     return { accepted_requirement_ids: [] };
@@ -113,16 +107,14 @@ const acceptanceFields = (
 
   return {
     accepted_requirement_ids: accepted,
-    expected_selection_plan_id: activeSelectionPlanId,
     ...(reason === "" ? {} : { acceptance_reason: reason }),
   };
 };
 
 /* §13: synchronous, one commit, no Operation - so no `Idempotency-Key` and no
-   `202`/`Location` obligation. `application_id` is stated rather than inferred from the
-   analysis: a client that names both is telling the server what it believes, and a
-   mismatch is a `412` naming the broken lineage instead of a decision landing on
-   another Application's analysis.
+   `202`/`Location` obligation. `application_id`, `expected_analysis_id`, and the active
+   plan are stated rather than inferred: the first names ownership and the latter two
+   are the exact context the form read.
 
    Only the decisions that were actually set are sent. A blank control is an absent
    field, not an empty string, because the application layer merges a submission over
@@ -144,6 +136,8 @@ export const applyAnalysisDecisions = async (
     "pinned_fact_ids" | "excluded_fact_ids" | "requirement_interpretations"
   > = {
     application_id: applicationId,
+    expected_analysis_id: analysisId,
+    ...(activeSelectionPlanId === null ? {} : { expected_selection_plan_id: activeSelectionPlanId }),
     accept_low_fit: decisions.accept_low_fit,
     accept_incomplete_analysis: decisions.accept_incomplete_analysis,
     ...(decisions.track_override == null ? {} : { track_override: decisions.track_override }),
@@ -350,7 +344,14 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
   return {
     track: isTrack(analysis.track) ? analysis.track : null,
     profile: isProfileName(analysis.profile) ? analysis.profile : null,
-    emphasis: isEmphasis(analysis.emphasis) ? analysis.emphasis : null,
+    /* Emphasis is effective at SelectionPlan level. The Application scalar is
+       advanced with that active plan, while the immutable analysis keeps the
+       classification value it originally carried. */
+    emphasis: isEmphasis(detail.application.emphasis)
+      ? detail.application.emphasis
+      : isEmphasis(analysis.emphasis)
+        ? analysis.emphasis
+        : null,
     language: isLanguage(analysis.language) ? analysis.language : null,
     fit: isFitLevel(analysis.fit) ? analysis.fit : null,
     fitScore: finiteFraction(analysis.fit_score),

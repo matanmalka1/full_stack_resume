@@ -100,6 +100,9 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         )
         active_operation = transaction.active_operation(application_id)
         latest_operation = transaction.latest_operation(application_id)
+        matching_context_operation_active = (
+            transaction.has_active_matching_context_operation(application_id)
+        )
         state = project_application_state(
             ProjectionContext(
                 application=application_record,
@@ -120,6 +123,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
                 today=date.today(),
                 active_operation=active_operation,
                 latest_operation=latest_operation,
+                matching_context_operation_active=matching_context_operation_active,
             )
         )
         return state, snapshot_record, analyses

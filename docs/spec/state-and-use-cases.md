@@ -4,6 +4,8 @@ Status: **Approved for v2.0 implementation (2026-08-17)**
 
 PostgreSQL transaction terminology amendment: **2026-08-25**
 
+Matching-configuration concurrency amendment: **2026-09-14**
+
 Product authority: `docs/spec/product-spec.md`
 
 ## 1. Purpose
@@ -211,6 +213,7 @@ Examples of historical warnings include:
 ```text
 READY_REVISION_FOR_OLDER_SNAPSHOT
 READY_REVISION_FOR_OLDER_ANALYSIS
+READY_REVISION_FOR_OLDER_SELECTION_PLAN
 FACT_SUPERSEDED
 FACT_KNOWN_INCORRECT
 FACT_DELETED
@@ -259,6 +262,13 @@ Application Detail and relevant list projections return:
 The complete projection is computed in one read transaction. `recommended_action` is
 deterministic and nullable. Action identifiers are stable application commands, not UI
 labels.
+
+`apply_analysis_decisions` means resolving an advertised review reason;
+`edit_matching_configuration` means voluntarily editing an otherwise settled matching
+context. They currently commit through the same backend command but remain separate
+action-policy intents. The voluntary action is available when the Application is not
+deleted, an active JobAnalysis exists, and no queued/running Operation can replace the
+active JobAnalysis or SelectionPlan.
 
 `active_operation` is limited to queued/running work and is the polling and concurrency
 signal. `latest_operation` is the newest lifecycle record whether live or terminal, so a
@@ -454,11 +464,33 @@ and runner record; the worker never re-reads Settings to decide what to execute.
 
 ### `apply_analysis_decisions`
 
-Synchronous. It accepts one local form submission. When requirement
-meaning/classification changes, it creates one new immutable JobAnalysis together with
-that analysis's initial deterministic SelectionPlan. When only selection/accepted-gap
-decisions change, it creates one replacement SelectionPlan. It records overrides and
-never mutates the original analysis or plan.
+Synchronous. It accepts one local form submission. When requirement meaning or the
+Track/Profile/language classification changes, it creates one new immutable JobAnalysis
+together with that analysis's initial deterministic SelectionPlan. An Emphasis decision
+changes selection and presentation policy, not the meaning of the analysis; when it is
+the only configuration change it is recorded on one replacement SelectionPlan. Fact
+selection and accepted-gap decisions likewise create only a replacement SelectionPlan.
+When an Emphasis decision accompanies a change that already requires a new analysis, the
+new analysis and its initial plan carry that decision in the same atomic write. No branch
+mutates the original analysis or plan.
+
+The command serves both a required review decision and a voluntary matching-configuration
+edit. A review reason is required only for the former. Every request names the immutable
+analysis it addresses and separately carries `expected_analysis_id`; when an active
+SelectionPlan exists it also carries `expected_selection_plan_id`. Under the Application
+write lock, both expected IDs must still equal the active context. A mismatch returns a
+conflict and writes nothing. The same transaction refuses the decision while a queued or
+running `analyze_job` or `propose_selection_plan` Operation can replace either context
+source. Operation admission and this check serialize on the same Application lock, so a
+competing Operation cannot enter between the check and commit.
+
+After a successful commit the API response includes the newly computed application-state
+projection, including `available_actions` and `recommended_action`. The Web client chooses
+the next step from that projection and does not predict it from the submitted fields. An
+existing WorkingDraft that depends on a replaced Analysis or SelectionPlan becomes stale
+through the ordinary projection rules. ApprovedRevision and Ready qualification are never
+rewritten; when their Analysis is no longer active they remain immutable historical
+milestones and the active-context warning rules apply.
 
 A gap acceptance may accompany a classification decision, and both land in that one
 write. New extraction contracts key requirement identity on the snapshot, source span,
@@ -501,9 +533,12 @@ could be scored (extraction failed, or the analysis predates this field).
 
 The deterministic form is synchronous and returns the immutable plan directly. It
 receives an explicit analysis ID, candidate context, selected/excluded/pinned facts,
-accepted gaps, and policy versions, validates Profile/Track/Emphasis and allowed-fact
-constraints, verifies under the Application lock that the named analysis is still active,
-then creates an immutable plan and frozen candidate context.
+accepted gaps, an optional explicit Emphasis decision, and policy versions. It validates
+Profile/Track/Emphasis and allowed-fact constraints, verifies under the Application lock
+that the named analysis is still active, then creates an immutable plan and frozen
+candidate context. The manifest distinguishes its effective `emphasis` from nullable
+`emphasis_override`, so historical plans remain readable and an explicit choice can
+resolve an Emphasis review reason without rewriting JobAnalysis.
 
 When AI `propose_selection_plan` mode is requested, the command creates an asynchronous,
 idempotent Operation. The provider output is only a Proposal; activation repeats the

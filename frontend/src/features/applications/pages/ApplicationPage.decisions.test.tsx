@@ -315,11 +315,12 @@ describe("the review decision, on the Application screen", () => {
        decision to whatever plan is active now rather than the one on screen. */
     expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
       application_id: "app-1",
+      expected_analysis_id: "analysis-1",
+      expected_selection_plan_id: "plan-1",
       accept_low_fit: false,
       accept_incomplete_analysis: false,
       accepted_requirement_ids: ["req-k8s"],
       acceptance_reason: "נסגר בראיון",
-      expected_selection_plan_id: "plan-1",
     });
   });
 
@@ -380,12 +381,14 @@ describe("the review decision, on the Application screen", () => {
     expect(fetchMock.mock.calls.filter((call) => call[0] === APPLY_PATH)).toHaveLength(1);
     expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
       application_id: "app-1",
+      expected_analysis_id: "analysis-1",
+      expected_selection_plan_id: "plan-1",
       accept_low_fit: false,
       accept_incomplete_analysis: false,
       track_override: "tech-sales",
       profile_override: "account-manager",
       emphasis_override: "leadership",
-      /* No gap was marked, so the acceptance is empty and carries no plan id with it. */
+      /* No gap was marked, but the active plan remains the second CAS source. */
       accepted_requirement_ids: [],
     });
   });
@@ -429,5 +432,113 @@ describe("the review decision, on the Application screen", () => {
     expect(screen.queryByRole("region", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
     /* The decision is still offered - it goes to the active analysis either way. */
     expect(screen.getByLabelText("מסלול")).toBeInTheDocument();
+  });
+});
+
+describe("voluntary matching configuration", () => {
+  const settledDetail = (overrides: Partial<ApplicationDetail> = {}) =>
+    detail({
+      preparation_state: "ready_to_draft",
+      review_reasons: [],
+      available_actions: ["create_draft", "edit_matching_configuration"],
+      recommended_action: "create_draft",
+      ...overrides,
+    });
+
+  it("shows current values and sends both active-context CAS identities", async () => {
+    let applied = false;
+    const before = settledDetail();
+    const after = settledDetail({ active_selection_plan_id: "plan-2" });
+    after.application = { ...before.application, emphasis: "new-business" };
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === APPLY_PATH) {
+        applied = true;
+        return Promise.resolve(
+          jsonResponse(
+            {
+              application_id: "app-1",
+              job_analysis_id: "analysis-1",
+              selection_plan_id: "plan-2",
+              created_analysis: false,
+              analysis: after.latest_analysis!.analysis,
+              plan: {},
+              state: after,
+            },
+            201,
+          ),
+        );
+      }
+      void init;
+      return Promise.resolve(jsonResponse(applied ? after : before));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    fireEvent.click(await screen.findByText("ערוך הגדרות התאמה"));
+
+    expect(screen.getByLabelText("מסלול")).toHaveValue("sales");
+    expect(screen.getByLabelText("פרופיל")).toHaveValue("account-manager");
+    expect(screen.getByLabelText("דגש")).toHaveValue("account-growth");
+    const save = screen.getByRole("button", { name: "שמירת הגדרות ההתאמה" });
+    expect(save).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
+    expect(screen.getByText("זוהו שינויים שלא נשמרו.")).toBeInTheDocument();
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+
+    expect(await screen.findByText("הגדרות ההתאמה נשמרו")).toBeInTheDocument();
+    const applyCall = fetchMock.mock.calls.find((call) => call[0] === APPLY_PATH);
+    expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
+      application_id: "app-1",
+      expected_analysis_id: "analysis-1",
+      expected_selection_plan_id: "plan-1",
+      accept_low_fit: false,
+      accept_incomplete_analysis: false,
+      emphasis_override: "new-business",
+      accepted_requirement_ids: [],
+    });
+  });
+
+  it.each([
+    [
+      "draft_in_progress" as const,
+      { active_working_draft_id: "draft-1", working_draft_state: "editing" as const },
+      /הטיוטה הפעילה לא תימחק, אך תהיה לא מעודכנת/,
+    ],
+    [
+      "ready" as const,
+      { latest_approved_revision_id: "revision-1", latest_ready_revision_id: "revision-1" },
+      /הגרסאות שאושרו והקבצים המוכנים לא ישתנו/,
+    ],
+  ])("explains the consequence from server state %s", async (preparation_state, extra, message) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(settledDetail({ preparation_state, ...extra })))),
+    );
+
+    renderPage();
+    fireEvent.click(await screen.findByText("ערוך הגדרות התאמה"));
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it("keeps local choices visible when the server reports a context conflict", async () => {
+    const before = settledDetail();
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      String(input) === APPLY_PATH
+        ? Promise.resolve(problemResponse("STATE_CONFLICT", "the active JobAnalysis moved", 409))
+        : Promise.resolve(jsonResponse(before)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    fireEvent.click(await screen.findByText("ערוך הגדרות התאמה"));
+    fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
+    fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות ההתאמה" }));
+
+    expect(await screen.findByText("הפעולה מתנגשת במצב העדכני. יש לרענן ולנסות שוב.")).toBeInTheDocument();
+    expect(screen.getByLabelText("דגש")).toHaveValue("new-business");
+    expect(screen.getByText("זוהו שינויים שלא נשמרו.")).toBeInTheDocument();
   });
 });

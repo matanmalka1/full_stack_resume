@@ -117,6 +117,8 @@ def _accepting_incomplete_analysis(services, ingested, analysed):
         ApplyAnalysisDecisionsCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
+            expected_analysis_id=analysed.analysis_id,
+            expected_selection_plan_id=analysed.selection_plan_id,
             accept_incomplete_analysis=True,
         )
     )

@@ -684,6 +684,7 @@ def test_a_classification_decision_carries_its_gap_acceptance_in_one_write(
         ApplyAnalysisDecisionsCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
+            expected_analysis_id=analysed.analysis_id,
             profile_override="account-manager",
             accepted_requirement_ids=[accepted_id],
             expected_selection_plan_id=analysed.selection_plan_id,
@@ -741,6 +742,7 @@ def test_an_acceptance_the_reclassification_removes_is_refused_whole(
             ApplyAnalysisDecisionsCommand(
                 application_id=ingested.application_id,
                 job_analysis_id=analysed.analysis_id,
+                expected_analysis_id=analysed.analysis_id,
                 track_override="sales",
                 profile_override="account-manager",
                 accepted_requirement_ids=[years],
@@ -779,6 +781,8 @@ def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
             ApplyAnalysisDecisionsCommand(
                 application_id=ingested.application_id,
                 job_analysis_id=analysed.analysis_id,
+                expected_analysis_id=analysed.analysis_id,
+                expected_selection_plan_id=analysed.selection_plan_id,
                 profile_override="account-manager",
                 excluded_fact_ids=["sales.company.activity"],
             )

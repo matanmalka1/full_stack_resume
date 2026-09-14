@@ -69,6 +69,10 @@ class SelectionManifest(StrictModel):
 
     policy_version: str
     emphasis: Emphasis
+    #: A user's explicit matching-configuration decision. `emphasis` is the
+    #: effective policy used by every plan, while this nullable field records
+    #: whether that value was chosen rather than inherited from JobAnalysis.
+    emphasis_override: Emphasis | None = None
     emphasis_policy_version: str
     candidates: list[SelectionCandidate] = []
     selected_fact_ids: list[str] = []

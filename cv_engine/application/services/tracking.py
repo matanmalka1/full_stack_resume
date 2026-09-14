@@ -271,6 +271,12 @@ class TrackingService(ServiceBase[TrackingRepository]):
         analyses = self.repo.analyses(command.application_id)
         if analyses and analyses[-1]["id"] != revision.job_analysis_id:
             warnings.append("READY_REVISION_FOR_OLDER_ANALYSIS")
+        try:
+            active_plan = self.repo.latest_selection_plan(command.application_id)
+        except UnknownRecord:
+            active_plan = None
+        if active_plan is not None and active_plan.id != revision.selection_plan_id:
+            warnings.append("READY_REVISION_FOR_OLDER_SELECTION_PLAN")
         return self._record_submission(
             application=application,
             submission_type="internal",

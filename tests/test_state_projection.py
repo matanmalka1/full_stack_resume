@@ -65,6 +65,7 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert detail.active_selection_plan_id == analysed.selection_plan_id
     assert detail.recommended_action == "create_draft"
     assert "create_selection_plan" in detail.available_actions
+    assert "edit_matching_configuration" in detail.available_actions
 
     drafted = services.drafts.draft(
         DraftCommand(
@@ -80,6 +81,7 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert detail.recommended_action == "approve"
     assert "approve" in detail.available_actions
     assert "create_selection_plan" not in detail.available_actions
+    assert "edit_matching_configuration" in detail.available_actions
 
     approved = approve_active_draft(services, ingested.application_id)
     detail = services.queries.application_detail(ingested.application_id)
@@ -87,6 +89,7 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert detail.working_draft_state is WorkingDraftState.NONE
     assert detail.latest_approved_revision_id == approved.revision_id
     assert detail.recommended_action == "render"
+    assert "edit_matching_configuration" in detail.available_actions
 
 
 def test_material_ambiguity_is_a_review_reason_and_blocks_drafting(services) -> None:
@@ -283,6 +286,8 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
         ApplyAnalysisDecisionsCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
+            expected_analysis_id=analysed.analysis_id,
+            expected_selection_plan_id=analysed.selection_plan_id,
             track_override="sales",
             profile_override="account-executive",
         )
@@ -301,6 +306,8 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
         ApplyAnalysisDecisionsCommand(
             application_id=ingested.application_id,
             job_analysis_id=after.active_analysis_id or "",
+            expected_analysis_id=after.active_analysis_id or "",
+            expected_selection_plan_id=after.active_selection_plan_id,
             accept_incomplete_analysis=True,
         )
     )
@@ -319,6 +326,7 @@ def test_ready_milestone_survives_a_new_draft_for_the_same_context(ready_applica
     assert before.preparation_state is PreparationState.READY
     assert before.latest_ready_revision_id == setup.approved.revision_id
     assert before.newer_draft_in_progress is False
+    assert "edit_matching_configuration" in before.available_actions
 
     setup.services.drafts.draft(
         DraftCommand(
@@ -332,6 +340,56 @@ def test_ready_milestone_survives_a_new_draft_for_the_same_context(ready_applica
     assert after.working_draft_state is WorkingDraftState.VALIDATED
     assert after.latest_ready_revision_id == setup.approved.revision_id
     assert after.newer_draft_in_progress is True
+
+
+def test_voluntary_matching_change_stales_the_existing_draft(drafted_application) -> None:
+    setup = drafted_application("Voluntary Matching Draft Co")
+    before = setup.services.queries.application_detail(setup.application_id)
+    working_id = before.active_working_draft_id
+
+    changed = setup.services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=setup.application_id,
+            job_analysis_id=before.active_analysis_id or "",
+            expected_analysis_id=before.active_analysis_id or "",
+            expected_selection_plan_id=before.active_selection_plan_id,
+            emphasis_override="new-business",
+        )
+    )
+
+    after = setup.services.queries.application_detail(setup.application_id)
+    assert changed.created_analysis is False
+    assert changed.job_analysis_id == before.active_analysis_id
+    assert after.active_working_draft_id == working_id
+    assert after.working_draft_state is WorkingDraftState.STALE
+    assert after.stale_reasons[0].code == "SELECTION_PLAN_REPLACED"
+    assert after.application.emphasis == "new-business"
+
+
+def test_voluntary_matching_change_keeps_ready_immutable_and_historical(
+    ready_application,
+) -> None:
+    setup = ready_application("Voluntary Matching Ready Co")
+    before = setup.services.queries.application_detail(setup.application_id)
+
+    changed = setup.services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=setup.application_id,
+            job_analysis_id=before.active_analysis_id or "",
+            expected_analysis_id=before.active_analysis_id or "",
+            expected_selection_plan_id=before.active_selection_plan_id,
+            emphasis_override="new-business",
+        )
+    )
+
+    after = setup.services.queries.application_detail(setup.application_id)
+    assert changed.created_analysis is False
+    assert changed.job_analysis_id == before.active_analysis_id
+    assert after.preparation_state is PreparationState.READY_TO_DRAFT
+    assert after.latest_ready_revision_id == setup.approved.revision_id
+    assert {warning.code for warning in after.warnings} == {
+        "READY_REVISION_FOR_OLDER_SELECTION_PLAN"
+    }
 
 
 def test_new_snapshot_makes_ready_historical_and_requires_analysis(ready_application) -> None:
