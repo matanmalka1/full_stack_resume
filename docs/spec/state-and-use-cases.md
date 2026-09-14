@@ -470,14 +470,30 @@ accompany one: pinned and excluded facts are decided against candidate accountin
 new analysis has not produced yet, so they stay a second command.
 
 It also carries `accept_incomplete_analysis`, the explicit decision to proceed when
-requirements were not understood or a mandatory requirement's coverage could not be
-determined. The UI identifies the unresolved requirements and the limits of analysis.
-It records the `analysis` override and resolves `ANALYSIS_INCOMPLETE` alone: coverage
-remains undetermined, no gap is accepted, and no classification question is settled.
-Fit remains `unknown` unless an independently established hard gap requires `low`;
-that gap requires its own acceptance. It is offered only here and never on `analyze`, so a
-client cannot pre-accept a posting nobody has looked at, and a genuinely new analysis -
-another snapshot, or changed Knowledge - starts without it and blocks again.
+requirements were not understood. The UI identifies the unresolved requirements and the
+limits of analysis. It records the `analysis` override and resolves `ANALYSIS_INCOMPLETE`
+alone: coverage remains undetermined, no gap is accepted, and no classification question
+is settled. It is offered only here and never on `analyze`, so a client cannot pre-accept
+a posting nobody has looked at, and a genuinely new analysis - another snapshot, or
+changed Knowledge - starts without it and blocks again.
+
+Fit remains `unknown` when extraction itself failed (nothing was understood, so nothing
+can be scored) unless an independently established hard gap requires `low` - a known
+poor Fit is knowledge a failed assessment must not erase; that gap requires its own
+acceptance. An individual mandatory requirement whose coverage could not be determined,
+with extraction otherwise successful, no longer forces the whole classification to
+`unknown` (revised; see `fit_score` below) - it still requires the same
+`accept_incomplete_analysis` decision through `coverage-undetermined`/`ANALYSIS_INCOMPLETE`,
+but the *Fit* it reports is `fit_score`'s own threshold, which already prices the
+undetermined requirement in at zero credit rather than blanking the verdict.
+
+`fit_score` is the canonical numeric Fit measure `fit` is read off:
+a weighted fraction of requirement coverage (mandatory requirements weighted double),
+where `undetermined` counts at zero credit rather than being excluded - an incompletely
+assessed posting must not outscore a fully assessed one. `fit` (`high`/`medium`/`low`)
+is derived from `fit_score` against fixed thresholds, with any hard gap still forcing
+`low` outright regardless of the score. `fit_score` is `null` only when nothing at all
+could be scored (extraction failed, or the analysis predates this field).
 
 ### `create_selection_plan`
 

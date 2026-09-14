@@ -28,12 +28,12 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
     .filter((label): label is string => label !== undefined);
   const [track, profile, ...extras] = classificationItems(classification);
   const trackProfileText = [track?.value, profile?.value].filter((value) => value !== undefined).join(" · ");
-  const confidenceTone = classification.fit === null ? "neutral" : fitTones[classification.fit];
+  const fitTone = classification.fit === null ? "neutral" : fitTones[classification.fit];
 
   return (
     <section>
-      {trackProfileText === "" && classification.confidence === null ? null : (
-        <div className="grid gap-3 sm:grid-cols-2">
+      {trackProfileText === "" && classification.fitScore === null && classification.confidence === null ? null : (
+        <div className="grid gap-3 sm:grid-cols-3">
           {trackProfileText === "" ? null : (
             <div className="rounded-control bg-cv-surface-muted p-3">
               <p className="text-support text-cv-text-muted">סיווג שהוצע</p>
@@ -42,10 +42,21 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
               </p>
             </div>
           )}
+          {/* התאמה למשרה: requirement coverage, not the classifier's self-confidence.
+              Kept as its own tile so a reader never has to infer which number is which
+              from a shared label. */}
+          {classification.fitScore === null ? null : (
+            <div className="rounded-control bg-cv-surface-muted p-3">
+              <p className="text-support text-cv-text-muted">התאמה למשרה</p>
+              <p className={`mt-0.5 text-heading-sm font-bold ${confidenceToneClasses[fitTone]}`}>
+                {confidenceText(classification.fitScore)}
+              </p>
+            </div>
+          )}
           {classification.confidence === null ? null : (
             <div className="rounded-control bg-cv-surface-muted p-3">
-              <p className="text-support text-cv-text-muted">רמת ביטחון</p>
-              <p className={`mt-0.5 text-heading-sm font-bold ${confidenceToneClasses[confidenceTone]}`}>
+              <p className="text-support text-cv-text-muted">ביטחון בניתוח</p>
+              <p className="mt-0.5 text-heading-sm font-bold text-cv-text">
                 {confidenceText(classification.confidence)}
               </p>
             </div>

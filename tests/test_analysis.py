@@ -20,7 +20,13 @@ from cv_engine.domain.analysis.classification import (
     classify_job,
     requirement_profile_scores,
 )
-from cv_engine.domain.analysis.gaps import FIT_SEVERITY, derive_fit, derive_gaps, merge_fit
+from cv_engine.domain.analysis.gaps import (
+    FIT_SCORE_HIGH_THRESHOLD,
+    FIT_SCORE_MEDIUM_THRESHOLD,
+    derive_gaps,
+    fit_level_from_score,
+    fit_score_from_requirements,
+)
 from cv_engine.domain.analysis.requirements.concepts import (
     RequirementConceptError,
     RequirementConceptStore,
@@ -43,12 +49,15 @@ from cv_engine.domain.analysis.requirements.segmentation import (
     statement_lines,
 )
 from cv_engine.domain.models import (
+    Coverage,
     FactStatus,
     FitLevel,
     Gap,
     JobAnalysis,
     Language,
     ProfileName,
+    Requirement,
+    RequirementKind,
     Track,
 )
 
@@ -551,45 +560,87 @@ Comfort operating amid organisational flux is essential (must).
 THIN_JOB = "Account Executive wanted. Closing and prospecting for new business."
 
 
-@pytest.mark.parametrize(
-    ("left", "right", "expected"),
-    [
-        (FitLevel.UNKNOWN, FitLevel.HIGH, FitLevel.UNKNOWN),
-        (FitLevel.HIGH, FitLevel.UNKNOWN, FitLevel.UNKNOWN),
-        (FitLevel.UNKNOWN, FitLevel.MEDIUM, FitLevel.UNKNOWN),
-        (FitLevel.MEDIUM, FitLevel.UNKNOWN, FitLevel.UNKNOWN),
-        (FitLevel.UNKNOWN, FitLevel.UNKNOWN, FitLevel.UNKNOWN),
-        (FitLevel.UNKNOWN, FitLevel.LOW, FitLevel.LOW),
-        (FitLevel.LOW, FitLevel.UNKNOWN, FitLevel.LOW),
-    ],
-)
-def test_merge_fit_combinations_involving_unknown(left, right, expected) -> None:
-    assert merge_fit(left, right) is expected
+def _requirement(
+    requirement_id: str,
+    *,
+    mandatory: bool,
+    coverage: Coverage,
+    kind: RequirementKind = "presence",
+) -> Requirement:
+    return Requirement(
+        requirement_id=requirement_id,
+        text=requirement_id,
+        kind=kind,
+        mandatory=mandatory,
+        coverage=coverage,
+    )
 
 
-def test_merge_fit_keeps_the_existing_ordering_for_assessed_levels() -> None:
-    assert merge_fit(FitLevel.HIGH, FitLevel.MEDIUM) is FitLevel.MEDIUM
-    assert merge_fit(FitLevel.HIGH, FitLevel.HIGH) is FitLevel.HIGH
-    assert merge_fit(FitLevel.MEDIUM, FitLevel.LOW) is FitLevel.LOW
+def test_fit_score_is_perfect_for_an_empty_requirement_list() -> None:
+    """Nothing was required, so nothing was missed - mirrors the old no-gaps HIGH.
+
+    Distinguishing this from a *failed* extraction that produced nothing is
+    `extraction_failed`, carried by both callers of this function, not something
+    this function can infer from an empty list alone.
+    """
+    assert fit_score_from_requirements([]) == 1.0
 
 
-def test_low_always_wins_over_unknown() -> None:
-    """Evidence of poor Fit is knowledge; a failed assessment must not erase it."""
-    for other in FitLevel:
-        if other is FitLevel.LOW:
-            continue
-        assert merge_fit(FitLevel.LOW, other) is FitLevel.LOW
-        assert merge_fit(other, FitLevel.LOW) is FitLevel.LOW
+def test_fit_score_weights_mandatory_requirements_double() -> None:
+    requirements = [
+        _requirement("mandatory-met", mandatory=True, coverage="matched"),
+        _requirement("preferred-unmet", mandatory=False, coverage="unsupported"),
+    ]
+    # (2 * 1.0 + 1 * 0.0) / (2 + 1)
+    assert fit_score_from_requirements(requirements) == pytest.approx(2 / 3)
 
 
-def test_unknown_is_not_ranked_on_the_severity_scale() -> None:
-    """Giving UNKNOWN a number would let it be compared silently."""
-    assert FitLevel.UNKNOWN not in FIT_SEVERITY
+def test_undetermined_requirements_count_toward_the_score_at_zero_credit() -> None:
+    """Undetermined must not be excluded from the denominator.
+
+    Two mandatory requirements, one matched and one undetermined, must not score
+    1.0 by only counting the one the engine could decide - that would let an
+    incompletely assessed posting outscore a fully assessed one.
+    """
+    requirements = [
+        _requirement("matched", mandatory=True, coverage="matched"),
+        _requirement("undetermined", mandatory=True, coverage="undetermined"),
+    ]
+    assert fit_score_from_requirements(requirements) == pytest.approx(0.5)
 
 
-def test_a_hard_gap_outranks_a_failed_extraction() -> None:
+def test_a_fully_undetermined_analysis_scores_zero_not_high() -> None:
+    requirements = [_requirement("undetermined", mandatory=True, coverage="undetermined")]
+    assert fit_score_from_requirements(requirements) == 0.0
+
+
+def test_fit_level_from_score_is_unknown_with_no_score() -> None:
+    assert fit_level_from_score(None, []) is FitLevel.UNKNOWN
+
+
+def test_fit_level_from_score_thresholds() -> None:
+    assert fit_level_from_score(FIT_SCORE_HIGH_THRESHOLD, []) is FitLevel.HIGH
+    assert fit_level_from_score(FIT_SCORE_HIGH_THRESHOLD - 0.01, []) is FitLevel.MEDIUM
+    assert fit_level_from_score(FIT_SCORE_MEDIUM_THRESHOLD, []) is FitLevel.MEDIUM
+    assert fit_level_from_score(FIT_SCORE_MEDIUM_THRESHOLD - 0.01, []) is FitLevel.LOW
+
+
+def test_a_hard_gap_forces_low_regardless_of_a_high_score() -> None:
+    """A known poor Fit is knowledge a high score must not launder away."""
     hard = [Gap(requirement="Native English", severity="hard", reason="not verified")]
-    assert derive_fit(hard, extraction_failed=True) is FitLevel.LOW
+    assert fit_level_from_score(0.99, hard) is FitLevel.LOW
+
+
+def test_a_hard_gap_forces_low_even_with_no_score_at_all() -> None:
+    """LOW wins over UNKNOWN too.
+
+    `apply_analysis_decisions(accept_incomplete_analysis=True)` depends on this:
+    "Fit remains unknown unless an independently established hard gap requires
+    low" (state-and-use-cases.md §12). A failed assessment must not erase an
+    independently established hard gap.
+    """
+    hard = [Gap(requirement="Native English", severity="hard", reason="not verified")]
+    assert fit_level_from_score(None, hard) is FitLevel.LOW
 
 
 def test_extraction_failure_produces_unknown_fit(
@@ -871,9 +922,11 @@ def test_a_legacy_analysis_is_never_reinterpreted_as_unknown() -> None:
     assert legacy.requirements == []
     assert legacy.fit is FitLevel.MEDIUM
     assert "extraction-failed" not in legacy.approval_reasons
-    # An empty requirement list is not evidence that extraction failed.
-    assert derive_fit(legacy.gaps) is FitLevel.MEDIUM
-    assert merge_fit(derive_fit(legacy.gaps), legacy.fit) is FitLevel.MEDIUM
+    # `fit_score` was never stored on this record and is never invented for it:
+    # it defaults to `None` on read rather than being recomputed from the
+    # record's shape. The stored `fit`, read directly above, is what stays
+    # MEDIUM - a pre-extractor record keeps the verdict it was written with.
+    assert legacy.fit_score is None
 
 
 # --------------------------------------------------------------------------

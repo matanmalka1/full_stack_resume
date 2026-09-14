@@ -31,6 +31,12 @@ IMMATERIAL_ANALYSIS_FIELDS = frozenset(
         "confidence",
         "deterministic_confidence",
         "proposal_confidence",
+        # `fit_score` is a pure function of `requirements` and `gaps`, both of
+        # which are already material: it cannot change without one of them
+        # changing too, so it carries no invalidation information `requirements`/
+        # `gaps` does not already carry. `fit` itself stays material - it is the
+        # field a draft's staleness is actually reported against.
+        "fit_score",
     }
 )
 

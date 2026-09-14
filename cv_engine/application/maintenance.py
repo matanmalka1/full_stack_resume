@@ -63,6 +63,7 @@ EXPORT_FIELDS = [
     "emphasis",
     "classification_confidence",
     "fit_level",
+    "fit_score",
     "current_status",
     "last_contact_date",
     "next_action",

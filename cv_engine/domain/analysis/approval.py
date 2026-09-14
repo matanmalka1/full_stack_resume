@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..contracts.analysis import JobAnalysis, JobClassificationProposal, OverrideKey
-from .gaps import derive_fit, merge_fit, merge_gaps
+from .gaps import fit_level_from_score, merge_gaps
 
 if TYPE_CHECKING:
     from ..profiles import ProfileStore
@@ -173,10 +173,14 @@ def merge_classification(
         reasons.append("low-confidence")
     reasons = list(dict.fromkeys(reasons))
     gaps = merge_gaps(deterministic.gaps, proposal.gaps)
-    # The deterministic run already decided whether extraction failed; a
-    # proposal cannot re-open that, so Fit is re-derived from the merged gaps
-    # alone and then folded against what the deterministic run concluded.
-    fit = merge_fit(derive_fit(gaps), deterministic.fit)
+    # `requirements` is carried through unchanged from `deterministic` below,
+    # so `fit_score` - which is a pure function of that same list - is too:
+    # the proposal supplies gaps, never Requirement-level coverage, so it has
+    # no numeric fit information of its own to fold in. What the proposal
+    # *can* do is raise a gap to hard severity (`merge_gaps`), and a hard gap
+    # in the merged list still overrides the score straight to LOW.
+    fit_score = deterministic.fit_score
+    fit = fit_level_from_score(fit_score, gaps)
 
     rationale = proposal.rationale
     if (track, profile) != (proposal.track, proposal.profile):
@@ -200,6 +204,7 @@ def merge_classification(
         proposal_confidence=proposal.confidence,
         rationale=rationale,
         fit=fit,
+        fit_score=fit_score,
         gaps=gaps,
         mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
         preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],

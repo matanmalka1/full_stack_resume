@@ -201,6 +201,12 @@ export interface Classification {
   emphasis: Emphasis | null;
   language: Language | null;
   fit: FitLevel | null;
+  /* The canonical numeric measure `fit` is read off: a weighted fraction of
+     requirement coverage, distinct from `confidence` below (how sure the
+     classifier is about its own read of the posting, not how well the
+     candidate matches it). Null only when nothing was assessed at all - same
+     condition that makes `fit` itself `unknown`. */
+  fitScore: number | null;
   gaps: AnalysisGap[];
   decided: string[];
   /* The descriptive half of the document: what the analysis concluded and why, as
@@ -233,7 +239,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 
 /* A 0..1 float in the domain model. A non-finite value is absent rather than rendered,
    so a malformed document cannot print "NaN%". */
-const finiteConfidence = (value: unknown): number | null =>
+const finiteFraction = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
 const stringsFrom = (value: unknown): string[] =>
@@ -347,12 +353,13 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     emphasis: isEmphasis(analysis.emphasis) ? analysis.emphasis : null,
     language: isLanguage(analysis.language) ? analysis.language : null,
     fit: isFitLevel(analysis.fit) ? analysis.fit : null,
+    fitScore: finiteFraction(analysis.fit_score),
     gaps: gapsFrom(analysis.gaps),
     decided: Object.keys(override),
     rationale: typeof analysis.rationale === "string" ? analysis.rationale : null,
-    confidence: finiteConfidence(analysis.confidence),
-    deterministicConfidence: finiteConfidence(analysis.deterministic_confidence),
-    proposalConfidence: finiteConfidence(analysis.proposal_confidence),
+    confidence: finiteFraction(analysis.confidence),
+    deterministicConfidence: finiteFraction(analysis.deterministic_confidence),
+    proposalConfidence: finiteFraction(analysis.proposal_confidence),
     keywords: stringsFrom(analysis.keywords),
     mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
     preferredRequirements: stringsFrom(analysis.preferred_requirements),

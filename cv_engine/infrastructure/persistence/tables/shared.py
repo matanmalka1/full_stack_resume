@@ -98,6 +98,7 @@ applications = Table(
     Column("emphasis", Text),
     Column("classification_confidence", Float),
     Column("fit_level", Text),
+    Column("fit_score", Float),
     Column("current_status", Text, nullable=False),
     Column("last_contact_date", Text),
     Column("next_action", Text),
@@ -120,6 +121,10 @@ applications = Table(
     CheckConstraint(
         f"terminal_outcome IS NULL OR terminal_outcome IN ({sql_values(TERMINAL_OUTCOMES)})",
         name="terminal_outcome",
+    ),
+    CheckConstraint(
+        "fit_score IS NULL OR (fit_score >= 0 AND fit_score <= 1)",
+        name="fit_score",
     ),
 )
 

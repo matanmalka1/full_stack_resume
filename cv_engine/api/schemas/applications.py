@@ -77,6 +77,7 @@ class ApplicationResponse(HttpSchema):
     emphasis: str | None = None
     classification_confidence: float | None = None
     fit_level: str | None = None
+    fit_score: float | None = None
     current_status: str
     terminal_outcome: str | None = None
     last_contact_date: str | None = None

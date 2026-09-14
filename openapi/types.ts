@@ -1382,6 +1382,7 @@ export interface components {
             /** Fit Level */
             fit_level?: string | null;
             /** Fit Score */
+            fit_score?: number | null;
             /** Id */
             id: string;
             /** Is Closed */
@@ -1531,6 +1532,7 @@ export interface components {
             /** Fit Level */
             fit_level?: string | null;
             /** Fit Score */
+            fit_score?: number | null;
             /** Id */
             id: string;
             /** Language */

@@ -244,6 +244,13 @@ class JobAnalysis(StrictModel):
     proposal_confidence: float | None = Field(default=None, ge=0, le=1)
     rationale: str
     fit: FitLevel
+    #: The canonical numeric fit measure `fit` is read off (`fit_level_from_score`,
+    #: `domain/analysis/gaps.py`): a weighted fraction of requirement coverage,
+    #: mandatory-weighted, with `undetermined` counted at zero credit rather than
+    #: excluded - so an incompletely assessed posting cannot outscore a fully
+    #: assessed one. `None` only when nothing was assessed at all (no requirements,
+    #: or extraction failed); absent on analyses written before this field existed.
+    fit_score: float | None = Field(default=None, ge=0, le=1)
     gaps: list[Gap]
     #: The complete requirement picture, matched requirements included. `gaps`
     #: is its unmet projection. Defaulted so analyses stored before requirement

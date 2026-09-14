@@ -375,6 +375,7 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     emphasis=analysis.emphasis.value,
                     classification_confidence=analysis.confidence,
                     fit_level=analysis.fit.value,
+                    fit_score=analysis.fit_score,
                     updated_at=now,
                 )
             )

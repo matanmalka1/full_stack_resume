@@ -16,7 +16,7 @@ from ..contracts.taxonomy import Emphasis, ProfileName, Track
 from ..facts import FactStore
 from ..profiles import ProfileStore
 from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
-from .gaps import derive_fit, derive_gaps, gaps_from_requirements
+from .gaps import fit_level_from_score, fit_score_from_requirements, derive_gaps, gaps_from_requirements
 from .requirements.concepts import RequirementConceptStore
 from .requirements.confidence import extraction_confidence, extraction_failed
 from .requirements.coverage import cover_requirements
@@ -259,17 +259,18 @@ def rebase_requirements(
         if fact_id in facts.facts
     }
     gaps = gaps_from_requirements(requirements, boundary_meanings=boundary_meanings)
-    # Stage-1 plan §3.6's table: `undetermined` blocks - and drives Fit to
-    # UNKNOWN - only for a *mandatory* requirement. "We could not tell" about
-    # a preferred one is not a decision the user must be stopped to make; the
-    # posting did not demand it in the first place.
+    # Stage-1 plan §3.6's table: an undetermined *mandatory* requirement still
+    # blocks approval here - see `coverage-undetermined` below - even though it
+    # no longer forces Fit itself to UNKNOWN; `fit_score_from_requirements`
+    # prices it in as zero credit instead (`gaps.py`). "We could not tell"
+    # about a preferred requirement is not a decision the user must be stopped
+    # to make; the posting did not demand it in the first place.
     mandatory_undetermined = any(
         requirement.coverage == "undetermined" and requirement.mandatory
         for requirement in requirements
     )
-    fit = derive_fit(
-        gaps, extraction_failed=extraction_failed, coverage_undetermined=mandatory_undetermined
-    )
+    fit_score = None if extraction_failed else fit_score_from_requirements(requirements)
+    fit = fit_level_from_score(fit_score, gaps)
     reasons = [
         *(
             reason
@@ -286,6 +287,7 @@ def rebase_requirements(
             "extraction_version": extraction_version,
             "gaps": gaps,
             "fit": fit,
+            "fit_score": fit_score,
             "mandatory_requirements": [gap.requirement for gap in gaps if gap.severity == "hard"],
             "preferred_requirements": [
                 gap.requirement for gap in gaps if gap.severity == "warning"
@@ -456,17 +458,17 @@ def classify_job(
         *gaps_from_requirements(requirements, boundary_meanings=boundary_meanings),
         *(gap for gap in rule_gaps if gap.requirement not in covered_text),
     ]
-    # Stage-1 plan §3.6: `undetermined` blocks - and drives Fit to UNKNOWN -
-    # only for a mandatory requirement. The deterministic `cover_requirements`
-    # never itself emits `undetermined` today; this stays consistent with the
-    # AI path's rule in `rebase_requirements` in case that changes.
+    # Stage-1 plan §3.6: an undetermined mandatory requirement still blocks
+    # approval below (`coverage-undetermined`). The deterministic
+    # `cover_requirements` never itself emits `undetermined` today; this stays
+    # consistent with the AI path's rule in `rebase_requirements` in case that
+    # changes.
     mandatory_undetermined = any(
         requirement.coverage == "undetermined" and requirement.mandatory
         for requirement in requirements
     )
-    fit = derive_fit(
-        gaps, extraction_failed=failed_extraction, coverage_undetermined=mandatory_undetermined
-    )
+    fit_score = None if failed_extraction else fit_score_from_requirements(requirements)
+    fit = fit_level_from_score(fit_score, gaps)
     candidate_overrides: dict[OverrideKey, str | None] = {
         "track": track_override,
         "profile": profile_override,
@@ -497,6 +499,7 @@ def classify_job(
         confidence=confidence,
         rationale=f"Matched {profile.value} signals; sales score {has_sales}, technology score {has_tech}.",
         fit=fit,
+        fit_score=fit_score,
         gaps=gaps,
         mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
         preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],

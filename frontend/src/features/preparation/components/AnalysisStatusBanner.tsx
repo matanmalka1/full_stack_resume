@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { Classification } from "@/api/analyses";
 import { Callout } from "@/ui/Callout";
 import type { Tone } from "@/ui/tone";
@@ -23,9 +25,22 @@ import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/a
    against zero. */
 interface BannerContent {
   body: string;
-  title: string;
+  title: ReactNode;
   tone: Tone;
 }
+
+/* Fit% (requirement coverage) and confidence% (how sure the classifier is about its
+   own read) are unrelated measures - see `Classification.fitScore` vs `.confidence`
+   in `@/api/analyses`. Stacked as two lines rather than one joined string, so neither
+   reads as an explanation or a component of the other. */
+const VerdictTitle = ({ fitLine, confidenceLine }: { fitLine: string; confidenceLine: string | null }) => (
+  <span className="flex flex-col gap-0.5">
+    <span>{fitLine}</span>
+    {confidenceLine === null ? null : (
+      <span className="text-support font-normal text-cv-text-muted">{confidenceLine}</span>
+    )}
+  </span>
+);
 
 const bannerContent = (
   classification: Classification | null,
@@ -70,9 +85,13 @@ const bannerContent = (
   /* Fit and confidence are recorded independently - a classification may carry one
      without the other - so the headline states whichever exists rather than a sentence
      that would be wrong when only one is present. */
-  const fitPart = classification.fit === null ? "הניתוח הושלם" : fitLabels[classification.fit];
-  const confidencePart =
-    classification.confidence === null ? null : `רמת ביטחון ${confidenceText(classification.confidence)}`;
+  const fitLevelPart = classification.fit === null ? "הניתוח הושלם" : fitLabels[classification.fit];
+  const fitLine =
+    classification.fitScore === null
+      ? fitLevelPart
+      : `התאמה למשרה: ${confidenceText(classification.fitScore)} · ${fitLevelPart}`;
+  const confidenceLine =
+    classification.confidence === null ? null : `ביטחון בניתוח: ${confidenceText(classification.confidence)}`;
   const explanation = (() => {
     if (classification.fit === null) {
       return "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה.";
@@ -85,7 +104,7 @@ const bannerContent = (
 
   return {
     body: explanation,
-    title: confidencePart === null ? fitPart : `${fitPart} · ${confidencePart}`,
+    title: <VerdictTitle confidenceLine={confidenceLine} fitLine={fitLine} />,
     /* Warning, not blocker, while a decision is open: `needs_review` is the same state
        `preparationStateTones` already reports as "warning" everywhere else on this
        screen - the stepper, the header badge - and a decision here is always answerable

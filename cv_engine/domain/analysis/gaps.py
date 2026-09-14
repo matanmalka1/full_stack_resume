@@ -7,11 +7,6 @@ from ..contracts.analysis import FitLevel, Gap, JobAnalysis, Requirement
 from ..contracts.selection import SelectionPlan
 from ..contracts.taxonomy import Track
 
-#: Only the three assessed levels are ordered. UNKNOWN is deliberately absent:
-#: it is not a point on the scale, so giving it a number would let it be
-#: compared - and a comparison is exactly what must not happen silently.
-FIT_SEVERITY = {FitLevel.HIGH: 0, FitLevel.MEDIUM: 1, FitLevel.LOW: 2}
-
 #: Why a requirement is not met, when no boundary fact gives the authoritative
 #: account. Deterministic labels rather than generated prose: the reason is
 #: displayed, never matched on.
@@ -26,43 +21,83 @@ _COVERAGE_REASON = {
     "undetermined": "The engine could not determine coverage for this requirement.",
 }
 
+#: A mandatory requirement counts double toward `fit_score`: failing to verify
+#: something the posting demanded should move the score more than falling
+#: short on something it only preferred.
+_MANDATORY_WEIGHT = 2
+_PREFERRED_WEIGHT = 1
 
-def derive_fit(
-    gaps: Sequence[Gap],
-    *,
-    extraction_failed: bool = False,
-    coverage_undetermined: bool = False,
-) -> FitLevel:
-    """Fit from the gaps, unless the requirements were never readable or decidable.
+#: `undetermined` earns no credit here, on purpose - see `fit_score_from_requirements`.
+_COVERAGE_VALUE = {"matched": 1.0, "partial": 0.5, "unsupported": 0.0, "undetermined": 0.0}
 
-    `extraction_failed` and `coverage_undetermined` are explicit signals, never
-    inferred from an empty requirement list. An analysis written before the
-    extractor existed also has no requirements, and it must keep the Fit it was
-    assessed with rather than being reinterpreted as unassessable.
+#: Score thresholds `fit_level_from_score` reads to draw HIGH/MEDIUM/LOW from
+#: `fit_score`. Named constants rather than inline literals because they are a
+#: tunable product decision, not an arithmetic fact.
+FIT_SCORE_HIGH_THRESHOLD = 0.85
+FIT_SCORE_MEDIUM_THRESHOLD = 0.55
 
-    A hard gap still outranks either: evidence of poor Fit is knowledge, and
-    losing it to "we could not tell" would be a downgrade (stage-1 plan §3.6).
+
+def fit_score_from_requirements(requirements: Sequence[Requirement]) -> float:
+    """The weighted fraction of requirement coverage this posting's analysis found.
+
+    `undetermined` requirements are *not* excluded from the denominator: they
+    count toward `total_weight` at zero credit, the same as `unsupported`. An
+    analysis that only decided coverage for 2 of 20 mandatory requirements and
+    happened to match both must not score 1.0 - excluding what was never
+    assessed would let an incomplete read report a fit score no complete read
+    could beat. This is a deliberate departure from the old `coverage_undetermined
+    -> Fit.UNKNOWN` rule (stage-1 plan §3.6): "we could not tell" now costs the
+    score the way "we could tell it isn't there" does, rather than blanking the
+    whole classification.
+
+    An empty requirement list scores 1.0, not `None`: nothing was demanded, so
+    nothing is missing - the same "not punished for being short" reading a thin,
+    legitimately requirement-free posting already got from the old step function
+    (`derive_fit` returned HIGH on no gaps). This function cannot on its own tell
+    that case apart from an extraction that produced nothing because it failed;
+    that distinction is `extraction_failed`, which both callers already carry and
+    already use to force the *caller's* `fit_score` to `None` before this
+    function would otherwise be asked to guess at zero requirements.
+    """
+    if not requirements:
+        return 1.0
+    total_weight = 0.0
+    total_value = 0.0
+    for requirement in requirements:
+        weight = _MANDATORY_WEIGHT if requirement.mandatory else _PREFERRED_WEIGHT
+        total_weight += weight
+        total_value += weight * _COVERAGE_VALUE[requirement.coverage]
+    return round(total_value / total_weight, 4)
+
+
+def fit_level_from_score(fit_score: float | None, gaps: Sequence[Gap]) -> FitLevel:
+    """`fit_score` is canonical; `fit_level` is read off it, gap-overridden.
+
+    Order matters:
+
+    1. A hard gap - a mandatory requirement `derive_gaps`/`gaps_from_requirements`
+       could actually decide was unmet, at either the deterministic or the
+       AI-merged stage - forces LOW outright, even with no score at all.
+       `apply_analysis_decisions(accept_incomplete_analysis=True)` depends on
+       exactly this: "Fit remains unknown unless an independently established
+       hard gap requires low" (state-and-use-cases.md §12,
+       `apply_analysis_decisions`) - a known poor Fit is knowledge that an
+       otherwise-unassessed analysis must not erase. This is unchanged from the
+       old `derive_fit`/`merge_fit` pair's own reasoning (stage-1 plan §3.6).
+    2. Failing that, no score at all (nothing was assessed, or extraction never
+       produced a requirement list) reports UNKNOWN rather than guessing a level
+       for a number that does not exist.
+    3. Otherwise the threshold on `fit_score` decides.
     """
     if any(gap.severity == "hard" for gap in gaps):
         return FitLevel.LOW
-    if extraction_failed or coverage_undetermined:
+    if fit_score is None:
         return FitLevel.UNKNOWN
-    return FitLevel.MEDIUM if gaps else FitLevel.HIGH
-
-
-def merge_fit(left: FitLevel, right: FitLevel) -> FitLevel:
-    """Combine two Fit judgements without ranking UNKNOWN.
-
-    LOW wins over everything, UNKNOWN included: an identified poor Fit is a
-    finding, and a failed assessment must not erase it. Against HIGH or MEDIUM,
-    UNKNOWN wins instead - a Fit that was never assessed cannot be reported as
-    one that was.
-    """
-    if FitLevel.LOW in (left, right):
-        return FitLevel.LOW
-    if FitLevel.UNKNOWN in (left, right):
-        return FitLevel.UNKNOWN
-    return max(left, right, key=lambda level: FIT_SEVERITY[level])
+    if fit_score >= FIT_SCORE_HIGH_THRESHOLD:
+        return FitLevel.HIGH
+    if fit_score >= FIT_SCORE_MEDIUM_THRESHOLD:
+        return FitLevel.MEDIUM
+    return FitLevel.LOW
 
 
 def gaps_from_requirements(

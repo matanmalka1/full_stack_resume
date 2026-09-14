@@ -492,6 +492,17 @@
             ],
             "title": "Fit Level"
           },
+          "fit_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fit Score"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -947,6 +958,17 @@
               }
             ],
             "title": "Fit Level"
+          },
+          "fit_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fit Score"
           },
           "id": {
             "title": "Id",

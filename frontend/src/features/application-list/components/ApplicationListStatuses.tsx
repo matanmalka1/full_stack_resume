@@ -5,7 +5,7 @@ import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
 import { type Tone, tonePresentation } from "@/ui/tone";
-import { fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/preparation";
+import { confidenceText, fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/preparation";
 import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
@@ -46,15 +46,27 @@ export const ApplicationFitStatus = ({
   }
 
   const label = fitLevelLabel(item.fit_level);
+  // Two independent numbers, never concatenated into one string: fit% is how well
+  // the posting's requirements are covered, confidence% is how sure the classifier
+  // is about its own read of the posting. Conflating them here would reproduce the
+  // exact ambiguity this field split was meant to remove.
+  const fitScoreLabel = item.fit_score == null ? null : confidenceText(item.fit_score);
+  const confidenceTitle =
+    item.classification_confidence == null
+      ? undefined
+      : `ביטחון בניתוח: ${confidenceText(item.classification_confidence)}`;
+
   if (variant === "card") {
     return (
-      <StatusBadge
-        className="shrink-0 px-2 py-0.5"
-        icon={fitLevelIcon(item.fit_level)}
-        tone={fitLevelTone(item.fit_level)}
-      >
-        {label}
-      </StatusBadge>
+      <span title={confidenceTitle}>
+        <StatusBadge
+          className="shrink-0 px-2 py-0.5"
+          icon={fitLevelIcon(item.fit_level)}
+          tone={fitLevelTone(item.fit_level)}
+        >
+          {fitScoreLabel == null ? label : `${label} · ${fitScoreLabel}`}
+        </StatusBadge>
+      </span>
     );
   }
 
@@ -62,15 +74,10 @@ export const ApplicationFitStatus = ({
     return <span className="shrink-0 text-support font-semibold text-cv-accent">{label}</span>;
   }
 
-  const confidence =
-    item.classification_confidence == null
-      ? undefined
-      : `רמת הביטחון של הסיווג: ${Math.round(item.classification_confidence * 100)}%`;
-
   return (
-    <span title={confidence}>
+    <span title={confidenceTitle}>
       <QuietStatus icon={fitLevelIcon(item.fit_level)} tone={fitLevelTone(item.fit_level)}>
-        {label}
+        {fitScoreLabel == null ? label : `${label} · ${fitScoreLabel}`}
       </QuietStatus>
     </span>
   );
