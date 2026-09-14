@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { Classification } from "@/api/analyses";
 import { applyAnalysisDecisions } from "@/api/analyses";
@@ -66,13 +66,6 @@ export const ReviewDecisionPanel = ({
      withheld: with no active SelectionPlan the projection is asking for
      `FACT_SELECTION_UNRESOLVED`, which is a different reason with a different action. */
   const selectionPlanId = detail.active_selection_plan_id ?? null;
-  /* A projection refresh can replace either source while the form is open. Do not carry
-     local answers onto the new context: the server CAS would refuse an in-flight write,
-     and the visible form must make the same boundary clear before the next press. */
-  useEffect(() => {
-    setDecisions(emptyDecisions);
-    setAcceptedRequirementIds([]);
-  }, [analysisId, selectionPlanId]);
   const mine = detail.review_reasons.filter(resolvedByReviewDecision);
   const open = openDecisions(detail);
   const showClassification = open.classification;

@@ -44,7 +44,13 @@ export const VerificationStage = ({
     <>
       <PreparationAlerts detail={detail} />
 
-      <ReviewDecisionPanel classification={classification} detail={detail} />
+      {/* Review answers belong to the immutable analysis/plan pair on screen. Remounting
+          on a context change clears them before they can be applied to the new pair. */}
+      <ReviewDecisionPanel
+        classification={classification}
+        detail={detail}
+        key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
+      />
 
       {/* The step's action, not a card around it. The action used to sit in an emphasized
           bordered box to mark it as recommended - but on a wizard step the action is the

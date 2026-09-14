@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { applyAnalysisDecisions, type Classification, type ClassificationDecisions } from "@/api/analyses";
 import { invalidateApplicationViews } from "@/api/applications";
@@ -111,18 +111,8 @@ export const MatchingConfigurationEditor = ({
   detail: ApplicationDetail;
 }) => {
   const queryClient = useQueryClient();
-  const current = useMemo(
-    () => valuesFrom(classification),
-    [classification.emphasis, classification.language, classification.profile, classification.track],
-  );
+  const current = useMemo(() => valuesFrom(classification), [classification]);
   const [values, setValues] = useState<MatchingValues | null>(current);
-
-  /* A background refresh that moves either CAS source also moves the form. Local
-     choices are cleared instead of being silently rebased onto a context they were
-     never made against; a write already in flight is still protected by the server. */
-  useEffect(() => {
-    setValues(current);
-  }, [current, detail.active_analysis_id, detail.active_selection_plan_id]);
 
   const canEdit = detail.available_actions.includes("edit_matching_configuration");
   const submission = current === null || values === null ? null : changedSubmission(current, values);
@@ -152,7 +142,7 @@ export const MatchingConfigurationEditor = ({
         detail.active_analysis_id,
         detail.application.id,
         submission,
-        detail.active_selection_plan_id,
+        detail.active_selection_plan_id ?? null,
       );
     },
     onSuccess: async () => {
@@ -242,6 +232,9 @@ export const MatchingConfigurationEditor = ({
         )}
 
         {save.data === undefined ? null : (
+          // `Callout` renders an `<output>` when given status; this is a component prop,
+          // not a role placed on a generic DOM element.
+          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
           <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
             {save.data.state.recommended_action == null
               ? "מצב המועמדות עודכן לפי ההקשר החדש."

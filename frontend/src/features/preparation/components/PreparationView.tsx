@@ -86,9 +86,15 @@ export const PreparationView = ({
       {/* A voluntary configuration edit is a different intent from resolving a review
           blocker even though both currently reach the same backend command. While this
           screen already owns a required decision, its form is the single commit surface;
-          otherwise this disclosure is the explicit entry for changing a settled context. */}
+          otherwise this disclosure is the explicit entry for changing a settled context.
+          The CAS source pair is also the local form's lifetime: a changed pair remounts
+          the editor before older local choices can be submitted against the new pair. */}
       {classification === null || detail.review_reasons.some(resolvedByReviewDecision) ? null : (
-        <MatchingConfigurationEditor classification={classification} detail={detail} />
+        <MatchingConfigurationEditor
+          classification={classification}
+          detail={detail}
+          key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
+        />
       )}
 
       {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
