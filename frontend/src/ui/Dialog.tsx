@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 import { surfaceClasses } from "./surface";
 import { cx } from "./cx";
+import { wrapDialogFocus } from "./dialogFocus";
 
 /* Native <dialog> backdrop clicks are valid interaction; the lint rule classifies the
    element as non-interactive despite its built-in keyboard and cancel behavior. */
@@ -37,9 +38,8 @@ interface DialogProps {
   title: ReactNode;
 }
 
-/* Native <dialog> owns the focus trap, the inert background, and focus restoration to
-   the invoker, so no dialog dependency is warranted here. Focus is moved to the dialog
-   heading on open, as A.5 requires. */
+/* Native <dialog> owns the inert background and focus restoration to the invoker.
+   Tab wraps explicitly at the boundaries. Focus moves to the heading on open. */
 export const Dialog = ({
   children,
   dismissible = true,
@@ -100,7 +100,7 @@ export const Dialog = ({
         }
         onClose();
       }}
-      onKeyDown={() => undefined}
+      onKeyDown={wrapDialogFocus}
       onClose={(event) => {
         /* A child dialog can close while this dialog remains open. React delegates the
            close event, so without stopping it here the child's event reaches an owning

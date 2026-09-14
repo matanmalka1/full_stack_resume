@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, Settings } from "@/api/contracts";
 import { applicationDetailQueryKey } from "@/api/applications";
+import { operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { autoDraftSources } from "@/features/preparation/model/autoDraft";
 import { settingsQueryKey } from "@/api/settings";
 import { ApplicationPage } from "./ApplicationPage";
@@ -129,8 +130,8 @@ const deterministicSettings: Settings = {
   updated_at: null,
 };
 
-/* Retries and the projection poll are off inside the test client: the interval is
-   covered by its own unit test, and a live timer here would make every assertion racy. */
+/* Retries are off. Query-specific polling options override the client's default,
+   so tests that require a completion tick explicitly refresh the watched Operation. */
 const HistoryControls = () => {
   const navigate = useNavigate();
   return (
@@ -344,7 +345,14 @@ describe("ApplicationPage at the preparation route", () => {
       }),
     );
 
-    renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+    const { client } = renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+
+    /* The accepted response seeds the queued Operation before it is watched. Drive
+       its next read explicitly rather than spending the test budget on a poll timer. */
+    await waitFor(() => expect(client.getQueryData<Operation>(operationQueryKey("op-draft"))).toBeDefined());
+    await act(async () => {
+      await client.fetchQuery(operationQueryOptions("op-draft"));
+    });
 
     expect(await screen.findByText("Draft editor route")).toBeInTheDocument();
   });

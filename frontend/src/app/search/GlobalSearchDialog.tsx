@@ -8,6 +8,7 @@ import type { ApplicationListItem } from "@/api/contracts";
 import { ApplicationSummary } from "@/features/application-list";
 import { preparationResumeDestination } from "@/features/preparation";
 import { cx } from "@/ui/cx";
+import { wrapDialogFocus } from "@/ui/dialogFocus";
 import { routePaths } from "../routePaths";
 
 /* Native <dialog> backdrop clicks are valid interaction; Escape is handled by the
@@ -30,8 +31,8 @@ const optionId = (item: ApplicationListItem): string => `global-search-result-${
    heading to open focus on and no footer, its whole surface is one combobox that must
    hold focus from the first keystroke, and its results are the listbox that combobox
    owns. The shared component would have to grow an option for each of those. What it does
-   share is the close policy - native <dialog>, so the focus trap, the inert background
-   and the restoration of focus are the platform's, Escape reaches the element's own
+   share is the close policy and Tab boundary wrapping. Native <dialog> owns the inert
+   background and focus restoration, Escape reaches the element's own
    cancel behavior, a backdrop click dismisses, and a close does not escape to an owning
    dialog. There is nothing typed here to discard: the search box is the question, not an
    edit, and reopening deliberately starts a new one. */
@@ -126,7 +127,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           onClose();
         }
       }}
-      onKeyDown={() => undefined}
+      onKeyDown={wrapDialogFocus}
       onClose={(event) => {
         /* The palette can be opened over an owning dialog. React delegates the close
            event, so without stopping it here this close would dismiss that dialog too. */

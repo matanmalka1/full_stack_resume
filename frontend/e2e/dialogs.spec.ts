@@ -1,9 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-/* Dialog behavior that only a real browser decides: the focus trap and focus restoration
-   the native <dialog> element owns, and Escape reaching the element's cancel behavior.
-   jsdom implements none of those, so the component tests assert the decisions the
-   components make and these assert what the platform then does with them. */
+/* Real keyboard navigation verifies Tab boundary wrapping, native modal focus
+   restoration, and Escape reaching the element's cancel behavior. */
 
 const settings = {
   edit_version: 0,
@@ -104,8 +102,12 @@ test.describe("dialogs", () => {
       // oxlint-disable-next-line no-await-in-loop
       await expect(dialog.locator(":focus")).toHaveCount(1);
     }
-    await page.keyboard.press("Shift+Tab");
-    await expect(dialog.locator(":focus")).toHaveCount(1);
+    for (let step = 0; step < 12; step += 1) {
+      // oxlint-disable-next-line no-await-in-loop
+      await page.keyboard.press("Shift+Tab");
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(dialog.locator(":focus")).toHaveCount(1);
+    }
 
     await page.keyboard.press("Escape");
 
@@ -146,6 +148,11 @@ test.describe("dialogs", () => {
     await page.keyboard.press("ControlOrMeta+k");
 
     await expect(palette).toBeVisible();
+    await expect(palette.getByRole("combobox")).toBeFocused();
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(palette.locator(":focus")).toHaveCount(1);
+    await page.keyboard.press("Tab");
     await expect(palette.getByRole("combobox")).toBeFocused();
 
     await page.keyboard.press("Escape");
