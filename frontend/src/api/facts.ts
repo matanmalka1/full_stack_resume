@@ -24,7 +24,7 @@ export const factsQueryPrefix = ["facts"] as const;
 export const factsQueryKey = (status?: FactStatus) => [...factsQueryPrefix, status ?? "all"] as const;
 export const factDetailQueryKey = (factId: string) => ["fact", factId] as const;
 export const factHistoryQueryKey = ["fact-history"] as const;
-export const factAttachmentTargetsQueryKey = (factId?: string) =>
+const factAttachmentTargetsQueryKey = (factId?: string) =>
   [...factsQueryPrefix, "attachment-targets", factId ?? "all"] as const;
 
 export const factsQueryOptions = (status?: FactStatus) =>

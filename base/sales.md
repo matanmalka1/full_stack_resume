@@ -934,25 +934,6 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "source_file": "",
       "resume_style": "paragraph",
       "link_target": null
-    },
-    {
-      "fact_id": "56572e59-6f08-4570-b088-1c5827f93717",
-      "meaning": "ההגגה",
-      "renderings": {
-        "en": "הגהג",
-        "he": "הגהג"
-      },
-      "tags": [
-        "גהה"
-      ],
-      "status": "pending",
-      "provenance": "גהגה",
-      "confirmed_at": null,
-      "effective_dates": null,
-      "replaces": null,
-      "source_file": "",
-      "resume_style": "bullet",
-      "link_target": null
     }
   ]
 }
