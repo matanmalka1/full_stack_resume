@@ -19,7 +19,7 @@ matrix's first row, and the second one has to change nothing at all - not
 from __future__ import annotations
 
 import json
-from html import unescape
+from html.parser import HTMLParser
 
 from api_harness import MUTATION_HEADERS
 from helpers import ACCOUNT_MANAGER_JOB, working_claim
@@ -30,6 +30,23 @@ from cv_engine.application.errors import InfrastructureFailure
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 
 UNSUPPORTED_WORDING = "Delivered 30% improvement in direct SaaS Sales."
+
+
+class _VisibleText(HTMLParser):
+    """Collect rendered text while ignoring inline safety/presentation tags."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+def _visible_html_text(value: str) -> str:
+    parser = _VisibleText()
+    parser.feed(value)
+    return "".join(parser.parts)
 
 
 def _application(services, company: str) -> str:
@@ -604,7 +621,7 @@ def test_reorder_preserves_section_membership_and_survives_a_fresh_read(api_work
     preview = api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/preview")
     assert preview.status_code == 200, preview.text
     ordered_text = [claim["text"] for claim in reordered["claims"]]
-    preview_text = unescape(preview.text)
+    preview_text = _visible_html_text(preview.text)
     assert [preview_text.index(text) for text in ordered_text] == sorted(
         preview_text.index(text) for text in ordered_text
     )
