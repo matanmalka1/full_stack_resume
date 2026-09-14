@@ -88,8 +88,11 @@ when the cause is extraction rather than classification.
 
 ### Stage 6 — Deterministic extraction ordering bugs (independent of everything above)
 
-`D5`, `D6` — dedup-before-mandatory-computed, and a shared clause letting a nearby
-"advantage" demote an explicit "must have" match.
+`D5`, `D6`, `D9` — dedup-before-mandatory-computed; a shared clause letting a nearby
+"advantage" demote an explicit "must have" match; and a bare (no-colon) heading that
+doesn't match a configured marker silently failing to close whatever section was open,
+letting later bullets inherit `section=="requirements"` — and with it `mandatory=True`
+— with no marker of their own.
 
 ### Stage 7 — AI interpretation/attestation gate integrity (independent domain)
 
@@ -115,6 +118,7 @@ current code path, and a dedup check whose two sides can never produce equal str
 | **D4** | בינוני-גבוה — בולט עם 3 בקשות נספר כיחידת "הבנה" אחת | [confidence.py:14-25](../cv_engine/domain/analysis/requirements/confidence.py#L14-L25), [extraction.py:118-167](../cv_engine/domain/analysis/requirements/extraction.py#L118-L167), [segmentation.py:241](../cv_engine/domain/analysis/requirements/segmentation.py#L241) | `_understood` בודק חפיפת offset בין ה-`StatementLine` המלא (כל המשפט) לבין ה-`ExtractedRequirement.span` שהוא רק תת-מחרוזת שהרג'קס תפס — משפט אחד ארוך עם 3 דרישות, רק 1 חולצה, נספר כ"מובן" במלואו | עצמאי | **CONFIRMED** — `item.start`/`item.end` הם offsets של ה-regex match בלבד (extraction.py:141-165), לא של המשפט; `_understood` (confidence.py:21-25) סופר overlap ברמת ה-line, לא ברמת המושג. `segmentation.py:241` מוסיף אפקט נלווה: שורה שממשיכה משפט קודם (lowercase, ללא bullet) ממוזגת לאותה יחידה. |
 | **D5** | גבוה — dedup קובע mandatory/preferred לפי המופע הראשון | [extraction.py:132-147](../cv_engine/domain/analysis/requirements/extraction.py#L132-L147), [requirements.json:43-68](../config/requirements.json#L43-L68) | דה-דופ (שורה 132-136, `concept`+`demanded`) רץ **לפני** חישוב mandatory/preferred (שורה 147) → אזכור ראשון תחת "About us" (preferred) "בולע" את המופע השני תחת "Requirements:" (mandatory) | עצמאי | **CONFIRMED, עם תנאי מוקדם שאומת**: cue-word matching ב-`_statement_kind` ([segmentation.py:169-171](../cv_engine/domain/analysis/requirements/segmentation.py#L169-L171)) הוא **ללא תלות בסקשן** — מילה כמו "experience" (ברשימת `requirement_cues`, config:51) בפסקת "About us" גם היא מסמנת את המשפט כ-`kind="requirement"`, ולכן נכנס בכלל למנוע ה-extraction (extraction.py:111: `if span.kind != "requirement": continue`). זה מה שהופך את התרחיש לריאלי, לא תיאורטי בלבד. |
 | **D6** | גבוה — clause משותף מאפשר ל"advantage" סמוך לבטל "must have" מפורש | [extraction.py:20,57-80,140,147](../cv_engine/domain/analysis/requirements/extraction.py#L20-L147) | `_SENTENCE=[.;\n]` לא חותך על פסיק; "Must have 5+ years..., European market an advantage." — אין parenthetical, אז ה-clause הוא כל המשפט; `"advantage"∈preferred_markers` (config:36) הופך את **כל** ה-clause, כולל ה-5+ שנים, ל-preferred | עצמאי | **CONFIRMED** ישירות מהרג'קס והקונפיג — `_SENTENCE` אינו כולל פסיק, ו-`_clause_around` (extraction.py:57-80) מחזיר את המשפט השלם פחות parentheticals כש-ה-match אינו בתוך aside. אותה א-סימטריה חוזרת ב-[interpretation.py:58-61](../cv_engine/domain/analysis/requirements/interpretation.py#L58-L61) בנתיב ה-AI, על ה-quote המצוטט. |
+| **D9** | גבוה — כותרת ללא נקודתיים לא סוגרת section, בולט הטבות יורש `mandatory=True` | [segmentation.py:96-120](../cv_engine/domain/analysis/requirements/segmentation.py#L96-L120) (`_heading_section`), [segmentation.py:123-142](../cv_engine/domain/analysis/requirements/segmentation.py#L123-L142) (`_section_of`), [extraction.py:147](../cv_engine/domain/analysis/requirements/extraction.py#L147) | כותרת כמו "Perks"/"Benefits" (בלי `:`) שאינה matches מדויק לאף marker מוגדר מחזירה `None` מ-`_heading_section`; `None` לא סוגר section פתוח (רק heading לא-`None` משנה `section`) → הbulletים שתחתיה יורשים את ה-section הקודם. אם זה "requirements", בולט הטבות תמים שמזדמן להתאים ל-concept pattern מקבל `mandatory=True` ב-extraction.py:147 בלי אף מרקר | עצמאי; שלב 6 עם D5/D6 | **CONFIRMED** — עקבתי את `_segments` (segmentation.py:181-248) שורה-שורה: `section` משתנה רק ב-`if heading is not None: ...; section=heading` (שורה 219-226); heading=`None` פשוט `continue`-ת בלי לגעת ב-section. אין קוד שסוגר section על heading לא-מזוהה. |
 | **D7** | בינוני — מדד מת, קבוע 1.0 בכל נתיב קיים | [confidence.py:48-57](../cv_engine/domain/analysis/requirements/confidence.py#L48-L57), [extraction.py:148-166](../cv_engine/domain/analysis/requirements/extraction.py#L148-L166) | `concept_classification_completeness` סופר `item.concept` לא-ריק; כל `ExtractedRequirement` נבנה תמיד עם `concept=concept.concept` (מחרוזת לא ריקה) — אין היום שום נתיב מייצר item ללא concept | Stage 8 (cleanup; ייתכן ותלוי בהחלטה #1 אם ייווצר נתיב חדש) | **CONFIRMED** — grep/read מלא של extraction.py לא מצא בנאי `ExtractedRequirement` עם `concept=""`/`None`. המדד קבוע מתמטית בקוד הנוכחי. |
 | **D8** | בינוני — confidence מודד וקטור שלא קיבל את ההחלטה | [classification.py:336-348,414-418,453-454](../cv_engine/domain/analysis/classification.py#L336-L454) | הבחירה בפועל (`best()`) מדורגת לפי `(coverage_scores, term_scores)` — coverage קודם; אבל `top`/`second` שמוזנים ל-`classification_confidence` מגיעים אך ורק מ-`term_scores.most_common(2)` (שורה 416-418), בלי קשר ל-coverage | Stage 5 (אחרי שהדנומינטורים מתוקנים) | **CONFIRMED** — קראתי את כל `classify_job`; `ranking` (משמש להחלטה ול-ambiguity) ו-`top/second` (משמש ל-confidence) הם שני חישובים נפרדים לחלוטין מאותו טקסט. |
 | **A1** | קריטי — נתיב AI לא יכול לגלות את באג הסגמנטציה | [analysis.py:234-241](../cv_engine/application/services/analysis.py#L234-L241), [ai_extraction.py:557-562,580-582](../cv_engine/domain/analysis/requirements/ai_extraction.py#L557-L582) | הספק מקבל `requirement_lines(job_text,...)` כ-hint; `by_ai` (understanding) ו-`extraction_is_failed` נמדדים מול **אותה** `requirement_lines()` — שורה שהסגמנטר לא מזהה (למשל תחת כותרת לא ב-`requirement_block_markers`) לא יכולה להוריד את `by_ai`, לא תדליק כשל, ולא תופיע כפער בשום מקום | תלוי Stage 0-2 (אותו קוד, לא תיקון נפרד) | **CONFIRMED** — אימתתי את כל שלוש נקודות הקריאה; אין שום נתיב אחר ב-ai_extraction.py שממדל את הטקסט המלא ללא תלות ב-`requirement_lines`. |
@@ -142,7 +146,13 @@ current code path, and a dedup check whose two sides can never produce equal str
 יחיד", ומצוין למה.
 
 ### D1
-קלט (עברית, ללא אף cue מוכר):
+שני קלטים: העברי מדגים את החמצת הסגמנטציה עצמה (אבל **לא** מפיק `approval_reasons=[]`
+— `PROFILE_TERMS`/`SALES_TERMS`/`TECH_TERMS` הם אנגלית בלבד, [classification.py:37-96](../cv_engine/domain/analysis/classification.py#L37-L96),
+כך שעל טקסט עברי `top=second=0` תמיד → `classification_confidence(0,0)=0.58<0.72` →
+`low-confidence` נדלק ללא קשר למצב ה-extraction). האנגלי מדגים את מצב ה-0-אזהרות
+המלא, שדורש גם vocabulary-match חזק וגם requirement_lines ריק בו-זמנית.
+
+**קלט 1 (עברית — מדגים רק את החמצת הסגמנטציה):**
 ```
 אנחנו מחפשים אשת/איש מכירות למשרה מלאה.
 
@@ -158,12 +168,41 @@ current code path, and a dedup check whose two sides can never produce equal str
 → section="other"; אף אחת מהשורות מכילה cue מרשימת `requirement_cues`/`soft_skill_cues`
 (he) → שתי הבולטים מקבלים `kind=None` ונשמטים לגמרי מ-`statement_lines`.
 **צפוי:** אין להחזיר ירוק מלא בלי אף איתות על משרה עם תוכן שלא נקרא.
-**בפועל:** `requirement_lines(text)==[]` → `fit_score=1.0`, `fit=HIGH`,
-`extraction_confidence` (מרכיב ה-extraction) `=1.0`, `approval_reasons=[]` (בהנחת
-classification_confidence מעל 0.72).
+**בפועל:** `requirement_lines(text)==[]` → `fit_score=1.0`, `fit=HIGH`, אבל
+`approval_reasons=["low-confidence"]` — **לא** ריק, כי `term_scores` (אוצר מילים
+אנגלי בלבד) הוא אפס על טקסט עברי. כלומר: fit=100% המסוכן כבר קיים כאן, אבל התופעה
+"0 אזהרות" דורשת קלט שני.
+
+**קלט 2 (אנגלית — מדגים 0 approval reasons בפועל, מאומת שורה-שורה):**
+```
+Account Executive — Closing New Business
+
+We're hiring an Account Executive to own quota-carrying, new business closing deals.
+
+What we're looking for:
+- A natural closer who loves people
+- Hungry, proactive, and building your own pipeline
+```
+`term_scores[ACCOUNT_EXECUTIVE]` סופר "account executive"(×2)+"closing"(×2)+"quota"(×1)+
+"new business"(×2) = 7 (config: [classification.py:58](../cv_engine/domain/analysis/classification.py#L58));
+שאר הפרופילים בציון 0 → `top=7, second=0` →
+`classification_confidence=min(0.98, 0.58+0.56+0.28)=0.98`. אף שורה לא מקבלת `kind`:
+הכותרת/הפסקה הפותחת לא מכילות cue, "What we're looking for:" אינה מרקר מוכר (section
+נשאר "other"), ושני הבוליטים ("natural closer"/"loves people"/"Hungry, proactive"/
+"building your own pipeline") לא מכילים אף cue מרשימת `requirement_cues` (כולל
+`soft_skill_cues` הממוזגת לתוכה, concepts.py:88) → `requirement_lines()==[]`.
+"quota-carrying" כן מכיל "quota", אבל הפסקה שמכילה אותו כבר נפסלה (`kind=None`) לפני
+שההתאמה ל-concept `quota-attainment` אפילו נבדקת (extraction.py:111 בודק `span.kind`
+לפני שהוא בכלל מריץ patterns). אין "years"/מספר בטקסט → אין rule_gap מ-`derive_gaps`.
+**צפוי:** אין להחזיר ירוק מלא בלי אף איתות על משרה עם 2 בוליטי דרישה אמיתיים.
+**בפועל (מאומת ידנית שורה-שורה):** `requirements=[]`, `extraction_confidence=1.0`
+(completeness=None→classified=1.0), `confidence=round(1.0·0.98,4)=0.98`,
+`failed_extraction=False` (state="absent"), `fit_score=1.0`, `fit=HIGH`,
+`approval_reasons=[]` — 0 אזהרות, בדיוק כפי שהתא בטבלה טוען.
 
 ### D2
-קלט (אנגלית, 3 שורות דרישה אמיתיות שלא ממופות לאף concept, + אזכור "Salesforce" בפרק לא-קשור):
+קלט (אנגלית, 3 שורות דרישה אמיתיות שלא ממופות לאף concept, + אזכור "Salesforce" תחת
+כותרת בלי נקודתיים):
 ```
 Requirements:
 - Excellent time-management and organizational skills
@@ -173,11 +212,19 @@ Requirements:
 Perks
 - We use Salesforce and Slack daily
 ```
-3 השורות הראשונות מכילות cue "skills" → `requirement_lines` בגודל 3; אף concept
-ב-`config/requirements.json` לא תואם אותן → `extracted=[]` → `completeness=0.0` →
-`state="unparsed"`. `derive_gaps` מזהה "salesforce" ב-lowered (גם בפרק Perks) →
-`rule_gaps` לא ריק → `understood_elsewhere=True`.
-**צפוי:** `extraction_failed=True` (3 דרישות נאמרו, 0 הובנו) → `fit_score=None`,
+**תיקון חשוב מהגרסה הקודמת של המסמך: `requirement_lines` הוא 4, לא 3.** "Perks" בלי
+נקודתיים **אינו** נכנס לענף ה-heading בכלל: `_heading_section` (segmentation.py:96-120)
+בודק colon תחילה (`stripped.endswith(":")` → false), ואז — בהיעדר colon — דורש התאמה
+מדויקת ל-marker מוגדר דרך `heading_sections.get(heading_key(stripped))`; "perks" אינו
+key שם → מחזיר `None`. `None` heading לא סוגר section (ר' D9 למטה) → ה-section הפתוח
+"requirements" (מ-"Requirements:") **ממשיך** דרך שורת "Perks" עצמה (שנשמטת כי קצרה
+מ-`_MIN_STATEMENT`) אל תוך הבולט של Salesforce. הבולט הזה, כ-list-item תחת
+section=="requirements", מקבל `kind="requirement"` דרך הכלל ב-segmentation.py:172-173
+— **גם בלי אף cue** בתוכו. סה"כ 4 requirement_lines: 3 עם cue "skills" + 1 (Salesforce)
+דרך ירושת ה-section. אף concept לא תואם אף אחת מה-4 → `extracted=[]` →
+`completeness=0/4=0.0` → `state="unparsed"`. `derive_gaps` מזהה "salesforce" ב-lowered
+(ללא תלות בסקשן) → `rule_gaps` לא ריק → `understood_elsewhere=True`.
+**צפוי:** `extraction_failed=True` (4 דרישות נאמרו, 0 הובנו) → `fit_score=None`,
 `fit=UNKNOWN`, `approval_reasons` כולל `extraction-failed`.
 **בפועל:** `confidence.py:94-95` מחזיר `False` לפני שבכלל בודק את ה-state → `fit_score=
 fit_score_from_requirements([])=1.0`, `fit=HIGH`, ה-gap היחיד הוא warning (לא חוסם),
@@ -237,6 +284,31 @@ Requirements:
 **צפוי:** "Must have 5+ years" מסומן במפורש כ-mandatory.
 **בפועל:** `mandatory=False` (הודגם לpreferred) בגלל "advantage" שמתייחס בפועל רק ל-European
 market, לא לדרישת השנים.
+
+### D9
+שני כיוונים — הבטוח (ניפוח denominator, נראה כבר בדוגמת D2 למעלה: הבולט של Salesforce
+תחת "Perks" הופך ל-requirement_line רק כי הסקשן לא נסגר) והמסוכן (mandatory מומצא):
+
+קלט (כיוון מסוכן):
+```
+Requirements:
+- Must have 5+ years of B2B sales experience
+
+Perks
+- Native English speakers get an extra paid day off every quarter
+- Free gym membership
+```
+"Perks" (בלי `:`) לא סוגרת את ה-section "requirements" שנפתח ע"י "Requirements:" (ר'
+מנגנון בטבלה). הבולט "Native English speakers get an extra paid day off every quarter"
+תואם את הפטרן `native english[a-z ]*` (concept `english-proficiency`, `demanded=
+"native"`) — לא כי מישהו דרש זאת, אלא כי המשפט על ימי חופש מזדמן להכיל את הצירוף. עם
+`span.section=="requirements"` (ירושה) ובלי אף preferred_marker בקלוז:
+`mandatory = (not preferred) and (marked or span.section=="requirements") = True`
+(extraction.py:147).
+**צפוי:** תיאור הטבה (ימי חופש) לא אמור להפוך אף פעם ל-mandatory requirement.
+**בפועל:** נוצר `Requirement(concept="english-proficiency", mandatory=True,
+demanded="native", ...)` מתוך משפט על הטבות. אם למועמד אין `common.language.english`
+ברמת "native" — זה hard gap שחוסם אישור, על דרישה שהמשרה מעולם לא ניסחה.
 
 ### D7
 לא ניתן לבטא כ-diff של קלט/פלט על טקסט משרה — זהו מדד שקבוע מתמטית תחת כל נתיב קוד קיים,
@@ -368,13 +440,21 @@ Requirements:
 Requirements:
 - Must own the full sales cycle at a SaaS company
 ```
-פרופוזל: `composition="any-of"`, member1="full sales cycle" (מועמד: matched, יש
-sales.summary.new_business), member2="SaaS company" (מועמד: לא SaaS, unsupported/partial
-דרך ה-boundary fact).
+פרופוזל: `composition="any-of"`, member1.attestation.quote="full sales cycle" (מועמד:
+matched, יש sales.summary.new_business), member2.attestation.quote="SaaS company".
+**תיקון מהגרסה הקודמת: member2 אינו יוצא unsupported/partial דרך boundary fact.**
+`_member_coverage` (ai_extraction.py:141-173) קודם קורא ל-`concept_for_quote("SaaS
+company", concepts)` — ושני הפטרנים של `technology-company-sales`
+(`config/requirements.json`) דורשים את המילה "sales" באותו הציטוט
+(`"sales[^.;]{0,120}...compan\w*"` או ההפוך); "SaaS company" לבדו לא מכיל "sales" כלל
+(SaaS ≠ sales) → **אף concept לא תואם** → `concept_for_quote` מחזיר `None` על 0
+התאמות (לא על ריבוי התאמות כמו ב-A10) → `_member_coverage` מחזיר `("undetermined",
+[], None)` ישירות (שורה 163-164), בלי לגעת בכלל ב-`threshold_coverage`/boundary fact.
 **צפוי:** דרישה ל"מחזור מכירות מלא **בחברת SaaS**" לא אמורה להיסגר ע"י מועמד בלי ניסיון
-SaaS.
-**בפועל:** `"matched" in member_coverages` מספיק → הדרישה כולה matched, האילוץ "at a
-SaaS company" נעלם.
+SaaS מאומת.
+**בפועל:** `member_coverages=["matched","undetermined"]`; `"matched" in member_coverages`
+מספיק (ai_extraction.py:226-231) → הדרישה כולה `coverage="matched"`, האילוץ "at a SaaS
+company" נעלם לגמרי — לא כי הוא נבדק ונכשל, אלא כי member1 המספיק "מכסה" עליו.
 
 ### A10
 קלט:
@@ -445,8 +525,9 @@ in config["concepts"].values()}` — assert אין חיתוך, לכל טקסט �
   בטעות. שווה לרשום את זה כ"משנה משמעות" (ר' למטה) ולא סתם "נשאר פתוח" — הכיוון
   הפוך מ-D7.
 - **A1's סיכון השיורי** (ר' Stage 2 למעלה) נשאר — לא תלוי בהחלטה #1.
-- **A2, A4, A11, D4, D5, D6, A5-A10, C1, C2, D8** — כולם עצמאיים לחלוטין מהחלטה #1;
-  שום דבר בהם לא נסגר או משתנה על ידה.
+- **A2, A4, A11, D4, D5, D6, D9, A5-A10, C1, C2, D8** — כולם עצמאיים לחלוטין מהחלטה #1;
+  שום דבר בהם לא נסגר או משתנה על ידה. D9 בפרט הוא באג בסגמנטציה (section לא נסגר),
+  לא ב"זוהה אך לא מופתה" — אותה משפחה כמו D1, לא מושפע מהחלטה #1.
 
 **משנים משמעות (לא "נסגר", לא "נשאר זהה" — המדד עצמו הופך לבעל תוכן):**
 - **D7** — כרגע `concept_classification_completeness` קבוע מתמטית ל-1.0 כי כל
