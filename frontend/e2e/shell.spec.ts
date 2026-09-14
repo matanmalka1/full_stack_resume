@@ -71,11 +71,9 @@ test("shares the saved theme between the shell and Settings and follows system c
   await expect(page.getByText("ההגדרות נשמרו")).toBeVisible();
   await expect(page.getByRole("button", { name: "ערכת נושא: כהה", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "ערכת נושא: כהה", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "ערכת נושא", exact: true });
-  await dialog.getByRole("combobox", { name: "ערכת נושא", exact: true }).selectOption("light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await dialog.getByRole("button", { name: "סגירה וחזרה לערך השמור" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("combobox", { name: "ערכת נושא", exact: true })).toHaveValue("light");
+  await expect(page.getByRole("dialog", { name: "ערכת נושא", exact: true })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "ערכת נושא", exact: true })).toHaveValue("dark");
+  await expect(page.getByRole("combobox", { name: "ערכת נושא", exact: true })).toHaveValue("light");
 });

@@ -30,7 +30,6 @@ from ..responses import accepted_operation
 from ..schemas.analyses import CreateAnalysisRequest
 from ..schemas.applications import (
     ApplicationDetailResponse,
-    JobSnapshotHistoryResponse,
     ApplicationListResponse,
     ArtifactVersionsResponse,
     CloseApplicationResponse,
@@ -42,6 +41,7 @@ from ..schemas.applications import (
     DeleteApplicationResponse,
     DuplicateCheckRequest,
     DuplicateCheckResponse,
+    JobSnapshotHistoryResponse,
     UpdateApplicationNotesRequest,
     UpdateApplicationNotesResponse,
 )

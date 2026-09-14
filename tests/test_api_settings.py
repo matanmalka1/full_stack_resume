@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from api_harness import MUTATION_HEADERS
 
 from cv_engine.api.app import API_PREFIX

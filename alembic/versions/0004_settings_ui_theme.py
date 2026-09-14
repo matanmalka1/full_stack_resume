@@ -1,6 +1,7 @@
 """Persist the shared UI theme preference. Existing installations follow the system."""
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0004"
