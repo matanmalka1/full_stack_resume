@@ -26,6 +26,7 @@ import { DraftEditorNotices } from "../components/DraftEditorNotices";
 import { DraftEmptyState } from "../components/DraftEmptyState";
 import { DraftFactPanel } from "../components/DraftFactPanel";
 import { DraftHeaderCard } from "../components/DraftHeaderCard";
+import { DraftHistoryControls } from "../components/DraftHistoryControls";
 import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
@@ -364,9 +365,15 @@ export const DraftEditorPage = () => {
             <DraftWorkspace
               editor={
                 <>
+                  <DraftHistoryControls
+                    canRedo={editing.history.canRedo}
+                    canUndo={editing.history.canUndo}
+                    onRedo={editing.history.redo}
+                    onUndo={editing.history.undo}
+                  />
                   <DraftOutlineEditor
                     actions={editing.claimActions}
-                    draft={draft}
+                    draft={editing.visibleDraft ?? draft}
                     factContext={{
                       beforeResolve,
                       afterResolve: afterFactResolved,
@@ -377,6 +384,8 @@ export const DraftEditorPage = () => {
                       profile: detail?.application.profile ?? null,
                     }}
                     facts={facts}
+                    onMoveClaim={editing.history.moveClaim}
+                    onMoveSection={editing.history.moveSection}
                     onRegenerateSection={editing.regenerateSection}
                   />
 
@@ -453,6 +462,8 @@ export const DraftEditorPage = () => {
               pending={editing.conflict.pending}
               pendingAdditions={editing.conflict.pendingAdditions}
               pendingRemovals={editing.conflict.pendingRemovals}
+              pendingSectionOrder={editing.conflict.pendingSectionOrder}
+              pendingClaimOrders={editing.conflict.pendingClaimOrders}
             />
           </>
         )}

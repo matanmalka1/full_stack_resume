@@ -282,6 +282,36 @@ def draft_claims(draft: DraftDocument) -> list[ClaimLine]:
     ]
 
 
+def reorder_draft(
+    draft: DraftDocument,
+    *,
+    section_order: list[str] | None = None,
+    claim_orders: dict[str, list[str]] | None = None,
+) -> DraftDocument:
+    """Reorder existing structure without changing identity, ownership, or facts."""
+    reordered = draft.model_copy(deep=True)
+    sections = {section.name: section for section in reordered.sections}
+    if len(sections) != len(reordered.sections):
+        raise ValueError("section names must be unique before they can be reordered")
+    if section_order is not None:
+        if len(section_order) != len(set(section_order)) or set(section_order) != set(sections):
+            raise ValueError("section_order must contain every section exactly once")
+        reordered.sections = [sections[name] for name in section_order]
+
+    for section_name, requested in (claim_orders or {}).items():
+        section = sections.get(section_name)
+        if section is None:
+            raise KeyError(section_name)
+        claims = {claim.claim_id: claim for claim in section.claims}
+        if len(claims) != len(section.claims):
+            raise ValueError(f"claim IDs in section {section_name!r} must be unique")
+        if len(requested) != len(set(requested)) or set(requested) != set(claims):
+            raise ValueError(f"claim order for section {section_name!r} must contain every claim exactly once")
+        section.claims = [claims[claim_id] for claim_id in requested]
+
+    return reordered.model_copy(update={"content_hash": sha256_text(_serialize_markdown(reordered))})
+
+
 def manually_edited(draft: DraftDocument) -> bool:
     """Whether this document carries wording a deterministic rebuild would lose.
 

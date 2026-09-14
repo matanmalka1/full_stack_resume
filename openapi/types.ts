@@ -3576,9 +3576,9 @@ export interface components {
          *     against a single expected version - a second command would need its own
          *     token and could interleave with the save already in flight.
          *
-         *     At least one of the three lists has to be non-empty. Requiring all three
-         *     would make "remove this line" impossible to express without also
-         *     rewriting or adding one.
+         *     At least one content operation has to be present. Reordering uses complete
+         *     permutations, so an omitted order means "leave this structure alone" while
+         *     an empty order is meaningful only for an already empty section.
          */
         UpdateWorkingDraftRequest: {
             /**
@@ -3592,11 +3592,24 @@ export interface components {
              */
             claim_edits: components["schemas"]["ClaimPatchRequest"][];
             /**
+             * Claim Orders
+             * @description Complete claim-ID order for each named section being reordered.
+             * @default {}
+             */
+            claim_orders: {
+                [key: string]: string[];
+            };
+            /**
              * Claim Removals
              * @description Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming apply-selection-change, and the headline and contacts are structural.
              * @default []
              */
             claim_removals: string[];
+            /**
+             * Section Order
+             * @description All section names in their requested reading order.
+             */
+            section_order?: string[] | null;
         };
         /** ValidationIssueResponse */
         ValidationIssueResponse: {

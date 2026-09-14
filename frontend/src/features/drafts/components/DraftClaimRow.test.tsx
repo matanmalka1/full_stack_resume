@@ -83,4 +83,21 @@ describe("DraftClaimRow", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(rowActions.onRemove).not.toHaveBeenCalled();
   });
+
+  it("moves a row only in an available direction", () => {
+    const onMove = vi.fn();
+    render(
+      <DraftClaimRow
+        actions={actions()}
+        claim={claim}
+        facts={facts}
+        move={{ canMoveDown: true, canMoveUp: false, onMove }}
+        removal={{ route: "none" }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "הזזת השורה למעלה" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "הזזת השורה למטה" }));
+    expect(onMove).toHaveBeenCalledWith(1);
+  });
 });

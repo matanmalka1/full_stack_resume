@@ -110,9 +110,9 @@ class UpdateWorkingDraftRequest(HttpSchema):
     against a single expected version - a second command would need its own
     token and could interleave with the save already in flight.
 
-    At least one of the three lists has to be non-empty. Requiring all three
-    would make "remove this line" impossible to express without also
-    rewriting or adding one.
+    At least one content operation has to be present. Reordering uses complete
+    permutations, so an omitted order means "leave this structure alone" while
+    an empty order is meaningful only for an already empty section.
     """
 
     claim_edits: list[ClaimPatchRequest] = []
@@ -126,6 +126,14 @@ class UpdateWorkingDraftRequest(HttpSchema):
         ),
     )
     claim_additions: list[ClaimAdditionRequest] = []
+    section_order: list[str] | None = Field(
+        default=None,
+        description="All section names in their requested reading order.",
+    )
+    claim_orders: dict[str, list[str]] = Field(
+        default={},
+        description="Complete claim-ID order for each named section being reordered.",
+    )
 
     @model_validator(mode="after")
     def validate_patch(self) -> UpdateWorkingDraftRequest:
@@ -135,8 +143,14 @@ class UpdateWorkingDraftRequest(HttpSchema):
         that only surfaced there would reach the client as a 500 rather than as
         the `422` an unusable request deserves.
         """
-        if not self.claim_edits and not self.claim_removals and not self.claim_additions:
-            raise ValueError("a patch must edit, remove, or add at least one claim")
+        if (
+            not self.claim_edits
+            and not self.claim_removals
+            and not self.claim_additions
+            and self.section_order is None
+            and not self.claim_orders
+        ):
+            raise ValueError("a patch must edit, remove, add, or reorder content")
         both = {edit.claim_id for edit in self.claim_edits} & set(self.claim_removals)
         if both:
             raise ValueError(f"a patch cannot both edit and remove the same claim: {sorted(both)}")

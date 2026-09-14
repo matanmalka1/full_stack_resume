@@ -340,19 +340,27 @@ class UpdateWorkingDraftCommand(BoundaryDTO):
     claim_edits: list[ClaimPatch] = []
     claim_removals: list[str] = []
     claim_additions: list[ClaimAddition] = []
+    section_order: list[str] | None = None
+    claim_orders: dict[str, list[str]] = {}
 
     @model_validator(mode="after")
     def validate_patch(self) -> UpdateWorkingDraftCommand:
         """A patch has to change something, and may not contradict itself.
 
-        Removal rides on this command rather than on one of its own because
+        Removal and ordering ride on this command rather than commands of their own because
         product-spec §10 makes removal one of the three ways an unsupported
         claim is resolved, and §14 commits an autosave patch as a single edit
         against a single expected version. A separate command would need its own
         token and could interleave with the save the user is already making.
         """
-        if not self.claim_edits and not self.claim_removals and not self.claim_additions:
-            raise ValueError("a working draft patch must edit, remove, or add at least one claim")
+        if (
+            not self.claim_edits
+            and not self.claim_removals
+            and not self.claim_additions
+            and self.section_order is None
+            and not self.claim_orders
+        ):
+            raise ValueError("a working draft patch must edit, remove, add, or reorder content")
         both = {edit.claim_id for edit in self.claim_edits} & set(self.claim_removals)
         if both:
             raise ValueError(f"a patch cannot both edit and remove the same claim: {sorted(both)}")

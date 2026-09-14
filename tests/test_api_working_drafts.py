@@ -19,6 +19,7 @@ matrix's first row, and the second one has to change nothing at all - not
 from __future__ import annotations
 
 import json
+from html import unescape
 
 from api_harness import MUTATION_HEADERS
 from helpers import ACCOUNT_MANAGER_JOB, working_claim
@@ -113,6 +114,14 @@ def _add(harness, working_draft_id: str, etag: str, claim_additions: list[dict])
     return harness.client.patch(
         f"{API_PREFIX}/working-drafts/{working_draft_id}",
         json={"claim_additions": claim_additions},
+        headers={**MUTATION_HEADERS, "If-Match": etag},
+    )
+
+
+def _reorder(harness, working_draft_id: str, etag: str, body: dict):
+    return harness.client.patch(
+        f"{API_PREFIX}/working-drafts/{working_draft_id}",
+        json=body,
         headers={**MUTATION_HEADERS, "If-Match": etag},
     )
 
@@ -566,6 +575,48 @@ def test_a_patch_that_says_nothing_or_contradicts_itself_is_refused(api_worker) 
     )
     assert contradictory.status_code == 422, contradictory.text
     assert _read(api_worker, working_draft_id).headers["ETag"] == etag
+
+
+def test_reorder_preserves_section_membership_and_survives_a_fresh_read(api_worker) -> None:
+    _application_id, working_draft_id, _sources = _drafted(api_worker, "Reorder Co")
+    before = _read(api_worker, working_draft_id)
+    sections = before.json()["outline"]["sections"]
+    assert len(sections) >= 2
+    target = next(section for section in sections if len(section["claims"]) >= 2)
+    section_order = [section["name"] for section in reversed(sections)]
+    claim_order = [claim["claim_id"] for claim in reversed(target["claims"])]
+
+    changed = _reorder(
+        api_worker,
+        working_draft_id,
+        before.headers["ETag"],
+        {"section_order": section_order, "claim_orders": {target["name"]: claim_order}},
+    )
+
+    assert changed.status_code == 200, changed.text
+    after = _read(api_worker, working_draft_id)
+    assert [section["name"] for section in after.json()["outline"]["sections"]] == section_order
+    reordered = next(
+        section for section in after.json()["outline"]["sections"] if section["name"] == target["name"]
+    )
+    assert [claim["claim_id"] for claim in reordered["claims"]] == claim_order
+    assert after.json()["edit_version"] == before.json()["edit_version"] + 1
+    preview = api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/preview")
+    assert preview.status_code == 200, preview.text
+    ordered_text = [claim["text"] for claim in reordered["claims"]]
+    preview_text = unescape(preview.text)
+    assert [preview_text.index(text) for text in ordered_text] == sorted(
+        preview_text.index(text) for text in ordered_text
+    )
+
+    invalid = _reorder(
+        api_worker,
+        working_draft_id,
+        after.headers["ETag"],
+        {"claim_orders": {target["name"]: claim_order[:-1]}},
+    )
+    assert invalid.status_code == 412, invalid.text
+    assert _read(api_worker, working_draft_id).headers["ETag"] == after.headers["ETag"]
 
 
 # --- E3: selection change, archive, replace ----------------------------------

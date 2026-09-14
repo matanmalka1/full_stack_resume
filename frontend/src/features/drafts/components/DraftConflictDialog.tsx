@@ -11,6 +11,8 @@ interface DraftConflictDialogProps {
   pending: ClaimPatch[];
   pendingAdditions: ClaimAddition[];
   pendingRemovals: string[];
+  pendingSectionOrder: string[] | null;
+  pendingClaimOrders: Record<string, string[]>;
 }
 
 /* A.4: a 409 is a choice, never a merge and never a silent overwrite. The dialog shows
@@ -25,6 +27,8 @@ export const DraftConflictDialog = ({
   pending,
   pendingAdditions,
   pendingRemovals,
+  pendingSectionOrder,
+  pendingClaimOrders,
 }: DraftConflictDialogProps) => {
   const texts = new Map(
     (current === undefined ? [] : outlineClaims(current)).map((claim) => [claim.claim_id, claim.text]),
@@ -87,6 +91,12 @@ export const DraftConflictDialog = ({
             </li>
           ))}
         </ul>
+      )}
+
+      {pendingSectionOrder === null && Object.keys(pendingClaimOrders).length === 0 ? null : (
+        <p className="text-support leading-6 text-cv-text-muted">
+          שינויי הסדר שלך עדיין ממתינים. החלת הגרסה שלך תחיל גם אותם על הטיוטה הנוכחית, אם המבנה עדיין תואם.
+        </p>
       )}
     </Dialog>
   );

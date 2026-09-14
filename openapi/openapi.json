@@ -6035,7 +6035,7 @@
       },
       "UpdateWorkingDraftRequest": {
         "additionalProperties": false,
-        "description": "The structured patch `PATCH /working-drafts/{id}` applies as one edit.\n\nRemovals travel with the edits rather than in a command of their own.\nProduct spec §10 makes removal one of the three resolutions for free text\nnothing could authorize, and §14 commits an autosave patch as a single edit\nagainst a single expected version - a second command would need its own\ntoken and could interleave with the save already in flight.\n\nAt least one of the three lists has to be non-empty. Requiring all three\nwould make \"remove this line\" impossible to express without also\nrewriting or adding one.",
+        "description": "The structured patch `PATCH /working-drafts/{id}` applies as one edit.\n\nRemovals travel with the edits rather than in a command of their own.\nProduct spec §10 makes removal one of the three resolutions for free text\nnothing could authorize, and §14 commits an autosave patch as a single edit\nagainst a single expected version - a second command would need its own\ntoken and could interleave with the save already in flight.\n\nAt least one content operation has to be present. Reordering uses complete\npermutations, so an omitted order means \"leave this structure alone\" while\nan empty order is meaningful only for an already empty section.",
         "properties": {
           "claim_additions": {
             "default": [],
@@ -6053,6 +6053,18 @@
             "title": "Claim Edits",
             "type": "array"
           },
+          "claim_orders": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "default": {},
+            "description": "Complete claim-ID order for each named section being reordered.",
+            "title": "Claim Orders",
+            "type": "object"
+          },
           "claim_removals": {
             "default": [],
             "description": "Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming apply-selection-change, and the headline and contacts are structural.",
@@ -6061,6 +6073,21 @@
             },
             "title": "Claim Removals",
             "type": "array"
+          },
+          "section_order": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "All section names in their requested reading order.",
+            "title": "Section Order"
           }
         },
         "title": "UpdateWorkingDraftRequest",

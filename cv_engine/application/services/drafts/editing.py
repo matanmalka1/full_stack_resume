@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim
+from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import EditResult, UpdateWorkingDraftCommand, WorkingDraftUpdateResult
 from ...errors import (
@@ -137,6 +137,16 @@ class DraftEditing(DraftServiceBase):
             except ValueError as exc:
                 raise PreconditionFailed(f"claim addition rejected: {exc}") from exc
             added_claim_ids.add(new_claim_id)
+        try:
+            patched = reorder_draft(
+                patched,
+                section_order=command.section_order,
+                claim_orders=command.claim_orders,
+            )
+        except KeyError as exc:
+            raise UnknownRecord(f"unknown section in the working draft: {exc.args[0]}") from exc
+        except ValueError as exc:
+            raise PreconditionFailed(f"draft reorder rejected: {exc}") from exc
         changed = self._commit_edit(working, patched)
         self.store_working_draft(changed.source)
         edited = {edit.claim_id for edit in command.claim_edits} | added_claim_ids

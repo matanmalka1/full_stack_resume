@@ -167,6 +167,8 @@ def update_working_draft(
                 ClaimAddition(**addition.model_dump(mode="python"))
                 for addition in request.claim_additions
             ],
+            section_order=request.section_order,
+            claim_orders={name: list(claim_ids) for name, claim_ids in request.claim_orders.items()},
         )
     )
     response.headers["ETag"] = draft_etag(result.edit_version, result.content_hash)

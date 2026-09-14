@@ -2,9 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { applicationDetailQueryKey } from "@/api/applications";
-import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts, WorkingDraftUpdate } from "@/api/contracts";
+import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import {
-  type DraftRead,
   applySelectionChange,
   regenerateClaim,
   regenerateSection,
@@ -20,6 +19,7 @@ import { useSettings } from "@/api/useSettings";
 import type { DraftClaimActions } from "../model/drafts.types";
 import { removability } from "../model/draftClaims";
 import { type AutosaveState, useDraftAutosave } from "./useDraftAutosave";
+import { useDraftHistory } from "./useDraftHistory";
 
 interface UseDraftEditingOptions {
   applicationId: string;
@@ -45,6 +45,8 @@ export interface DraftEditing {
     pending: AutosaveState["pending"];
     pendingAdditions: AutosaveState["pendingAdditions"];
     pendingRemovals: AutosaveState["pendingRemovals"];
+    pendingSectionOrder: AutosaveState["pendingSectionOrder"];
+    pendingClaimOrders: AutosaveState["pendingClaimOrders"];
     reapplyLocal: () => void;
   };
   /* Anything the server has not accepted yet: a buffered edit, a save in flight, or a
@@ -58,6 +60,15 @@ export interface DraftEditing {
   saveState: AutosaveState;
   selectionError: unknown;
   selectionPending: boolean;
+  history: {
+    canRedo: boolean;
+    canUndo: boolean;
+    moveClaim: (section: string, index: number, offset: -1 | 1) => void;
+    moveSection: (index: number, offset: -1 | 1) => void;
+    redo: () => void;
+    undo: () => void;
+  };
+  visibleDraft: WorkingDraft | undefined;
 }
 
 /* Every write this screen makes to the draft: the autosave buffer, the two removal
@@ -78,39 +89,18 @@ export const useDraftEditing = ({
   const { isPending: settingsPending, settings } = useSettings();
   const regenerationAvailable = aiRegenerationAvailable(settings);
 
-  /* A save changes the draft, so the read that produced it is stale by definition. The
-     new token is installed directly - it is the one the response returned for the version
-     that now exists - and the reads are invalidated so the outline, the pending claims,
-     and the projection's blockers all come back describing the same version. */
-  const onSaved = useCallback(
-    (update: WorkingDraftUpdate, nextEtag: string | null) => {
-      if (workingDraftId === null) {
-        return;
-      }
-      queryClient.setQueryData<DraftRead>(workingDraftQueryKey(workingDraftId), (previous) =>
-        previous === undefined
-          ? previous
-          : {
-              ...previous,
-              etag: nextEtag,
-              draft:
-                update.working_draft_id === workingDraftId
-                  ? {
-                      ...previous.draft,
-                      edit_version: update.edit_version,
-                      content_hash: update.content_hash,
-                      latest_validation_run_id: null,
-                      latest_validation_passed: null,
-                    }
-                  : previous.draft,
-            },
-      );
-      void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(workingDraftId) });
-      void queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(workingDraftId) });
-      void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-    },
-    [applicationId, queryClient, workingDraftId],
-  );
+  /* A save changes the draft, so the read that produced it is stale by definition. Keep
+     its body and token together until the invalidated read replaces both: installing the
+     response token beside the previous outline would briefly construct a DraftRead that
+     never existed. The autosave queue owns the returned token needed by its next write. */
+  const onSaved = useCallback(() => {
+    if (workingDraftId === null) {
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(workingDraftId) });
+    void queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(workingDraftId) });
+    void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
+  }, [applicationId, queryClient, workingDraftId]);
 
   /* A 409 says the read behind both the editor and its ETag is obsolete. Refresh them as
      one DraftRead so the conflict comparison and the next If-Match name the same server
@@ -125,6 +115,12 @@ export const useDraftEditing = ({
   }, [queryClient, workingDraftId]);
 
   const autosave = useDraftAutosave({ etag, onConflict, onSaved, workingDraftId });
+  const history = useDraftHistory({
+    draft,
+    queueClaimOrder: autosave.queueClaimOrder,
+    queueEdit: (claim, text) => autosave.queueEdit({ claim_id: claim.claim_id, fact_ids: claim.fact_ids, text }),
+    queueSectionOrder: autosave.queueSectionOrder,
+  });
 
   /* §14: the overlay is absolute, so every change starts from what the accounting
      currently reports and adds one decision to it. Sending only what moved would drop
@@ -150,7 +146,7 @@ export const useDraftEditing = ({
     onSuccess: () => {
       /* The plan and the document changed together, and the ETag with them. Nothing from
          the response is seeded: the refreshed reads report the version that now exists. */
-      onSaved({} as WorkingDraftUpdate, null);
+      onSaved();
     },
   });
 
@@ -184,7 +180,9 @@ export const useDraftEditing = ({
     autosave.status === "conflict" ||
     autosave.pending.length > 0 ||
     autosave.pendingRemovals.length > 0 ||
-    autosave.pendingAdditions.length > 0;
+    autosave.pendingAdditions.length > 0 ||
+    autosave.pendingSectionOrder !== null ||
+    Object.keys(autosave.pendingClaimOrders).length > 0;
 
   /* Which command removes a line is `removability`'s answer, not a guess made here: the
      patch takes the unauthorized claims, and a fact-authorized one is removed by
@@ -209,7 +207,7 @@ export const useDraftEditing = ({
       /* The fact links are the claim's own. An edit changes wording, not what backs it -
          relinking is a separate decision, and sending a different set here would silently
          re-authorize a line the user only rephrased. */
-      onEdit: (claim, text) => autosave.queueEdit({ claim_id: claim.claim_id, fact_ids: claim.fact_ids, text }),
+      onEdit: history.edit,
       onCommit: autosave.flush,
       onAdd: (section, text) => autosave.queueAddition({ section, text }),
       onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
@@ -217,11 +215,16 @@ export const useDraftEditing = ({
       regenerationDisabled: dirty || regeneration.isPending || !regenerationAvailable,
     },
     conflict: {
-      discardLocal: autosave.discardLocal,
+      discardLocal: () => {
+        autosave.discardLocal();
+        history.reset();
+      },
       open: autosave.status === "conflict",
       pending: autosave.pending,
       pendingAdditions: autosave.pendingAdditions,
       pendingRemovals: autosave.pendingRemovals,
+      pendingSectionOrder: autosave.pendingSectionOrder,
+      pendingClaimOrders: autosave.pendingClaimOrders,
       reapplyLocal: autosave.reapplyLocal,
     },
     dirty,
@@ -230,10 +233,19 @@ export const useDraftEditing = ({
     /* Including an omitted fact is a pin: in a budgeted deterministic selection, holding
        it is the only way to say "keep this one". */
     includeFact: (fact) => selection.mutate({ pinned: [fact.fact_id] }),
+    history: {
+      canRedo: history.canRedo,
+      canUndo: history.canUndo,
+      moveClaim: history.moveClaim,
+      moveSection: history.moveSection,
+      redo: history.redo,
+      undo: history.undo,
+    },
     regenerateSection: (section) => regeneration.mutate({ section }),
     regenerationError: regeneration.error,
     saveState: autosave,
     selectionError: selection.error,
     selectionPending: selection.isPending,
+    visibleDraft: history.visibleDraft,
   };
 };

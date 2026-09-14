@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { Check, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
 import type { DraftClaim, DraftFact } from "@/api/contracts";
 import { Button } from "@/ui/Button";
@@ -20,6 +20,7 @@ interface DraftClaimRowProps {
   facts: DraftFact[];
   /* Which command removes this line, or why none does - decided once by the list. */
   removal: Removability;
+  move?: { canMoveDown: boolean; canMoveUp: boolean; onMove: (offset: -1 | 1) => void };
 }
 
 /* Icons instead of spelled-out labels: on sixty stacked rows the labels were wider than
@@ -32,7 +33,7 @@ const marginClasses = "w-full shrink-0 pt-0.5 sm:w-36";
 
 /* One line of the draft: status, text, backing facts, actions. Computes nothing about the
    draft itself - removability and linked facts are the list's answers. */
-export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }: DraftClaimRowProps) => {
+export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, removal }: DraftClaimRowProps) => {
   const [text, setText] = useState(claim.text);
   /* The server's text wins on an underlying change (regeneration, rebuild, conflict
      resolution). Set during render, not an effect, so the row never paints a superseded
@@ -150,6 +151,30 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, removal }
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {move === undefined ? null : (
+          <>
+            <Button
+              aria-label="הזזת השורה למעלה"
+              className={rowActionClasses}
+              disabled={!move.canMoveUp}
+              onClick={() => move.onMove(-1)}
+              title="הזזת השורה למעלה"
+              variant="ghost"
+            >
+              <ArrowUp aria-hidden="true" className="size-icon-md text-cv-text-muted" />
+            </Button>
+            <Button
+              aria-label="הזזת השורה למטה"
+              className={rowActionClasses}
+              disabled={!move.canMoveDown}
+              onClick={() => move.onMove(1)}
+              title="הזזת השורה למטה"
+              variant="ghost"
+            >
+              <ArrowDown aria-hidden="true" className="size-icon-md text-cv-text-muted" />
+            </Button>
+          </>
+        )}
         <Button
           aria-label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
           className={rowActionClasses}

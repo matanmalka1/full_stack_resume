@@ -96,6 +96,8 @@ export interface DraftPatch {
   claim_edits: ClaimPatch[];
   claim_removals: string[];
   claim_additions: ClaimAddition[];
+  section_order?: string[];
+  claim_orders?: Record<string, string[]>;
 }
 
 export interface DraftUpdate {

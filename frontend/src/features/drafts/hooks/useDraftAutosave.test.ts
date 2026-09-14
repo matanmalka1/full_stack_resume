@@ -253,6 +253,28 @@ describe("useDraftAutosave", () => {
     });
   });
 
+  it("coalesces section and claim ordering into the same serialized save", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(updateResponse(5));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = setup();
+
+    act(() => {
+      result.current.queueSectionOrder(["experience", "skills"]);
+      result.current.queueClaimOrder("experience", ["c-2", "c-1"]);
+      result.current.queueClaimOrder("experience", ["c-3", "c-2", "c-1"]);
+      result.current.flush();
+    });
+
+    await waitFor(() => expect(result.current.status).toBe("saved"));
+    expect(bodyOf(fetchMock.mock.calls[0])).toEqual({
+      claim_edits: [],
+      claim_removals: [],
+      claim_additions: [],
+      section_order: ["experience", "skills"],
+      claim_orders: { experience: ["c-3", "c-2", "c-1"] },
+    });
+  });
+
   it("flushes an edit that is still waiting for the debounce when the editor unmounts", async () => {
     const fetchMock = vi.fn().mockResolvedValue(updateResponse(5));
     vi.stubGlobal("fetch", fetchMock);

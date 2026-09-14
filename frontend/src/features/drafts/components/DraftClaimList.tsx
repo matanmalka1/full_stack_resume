@@ -23,6 +23,7 @@ interface DraftClaimListProps {
   facts: WorkingDraftFacts | undefined;
   /* Rendered instead of the list when the outline names no claims here. */
   emptyLabel: string;
+  onMove?: (index: number, offset: -1 | 1) => void;
 }
 
 /* One run of claims as a list of rows.
@@ -37,6 +38,7 @@ export const DraftClaimList = ({
   emptyLabel,
   factResolution,
   facts,
+  onMove,
 }: DraftClaimListProps): ReactNode => {
   const [pendingRemoval, setPendingRemoval] = useState<DraftClaim | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,16 +106,28 @@ export const DraftClaimList = ({
         <p className="text-support leading-6 text-cv-text-muted">{emptyLabel}</p>
       ) : (
         <ul className="flex flex-col divide-y divide-cv-border">
-          {visibleClaims.map((claim) => (
-            <DraftClaimRow
-              actions={rowActions}
-              claim={claim}
-              facts={linkedFacts(claim, facts)}
-              factResolution={claim.claim_type === "pending" ? factResolution?.(claim) : undefined}
-              key={claim.claim_id}
-              removal={removability(claim, draft, facts)}
-            />
-          ))}
+          {visibleClaims.map((claim) => {
+            const index = claims.findIndex((candidate) => candidate.claim_id === claim.claim_id);
+            return (
+              <DraftClaimRow
+                actions={rowActions}
+                claim={claim}
+                facts={linkedFacts(claim, facts)}
+                factResolution={claim.claim_type === "pending" ? factResolution?.(claim) : undefined}
+                key={claim.claim_id}
+                move={
+                  onMove === undefined || pendingRemoval !== null
+                    ? undefined
+                    : {
+                        canMoveDown: index < claims.length - 1,
+                        canMoveUp: index > 0,
+                        onMove: (offset) => onMove(index, offset),
+                      }
+                }
+                removal={removability(claim, draft, facts)}
+              />
+            );
+          })}
         </ul>
       )}
 
