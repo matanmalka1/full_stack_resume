@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Operation } from "@/api/contracts";
@@ -19,13 +19,13 @@ const operation = (overrides: Partial<Operation> = {}): Operation => ({
   ...overrides,
 });
 
-const renderPanel = (value: Operation) => {
+const renderPanel = (value: Operation, onQueued = vi.fn()) => {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <ActiveOperationPanel onQueued={vi.fn()} operation={value} />
+      <ActiveOperationPanel onQueued={onQueued} operation={value} />
     </QueryClientProvider>,
   );
 };
@@ -91,5 +91,71 @@ describe("ActiveOperationPanel progress", () => {
     expect(screen.queryByRole("button", { name: "ביטול הפעולה" })).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(4_000));
     expect(screen.getByRole("button", { name: "ביטול הפעולה" })).toBeInTheDocument();
+  });
+
+  it("distinguishes an accepted cancellation request from completed cancellation", () => {
+    renderPanel(operation({ available_actions: [], cancellation_requested_at: "2026-09-10T08:00:04Z" }));
+
+    expect(screen.getByText("בקשת הביטול התקבלה")).toBeInTheDocument();
+    expect(screen.queryByText("בוטלה")).not.toBeInTheDocument();
+  });
+
+  it("prevents duplicate cancellation requests while the first request is pending", async () => {
+    vi.useFakeTimers();
+    let resolveCancel!: (response: Response) => void;
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveCancel = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderPanel(operation({ available_actions: ["cancel"] }));
+    act(() => vi.advanceTimersByTime(4_000));
+
+    const cancel = screen.getByRole("button", { name: "ביטול הפעולה" });
+    fireEvent.click(cancel);
+    fireEvent.click(cancel);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(cancel).toBeDisabled();
+
+    resolveCancel(new Response(JSON.stringify(operation()), { headers: { "Content-Type": "application/json" } }));
+    await act(async () => Promise.resolve());
+  });
+
+  it("tracks the new Operation returned by retry", async () => {
+    const onQueued = vi.fn();
+    const queued = operation({ id: "operation-2", status: "queued", phase: "queued" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(queued), {
+          headers: { "Content-Type": "application/json", Location: "/api/v1/operations/operation-2" },
+          status: 202,
+        }),
+      ),
+    );
+    renderPanel(
+      operation({ available_actions: ["retry"], is_terminal: true, phase: "completed", status: "failed" }),
+      onQueued,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "ניסיון חוזר" }));
+    await waitFor(() => expect(onQueued).toHaveBeenCalledWith("operation-2"));
+  });
+
+  it("explains a blocked retry without offering an action the server omitted", () => {
+    renderPanel(
+      operation({
+        available_actions: [],
+        failure_code: "MISSING_FACT_RENDERING",
+        is_terminal: true,
+        phase: "completed",
+        status: "failed",
+      }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("יש להשלים ניסוח לעובדה בשפת היעד");
+    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
   });
 });

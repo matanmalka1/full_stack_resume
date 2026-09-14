@@ -1,9 +1,14 @@
+import { Minus, Plus } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 
 const PAGE_WIDTH_PX = 794;
 const PAGE_HEIGHT_PX = 1123;
+const MIN_ZOOM_PERCENT = 25;
+const MAX_ZOOM_PERCENT = 200;
+const ZOOM_STEP_PERCENT = 10;
 
 interface DocumentFrameProps {
   className?: string;
@@ -13,52 +18,105 @@ interface DocumentFrameProps {
   title: string;
 }
 
-/* The rendered CV is a fixed A4 page (794x1123px), not a responsive layout - shrinking the
-   iframe element itself to the column width reflows that page at the wrong width and cuts
-   every line mid-word, while a column wider than the page leaves bare space below it. The
-   frame keeps its native A4 size and is scaled visually to fit the column instead, so the
-   document always lays out the way the renderer built it, and the wrapper's height tracks
-   the scaled page rather than a guessed constant. */
+type ZoomMode = "fit" | "manual";
+
+const clampZoom = (zoom: number): number => Math.min(MAX_ZOOM_PERCENT, Math.max(MIN_ZOOM_PERCENT, zoom));
+const fitZoomForWidth = (width: number): number =>
+  Math.min(100, Math.max(MIN_ZOOM_PERCENT, (width / PAGE_WIDTH_PX) * 100));
+
+/* The rendered CV remains a fixed 794x1123 A4 page. This component changes only the
+   browser presentation around that page: the iframe always receives its native layout
+   dimensions, while a transform and an explicitly-sized canvas provide zoom and
+   scrollbars without reflowing the document or changing the rendered artifact. */
 export const DocumentFrame = ({ className, frameClassName, onLoad, src, title }: DocumentFrameProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [fitZoom, setFitZoom] = useState(100);
+  const [manualZoom, setManualZoom] = useState(100);
+  const [zoomMode, setZoomMode] = useState<ZoomMode>("fit");
 
   useLayoutEffect(() => {
-    const node = containerRef.current;
+    const node = viewportRef.current;
     if (node === null || typeof ResizeObserver === "undefined") return undefined;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      setScale(width > 0 ? Math.min(1, width / PAGE_WIDTH_PX) : 1);
+      if (width > 0) setFitZoom(fitZoomForWidth(width));
     });
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
 
+  const zoom = zoomMode === "fit" ? fitZoom : manualZoom;
+  const scale = zoom / 100;
+  const shownZoom = Math.round(zoom);
+
+  const selectManualZoom = (nextZoom: number) => {
+    setManualZoom(clampZoom(nextZoom));
+    setZoomMode("manual");
+  };
+
   return (
-    <div
-      className={cx("flex justify-center overflow-hidden", className)}
-      ref={containerRef}
-      style={{ height: PAGE_HEIGHT_PX * scale }}
-    >
-      <iframe
-        /* `shrink-0` is what makes the paragraph above true. The wrapper is a flex
-           container, so without it the iframe - a flex item asked to be wider than the
-           column - was shrunk by the flex algorithm to the column's width before the
-           transform ever applied: the A4 page reflowed at ~450px and cut every line, and
-           the scale then shrank that already-broken layout a second time. A transform
-           changes what is painted, never the box the layout gave it. */
-        className={cx("shrink-0 rounded-control border border-cv-border bg-cv-surface", frameClassName)}
-        onLoad={onLoad}
-        sandbox=""
-        src={src}
-        style={{
-          height: PAGE_HEIGHT_PX,
-          transform: `scale(${scale})`,
-          transformOrigin: "top center",
-          width: PAGE_WIDTH_PX,
-        }}
-        title={title}
-      />
+    <div className={cx("flex min-w-0 flex-col gap-3", className)}>
+      <div aria-label="בקרות זום למסמך" className="flex flex-wrap items-center gap-2" role="toolbar">
+        <Button
+          aria-label="הקטנת המסמך"
+          disabled={zoom <= MIN_ZOOM_PERCENT}
+          onClick={() => selectManualZoom(zoom - ZOOM_STEP_PERCENT)}
+          size="icon"
+          variant="secondary"
+        >
+          <Minus aria-hidden="true" className="size-icon-md" />
+        </Button>
+        <output aria-live="polite" className="min-w-14 text-center text-support tabular-nums text-cv-text">
+          {shownZoom}%
+        </output>
+        <Button
+          aria-label="הגדלת המסמך"
+          disabled={zoom >= MAX_ZOOM_PERCENT}
+          onClick={() => selectManualZoom(zoom + ZOOM_STEP_PERCENT)}
+          size="icon"
+          variant="secondary"
+        >
+          <Plus aria-hidden="true" className="size-icon-md" />
+        </Button>
+        <Button onClick={() => selectManualZoom(100)} size="compact" variant="secondary">
+          100%
+        </Button>
+        <Button aria-pressed={zoomMode === "fit"} onClick={() => setZoomMode("fit")} size="compact" variant="secondary">
+          התאמה לרוחב
+        </Button>
+      </div>
+
+      <div
+        aria-label="מסמך קורות החיים — ניתן לגלול"
+        className="w-full overflow-auto overscroll-contain"
+        dir="ltr"
+        ref={viewportRef}
+        role="region"
+        style={{ height: PAGE_HEIGHT_PX * scale, maxHeight: "75vh" }}
+        tabIndex={0}
+      >
+        <div
+          className="relative mx-auto shrink-0"
+          style={{ height: PAGE_HEIGHT_PX * scale, width: PAGE_WIDTH_PX * scale }}
+        >
+          <iframe
+            className={cx(
+              "absolute left-0 top-0 rounded-control border border-cv-border bg-cv-surface",
+              frameClassName,
+            )}
+            onLoad={onLoad}
+            sandbox=""
+            src={src}
+            style={{
+              height: PAGE_HEIGHT_PX,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              width: PAGE_WIDTH_PX,
+            }}
+            title={title}
+          />
+        </div>
+      </div>
     </div>
   );
 };
