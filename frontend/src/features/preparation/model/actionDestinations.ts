@@ -17,6 +17,9 @@ const destinations: Record<string, (applicationId: string) => string> = {
      for exactly these links; one address answers them now. */
   analyze: routePaths.application,
   apply_analysis_decisions: routePaths.application,
+  /* `MatchingConfigurationEditor` is a control inside `PreparationView`, which this screen
+     renders, so the action resolves to the screen already holding it. */
+  edit_matching_configuration: routePaths.application,
   create_selection_plan: routePaths.application,
   create_draft: routePaths.application,
   archive_working_draft: routePaths.application,

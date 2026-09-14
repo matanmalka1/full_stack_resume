@@ -126,21 +126,30 @@ export const JobSnapshotHistory = ({
   applicationId: string;
   activeSnapshotId: string;
 }) => {
-  const history = useQuery(jobSnapshotHistoryOptions(applicationId, activeSnapshotId));
+  /* The history is read when it is asked for. Every posting it carries is a full job text,
+     and fetching all of them behind a disclosure nobody opened spent that on every visit to
+     the screen; it also put the panel's loading, error and empty states on a screen that
+     was not showing the panel, where they compete with the states that screen does own. */
+  const [open, setOpen] = useState(false);
+  const history = useQuery({ ...jobSnapshotHistoryOptions(applicationId, activeSnapshotId), enabled: open });
   return (
-    <details className="mt-4 border-t border-cv-border pt-4">
+    <details className="mt-4 border-t border-cv-border pt-4" onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary className="cursor-pointer text-support font-semibold">היסטוריית נוסחי משרה</summary>
-      <p className="mt-2 text-support text-cv-text-muted">הצגת ההיסטוריה אינה משנה את נוסח המשרה הפעיל.</p>
-      {history.isPending && <output className="block">טוען נוסחים שמורים…</output>}
-      {history.isError && (
-        <div role="alert">
-          <p>לא ניתן לטעון את היסטוריית המשרה.</p>
-          <Button variant="secondary" onClick={() => void history.refetch()}>
-            ניסיון חוזר
-          </Button>
-        </div>
+      {open && (
+        <>
+          <p className="mt-2 text-support text-cv-text-muted">הצגת ההיסטוריה אינה משנה את נוסח המשרה הפעיל.</p>
+          {history.isPending && <output className="block">טוען נוסחים שמורים…</output>}
+          {history.isError && (
+            <div role="alert">
+              <p>לא ניתן לטעון את היסטוריית המשרה.</p>
+              <Button variant="secondary" onClick={() => void history.refetch()}>
+                ניסיון חוזר
+              </Button>
+            </div>
+          )}
+          {history.data && <HistorySelection key={activeSnapshotId} history={history.data} />}
+        </>
       )}
-      {history.data && <HistorySelection key={activeSnapshotId} history={history.data} />}
     </details>
   );
 };

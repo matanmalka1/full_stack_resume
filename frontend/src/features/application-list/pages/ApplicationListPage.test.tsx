@@ -723,7 +723,7 @@ describe("ApplicationListPage", () => {
     renderPage({ queryClient });
 
     fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "מחיקת מועמדות" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "מחיקת המועמדות Acme" }));
     fireEvent.click(screen.getByRole("button", { name: "מחיקת המועמדות" }));
 
     await waitFor(() =>

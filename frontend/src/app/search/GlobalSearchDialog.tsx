@@ -24,7 +24,17 @@ const optionId = (item: ApplicationListItem): string => `global-search-result-${
 
 /* Find an Application from anywhere and go to it. The palette navigates; it does not
    manage records, so it is not a second board - the board's own filters, actions, and
-   pagination stay there, and a result here is drawn by the board's own summary. */
+   pagination stay there, and a result here is drawn by the board's own summary.
+
+   The one dialog in the app that does not go through `ui/Dialog`, deliberately: it has no
+   heading to open focus on and no footer, its whole surface is one combobox that must
+   hold focus from the first keystroke, and its results are the listbox that combobox
+   owns. The shared component would have to grow an option for each of those. What it does
+   share is the close policy - native <dialog>, so the focus trap, the inert background
+   and the restoration of focus are the platform's, Escape reaches the element's own
+   cancel behavior, a backdrop click dismisses, and a close does not escape to an owning
+   dialog. There is nothing typed here to discard: the search box is the question, not an
+   edit, and reopening deliberately starts a new one. */
 export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) => {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -55,16 +65,27 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
      empty state is for. */
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (!open || dialog === null || dialog.open) {
+    if (dialog === null) {
       return;
     }
 
-    // Opening a native dialog synchronizes this transient UI with the `open` prop.
-    // oxlint-disable-next-line react/set-state-in-effect
-    setSearch("");
-    setSelectedIndex(0);
-    dialog.showModal();
-    inputRef.current?.focus();
+    if (open && !dialog.open) {
+      // Opening a native dialog synchronizes this transient UI with the `open` prop.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setSearch("");
+      setSelectedIndex(0);
+      dialog.showModal();
+      inputRef.current?.focus();
+      return;
+    }
+
+    /* Closing through the element, not by unmounting it. Removing an open modal dialog
+       from the document leaves focus on the body; `close()` is what hands focus back to
+       whatever opened the palette - the header trigger, or the element the Cmd+K
+       shortcut was pressed from. */
+    if (!open && dialog.open) {
+      dialog.close();
+    }
   }, [open]);
 
   const selectItem = (item: ApplicationListItem) => {
@@ -73,11 +94,8 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Escape") {
-      onClose();
-      return;
-    }
-
+    /* Escape is left to the element's own cancel behavior, which closes the dialog and
+       restores focus; handling it here as well would close the palette twice. */
     if (items.length === 0) {
       return;
     }
@@ -96,21 +114,25 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
     }
   };
 
-  if (!open) {
-    return null;
-  }
-
   return (
     <dialog
+      /* `flex` is an author rule and would beat the user agent's `display: none` for a
+         closed dialog, leaving the palette on screen. The layout is applied only while the
+         element is open. */
       aria-label="מעבר מהיר למועמדות"
-      className="fixed left-1/2 top-24 m-0 flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
+      className="fixed left-1/2 top-24 m-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
       onClick={(event) => {
         if (event.target === dialogRef.current) {
           onClose();
         }
       }}
       onKeyDown={() => undefined}
-      onClose={onClose}
+      onClose={(event) => {
+        /* The palette can be opened over an owning dialog. React delegates the close
+           event, so without stopping it here this close would dismiss that dialog too. */
+        event.stopPropagation();
+        onClose();
+      }}
       ref={dialogRef}
     >
       <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3">

@@ -297,6 +297,14 @@ export const jobSnapshotHistoryOptions = (applicationId: string, activeSnapshotI
     queryKey: [...applicationDetailQueryKey(applicationId), "job-snapshots", activeSnapshotId],
     queryFn: async ({ signal }) => {
       const response = await apiRequest<JobSnapshotHistory>(jobSnapshotsPath(applicationId), { signal });
+      /* The cast above is a promise about the payload, not a check on it. A response that
+         does not keep that promise used to reach the component as a history and take the
+         whole screen down from inside its render, where nothing catches it. Refused here
+         instead, so a payload the contract does not describe surfaces as the failed read
+         this query already knows how to report, beside a panel nobody had opened. */
+      if (!Array.isArray(response.data?.items)) {
+        throw new Error("job snapshot history response did not carry an items array");
+      }
       return response.data;
     },
   });

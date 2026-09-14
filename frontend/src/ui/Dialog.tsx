@@ -8,6 +8,22 @@ import { cx } from "./cx";
 /* oxlint-disable jsx-a11y/no-noninteractive-element-interactions */
 import { IconButton } from "./IconButton";
 
+type DialogField = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+/* What the user has typed into this dialog, read from the dialog's own controls rather
+   than from a per-dialog flag, so a form dialog added later is covered without being
+   registered anywhere. The comparison is against a snapshot taken when the dialog opened,
+   not against each element's `defaultValue`: a form library writes its defaults into the
+   element, and `defaultValue` would report those writes as edits. */
+const fieldState = (dialog: HTMLDialogElement): string =>
+  Array.from(dialog.querySelectorAll<DialogField>("input, textarea, select"))
+    .map((field, index) =>
+      field instanceof HTMLInputElement && (field.type === "checkbox" || field.type === "radio")
+        ? `${index}:${String(field.checked)}`
+        : `${index}:${field.value}`,
+    )
+    .join("\u0000");
+
 interface DialogProps {
   children: ReactNode;
   /* A.5: Escape cancels only when cancelling cannot approve, discard, or overwrite
@@ -36,6 +52,7 @@ export const Dialog = ({
 }: DialogProps) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const openedWith = useRef("");
   const heightClass = size === "wide" ? "max-h-[85dvh]" : "max-h-[calc(100dvh-2rem)]";
 
   useEffect(() => {
@@ -47,6 +64,7 @@ export const Dialog = ({
 
     if (open && !dialog.open) {
       dialog.showModal();
+      openedWith.current = fieldState(dialog);
       headingRef.current?.focus();
       return;
     }
@@ -70,9 +88,17 @@ export const Dialog = ({
         }
       }}
       onClick={(event) => {
-        if (dismissible && event.target === event.currentTarget) {
-          onClose();
+        /* The backdrop is the one close a user reaches by accident, so it is the one that
+           refuses to discard work. Escape and the dialog's own cancel controls are
+           deliberate and still close; a click beside a dialog holding edits does nothing
+           rather than silently throwing them away. */
+        if (!dismissible || event.target !== event.currentTarget) {
+          return;
         }
+        if (fieldState(event.currentTarget) !== openedWith.current) {
+          return;
+        }
+        onClose();
       }}
       onKeyDown={() => undefined}
       onClose={(event) => {
