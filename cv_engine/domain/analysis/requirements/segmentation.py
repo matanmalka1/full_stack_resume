@@ -28,6 +28,15 @@ _TERMINAL = (".", "!", "?", ":", ";")
 #: readily as one per line, and the separator is the same either way.
 _ASK_BREAK = re.compile(r"[.;,]\s+(?:and\s+|or\s+)?")
 
+#: A heading is a label, not a sentence. Past this a bare line is prose, and
+#: closing the open block on it would demote every bullet below a posting's
+#: closing pitch.
+_MAX_HEADING_WORDS = 6
+
+#: What ends a sentence rather than a heading. `:` is not here: it is the one
+#: mark that *announces* a heading, and is handled before this is consulted.
+_SENTENCE_END = (".", ",", ";", "!", "?")
+
 
 @dataclass(frozen=True)
 class StatementLine:
@@ -100,7 +109,12 @@ def _collapse(text: str, base: int) -> tuple[str, tuple[int, ...]]:
 
 
 def _heading_section(
-    line: str, stripped: str, concepts: RequirementConceptStore
+    line: str,
+    stripped: str,
+    concepts: RequirementConceptStore,
+    *,
+    section: SectionKind,
+    at_block_start: bool,
 ) -> SectionKind | None:
     """Which section this line opens, or `None` if it states something instead.
 
@@ -114,6 +128,26 @@ def _heading_section(
     that merely ends in "preferred" swallow itself as a heading. A glyph marks
     an item rather than a heading, so a bulleted line is never one.
 
+    A bare heading the vocabulary does not configure - `Perks`, `What we
+    offer`, `Life at Acme` - used to open nothing *and close nothing*, so the
+    `Requirements:` above it stayed open to the end of the posting and a perk
+    bullet that happened to match a concept pattern was read as a mandatory
+    requirement the posting never stated. `Benefits:` already closes that
+    block by opening `other`; the colon there is typography, not meaning, so
+    the bare form closes it the same way. Configuring every possible heading
+    is not the alternative - the list would be the thing that silently fails.
+
+    What keeps that from swallowing the requirement in `SaaS experience
+    preferred` - the failure the paragraph above exists to prevent - is
+    `_statement_kind`: a line that states a requirement or a responsibility is
+    never a heading, whatever its shape, and that test is the requirement
+    vocabulary itself rather than a second list beside it. Three shape rules
+    narrow what is left to labels: a heading follows a break in the text
+    (`at_block_start`), so no continuation line and no line inside a run of
+    unbulleted statements can be one; it does not end like a sentence; and it
+    is short enough to be a label rather than prose that happens to use no cue
+    word.
+
     A question mark alone no longer announces anything. "Do you have 3+ years
     of sales experience?" is a requirement asked as a question, and discarding
     it reported a posting that stated requirements as one that stated none.
@@ -122,8 +156,17 @@ def _heading_section(
         return _section_of(stripped.casefold(), concepts)
     if _BULLET.match(line):
         return None
-    section = concepts.heading_sections.get(heading_key(stripped))
-    return cast("SectionKind | None", section)
+    configured = concepts.heading_sections.get(heading_key(stripped))
+    if configured is not None:
+        return cast("SectionKind", configured)
+    if (
+        at_block_start
+        and not stripped.endswith(_SENTENCE_END)
+        and len(stripped.split()) <= _MAX_HEADING_WORDS
+        and _statement_kind(stripped, section, False, concepts) is None
+    ):
+        return _section_of(stripped.casefold(), concepts)
+    return None
 
 
 def _section_of(heading: str, concepts: RequirementConceptStore) -> SectionKind:
@@ -222,7 +265,12 @@ def _segments(text: str, concepts: RequirementConceptStore) -> list[_Span]:
             flush()
             open_ended = False
             continue
-        heading = _heading_section(line, stripped, concepts)
+        # `not buffered` is "the text broke here": the line above was blank, a
+        # heading, or the start of the posting. A heading sits after such a
+        # break; a continuation or the middle of an unbulleted run never does.
+        heading = _heading_section(
+            line, stripped, concepts, section=section, at_block_start=not buffered
+        )
         if heading is not None:
             # The statement above closes under the heading it was written
             # under, so `flush` runs before the section changes.
@@ -274,6 +322,41 @@ def requirement_lines(text: str, concepts: RequirementConceptStore) -> list[Stat
     return [line for line in statement_lines(text, concepts) if line.kind == "requirement"]
 
 
+def ask_bounds(text: str) -> list[tuple[int, int]]:
+    """Where each separate demand inside one statement's text begins and ends.
+
+    One definition of "where one demand stops and the next starts", used by
+    everything that has to answer that question. `extraction_completeness`
+    counts by these (through `statement_asks`), and `_clause_around` reads a
+    match's qualifiers out of the one it lands in - two measures that must
+    agree, because a clause wider than the demand hands a match a qualifier
+    belonging to the demand beside it.
+
+    The direction of the remaining error is deliberate and agrees with
+    `_segments`' documented bias. An enumeration cut into more asks than the
+    employer meant reports *less* understood than it was; merging demands
+    reports more. Of the two, the flattering one is the one worth ruling out,
+    so an ambiguous separator cuts.
+
+    Cuts tile the text exactly, so no extracted span can fall into a gap
+    between asks and be counted unread. A fragment shorter than a statement's
+    own minimum is not a demand but a list entry or a trailing qualifier, so it
+    stays joined to the ask before it - which is what keeps the "a plus" in
+    "Experience with Salesforce, a plus." governing the Salesforce it follows -
+    and a statement whose parts are all fragments is one ask: its whole self.
+    """
+    cuts = [0]
+    for separator in _ASK_BREAK.finditer(text):
+        if len(text[cuts[-1] : separator.start()].strip()) >= _MIN_STATEMENT:
+            cuts.append(separator.end())
+    cuts.append(len(text))
+    asks = [(cuts[index], cuts[index + 1]) for index in range(len(cuts) - 1)]
+    if len(asks) > 1 and len(text[asks[-1][0] : asks[-1][1]].strip()) < _MIN_STATEMENT:
+        asks[-2] = (asks[-2][0], asks[-1][1])
+        asks.pop()
+    return asks
+
+
 def statement_asks(text: str, line: StatementLine) -> list[tuple[int, int]]:
     """The separate demands one statement makes, as posting offsets.
 
@@ -297,28 +380,6 @@ def statement_asks(text: str, line: StatementLine) -> list[tuple[int, int]]:
       sentence, and the statement-level split `_segments` could make - by
       sentence, or by relaxing the continuation rule at `_segments`' documented
       bias - never cuts it.
-
-    The direction of the remaining error is deliberate and agrees with that
-    bias comment. An enumeration cut into more asks than the employer meant
-    reports *less* understood than it was; merging demands reports more. Of the
-    two, the flattering one is the one worth ruling out, so an ambiguous
-    separator cuts.
-
-    Cuts tile the statement exactly - a separator belongs to the ask that
-    follows it - so no extracted span can fall into a gap between asks and be
-    counted unread. A fragment shorter than a statement's own minimum is not a
-    demand but a list entry or a label, so it stays joined to the ask before
-    it, and a statement whose parts are all fragments is one ask: its whole
-    self.
     """
     raw = text[line.start : line.end]
-    cuts = [0]
-    for separator in _ASK_BREAK.finditer(raw):
-        if len(raw[cuts[-1] : separator.start()].strip()) >= _MIN_STATEMENT:
-            cuts.append(separator.end())
-    cuts.append(len(raw))
-    asks = [(cuts[index], cuts[index + 1]) for index in range(len(cuts) - 1)]
-    if len(asks) > 1 and len(raw[asks[-1][0] : asks[-1][1]].strip()) < _MIN_STATEMENT:
-        asks[-2] = (asks[-2][0], asks[-1][1])
-        asks.pop()
-    return [(line.start + start, line.start + end) for start, end in asks]
+    return [(line.start + start, line.start + end) for start, end in ask_bounds(raw)]

@@ -13,9 +13,162 @@ this session (file:line cited), independent of the external review's own citatio
 
 **Stage 1+2 נחת בקוד** (הסשן שאחרי התכנון). **Stage 3 נחת חלקית: A11 נסגר,
 A2 נעצר כשאלת מדיניות פתוחה** (ר' להלן). **Stage 4 נחת במלואו: D4 סגור,
-D10 הוגדר-מחדש ואז נסגר** (ר' להלן). כל השאר — Stage 5-8 — עדיין תכנון
-בלבד. 23 ממצאים מאומתים (D1-D10, A1-A12, C1-C2; ‏A4 ו-D10 אינם באגים עצמאיים),
-סדר תיקון ב-8 שלבים. ‏`A12` נוסף ב-Stage 3, מתוך היישום ולא מהסקירה המקורית.
+D10 הוגדר-מחדש ואז נסגר** (ר' להלן). **Stage 6 נחת במלואו: D5, D6, D9 סגורים,
+והחלטה #10 הוכרעה מחדש ונשארה כפי שהייתה** (ר' להלן). **מתוך Stage 8: C2 סגור;
+D7 נשאר פתוח וחסום על A2.** 23 ממצאים מאומתים (D1-D10, A1-A12, C1-C2; ‏A4
+ו-D10 אינם באגים עצמאיים), סדר תיקון ב-8 שלבים. ‏`A12` נוסף ב-Stage 3, מתוך
+היישום ולא מהסקירה המקורית.
+
+**הצעד הבא דורש הכרעת מוצר, לא עוד סשן ביצוע.** שני השלבים שנשארו פתוחים —
+**Stage 5** (`D8`, `C1`) ו-**Stage 7** (`A5`-`A10`, `A12`) — חסומים שניהם על
+החלטות מוצר פתוחות: #5 ו-#6 עבור Stage 5, ו-#4 עבור Stage 7. ‏**A2** חסום על
+שלוש שאלותיו (ר' "A2 — למה נעצר"), ו-**D7** חסום על A2. אין כרגע שלב ביצוע
+שאפשר לפתוח בלי להכריע קודם באחת מההחלטות האלה.
+
+### מה נחת ב-Stage 6 (+ C2 מ-Stage 8)
+
+| ממצא | סטטוס | מה נחת |
+| --- | --- | --- |
+| **D5** | **סגור** | `mandatory` מחושב **לפני** הדה-דופ, ומופע mandatory מחליף מופע preferred שכבר נרשם |
+| **D6** | **סגור** | `_SENTENCE` נמחק; `_clause_around` חותך לפי `ask_bounds` — הגדרה אחת משותפת עם `extraction_completeness` |
+| **D9** | **סגור** | כותרת ערומה לא-מוגדרת סוגרת את הבלוק שמעליה (פותחת `other`), מוגנת בארבעה תנאים |
+| **C2** | **סגור** | הדה-דופ המת נמחק; הגארד הנגזר הורחב ב-`test_no_concept_shadows_a_legacy_rule_gap` |
+| **החלטה #10** | **הוכרעה מחדש — נשארה `mandatory=False`** | הנימוק הוחלף בנימוק שלא פג עם D9 |
+
+**D5 — ההכרעה: המופע החזק מייצג את הקונספט, לא המופע הראשון.** הדה-דופ עצמו
+נשמר כלשונו ("A posting restating one requirement in different words states one
+requirement, not five") — מה שהשתנה הוא *איזה* מופע שורד. `mandatory` עלה מעל
+בדיקת הדה-דופ, ומופע `mandatory=True` **מחליף** ברשימה מופע `mandatory=False`
+שכבר נרשם, כולל ה-`span` וה-offsets שלו. ההחלפה, ולא עדכון-במקום של
+ה-`mandatory` בלבד, היא מה שמזיז גם את ה-offsets — וזה נדרש: `mapped_spans`
+נגזר מהם, כך שאחרי ההחלפה השורה שנשארת **unmatched** היא פסקת ה-About-us ולא
+הבולט המפורש. עדכון-במקום היה משאיר את הדרישה המפורשת מדווחת כשורה שלא נקראה.
+
+**ה-`ordinal` של מופע שהוחלף אינו ממוחזר.** המחליף צורך `ordinal` חדש
+מ-`seen[identity]`, וה-`ordinal` של המוחלף נשאר "שרוף". לכן `ordinal` יכול
+להיות לא-רציף (בדוגמת D5: הישות היחידה ששרדה נושאת `ordinal=1`). זה מכוון
+ומתועד בקוד: `ordinal` הוא דיסקרימיננט התנגשות בין שני ספנים שמתנרמלים אותו
+דבר, לא מיקום; הנפקה חוזרת שלו היא הדבר היחיד שיכול לתת לשתי דרישות חיות
+`requirement_id` זהה.
+
+**D6 — ההכרעה: לאחד לקבוע אחד, לא להשאיר שתי הגדרות.** `_SENTENCE` נמחק לגמרי.
+`segmentation.ask_bounds()` חולץ מתוך `statement_asks` כפונקציה על טקסט גולמי,
+ו-`_clause_around` לוקח את ה-ask שה-match יושב בו (ואם ה-match חוצה מפריד — את
+איחוד כל ה-asks שהוא נוגע בהם, כך שהקלוז תמיד מכיל את ה-match). `statement_asks`
+נשארה בדיוק מה שהייתה ומאצילה ל-`ask_bounds`, כך ש-**`_ASK_BREAK` לא שונה ולכן
+ה-completeness (המכנה של D4) לא זז בכלל** — נמדד: אפס שינוי ב-`asks` על כל 22
+פיקסצ'רי המודעות.
+
+*למה איחוד ולא הוספת פסיק ל-`_SENTENCE`:* פסיק לבדו היה שובר את הכיוון ההפוך.
+ב-"Experience with Salesforce, a plus." הקוואליפייר שאחרי הפסיק שייך אחורה, ו-
+`[.;,]` בלי שומר היה הופך את הבולט הזה ל-mandatory. ‏`ask_bounds` כבר נושא את
+השומר הנכון (מפריד שמשאיר שבר קצר מ-`_MIN_STATEMENT` אינו גבול) וגם את השומר על
+`3.5` (‏`\s+` אחרי הפיסוק) — שומר ש-`_SENTENCE` מעולם לא היה לו. שתי הגדרות
+לשאלה אחת הן שתי תשובות: קלוז רחב מה-ask שהמדד סופר יכול לקחת קוואליפייר מה-ask
+שלידו, וזה בדיוק הבאג.
+
+**D9 — ההכרעה: לסגור, לא להרחיב מה נחשב heading.** שאלת הפתיחה ("איזה section
+זה פותח") ושאלת הסגירה ("האם זה מסיים את הקודם") הופרדו. כותרת ערומה שאינה
+marker מוגדר פותחת `other` — בדיוק מה ש-`Benefits:` כבר עושה, כי הנקודתיים שם
+טיפוגרפיה ולא משמעות. **ארבעה תנאים, ושלושתם הראשונים נגזרים ולא רשימה:**
+
+1. `_statement_kind(...) is None` — **זה השומר שהפסקה בדוקסטרינג דורשת.** שורה
+   שמנסחת דרישה או אחריות לעולם אינה כותרת, ולכן "SaaS experience preferred"
+   (שיש בו cue) לא נבלע. השומר **הוא ווקבולרי הדרישות עצמו**, לא רשימה שנייה
+   לידו.
+2. `at_block_start` (‏`not buffered` ב-`_segments`) — הטקסט נשבר כאן: השורה
+   שמעל ריקה, כותרת, או תחילת המודעה. זה מוציא מכלל אפשרות שורת המשך ושורה
+   בתוך רצף סטייטמנטים לא-מבולטים.
+3. לא מסתיימת ב-`.,;!?`.
+4. עד `_MAX_HEADING_WORDS` (6) מילים — כותרת היא תווית, לא פרוזה.
+
+**החלטה #10 — הוכרעה מחדש, והתשובה לא זזה: `mandatory=False`.** הנימוק **כן**
+זז, וזה העיקר: הנימוק הישן היה "‏`section` שגוי כי D9 לא תוקן", והוא פג עכשיו.
+הנימוק שהחליף אותו אינו תלוי באמינות `section`: הישות הזו קיימת **בדיוק כי שום
+דבר לא קרא מה השורה מבקשת**. ‏`undetermined` הוא "לא הצלחנו לומר", ו-
+`mandatory=True` הוא לומר — טענת חובה על טקסט שהדרישה שבו מעולם לא זוהתה. ל-
+דרישה שהותאמה, `mandatory` הוא קריאה מאומתת של ספן שהמנוע הבין; כאן אין קריאה
+כזו לדווח. ובפועל לא נאבד כלום: `fit_score` מתמחר undetermined באפס בשני
+המשקלים, ו-`requirements-unmapped` כבר מדווח על קיומן ללא תלות ב-`mandatory`
+או ב-`section`. הדוקסטרינג של `undetermined_requirement` עודכן בהתאם.
+
+**C2 — ההכרעה: מחיקה, כפי שהומלץ.** `covered_text` והמסנן נמחקו; במקומם הערה
+שאומרת למה דה-דופ אינו אפשרי כאן. ההנמקה: `gap.requirement` הוא ביטוי ש-
+`derive_gaps` כותבת, ו-`requirement.text` הוא ספן שנחתך מהמודעה הזו; שוויון
+ביניהם הוא צירוף מקרים של ניסוח, לא טענה שאותה דרישה נקראה פעמיים — ומודעה
+שניסחה בולט בדיוק כתווית של כלל הייתה **מאבדת** את ה-gap של אותו כלל. דה-דופ
+אמיתי דורש ציר משותף (קונספט ששני הצדדים מכנים), ולכללים אין כזה: אין קונספט
+שמדל Salesforce/CRM/SaaS/partnerships — וזו בדיוק הסיבה שהכללים עדיין קיימים.
+**לא בחרתי בציר אמיתי** כי הוא היה דורש להמציא התאמה שאינה קיימת, ולהפיל
+rule-gaps בשקט — כלומר לשנות `gaps` ו-`fit` בלי שאף אחד ביקש.
+
+**הגארד הנגזר.** לא נוסף טסט חדש: `test_no_concept_shadows_a_legacy_rule_gap`
+הוא הטסט הקרוב (אותו נושא בדיוק) והורחב. שני הצדדים נגזרים — התוויות ע"י
+**הרצת** `derive_gaps` על ה-probes לכל `Track` (‏6 תוויות, כולל
+`8+ years of Development experience` אחרי שנוסף probe שנים), והצד השני
+מווקבולרי הקונספטים הטעון. הטענה: **אף `pattern` של קונספט אינו מתאים לאף
+תווית של כלל**. נבדק שהוא נושך: קונספט עם פטרן `salesforce` היה מפיל אותו.
+
+### מה זז בפועל — חמש התלויות שהמסמך דרש לדווח עליהן
+
+**על 22 פיקסצ'רי המודעות ב-`tests/` — אפס שינוי בכל אחת מהחמש.** נמדד ישירות
+(‏`requirement_lines`, ‏`asks`, ‏`extracted` על כל שדותיו כולל `requirement_id`,
+‏`unmatched_requirement_lines`, ‏`completeness`, ‏`state`, ‏`extraction_confidence`
+בשני המצבים של `understood_elsewhere`): הדיף ריק לחלוטין. **לכן שום טסט קיים
+לא נשבר — וזו לא הצלחה אלא ממצא: לקורפוס לא הייתה שום כיסוי לאף אחד
+מ-D5/D6/D9.** זו הסיבה שנוספו טסטי רגרסיה, ואומת ש-שלושתם אדומים על הקוד
+שלפני התיקון.
+
+להלן ההשפעה על שלושת הקלטים של הממצאים עצמם (לפני → אחרי):
+
+| # | תלות | D5 | D6 | D9 |
+| --- | --- | --- | --- | --- |
+| 1 | `extraction_completeness` | `1/3` → `1/3` (לא זז) | `1.0` → `1.0` | **`2/3` → `2/2`** (‏"Free gym membership" יצא מהמכנה) |
+| 2 | `unmatched_requirement_lines` | **הבולט המפורש → פסקת About-us** (אותו מספר, שורה אחרת) | `[]` → `[]` | **`["Free gym membership"]` → `[]`** |
+| 3 | `requirement_id` של ישות סינתטית | השתנה (שורה אחרת) | — | **ישות אחת נעלמה** |
+| 4 | `by_ai` / `extraction_is_failed` (מכנה `len(requirement_lines)`) | `2` → `2` | `1` → `1` | **`3` → `2`** |
+| 5 | `seen`/`ordinal` של הנתיב הדטרמיניסטי | **`ordinal 0` → `1`**, ‏`mandatory False` → **`True`** | `mandatory False` → **`True`** (שנים) | `mandatory True` → **`False`** (‏english) |
+
+**הכיוון בכל שלושתם הוא הכיוון הנכון:** D5 ו-D6 מחזירים `mandatory=True` לדרישות
+שהמודעה ניסחה במפורש; D9 מוריד `mandatory` מטקסט שהמודעה מעולם לא ניסחה כדרישה,
+ומוציא בולט הטבות מהמכנה.
+
+### `extraction_version` הועלה `"3"` → `"4"` — וזה ממפתח מחדש כל requirement_id
+
+**נדרש, ולא כתופעת לוואי של נגיעה בקונפיג.** D5/D6/D9 משנים את ה-`mandatory` של
+דרישות ש-`requirement_id` שלהן היה נשאר **זהה** (‏`mandatory` אינו בפיילואד של
+ה-id). זה בדיוק התרחיש שהדוקסטרינג של `requirement_id` מצהיר שהשדה נועד למנוע:
+"a semantics change does not silently inherit an acceptance recorded against the
+old meaning". ‏acceptance שנרשם כשהמנוע אמר "preferred" היה עונה בשקט על
+"mandatory". התקדים זהה ל-D10 (‏`"2" → "3"`).
+
+**המחיר, במפורש:** כל ה-ids בקורפוס ממופתחים מחדש; acceptance שנרשם מול ניתוח
+ישן לא יענה על ניתוח חדש של אותה מודעה. רשומות שכבר נכתבו קפואות תחת `"2"`/`"3"`
+ולא נגעו (החלטה #8). **זו העלאה שנייה בשני שלבים** — ר' פריט מעקב 14.
+**הנגיעה היחידה ב-`config/requirements.json` היא שורת הגרסה.** אף פטרן, cue או
+marker לא שונה — כל תיקוני D5/D6/D9 הם בקוד.
+
+### מה נשאר מחוץ להיקף, במפורש
+
+**‏D6 בנתיב ה-AI (`interpretation.py:55-72`) — לא נגעתי, בכוונה.** אותה
+א-סימטריה אכן חוזרת שם: `quoted = source_text[start:end]` הוא ה-quote המלא, אין
+בו `_clause_around` כלל, ולכן ספק שמצטט את כל הבולט מקבל `preferred=True`
+מ-"advantage" ששייך לחצי השני — וההצעה שלו נדחית ב-"interpretation strengthens
+an explicit preferred requirement". **למה לא בהיקף:** זהו **שער** על טענת ספק,
+לא מדד ניקוד — הדומיין של Stage 7, שמקובץ אחרון במפורש "because they require
+the most product judgment (how strict should a gate be)". כיוון התיקון שם הוא
+**הרפיית שער**, וההנמקה של D6 ("הכיוון השמרני") אינה עוברת לשם: בנתיב
+הדטרמיניסטי טעות מחמירה, בשער היא מרפה. נרשם כפריט מעקב 15.
+
+**‏D7 — לא נגעתי, כתנאי עצירה.** אומת מחדש בקוד: `concept_classification_
+completeness` (confidence.py:65) הוא הגורם `classified` של `extraction_confidence`
+(שורה 131), והוא עדיין קבוע `1.0` בכל נתיב קיים. נשאר פתוח עד ש-A2 נסגר.
+
+**גבול A2 לא נגעו בו.** מבנה `extraction_confidence` — קיום גורם `classified`,
+רצפת `understood_elsewhere`, צורת המכפלה — זהה בייט-לבייט. `confidence.py` לא
+נגע כלל בשלב הזה. **לא התברר שום מקום שבו D5/D6/D9 מחייבים נגיעה שם.**
+
+**החלטות #4, #5, #6 — לא נגעו ולא הוכרעו.**
 
 ### מה נחת ב-Stage 4
 
@@ -272,12 +425,10 @@ concepts, *, understood_elsewhere)`. **לנתיב ה-AI אין `list[ExtractedRe
 - **D4-D10 (פרט ל-D2), A2, A5-A11, C1, C2 — ללא שינוי.** שייכים ל-Stage 3-8.
   (‏D4 ו-D10 נסגרו מאז ב-Stage 4; ר' למעלה.)
 
-**הצעד הבא:** **Stage 6** (`D5`, `D6`, `D9`) — באגי סדר בחילוץ הדטרמיניסטי,
-עצמאיים מהכול ו**ללא אף החלטה פתוחה**. Stage 5 (`D8`, `C1`) חסום על החלטות
-#5 ו-#6 שעדיין פתוחות, ולכן אינו הצעד הבא למרות מיקומו ברשימה. ל-Stage 6 יש
-כבר פריט נכנס פתוח מ-Stage 2 (החלטה #10): כש-`line.section` נעשה אמין, להחליט
-מחדש אם `undetermined_requirement` עובר מ-`mandatory=False` קבוע ל-
-`line.section == "requirements"`. A2 חוזר לשולחן כשההכרעות שלו נסגרות.
+**~~הצעד הבא: Stage 6.~~ נחת** (ר' "מה נחת ב-Stage 6" בראש המסמך), יחד עם C2
+מ-Stage 8 ועם פריט הכניסה של החלטה #10. **מה שנשאר אינו שלב ביצוע:** Stage 5
+(`D8`, `C1`) חסום על החלטות #5/#6, Stage 7 חסום על #4, ו-A2 — ואחריו D7 —
+חסום על שלוש השאלות שלו.
 
 **החלטות #1-#3 ו-#7-#12 סגורות (RESOLVED)**, כל אחת עם נימוק מלא במקום — ראה
 **Open product decisions** למטה. הן מכסות: מה קורה לשורת דרישה שלא מופתה
@@ -313,8 +464,9 @@ implementation file plan" למטה, שבע קבצים בסדר עריכה מוג
 2. **`undetermined_requirement()` לא קובעת `.extractor`** (נשאר `None`, כמו
    בנתיב הדטרמיניסטי). ר' ההערה בסוף החלטה #11 — להשוות כש-Stage 3 נוגע
    ב-`correct_interpretation`.
-3. **`mandatory` של ישות סינתטית** — לשקול מחדש מעבר ל-`line.section ==
-   "requirements"` אחרי ש-D9 מתוקן (Stage 6). ר' החלטה #10.
+3. **~~`mandatory` של ישות סינתטית~~ — נסגר ב-Stage 6.** נשקל מחדש אחרי ש-D9
+   תוקן, וההכרעה נשארה `mandatory=False` — עם נימוק חדש שאינו תלוי באמינות
+   `section`. ר' "מה נחת ב-Stage 6".
 4. **~~D7 מתחיל לזוז.~~ שגוי — תוקן ב-Stage 4.**
    `concept_classification_completeness` חתומה על
    `list[ExtractedRequirement]`, לא על `list[Requirement]`, ו-
@@ -380,6 +532,34 @@ implementation file plan" למטה, שבע קבצים בסדר עריכה מוג
     הוא גבול מוצהר של המועמד, ו-`REVIEW_DECISION_JOB` מתועד כך במפורש), אבל
     זה גם הסיבה שכל מודעה שמבקשת מכירה בחברת טכנולוגיה מקבלת `fit` לכל היותר
     בינוני. ראוי לוודא שזו עדיין העמדה הרצויה כשנוגעים בכיול הסף (D3).
+
+### פריטי מעקב שנוספו ב-Stage 6
+
+14. **`extraction_version` הועלה פעמיים בשני שלבים רצופים (`"2"→"3"→"4"`).**
+    כל העלאה ממפתחת מחדש את כל הקורפוס ומבטלת acceptances על מודעות שעדיין
+    בטיפול — גם כשהמשמעות של אותה מודעה ספציפית לא זזה כלל (‏Stage 6: אפס
+    מ-22 הפיקסצ'רים זזו). המנגנון גס מדי מכדי למפתח מחדש רק את המודעות
+    שהושפעו, ואין היום חלופה. **מדד להחלטה:** אם העלאות נעשות תכופות ומייצרות
+    חיכוך אמיתי, זו הנקודה לשקול ציר גרסה עדין יותר (למשל גרסה פר-קונספט
+    ב-`requirement_id`, כך שהעלאה נוגעת רק בדרישות שהקונספט שלהן השתנה). לא
+    לפעולה עכשיו — הרחבה של פריט 12.
+15. **‏D6 לא תוקן בנתיב ה-AI, ולכן שתי ההגדרות של "קלוז" כבר לא מסכימות.**
+    הנתיב הדטרמיניסטי קורא קוואליפייר מתוך ה-ask (‏`ask_bounds`); השער ב-
+    `interpretation.py:55-72` קורא אותו מכל ה-quote. ספק שמצטט את הבולט השלם
+    ב-"Must have 5+ years..., European market ... is an advantage." יקבל
+    `preferred=True` ותידחה לו הצעת `mandatory` נכונה. זה **שער**, לא מדד,
+    ולכן שייך ל-Stage 7 ולהחלטה #2 (עד כמה שער אמור להיות מחמיר) — ר' "מה
+    נשאר מחוץ להיקף" בראש המסמך.
+16. **בולט הטבות עדיין נספר במכנה, גם אחרי D9.** על הקלט של D9, השורה
+    "Native English speakers get an extra paid day off every quarter" עברה
+    ל-`section=="other"` ואיבדה את ה-`mandatory` — אבל היא **עדיין**
+    `requirement_line`, כי `_statement_kind` נותן ל-cue לגבור על ה-section
+    ("native" הוא cue). לכן היא עדיין מייצרת `Requirement` (‏`mandatory=False`,
+    ‏warning gap) ועדיין במכנה. זו התנהגות **מכוונת ומתועדת** של
+    `_statement_kind` ("a cue outranks the section, in both directions"),
+    לא שארית של D9 — אבל זו הנקודה שבה כלל ה-cue משלם על עצמו. מדד להחלטה:
+    אם בולטי הטבות שמזדמנים להכיל cue מתבררים כשכיחים, זו שאלת כיול של
+    `requirement_cues`, לא של הסגמנטציה.
 
 ## Root cause, restated precisely
 
@@ -562,13 +742,17 @@ one that actually decided (coverage), and the one approval reason that *did* fir
 (`low-confidence`) being clearable by an override that doesn't address its actual cause
 when the cause is extraction rather than classification.
 
-### Stage 6 — Deterministic extraction ordering bugs (independent of everything above)
+### Stage 6 — Deterministic extraction ordering bugs — **landed**
 
 `D5`, `D6`, `D9` — dedup-before-mandatory-computed; a shared clause letting a nearby
 "advantage" demote an explicit "must have" match; and a bare (no-colon) heading that
 doesn't match a configured marker silently failing to close whatever section was open,
 letting later bullets inherit `section=="requirements"` — and with it `mandatory=True`
-— with no marker of their own.
+— with no marker of their own. **All three closed**, along with the inbound item
+decision #10 left open (re-decided, answer unchanged, justification replaced), and
+`extraction_version` bumped `"3"` → `"4"` because all three change the meaning of a
+`mandatory` carried under an otherwise-identical `requirement_id`. Full statement at
+the top, under "מה נחת ב-Stage 6".
 
 ### Stage 7 — AI interpretation/attestation gate integrity (independent domain)
 
@@ -580,15 +764,19 @@ of them in one respect: the others are gates that are weaker than intended, whil
 Grouped last only because they require the most product judgment (how strict should a
 gate be before it starts rejecting good-faith provider output — see decision #2).
 
-### Stage 8 — Cleanup (do last; no behavior depends on these)
+### Stage 8 — Cleanup — **C2 landed, D7 still blocked**
 
 `D7`, `C2` — a completeness sub-score that is a mathematical constant under every
 current code path, and a dedup check whose two sides can never produce equal strings.
 
-**`D7` is blocked, and not by anything in Stage 8.** It *is* `extraction_confidence`'s
-`classified` factor, so removing, replacing, or reformulating it decides A2's open
-question 1 as a side effect — the exact thing A2's boundary forbids. `C2` carries no
-such constraint and can land on its own.
+- **`C2` — landed**, with Stage 6, as the finding itself predicted it could. Deleted
+  as dead, per the recommended default, with the reasoning left in place of the code
+  and the derived guard folded into `test_no_concept_shadows_a_legacy_rule_gap` rather
+  than added beside it. See "מה נחת ב-Stage 6" at the top.
+- **`D7` is blocked, and not by anything in Stage 8.** It *is*
+  `extraction_confidence`'s `classified` factor, so removing, replacing, or
+  reformulating it decides A2's open question 1 as a side effect — the exact thing
+  A2's boundary forbids. Re-verified against the code in this session and untouched.
 
 ---
 
@@ -601,9 +789,9 @@ such constraint and can land on its own.
 | **D3** | גבוה — סף האישור עובר בקריאה חלקית | [approval.py:14](../cv_engine/domain/analysis/approval.py#L14), [confidence.py:99-123](../cv_engine/domain/analysis/requirements/confidence.py#L99-L123), [classification.py:153-168,450-454](../cv_engine/domain/analysis/classification.py#L153-L168) | עם `classified=1.0` (ר' D7) והנוסחה `(0.4+0.6·completeness)·classified`, מספיק `completeness≈0.56` כדי לחצות `0.72/0.98≈0.735` | Stage 1+2 (החלטה #1 **RESOLVED=YES**) — אך הסף `0.72` עצמו לא מושפע מהחלטות #1-#3 (אלה קבעו *איך* partial extraction מיוצג, לא *מה הסף* לאישור על ייצוג כזה); D3 נשאר שאלת כיול פתוחה, לא מכוסה ע"י אף החלטה שנפתרה | **CONFIRMED** — שחזרתי את החשבון ישירות מהנוסחאות; מספרי הדוגמה (0.735, c≥0.558) עקביים עם קריאת הקוד, בהנחת `classification_confidence` גבוה טיפוסי. |
 | **D4** | בינוני-גבוה — בולט עם 3 בקשות נספר כיחידת "הבנה" אחת | [confidence.py:14-25](../cv_engine/domain/analysis/requirements/confidence.py#L14-L25), [extraction.py:118-167](../cv_engine/domain/analysis/requirements/extraction.py#L118-L167), [segmentation.py:241](../cv_engine/domain/analysis/requirements/segmentation.py#L241) | `_understood` בודק חפיפת offset בין ה-`StatementLine` המלא (כל המשפט) לבין ה-`ExtractedRequirement.span` שהוא רק תת-מחרוזת שהרג'קס תפס — משפט אחד ארוך עם 3 דרישות, רק 1 חולצה, נספר כ"מובן" במלואו | עצמאי | **CONFIRMED** — `item.start`/`item.end` הם offsets של ה-regex match בלבד (extraction.py:141-165), לא של המשפט; `_understood` (confidence.py:21-25) סופר overlap ברמת ה-line, לא ברמת המושג. `segmentation.py:241` מוסיף אפקט נלווה: שורה שממשיכה משפט קודם (lowercase, ללא bullet) ממוזגת לאותה יחידה. **סגור ב-Stage 4** — דרך (ב): `statement_asks` היא יחידת המדידה, הסגמנטציה לא נגעה. ר' "מה נחת ב-Stage 4". |
 | **D10** | גבוה — פסקה ריאליסטית שלמה נספרת כ-N=1 ומדליקה כשל קטסטרופלי | [segmentation.py:181-248](../cv_engine/domain/analysis/requirements/segmentation.py#L181-L248), [confidence.py:42-96](../cv_engine/domain/analysis/requirements/confidence.py#L42-L96), [helpers.py:48-56](../tests/helpers.py#L48-L56) | `PAYME_TECH_SALES_JOB` נשמר כפסקה פיזית אחת ובה כמה משפטים ותיאור תפקיד לצד "Prefer inside Sales experience...". ה-cue `experience` מסווג את כל הפסקה כ-`requirement_line` יחיד; אף concept אינו ממפה אותה → `completeness=0/1`, `state="unparsed"`, ‏`requirements-unmapped` ו-`extraction-failed`. בוליאן החלטה #2 מבחין רק בין 0 ליותר מ-0 ואינו יכול לדעת ש-N=1 אינו דרישה יחידה אלא פסקה שלמה | תלוי D4; Stage 4 | **CONFIRMED** על הקלט הריאלי הקיים: `requirement_lines==1`, ‏`extracted==0`. הטסט האדום: `tests/test_selection.py::test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations` (`fit=UNKNOWN` במקום `HIGH`). החלטה #2 (`0 מתוך N`) משמעותית רק לאחר ש-N מייצג דרישות ולא פסקאות. **הוגדר-מחדש ואז נסגר ב-Stage 4.** אחרי D4 ‏`N=12` בקשות ולא פסקה אחת, והתשובה נשארה `0/12` — כלומר `extraction_failed=True` היה הבוליאן **עובד**, לא נכשל. הכשל האמיתי היה בווקבולרי: התבנית דרשה `compan\w*` והמודעה אומרת "tech-related industry". התבנית הורחבה ו-`extraction_version` עלה ל-`"3"`; PAYME עכשיו `partial` ו-`fit=LOW`. ‏`HIGH` המקורי היה ה-false green של D1 ולא הורווח מעולם. ר' "D10 — איך נסגר". |
-| **D5** | גבוה — dedup קובע mandatory/preferred לפי המופע הראשון | [extraction.py:132-147](../cv_engine/domain/analysis/requirements/extraction.py#L132-L147), [requirements.json:43-68](../config/requirements.json#L43-L68) | דה-דופ (שורה 132-136, `concept`+`demanded`) רץ **לפני** חישוב mandatory/preferred (שורה 147) → אזכור ראשון תחת "About us" (preferred) "בולע" את המופע השני תחת "Requirements:" (mandatory) | עצמאי | **CONFIRMED, עם תנאי מוקדם שאומת**: cue-word matching ב-`_statement_kind` ([segmentation.py:169-171](../cv_engine/domain/analysis/requirements/segmentation.py#L169-L171)) הוא **ללא תלות בסקשן** — מילה כמו "experience" (ברשימת `requirement_cues`, config:51) בפסקת "About us" גם היא מסמנת את המשפט כ-`kind="requirement"`, ולכן נכנס בכלל למנוע ה-extraction (extraction.py:111: `if span.kind != "requirement": continue`). זה מה שהופך את התרחיש לריאלי, לא תיאורטי בלבד. |
-| **D6** | גבוה — clause משותף מאפשר ל"advantage" סמוך לבטל "must have" מפורש | [extraction.py:20,57-80,140,147](../cv_engine/domain/analysis/requirements/extraction.py#L20-L147) | `_SENTENCE=[.;\n]` לא חותך על פסיק; "Must have 5+ years..., European market an advantage." — אין parenthetical, אז ה-clause הוא כל המשפט; `"advantage"∈preferred_markers` (config:36) הופך את **כל** ה-clause, כולל ה-5+ שנים, ל-preferred | עצמאי | **CONFIRMED** ישירות מהרג'קס והקונפיג — `_SENTENCE` אינו כולל פסיק, ו-`_clause_around` (extraction.py:57-80) מחזיר את המשפט השלם פחות parentheticals כש-ה-match אינו בתוך aside. אותה א-סימטריה חוזרת ב-[interpretation.py:58-61](../cv_engine/domain/analysis/requirements/interpretation.py#L58-L61) בנתיב ה-AI, על ה-quote המצוטט. |
-| **D9** | גבוה — כותרת ללא נקודתיים לא סוגרת section, בולט הטבות יורש `mandatory=True` | [segmentation.py:96-120](../cv_engine/domain/analysis/requirements/segmentation.py#L96-L120) (`_heading_section`), [segmentation.py:123-142](../cv_engine/domain/analysis/requirements/segmentation.py#L123-L142) (`_section_of`), [extraction.py:147](../cv_engine/domain/analysis/requirements/extraction.py#L147) | כותרת כמו "Perks"/"Benefits" (בלי `:`) שאינה matches מדויק לאף marker מוגדר מחזירה `None` מ-`_heading_section`; `None` לא סוגר section פתוח (רק heading לא-`None` משנה `section`) → הbulletים שתחתיה יורשים את ה-section הקודם. אם זה "requirements", בולט הטבות תמים שמזדמן להתאים ל-concept pattern מקבל `mandatory=True` ב-extraction.py:147 בלי אף מרקר | עצמאי; שלב 6 עם D5/D6 | **CONFIRMED** — עקבתי את `_segments` (segmentation.py:181-248) שורה-שורה: `section` משתנה רק ב-`if heading is not None: ...; section=heading` (שורה 219-226); heading=`None` פשוט `continue`-ת בלי לגעת ב-section. אין קוד שסוגר section על heading לא-מזוהה. |
+| **D5** | גבוה — dedup קובע mandatory/preferred לפי המופע הראשון | [extraction.py:132-147](../cv_engine/domain/analysis/requirements/extraction.py#L132-L147), [requirements.json:43-68](../config/requirements.json#L43-L68) | דה-דופ (שורה 132-136, `concept`+`demanded`) רץ **לפני** חישוב mandatory/preferred (שורה 147) → אזכור ראשון תחת "About us" (preferred) "בולע" את המופע השני תחת "Requirements:" (mandatory) | עצמאי | **CONFIRMED, עם תנאי מוקדם שאומת**: cue-word matching ב-`_statement_kind` ([segmentation.py:169-171](../cv_engine/domain/analysis/requirements/segmentation.py#L169-L171)) הוא **ללא תלות בסקשן** — מילה כמו "experience" (ברשימת `requirement_cues`, config:51) בפסקת "About us" גם היא מסמנת את המשפט כ-`kind="requirement"`, ולכן נכנס בכלל למנוע ה-extraction (extraction.py:111: `if span.kind != "requirement": continue`). זה מה שהופך את התרחיש לריאלי, לא תיאורטי בלבד.  ‏**סגור ב-Stage 6** — `mandatory` מחושב לפני הדה-דופ, ומופע mandatory מחליף מופע preferred שכבר נרשם. |
+| **D6** | גבוה — clause משותף מאפשר ל"advantage" סמוך לבטל "must have" מפורש | [extraction.py:20,57-80,140,147](../cv_engine/domain/analysis/requirements/extraction.py#L20-L147) | `_SENTENCE=[.;\n]` לא חותך על פסיק; "Must have 5+ years..., European market an advantage." — אין parenthetical, אז ה-clause הוא כל המשפט; `"advantage"∈preferred_markers` (config:36) הופך את **כל** ה-clause, כולל ה-5+ שנים, ל-preferred | עצמאי | **CONFIRMED** ישירות מהרג'קס והקונפיג — `_SENTENCE` אינו כולל פסיק, ו-`_clause_around` (extraction.py:57-80) מחזיר את המשפט השלם פחות parentheticals כש-ה-match אינו בתוך aside. אותה א-סימטריה חוזרת ב-[interpretation.py:58-61](../cv_engine/domain/analysis/requirements/interpretation.py#L58-L61) בנתיב ה-AI, על ה-quote המצוטט.  ‏**סגור ב-Stage 6** — `_SENTENCE` נמחק; הקלוז נחתך לפי `ask_bounds`, הגדרה אחת משותפת עם ה-completeness. הנתיב ה-AI (`interpretation.py`) נשאר מחוץ להיקף במפורש — פריט מעקב 15. |
+| **D9** | גבוה — כותרת ללא נקודתיים לא סוגרת section, בולט הטבות יורש `mandatory=True` | [segmentation.py:96-120](../cv_engine/domain/analysis/requirements/segmentation.py#L96-L120) (`_heading_section`), [segmentation.py:123-142](../cv_engine/domain/analysis/requirements/segmentation.py#L123-L142) (`_section_of`), [extraction.py:147](../cv_engine/domain/analysis/requirements/extraction.py#L147) | כותרת כמו "Perks"/"Benefits" (בלי `:`) שאינה matches מדויק לאף marker מוגדר מחזירה `None` מ-`_heading_section`; `None` לא סוגר section פתוח (רק heading לא-`None` משנה `section`) → הbulletים שתחתיה יורשים את ה-section הקודם. אם זה "requirements", בולט הטבות תמים שמזדמן להתאים ל-concept pattern מקבל `mandatory=True` ב-extraction.py:147 בלי אף מרקר | עצמאי; שלב 6 עם D5/D6 | **CONFIRMED** — עקבתי את `_segments` (segmentation.py:181-248) שורה-שורה: `section` משתנה רק ב-`if heading is not None: ...; section=heading` (שורה 219-226); heading=`None` פשוט `continue`-ת בלי לגעת ב-section. אין קוד שסוגר section על heading לא-מזוהה.  ‏**סגור ב-Stage 6** — כותרת ערומה לא-מוגדרת פותחת `other` תחת ארבעה תנאים, שהראשון בהם (`_statement_kind is None`) הוא הווקבולרי עצמו ולכן מונע את הבליעה ההפוכה. |
 | **D7** | בינוני — מדד מת, קבוע 1.0 בכל נתיב קיים | [confidence.py:48-57](../cv_engine/domain/analysis/requirements/confidence.py#L48-L57), [extraction.py:148-166](../cv_engine/domain/analysis/requirements/extraction.py#L148-L166) | `concept_classification_completeness` סופר `item.concept` לא-ריק; כל `ExtractedRequirement` נבנה תמיד עם `concept=concept.concept` (מחרוזת לא ריקה) — אין היום שום נתיב מייצר item ללא concept | Stage 8 (cleanup; ייתכן ותלוי בהחלטה #1 אם ייווצר נתיב חדש) | **CONFIRMED** — grep/read מלא של extraction.py לא מצא בנאי `ExtractedRequirement` עם `concept=""`/`None`. המדד קבוע מתמטית בקוד הנוכחי. |
 | **D8** | בינוני — confidence מודד וקטור שלא קיבל את ההחלטה | [classification.py:336-348,414-418,453-454](../cv_engine/domain/analysis/classification.py#L336-L454) | הבחירה בפועל (`best()`) מדורגת לפי `(coverage_scores, term_scores)` — coverage קודם; אבל `top`/`second` שמוזנים ל-`classification_confidence` מגיעים אך ורק מ-`term_scores.most_common(2)` (שורה 416-418), בלי קשר ל-coverage | Stage 5 (אחרי שהדנומינטורים מתוקנים) | **CONFIRMED** — קראתי את כל `classify_job`; `ranking` (משמש להחלטה ול-ambiguity) ו-`top/second` (משמש ל-confidence) הם שני חישובים נפרדים לחלוטין מאותו טקסט. |
 | **A1** | קריטי — נתיב AI לא יכול לגלות את באג הסגמנטציה | [analysis.py:234-241](../cv_engine/application/services/analysis.py#L234-L241), [ai_extraction.py:557-562,580-582](../cv_engine/domain/analysis/requirements/ai_extraction.py#L557-L582) | הספק מקבל `requirement_lines(job_text,...)` כ-hint; `by_ai` (understanding) ו-`extraction_is_failed` נמדדים מול **אותה** `requirement_lines()` — שורה שהסגמנטר לא מזהה (למשל תחת כותרת לא ב-`requirement_block_markers`) לא יכולה להוריד את `by_ai`, לא תדליק כשל, ולא תופיע כפער בשום מקום | Stage 1+2 (החלטות #1-#3 **RESOLVED**), עם תנאי מפורש ש-Stage 2 מיושם בנתיב ה-AI עצמו (ר' Stage 2 למעלה) — הסיכון השיורי (סגמנטציה שלא מזהה שורה מלכתחילה) נשאר גם אז, ר' Stage 2 | **CONFIRMED** — אימתתי את כל שלוש נקודות הקריאה; אין שום נתיב אחר ב-ai_extraction.py שממדל את הטקסט המלא ללא תלות ב-`requirement_lines`. |
@@ -619,7 +807,7 @@ such constraint and can land on its own.
 | **A11** | גבוה — ordinal=0 קבוע ⇒ ID כפול ⇒ ניפוח מכנה | [ai_extraction.py:520-528](../cv_engine/domain/analysis/requirements/ai_extraction.py#L520-L528) | `ordinal=0` בכל שורה; `requirement_id` נבנה מ-hash של interpretation+kind+demanded+identity_span+ordinal — הצעה כפולה (אותו quote+interpretation) מייצרת שני `Requirement` שונים ברשימה עם **אותו** requirement_id, בלי דה-דופ | Stage 3 — **סגור** | **CONFIRMED** — קראתי את `verify_and_cover_extraction`: אין שום בדיקת ייחודיות על `req_id`/span לפני `requirements.append(...)`. **תוקן ב-Stage 3:** דה-דופ לפי `requirement_id` לפני ה-append, `ordinal=0` נשאר קבוע במכוון, `mapped_spans` ממשיך לקלוט גם כפולות. הנימוק המלא, כולל למה *לא* ordinal, בראש המסמך. |
 | **A12** | גבוה — דוקסטרינג מבטיח שער שלא קיים; `topic_tags` מתקבל ולא נקרא | [ai_extraction.py:11](../cv_engine/domain/analysis/requirements/ai_extraction.py#L11), [contracts/providers.py:38-48](../cv_engine/domain/contracts/providers.py#L38-L48) | שני דוקסטרינגים מצהירים ש-`topic_tags` נקרא ואף אוכף: "consulted only as a boundary-association hint" ו-"a hint to fact-boundary association, **not a grant: a foreign tag disqualifies the proposal** rather than being trusted as scoping". בפועל השדה מתקבל מהספק, נשמר בחוזה, **ואף שורת קוד לא קוראת אותו** — כולל השער המובטח. ספק שמצרף tag זר לא נדחה ולא מסומן | Stage 7 (נושא: שלמות שערי ה-AI) | **CONFIRMED via grep** — `grep -rn "topic_tags" cv_engine ai config` מחזיר בדיוק שלוש שורות: שתי ההצהרות בדוקסטרינגים והגדרת השדה עצמה (providers.py:48). אין קורא רביעי. **חמור מ-A3:** ב-A3 פונקציה (`unmapped_statement_ids`) הוגדרה ולא נקראה — קוד מת, שקוף למי שקורא. כאן התיעוד מבטיח הגנה אקטיבית, כך שקורא הקובץ מאמין שיש שער שאין. **התיקון הוא הכרעה, לא שורה:** או לממש את השער שהדוקסטרינג מבטיח, או למחוק את ההבטחה (ואולי את השדה) — שתי הדרכים לגיטימיות, ואסור להשאיר את הפער. נמצא תוך יישום A11 (Stage 3), לא בסקירה המקורית. |
 | **C1** | בינוני — האזהרה שכן נדלקה (low-confidence) ניתנת לביטול בטעות | [approval.py:52-76](../cv_engine/domain/analysis/approval.py#L52-L76) | `"low-confidence": ApprovalReason(frozenset({"track","profile"}), ...)` — בחירת Profile מנקה אזהרת confidence נמוך גם כשהסיבה האמיתית היא extraction_score נמוך, לא classification | Stage 5 | **CONFIRMED** מהטבלה עצמה — ואימתתי שההערה הפנימית בקוד (שורות 65-67) חלה ניסוחית בדיוק על `extraction-failed` בלבד, לא הורחבה ל-`low-confidence` שסובל מאותה בעיה. |
-| **C2** | בינוני — dedup בין rule-gap ל-requirement-gap כמעט אף פעם לא תואם | [classification.py:461-465](../cv_engine/domain/analysis/classification.py#L461-L465) | `covered_text = {requirement.text ...}` מול `gap.requirement` (תווית כתובה ביד כמו `"Salesforce"`, `"Direct SaaS Sales preference"`) — אין קונספט בשם salesforce/saas ב-`requirements.json`, כך שהמחרוזות האלה לעולם לא ייווצרו כ-`requirement.text` | Stage 8 | **CONFIRMED**: סרקתי את כל `config/requirements.json` — אין concept בשם salesforce/saas; המחרוזות היחידות שיכולות להגיע ל-`requirement.text` הן span-ים שחולצו מהטקסט (via `item.span`/`normalize_span`), לא התוויות הקבועות מ-`derive_gaps`. |
+| **C2** | בינוני — dedup בין rule-gap ל-requirement-gap כמעט אף פעם לא תואם | [classification.py:461-465](../cv_engine/domain/analysis/classification.py#L461-L465) | `covered_text = {requirement.text ...}` מול `gap.requirement` (תווית כתובה ביד כמו `"Salesforce"`, `"Direct SaaS Sales preference"`) — אין קונספט בשם salesforce/saas ב-`requirements.json`, כך שהמחרוזות האלה לעולם לא ייווצרו כ-`requirement.text` | Stage 8 | **CONFIRMED**: סרקתי את כל `config/requirements.json` — אין concept בשם salesforce/saas; המחרוזות היחידות שיכולות להגיע ל-`requirement.text` הן span-ים שחולצו מהטקסט (via `item.span`/`normalize_span`), לא התוויות הקבועות מ-`derive_gaps`.  ‏**סגור ב-Stage 6** — נמחק כקוד מת, עם הנמקה במקום הקוד וגארד נגזר ב-`test_no_concept_shadows_a_legacy_rule_gap`. |
 
 ---
 
@@ -1219,6 +1407,11 @@ in config["concepts"].values()}` — assert אין חיתוך, לכל טקסט �
      עוברת בירושה מהניתוח הקודם ולא מחושבת מחדש.
 
 10. **RESOLVED — `mandatory=False` לכל ישות `undetermined` סינתטית (שורה לא-ממופה).**
+    **עודכן ב-Stage 6: נשקל מחדש אחרי ש-D9 תוקן, וההכרעה נשארה `mandatory=False`.**
+    הנימוק שלהלן — "‏`section` שגוי כי D9 לא תוקן" — פג, והוחלף בנימוק שאינו
+    תלוי באמינות `section`: הישות קיימת בדיוק כי שום דבר לא קרא מה השורה
+    מבקשת, ו-`mandatory=True` היה טוען חובה על טקסט שהדרישה שבו לא זוהתה.
+    ר' "מה נחת ב-Stage 6" בראש המסמך ואת הדוקסטרינג של `undetermined_requirement`.
     **תיקון לטענה במשימה:** "undetermined ממילא coverage-undetermined חוסם" איננה
     מדויקת — `gaps_from_requirements` (gaps.py:132) מגדיר
     `hard = requirement.mandatory and requirement.coverage != "undetermined"` —
@@ -1249,8 +1442,8 @@ in config["concepts"].values()}` — assert אין חיתוך, לכל טקסט �
     `accepted-low-fit` — כך שהתרחיש שה-mandatory=True נועד להגן עליו (משרה עם
     דרישות שלא נקראו) כבר חסום ע"י ה-fit-gate בלי תלות בבחירת mandatory כאן.
     **מסקנה:** mandatory=False עכשיו, כיוון שמרני שלא מגדיל blast radius של D9
-    שלא-תוקן, בלי לאבד הגנה בפועל. לשקול מחדש ל-mandatory מ-section אחרי ש-D9
-    מתוקן (Stage 6) — ר' "מה מתייתר" בהמשך, יש להוסיף שם רישום.
+    שלא-תוקן, בלי לאבד הגנה בפועל. ~~לשקול מחדש ל-mandatory מ-section אחרי ש-D9
+    מתוקן (Stage 6)~~ — **נשקל ב-Stage 6, והתשובה נשארה `mandatory=False`.**
 
     **תוספת — השלכה שנבדקה במפורש: `coverage-undetermined` לעולם לא נדלק מישויות
     סינתטיות.** `mandatory_undetermined = any(coverage=="undetermined" and

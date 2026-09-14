@@ -245,6 +245,49 @@ def test_similar_requirements_in_one_posting_stay_distinct(requirement_concepts)
     assert len({item.requirement_id for item in found}) == 2
 
 
+def test_a_required_restatement_outranks_a_passing_mention(requirement_concepts) -> None:
+    """One requirement, and the occurrence the employer *required* is the one kept.
+
+    A cue outranks the section, so the About-us paragraph is a requirement
+    statement too, and it mentions the sales cycle as "a plus". The dedup ran
+    before `mandatory` was computed, so that blurb was recorded first and the
+    explicit "Must own the full sales cycle" under `Requirements:` was skipped
+    as a restatement of it: one requirement, `mandatory=False`, and the bullet
+    the employer actually wrote nowhere in the list.
+    """
+    job = (
+        "About Us\n"
+        "Our team combines deep sales experience with technical rigor. "
+        "Full sales cycle exposure is a plus for this role.\n\n"
+        "Requirements:\n"
+        "- Must own the full sales cycle end to end\n"
+    )
+    found = extract_requirements(job, normalized_hash="restated", concepts=requirement_concepts)
+    cycle = [item for item in found if item.concept == "full-sales-cycle"]
+    # Still deduped: restating one requirement states one requirement.
+    assert len(cycle) == 1
+    assert cycle[0].mandatory is True
+    # And the surviving entry is the demand, not the aside it was first seen
+    # in: the offsets are what `unmatched_requirement_lines` reads to decide
+    # which statement was left unread.
+    required = job.index("Must own")
+    assert required <= cycle[0].start < cycle[0].end <= job.index("end to end") + len("end to end")
+
+
+def test_a_preferred_restatement_does_not_demote_a_requirement(requirement_concepts) -> None:
+    """The upgrade is one-directional: first-seen still wins among equals."""
+    job = (
+        "Requirements:\n"
+        "- Must own the full sales cycle end to end\n\n"
+        "About Us\n"
+        "Full sales cycle exposure is a plus for this role.\n"
+    )
+    found = extract_requirements(job, normalized_hash="reordered", concepts=requirement_concepts)
+    cycle = [item for item in found if item.concept == "full-sales-cycle"]
+    assert len(cycle) == 1
+    assert cycle[0].mandatory is True
+
+
 def test_identity_normalization_keeps_qualifiers() -> None:
     """`native`, `3+ years`, `European` are part of what a requirement *is*."""
     assert normalize_span("  Native   English\nspeaker ") == "native english speaker"
@@ -304,6 +347,44 @@ def test_a_clause_qualifier_governs_its_own_clause_only(
     assert by_concept["media-industry-experience"].mandatory is False
     # The span that swallows the aside must not inherit its "ideally".
     assert by_concept["technology-company-sales"].mandatory is True
+
+
+def test_a_comma_separates_two_demands_and_their_qualifiers(requirement_concepts) -> None:
+    """ "...is an advantage" after a comma governs its own demand, not the one before it.
+
+    The clause a qualifier governs stopped only at `.` or `;`, so this single
+    sentence was one clause and the "advantage" belonging to the European
+    market demoted the years the posting said "Must have" about - an explicit
+    mandatory requirement reported as preferred.
+    """
+    job = (
+        "Requirements:\n"
+        "- Must have 5+ years of B2B sales experience, "
+        "European market experience is an advantage.\n"
+    )
+    found = {
+        item.concept: item
+        for item in extract_requirements(
+            job, normalized_hash="two-demands", concepts=requirement_concepts
+        )
+    }
+    assert found["sales-closing-experience-years"].mandatory is True
+    assert found["european-market-experience"].mandatory is False
+
+
+def test_a_trailing_qualifier_too_short_to_be_a_demand_attaches_backwards(
+    requirement_concepts,
+) -> None:
+    """The other direction of the same cut, and the reason a comma is safe here.
+
+    "Experience with Salesforce and the full sales cycle, a plus." puts its
+    qualifier after a comma as well, but what follows is a fragment rather than
+    a second demand, so it still governs the demand it trails. A comma that cut
+    unconditionally would have made this bullet mandatory.
+    """
+    job = "Requirements:\n- Experience with Salesforce and the full sales cycle, a plus.\n"
+    found = extract_requirements(job, normalized_hash="a-plus", concepts=requirement_concepts)
+    assert [item.mandatory for item in found] == [False]
 
 
 def test_mandatory_partial_and_unsupported_both_produce_hard_gaps(
@@ -535,6 +616,7 @@ def test_no_concept_shadows_a_legacy_rule_gap(fact_store, requirement_concepts) 
         "experience using a crm system",
         "salesforce experience required",
         "strategic partnerships and distribution partners",
+        "must have 8+ years of experience",
     ]
     for probe in rule_probes:
         rule_gaps = {gap.requirement.casefold() for gap in derive_gaps(probe, Track.SALES)}
@@ -559,6 +641,31 @@ def test_no_concept_shadows_a_legacy_rule_gap(fact_store, requirement_concepts) 
             f"concept vocabulary shadows legacy rule gap(s) {sorted(overlap)} for {probe!r}; "
             "either remove the rule or make the concept carry its substitutes"
         )
+
+    # `classify_job` unions the two gap sources with no dedup between them,
+    # and this is why. The dedup it used to carry compared `gap.requirement`
+    # against `{requirement.text ...}` - a phrase `derive_gaps` writes against
+    # a span cut out of the posting - and the two could not produce equal
+    # strings, so it never removed anything. Both sides are taken from the code
+    # and the config rather than copied into a list here: the labels by running
+    # `derive_gaps`, the concept side from the loaded vocabulary. A concept
+    # that begins matching a rule's own wording gives the two sources a shared
+    # axis, at which point the union really can duplicate a requirement and the
+    # dedup question reopens - so that fails here rather than shipping.
+    labels = {
+        gap.requirement
+        for probe in rule_probes
+        for track in Track
+        for gap in derive_gaps(probe, track)
+    }
+    assert labels, "the probes no longer make derive_gaps fire; the check below proves nothing"
+    for label in sorted(labels):
+        for concept in requirement_concepts.concepts.values():
+            for pattern in concept.patterns:
+                assert not pattern.search(label), (
+                    f"concept {concept.concept!r} matches the rule label {label!r}; "
+                    "a rule gap and a requirement gap can now name the same requirement"
+                )
 
 
 # --------------------------------------------------------------------------
@@ -1162,6 +1269,68 @@ def test_a_bare_heading_must_be_the_marker_rather_than_contain_it(
     assert heading_key("Direct SaaS sales experience is an advantage.") not in (
         requirement_concepts.heading_sections
     )
+
+
+def test_an_unconfigured_bare_heading_still_closes_the_block_above_it(
+    requirement_concepts,
+) -> None:
+    """`Perks` closes `Requirements:` the same way `Benefits:` does.
+
+    A bare heading matching no configured marker opened nothing and closed
+    nothing, so the requirement block stayed latched open to the end of the
+    posting. A perk bullet that happens to contain "Native English" then
+    inherited `section == "requirements"` and came out `mandatory=True` - a
+    hard gap, blocking approval, on a requirement about paid leave that the
+    posting never stated.
+    """
+    job = (
+        "Requirements:\n"
+        "- Must have 5+ years of B2B sales experience\n\n"
+        "Perks\n"
+        "- Native English speakers get an extra paid day off every quarter\n"
+        "- Free gym membership\n"
+    )
+    assert heading_key("Perks") not in requirement_concepts.heading_sections
+    sections = {line.text: line.section for line in statement_lines(job, requirement_concepts)}
+    assert sections["Must have 5+ years of B2B sales experience"] == "requirements"
+    assert sections["Native English speakers get an extra paid day off every quarter"] == "other"
+    found = {
+        item.concept: item
+        for item in extract_requirements(
+            job, normalized_hash="perks", concepts=requirement_concepts
+        )
+    }
+    assert found["sales-closing-experience-years"].mandatory is True
+    assert found["english-proficiency"].mandatory is False
+
+
+def test_a_bare_requirement_is_never_read_as_a_heading_even_after_a_break(
+    requirement_concepts,
+) -> None:
+    """The guard that keeps the fix above from being the worse bug.
+
+    Widening what counts as a heading to close a block risks swallowing the
+    requirement in "SaaS experience preferred" - a heading opens a section and
+    states nothing, so anything read as one disappears from the posting. What
+    rules it out is the requirement vocabulary itself: a line stating a
+    requirement or a responsibility is never a heading, whatever its shape or
+    where it sits.
+    """
+    job = "Requirements:\n\nSaaS experience preferred\n\n- Fluent English required\n"
+    texts = [line.text for line in requirement_lines(job, requirement_concepts)]
+    assert "SaaS experience preferred" in texts
+    assert "Fluent English required" in texts
+
+
+def test_a_bare_heading_needs_a_break_above_it(requirement_concepts) -> None:
+    """A line inside a run of statements continues the run, it does not head it.
+
+    Without this, the second half of a wrapped statement - or any short,
+    cue-free line in an unbulleted list - would close the block it is part of.
+    """
+    job = "Requirements:\nFluent English required\nStrong commercial judgement\n- Native English\n"
+    sections = {line.text: line.section for line in statement_lines(job, requirement_concepts)}
+    assert sections["Native English"] == "requirements"
 
 
 def test_a_requirement_asked_as_a_question_is_not_a_heading(requirement_concepts) -> None:

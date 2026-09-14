@@ -505,10 +505,23 @@ def classify_job(
         for fact_id in requirement.boundary_fact_ids
         if fact_id in facts.facts
     }
-    covered_text = {requirement.text for requirement in requirements}
+    # The rule gaps are unioned, with no dedup against the requirement gaps.
+    # There was one - `gap.requirement not in {requirement.text ...}` - and the
+    # two sides could not meet: `gap.requirement` is a label `derive_gaps`
+    # writes ("Salesforce", "Sales CRM usage"), while `requirement.text` is a
+    # span cut out of this posting. Equality between them is a coincidence of
+    # wording, never a statement that the same requirement was read twice, and
+    # a posting that worded a bullet exactly like a rule's label would have
+    # lost that rule's gap for it. Deduping these needs a shared axis - a
+    # concept the rule and the requirement both name - and the rules have none
+    # to give: no concept in `config/requirements.json` models Salesforce, CRM,
+    # SaaS, or partnerships, which is the whole reason these rules still exist
+    # (see `rule_gaps` above). Until one does, the honest answer is the union:
+    # a rule reading a term the vocabulary does not model reports a real gap,
+    # and duplication cannot arise from a term that has no concept.
     gaps = [
         *gaps_from_requirements(requirements, boundary_meanings=boundary_meanings),
-        *(gap for gap in rule_gaps if gap.requirement not in covered_text),
+        *rule_gaps,
     ]
     # Stage-1 plan §3.6: an undetermined mandatory requirement still blocks
     # approval below (`coverage-undetermined`). `cover_requirements` itself

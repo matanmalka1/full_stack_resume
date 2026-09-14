@@ -13,7 +13,7 @@ from ...contracts.analysis import (
     RequirementKind,
 )
 from .concepts import RequirementConcept, RequirementConceptStore
-from .segmentation import StatementLine, _segments, requirement_lines
+from .segmentation import StatementLine, _segments, ask_bounds, requirement_lines
 
 #: The interpretation stamped on every rule-derived and concept-derived
 #: requirement's identity. Explicit rather than `None`: a `None` interpretation
@@ -31,7 +31,6 @@ RULE_INTERPRETATION = "rule-interpretation-v1"
 UNDETERMINED_INTERPRETATION = "undetermined-interpretation-v1"
 
 _WHITESPACE = re.compile(r"\s+")
-_SENTENCE = re.compile(r"[.;\n]")
 _ASIDE = re.compile(r"\([^)]*\)")
 
 
@@ -83,14 +82,32 @@ def _clause_around(text: str, start: int, end: int) -> str:
       company is required, only the European market is preferred.
 
     So: an enclosed match takes its aside as the clause; otherwise the clause
-    is the sentence with every aside removed.
+    is the demand the match sits in, with every aside removed.
+
+    The demand, and not the sentence. A clause that stopped only at `.` or `;`
+    read "Must have 5+ years of B2B sales experience, European market
+    experience is an advantage." as one clause, so the "advantage" belonging to
+    the European market demoted the years the posting said "Must have" about.
+    A comma is the separator there, and there is exactly one definition of it
+    in this package - `segmentation.ask_bounds`, which
+    `extraction_completeness` also counts by. Two definitions would be two
+    answers to one question: a clause wider than the demand the measure counts
+    can only take its qualifiers from a demand beside it. That definition also
+    carries the guard that makes a comma safe here, which a bare `[.;,\n]`
+    would not have: a separator leaving a fragment too short to be a demand of
+    its own is not a boundary, so the trailing qualifier in "Experience with
+    Salesforce, a plus." still attaches backwards to the Salesforce it follows.
+
+    A match straddling a separator takes every demand it touches, so the clause
+    always contains the match itself - the same reason an aside a match
+    swallows does not govern it.
     """
     for aside in _ASIDE.finditer(text):
         if aside.start() < start and end <= aside.end():
             return aside.group(0)
-    left = max((match.end() for match in _SENTENCE.finditer(text, 0, start)), default=0)
-    right_match = _SENTENCE.search(text, end)
-    right = right_match.start() if right_match else len(text)
+    touched = [ask for ask in ask_bounds(text) if ask[0] < end and start < ask[1]]
+    left = touched[0][0] if touched else 0
+    right = touched[-1][1] if touched else len(text)
     return _ASIDE.sub(" ", text[left:right])
 
 
@@ -138,46 +155,76 @@ def extract_requirements(
                     if not identity:
                         continue
                     demanded = _demanded_level(concept, matched)
-                    # A posting restating one requirement in different words
-                    # ("full sales cycle", "lead to close", "prospecting to
-                    # close") states one requirement, not five. Distinctness
-                    # is per concept, except for thresholds, where a different
-                    # demanded value is a genuinely different requirement.
-                    if any(
-                        item.concept == concept.concept and item.demanded == demanded
-                        for item in found
-                    ):
-                        continue
-                    ordinal = seen.get(identity, 0)
-                    seen[identity] = ordinal + 1
                     clause = _clause_around(span.text, match.start(), match.end()).casefold()
                     preferred = any(marker in clause for marker in concepts.preferred_markers)
-                    start, end = span.origin(match.start(), match.end())
                     # The clause wins over the statement, and the statement
                     # over the section. "(ideally European market)" inside a
                     # bullet ending "(must)" makes the European market
                     # preferred and leaves the rest of the bullet mandatory,
                     # which is what the posting actually says.
+                    #
+                    # Decided before the dedup below, not after. A posting
+                    # mentions the full sales cycle in its About-us paragraph -
+                    # a requirement statement too, since a cue outranks the
+                    # section - and then *requires* it under `Requirements:`.
+                    # With the dedup first, the blurb was recorded and the
+                    # explicit "Must own the full sales cycle" was skipped as a
+                    # restatement of it: one requirement, `mandatory=False`,
+                    # and the bullet the employer actually wrote missing from
+                    # the list entirely.
                     mandatory = (not preferred) and (marked or span.section == "requirements")
-                    found.append(
-                        ExtractedRequirement(
-                            requirement_id=requirement_id(
-                                normalized_hash=normalized_hash,
-                                extraction_version=concepts.extraction_version,
-                                identity_span=identity,
-                                ordinal=ordinal,
-                            ),
-                            concept=concept.concept,
-                            kind=concept.kind,
-                            span=_WHITESPACE.sub(" ", matched).strip(),
+                    # A posting restating one requirement in different words
+                    # ("full sales cycle", "lead to close", "prospecting to
+                    # close") states one requirement, not five. Distinctness
+                    # is per concept, except for thresholds, where a different
+                    # demanded value is a genuinely different requirement.
+                    #
+                    # Which occurrence represents it is not a matter of which
+                    # came first. A posting that requires something requires it
+                    # however else it also mentions it, so a mandatory
+                    # occurrence replaces a preferred one already recorded -
+                    # taking its span and offsets too, so the requirement reads
+                    # as the demand the employer wrote rather than the aside it
+                    # was first noticed in.
+                    duplicate = next(
+                        (
+                            index
+                            for index, item in enumerate(found)
+                            if item.concept == concept.concept and item.demanded == demanded
+                        ),
+                        None,
+                    )
+                    if duplicate is not None and (found[duplicate].mandatory or not mandatory):
+                        continue
+                    # `ordinal` separates two requirements whose spans
+                    # normalize alike; it is not a position, and a replaced
+                    # occurrence's number is not reclaimed. Reissuing it would
+                    # be the one thing that could give two live requirements
+                    # one id.
+                    ordinal = seen.get(identity, 0)
+                    seen[identity] = ordinal + 1
+                    start, end = span.origin(match.start(), match.end())
+                    entry = ExtractedRequirement(
+                        requirement_id=requirement_id(
+                            normalized_hash=normalized_hash,
+                            extraction_version=concepts.extraction_version,
                             identity_span=identity,
                             ordinal=ordinal,
-                            mandatory=mandatory,
-                            demanded=demanded,
-                            start=start,
-                            end=end,
-                        )
+                        ),
+                        concept=concept.concept,
+                        kind=concept.kind,
+                        span=_WHITESPACE.sub(" ", matched).strip(),
+                        identity_span=identity,
+                        ordinal=ordinal,
+                        mandatory=mandatory,
+                        demanded=demanded,
+                        start=start,
+                        end=end,
                     )
+                    if duplicate is None:
+                        found.append(entry)
+                    else:
+                        found[duplicate] = entry
     return sorted(found, key=lambda item: (item.concept, item.ordinal))
 
 
@@ -228,12 +275,21 @@ def undetermined_requirement(
     counted in the same denominator as everything else.
 
     `mandatory` is always `False`, deliberately, and not read off
-    `line.section`. `section` is the field a bare heading that matches no
-    configured marker still leaves pointing at the block above it, so a perk
-    bullet can carry `section == "requirements"`; taking `mandatory` from it
-    here would carry that into new code. `fit_score` already prices an
-    undetermined entry at zero either way, and it is the caller's
-    `requirements-unmapped` reason, not `mandatory`, that discloses one exists.
+    `line.section`. The original reason was that a bare heading closed no
+    section, so a perk bullet could carry `section == "requirements"`; that is
+    fixed, and the answer does not change, for a reason that does not expire:
+    this entry exists precisely because nothing read what the statement asks
+    for. `undetermined` is "we could not tell", and `mandatory=True` would be
+    telling - asserting an obligation about text whose demand was never
+    identified. A matched requirement's `mandatory` is a verified reading of a
+    span the engine understood; there is no such reading here to report.
+
+    Nothing is lost by that. `fit_score` prices an undetermined entry at zero
+    either way, and both weights land under the low-fit threshold on any
+    posting with one; `coverage-undetermined` would be the only other effect,
+    and the caller already discloses these entries unconditionally through
+    `requirements-unmapped`, which does not consult `mandatory` or `section`
+    at all.
 
     `extraction_version` is the caller's base version; the
     `UNDETERMINED_INTERPRETATION` discriminant is appended here so no caller
