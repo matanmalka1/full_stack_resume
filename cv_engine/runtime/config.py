@@ -92,7 +92,10 @@ SETTINGS: dict[str, Setting] = {
         Setting("api_host", "CV_API_HOST", default=DEFAULT_HOST),
         Setting("api_port", "CV_API_PORT", default=DEFAULT_PORT, cast=int),
         Setting(
-            "api_max_body_bytes", "CV_API_MAX_BODY_BYTES", default=API_MAX_BODY_BYTES_DEFAULT, cast=int
+            "api_max_body_bytes",
+            "CV_API_MAX_BODY_BYTES",
+            default=API_MAX_BODY_BYTES_DEFAULT,
+            cast=int,
         ),
         # Unset in production: the built UI is served same-origin, so there is no
         # second origin to allow. A value here is the one development Vite origin
@@ -277,4 +280,6 @@ def _cast(setting: Setting, raw: Any) -> Any:
     try:
         return setting.cast(raw)
     except (TypeError, ValueError) as exc:
-        raise ConfigError(f"{setting.env}={raw!r} is not a valid value for {setting.name}: {exc}") from exc
+        raise ConfigError(
+            f"{setting.env}={raw!r} is not a valid value for {setting.name}: {exc}"
+        ) from exc

@@ -129,7 +129,9 @@ class DraftEditing(DraftServiceBase):
             try:
                 patched, new_claim_id = add_claim(patched, addition.section, addition.text, facts)
             except KeyError as exc:
-                raise UnknownRecord(f"unknown section in the working draft: {addition.section}") from exc
+                raise UnknownRecord(
+                    f"unknown section in the working draft: {addition.section}"
+                ) from exc
             except ValueError as exc:
                 raise PreconditionFailed(f"claim addition rejected: {exc}") from exc
             added_claim_ids.add(new_claim_id)
