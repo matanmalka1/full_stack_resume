@@ -702,8 +702,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 excluded_fact_ids=list(proposal.excluded_fact_ids),
                 emphasis_override=(
                     active_plan.plan.emphasis_override.value
-                    if active_plan is not None
-                    and active_plan.plan.emphasis_override is not None
+                    if active_plan is not None and active_plan.plan.emphasis_override is not None
                     else None
                 ),
                 expected_candidate_context_hash=command.expected_candidate_context_hash,
@@ -851,9 +850,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             active_plan.plan.emphasis_override if active_plan is not None else None
         )
         requested_emphasis_override = (
-            Emphasis(command.emphasis_override)
-            if command.emphasis_override is not None
-            else None
+            Emphasis(command.emphasis_override) if command.emphasis_override is not None else None
         )
         emphasis_decision_changed = requested_emphasis_override is not None and (
             prior_emphasis_override != requested_emphasis_override

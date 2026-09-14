@@ -645,21 +645,23 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             self._refuse_matching_context_operation(connection, application_id)
 
     @staticmethod
-    def _refuse_matching_context_operation(
-        connection: Connection, application_id: str
-    ) -> None:
-        competing = connection.execute(
-            select(operations.c.id, operations.c.operation_type)
-            .where(
-                operations.c.application_id == application_id,
-                operations.c.status.in_(("queued", "running")),
-                operations.c.operation_type.in_(
-                    tuple(kind.value for kind in MATCHING_CONTEXT_OPERATION_TYPES)
-                ),
+    def _refuse_matching_context_operation(connection: Connection, application_id: str) -> None:
+        competing = (
+            connection.execute(
+                select(operations.c.id, operations.c.operation_type)
+                .where(
+                    operations.c.application_id == application_id,
+                    operations.c.status.in_(("queued", "running")),
+                    operations.c.operation_type.in_(
+                        tuple(kind.value for kind in MATCHING_CONTEXT_OPERATION_TYPES)
+                    ),
+                )
+                .order_by(operations.c.created_at, operations.c.id)
+                .limit(1)
             )
-            .order_by(operations.c.created_at, operations.c.id)
-            .limit(1)
-        ).mappings().one_or_none()
+            .mappings()
+            .one_or_none()
+        )
         if competing is not None:
             raise StateConflict(
                 "matching configuration cannot change while a context Operation is active: "

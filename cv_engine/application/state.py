@@ -237,9 +237,7 @@ def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -
         else None
     )
     unresolved = (
-        unresolved_approval_reasons(analysis, selection_overrides)
-        if analysis is not None
-        else []
+        unresolved_approval_reasons(analysis, selection_overrides) if analysis is not None else []
     )
     grouped: dict[str, list[str]] = {}
     for reason in unresolved:

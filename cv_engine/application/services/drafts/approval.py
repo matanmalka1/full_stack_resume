@@ -186,8 +186,7 @@ class DraftApproval(DraftServiceBase):
             # has to be legible from the record itself rather than recovered by
             # joining through whichever plan happens to still be reachable.
             "accepted_gaps": [
-                accepted.model_dump(mode="json")
-                for accepted in selection_plan.accepted_gaps
+                accepted.model_dump(mode="json") for accepted in selection_plan.accepted_gaps
             ],
             "user_overrides": decision_overrides,
             "fact_store_version": facts.version,
