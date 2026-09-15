@@ -269,12 +269,36 @@ failures. Required behavior includes:
   still reaches Ready without semantic-review calls or fabricated review metadata; it
   does not claim to create a new analysis.
 
-The [Connecteam and WeDev cases](../tailoring-acceptance-cases.md) supply factual and
-editorial acceptance examples, including HubSpot fabrication, personal-project
-misattribution, and annualized metrics. Mock review outputs prove policy enforcement,
-not real model accuracy. Manual live evaluation must inspect both supported new
-wording and deliberately unsupported variants from both tracks before release.
-No new passing evidence is asserted by this specification amendment.
+These refusals hold for any posting, and are stated as engine properties rather than
+as expectations about a particular job advertisement. Each names a way a fluent,
+plausible sentence can still be false:
+
+- **A tool the posting names does not become a candidate tool.** Demanding a named CRM
+  does not license substituting it for a different verified one, and adjacent activity
+  evidence does not establish the tool.
+- **Adjacent experience is not converted into the demanded category.** Verified B2B
+  sales in one industry does not become SaaS sales; a sales role does not become a
+  formally held SDR role.
+- **Personal-project work is not attributed to an employer.** Every word appearing
+  somewhere in the fact store is not support for the combination: who did what, where,
+  in which period and under which framing is checked as a whole.
+- **Technology named in a posting's company description is not candidate experience.**
+- **A metric keeps its own period and unit.** A figure stated over a tenure must not be
+  restated as annual, and a value must not be imported from an older artifact when the
+  canonical fact states a different one.
+- **A declared proficiency level is not raised to meet a demand** — a fluent language
+  does not become native because the posting asks for native.
+- **A responsibility listed in a posting is not evidence the candidate performed it.**
+- **Uncertainty is never rendered as absence of experience**, and an unverified
+  boundary is never inferred away from adjacent verified facts.
+- **A Profile's allowed fact pool is not widened by the writer.** A fact existing in the
+  store is not permission to use it outside the pool the Profile offers.
+
+Mock review outputs prove policy enforcement, not real model accuracy. Manual live
+evaluation must inspect both supported new wording and deliberately unsupported
+variants, across a sales-track and a development-track posting, before release.
+Postings live in test fixtures and are freely replaceable; no specification names a
+particular one. No new passing evidence is asserted by this specification amendment.
 
 ### D5 semantic-analysis acceptance — approved 2026-09-15
 
