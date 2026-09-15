@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 from html.parser import HTMLParser
 
-from api_harness import MUTATION_HEADERS
+from api_harness import MUTATION_HEADERS, analyze_offline
 from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
@@ -68,17 +68,7 @@ def _post(harness, path: str, body: dict, **headers) -> object:
 
 
 def _analyze(harness, application_id: str) -> dict[str, str]:
-    detail = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
-    assert detail.status_code == 200, detail.text
-    response = _post(
-        harness,
-        f"/applications/{application_id}/analyses",
-        {"job_snapshot_id": detail.json()["active_job_snapshot_id"]},
-    )
-    assert response.status_code == 202, response.text
-    finished = harness.wait_for_operation(response.json()["id"])
-    assert finished["status"] == "succeeded", finished
-    return {output["output_type"]: output["output_id"] for output in finished["outputs"]}
+    return analyze_offline(harness, application_id, ACCOUNT_MANAGER_JOB)
 
 
 def _generate(harness, application_id: str, sources: dict[str, str]) -> str:
@@ -180,11 +170,11 @@ def _unsupported_edit(harness, application_id: str) -> dict:
 # --- E1: generation ----------------------------------------------------------
 
 
-def test_generation_records_the_explicit_parent_approved_revision(api_worker) -> None:
-    application_id, working_draft_id, sources = _drafted(api_worker, "Parent Revision Co")
-    validated = _validated(api_worker, working_draft_id)
+def test_generation_records_the_explicit_parent_approved_revision(ai_api_worker) -> None:
+    application_id, working_draft_id, sources = _drafted(ai_api_worker, "Parent Revision Co")
+    validated = _validated(ai_api_worker, working_draft_id)
     approved = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         {
             "expected_edit_version": validated["edit_version"],
@@ -194,7 +184,7 @@ def test_generation_records_the_explicit_parent_approved_revision(api_worker) ->
     assert approved.status_code == 201, approved.text
 
     queued = _post(
-        api_worker,
+        ai_api_worker,
         f"/applications/{application_id}/working-draft/generate",
         {
             "job_analysis_id": sources["job_analysis"],
@@ -203,7 +193,7 @@ def test_generation_records_the_explicit_parent_approved_revision(api_worker) ->
         },
     )
     assert queued.status_code == 202, queued.text
-    finished = api_worker.wait_for_operation(queued.json()["id"])
+    finished = ai_api_worker.wait_for_operation(queued.json()["id"])
     assert finished["status"] == "succeeded", finished
     draft_id = next(
         output["output_id"]
@@ -211,17 +201,17 @@ def test_generation_records_the_explicit_parent_approved_revision(api_worker) ->
         if output["output_type"] == "working_draft"
     )
     assert (
-        _read(api_worker, draft_id).json()["parent_revision_id"] == approved.json()["revision_id"]
+        _read(ai_api_worker, draft_id).json()["parent_revision_id"] == approved.json()["revision_id"]
     )
 
 
 def test_generation_refuses_a_parent_revision_owned_by_another_application(
-    api_worker,
+    ai_api_worker,
 ) -> None:
-    first_id, first_draft, _first_sources = _drafted(api_worker, "Parent Owner Co")
-    validated = _validated(api_worker, first_draft)
+    first_id, first_draft, _first_sources = _drafted(ai_api_worker, "Parent Owner Co")
+    validated = _validated(ai_api_worker, first_draft)
     approved = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{first_draft}/approve",
         {
             "expected_edit_version": validated["edit_version"],
@@ -230,10 +220,10 @@ def test_generation_refuses_a_parent_revision_owned_by_another_application(
     )
     assert approved.status_code == 201, approved.text
 
-    second_id = _application(api_worker.services, "Parent Intruder Co")
-    second_sources = _analyze(api_worker, second_id)
+    second_id = _application(ai_api_worker.services, "Parent Intruder Co")
+    second_sources = _analyze(ai_api_worker, second_id)
     queued = _post(
-        api_worker,
+        ai_api_worker,
         f"/applications/{second_id}/working-draft/generate",
         {
             "job_analysis_id": second_sources["job_analysis"],
@@ -245,42 +235,42 @@ def test_generation_refuses_a_parent_revision_owned_by_another_application(
     assert queued.status_code == 412, queued.text
     assert queued.json()["code"] == "LINEAGE_BROKEN"
     assert (
-        api_worker.services.repository.approved_revision(
+        ai_api_worker.services.repository.approved_revision(
             approved.json()["revision_id"]
         ).application_id
         == first_id
     )
-    assert _state(api_worker, second_id)["active_working_draft_id"] is None
+    assert _state(ai_api_worker, second_id)["active_working_draft_id"] is None
 
 
 # --- E2: read, ETag, and optimistic update -----------------------------------
 
 
-def test_a_second_save_with_the_same_etag_is_a_conflict_that_changes_nothing(api_worker) -> None:
+def test_a_second_save_with_the_same_etag_is_a_conflict_that_changes_nothing(ai_api_worker) -> None:
     """The concurrency matrix's first row: two autosaves, one ETag.
 
     The assertion that matters is the third one. A `409` that had already
     written would be worse than no check at all, because the client would be
     told its save failed while the document moved underneath it.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Same Etag Co")
-    read = _read(api_worker, working_draft_id)
-    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Same Etag Co")
+    read = _read(ai_api_worker, working_draft_id)
+    claim = working_claim(ai_api_worker.services, application_id, "sales.metric.performance")
     edits = [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}]
-    first = _patch(api_worker, working_draft_id, read.headers["ETag"], edits)
+    first = _patch(ai_api_worker, working_draft_id, read.headers["ETag"], edits)
     assert first.status_code == 200, first.text
 
-    second = _patch(api_worker, working_draft_id, read.headers["ETag"], edits)
+    second = _patch(ai_api_worker, working_draft_id, read.headers["ETag"], edits)
 
     assert second.status_code == 409, second.text
     assert second.json()["code"] == "STATE_CONFLICT"
-    after = _read(api_worker, working_draft_id).json()
+    after = _read(ai_api_worker, working_draft_id).json()
     assert after["edit_version"] == first.json()["edit_version"]
     assert after["content_hash"] == first.json()["content_hash"]
 
 
 def test_an_out_of_band_edit_wins_before_a_web_autosave_with_the_stale_etag(
-    api_worker,
+    ai_api_worker,
 ) -> None:
     """Every writer shares one optimistic draft version, not a store of its own.
 
@@ -289,46 +279,46 @@ def test_an_out_of_band_edit_wins_before_a_web_autosave_with_the_stale_etag(
     that the Web autosave holding the now-stale ETag is refused rather than
     silently overwriting the newer version.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Draft Race Co")
-    read = _read(api_worker, working_draft_id)
-    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Draft Race Co")
+    read = _read(ai_api_worker, working_draft_id)
+    claim = working_claim(ai_api_worker.services, application_id, "sales.metric.performance")
     before = read.json()
 
-    api_worker.services.drafts.edit_claim(
+    ai_api_worker.services.drafts.edit_claim(
         application_id,
         claim.claim_id,
         [claim.fact_ids[0]],
         text=claim.text,
     )
-    out_of_band = _read(api_worker, working_draft_id).json()
+    out_of_band = _read(ai_api_worker, working_draft_id).json()
     assert out_of_band["edit_version"] == before["edit_version"] + 1
 
     stale_web = _patch(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
         [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}],
     )
     assert stale_web.status_code == 409, stale_web.text
     assert stale_web.json()["code"] == "STATE_CONFLICT"
-    after = _read(api_worker, working_draft_id).json()
+    after = _read(ai_api_worker, working_draft_id).json()
     assert (after["edit_version"], after["content_hash"]) == (
         out_of_band["edit_version"],
         out_of_band["content_hash"],
     )
 
 
-def test_free_text_no_fact_authorizes_is_kept_as_a_pending_claim(api_worker) -> None:
+def test_free_text_no_fact_authorizes_is_kept_as_a_pending_claim(ai_api_worker) -> None:
     """§14: unauthorized free text is saved, not discarded and not refused."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Pending Text Co")
-    read = _read(api_worker, working_draft_id)
-    edit = _unsupported_edit(api_worker, application_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Pending Text Co")
+    read = _read(ai_api_worker, working_draft_id)
+    edit = _unsupported_edit(ai_api_worker, application_id)
 
-    response = _patch(api_worker, working_draft_id, read.headers["ETag"], [edit])
+    response = _patch(ai_api_worker, working_draft_id, read.headers["ETag"], [edit])
 
     assert response.status_code == 200, response.text
     assert response.json()["pending_claim_ids"] == [edit["claim_id"]]
-    stored = _read(api_worker, working_draft_id).json()["source"]
+    stored = _read(ai_api_worker, working_draft_id).json()["source"]
     saved = next(
         claim
         for section in stored["sections"]
@@ -340,25 +330,25 @@ def test_free_text_no_fact_authorizes_is_kept_as_a_pending_claim(api_worker) -> 
     assert saved["pending_reason"]
 
 
-def test_a_manually_added_line_lands_pending_and_is_removable(api_worker) -> None:
+def test_a_manually_added_line_lands_pending_and_is_removable(ai_api_worker) -> None:
     """A free-hand line the user writes has no fact behind it, so it follows the
     same pending resolution as free text an edit could not authorize - and the
     same removal is what a person takes back with.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Manual Line Co")
-    read = _read(api_worker, working_draft_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Manual Line Co")
+    read = _read(ai_api_worker, working_draft_id)
     section_name = read.json()["outline"]["sections"][0]["name"]
     new_text = "שורה שנכתבה ידנית ואינה מבוססת על עובדה קיימת."
 
     response = _add(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
         [{"section": section_name, "text": new_text}],
     )
 
     assert response.status_code == 200, response.text
-    after = _read(api_worker, working_draft_id).json()
+    after = _read(ai_api_worker, working_draft_id).json()
     section = next(
         section for section in after["outline"]["sections"] if section["name"] == section_name
     )
@@ -369,45 +359,45 @@ def test_a_manually_added_line_lands_pending_and_is_removable(api_worker) -> Non
     assert added["claim_id"] in response.json()["pending_claim_ids"]
 
     removed = _remove(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
-        _read(api_worker, working_draft_id).headers["ETag"],
+        _read(ai_api_worker, working_draft_id).headers["ETag"],
         [added["claim_id"]],
     )
     assert removed.status_code == 200, removed.text
-    final = _read(api_worker, working_draft_id).json()
+    final = _read(ai_api_worker, working_draft_id).json()
     assert added["claim_id"] not in {
         claim["claim_id"] for section in final["outline"]["sections"] for claim in section["claims"]
     }
 
 
-def test_adding_a_line_to_an_unknown_section_is_refused(api_worker) -> None:
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Unknown Section Co")
-    read = _read(api_worker, working_draft_id)
+def test_adding_a_line_to_an_unknown_section_is_refused(ai_api_worker) -> None:
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Unknown Section Co")
+    read = _read(ai_api_worker, working_draft_id)
 
     response = _add(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
         [{"section": "לא קיים", "text": "טקסט כלשהו"}],
     )
 
     assert response.status_code == 404, response.text
-    assert _read(api_worker, working_draft_id).headers["ETag"] == read.headers["ETag"]
+    assert _read(ai_api_worker, working_draft_id).headers["ETag"] == read.headers["ETag"]
 
 
 # --- M4 Stage D: the editor's read, its preview, and claim removal -----------
 
 
-def test_the_draft_read_carries_an_outline_the_editor_can_address(api_worker) -> None:
+def test_the_draft_read_carries_an_outline_the_editor_can_address(ai_api_worker) -> None:
     """The outline is derived from the same document `source` carries.
 
     Asserted against `source` rather than against a fixture, because the claim
     that matters is that the two cannot disagree: the outline is computed per
     read from that object, not stored beside it.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Outline Co")
-    body = _read(api_worker, working_draft_id).json()
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Outline Co")
+    body = _read(ai_api_worker, working_draft_id).json()
     outline, source = body["outline"], body["source"]
 
     assert outline["headline"]["claim_id"] == source["headline"]["claim_id"]
@@ -433,7 +423,7 @@ def test_the_draft_read_carries_an_outline_the_editor_can_address(api_worker) ->
         assert claim["fact_ids"] == stored[claim_id]["fact_ids"]
 
 
-def test_the_facts_read_is_the_union_of_linked_facts_and_plan_candidates(api_worker) -> None:
+def test_the_facts_read_is_the_union_of_linked_facts_and_plan_candidates(ai_api_worker) -> None:
     """Neither set covers the other, which is the whole reason for this read.
 
     Contacts come from the candidate context and appear in no SelectionPlan; an
@@ -441,9 +431,9 @@ def test_the_facts_read_is_the_union_of_linked_facts_and_plan_candidates(api_wor
     would leave the editor unable to say either what backs a line or what could
     be added to one.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Fact Union Co")
-    draft = _read(api_worker, working_draft_id).json()
-    response = api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/facts")
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Fact Union Co")
+    draft = _read(ai_api_worker, working_draft_id).json()
+    response = ai_api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/facts")
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -491,7 +481,7 @@ def test_the_facts_read_is_the_union_of_linked_facts_and_plan_candidates(api_wor
     assert set(rows) == linked_ids | candidate_ids
 
 
-def test_the_preview_is_the_rendered_draft_and_is_safe_to_frame(api_worker) -> None:
+def test_the_preview_is_the_rendered_draft_and_is_safe_to_frame(ai_api_worker) -> None:
     """architecture §13: server-rendered HTML for an isolated iframe.
 
     The headers are the assertion, not decoration. The document is framed with
@@ -499,10 +489,10 @@ def test_the_preview_is_the_rendered_draft_and_is_safe_to_frame(api_worker) -> N
     remembering to would be one forgotten attribute away from running whatever
     the response contained.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Preview Co")
-    read = _read(api_worker, working_draft_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Preview Co")
+    read = _read(ai_api_worker, working_draft_id)
 
-    response = api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/preview")
+    response = ai_api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/preview")
 
     assert response.status_code == 200, response.text
     assert response.headers["Content-Type"].startswith("text/html")
@@ -518,7 +508,7 @@ def test_the_preview_is_the_rendered_draft_and_is_safe_to_frame(api_worker) -> N
 
 
 def test_removing_a_pending_claim_is_the_resolution_no_other_command_reaches(
-    api_worker,
+    ai_api_worker,
 ) -> None:
     """product-spec §10: removal is one of the three resolutions for free text.
 
@@ -526,15 +516,15 @@ def test_removing_a_pending_claim_is_the_resolution_no_other_command_reaches(
     unauthorized claim, refuses one the fact selection authorizes, and refuses
     the structural claims outright.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Removal Co")
-    edit = _unsupported_edit(api_worker, application_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Removal Co")
+    edit = _unsupported_edit(ai_api_worker, application_id)
     pending = _patch(
-        api_worker, working_draft_id, _read(api_worker, working_draft_id).headers["ETag"], [edit]
+        ai_api_worker, working_draft_id, _read(ai_api_worker, working_draft_id).headers["ETag"], [edit]
     )
     assert pending.status_code == 200, pending.text
     assert pending.json()["pending_claim_ids"] == [edit["claim_id"]]
 
-    read = _read(api_worker, working_draft_id)
+    read = _read(ai_api_worker, working_draft_id)
     body = read.json()
     authorized = next(
         claim["claim_id"]
@@ -543,12 +533,12 @@ def test_removing_a_pending_claim_is_the_resolution_no_other_command_reaches(
         if claim["claim_type"] != "pending" and claim["fact_ids"]
     )
 
-    refused = _remove(api_worker, working_draft_id, read.headers["ETag"], [authorized])
+    refused = _remove(ai_api_worker, working_draft_id, read.headers["ETag"], [authorized])
     assert refused.status_code == 412, refused.text
     assert "apply_selection_change" in refused.json()["detail"]
 
     structural = _remove(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
         [body["outline"]["headline"]["claim_id"]],
@@ -556,10 +546,10 @@ def test_removing_a_pending_claim_is_the_resolution_no_other_command_reaches(
     assert structural.status_code == 412, structural.text
     assert "structural" in structural.json()["detail"]
 
-    removed = _remove(api_worker, working_draft_id, read.headers["ETag"], [edit["claim_id"]])
+    removed = _remove(ai_api_worker, working_draft_id, read.headers["ETag"], [edit["claim_id"]])
 
     assert removed.status_code == 200, removed.text
-    after = _read(api_worker, working_draft_id).json()
+    after = _read(ai_api_worker, working_draft_id).json()
     assert edit["claim_id"] not in {
         claim["claim_id"] for section in after["outline"]["sections"] for claim in section["claims"]
     }
@@ -572,31 +562,31 @@ def test_removing_a_pending_claim_is_the_resolution_no_other_command_reaches(
     ]
 
 
-def test_a_patch_that_says_nothing_or_contradicts_itself_is_refused(api_worker) -> None:
+def test_a_patch_that_says_nothing_or_contradicts_itself_is_refused(ai_api_worker) -> None:
     """`422`, before anything is applied. An empty patch is not a save."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Empty Patch Co")
-    etag = _read(api_worker, working_draft_id).headers["ETag"]
-    edit = _unsupported_edit(api_worker, application_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Empty Patch Co")
+    etag = _read(ai_api_worker, working_draft_id).headers["ETag"]
+    edit = _unsupported_edit(ai_api_worker, application_id)
 
-    empty = api_worker.client.patch(
+    empty = ai_api_worker.client.patch(
         f"{API_PREFIX}/working-drafts/{working_draft_id}",
         json={"claim_edits": [], "claim_removals": []},
         headers={**MUTATION_HEADERS, "If-Match": etag},
     )
     assert empty.status_code == 422, empty.text
 
-    contradictory = api_worker.client.patch(
+    contradictory = ai_api_worker.client.patch(
         f"{API_PREFIX}/working-drafts/{working_draft_id}",
         json={"claim_edits": [edit], "claim_removals": [edit["claim_id"]]},
         headers={**MUTATION_HEADERS, "If-Match": etag},
     )
     assert contradictory.status_code == 422, contradictory.text
-    assert _read(api_worker, working_draft_id).headers["ETag"] == etag
+    assert _read(ai_api_worker, working_draft_id).headers["ETag"] == etag
 
 
-def test_reorder_preserves_section_membership_and_survives_a_fresh_read(api_worker) -> None:
-    _application_id, working_draft_id, _sources = _drafted(api_worker, "Reorder Co")
-    before = _read(api_worker, working_draft_id)
+def test_reorder_preserves_section_membership_and_survives_a_fresh_read(ai_api_worker) -> None:
+    _application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Reorder Co")
+    before = _read(ai_api_worker, working_draft_id)
     sections = before.json()["outline"]["sections"]
     assert len(sections) >= 2
     target = next(section for section in sections if len(section["claims"]) >= 2)
@@ -604,14 +594,14 @@ def test_reorder_preserves_section_membership_and_survives_a_fresh_read(api_work
     claim_order = [claim["claim_id"] for claim in reversed(target["claims"])]
 
     changed = _reorder(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         before.headers["ETag"],
         {"section_order": section_order, "claim_orders": {target["name"]: claim_order}},
     )
 
     assert changed.status_code == 200, changed.text
-    after = _read(api_worker, working_draft_id)
+    after = _read(ai_api_worker, working_draft_id)
     assert [section["name"] for section in after.json()["outline"]["sections"]] == section_order
     reordered = next(
         section
@@ -620,7 +610,7 @@ def test_reorder_preserves_section_membership_and_survives_a_fresh_read(api_work
     )
     assert [claim["claim_id"] for claim in reordered["claims"]] == claim_order
     assert after.json()["edit_version"] == before.json()["edit_version"] + 1
-    preview = api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/preview")
+    preview = ai_api_worker.client.get(f"{API_PREFIX}/working-drafts/{working_draft_id}/preview")
     assert preview.status_code == 200, preview.text
     ordered_text = [claim["text"] for claim in reordered["claims"]]
     preview_text = _visible_html_text(preview.text)
@@ -629,22 +619,22 @@ def test_reorder_preserves_section_membership_and_survives_a_fresh_read(api_work
     )
 
     invalid = _reorder(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         after.headers["ETag"],
         {"claim_orders": {target["name"]: claim_order[:-1]}},
     )
     assert invalid.status_code == 412, invalid.text
-    assert _read(api_worker, working_draft_id).headers["ETag"] == after.headers["ETag"]
+    assert _read(ai_api_worker, working_draft_id).headers["ETag"] == after.headers["ETag"]
 
 
 # --- E3: selection change, archive, replace ----------------------------------
 
 
-def test_a_selection_change_creates_a_plan_and_moves_the_draft_onto_it(api_worker) -> None:
+def test_a_selection_change_creates_a_plan_and_moves_the_draft_onto_it(ai_api_worker) -> None:
     """§14: one immutable SelectionPlan, and the draft rebuilt from it."""
-    application_id, working_draft_id, sources = _drafted(api_worker, "Reselection Co")
-    before = _read(api_worker, working_draft_id).json()
+    application_id, working_draft_id, sources = _drafted(ai_api_worker, "Reselection Co")
+    before = _read(ai_api_worker, working_draft_id).json()
     # A Core Skills fact that the engine selected: excluding one of those does
     # not cost a role block its floor or empty a required tag, which are the
     # two exclusions the domain refuses outright.
@@ -655,7 +645,7 @@ def test_a_selection_change_creates_a_plan_and_moves_the_draft_onto_it(api_worke
     )
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/apply-selection-change",
         {"expected_edit_version": before["edit_version"], "excluded_fact_ids": [excluded]},
     )
@@ -664,73 +654,73 @@ def test_a_selection_change_creates_a_plan_and_moves_the_draft_onto_it(api_worke
     body = response.json()
     assert body["selection_plan_id"] != sources["selection_plan"]
     assert body["edit_version"] == before["edit_version"] + 1
-    after = _read(api_worker, working_draft_id).json()
+    after = _read(ai_api_worker, working_draft_id).json()
     assert after["selection_plan_id"] == body["selection_plan_id"]
     assert excluded not in after["source"]["selected_fact_ids"]
     assert after["source"]["omitted_facts"][excluded] == "excluded_by_user"
 
 
-def test_a_selection_change_refuses_a_draft_carrying_manual_wording(api_worker) -> None:
+def test_a_selection_change_refuses_a_draft_carrying_manual_wording(ai_api_worker) -> None:
     """§14's other branch: a deterministic rebuild would discard the user's text."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Manual Wording Co")
-    read = _read(api_worker, working_draft_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Manual Wording Co")
+    read = _read(ai_api_worker, working_draft_id)
     edited = _patch(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
-        [_unsupported_edit(api_worker, application_id)],
+        [_unsupported_edit(ai_api_worker, application_id)],
     )
     assert edited.status_code == 200, edited.text
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/apply-selection-change",
         {"expected_edit_version": edited.json()["edit_version"], "excluded_fact_ids": []},
     )
 
     assert response.status_code == 412, response.text
     assert "regenerate_section" in response.json()["detail"]
-    after = _read(api_worker, working_draft_id).json()
+    after = _read(ai_api_worker, working_draft_id).json()
     assert after["edit_version"] == edited.json()["edit_version"]
 
 
-def test_archiving_registers_the_snapshot_before_clearing_the_pointer(api_worker) -> None:
+def test_archiving_registers_the_snapshot_before_clearing_the_pointer(ai_api_worker) -> None:
     """§14: the historical record exists first, and the payload is really there."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Archive Co")
-    before = _read(api_worker, working_draft_id).json()
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Archive Co")
+    before = _read(ai_api_worker, working_draft_id).json()
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/archive",
         {"expected_edit_version": before["edit_version"]},
     )
 
     assert response.status_code == 200, response.text
     body = response.json()
-    artifacts = api_worker.client.get(f"{API_PREFIX}/applications/{application_id}/artifacts")
+    artifacts = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}/artifacts")
     registered = next(
         item for item in artifacts.json()["items"] if item["id"] == body["artifact_version_id"]
     )
     assert registered["artifact_type"] == "working_draft_snapshot"
     assert registered["lifecycle_status"] == "archived"
     assert registered["metadata"]["working_draft_id"] == working_draft_id
-    assert _audit(api_worker, application_id, "archive_working_draft")["client"] == "web"
-    stored = api_worker.services.artifacts.resolve(
-        api_worker.services.repository.artifact_version(body["artifact_version_id"])["path"]
+    assert _audit(ai_api_worker, application_id, "archive_working_draft")["client"] == "web"
+    stored = ai_api_worker.services.artifacts.resolve(
+        ai_api_worker.services.repository.artifact_version(body["artifact_version_id"])["path"]
     )
     assert json.loads(stored.read_text(encoding="utf-8"))["application_id"] == application_id
-    state = _state(api_worker, application_id)
+    state = _state(ai_api_worker, application_id)
     assert state["active_working_draft_id"] is None
     assert state["working_draft_state"] == "none"
 
 
-def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(api_worker) -> None:
+def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(ai_api_worker) -> None:
     """§14 Keep: the snapshot is materialized, and the draft is replaced in place."""
-    application_id, working_draft_id, sources = _drafted(api_worker, "Replace Keep Co")
-    before = _read(api_worker, working_draft_id).json()
+    application_id, working_draft_id, sources = _drafted(ai_api_worker, "Replace Keep Co")
+    before = _read(ai_api_worker, working_draft_id).json()
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/applications/{application_id}/working-draft/replace",
         {
             "working_draft_id": working_draft_id,
@@ -742,30 +732,30 @@ def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(api_worker)
     )
 
     assert response.status_code == 202, response.text
-    finished = api_worker.wait_for_operation(response.json()["id"])
+    finished = ai_api_worker.wait_for_operation(response.json()["id"])
     assert finished["status"] == "succeeded", finished
-    after = _read(api_worker, working_draft_id).json()
+    after = _read(ai_api_worker, working_draft_id).json()
     assert after["edit_version"] == before["edit_version"] + 1
     assert after["active"] is True
-    artifacts = api_worker.client.get(f"{API_PREFIX}/applications/{application_id}/artifacts")
+    artifacts = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}/artifacts")
     kept = [
         item
         for item in artifacts.json()["items"]
         if item["artifact_type"] == "working_draft_snapshot"
     ]
     assert [item["metadata"]["edit_version"] for item in kept] == [before["edit_version"]]
-    assert _audit(api_worker, application_id, "replace_working_draft")["client"] == "web"
+    assert _audit(ai_api_worker, application_id, "replace_working_draft")["client"] == "web"
 
 
-def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(api_worker) -> None:
+def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(ai_api_worker) -> None:
     """§14: nothing is deleted or deactivated before the replacement succeeds."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Replace Refusal Co")
-    other_id = _application(api_worker.services, "Replace Refusal Other Co")
-    other_sources = _analyze(api_worker, other_id)
-    before = _read(api_worker, working_draft_id).json()
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Replace Refusal Co")
+    other_id = _application(ai_api_worker.services, "Replace Refusal Other Co")
+    other_sources = _analyze(ai_api_worker, other_id)
+    before = _read(ai_api_worker, working_draft_id).json()
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/applications/{application_id}/working-draft/replace",
         {
             "working_draft_id": working_draft_id,
@@ -776,8 +766,8 @@ def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(api_w
     )
 
     assert response.status_code == 412, response.text
-    assert _read(api_worker, working_draft_id).json() == before
-    assert _state(api_worker, application_id)["active_working_draft_id"] == working_draft_id
+    assert _read(ai_api_worker, working_draft_id).json() == before
+    assert _state(ai_api_worker, application_id)["active_working_draft_id"] == working_draft_id
 
 
 # --- E3a: the window between the `202` and the write -------------------------
@@ -808,33 +798,33 @@ def _queued_replacement(harness, application_id: str, working_draft_id: str, sou
     return response.json()["id"], before
 
 
-def test_an_edit_after_the_replacement_was_accepted_is_not_overwritten(api_paused) -> None:
+def test_an_edit_after_the_replacement_was_accepted_is_not_overwritten(ai_api_paused) -> None:
     """§14: the version is re-checked at activation, not only at admission."""
-    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Race Edit Co")
+    application_id, working_draft_id, sources = _drafted(ai_api_paused, "Replace Race Edit Co")
     operation_id, before = _queued_replacement(
-        api_paused, application_id, working_draft_id, sources
+        ai_api_paused, application_id, working_draft_id, sources
     )
 
-    read = _read(api_paused, working_draft_id)
+    read = _read(ai_api_paused, working_draft_id)
     edited = _patch(
-        api_paused,
+        ai_api_paused,
         working_draft_id,
         read.headers["ETag"],
-        [_unsupported_edit(api_paused, application_id)],
+        [_unsupported_edit(ai_api_paused, application_id)],
     )
     assert edited.status_code == 200, edited.text
 
-    finished = api_paused.run_operation(operation_id)
+    finished = ai_api_paused.run_operation(operation_id)
 
     assert finished["status"] == "failed", finished
     assert finished["failure_code"] == "SOURCE_CHANGED"
-    after = _read(api_paused, working_draft_id).json()
+    after = _read(ai_api_paused, working_draft_id).json()
     assert after["edit_version"] == before["edit_version"] + 1
     assert after["content_hash"] == edited.json()["content_hash"]
 
 
 def test_an_archive_after_the_replacement_was_accepted_does_not_create_a_new_draft(
-    api_paused,
+    ai_api_paused,
 ) -> None:
     """§14: the command named one draft, so it may not land on a different record.
 
@@ -842,29 +832,29 @@ def test_an_archive_after_the_replacement_was_accepted_does_not_create_a_new_dra
     active row and the replacement inserted a brand new draft with a new id - a record
     nobody asked for, presented as the replacement of one that had been set aside.
     """
-    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Race Archive Co")
+    application_id, working_draft_id, sources = _drafted(ai_api_paused, "Replace Race Archive Co")
     operation_id, before = _queued_replacement(
-        api_paused, application_id, working_draft_id, sources
+        ai_api_paused, application_id, working_draft_id, sources
     )
 
     archived = _post(
-        api_paused,
+        ai_api_paused,
         f"/working-drafts/{working_draft_id}/archive",
         {"expected_edit_version": before["edit_version"]},
     )
     assert archived.status_code == 200, archived.text
 
-    finished = api_paused.run_operation(operation_id)
+    finished = ai_api_paused.run_operation(operation_id)
 
     assert finished["status"] == "failed", finished
     assert finished["failure_code"] == "SOURCE_CHANGED"
-    state = _state(api_paused, application_id)
+    state = _state(ai_api_paused, application_id)
     assert state["active_working_draft_id"] is None
     assert state["working_draft_state"] == "none"
 
 
 def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapshot(
-    api_paused,
+    ai_api_paused,
 ) -> None:
     """§14 Keep is a side effect, so a replay must not reach it at all.
 
@@ -874,8 +864,8 @@ def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapsho
     path it had already written - which is exactly why the assertion is that the replay
     is settled first, not that some particular second failure occurs.
     """
-    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Replay Co")
-    before = _read(api_paused, working_draft_id).json()
+    application_id, working_draft_id, sources = _drafted(ai_api_paused, "Replace Replay Co")
+    before = _read(ai_api_paused, working_draft_id).json()
     body = {
         "working_draft_id": working_draft_id,
         "expected_edit_version": before["edit_version"],
@@ -886,24 +876,24 @@ def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapsho
     path = f"/applications/{application_id}/working-draft/replace"
     key = {"Idempotency-Key": "replace-replay-1"}
 
-    first = _post(api_paused, path, body, **key)
-    second = _post(api_paused, path, body, **key)
+    first = _post(ai_api_paused, path, body, **key)
+    second = _post(ai_api_paused, path, body, **key)
 
     assert first.status_code == 202, first.text
     assert second.status_code == 202, second.text
     assert second.json()["id"] == first.json()["id"]
     assert [
-        item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)
+        item["metadata"]["edit_version"] for item in _snapshots(ai_api_paused, application_id)
     ] == [before["edit_version"]]
     # `_audit` asserts there is exactly one record for the action, which is the assertion
     # that matters here: a second Keep would write a second audit record beside the second
     # snapshot. `details_json` is canonical JSON text rather than a mapping.
-    kept = json.loads(_audit(api_paused, application_id, "replace_working_draft")["details_json"])
+    kept = json.loads(_audit(ai_api_paused, application_id, "replace_working_draft")["details_json"])
     assert kept["kept"] is True
     assert kept["edit_version"] == before["edit_version"]
 
 
-def test_a_replay_is_settled_by_the_key_even_after_the_draft_moved(api_paused) -> None:
+def test_a_replay_is_settled_by_the_key_even_after_the_draft_moved(ai_api_paused) -> None:
     """§14: a replay is answered from the reservation, not by re-checking preconditions.
 
     The natural case, not a contrived one: the first replacement is what moves the draft,
@@ -912,8 +902,8 @@ def test_a_replay_is_settled_by_the_key_even_after_the_draft_moved(api_paused) -
     state its own first attempt produced, which is precisely what an idempotency key
     exists to prevent.
     """
-    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Replay Moved Co")
-    before = _read(api_paused, working_draft_id).json()
+    application_id, working_draft_id, sources = _drafted(ai_api_paused, "Replace Replay Moved Co")
+    before = _read(ai_api_paused, working_draft_id).json()
     body = {
         "working_draft_id": working_draft_id,
         "expected_edit_version": before["edit_version"],
@@ -924,23 +914,23 @@ def test_a_replay_is_settled_by_the_key_even_after_the_draft_moved(api_paused) -
     path = f"/applications/{application_id}/working-draft/replace"
     key = {"Idempotency-Key": "replace-replay-moved-1"}
 
-    first = _post(api_paused, path, body, **key)
+    first = _post(ai_api_paused, path, body, **key)
     assert first.status_code == 202, first.text
     operation_id = first.json()["id"]
-    assert api_paused.run_operation(operation_id)["status"] == "succeeded"
-    after = _read(api_paused, working_draft_id).json()
+    assert ai_api_paused.run_operation(operation_id)["status"] == "succeeded"
+    after = _read(ai_api_paused, working_draft_id).json()
     assert after["edit_version"] == before["edit_version"] + 1
 
-    replayed = _post(api_paused, path, body, **key)
+    replayed = _post(ai_api_paused, path, body, **key)
 
     assert replayed.status_code == 202, replayed.text
     assert replayed.json()["id"] == operation_id
     # And the replacement ran once: one snapshot, and the draft is not replaced again.
-    assert _read(api_paused, working_draft_id).json()["edit_version"] == after["edit_version"]
+    assert _read(ai_api_paused, working_draft_id).json()["edit_version"] == after["edit_version"]
 
 
 def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
-    api_paused,
+    ai_api_paused,
 ) -> None:
     """§14: the crash window between Keep and the Operation is recoverable.
 
@@ -955,8 +945,8 @@ def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
     the first call is driven through the application layer with Operation creation made to
     fail, which leaves exactly the state a crash would.
     """
-    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Interrupted Co")
-    before = _read(api_paused, working_draft_id).json()
+    application_id, working_draft_id, sources = _drafted(ai_api_paused, "Replace Interrupted Co")
+    before = _read(ai_api_paused, working_draft_id).json()
     body = {
         "working_draft_id": working_draft_id,
         "expected_edit_version": before["edit_version"],
@@ -967,7 +957,7 @@ def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
     path = f"/applications/{application_id}/working-draft/replace"
     key = {"Idempotency-Key": "replace-interrupted-1"}
 
-    operations = api_paused.services.operations
+    operations = ai_api_paused.services.operations
     original = operations.submit_draft
 
     def fail_after_keep(*_args, **_kwargs):
@@ -975,28 +965,28 @@ def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
 
     operations.submit_draft = fail_after_keep
     try:
-        interrupted = _post(api_paused, path, body, **key)
+        interrupted = _post(ai_api_paused, path, body, **key)
     finally:
         operations.submit_draft = original
     assert interrupted.status_code == 500, interrupted.text
 
     # The state a crash would leave: the snapshot is written, and nothing is queued.
-    snapshots = _snapshots(api_paused, application_id)
+    snapshots = _snapshots(ai_api_paused, application_id)
     assert [item["metadata"]["edit_version"] for item in snapshots] == [before["edit_version"]]
 
-    resumed = _post(api_paused, path, body, **key)
+    resumed = _post(ai_api_paused, path, body, **key)
 
     assert resumed.status_code == 202, resumed.text
-    assert api_paused.run_operation(resumed.json()["id"])["status"] == "succeeded"
+    assert ai_api_paused.run_operation(resumed.json()["id"])["status"] == "succeeded"
     # One snapshot, and one audit record: Keep was ensured, not repeated.
     assert [
-        item["metadata"]["edit_version"] for item in _snapshots(api_paused, application_id)
+        item["metadata"]["edit_version"] for item in _snapshots(ai_api_paused, application_id)
     ] == [before["edit_version"]]
-    _audit(api_paused, application_id, "replace_working_draft")
-    assert _read(api_paused, working_draft_id).json()["edit_version"] == before["edit_version"] + 1
+    _audit(ai_api_paused, application_id, "replace_working_draft")
+    assert _read(ai_api_paused, working_draft_id).json()["edit_version"] == before["edit_version"] + 1
 
 
-def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(api_paused) -> None:
+def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(ai_api_paused) -> None:
     """§14: a registration is not evidence that the historical copy still exists.
 
     The ensure that makes a crash recoverable reads a row, and a row says a snapshot was
@@ -1006,8 +996,8 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(api
     the wording the Keep decision existed to preserve. So the payload is verified, and
     anything but `ok` refuses.
     """
-    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Lost Snapshot Co")
-    before = _read(api_paused, working_draft_id).json()
+    application_id, working_draft_id, sources = _drafted(ai_api_paused, "Replace Lost Snapshot Co")
+    before = _read(ai_api_paused, working_draft_id).json()
     body = {
         "working_draft_id": working_draft_id,
         "expected_edit_version": before["edit_version"],
@@ -1018,7 +1008,7 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(api
     path = f"/applications/{application_id}/working-draft/replace"
     key = {"Idempotency-Key": "replace-lost-snapshot-1"}
 
-    operations = api_paused.services.operations
+    operations = ai_api_paused.services.operations
     original = operations.submit_draft
 
     def fail_after_keep(*_args, **_kwargs):
@@ -1026,32 +1016,32 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(api
 
     operations.submit_draft = fail_after_keep
     try:
-        assert _post(api_paused, path, body, **key).status_code == 500
+        assert _post(ai_api_paused, path, body, **key).status_code == 500
     finally:
         operations.submit_draft = original
 
     # The snapshot is registered, and then its payload is corrupted underneath the row.
-    snapshot = _snapshots(api_paused, application_id)[0]
-    stored = api_paused.services.repository.artifact_version(snapshot["id"])
-    api_paused.services.artifacts.resolve(stored["path"]).write_text("tampered", encoding="utf-8")
+    snapshot = _snapshots(ai_api_paused, application_id)[0]
+    stored = ai_api_paused.services.repository.artifact_version(snapshot["id"])
+    ai_api_paused.services.artifacts.resolve(stored["path"]).write_text("tampered", encoding="utf-8")
 
-    refused = _post(api_paused, path, body, **key)
+    refused = _post(ai_api_paused, path, body, **key)
 
     assert refused.status_code == 409, refused.text
     # And the draft is untouched: no Operation was queued to replace it.
-    assert _read(api_paused, working_draft_id).json() == before
-    assert _state(api_paused, application_id)["active_working_draft_id"] == working_draft_id
+    assert _read(ai_api_paused, working_draft_id).json() == before
+    assert _state(ai_api_paused, application_id)["active_working_draft_id"] == working_draft_id
 
 
-def test_the_same_key_with_a_different_replacement_is_refused(api_paused) -> None:
+def test_the_same_key_with_a_different_replacement_is_refused(ai_api_paused) -> None:
     """§14: two different replacements are two commands, whatever key they carry.
 
     The draft identity travels in the Operation payload, which is what the idempotency
     check hashes. Without it a replacement of a different version - or one that changed
     the Keep decision - hashed identically to the first and was served back as a replay.
     """
-    application_id, working_draft_id, sources = _drafted(api_paused, "Replace Key Reuse Co")
-    before = _read(api_paused, working_draft_id).json()
+    application_id, working_draft_id, sources = _drafted(ai_api_paused, "Replace Key Reuse Co")
+    before = _read(ai_api_paused, working_draft_id).json()
     path = f"/applications/{application_id}/working-draft/replace"
     key = {"Idempotency-Key": "replace-reuse-1"}
     body = {
@@ -1062,8 +1052,8 @@ def test_the_same_key_with_a_different_replacement_is_refused(api_paused) -> Non
         "keep_previous": True,
     }
 
-    assert _post(api_paused, path, body, **key).status_code == 202
-    reused = _post(api_paused, path, {**body, "keep_previous": False}, **key)
+    assert _post(ai_api_paused, path, body, **key).status_code == 202
+    reused = _post(ai_api_paused, path, {**body, "keep_previous": False}, **key)
 
     assert reused.status_code == 409, reused.text
     assert reused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
@@ -1072,19 +1062,19 @@ def test_the_same_key_with_a_different_replacement_is_refused(api_paused) -> Non
 # --- E4: validation ----------------------------------------------------------
 
 
-def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(api_worker) -> None:
+def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(ai_api_worker) -> None:
     """§22: `passed=false` is `200`, and the immutable run is written anyway."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Failing Validation Co")
-    read = _read(api_worker, working_draft_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Failing Validation Co")
+    read = _read(ai_api_worker, working_draft_id)
     edited = _patch(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
-        [_unsupported_edit(api_worker, application_id)],
+        [_unsupported_edit(ai_api_worker, application_id)],
     )
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/validate",
         {"expected_edit_version": edited.json()["edit_version"]},
     )
@@ -1093,12 +1083,12 @@ def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(api_w
     body = response.json()
     assert body["passed"] is False
     assert any(issue["code"] == "pending-claim" for issue in body["report"]["issues"])
-    assert api_worker.services.repository.validation_report(body["validation_run_id"]).passed is (
+    assert ai_api_worker.services.repository.validation_report(body["validation_run_id"]).passed is (
         False
     )
-    assert _state(api_worker, application_id)["working_draft_state"] == "validation_failed"
+    assert _state(ai_api_worker, application_id)["working_draft_state"] == "validation_failed"
     stale = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/validate",
         {"expected_edit_version": body["edit_version"] + 1},
     )
@@ -1106,14 +1096,14 @@ def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(api_w
     assert stale.json()["code"] == "STATE_CONFLICT"
 
 
-def test_validation_run_read_remains_historical_after_the_draft_moves(api_worker) -> None:
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Historical Run Co")
-    validated = _validated(api_worker, working_draft_id)
+def test_validation_run_read_remains_historical_after_the_draft_moves(ai_api_worker) -> None:
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Historical Run Co")
+    validated = _validated(ai_api_worker, working_draft_id)
 
-    read = _read(api_worker, working_draft_id)
-    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    read = _read(ai_api_worker, working_draft_id)
+    claim = working_claim(ai_api_worker.services, application_id, "sales.metric.performance")
     moved = _patch(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
         [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}],
@@ -1121,7 +1111,7 @@ def test_validation_run_read_remains_historical_after_the_draft_moves(api_worker
     assert moved.status_code == 200, moved.text
     assert moved.json()["edit_version"] > validated["edit_version"]
 
-    historical = api_worker.client.get(
+    historical = ai_api_worker.client.get(
         f"{API_PREFIX}/validation-runs/{validated['validation_run_id']}"
     )
     assert historical.status_code == 200, historical.text
@@ -1132,13 +1122,13 @@ def test_validation_run_read_remains_historical_after_the_draft_moves(api_worker
 
 
 def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes(
-    api_worker,
+    ai_api_worker,
 ) -> None:
     application_id, working_draft_id, _sources = _drafted(
-        api_worker, "Forward Compatible Report Co"
+        ai_api_worker, "Forward Compatible Report Co"
     )
-    ordinary = _validated(api_worker, working_draft_id)
-    lineage = api_worker.services.repository.validation_lineage(ordinary["validation_run_id"])
+    ordinary = _validated(ai_api_worker, working_draft_id)
+    lineage = ai_api_worker.services.repository.validation_lineage(ordinary["validation_run_id"])
     report = ValidationReport(
         passed=False,
         groups={"content": True, "future-validator-group": False},
@@ -1152,17 +1142,17 @@ def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes
         ],
         evidence={"future-evidence": {"kept": [1, "two", False]}},
     )
-    run_id = api_worker.services.repository.record_validation(
+    run_id = ai_api_worker.services.repository.record_validation(
         application_id,
         "pre-render",
         report,
         lineage=lineage,
     )
 
-    response = api_worker.client.get(f"{API_PREFIX}/validation-runs/{run_id}")
+    response = ai_api_worker.client.get(f"{API_PREFIX}/validation-runs/{run_id}")
 
     assert response.status_code == 200, response.text
-    assert response.json()["report"] == api_worker.services.repository.validation_report(
+    assert response.json()["report"] == ai_api_worker.services.repository.validation_report(
         run_id
     ).model_dump(mode="json")
     assert response.json()["report"]["groups"]["future-validator-group"] is False
@@ -1191,19 +1181,19 @@ def _validated(harness, working_draft_id: str) -> dict:
     return response.json()
 
 
-def test_an_edit_after_validation_makes_that_run_unusable_for_approval(api_worker) -> None:
+def test_an_edit_after_validation_makes_that_run_unusable_for_approval(ai_api_worker) -> None:
     """The binding check that could not fail before, failing.
 
     Approval used to validate for itself, so the run always described the draft
     in front of it. Here the run is real evidence about an earlier version, and
     approving against it would freeze content nothing checked.
     """
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Stale Approval Co")
-    validated = _validated(api_worker, working_draft_id)
-    read = _read(api_worker, working_draft_id)
-    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Stale Approval Co")
+    validated = _validated(ai_api_worker, working_draft_id)
+    read = _read(ai_api_worker, working_draft_id)
+    claim = working_claim(ai_api_worker.services, application_id, "sales.metric.performance")
     edited = _patch(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
         [{"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}],
@@ -1211,7 +1201,7 @@ def test_an_edit_after_validation_makes_that_run_unusable_for_approval(api_worke
     assert edited.status_code == 200, edited.text
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         {
             "expected_edit_version": edited.json()["edit_version"],
@@ -1221,21 +1211,21 @@ def test_an_edit_after_validation_makes_that_run_unusable_for_approval(api_worke
 
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "VALIDATION_STALE"
-    assert api_worker.services.repository.approved_revisions(application_id) == []
+    assert ai_api_worker.services.repository.approved_revisions(application_id) == []
 
 
 def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific_code(
-    api_worker,
+    ai_api_worker,
 ) -> None:
     """An edit outside the Web editor is evidence to preserve, not output to overwrite."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Diverged Projection Co")
-    validated = _validated(api_worker, working_draft_id)
-    markdown_path = api_worker.services.artifacts.working_paths(application_id).markdown
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Diverged Projection Co")
+    validated = _validated(ai_api_worker, working_draft_id)
+    markdown_path = ai_api_worker.services.artifacts.working_paths(application_id).markdown
     edited_projection = markdown_path.read_text(encoding="utf-8") + "\nmanual edit\n"
     markdown_path.write_text(edited_projection, encoding="utf-8")
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         {
             "expected_edit_version": validated["edit_version"],
@@ -1246,27 +1236,27 @@ def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific
     assert response.status_code == 409, response.text
     assert response.json()["code"] == "WORKING_PROJECTION_DIVERGED"
     assert markdown_path.read_text(encoding="utf-8") == edited_projection
-    assert api_worker.services.repository.approved_revisions(application_id) == []
+    assert ai_api_worker.services.repository.approved_revisions(application_id) == []
 
 
-def test_a_failing_run_blocks_approval_and_says_which_groups_failed(api_worker) -> None:
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Blocked Approval Co")
-    read = _read(api_worker, working_draft_id)
+def test_a_failing_run_blocks_approval_and_says_which_groups_failed(ai_api_worker) -> None:
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Blocked Approval Co")
+    read = _read(ai_api_worker, working_draft_id)
     edited = _patch(
-        api_worker,
+        ai_api_worker,
         working_draft_id,
         read.headers["ETag"],
-        [_unsupported_edit(api_worker, application_id)],
+        [_unsupported_edit(ai_api_worker, application_id)],
     )
     failed = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/validate",
         {"expected_edit_version": edited.json()["edit_version"]},
     ).json()
     assert failed["passed"] is False
 
     response = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         {
             "expected_edit_version": failed["edit_version"],
@@ -1280,24 +1270,24 @@ def test_a_failing_run_blocks_approval_and_says_which_groups_failed(api_worker) 
 
 
 def test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse(
-    api_worker,
+    ai_api_worker,
 ) -> None:
     """§15: the payload covers all three arguments plus the content hash."""
-    application_id, working_draft_id, _sources = _drafted(api_worker, "Approval Key Co")
-    validated = _validated(api_worker, working_draft_id)
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Approval Key Co")
+    validated = _validated(ai_api_worker, working_draft_id)
     body = {
         "expected_edit_version": validated["edit_version"],
         "validation_run_id": validated["validation_run_id"],
     }
 
     first = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         body,
         **{"Idempotency-Key": "approve-once"},
     )
     repeated = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         body,
         **{"Idempotency-Key": "approve-once"},
@@ -1305,12 +1295,12 @@ def test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse(
 
     assert first.status_code == 201, first.text
     assert repeated.json() == first.json()
-    assert len(api_worker.services.repository.approved_revisions(application_id)) == 1
+    assert len(ai_api_worker.services.repository.approved_revisions(application_id)) == 1
 
-    _other_app, other_draft_id, _other = _drafted(api_worker, "Approval Key Other Co")
-    other = _validated(api_worker, other_draft_id)
+    _other_app, other_draft_id, _other = _drafted(ai_api_worker, "Approval Key Other Co")
+    other = _validated(ai_api_worker, other_draft_id)
     reused = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{other_draft_id}/approve",
         {
             "expected_edit_version": other["edit_version"],

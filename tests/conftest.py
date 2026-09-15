@@ -941,6 +941,7 @@ class PausedApiHarness:
 
     client: Any
     services: Services
+    fake_openai: FakeOpenAI | None = None
 
     def run_operation(self, operation_id: str) -> dict[str, Any]:
         """Execute one queued Operation here, in the calling thread."""
@@ -962,7 +963,14 @@ def api_paused(services: Services):
 
 
 @pytest.fixture
-def ai_api_worker(ai_services: Services):
+def ai_api_paused(ai_services: Services, fake_openai: FakeOpenAI):
     """The same arrangement, with the AI provider wired to the fake transport."""
-    with api_with_worker(ai_services) as harness:
+    with TestClient(create_app(build_api_services(ai_services))) as client:
+        yield PausedApiHarness(client=client, services=ai_services, fake_openai=fake_openai)
+
+
+@pytest.fixture
+def ai_api_worker(ai_services: Services, fake_openai: FakeOpenAI):
+    """The same arrangement, with the AI provider wired to the fake transport."""
+    with api_with_worker(ai_services, fake_openai=fake_openai) as harness:
         yield harness

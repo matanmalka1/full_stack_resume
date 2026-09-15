@@ -21,11 +21,14 @@ from time import monotonic, sleep
 from typing import Any
 
 from fastapi.testclient import TestClient
+from helpers import trivial_requirement_extraction
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.api.schemas.operations import OperationResponse
 from cv_engine.application.operations import TERMINAL_OPERATION_STATUSES
+from cv_engine.domain.models import JobClassificationProposal
 from cv_engine.runtime.composition import Services, build_api_services
+from fake_provider import FakeOpenAI
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
@@ -48,13 +51,31 @@ OPERATION_RESPONSE_FIELDS = frozenset(OperationResponse.model_fields) | frozense
 WORKER_STOP_TIMEOUT_SECONDS = 5.0
 OPERATION_TIMEOUT_SECONDS = 20.0
 
+#: A generic, always-accepted classification for tests whose subject is not
+#: analysis semantics - only that some analysis exists to build on.
+_OFFLINE_CLASSIFICATION = JobClassificationProposal(
+    track="sales",
+    profile="account-manager",
+    emphasis="account-growth",
+    language="en",
+    confidence=0.99,
+    rationale="fixture",
+    keywords=[],
+)
+
 
 @dataclass(frozen=True)
 class ApiHarness:
-    """One HTTP client and the application services the worker shares with it."""
+    """One HTTP client and the application services the worker shares with it.
+
+    `fake_openai` is set only on a provider-backed harness (`ai_api_worker`);
+    a plain one (`api_worker`) leaves it `None`, and `analyze_offline` refuses
+    to run without it rather than reaching the network.
+    """
 
     client: TestClient
     services: Services
+    fake_openai: FakeOpenAI | None = None
 
     def operation(self, operation_id: str) -> dict[str, Any]:
         response = self.client.get(f"{API_PREFIX}/operations/{operation_id}")
@@ -85,13 +106,71 @@ class ApiHarness:
             sleep(0.02)
 
 
+def analyze_offline(harness, application_id: str, job_text: str) -> dict[str, str]:
+    """Create an analysis over HTTP with no real provider reachable.
+
+    Works over any harness exposing `.client`, `.fake_openai`, and
+    `.wait_for_operation()` - the worker-backed `ApiHarness` and the
+    foreground-executed `PausedApiHarness` alike.
+
+    D5 (product-spec.md §2) requires a configured AI provider for every new
+    JobAnalysis - there is no rules-based fallback. `fake_openai` answers with
+    a trivial extraction (every requirement-bearing line declared unmapped, so
+    the analysis is honestly `extraction-failed`) and a generic classification,
+    then the incomplete-analysis review reason is explicitly accepted the same
+    way a user would through Apply Decisions - never silently, and never by
+    widening what the analyze endpoint itself accepts
+    (`AnalyzeCommand.accept_incomplete_analysis` does not exist for exactly
+    that reason).
+
+    For a test asserting on requirements, coverage, confidence, or Fit, script
+    `fake_openai` explicitly instead and call this only for what it is: a way
+    to reach a draftable analysis without asserting what is in it.
+    """
+    assert harness.fake_openai is not None, "analyze_offline needs a provider-backed harness"
+    concepts = harness.services.analysis.load_knowledge().requirement_concepts
+    harness.fake_openai.script(
+        "propose_requirement_extraction",
+        trivial_requirement_extraction(job_text, concepts),
+    )
+    harness.fake_openai.script("propose_job_analysis", _OFFLINE_CLASSIFICATION)
+    detail = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
+    assert detail.status_code == 200, detail.text
+    response = harness.client.post(
+        f"{API_PREFIX}/applications/{application_id}/analyses",
+        json={"job_snapshot_id": detail.json()["active_job_snapshot_id"]},
+        headers=MUTATION_HEADERS,
+    )
+    assert response.status_code == 202, response.text
+    finished = harness.wait_for_operation(response.json()["id"])
+    assert finished["status"] == "succeeded", finished
+    outputs = {item["output_type"]: item["output_id"] for item in finished["outputs"]}
+    accepted = harness.client.post(
+        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
+        json={
+            "application_id": application_id,
+            "expected_analysis_id": outputs["job_analysis"],
+            "expected_selection_plan_id": outputs["selection_plan"],
+            "accept_incomplete_analysis": True,
+        },
+        headers=MUTATION_HEADERS,
+    )
+    assert accepted.status_code == 201, accepted.text
+    body = accepted.json()
+    return {
+        "job_analysis": body["job_analysis_id"],
+        "selection_plan": body["selection_plan_id"],
+    }
+
+
 @contextmanager
-def api_with_worker(services: Services):
+def api_with_worker(services: Services, *, fake_openai: FakeOpenAI | None = None):
     """Run the composed app and the composed worker together for one test.
 
     The worker is the one the composition root built, not a second wiring: a
     harness that assembled its own runner would prove the harness works rather
-    than the product.
+    than the product. `fake_openai` is the same instance `services` was built
+    with, threaded through so `ApiHarness.analyze_offline` can script it.
     """
     stop = Event()
     thread = Thread(
@@ -103,7 +182,7 @@ def api_with_worker(services: Services):
     with TestClient(create_app(build_api_services(services))) as client:
         thread.start()
         try:
-            yield ApiHarness(client=client, services=services)
+            yield ApiHarness(client=client, services=services, fake_openai=fake_openai)
         finally:
             stop.set()
             thread.join(timeout=WORKER_STOP_TIMEOUT_SECONDS)
