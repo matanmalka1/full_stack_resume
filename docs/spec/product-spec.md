@@ -1,26 +1,14 @@
-# CV Application v2.0 Product Specification
+# CV Application Product Specification
 
 Status: **Approved for v2.0 implementation (2026-08-17)**
 
 Persistence, object-storage, secret-configuration, and fixed-root amendments: **2026-08-25**
 
-Product version: **2.0**
-
-Base v1 revision: **`v1.0.0` / `2cc31c7`**
-
-Primary specification language: English
-
-Primary UI language: Hebrew
-
-Official target platform: macOS
-
 ## תקציר מנהלים
 
-v2.0 הופך את מנוע v1 המאומת לאפליקציה מלאה למועמד יחיד.
 המערכת כוללת FastAPI מקומי, ממשק React בעברית, PostgreSQL ל-state מובנה
 ו-object-storage abstraction ל-snapshots ולתוצרים immutable. ברירת המחדל היא
 אחסון מקומי, וניתן לבחור bucket תואם S3 בלי לשנות references במסד.
-ה-Web הוא ה-client היחיד.
 המערכת רצה בשני תהליכים מעל אותה שכבת application: ה-API ו-worker ה-Operations.
 
 הזרימה המרכזית היא:
@@ -35,10 +23,6 @@ ApprovedRevision וכל התוצרים הנגזרים ממנה הם immutable.
 AI מסווג ומציע ניסוח תחת חוזים מובנים. הוא אינו מקור אמת ואינו יוצר ישויות domain
 ישירות. עובדות canonical, policy דטרמיניסטי ו-validation נשארים סמכותיים. מסלול
 דטרמיניסטי מלא עד Ready PDF ממשיך לעבוד ללא API key.
-
-הפיתוח מתבצע ב-branch/worktree הפעיל של v2 מול מסד PostgreSQL מבודד.
-אין dual-write. v1 הוא ארכיון קפוא ב-Git ואינו נפתח,
-נקרא או נכתב על ידי v2 — אין מיגרציה ואין cutover.
 
 ## 1. Authority and interpretation
 
@@ -55,9 +39,6 @@ Authority is ordered as follows:
 Normative terms such as **must**, **must not**, **should**, and **may** are intentional.
 An internal naming or packaging decision may change without approval when observable
 behavior and every invariant remain unchanged. A semantic change, scope expansion,
-migration risk, or weakened factual boundary requires an explicit decision.
-
-`AGENTS.md` governs repository work and points to this specification set.
 
 ## 2. Product goal
 
