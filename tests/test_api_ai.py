@@ -14,7 +14,7 @@ which is what makes a `202` mean anything.
 from __future__ import annotations
 
 import pytest
-from api_harness import MUTATION_HEADERS
+from api_harness import MUTATION_HEADERS, analyze_offline
 from fake_provider import FakeOpenAI
 from helpers import ACCOUNT_MANAGER_JOB
 
@@ -42,16 +42,7 @@ def _application(services, company: str) -> str:
 
 
 def _analyze(harness, application_id: str) -> dict[str, str]:
-    detail = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
-    response = _post(
-        harness,
-        f"/applications/{application_id}/analyses",
-        {"job_snapshot_id": detail.json()["active_job_snapshot_id"]},
-    )
-    assert response.status_code == 202, response.text
-    finished = harness.wait_for_operation(response.json()["id"])
-    assert finished["status"] == "succeeded", finished
-    return {output["output_type"]: output["output_id"] for output in finished["outputs"]}
+    return analyze_offline(harness, application_id, ACCOUNT_MANAGER_JOB)
 
 
 def _generate(harness, application_id: str, sources: dict[str, str]) -> str:

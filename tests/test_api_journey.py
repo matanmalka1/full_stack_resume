@@ -30,9 +30,17 @@ from __future__ import annotations
 import os
 
 from api_harness import MUTATION_HEADERS
+from fake_provider import FakeOpenAI
 from helpers import ACCOUNT_MANAGER_JOB, REVIEW_DECISION_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
+from cv_engine.domain.contracts.analysis import RequirementAttestation, RequirementInterpretation
+from cv_engine.domain.contracts.providers import (
+    ProposedEvidence,
+    ProposedRequirement,
+    RequirementExtractionProposal,
+)
+from cv_engine.domain.models import JobClassificationProposal
 
 
 def _post(harness, path: str, body: dict | None = None, **headers):
@@ -65,17 +73,89 @@ def _outputs(finished: dict) -> dict[str, str]:
     return {output["output_type"]: output["output_id"] for output in finished["outputs"]}
 
 
+def _matched(job_text: str, quote: str, fact_id: str) -> ProposedRequirement:
+    """One mandatory, single-condition requirement, evidenced and matched."""
+    start = job_text.index(quote)
+    return ProposedRequirement(
+        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+        interpretation=RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+        ),
+        kind="presence",
+        label=quote,
+        coverage="matched",
+        evidence=[ProposedEvidence(fact_id=fact_id, rationale="stated in the posting")],
+    )
+
+
+def _unsupported(job_text: str, quote: str) -> ProposedRequirement:
+    """One mandatory requirement no fact evidences - a hard gap."""
+    start = job_text.index(quote)
+    return ProposedRequirement(
+        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+        interpretation=RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+        ),
+        kind="presence",
+        label=quote,
+        coverage="unsupported",
+        evidence=[],
+    )
+
+
 def test_the_full_api_journey_reaches_ready_offline(
-    api_worker, deterministic_renderer, monkeypatch
+    ai_api_worker, fake_openai: FakeOpenAI, deterministic_renderer, monkeypatch
 ) -> None:
+    """Offline means no real network call, not no provider at all.
+
+    D5 (product-spec.md §2) requires a configured AI provider to create a
+    JobAnalysis - there is no rules-based fallback. `ai_api_worker` answers
+    Analyze through the fake OpenAI transport, so `OPENAI_API_KEY` still stays
+    genuinely unset and nothing here reaches the network; only the step D5
+    made provider-mandatory is scripted; everything downstream of the analysis
+    - Draft through Ready - is exactly the deterministic slice this test
+    proves runs with no key at all.
+    """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert os.environ.get("OPENAI_API_KEY") is None, (
         "the deterministic slice must reach Ready with no provider configured"
     )
+    fake_openai.script(
+        "propose_requirement_extraction",
+        RequirementExtractionProposal(
+            requirements=[
+                _matched(
+                    ACCOUNT_MANAGER_JOB,
+                    "Experience owning the full sales cycle.",
+                    "sales.summary.new_business",
+                ),
+                _matched(ACCOUNT_MANAGER_JOB, "Fluent English.", "common.language.english"),
+            ],
+            unmapped_statements=[],
+        ),
+    )
+    fake_openai.script(
+        "propose_job_analysis",
+        JobClassificationProposal(
+            track="sales",
+            profile="account-manager",
+            emphasis="account-growth",
+            language="en",
+            confidence=0.95,
+            rationale="account management role with a clear sales-cycle requirement",
+            keywords=[],
+        ),
+    )
 
     # --- Create ---------------------------------------------------------
     created = _post(
-        api_worker,
+        ai_api_worker,
         "/applications",
         {
             "company": "Journey Co",
@@ -88,14 +168,14 @@ def test_the_full_api_journey_reaches_ready_offline(
     application_id = created.json()["application_id"]
     job_snapshot_id = created.json()["job_snapshot_id"]
 
-    detail = _get(api_worker, f"/applications/{application_id}").json()
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "needs_analysis"
 
     # --- Analyze --------------------------------------------------------
     analyzed = _run_operation(
-        api_worker,
+        ai_api_worker,
         _post(
-            api_worker,
+            ai_api_worker,
             f"/applications/{application_id}/analyses",
             {"job_snapshot_id": job_snapshot_id},
         ),
@@ -106,26 +186,26 @@ def test_the_full_api_journey_reaches_ready_offline(
     # the no-review path can draft without a separate selection command.
     selection_plan_id = sources["selection_plan"]
 
-    detail = _get(api_worker, f"/applications/{application_id}").json()
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready_to_draft"
     assert detail["active_selection_plan_id"] == selection_plan_id
 
     # --- Draft ----------------------------------------------------------
     drafted = _run_operation(
-        api_worker,
+        ai_api_worker,
         _post(
-            api_worker,
+            ai_api_worker,
             f"/applications/{application_id}/working-draft/generate",
             {"job_analysis_id": analysis_id, "selection_plan_id": selection_plan_id},
         ),
     )
     working_draft_id = _outputs(drafted)["working_draft"]
 
-    detail = _get(api_worker, f"/applications/{application_id}").json()
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready_for_approval"
     assert detail["working_draft_state"] == "validated"
 
-    read = _get(api_worker, f"/working-drafts/{working_draft_id}")
+    read = _get(ai_api_worker, f"/working-drafts/{working_draft_id}")
     assert read.status_code == 200, read.text
     etag = read.headers["ETag"]
 
@@ -138,7 +218,7 @@ def test_the_full_api_journey_reaches_ready_offline(
     # It still commits a new version: `apply_claim_edit` records the manual
     # derivation, so the content hash moves even when the words do not, which is
     # what makes the second save below a real lost-update attempt.
-    claim = working_claim(api_worker.services, application_id, "sales.metric.performance")
+    claim = working_claim(ai_api_worker.services, application_id, "sales.metric.performance")
     patch_body = {
         "claim_edits": [
             {"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}
@@ -146,28 +226,28 @@ def test_the_full_api_journey_reaches_ready_offline(
     }
 
     edited = _patch(
-        api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
+        ai_api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
     )
     assert edited.status_code == 200, edited.text
     new_etag = edited.headers["ETag"]
     assert new_etag != etag
 
-    detail = _get(api_worker, f"/applications/{application_id}").json()
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "draft_in_progress"
     assert detail["working_draft_state"] == "editing"
 
     # The same token again is the concurrency matrix's first row: the second
     # save must change nothing at all rather than win or merge.
     stale = _patch(
-        api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
+        ai_api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
     )
     assert stale.status_code == 409, stale.text
-    assert _get(api_worker, f"/working-drafts/{working_draft_id}").headers["ETag"] == new_etag
+    assert _get(ai_api_worker, f"/working-drafts/{working_draft_id}").headers["ETag"] == new_etag
 
     # --- Validate -------------------------------------------------------
-    current = _get(api_worker, f"/working-drafts/{working_draft_id}").json()
+    current = _get(ai_api_worker, f"/working-drafts/{working_draft_id}").json()
     validated = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/validate",
         {"expected_edit_version": current["edit_version"]},
     )
@@ -175,13 +255,13 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert validated.json()["passed"] is True, validated.json()["report"]
     validation_run_id = validated.json()["validation_run_id"]
 
-    detail = _get(api_worker, f"/applications/{application_id}").json()
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready_for_approval"
     assert detail["working_draft_state"] == "validated"
 
     # --- Approve --------------------------------------------------------
     approved = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         {
             "expected_edit_version": current["edit_version"],
@@ -191,19 +271,19 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert approved.status_code == 201, approved.text
     revision_id = approved.json()["revision_id"]
 
-    detail = _get(api_worker, f"/applications/{application_id}").json()
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "approved"
 
-    revision = _get(api_worker, f"/approved-revisions/{revision_id}").json()
+    revision = _get(ai_api_worker, f"/approved-revisions/{revision_id}").json()
     assert revision["ready_qualified"] is False, "nothing is rendered yet"
     # The approval was made from a browser, and the immutable record must say so.
     assert revision["decision_provenance"]["client"] == "web"
 
     # --- Render ---------------------------------------------------------
     rendered = _run_operation(
-        api_worker,
+        ai_api_worker,
         _post(
-            api_worker,
+            ai_api_worker,
             f"/approved-revisions/{revision_id}/render",
             {"application_id": application_id},
         ),
@@ -211,18 +291,18 @@ def test_the_full_api_journey_reaches_ready_offline(
     pdf_artifact_version_id = _outputs(rendered)["resume_pdf"]
 
     # --- Ready ----------------------------------------------------------
-    detail = _get(api_worker, f"/applications/{application_id}").json()
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready"
     assert detail["latest_ready_revision_id"] == revision_id
 
-    revision = _get(api_worker, f"/approved-revisions/{revision_id}").json()
+    revision = _get(ai_api_worker, f"/approved-revisions/{revision_id}").json()
     assert revision["ready_qualified"] is True
     assert revision["pdf_artifact_version_id"] == pdf_artifact_version_id
     assert revision["ready_validation"]["passed"] is True
 
     # --- Download the exact Ready PDF (§5.2) ----------------------------
     export = _get(
-        api_worker,
+        ai_api_worker,
         f"/approved-revisions/{revision_id}/recruiter-pdf"
         f"?pdf_artifact_version_id={pdf_artifact_version_id}",
     )
@@ -230,16 +310,42 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert export.content.startswith(b"%PDF")
     assert "CV.pdf" in export.headers["content-disposition"]
 
-    by_id = _get(api_worker, f"/artifacts/{pdf_artifact_version_id}/download")
+    by_id = _get(ai_api_worker, f"/artifacts/{pdf_artifact_version_id}/download")
     assert by_id.status_code == 200, by_id.text
     assert by_id.content == export.content
 
 
 def test_the_review_journey_resolves_once_and_reaches_ready(
-    api_worker, deterministic_renderer
+    ai_api_worker, fake_openai: FakeOpenAI, deterministic_renderer
 ) -> None:
+    fake_openai.script(
+        "propose_requirement_extraction",
+        RequirementExtractionProposal(
+            requirements=[
+                _matched(
+                    REVIEW_DECISION_JOB,
+                    "Experience owning the full sales cycle.",
+                    "sales.summary.new_business",
+                ),
+                _unsupported(REVIEW_DECISION_JOB, "Sales experience at a SaaS company."),
+            ],
+            unmapped_statements=[],
+        ),
+    )
+    fake_openai.script(
+        "propose_job_analysis",
+        JobClassificationProposal(
+            track="sales",
+            profile="account-manager",
+            emphasis="account-growth",
+            language="en",
+            confidence=0.9,
+            rationale="account management with an unverified SaaS-specific requirement",
+            keywords=[],
+        ),
+    )
     created = _post(
-        api_worker,
+        ai_api_worker,
         "/applications",
         {
             "company": "Review Journey Co",
@@ -252,20 +358,20 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     application_id = created.json()["application_id"]
 
     analyzed = _run_operation(
-        api_worker,
+        ai_api_worker,
         _post(
-            api_worker,
+            ai_api_worker,
             f"/applications/{application_id}/analyses",
             {"job_snapshot_id": created.json()["job_snapshot_id"]},
         ),
     )
     original = _outputs(analyzed)
-    state = _get(api_worker, f"/applications/{application_id}").json()
+    state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert state["preparation_state"] == "needs_review"
     assert state["recommended_action"] == "apply_analysis_decisions"
 
     decided = _post(
-        api_worker,
+        ai_api_worker,
         f"/analyses/{original['job_analysis']}/apply-decisions",
         {
             "application_id": application_id,
@@ -284,11 +390,11 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     # Two decisions, because they answer two different questions: what this job
     # is, and whether to proceed past each deficiency. Accepting low Fit no
     # longer dismisses the hard gaps along with it.
-    state = _get(api_worker, f"/applications/{application_id}").json()
+    state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert {reason["code"] for reason in state["review_reasons"]} == {"HARD_GAP_REQUIRES_DECISION"}
-    analysis = api_worker.services.repository.get_analysis(resolved["job_analysis_id"])["analysis"]
+    analysis = ai_api_worker.services.repository.get_analysis(resolved["job_analysis_id"])["analysis"]
     accepted = _post(
-        api_worker,
+        ai_api_worker,
         f"/analyses/{resolved['job_analysis_id']}/apply-decisions",
         {
             "application_id": application_id,
@@ -305,14 +411,14 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     assert accepted.status_code == 201, accepted.text
     resolved = {**resolved, "selection_plan_id": accepted.json()["selection_plan_id"]}
 
-    state = _get(api_worker, f"/applications/{application_id}").json()
+    state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert state["review_reasons"] == []
     assert state["preparation_state"] == "ready_to_draft"
 
     drafted = _run_operation(
-        api_worker,
+        ai_api_worker,
         _post(
-            api_worker,
+            ai_api_worker,
             f"/applications/{application_id}/working-draft/generate",
             {
                 "job_analysis_id": resolved["job_analysis_id"],
@@ -321,10 +427,10 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         ),
     )
     working_draft_id = _outputs(drafted)["working_draft"]
-    working = _get(api_worker, f"/working-drafts/{working_draft_id}").json()
+    working = _get(ai_api_worker, f"/working-drafts/{working_draft_id}").json()
 
     validated = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/validate",
         {"expected_edit_version": working["edit_version"]},
     )
@@ -332,7 +438,7 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     assert validated.json()["passed"] is True
 
     approved = _post(
-        api_worker,
+        ai_api_worker,
         f"/working-drafts/{working_draft_id}/approve",
         {
             "expected_edit_version": working["edit_version"],
@@ -343,14 +449,14 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     revision_id = approved.json()["revision_id"]
 
     rendered = _run_operation(
-        api_worker,
+        ai_api_worker,
         _post(
-            api_worker,
+            ai_api_worker,
             f"/approved-revisions/{revision_id}/render",
             {"application_id": application_id},
         ),
     )
     assert _outputs(rendered)["resume_pdf"]
-    state = _get(api_worker, f"/applications/{application_id}").json()
+    state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert state["preparation_state"] == "ready"
     assert state["latest_ready_revision_id"] == revision_id
