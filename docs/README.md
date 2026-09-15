@@ -9,7 +9,6 @@ Where the authoritative answer lives. One concept, one home; everything else lin
 | A layer boundary, storage layout, runtime config, process model | [`spec/architecture.md`](spec/architecture.md) |
 | What evidence a change owes, the golden matrix, release gates | [`spec/test-and-acceptance-plan.md`](spec/test-and-acceptance-plan.md) |
 | Why tailoring works the way it does, and what is still only designed | [`tailoring-decisions.md`](tailoring-decisions.md) |
-| The two acceptance postings and their source mappings | [`tailoring-acceptance-cases.md`](tailoring-acceptance-cases.md) |
 | Open frontend UX work | [`backlog/frontend-ux.md`](backlog/frontend-ux.md) |
 | How to split implementation across parallel agents | [`execution-protocol.md`](execution-protocol.md) |
 | How to run, build, and test the system | [`../README.md`](../README.md) |
