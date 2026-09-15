@@ -53,11 +53,12 @@ def fit_score_from_requirements(requirements: Sequence[Requirement]) -> float:
     An empty requirement list scores 1.0, not `None`: nothing was demanded, so
     nothing is missing - the same "not punished for being short" reading a thin,
     legitimately requirement-free posting already got from the old step function
-    (`derive_fit` returned HIGH on no gaps). This function cannot on its own tell
-    that case apart from an extraction that produced nothing because it failed;
-    that distinction is `extraction_failed`, which both callers already carry and
-    already use to force the *caller's* `fit_score` to `None` before this
-    function would otherwise be asked to guess at zero requirements.
+    (`derive_fit` returned HIGH on no gaps). This function cannot on its own
+    tell that case apart from an extraction that produced nothing because it
+    failed. `fit_score_for` is where that distinction is made, and is the only
+    caller in the engine; the raw score stays separately callable because it is
+    the arithmetic on its own, testable without the two signals that decide
+    whether asking for it is meaningful at all.
     """
     if not requirements:
         return 1.0
@@ -151,19 +152,22 @@ def gaps_from_requirements(requirements: Sequence[Requirement], facts: FactStore
     for requirement in requirements:
         if requirement.coverage == "matched":
             continue
-        authoritative = [
-            facts.facts[fact_id].meaning
-            for fact_id in requirement.boundary_fact_ids
-            if fact_id in facts.facts
-        ]
+        # The first boundary fact that applies gives the authoritative account of
+        # what is not verified; the generic label is the fallback when none does.
+        authoritative = next(
+            (
+                facts.facts[fact_id].meaning
+                for fact_id in requirement.boundary_fact_ids
+                if fact_id in facts.facts
+            ),
+            None,
+        )
         hard = requirement.mandatory and requirement.coverage != "undetermined"
         gaps.append(
             Gap(
                 requirement=requirement.text,
                 severity="hard" if hard else "warning",
-                reason=authoritative[0]
-                if authoritative
-                else _COVERAGE_REASON[requirement.coverage],
+                reason=authoritative or _COVERAGE_REASON[requirement.coverage],
                 substitute_fact_ids=list(requirement.supporting_fact_ids),
                 requirement_id=requirement.requirement_id,
             )
@@ -247,8 +251,7 @@ def derive_gaps(lowered: str) -> list[Gap]:
     could get different gaps from the same text.
     """
     gaps: list[Gap] = []
-    hard_saas = bool(re.search(r"(?:direct|proven|must have|required).{0,40}saas sales", lowered))
-    if hard_saas:
+    if re.search(r"(?:direct|proven|must have|required).{0,40}saas sales", lowered):
         gaps.append(
             Gap(
                 requirement="Direct SaaS Sales",
