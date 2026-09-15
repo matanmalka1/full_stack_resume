@@ -246,7 +246,6 @@ describe("the review decision, on the Application screen", () => {
     expect(screen.queryByLabelText("מסלול")).not.toBeInTheDocument();
   });
 
-
   it("sends an accepted gap with the plan the decision was taken against", async () => {
     let applied = false;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {

@@ -233,11 +233,7 @@ const gapsFrom = (value: unknown): AnalysisGap[] => {
     return [];
   }
   return value.flatMap((gap) => {
-    if (
-      !isRecord(gap) ||
-      typeof gap.requirement !== "string" ||
-      typeof gap.requirement_id !== "string"
-    ) {
+    if (!isRecord(gap) || typeof gap.requirement !== "string" || typeof gap.requirement_id !== "string") {
       return [];
     }
     return gap.severity === "hard" || gap.severity === "warning"

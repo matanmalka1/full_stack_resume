@@ -11,8 +11,7 @@ import { fitLabels, fitTones } from "../../model/analysisLabels";
 const Provenance = ({ record }: { record: JobAnalysisRecord | null }) =>
   record === null ? null : (
     <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-      נותח על ידי AI (<LtrText>{record.model}</LtrText>){" "}
-      · {formatDateTime(record.created_at)}
+      נותח על ידי AI (<LtrText>{record.model}</LtrText>) · {formatDateTime(record.created_at)}
       {record.version_number <= 1 ? null : ` · ניתוח מס' ${record.version_number}`}
     </p>
   );

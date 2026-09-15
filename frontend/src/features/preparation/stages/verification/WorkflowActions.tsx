@@ -29,18 +29,8 @@ interface WorkflowActionsProps {
 }
 
 export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: WorkflowActionsProps) => {
-  const {
-    analyze,
-    archive,
-    commandsBlocked,
-    draft,
-    editVersion,
-    error,
-    provider,
-    replace,
-    settings,
-    workInFlight,
-  } = useWorkflowCommands(detail, plan, onQueued);
+  const { analyze, archive, commandsBlocked, draft, editVersion, error, provider, replace, settings, workInFlight } =
+    useWorkflowCommands(detail, plan, onQueued);
 
   /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
      draft carries manual wording that nothing regenerates, so the reader opts out of

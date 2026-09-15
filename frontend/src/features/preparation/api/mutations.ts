@@ -30,10 +30,7 @@ import type { WorkflowActionPlan } from "../model/workflowActionPlan";
    in the diagnostics tab. Both send this exact command, and reaching it through the full
    command hook mounted the stale-draft version read and the in-flight Operation query a
    second time for a button that needs neither. */
-export const useAnalyzeCommand = (
-  detail: ApplicationDetail,
-  onQueued: (operationId: string) => void,
-) => {
+export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operationId: string) => void) => {
   const queryClient = useQueryClient();
   const { settings } = useSettings();
   /* The default lane, unaffected by the override below - `useWorkflowCommands` also

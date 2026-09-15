@@ -16,7 +16,7 @@ import { type ChecklistEntry, CommitBar, CommitChecklist } from "../../component
 import { GapsSection } from "../analysis/GapsSection";
 import { ReviewDecisionForm } from "./ReviewDecisionForm";
 
-/* The classification decision, on the Application screen and directly under the analysis
+/* The analysis decision, on the Application screen and directly under the analysis
    it is about.
 
    It used to be a route of its own, which meant the decision was taken on one screen and
@@ -42,8 +42,7 @@ export const ReviewDecisionPanel = ({
   beforeApply,
   inline = false,
 }: {
-  /* Read both to name the values the override selects would replace and to render the
-     gap list a hard-gap acceptance is taken against. */
+  /* The analysis supplies the gap list that a hard-gap acceptance is taken against. */
   classification: Classification | null;
   detail: ApplicationDetail;
   beforeApply?: () => Promise<void>;
@@ -75,9 +74,7 @@ export const ReviewDecisionPanel = ({
   /* Only a hard gap is accepted; its requirement ID is the whole of what the
      acceptance records. */
   const acceptableGapCount =
-    classification === null
-      ? 0
-      : classification.gaps.filter((gap) => gap.severity === "hard").length;
+    classification === null ? 0 : classification.gaps.filter((gap) => gap.severity === "hard").length;
 
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */
@@ -90,11 +87,7 @@ export const ReviewDecisionPanel = ({
   const fitReady = !showFit || decisions.accept_low_fit;
   const gapsReady = !showGapAcceptance || acceptedRequirementIds.length > 0;
   const decisionReady =
-    analysisId !== null &&
-    hasDecision(submitted) &&
-    incompleteAnalysisReady &&
-    fitReady &&
-    gapsReady;
+    analysisId !== null && hasDecision(submitted) && incompleteAnalysisReady && fitReady && gapsReady;
 
   const apply = useMutation({
     mutationFn: async () => {
@@ -182,8 +175,8 @@ export const ReviewDecisionPanel = ({
               acceptance alone creates a replacement SelectionPlan. */}
           <Disclosure summary="מה יישמר לאחר האישור?">
             <p dir="auto">
-              אישור המשך עם ניתוח חלקי נרשם בניתוח חדש; קבלת פער נרשמת בתוכנית בחירה חדשה.
-              הרשומות הקודמות נשמרות, והחלטה שלא נשלחה אינה מתבטלת.
+              אישור המשך עם ניתוח חלקי נרשם בניתוח חדש; קבלת פער נרשמת בתוכנית בחירה חדשה. הרשומות הקודמות נשמרות,
+              והחלטה שלא נשלחה אינה מתבטלת.
             </p>
           </Disclosure>
 

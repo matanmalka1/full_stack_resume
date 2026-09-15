@@ -47,25 +47,25 @@ const GapAcceptanceFields = ({
   <div className="flex flex-col gap-3">
     <p className="text-support leading-6 text-cv-text-muted" dir="auto">
       {acceptance.marked === 0
-          ? "סימון פער חוסם ברשימת הפערים שלמעלה הוא ההכרעה שפותחת את המשך התהליך. הסימון אינו הופך את הפער למכוסה ואינו מתיר טענה שאין לה עובדה — הוא רושם שהמשכת ביודעין."
-          : `${acceptance.marked} מתוך ${acceptance.acceptable} פערים חוסמים מסומנים לקבלה. הסימון אינו הופך את הפער למכוסה ואינו מתיר טענה שאין לה עובדה — הוא רושם שהמשכת ביודעין.`}
+        ? "סימון פער חוסם ברשימת הפערים שלמעלה הוא ההכרעה שפותחת את המשך התהליך. הסימון אינו הופך את הפער למכוסה ואינו מתיר טענה שאין לה עובדה — הוא רושם שהמשכת ביודעין."
+        : `${acceptance.marked} מתוך ${acceptance.acceptable} פערים חוסמים מסומנים לקבלה. הסימון אינו הופך את הפער למכוסה ואינו מתיר טענה שאין לה עובדה — הוא רושם שהמשכת ביודעין.`}
     </p>
 
     <Field hint="הסיבה נרשמת יחד עם כל הפערים שסומנו בשליחה הזו." label="סיבת הקבלה" optional>
-        {(control) => (
-          <Textarea
-            {...control}
-            className="min-h-20"
-            dir="auto"
-            disabled={disabled}
-            /* The server's own limit, stated to the control rather than re-checked after
-               the fact: a longer reason is refused there, and the field is what keeps the
-               reader from writing one. */
-            maxLength={500}
-            onChange={(event) => onChange({ ...decisions, acceptance_reason: event.target.value })}
-            value={decisions.acceptance_reason ?? ""}
-          />
-        )}
+      {(control) => (
+        <Textarea
+          {...control}
+          className="min-h-20"
+          dir="auto"
+          disabled={disabled}
+          /* The server's own limit, stated to the control rather than re-checked after
+             the fact: a longer reason is refused there, and the field is what keeps the
+             reader from writing one. */
+          maxLength={500}
+          onChange={(event) => onChange({ ...decisions, acceptance_reason: event.target.value })}
+          value={decisions.acceptance_reason ?? ""}
+        />
+      )}
     </Field>
   </div>
 );

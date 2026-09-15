@@ -30,9 +30,7 @@ export const updateSettings = async (body: UpdateSettingsRequest, etag: string):
 };
 
 export const executionProvider = (settings: Settings | undefined): "openai" | undefined =>
-  settings?.provider_configured && settings.ai_enabled
-    ? "openai"
-    : undefined;
+  settings?.provider_configured && settings.ai_enabled ? "openai" : undefined;
 
 export const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
   settings?.provider_configured === true && settings.ai_enabled === true;
