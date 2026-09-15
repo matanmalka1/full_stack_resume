@@ -31,34 +31,43 @@ def store_draft(root: Path, draft):
     return stored.paths.markdown, stored.markdown
 
 
-def seed_existing_analysis(services: Services, ingested, **overrides):
+def seed_existing_analysis(
+    services: Services,
+    ingested,
+    *,
+    activation_command: AnalyzeCommand | None = None,
+    **overrides,
+):
     """Persist an already-existing analysis for downstream tests without invoking AI."""
     knowledge = services.analysis.load_knowledge()
     profile_name = ProfileName(overrides.pop("profile_override", "account-manager"))
     profile = knowledge.profiles.get(profile_name)
+    gaps = overrides.pop("gaps", [])
+    requirements = overrides.pop("requirements", [])
     analysis = JobAnalysis(
         analysis_version="2.0",
-        track=Track(overrides.pop("track_override", profile.track)),
+        track=Track(overrides.pop("track_override", None) or profile.track),
         profile=profile_name,
-        emphasis=Emphasis(overrides.pop("emphasis_override", profile.default_emphasis)),
-        language=overrides.pop("language_override", "en"),
+        emphasis=Emphasis(overrides.pop("emphasis_override", None) or profile.default_emphasis),
+        language=overrides.pop("language_override", None) or "en",
         confidence=0.99,
         rationale="existing analysis test fixture",
-        fit="high",
-        fit_score=1.0,
-        gaps=[],
-        requirements=[],
+        fit=overrides.pop("fit", "high"),
+        fit_score=overrides.pop("fit_score", 1.0),
+        gaps=gaps,
+        requirements=requirements,
         extraction_version="test-ai-v1",
         unmapped_statements=[],
-        understanding={"by_ai": 0},
+        understanding={"by_ai": len(requirements)},
         interpretation_decisions=[],
-        mandatory_requirements=[],
-        preferred_requirements=[],
+        mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
+        preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
         keywords=[],
         **overrides,
     )
     return services.analysis.activate(
-        AnalyzeCommand(
+        activation_command
+        or AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
         ),
@@ -80,6 +89,25 @@ def seed_existing_analysis(services: Services, ingested, **overrides):
     )
 
 
+def seed_analysis_for_command(services: Services, command: AnalyzeCommand, **analysis_values):
+    """Seed an existing analysis explicitly for a downstream test scenario."""
+    snapshot = services.repository.get_snapshot(command.job_snapshot_id)
+    if snapshot["application_id"] != command.application_id:
+        from cv_engine.application.errors import LineageBroken
+
+        raise LineageBroken("job snapshot does not belong to the named Application")
+    return seed_existing_analysis(
+        services,
+        command,
+        activation_command=command,
+        track_override=command.track_override,
+        profile_override=command.profile_override or "account-manager",
+        emphasis_override=command.emphasis_override,
+        language_override=command.language_override or "en",
+        **analysis_values,
+    )
+
+
 ACCOUNT_MANAGER_JOB = (
     "Account Manager responsible for retention, portfolio growth, negotiation, "
     "and customer relationships.\n\n"
@@ -88,18 +116,14 @@ ACCOUNT_MANAGER_JOB = (
     "- Fluent English."
 )
 
-# Hebrew, low confidence, one hard gap and one warning gap: the deterministic
-# classifier requires approval here, so it exposes anything a provider could
-# quietly relax.
+# An ambiguous Hebrew posting for review-flow scenarios.
 AMBIGUOUS_HEBREW_JOB = (
     "דרוש מנהל לקוחות עם ניסיון בפיתוח עסקי ובניהול תיק לקוחות מול ארגונים גדולים. "
     "התפקיד כולל אחריות על שימור, גיוס לקוחות חדשים והובלת תהליכי מכירה מורכבים. "
     "דרישות: account manager, business development, Salesforce, must have direct saas sales."
 )
 
-# A readable review-path posting: classification confidence still requires an
-# explicit Profile decision, while the technology-company requirement remains
-# a separate hard gap that the user must accept by its requirement ID.
+# A readable review-path posting with a technology-company requirement.
 REVIEW_DECISION_JOB = (
     "Account manager and business development role for enterprise customers.\n"
     "התפקיד כולל אחריות על שימור, גיוס לקוחות חדשים והובלת תהליכי מכירה מורכבים.\n\n"

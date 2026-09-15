@@ -12,8 +12,6 @@ import type { ApplicationDetail, Reason } from "@/api/contracts";
    heading, and the checklist in its action bar - and a count worked out four times is a
    count that eventually disagrees with the controls it describes. */
 
-export const CLASSIFICATION_REASON = "MATERIAL_CLASSIFICATION_AMBIGUITY";
-
 export const FIT_REASON = "LOW_FIT_REQUIRES_ACCEPTANCE";
 
 /* Its own reason with its own control, and deliberately not the fit checkbox's. The two
@@ -30,7 +28,6 @@ export const INCOMPLETE_ANALYSIS_REASON = "ANALYSIS_INCOMPLETE";
    backend falls through to being named as belonging elsewhere instead of quietly
    acquiring an unrelated control. */
 const REVIEW_REASONS_THIS_SCREEN_OWNS: Record<string, true> = {
-  [CLASSIFICATION_REASON]: true,
   [INCOMPLETE_ANALYSIS_REASON]: true,
   [FIT_REASON]: true,
   [GAP_REASON]: true,
@@ -43,7 +40,6 @@ export const resolvedByReviewDecision = (reason: Reason): boolean =>
   Object.hasOwn(REVIEW_REASONS_THIS_SCREEN_OWNS, reason.code);
 
 export interface OpenDecisions {
-  classification: boolean;
   fit: boolean;
   gaps: boolean;
   incompleteAnalysis: boolean;
@@ -56,7 +52,6 @@ export const openDecisions = (detail: ApplicationDetail): OpenDecisions => {
   const mine = detail.review_reasons.filter(resolvedByReviewDecision);
 
   return {
-    classification: mine.some((reason) => reason.code === CLASSIFICATION_REASON),
     fit: mine.some((reason) => reason.code === FIT_REASON),
     gaps: detail.active_selection_plan_id != null && mine.some((reason) => reason.code === GAP_REASON),
     incompleteAnalysis: mine.some((reason) => reason.code === INCOMPLETE_ANALYSIS_REASON),

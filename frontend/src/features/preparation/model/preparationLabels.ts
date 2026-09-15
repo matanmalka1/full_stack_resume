@@ -108,7 +108,6 @@ const blockedReasonLabels: Record<string, string> = {
   VALIDATION_FAILED: "האימות נכשל. צריך לתקן ולאמת מחדש.",
   VALIDATION_STALE: "הטיוטה השתנתה מאז האימות.",
   DRAFT_EDITED_AFTER_VALIDATION: "הטיוטה השתנתה מאז האימות.",
-  MATERIAL_CLASSIFICATION_AMBIGUITY: "צריך להכריע את סיווג המשרה.",
   ANALYSIS_INCOMPLETE: "הניתוח לא הצליח לקרוא את דרישות המשרה.",
   LOW_FIT_REQUIRES_ACCEPTANCE: "צריך לאשר התאמה נמוכה.",
   HARD_GAP_REQUIRES_DECISION: "צריך להכריע פער חוסם.",
@@ -130,7 +129,6 @@ export const blockedReasonLabel = (reason: string): string | null => blockedReas
    `blockedReasonLabel` answers null: a `SCREAMING_SNAKE` identifier on screen is a
    missing translation shown to the wrong audience. */
 const reasonTitles: Record<string, string> = {
-  MATERIAL_CLASSIFICATION_AMBIGUITY: "סיווג המשרה לא חד־משמעי",
   ANALYSIS_INCOMPLETE: "הניתוח לא קרא את דרישות המשרה",
   LOW_FIT_REQUIRES_ACCEPTANCE: "ההתאמה למשרה נמוכה",
   HARD_GAP_REQUIRES_DECISION: "יש פער חוסם מול הדרישות",

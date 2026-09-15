@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import date
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft
+from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, seed_analysis_for_command
 from sqlalchemy import update
 
 from cv_engine.application.commands import (
@@ -52,11 +52,12 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert listed.id == ingested.application_id
     assert listed.preparation_state is PreparationState.NEEDS_ANALYSIS
 
-    analysed = services.analysis.analyze(
+    analysed = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-        )
+        ),
     )
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.preparation_state is PreparationState.READY_TO_DRAFT
@@ -91,8 +92,8 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert "edit_matching_configuration" in detail.available_actions
 
 
-#: Requirements stated in prose that neither the concept vocabulary nor the
-#: legacy gap rules can read. The engine's honest answer is that it did not
+#: Requirements stated in prose that the scripted extractor does not read.
+#: The engine's honest answer is that it did not
 #: understand this posting - which is a blocker no decision settles.
 UNREADABLE_POSTING = (
     "Account Executive.\n"
@@ -166,7 +167,6 @@ def _analysis_needing(reason: str) -> JobAnalysis:
             "preferred_requirements": [],
             "keywords": [],
             "language": "en",
-            "classification_requires_approval": True,
             "approval_reasons": [reason],
         }
     )
@@ -247,11 +247,15 @@ def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided
             client="web",
         )
     )
-    analysed = services.analysis.analyze(
+    analysed = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-        )
+        ),
+        fit="unknown",
+        fit_score=None,
+        approval_reasons=["extraction-failed"],
     )
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_REVIEW
@@ -400,11 +404,12 @@ def test_new_analysis_makes_parallel_draft_stale_without_erasing_ready_history(
             selection_plan_id=setup.selection_plan_id,
         )
     )
-    replacement = setup.services.analysis.analyze(
+    replacement = seed_analysis_for_command(
+        setup.services,
         AnalyzeCommand(
             application_id=setup.application_id,
             job_snapshot_id=setup.snapshot_id,
-        )
+        ),
     )
 
     detail = setup.services.queries.application_detail(setup.application_id)

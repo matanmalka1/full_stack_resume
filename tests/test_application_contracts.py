@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, seed_analysis_for_command
 
 from cv_engine.application import errors
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
@@ -56,18 +56,20 @@ def test_commands_require_sources_owned_by_the_named_application(services) -> No
     )
 
     with pytest.raises(errors.LineageBroken):
-        services.analysis.analyze(
+        seed_analysis_for_command(
+            services,
             AnalyzeCommand(
                 application_id=mine.application_id,
                 job_snapshot_id=theirs.job_snapshot_id,
-            )
+            ),
         )
 
-    analysed = services.analysis.analyze(
+    analysed = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=theirs.application_id,
             job_snapshot_id=theirs.job_snapshot_id,
-        )
+        ),
     )
     with pytest.raises(errors.LineageBroken):
         services.drafts.draft(

@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from typing import cast
 
 from ..contracts.analysis import (
     JobAnalysis,
     JobClassificationProposal,
+    Language,
     OverrideKey,
     Requirement,
     UnderstandingSources,
     UnmappedStatement,
 )
 from ..facts import FactStore
-from ..profiles import ProfileStore
-from .approval import unresolved_reasons
+from ..profiles import ProfileStore, classification_mismatch
 from .gaps import (
     fit_level_from_score,
     fit_score_for,
@@ -26,14 +27,19 @@ from .gaps import (
 def _classified_values(proposal, profiles: ProfileStore, overrides: Mapping[OverrideKey, str]):
     profile = type(proposal.profile)(overrides.get("profile", proposal.profile.value))
     track = type(proposal.track)(overrides.get("track", proposal.track.value))
-    if profiles.get(profile).track is not track:
+    emphasis = type(proposal.emphasis)(overrides.get("emphasis", proposal.emphasis.value))
+    selected = profiles.get(profile)
+    mismatch = classification_mismatch(selected, track, emphasis)
+    if mismatch == "track":
         raise ValueError(
             f"classified Track {track.value} and Profile {profile.value} are inconsistent"
         )
-    emphasis = type(proposal.emphasis)(overrides.get("emphasis", proposal.emphasis.value))
-    if emphasis not in profiles.get(profile).allowed_emphases:
+    if mismatch == "emphasis":
         raise ValueError(f"Emphasis {emphasis.value} is not allowed for Profile {profile.value}")
-    return track, profile, emphasis, overrides.get("language", proposal.language)
+    language = overrides.get("language", proposal.language)
+    if language not in ("en", "he"):
+        raise ValueError(f"unsupported analysis language: {language}")
+    return track, profile, emphasis, cast(Language, language)
 
 
 def _analysis_reasons(
@@ -104,7 +110,6 @@ def build_analysis(
         preferred_requirements=[g.requirement for g in gaps if g.severity == "warning"],
         keywords=sorted(set(proposal.keywords)),
         language=language,
-        classification_requires_approval=bool(unresolved_reasons(reasons, applied)),
         approval_reasons=reasons,
         user_override=applied,
     )
@@ -155,9 +160,6 @@ def rebase_requirements(
             "fit_score": fit_score,
             "mandatory_requirements": [g.requirement for g in gaps if g.severity == "hard"],
             "preferred_requirements": [g.requirement for g in gaps if g.severity == "warning"],
-            "classification_requires_approval": bool(
-                unresolved_reasons(reasons, analysis.user_override)
-            ),
             "approval_reasons": reasons,
         }
     )

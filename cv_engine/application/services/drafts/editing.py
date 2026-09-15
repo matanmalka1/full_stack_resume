@@ -87,11 +87,7 @@ class DraftEditing(DraftServiceBase):
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
         self.load_active_application(working.application_id)
-        if working.content_hash != command.expected_content_hash:
-            raise StateConflict(
-                f"working draft {working.id} has content hash {working.content_hash}, "
-                f"not {command.expected_content_hash}"
-            )
+        self._require_content_hash(working, command.expected_content_hash)
         knowledge = self.load_knowledge()
         facts, profiles = knowledge.facts, knowledge.profiles
         # The chain is checked before the edit, on the same terms as every other

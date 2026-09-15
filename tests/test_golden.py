@@ -34,9 +34,9 @@ def _build_case(draft_factory, case: dict):
     overrides = case.get("overrides", {})
     return draft_factory(
         case["job"],
-        track_override=overrides.get("track"),
-        profile_override=overrides.get("profile"),
-        emphasis_override=overrides.get("emphasis"),
+        track_override=overrides.get("track") or case["track"],
+        profile_override=overrides.get("profile") or case["profile"],
+        emphasis_override=overrides.get("emphasis") or case["emphasis"],
         application_id="00000000-0000-0000-0000-000000000001",
         job_snapshot_id="00000000-0000-0000-0000-000000000002",
     )
@@ -47,7 +47,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
     tmp_path: Path,
     draft_factory,
 ) -> None:
-    """Pin content: classification, Markdown, selection, and the rendered HTML.
+    """Pin content: analysis fields, Markdown, selection, and rendered HTML.
 
     Nothing here needs a browser. `render_html` writes the document itself; only
     PDF geometry and the ATS/layout report below it need Chromium, and they are
@@ -150,9 +150,9 @@ def test_persisted_plan_reproduces_the_computed_selection(
         overrides = case.get("overrides", {})
         computed = draft_factory(
             case["job"],
-            track_override=overrides.get("track"),
-            profile_override=overrides.get("profile"),
-            emphasis_override=overrides.get("emphasis"),
+            track_override=overrides.get("track") or case["track"],
+            profile_override=overrides.get("profile") or case["profile"],
+            emphasis_override=overrides.get("emphasis") or case["emphasis"],
         )
         rebuilt = build_draft(
             application_id=computed.draft.application_id,

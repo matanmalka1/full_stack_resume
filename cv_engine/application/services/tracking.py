@@ -4,7 +4,11 @@ from typing import Literal
 
 from ...domain.contracts.records import AuditRecord
 from ...domain.contracts.recruitment import ApplicationStatus
-from ...domain.recruitment import terminal_outcome_after, transition_allowed
+from ...domain.recruitment import (
+    submission_owns_transition,
+    terminal_outcome_after,
+    user_transition_allowed,
+)
 from ...util import new_id, utc_now
 from ..commands import (
     ApplicationMutationResult,
@@ -72,11 +76,11 @@ class TrackingService(ServiceBase[TrackingRepository]):
             target = ApplicationStatus(command.target_status)
         except ValueError as exc:
             raise StateConflict(str(exc)) from exc
-        if target is ApplicationStatus.APPLIED:
+        if submission_owns_transition(target):
             raise StateConflict("applied is submission-owned and cannot be set directly")
         if target is current:
             return self._result(command.application_id)
-        if not transition_allowed(current, target):
+        if not user_transition_allowed(current, target):
             raise StateConflict(f"invalid status transition: {current.value} -> {target.value}")
         now = command.occurred_at or utc_now()
         event_id = new_id()

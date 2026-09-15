@@ -9,20 +9,14 @@ from ...application.errors import (
     StateConflict,
     UnknownRecord,
 )
-from ...util import canonical_json, new_id
-from .base import SqlAlchemyRepositoryBase
+from ...util import new_id
+from .base import SqlAlchemyRepositoryBase, json_text_record
 from .tables import applications, recruitment_events, submissions
 
 _RECRUITMENT_EVENT_COLUMNS = tuple(
     column for column in recruitment_events.c if column.name != "seq"
 )
 _SUBMISSION_COLUMNS = tuple(column for column in submissions.c if column.name != "seq")
-
-
-def _json_text_record(row: Any, field: str) -> dict[str, Any]:
-    record = dict(row)
-    record[field] = canonical_json(record[field])
-    return record
 
 
 class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
@@ -185,7 +179,7 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
             )
         if row is None:
             raise UnknownRecord(event_id)
-        return _json_text_record(row, "payload_json")
+        return json_text_record(row, "payload_json")
 
     def recruitment_events(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
@@ -198,7 +192,7 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .all()
             )
-        return [_json_text_record(row, "payload_json") for row in rows]
+        return [json_text_record(row, "payload_json") for row in rows]
 
     def submissions(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
@@ -211,4 +205,4 @@ class SqlAlchemyTrackingRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .all()
             )
-        return [_json_text_record(row, "metadata_json") for row in rows]
+        return [json_text_record(row, "metadata_json") for row in rows]

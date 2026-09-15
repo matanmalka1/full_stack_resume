@@ -19,6 +19,8 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
     approve_active_draft,
+    seed_analysis_for_command,
+    seed_existing_analysis,
     validate_active_draft,
 )
 from sqlalchemy import delete, func, select, update
@@ -40,6 +42,7 @@ from cv_engine.application.errors import (
     WorkflowError,
 )
 from cv_engine.application.ready import qualify_ready_revision
+from cv_engine.domain.contracts.analysis import Gap, Requirement
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.models import DecisionRecord
 from cv_engine.infrastructure.persistence.artifacts import SqlAlchemyArtifactRepository
@@ -83,7 +86,8 @@ def _persisted(services: Services) -> dict[str, int]:
 
 def _analyze(services: Services, application_id: str, **overrides):
     snapshot_id = services.repository.latest_snapshot(application_id)["id"]
-    return services.analysis.analyze(
+    return seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=application_id,
             job_snapshot_id=snapshot_id,
@@ -91,7 +95,7 @@ def _analyze(services: Services, application_id: str, **overrides):
             profile_override=overrides.get("profile"),
             emphasis_override=overrides.get("emphasis"),
             language_override=overrides.get("language"),
-        )
+        ),
     )
 
 
@@ -623,8 +627,9 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
         Path("cv_engine/api/routers/health.py"),
         Path("cv_engine/api/schemas/health.py"),
         Path("cv_engine/application/commands/knowledge.py"),
-        # The one stage that consumes it.
-        Path("cv_engine/application/services/analysis.py"),
+        # Preparation and interpretation correction consume it.
+        Path("cv_engine/application/services/analysis_preparation.py"),
+        Path("cv_engine/application/services/analysis_correction.py"),
     }
     root = Path(__file__).resolve().parents[1]
     readers = {
@@ -636,16 +641,6 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
         "these read the requirement vocabulary but are excluded from the document "
         f"knowledge scope: {sorted(str(path) for path in readers - allowed)}"
     )
-
-
-#: Classified as Development, and one of its hard gaps exists only under that
-#: Track: the years rule is the one gap a reclassification can delete.
-DEVELOPMENT_YEARS_JOB = (
-    "Senior Backend Developer.\n"
-    "Python API React microservices.\n"
-    "5+ years of experience required.\n"
-    "Must have proven direct SaaS Sales experience.\n"
-)
 
 
 def _hard_gap_ids(services: Services, analysis_id: str) -> list[str]:
@@ -672,11 +667,27 @@ def test_a_classification_decision_carries_its_gap_acceptance_in_one_write(
             client="web",
         )
     )
-    analysed = services.analysis.analyze(
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        )
+    requirement_id = "test-direct-saas-sales"
+    analysed = seed_existing_analysis(
+        services,
+        ingested,
+        requirements=[
+            Requirement(
+                requirement_id=requirement_id,
+                text="must have direct saas sales",
+                kind="presence",
+                mandatory=True,
+                coverage="unsupported",
+            )
+        ],
+        gaps=[
+            Gap(
+                requirement="must have direct saas sales",
+                severity="hard",
+                reason="canonical facts do not establish this requirement",
+                requirement_id=requirement_id,
+            )
+        ],
     )
     accepted_id = _hard_gap_ids(services, analysed.analysis_id)[0]
 
@@ -705,53 +716,6 @@ def test_a_classification_decision_carries_its_gap_acceptance_in_one_write(
     assert "HARD_GAP_REQUIRES_DECISION" not in {reason.code for reason in detail.review_reasons}
 
 
-def test_an_acceptance_the_reclassification_removes_is_refused_whole(
-    services: Services,
-) -> None:
-    """The atomic form refuses atomically: no analysis, no plan, no acceptance.
-
-    A Track override deletes the rule-derived gap that only Development states.
-    Accepting it and then reclassifying would store a decision about a gap the
-    new analysis does not have, which would later read as a decision about
-    something.
-    """
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Reclassified Gap Co",
-            target_role="Backend Developer",
-            job_text=DEVELOPMENT_YEARS_JOB,
-            client="web",
-        )
-    )
-    analysed = services.analysis.analyze(
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        )
-    )
-    analysis = services.repository.get_analysis(analysed.analysis_id)["analysis"]
-    years = next(
-        gap.requirement_id
-        for gap in analysis.gaps
-        if gap.severity == "hard" and "Development experience" in gap.requirement
-    )
-
-    before = _persisted(services)
-    with pytest.raises(PreconditionFailed, match="no hard gap to accept"):
-        services.analysis.apply_analysis_decisions(
-            ApplyAnalysisDecisionsCommand(
-                application_id=ingested.application_id,
-                job_analysis_id=analysed.analysis_id,
-                expected_analysis_id=analysed.analysis_id,
-                track_override="sales",
-                profile_override="account-manager",
-                accepted_requirement_ids=[years],
-                expected_selection_plan_id=analysed.selection_plan_id,
-            )
-        )
-    assert _persisted(services) == before
-
-
 def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
     services: Services,
 ) -> None:
@@ -769,11 +733,12 @@ def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
             client="web",
         )
     )
-    analysed = services.analysis.analyze(
+    analysed = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-        )
+        ),
     )
     before = _persisted(services)
     with pytest.raises(PreconditionFailed, match="fact overlay"):

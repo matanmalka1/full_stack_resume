@@ -100,3 +100,21 @@ def test_rebase_uses_fit_score_for(profile_store, fact_store) -> None:
     )
     assert rebased.fit_score is None
     assert rebased.fit.value == "unknown"
+
+
+def test_low_classification_confidence_does_not_create_a_review_reason(
+    profile_store, fact_store
+) -> None:
+    analysis = build_analysis(
+        requirements=[],
+        extraction_version="ai:test",
+        extraction_failed=False,
+        requirements_absent=False,
+        requirements_unmapped=False,
+        proposal=_proposal(confidence=0.01, rationale="uncertain", keywords=[]),
+        profiles=profile_store,
+        facts=fact_store,
+        unmapped_statements=[],
+        understanding=UnderstandingSources(by_ai=0),
+    )
+    assert analysis.approval_reasons == []

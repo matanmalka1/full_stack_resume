@@ -17,8 +17,7 @@ class FitLevel(StrEnum):
     LOW = "low"
     #: Requirements could not be read, so Fit was never assessed. Distinct from
     #: MEDIUM, which claims an assessment was made and landed in the middle.
-    #: Only a *new* analysis run whose extraction failed may carry it; analyses
-    #: stored before the extractor existed keep the Fit they were written with.
+    #: An extraction failure may carry it rather than claiming an assessment.
     UNKNOWN = "unknown"
 
 
@@ -31,7 +30,7 @@ Coverage = Literal["matched", "partial", "unsupported", "undetermined"]
 SourceRole = Literal["requirement", "responsibility", "company-description", "benefit", "other"]
 Obligation = Literal["mandatory", "preferred", "unspecified"]
 #: `any-of` is one requirement satisfied by any one member; `all-of` checks
-#: each member independently, the way `ConceptComponent` already does.
+#: each member independently.
 Composition = Literal["single", "any-of", "all-of"]
 
 
@@ -176,12 +175,9 @@ class Requirement(StrictModel):
     supporting_fact_ids: list[str] = []
     boundary_fact_ids: list[str] = []
     missing_components: list[MissingComponent] = []
-    #: None = this record was written before the interpretation gate existed.
-    #: Not "single, not negated" - that would be inventing a value the record
-    #: never carried. Consumers must preserve that unknown value.
+    #: None means the extractor could not establish an interpretation.
     interpretation: RequirementInterpretation | None = None
-    #: None = this record carries no attestation; do not infer which
-    #: extractor produced it from that absence.
+    #: None means no verified source attestation was established.
     attestation: RequirementAttestation | None = None
     #: None is used only for an engine-synthesized unmapped requirement.
     extractor: str | None = None
@@ -192,9 +188,7 @@ class Gap(StrictModel):
     severity: Literal["warning", "hard"]
     reason: str
     substitute_fact_ids: list[str] = []
-    #: The `Requirement` this gap projects, when one produced it. Absent on
-    #: analyses written before requirement coverage existed, whose stored gaps
-    #: stay authoritative exactly as recorded.
+    #: The `Requirement` this gap projects, when one produced it.
     requirement_id: str | None = None
 
 
@@ -206,7 +200,7 @@ class JobClassificationProposal(StrictModel):
     """What the classification provider is allowed to propose.
 
     Deliberately narrower than `JobAnalysis`: the fields that route safety
-    decisions — language, Fit, approval, requirements, overrides, analysis
+    decisions — Fit, approval, requirements, overrides, analysis
     version — are absent, so a provider cannot express them at all. Adding a new
     safety field to `JobAnalysis` therefore keeps it out of provider reach by
     default instead of relying on a merge whitelist staying up to date.
@@ -234,7 +228,7 @@ class JobAnalysis(StrictModel):
     #: mandatory-weighted, with `undetermined` counted at zero credit rather than
     #: excluded - so an incompletely assessed posting cannot outscore a fully
     #: assessed one. `None` only when nothing was assessed at all (no requirements,
-    #: or extraction failed); absent on analyses written before this field existed.
+    #: or extraction failed).
     fit_score: float | None = Field(default=None, ge=0, le=1)
     gaps: list[Gap]
     requirements: list[Requirement]
@@ -246,6 +240,5 @@ class JobAnalysis(StrictModel):
     preferred_requirements: list[str]
     keywords: list[str]
     language: Literal["en", "he"]
-    classification_requires_approval: bool = False
     approval_reasons: list[str] = []
     user_override: dict[OverrideKey, str] = {}

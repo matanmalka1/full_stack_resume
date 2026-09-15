@@ -46,7 +46,6 @@ test.describe("the application shell", () => {
 
 test("shares the saved theme between the shell and Settings and follows system changes", async ({ page }) => {
   let saved: Settings = { ...settings, ui_theme: "system" };
-  await page.addInitScript(() => localStorage.setItem("cv-theme", "dark"));
   await page.route("**/api/v1/settings", async (route) => {
     if (route.request().method() === "PATCH")
       saved = { ...saved, ...route.request().postDataJSON(), edit_version: saved.edit_version + 1 };

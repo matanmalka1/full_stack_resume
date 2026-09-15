@@ -10,7 +10,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic, sleep
-from types import SimpleNamespace
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -25,7 +24,6 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
     approve_active_draft,
-    seed_existing_analysis,
     trivial_requirement_extraction,
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
@@ -338,22 +336,15 @@ def requirement_concepts(project_root: Path) -> RequirementConceptStore:
 
 
 @pytest.fixture
-def classify(
+def analysis_document(
     fact_store: FactStore,
     profile_store: ProfileStore,
     requirement_concepts: RequirementConceptStore,
 ):
     """Build an analysis document for downstream unit tests without running analysis."""
 
-    def _classify(text: str, **overrides):
-        profile = ProfileName(
-            overrides.pop("profile_override", None)
-            or (
-                "development"
-                if any(term in text.casefold() for term in ("python", "developer", "backend"))
-                else "account-manager"
-            )
-        )
+    def _analysis_document(**overrides):
+        profile = ProfileName(overrides.pop("profile_override", None) or "development")
         selected = profile_store.get(profile)
         emphasis = Emphasis(overrides.pop("emphasis_override", None) or selected.default_emphasis)
         language = overrides.pop("language_override", None) or "en"
@@ -379,7 +370,7 @@ def classify(
             **overrides,
         )
 
-    return _classify
+    return _analysis_document
 
 
 @pytest.fixture
@@ -402,34 +393,9 @@ def candidate_context(project_root: Path, fact_store: FactStore):
     return load_candidate_context(project_root, fact_store)
 
 
-def _with_existing_analysis_seeder(services: Services) -> Services:
-    """Give downstream tests an explicit fixture seeder, not a product analysis path."""
-
-    def seed(command):
-        snapshot = services.repository.get_snapshot(command.job_snapshot_id)
-        if snapshot["application_id"] != command.application_id:
-            from cv_engine.application.errors import LineageBroken
-
-            raise LineageBroken("job snapshot does not belong to the named Application")
-        return seed_existing_analysis(
-            services,
-            SimpleNamespace(
-                application_id=command.application_id,
-                job_snapshot_id=command.job_snapshot_id,
-            ),
-            track_override=command.track_override,
-            profile_override=command.profile_override or "account-manager",
-            emphasis_override=command.emphasis_override,
-            language_override=command.language_override or "en",
-        )
-
-    services.analysis.analyze = seed  # type: ignore[attr-defined]
-    return services
-
-
 @pytest.fixture
 def services(app_paths: AppPaths) -> Services:
-    return _with_existing_analysis_seeder(build_services(app_paths))
+    return build_services(app_paths)
 
 
 @pytest.fixture
@@ -453,9 +419,7 @@ def ai_services(app_paths: AppPaths, fake_openai: FakeOpenAI, task_contracts) ->
     than reaching the network, and the offline guarantee is not weakened by the
     fixture that exercises AI.
     """
-    return _with_existing_analysis_seeder(
-        build_services(app_paths, provider=fake_openai.provider(task_contracts))
-    )
+    return build_services(app_paths, provider=fake_openai.provider(task_contracts))
 
 
 @pytest.fixture
@@ -791,14 +755,7 @@ def draft_factory(
         write: bool = False,
         **overrides,
     ) -> DraftSetup:
-        profile_name = ProfileName(
-            overrides.pop("profile_override", None)
-            or (
-                "development"
-                if any(term in job.casefold() for term in ("python", "developer", "backend"))
-                else "account-manager"
-            )
-        )
+        profile_name = ProfileName(overrides.pop("profile_override", None) or "account-manager")
         profile = profile_store.get(profile_name)
         analysis = JobAnalysis(
             analysis_version="2.0",

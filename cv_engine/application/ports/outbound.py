@@ -280,8 +280,8 @@ class RequirementExtractionContext(StrictModel):
 
     `requirement_lines` is the engine's own segmentation
     (`requirements/segmentation.py::requirement_lines`), supplied so
-    completeness is judged against the identical denominator the deterministic
-    path uses (stage-1 plan §3.3) - a provider is not asked to re-derive it,
+    completeness is judged against an independently derived denominator - a
+    provider is not asked to re-derive it,
     and cannot inflate completeness by choosing a friendlier one.
     """
 

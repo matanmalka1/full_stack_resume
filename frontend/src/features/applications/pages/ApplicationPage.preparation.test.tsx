@@ -88,7 +88,7 @@ const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): Applicatio
         mandatory_requirements: ["5 years of Python"],
         preferred_requirements: ["Kubernetes"],
         gaps: [{ requirement: "Kubernetes", severity: "warning", reason: "no matching fact" }],
-        approval_reasons: ["low-confidence"],
+        approval_reasons: ["coverage-undetermined"],
         user_override: {},
       },
       provider: "openai",

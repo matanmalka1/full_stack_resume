@@ -61,6 +61,15 @@ def transition_allowed(current: ApplicationStatus, target: ApplicationStatus) ->
     return target in ALLOWED_TRANSITIONS[current]
 
 
+def submission_owns_transition(target: ApplicationStatus) -> bool:
+    return target is ApplicationStatus.APPLIED
+
+
+def user_transition_allowed(current: ApplicationStatus, target: ApplicationStatus) -> bool:
+    """A direct status command cannot perform submission's `applied` transition."""
+    return not submission_owns_transition(target) and transition_allowed(current, target)
+
+
 def user_transition_targets(current: ApplicationStatus) -> tuple[ApplicationStatus, ...]:
     """Direct status choices a user may make from ``current``.
 
@@ -69,8 +78,9 @@ def user_transition_targets(current: ApplicationStatus) -> tuple[ApplicationStat
     backend's policy without copying the graph or offering a command the status endpoint
     will refuse.
     """
-    allowed = ALLOWED_TRANSITIONS[current] - {ApplicationStatus.APPLIED}
-    return tuple(status for status in ApplicationStatus if status in allowed)
+    return tuple(
+        status for status in ApplicationStatus if user_transition_allowed(current, status)
+    )
 
 
 def terminal_outcome_after(

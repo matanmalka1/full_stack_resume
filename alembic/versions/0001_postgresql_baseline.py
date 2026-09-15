@@ -230,6 +230,7 @@ def upgrade() -> None:
         sa.Column("emphasis", sa.Text(), nullable=True),
         sa.Column("classification_confidence", sa.Float(), nullable=True),
         sa.Column("fit_level", sa.Text(), nullable=True),
+        sa.Column("fit_score", sa.Float(), nullable=True),
         sa.Column("current_status", sa.Text(), nullable=False),
         sa.Column("last_contact_date", sa.Text(), nullable=True),
         sa.Column("next_action", sa.Text(), nullable=True),
@@ -239,6 +240,11 @@ def upgrade() -> None:
         sa.Column("created_at", sa.Text(), nullable=False),
         sa.Column("updated_at", sa.Text(), nullable=False),
         sa.Column("terminal_outcome", sa.Text(), nullable=True),
+        # Soft-delete disposition (product-spec.md invariant #20), orthogonal to
+        # `current_status`: NULL means active, set means `delete_application` ran.
+        # `applications` is already a mutable-exception table, so a nullable
+        # column here needs no change to the immutability trigger set.
+        sa.Column("deleted_at", sa.Text(), nullable=True),
         sa.CheckConstraint(
             "current_status IN ('saved', 'applied', 'recruiter_screen', 'interview', 'assignment', 'final_stage', 'offer', 'accepted', 'rejected', 'withdrawn', 'closed')",
             name=op.f("ck_applications_current_status"),
@@ -247,6 +253,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "terminal_outcome IS NULL OR terminal_outcome IN ('accepted', 'rejected', 'withdrawn')",
             name=op.f("ck_applications_terminal_outcome"),
+        ),
+        sa.CheckConstraint(
+            "fit_score IS NULL OR (fit_score >= 0 AND fit_score <= 1)",
+            name=op.f("ck_applications_fit_score"),
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_applications")),
     )
@@ -374,6 +384,7 @@ def upgrade() -> None:
         ),
         sa.Column("ui_density", sa.Text(), nullable=False),
         sa.Column("ui_text_size", sa.Text(), nullable=False),
+        sa.Column("ui_theme", sa.Text(), server_default=sa.text("'system'"), nullable=False),
         sa.Column("updated_at", sa.Text(), nullable=False),
         sa.CheckConstraint(
             "default_execution_mode IN ('deterministic', 'ai')",
@@ -393,6 +404,9 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "ui_text_size IN ('normal', 'large')", name=op.f("ck_app_settings_ui_text_size")
+        ),
+        sa.CheckConstraint(
+            "ui_theme IN ('system', 'light', 'dark')", name=op.f("ck_app_settings_ui_theme")
         ),
         sa.CheckConstraint("edit_version > 0", name=op.f("ck_app_settings_edit_version_positive")),
         sa.CheckConstraint("singleton_id = 1", name=op.f("ck_app_settings_singleton")),

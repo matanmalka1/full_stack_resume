@@ -5,8 +5,9 @@ from pathlib import Path
 from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
 
 from cv_engine.domain.draft_markdown import serialize_markdown
-from cv_engine.domain.drafts import register_linked_claim
-from cv_engine.domain.models import ClaimLine, JobAnalysis
+from cv_engine.domain.contracts.analysis import JobAnalysis
+from cv_engine.domain.contracts.drafts import ClaimLine
+from cv_engine.domain.drafts import apply_claim_edit
 from cv_engine.domain.validation import validate_draft
 from cv_engine.util import sha256_text
 
@@ -32,6 +33,7 @@ def test_unsafe_headline_fails_only_the_draft_side_headline_group(
 ) -> None:
     facts, profile, analysis, draft, _markdown = draft_factory(
         "Python backend developer API React",
+        profile_override="development",
         write=True,
     )
     draft.headline.text = "Invented Executive Seniority"
@@ -56,7 +58,7 @@ def test_unsafe_headline_fails_only_the_draft_side_headline_group(
 
 def test_manual_unlinked_change_blocks_approval(draft_factory) -> None:
     facts, profile, analysis, draft, markdown = draft_factory(
-        "Python backend developer API React", write=True
+        "Python backend developer API React", profile_override="development", write=True
     )
     markdown.write_text(
         markdown.read_text(encoding="utf-8").replace(
@@ -90,12 +92,12 @@ def test_negative_saas_boundary_cannot_be_inverted_into_derived_claim(
     claim = next(
         claim for section in draft.sections for claim in section.claims if claim.style == "bullet"
     )
-    updated = register_linked_claim(
+    updated = apply_claim_edit(
         draft,
         claim.claim_id,
-        "Delivered 30% improvement in direct SaaS Sales.",
         ["sales.metric.performance", "sales.tech_sales.boundary"],
         facts,
+        text="Delivered 30% improvement in direct SaaS Sales.",
     )
     edited = claim_by_id(updated, claim.claim_id)
     assert edited.claim_type == "pending"
@@ -249,7 +251,7 @@ def test_a_project_heading_is_not_mistaken_for_a_demoted_job_title(draft_factory
     equality check would have forced them out of the document.
     """
     facts, profile, analysis, draft, markdown = draft_factory(
-        "Python backend developer API React", write=True
+        "Python backend developer API React", profile_override="development", write=True
     )
     headings = [
         fact_id
@@ -278,21 +280,9 @@ def test_an_unread_posting_is_its_own_validation_finding(draft_factory) -> None:
     unread = JobAnalysis.model_validate(
         {
             **analysis.model_dump(mode="json"),
-            "classification_requires_approval": True,
             "approval_reasons": ["extraction-failed"],
         }
     )
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, unread)
     codes = {issue.code for issue in report.issues}
     assert "incomplete-analysis-not-accepted" in codes
-    assert "classification-approval-required" not in codes
-
-    ambiguous = JobAnalysis.model_validate(
-        {
-            **analysis.model_dump(mode="json"),
-            "classification_requires_approval": True,
-            "approval_reasons": ["low-confidence"],
-        }
-    )
-    other = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, ambiguous)
-    assert "classification-approval-required" in {issue.code for issue in other.issues}

@@ -22,8 +22,7 @@ written through Settings like any other preference. `system` writes no attribute
 changes to the operating-system preference keep applying live; an explicit choice stamps
 `data-theme="light"` or `data-theme="dark"` on the root. Local storage holds only
 `cv-theme-cache`, a startup cache so the first paint does not flash the wrong theme; it
-is never authoritative. The legacy `cv-theme` key is read once for import and is not
-written. Both themes declare the matching `color-scheme`, allowing native controls to
+is never authoritative. Both themes declare the matching `color-scheme`, allowing native controls to
 follow the selected theme.
 
 | Role | Purpose |

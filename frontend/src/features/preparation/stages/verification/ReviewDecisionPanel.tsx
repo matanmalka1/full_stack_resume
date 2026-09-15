@@ -69,7 +69,6 @@ export const ReviewDecisionPanel = ({
   const selectionPlanId = detail.active_selection_plan_id ?? null;
   const mine = detail.review_reasons.filter(resolvedByReviewDecision);
   const open = openDecisions(detail);
-  const showClassification = open.classification;
   const showFit = open.fit;
   const showGapAcceptance = open.gaps;
   const showIncompleteAnalysis = open.incompleteAnalysis;
@@ -81,41 +80,19 @@ export const ReviewDecisionPanel = ({
       ? 0
       : classification.gaps.filter((gap) => gap.severity === "hard" && gap.requirementId !== null).length;
 
-  /* A materially ambiguous classification is resolved by an explicit track or profile
-     override, and the server clears the reason on the presence of that key whatever its
-     value - so confirming the analysis's own guess resolves it exactly as changing it
-     would. A field left on "keep current" therefore submits that current value rather than
-     withholding it: keeping the classification the analysis proposed is a valid decision,
-     not a missing one, and the reader is not forced to change a value only to move on. With
-     no analysis to read a current value from there is nothing to confirm, so the explicit
-     pick stays required. */
-  const confirmedTrack =
-    showClassification && decisions.track_override === null
-      ? (classification?.track ?? null)
-      : decisions.track_override;
-  const confirmedProfile =
-    showClassification && decisions.profile_override === null
-      ? (classification?.profile ?? null)
-      : decisions.profile_override;
-
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */
   const submitted = {
     ...decisions,
-    track_override: confirmedTrack,
-    profile_override: confirmedProfile,
     accepted_requirement_ids: showGapAcceptance ? [...acceptedRequirementIds] : [],
   };
 
-  const classificationReady =
-    !showClassification || submitted.track_override !== null || submitted.profile_override !== null;
   const incompleteAnalysisReady = !showIncompleteAnalysis || decisions.accept_incomplete_analysis;
   const fitReady = !showFit || decisions.accept_low_fit;
   const gapsReady = !showGapAcceptance || acceptedRequirementIds.length > 0;
   const decisionReady =
     analysisId !== null &&
     hasDecision(submitted) &&
-    classificationReady &&
     incompleteAnalysisReady &&
     fitReady &&
     gapsReady;
@@ -161,7 +138,6 @@ export const ReviewDecisionPanel = ({
      commits them. What stood here was a single sentence saying something was missing,
      under the button and out of sight on a long form. */
   const checklist: ChecklistEntry[] = [
-    ...(showClassification ? [{ done: classificationReady, label: "אישור סיווג קורות החיים" }] : []),
     ...(showIncompleteAnalysis ? [{ done: incompleteAnalysisReady, label: "אישור שהדרישות לא נקראו" }] : []),
     ...(showFit ? [{ done: fitReady, label: "אישור ההתאמה הנמוכה" }] : []),
     ...(showGapAcceptance ? [{ done: gapsReady, label: "סימון פער חוסם לקבלה" }] : []),
@@ -192,28 +168,23 @@ export const ReviewDecisionPanel = ({
               form from - two decisions read as two, one decision as one. */}
           <div className={showGapAcceptance && classification !== null ? "border-t border-cv-border pt-5" : undefined}>
             <ReviewDecisionForm
-              classification={classification}
               decisions={decisions}
               disabled={apply.isPending}
               gapAcceptance={
                 showGapAcceptance ? { acceptable: acceptableGapCount, marked: acceptedRequirementIds.length } : null
               }
               onChange={setDecisions}
-              showClassification={showClassification}
               showFit={showFit}
               showIncompleteAnalysis={showIncompleteAnalysis}
             />
           </div>
 
-          {/* §13: what the commit does, and the two things the controls cannot say. What
-              it writes depends on what was decided - a classification decision derives a
-              new analysis, while a gap acceptance alone is recorded on a new SelectionPlan
-              for the analysis on screen - so the sentence names both rather than promising
-              the one that happens to be more common. */}
+          {/* §13: risk acknowledgement may create a revised analysis; gap
+              acceptance alone creates a replacement SelectionPlan. */}
           <Disclosure summary="מה יישמר לאחר האישור?">
             <p dir="auto">
-              כל ההחלטות נשלחות יחד. שינוי סיווג יוצר ניתוח ותוכנית בחירה חדשים; קבלת פער נרשמת בתוכנית בחירה חדשה.
-              הרשומות הקודמות נשמרות, ושדה שלא שונה אינו מבטל החלטה קודמת.
+              אישור המשך עם ניתוח חלקי נרשם בניתוח חדש; קבלת פער נרשמת בתוכנית בחירה חדשה.
+              הרשומות הקודמות נשמרות, והחלטה שלא נשלחה אינה מתבטלת.
             </p>
           </Disclosure>
 

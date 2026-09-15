@@ -11,7 +11,6 @@ const blockerResolution = (code: string): string => {
   }
   if (
     code === "low-fit" ||
-    code === "classification-approval-required" ||
     code === "incomplete-analysis-not-accepted"
   ) {
     return "חזרו למסך המועמדות והשלימו את החלטת הסקירה הנדרשת לפני אימות מחדש.";

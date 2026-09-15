@@ -202,7 +202,7 @@ const stubReads = (
 const reviewDetail = (
   codes = [
     "HARD_GAP_REQUIRES_DECISION",
-    "MATERIAL_CLASSIFICATION_AMBIGUITY",
+    "ANALYSIS_INCOMPLETE",
     "PENDING_FACT_REQUIRES_RESOLUTION",
     "KNOWLEDGE_RECONCILIATION_REQUIRED",
   ],
@@ -666,7 +666,7 @@ describe("DraftEditorPage", () => {
     expect(screen.queryByRole("button", { name: "שמירת ההחלטות" })).toBeNull();
   });
 
-  it.each(["MATERIAL_CLASSIFICATION_AMBIGUITY", "HARD_GAP_REQUIRES_DECISION", "ANALYSIS_INCOMPLETE"])(
+  it.each(["HARD_GAP_REQUIRES_DECISION", "ANALYSIS_INCOMPLETE"])(
     "keeps approval closed with an exact passing run and an open %s decision",
     async (code) => {
       const fetchMock = stubReads({
@@ -733,7 +733,7 @@ describe("DraftEditorPage", () => {
                   },
                 ],
               })
-            : reviewDetail(["MATERIAL_CLASSIFICATION_AMBIGUITY"]),
+            : reviewDetail(["ANALYSIS_INCOMPLETE"]),
         ),
       );
     });
@@ -742,6 +742,7 @@ describe("DraftEditorPage", () => {
     await editRow(2);
     const editor = await screen.findByDisplayValue("Owned the CRM migration.");
     fireEvent.change(editor, { target: { value: "My local wording." } });
+    fireEvent.click(screen.getByRole("switch", { name: /הדרישות לא נקראו/ }));
     fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
     await waitFor(() =>
       expect(fetchMock.mock.calls.some((call) => (call[1] as RequestInit)?.method === "PATCH")).toBe(true),

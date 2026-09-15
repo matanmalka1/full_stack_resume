@@ -1,7 +1,7 @@
 import { approvalReasonLabel } from "../../model/analysisLabels";
 import { AnalysisSection } from "./AnalysisSection";
 
-/* Why the classification is not settled. The projection's review reason says that a
+/* Why the analysis is incomplete. The projection's review reason says that a
    decision is needed and carries the action; this says what about the analysis made it
    necessary, which is the part a person needs in order to decide rather than merely to
    be told to. */

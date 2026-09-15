@@ -2,12 +2,22 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Self
+from typing import Any, Self
 
 from sqlalchemy.engine import Connection, Engine
 
 from ...application.ports import UnitOfWork
+from ...util import canonical_json
 from .connection import SqlAlchemyUnitOfWork
+
+
+def json_text_record(row: Any, *fields: str) -> dict[str, Any]:
+    """Serialize selected SQL JSON columns for repository read records."""
+    record = dict(row)
+    for field in fields:
+        value = record[field]
+        record[field] = None if value is None else canonical_json(value)
+    return record
 
 
 def sqlalchemy_unit_of_work(uow: UnitOfWork) -> SqlAlchemyUnitOfWork:

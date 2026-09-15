@@ -52,6 +52,7 @@ def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
     ).draft
     replacement = draft_factory(
         "Python backend developer API React",
+        profile_override="development",
         application_id=application_id,
     ).draft
     store = FilesystemArtifactStore(app_paths)

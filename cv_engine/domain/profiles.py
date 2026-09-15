@@ -1,16 +1,28 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from ..util import canonical_json, sha256_text
 from .contracts.knowledge import FactStatus, Profile
-from .contracts.taxonomy import ProfileName
+from .contracts.taxonomy import Emphasis, ProfileName, Track
 from .facts import FactStore
 from .selection import ROLE_BLOCK_TAG
 
 
 class ProfileStoreError(ValueError):
     pass
+
+
+def classification_mismatch(
+    profile: Profile, track: Track, emphasis: Emphasis
+) -> Literal["track", "emphasis"] | None:
+    """The domain rule for a Track/Profile/Emphasis classification."""
+    if profile.track is not track:
+        return "track"
+    if emphasis not in profile.allowed_emphases:
+        return "emphasis"
+    return None
 
 
 # A role block's span, as the fact store states it: "YYYY-MM/YYYY-MM". The month

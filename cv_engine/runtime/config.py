@@ -181,8 +181,6 @@ def mask_value(name: str, value: Any) -> Any:
     return MASK
 
 
-SOURCES = ("environment", "env-file", "project-config", "default")
-
 
 @dataclass(frozen=True)
 class Resolved:

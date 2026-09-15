@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..util import sha256_text
-from .analysis.approval import ANALYSIS_INCOMPLETE, approval_reason, unresolved_approval_reasons
+from .analysis.approval import unresolved_approval_reasons
 from .analysis.gaps import unaccepted_hard_gaps
 from .contracts.analysis import JobAnalysis
 from .contracts.drafts import ClaimLine, DraftDocument
@@ -323,25 +323,13 @@ def _profile_matches(context: _ValidationContext) -> None:
         else None
     )
     unresolved = unresolved_approval_reasons(context.analysis, selection_overrides)
-    incomplete = [
-        reason
-        for reason in unresolved
-        if approval_reason(reason).review_code == ANALYSIS_INCOMPLETE
-    ]
-    ambiguous = [reason for reason in unresolved if reason not in incomplete]
-    if incomplete:
+    if unresolved:
         context.add_issue(
             "profile",
             "incomplete-analysis-not-accepted",
-            "The analysis did not read this posting's requirements "
-            f"({', '.join(incomplete)}); proceeding requires accepting an incomplete "
+            "The posting analysis is incomplete "
+            f"({', '.join(unresolved)}); proceeding requires accepting an incomplete "
             "analysis.",
-        )
-    if ambiguous:
-        context.add_issue(
-            "profile",
-            "classification-approval-required",
-            f"Material classification ambiguity is unresolved: {', '.join(ambiguous)}",
         )
 
 

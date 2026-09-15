@@ -112,7 +112,6 @@ const validationIssueMessages: Record<string, string> = {
   "low-fit": "נדרש אישור מפורש כדי להמשיך עם התאמה נמוכה.",
   "hard-gap-not-accepted": "יש להכריע בפערים מול דרישות החובה של המשרה.",
   "incomplete-analysis-not-accepted": "יש לאשר במפורש המשך עם ניתוח חלקי.",
-  "classification-approval-required": "יש להשלים את החלטת הסיווג לפני האימות.",
   "section-order": "סדר הפרקים אינו תואם לפרופיל שנבחר.",
   "fact-outside-profile-section": "עובדה מקושרת לפרק שאינו מתאים לה.",
   "section-budget-exceeded": "אחד הפרקים כולל יותר מדי טענות.",

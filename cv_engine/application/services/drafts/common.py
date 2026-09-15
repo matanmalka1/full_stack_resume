@@ -104,6 +104,14 @@ class DraftServiceBase(ServiceBase[DraftRepository]):
             )
         return working
 
+    @staticmethod
+    def _require_content_hash(working: WorkingDraft, expected_content_hash: str) -> None:
+        if working.content_hash != expected_content_hash:
+            raise StateConflict(
+                f"working draft {working.id} has content hash {working.content_hash}, "
+                f"not {expected_content_hash}"
+            )
+
     def _commit_edit(self, working: WorkingDraft, source: DraftDocument) -> WorkingDraft:
         changed = self.repo.update_working_draft(
             working.id,

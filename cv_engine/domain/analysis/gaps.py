@@ -44,15 +44,12 @@ def fit_score_from_requirements(requirements: Sequence[Requirement]) -> float:
     analysis that only decided coverage for 2 of 20 mandatory requirements and
     happened to match both must not score 1.0 - excluding what was never
     assessed would let an incomplete read report a fit score no complete read
-    could beat. This is a deliberate departure from the old `coverage_undetermined
-    -> Fit.UNKNOWN` rule (stage-1 plan §3.6): "we could not tell" now costs the
-    score the way "we could tell it isn't there" does, rather than blanking the
-    whole classification.
+    could beat. "We could not tell" earns no score credit, without making a
+    false claim that the candidate definitely lacks the requirement.
 
     An empty requirement list scores 1.0, not `None`: nothing was demanded, so
     nothing is missing - the same "not punished for being short" reading a thin,
-    legitimately requirement-free posting already got from the old step function
-    (`derive_fit` returned HIGH on no gaps). This function cannot on its own
+    legitimately requirement-free posting should receive. This function cannot on its own
     tell that case apart from an extraction that produced nothing because it
     failed. `fit_score_for` is where that distinction is made, and is the only
     caller in the engine; the raw score stays separately callable because it is
@@ -84,9 +81,8 @@ def fit_score_for(
     extraction failed or the posting stated nothing readable. Neither of those
     is visible from the list, so both are passed in.
 
-    Both paths asked this question, separately, in identical words. One
-    statement of it means a later change to when Fit is unknown cannot land on
-    the deterministic path and miss the AI one.
+    The same function is used for initial analysis and later corrections, so
+    both preserve the same unknown-Fit policy.
     """
     if extraction_failed or requirements_absent:
         return None
@@ -105,7 +101,7 @@ def fit_level_from_score(fit_score: float | None, gaps: Sequence[Gap]) -> FitLev
        hard gap requires low" (state-and-use-cases.md §12,
        `apply_analysis_decisions`) - a known poor Fit is knowledge that an
        otherwise-unassessed analysis must not erase. This is unchanged from the
-       old `derive_fit`/`merge_fit` pair's own reasoning (stage-1 plan §3.6).
+       the same policy applies after an interpretation correction.
     2. Failing that, no score at all (nothing was assessed, or extraction never
        produced a requirement list) reports UNKNOWN rather than guessing a level
        for a number that does not exist.
@@ -193,9 +189,8 @@ def unaccepted_hard_gaps(
 
     One function, three consumers: the state projection that reports the
     blocker, the draft generation that refuses to build past it, and the
-    validation that refuses to pass a draft built past it. They disagreed
-    before - the projection said blocked while generation happily proceeded -
-    because each asked the question in its own words.
+    validation that refuses to pass a draft built past it. All three use one
+    policy for whether an acceptance applies.
 
     A plan for another analysis contributes nothing: acceptance is a decision
     about the gaps as *this* analysis stated them.

@@ -22,7 +22,7 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     recruitment_timeline: [],
     preparation_state: "needs_review",
     working_draft_state: "none",
-    review_reasons: [reason("MATERIAL_CLASSIFICATION_AMBIGUITY")],
+    review_reasons: [reason("ANALYSIS_INCOMPLETE")],
     stale_reasons: [],
     warnings: [],
     active_job_snapshot_id: "snap-1",
@@ -209,7 +209,7 @@ describe("the review decision, on the Application screen", () => {
         Promise.resolve(
           jsonResponse(
             detail({
-              review_reasons: [reason("MATERIAL_CLASSIFICATION_AMBIGUITY"), reason("ANALYSIS_INCOMPLETE")],
+              review_reasons: [reason("ANALYSIS_INCOMPLETE"), reason("LOW_FIT_REQUIRES_ACCEPTANCE")],
             }),
           ),
         ),
@@ -222,9 +222,9 @@ describe("the review decision, on the Application screen", () => {
     const save = screen.getByRole("button", { name: "שמירת ההחלטות" });
     const commitBarLayout = save.parentElement?.parentElement;
     expect(commitBarLayout).toHaveClass("grid", "sm:grid-cols-[minmax(0,1fr)_max-content]");
-    fireEvent.change(screen.getByLabelText("מסלול"), { target: { value: "tech-sales" } });
-    expect(save).toBeDisabled();
     fireEvent.click(screen.getByRole("switch", { name: /הדרישות לא נקראו/ }));
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole("switch", { name: /ההתאמה הנמוכה/ }));
     expect(save).toBeEnabled();
     expect(save.parentElement?.parentElement).toBe(commitBarLayout);
   });
@@ -246,17 +246,15 @@ describe("the review decision, on the Application screen", () => {
     expect(screen.queryByLabelText("מסלול")).not.toBeInTheDocument();
   });
 
-  /* An acceptance names a Requirement, and an analysis written before requirement
-     extraction has none to name. The server refuses such an id, so the screen says why
-     instead of offering a control that could only fail. */
-  it("names a hard gap from a legacy analysis as one it cannot decide", async () => {
-    const legacy = detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] });
-    legacy.latest_analysis!.analysis.gaps = [
+  /* A hard gap without requirement identity cannot be accepted by ID. */
+  it("names a hard gap without an id as one it cannot decide", async () => {
+    const unidentified = detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] });
+    unidentified.latest_analysis!.analysis.gaps = [
       { requirement: "5 years of Kubernetes", severity: "hard", reason: "missing" },
     ];
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(legacy))),
+      vi.fn(() => Promise.resolve(jsonResponse(unidentified))),
     );
 
     renderPage();
@@ -358,7 +356,7 @@ describe("the review decision, on the Application screen", () => {
                 available_actions: ["create_draft"],
                 recommended_action: "create_draft",
               })
-            : detail(),
+            : detail({ review_reasons: [reason("ANALYSIS_INCOMPLETE"), reason("LOW_FIT_REQUIRES_ACCEPTANCE")] }),
         ),
       );
     });
@@ -366,8 +364,8 @@ describe("the review decision, on the Application screen", () => {
 
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("מסלול"), { target: { value: "tech-sales" } });
-    fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "leadership" } });
+    fireEvent.click(await screen.findByRole("switch", { name: /הדרישות לא נקראו/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /ההתאמה הנמוכה/ }));
     fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
     /* The refreshed projection reports the state that follows - here, that the reason
@@ -383,11 +381,8 @@ describe("the review decision, on the Application screen", () => {
       application_id: "app-1",
       expected_analysis_id: "analysis-1",
       expected_selection_plan_id: "plan-1",
-      accept_low_fit: false,
-      accept_incomplete_analysis: false,
-      track_override: "tech-sales",
-      profile_override: "account-manager",
-      emphasis_override: "leadership",
+      accept_low_fit: true,
+      accept_incomplete_analysis: true,
       /* No gap was marked, but the active plan remains the second CAS source. */
       accepted_requirement_ids: [],
     });
@@ -407,7 +402,7 @@ describe("the review decision, on the Application screen", () => {
 
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText("מסלול"), { target: { value: "tech-sales" } });
+    fireEvent.click(await screen.findByRole("switch", { name: /הדרישות לא נקראו/ }));
     fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
 
     expect(await screen.findByText("the submitted decisions change nothing")).toBeInTheDocument();
@@ -415,7 +410,7 @@ describe("the review decision, on the Application screen", () => {
        safe was lost. */
     expect(screen.getByRole("heading", { level: 1, name: "ניתוח והתאמה" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "החלטות נדרשות כדי להמשיך" })).toBeInTheDocument();
-    expect(screen.getByLabelText("מסלול")).toHaveValue("tech-sales");
+    expect(screen.getByRole("switch", { name: /הדרישות לא נקראו/ })).toBeChecked();
   });
 
   it("does not show a superseded analysis as the one under decision", async () => {
@@ -430,8 +425,8 @@ describe("the review decision, on the Application screen", () => {
        rather than shown as the classification in force. */
     expect(await screen.findByText("הניתוח שעל המסך אינו הניתוח הפעיל")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "ניתוח המשרה" })).not.toBeInTheDocument();
-    /* The decision is still offered - it goes to the active analysis either way. */
-    expect(screen.getByLabelText("מסלול")).toBeInTheDocument();
+    /* The risk decision is still offered against the active analysis ID. */
+    expect(screen.getByRole("switch", { name: /הדרישות לא נקראו/ })).toBeInTheDocument();
   });
 });
 

@@ -7,7 +7,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 it("toggles and saves directly without a dialog while preserving current server preferences", async () => {
-  localStorage.setItem("cv-theme", "dark");
   let reads = 0;
   const fetch = vi.fn((_input: unknown, init?: RequestInit) => {
     if (init?.method === "PATCH")

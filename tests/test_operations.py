@@ -6,7 +6,7 @@ from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
-from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
+from helpers import ACCOUNT_MANAGER_JOB, seed_analysis_for_command, validate_active_draft
 from pydantic import ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import ProgrammingError
@@ -823,11 +823,12 @@ def test_draft_operation_activates_one_validated_working_draft(services) -> None
             client="web",
         )
     )
-    analysis = services.analysis.analyze(
+    analysis = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-        )
+        ),
     )
     operation = services.operations.submit_draft(
         DraftCommand(
@@ -857,11 +858,12 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
             client="web",
         )
     )
-    analysis = services.analysis.analyze(
+    analysis = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-        )
+        ),
     )
     command = DraftCommand(
         application_id=ingested.application_id,
@@ -902,11 +904,12 @@ def test_foreground_draft_runs_through_one_operation(services) -> None:
             client="web",
         )
     )
-    analysed = services.analysis.analyze(
+    analysed = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-        )
+        ),
     )
 
     operation = services.operations.submit_draft(

@@ -108,7 +108,7 @@ def test_job_keywords_cannot_outrank_profile_and_emphasis_semantics(draft_factor
 
 
 def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """A Profile invariant outranks the Emphasis that would have dropped it."""
     base = profile_store.get("account-manager")
@@ -118,8 +118,8 @@ def test_a_required_tag_is_rescued_and_the_eviction_is_recorded(
             "required_tags": ["retention"],
         }
     )
-    analysis = classify(
-        ACCOUNT_MANAGER_JOB, profile_override="account-manager", emphasis_override="new-business"
+    analysis = analysis_document(
+        profile_override="account-manager", emphasis_override="new-business"
     )
 
     selected, manifest = build_selection(
@@ -353,9 +353,9 @@ def _requirement(requirement_id: str, *, mandatory: bool, coverage: Coverage, su
 
 
 def _summary_selection(
-    profile_store, policy_store, fact_store, classify, *, requirements=(), gaps=()
+    profile_store, policy_store, fact_store, analysis_document, *, requirements=(), gaps=()
 ):
-    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+    analysis = analysis_document(profile_override="account-manager")
     analysis = analysis.model_copy(update={"requirements": list(requirements), "gaps": list(gaps)})
     selected, manifest = build_selection(
         analysis=analysis,
@@ -407,7 +407,7 @@ def test_a_manifest_written_before_the_tier_existed_still_reads() -> None:
 
 
 def test_a_mandatory_requirement_outranks_a_stronger_semantic_score(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
     """What the employer demanded decides before what the Profile prefers.
 
@@ -416,14 +416,14 @@ def test_a_mandatory_requirement_outranks_a_stronger_semantic_score(
     to be enough to reverse that, or the authority order is not an authority
     order.
     """
-    baseline, _ = _summary_selection(profile_store, policy_store, fact_store, classify)
+    baseline, _ = _summary_selection(profile_store, policy_store, fact_store, analysis_document)
     assert baseline == ["sales.summary.account"]
 
     selected, _ = _summary_selection(
         profile_store,
         policy_store,
         fact_store,
-        classify,
+        analysis_document,
         requirements=[
             _requirement(
                 "r-mand", mandatory=True, coverage="matched", supports=["sales.summary.tech"]
@@ -434,7 +434,7 @@ def test_a_mandatory_requirement_outranks_a_stronger_semantic_score(
 
 
 def test_evidence_for_a_met_requirement_carries_authority_a_substitute_never_had(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
     """The widening `gap_substitute` could not express.
 
@@ -448,7 +448,7 @@ def test_evidence_for_a_met_requirement_carries_authority_a_substitute_never_had
         "r-met", mandatory=True, coverage="matched", supports=["sales.summary.tech"]
     )
     selected, manifest = _summary_selection(
-        profile_store, policy_store, fact_store, classify, requirements=[matched]
+        profile_store, policy_store, fact_store, analysis_document, requirements=[matched]
     )
     assert selected == ["sales.summary.tech"]
     winner = next(c for c in manifest.candidates if c.fact_id == "sales.summary.tech")
@@ -456,14 +456,14 @@ def test_evidence_for_a_met_requirement_carries_authority_a_substitute_never_had
 
 
 def test_a_mandatory_requirement_outranks_a_preferred_one(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
     """Between two answered asks, the one the employer made a condition wins."""
     selected, _ = _summary_selection(
         profile_store,
         policy_store,
         fact_store,
-        classify,
+        analysis_document,
         requirements=[
             _requirement(
                 "r-pref", mandatory=False, coverage="matched", supports=["sales.summary.tech"]
@@ -480,7 +480,7 @@ def test_a_mandatory_requirement_outranks_a_preferred_one(
 
 
 def test_a_gap_takes_the_necessity_of_the_requirement_it_projects(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
     """A substitute is ranked by what it stands in for, not by being a substitute."""
     requirements = [
@@ -504,14 +504,19 @@ def test_a_gap_takes_the_necessity_of_the_requirement_it_projects(
         ),
     ]
     selected, _ = _summary_selection(
-        profile_store, policy_store, fact_store, classify, requirements=requirements, gaps=gaps
+        profile_store,
+        policy_store,
+        fact_store,
+        analysis_document,
+        requirements=requirements,
+        gaps=gaps,
     )
     # `sales.summary.account` substitutes too, and outscores the winner 200 to 0.
     assert selected == ["sales.summary.tech"]
 
 
 def test_an_analysis_without_requirements_ranks_as_policy_1_0_0_did(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
     """Gaps from before requirement extraction stay on one tier.
 
@@ -535,7 +540,7 @@ def test_an_analysis_without_requirements_ranks_as_policy_1_0_0_did(
         ),
     ]
     selected, manifest = _summary_selection(
-        profile_store, policy_store, fact_store, classify, gaps=gaps
+        profile_store, policy_store, fact_store, analysis_document, gaps=gaps
     )
     # Both substitute, so severity must not separate them: the semantic score
     # decides, 20 against 0, exactly as it did under `int(gap_substitute)`.
@@ -560,8 +565,10 @@ def test_an_analysis_without_requirements_ranks_as_policy_1_0_0_did(
 # rather than trimmed to fit.
 
 
-def _account_manager_selection(profile_store, policy_store, fact_store, classify, **overlay):
-    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+def _account_manager_selection(
+    profile_store, policy_store, fact_store, analysis_document, **overlay
+):
+    analysis = analysis_document(profile_override="account-manager")
     return build_selection(
         analysis=analysis,
         profile=profile_store.get("account-manager"),
@@ -573,9 +580,9 @@ def _account_manager_selection(profile_store, policy_store, fact_store, classify
 
 
 def test_selected_fact_without_target_language_rendering_is_refused_before_drafting(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, classify
+    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
-    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+    analysis = analysis_document(profile_override="account-manager")
     _sections, baseline = build_selection(
         analysis=analysis,
         profile=profile_store.get("account-manager"),
@@ -612,7 +619,7 @@ def test_selected_fact_without_target_language_rendering_is_refused_before_draft
 
 
 def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """The default path is the old path.
 
@@ -622,13 +629,13 @@ def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(
     records that are supposed to be immutable.
     """
     selected, manifest = _account_manager_selection(
-        profile_store, policy_store, fact_store, classify
+        profile_store, policy_store, fact_store, analysis_document
     )
     with_empty, manifest_empty = _account_manager_selection(
         profile_store,
         policy_store,
         fact_store,
-        classify,
+        analysis_document,
         pinned_fact_ids=frozenset(),
         excluded_fact_ids=frozenset(),
     )
@@ -638,10 +645,12 @@ def test_an_overlay_free_build_is_byte_for_byte_the_build_that_ran_before(
 
 
 def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """Explicit inclusion is a hold, which is the only way to say it."""
-    _, before = _account_manager_selection(profile_store, policy_store, fact_store, classify)
+    _, before = _account_manager_selection(
+        profile_store, policy_store, fact_store, analysis_document
+    )
     omitted = next(
         candidate
         for candidate in before.candidates
@@ -652,7 +661,7 @@ def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
         profile_store,
         policy_store,
         fact_store,
-        classify,
+        analysis_document,
         pinned_fact_ids=frozenset({omitted.fact_id}),
     )
 
@@ -672,7 +681,7 @@ def test_a_pinned_fact_survives_the_budget_that_had_omitted_it(
 
 
 def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_it(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """A fact the engine ranked out and one the user removed are different facts.
 
@@ -680,7 +689,9 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
     still tell them apart, which is what makes the plan evidence of a decision
     rather than of an outcome.
     """
-    _, before = _account_manager_selection(profile_store, policy_store, fact_store, classify)
+    _, before = _account_manager_selection(
+        profile_store, policy_store, fact_store, analysis_document
+    )
     chosen = next(
         candidate
         for candidate in before.candidates
@@ -691,7 +702,7 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
         profile_store,
         policy_store,
         fact_store,
-        classify,
+        analysis_document,
         excluded_fact_ids=frozenset({chosen.fact_id}),
     )
 
@@ -715,20 +726,20 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
 
 
 def test_an_overlay_naming_a_fact_the_profile_never_offered_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     with pytest.raises(SelectionError, match="offers no candidate named"):
         _account_manager_selection(
             profile_store,
             policy_store,
             fact_store,
-            classify,
+            analysis_document,
             pinned_fact_ids=frozenset({"development.stack.python"}),
         )
 
 
 def test_a_fact_named_on_both_sides_of_the_overlay_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """Neither reading is safe, so neither is chosen."""
     with pytest.raises(SelectionError, match="pinned and excluded"):
@@ -736,14 +747,14 @@ def test_a_fact_named_on_both_sides_of_the_overlay_is_refused(
             profile_store,
             policy_store,
             fact_store,
-            classify,
+            analysis_document,
             pinned_fact_ids=frozenset({"sales.achievement.retention"}),
             excluded_fact_ids=frozenset({"sales.achievement.retention"}),
         )
 
 
 def test_structure_cannot_be_excluded_as_if_it_were_evidence(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """Removing a heading does not shorten a CV; it orphans what is under it."""
     for fact_id in ("sales.role.leader.title", "sales.role.leader.dates"):
@@ -752,13 +763,13 @@ def test_structure_cannot_be_excluded_as_if_it_were_evidence(
                 profile_store,
                 policy_store,
                 fact_store,
-                classify,
+                analysis_document,
                 excluded_fact_ids=frozenset({fact_id}),
             )
 
 
 def test_an_exclusion_that_costs_a_role_block_its_quantitative_floor_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """The invariant is not traded for the user's choice, and neither is dropped.
 
@@ -772,13 +783,13 @@ def test_an_exclusion_that_costs_a_role_block_its_quantitative_floor_is_refused(
             profile_store,
             policy_store,
             fact_store,
-            classify,
+            analysis_document,
             excluded_fact_ids=frozenset({"sales.metric.new_customers"}),
         )
 
 
 def test_an_exclusion_that_empties_a_required_tag_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, classify
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
 ) -> None:
     """The rescue refills a required tag from the pool; it cannot refill nothing.
 
@@ -801,13 +812,13 @@ def test_an_exclusion_that_empties_a_required_tag_is_refused(
             profile_store,
             policy_store,
             fact_store,
-            classify,
+            analysis_document,
             excluded_fact_ids=carriers,
         )
 
 
 def test_acceptance_is_not_an_input_to_selection(
-    profile_store, policy_store, fact_store, classify
+    profile_store, policy_store, fact_store, analysis_document
 ) -> None:
     """Proceeding past a gap is a decision about the gap, not about the facts.
 

@@ -16,8 +16,8 @@ from ...domain.contracts.records import (
     ValidationRunLineage,
 )
 from ...domain.contracts.validation import ValidationReport
-from ...util import canonical_json, new_id, utc_now
-from .base import SqlAlchemyRepositoryBase
+from ...util import new_id, utc_now
+from .base import SqlAlchemyRepositoryBase, json_text_record
 from .tables import (
     approved_revisions,
     artifact_versions,
@@ -29,14 +29,6 @@ from .tables import (
     validation_runs,
     working_drafts,
 )
-
-
-def _json_text_record(row: Any, *fields: str) -> dict[str, Any]:
-    record = dict(row)
-    for field in fields:
-        value = record[field]
-        record[field] = None if value is None else canonical_json(value)
-    return record
 
 
 def _require_owned_snapshot(
@@ -196,7 +188,7 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
             row = connection.execute(statement).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no {artifact_type} artifact for application {application_id}")
-        return _json_text_record(row, "metadata_json")
+        return json_text_record(row, "metadata_json")
 
     def artifact_versions(self, application_id: str) -> list[dict[str, Any]]:
         with self.read_connection() as connection:
@@ -212,7 +204,7 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .all()
             )
-        return [_json_text_record(row, "metadata_json") for row in rows]
+        return [json_text_record(row, "metadata_json") for row in rows]
 
     def artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
@@ -232,7 +224,7 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
             )
         if row is None:
             raise UnknownRecord(f"no artifact version {artifact_version_id}")
-        return _json_text_record(row, "metadata_json")
+        return json_text_record(row, "metadata_json")
 
     def artifact_version_for_revision(
         self,
@@ -262,7 +254,7 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
             row = connection.execute(statement).mappings().one_or_none()
         if row is None:
             raise UnknownRecord(f"no {artifact_type} artifact for approved revision {revision_id}")
-        return _json_text_record(row, "metadata_json")
+        return json_text_record(row, "metadata_json")
 
     def insert_decision(self, record: DecisionRecord) -> None:
         with self.transaction() as connection:
@@ -303,7 +295,7 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
             )
         if row is None:
             raise UnknownRecord(f"no decision record for application {application_id}")
-        return _json_text_record(row, "structured_json")
+        return json_text_record(row, "structured_json")
 
     def decision_for_artifact_version(self, artifact_version_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
@@ -319,7 +311,7 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
             )
         if row is None:
             raise UnknownRecord(f"no decision record for artifact version {artifact_version_id}")
-        return _json_text_record(row, "structured_json")
+        return json_text_record(row, "structured_json")
 
     def decision_for_revision(self, revision_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
@@ -341,7 +333,7 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
             )
         if row is None:
             raise UnknownRecord(f"no decision record for approved revision {revision_id}")
-        return _json_text_record(row, "structured_json")
+        return json_text_record(row, "structured_json")
 
     def record_generation_run(self, values: dict[str, Any]) -> str:
         run_id = values.get("id") or new_id()

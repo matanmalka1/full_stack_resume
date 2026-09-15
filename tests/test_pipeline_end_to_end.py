@@ -17,12 +17,11 @@ from __future__ import annotations
 import os
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, seed_existing_analysis
 
 import cv_engine.application.services.drafts.generation as draft_generation_module
 import cv_engine.application.services.drafts.validation as draft_validation_module
 from cv_engine.application.commands import (
-    AnalyzeCommand,
     ApproveDraftCommand,
     DraftCommand,
     IngestCommand,
@@ -33,8 +32,6 @@ from cv_engine.application.maintenance import (
     build_application_export,
     reconcile_artifacts,
 )
-from cv_engine.application.services.analysis import PreparedAnalysis
-from cv_engine.application.services.analysis_selection import AnalysisSelection
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.runtime.composition import Services
 
@@ -49,38 +46,10 @@ def no_ai_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
 
-def _seed_existing_analysis(services, ingested, classify):
-    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
-    knowledge = services.analysis.load_knowledge()
-    profile = knowledge.profiles.get(analysis.profile)
-    return services.analysis.activate(
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-        PreparedAnalysis(
-            result=analysis,
-            plan_manifest=AnalysisSelection.manifest(analysis, knowledge),
-            provider="test",
-            model="existing-analysis-fixture",
-            candidate_context_version=knowledge.candidate.context_version,
-            candidate_context_hash=knowledge.candidate.version_hash,
-            profile_version=knowledge.profiles.version,
-            selection_policy_version=knowledge.policies.version,
-            track_emphasis_dependencies={
-                "track": analysis.track.value,
-                "emphasis": analysis.emphasis.value,
-            },
-            normalized_role=profile.normalized_role,
-        ),
-    )
-
-
 def test_deterministic_pipeline_reaches_ready_and_reconciles(
     services: Services,
     deterministic_renderer: None,
     no_ai_key: None,
-    classify,
 ) -> None:
     assert os.environ.get("OPENAI_API_KEY") is None
 
@@ -97,8 +66,8 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     application_id = ingested.application_id
     assert ingested.job_snapshot_id
 
-    # analyze, against that exact snapshot
-    analysed = _seed_existing_analysis(services, ingested, classify)
+    # begin from an existing analysis against that exact snapshot
+    analysed = seed_existing_analysis(services, ingested)
 
     # draft, from that exact analysis and plan
     drafted = services.drafts.draft(
@@ -180,7 +149,6 @@ def test_failed_pre_render_validation_blocks_approval(
     services: Services,
     no_ai_key: None,
     monkeypatch: pytest.MonkeyPatch,
-    classify,
 ) -> None:
     """A draft that fails pre-render validation cannot be approved.
 
@@ -222,7 +190,7 @@ def test_failed_pre_render_validation_blocks_approval(
             client="web",
         )
     )
-    analysed = _seed_existing_analysis(services, ingested, classify)
+    analysed = seed_existing_analysis(services, ingested)
     services.drafts.draft(
         DraftCommand(
             application_id=ingested.application_id,

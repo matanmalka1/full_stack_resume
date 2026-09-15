@@ -4,7 +4,12 @@ import uuid
 from pathlib import Path
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, artifact_version_and_path
+from helpers import (
+    ACCOUNT_MANAGER_JOB,
+    approve_active_draft,
+    artifact_version_and_path,
+    seed_analysis_for_command,
+)
 from sqlalchemy import func, select
 
 import cv_engine.infrastructure.rendering as rendering_module
@@ -35,11 +40,12 @@ def _submission_command(services, application_id: str) -> SubmissionCommand:
 
 
 def _reanalyze(services, application_id: str):
-    return services.analysis.analyze(
+    return seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=application_id,
             job_snapshot_id=services.repository.latest_snapshot(application_id)["id"],
-        )
+        ),
     )
 
 

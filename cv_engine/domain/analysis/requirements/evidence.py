@@ -27,11 +27,8 @@ This module is that split, written out:
   decides, and it can only ever *lower* coverage, so a vocabulary that does
   not model a posting cannot manufacture a false positive from it.
 
-What the vocabulary no longer does is decide coverage. `concept_for_quote`
-gating `matched`/`unsupported` meant a real requirement the six configured
-concepts did not model returned `undetermined` however well the provider read
-it - the closed-vocabulary collapse product-spec §2 "Semantic analysis
-authority" removes.
+The vocabulary does not decide coverage. The provider's reading is narrowed
+by canonical evidence and boundary policy, not by a closed concept match.
 """
 
 from __future__ import annotations
@@ -122,9 +119,7 @@ def boundary_facts_for_quote(
 
     Applicability is a deterministic pattern match on the verified quote, and
     every concept whose patterns match contributes - not only a unique match.
-    `concept_for_quote` refuses an ambiguous match because picking one of two
-    readings would misclassify coverage; here the direction is the opposite,
-    because a boundary can only cap `matched` to `partial`. Taking every
+    A boundary can only cap `matched` to `partial`. Taking every
     matching concept's boundary is the conservative reading, and refusing on
     ambiguity would drop a real limit on a technicality.
     """

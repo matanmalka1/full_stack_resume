@@ -138,8 +138,7 @@ def cover_ai_requirement(
     """Decide coverage for one gate-verified AI requirement (D5).
 
     `interpretation.negation` is checked first and unconditionally: a negated
-    requirement is never positive coverage, matching the deterministic rule in
-    `coverage.py` (stage-1 plan §3.2 rule 7).
+    requirement is never positive coverage.
 
     Everything after that is the provider's reading under `evidence.py`'s
     gates. What this function no longer does is ask
@@ -419,9 +418,8 @@ def verify_and_cover_extraction(
     the key and why a duplicate is collapsed rather than rejected.
 
     `UnderstandingSources.by_ai` counts requirement-bearing statements this
-    extraction actually covered, using the identical `requirement_lines`
-    denominator the deterministic path uses, so completeness is comparable
-    across extractors (stage-1 plan §3.3). It counts *coverage*, i.e. a
+    extraction actually covered, using the `requirement_lines` denominator.
+    It counts *coverage*, i.e. a
     statement whose offsets a verified requirement or a declared
     unmapped-statement entry touches - not whether that requirement was
     successfully mapped to a concept. A statement handled but left
@@ -438,8 +436,7 @@ def verify_and_cover_extraction(
     requirement's offsets touched. Each already has an `undetermined`
     `Requirement` spliced into the returned list - a provider that reads one of
     twenty requirements and says nothing about the other nineteen must not
-    produce a `fit_score` computed over that one, which is the same false green
-    the deterministic path closes the same way. They are returned as well as
+    produce a `fit_score` computed over that one. They are returned as well as
     spliced because the caller needs to know one existed, and re-deriving that
     from the spliced list would mean inferring which entries this function
     synthesized.

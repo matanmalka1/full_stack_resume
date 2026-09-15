@@ -71,11 +71,7 @@ class DraftRegeneration(DraftServiceBase):
             raise LineageBroken(
                 f"working draft {working.id} does not belong to application {application_id}"
             )
-        if working.content_hash != expected_content_hash:
-            raise StateConflict(
-                f"working draft {working.id} has content hash {working.content_hash}, "
-                f"not {expected_content_hash}"
-            )
+        self._require_content_hash(working, expected_content_hash)
         if working.job_analysis_id != job_analysis_id:
             raise LineageBroken(
                 f"working draft {working.id} was built from analysis "

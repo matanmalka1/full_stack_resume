@@ -28,6 +28,7 @@ from ...commands import (
     RenderCommand,
     ReplaceWorkingDraftCommand,
 )
+from ...chain import draft_source_mismatch
 from ...errors import (
     IDEMPOTENCY_KEY_REUSED,
     ApplicationError,
@@ -158,11 +159,9 @@ class OperationService(ServiceBase[OperationRepository]):
             snapshot = drafts.get_snapshot(analysis["job_snapshot_id"])
         except UnknownRecord as exc:
             raise UnknownRecord("unknown source for draft generation") from exc
-        if (
-            analysis["application_id"] != command.application_id
-            or plan.application_id != command.application_id
-            or plan.job_analysis_id != command.job_analysis_id
-        ):
+        if draft_source_mismatch(
+            command.application_id, command.job_analysis_id, analysis, plan
+        ) is not None:
             raise LineageBroken("draft sources do not belong to the named Application")
         if command.parent_revision_id is not None:
             readiness = cast(ReadinessRepository, self.repo)

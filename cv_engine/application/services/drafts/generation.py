@@ -17,6 +17,7 @@ from ....domain.knowledge import Knowledge
 from ....domain.profiles import allowed_fact_pool
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import DraftCommand, DraftResult
+from ...chain import draft_source_mismatch
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
@@ -91,15 +92,18 @@ class DraftGeneration(DraftServiceBase):
             record = self.repo.get_analysis(analysis_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown job analysis: {analysis_id}") from exc
-        if record["application_id"] != command.application_id:
-            raise LineageBroken(
-                f"analysis {analysis_id} does not belong to application {command.application_id}"
-            )
         try:
             plan = self.repo.selection_plan(command.selection_plan_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown selection plan: {command.selection_plan_id}") from exc
-        if plan.application_id != command.application_id or plan.job_analysis_id != analysis_id:
+        mismatch = draft_source_mismatch(
+            command.application_id, analysis_id, record, plan
+        )
+        if mismatch == "analysis":
+            raise LineageBroken(
+                f"analysis {analysis_id} does not belong to application {command.application_id}"
+            )
+        if mismatch == "selection_plan":
             raise LineageBroken(
                 f"selection plan {plan.id} does not belong to application "
                 f"{command.application_id} and analysis {analysis_id}"

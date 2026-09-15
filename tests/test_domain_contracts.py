@@ -19,7 +19,7 @@ from cv_engine.domain.models import (
 
 
 def test_a_draft_cannot_rewrite_the_provenance_it_is_judged_against(draft_factory) -> None:
-    setup = draft_factory("Python backend developer API React")
+    setup = draft_factory("Python backend developer API React", profile_override="development")
     draft = setup.draft
 
     for field, value in (
@@ -100,7 +100,9 @@ def test_ready_qualification_cannot_claim_a_result_its_evidence_did_not_earn() -
 
 
 def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> None:
-    draft: DraftDocument = draft_factory("Python backend developer API React").draft
+    draft: DraftDocument = draft_factory(
+        "Python backend developer API React", profile_override="development"
+    ).draft
     manifest = draft.selection
     assert isinstance(manifest, SelectionManifest)
 
@@ -162,7 +164,7 @@ def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> Non
 def test_an_analysis_refuses_an_override_it_cannot_act_on(draft_factory) -> None:
     """An override is what clears an approval reason. A key nothing routes on
     would sit in the record looking like a decision while resolving nothing."""
-    analysis = draft_factory("Python backend developer API React").analysis
+    analysis = draft_factory("Python backend developer API React", profile_override="development").analysis
     payload = analysis.model_dump(mode="json")
 
     with pytest.raises(ValidationError):

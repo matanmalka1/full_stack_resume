@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
 from foreground import foreground_executor
-from helpers import ACCOUNT_MANAGER_JOB, trivial_requirement_extraction
+from helpers import ACCOUNT_MANAGER_JOB, seed_analysis_for_command, trivial_requirement_extraction
 from pydantic import ValidationError
 
 from cv_engine.application.commands import (
@@ -94,13 +94,17 @@ def _ingested(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
 
 
 def _analyzed(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
-    """One deterministic analysis, so an AI test can be about one AI task."""
+    """Seed one existing analysis so an AI test can focus on another task."""
     ingested = _ingested(services, company, job_text)
-    analysed = services.analysis.analyze(
+    analysed = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-        )
+        ),
+        fit="unknown",
+        fit_score=None,
+        approval_reasons=["requirements-absent"],
     )
     return ingested, analysed
 
@@ -108,14 +112,10 @@ def _analyzed(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
 def _accepting_incomplete_analysis(services, ingested, analysed):
     """Answer the analysis-completeness gate the way a user answers it.
 
-    `ACCOUNT_MANAGER_JOB` states no requirement this engine reads, so its
-    analysis records `requirements-absent` and drafting stays blocked until
-    someone decides to proceed anyway. For a test whose subject is drafting or
-    regeneration, that gate is a precondition, not the thing under test - so it
-    is answered here through `apply_analysis_decisions`, the same command the
-    product offers, rather than by giving the shared fixture posting a
-    requirement. Editing the fixture would hide that the gate works at all, and
-    would change an input several other test files share.
+    The seeded analysis records `requirements-absent`, so drafting stays blocked
+    until someone decides to proceed. Tests focused on later AI tasks answer
+    that precondition through the same `apply_analysis_decisions` command the
+    product offers.
 
     A decision creates a new analysis and a new plan, so the caller must use the
     ids this returns.
@@ -358,21 +358,24 @@ def test_draft_resume_commits_wording_its_facts_support(
     ai_services, fake_openai: FakeOpenAI, change_composite: bool
 ) -> None:
     ingested = _ingested(ai_services, "Draft Co")
-    analysed = ai_services.analysis.analyze(
+    analysed = seed_analysis_for_command(
+        ai_services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
             track_override="tech-sales",
             profile_override="tech-sales",
             emphasis_override="tech-consultative-sales",
-        )
+        ),
+        fit="unknown",
+        fit_score=None,
+        approval_reasons=["requirements-absent"],
     )
-    # The posting states no requirement the engine reads, so the completeness
-    # gate blocks drafting until it is explicitly answered - a precondition for
-    # this test, not its subject. See `_accepting_incomplete_analysis`.
+    # The existing analysis fixture has an incomplete-extraction review gate;
+    # answering it is a precondition for drafting, not this test's subject.
     analysed = _accepting_incomplete_analysis(ai_services, ingested, analysed)
-    # The deterministic document first, so the proposal can echo wording that is
-    # known to be supported; the AI run then rebuilds the same draft.
+    # Build a supported document from the existing analysis first, so the
+    # proposal can echo wording the validation contract accepts.
     ai_services.drafts.draft(
         DraftCommand(
             application_id=ingested.application_id,
@@ -989,7 +992,6 @@ def test_unread_ai_requirements_do_not_become_high_fit(
     analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
     assert analysis.fit.value == "unknown"
     assert "extraction-failed" in analysis.approval_reasons
-    assert analysis.classification_requires_approval
     assert analysis.understanding.by_ai == 0
 
 
@@ -1386,9 +1388,8 @@ def test_the_extraction_contract_carries_no_tag_field_for_a_gate_that_never_exis
 ) -> None:
     """A12: the promise is gone, and so is the field it promised a gate over.
 
-    Two docstrings stated that `topic_tags` was consulted - one of them naming
-    `coverage.py` as the consumer - and that "a foreign tag disqualifies the
-    proposal". Nothing read the field anywhere, while the strict output schema
+    Documentation stated that `topic_tags` was consulted and that "a foreign
+    tag disqualifies the proposal". Nothing read the field anywhere, while the strict output schema
     still obliged every provider to fill it on every requirement. The field is
     refused now rather than quietly accepted, so it cannot come back as data
     before it comes back as a decision: nothing declares a tag vocabulary for
@@ -1480,12 +1481,12 @@ def test_a_proposal_cannot_add_experience_that_is_not_in_the_facts(
 def test_a_requirement_statement_the_ai_never_touched_enters_the_score(
     ai_services, fake_openai
 ) -> None:
-    """The AI path splices the same `undetermined` entry the deterministic one does.
+    """Unread statements are spliced into the score as `undetermined`.
 
     A provider that reads one of two requirement statements and says nothing
     about the other used to produce a `requirements` list of length one and a
-    `fit_score` computed over that one alone - the identical false green the
-    deterministic path closes, relocated. `unmapped_statements` did not close it
+    `fit_score` computed over that one alone - a false green.
+    `unmapped_statements` did not close it
     either: nothing downstream scored them.
     """
     job_text = (
@@ -1641,7 +1642,6 @@ def test_a_complete_extraction_records_the_confidence_of_the_run_that_produced_i
     assert analysis.confidence == CLASSIFICATION.confidence
     # Nothing downstream of a verified extraction is left asking for review.
     assert analysis.approval_reasons == []
-    assert not analysis.classification_requires_approval
 
 
 @pytest.mark.parametrize(

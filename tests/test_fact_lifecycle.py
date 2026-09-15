@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from helpers import approve_active_draft
+from helpers import approve_active_draft, seed_analysis_for_command
 from helpers import working_claim as _working_claim
 from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
@@ -340,12 +340,13 @@ def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
         },
         application_id=application_id,
     )
-    hebrew = services.analysis.analyze(
+    hebrew = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=application_id,
             job_snapshot_id=setup.snapshot_id,
             language_override="he",
-        )
+        ),
     )
     fact_source = services.paths.knowledge_root / "base" / "sales.md"
     profile_source = services.paths.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
@@ -629,11 +630,12 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     services.knowledge_lifecycle.attach_fact(
         "sales.leadership.pipeline_review", "account-manager", "Work Experience", pin=True
     )
-    refreshed = services.analysis.analyze(
+    refreshed = seed_analysis_for_command(
+        services,
         AnalyzeCommand(
             application_id=app_id,
             job_snapshot_id=setup.snapshot_id,
-        )
+        ),
     )
     attached_draft = services.drafts.draft(
         DraftCommand(

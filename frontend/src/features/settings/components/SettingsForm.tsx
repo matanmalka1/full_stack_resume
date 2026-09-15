@@ -16,7 +16,6 @@ import { LtrText } from "@/ui/LtrText";
 import { Select } from "@/ui/Select";
 import { Switch } from "@/ui/Switch";
 import { SettingsConflict } from "./SettingsConflict";
-import { legacyTheme } from "@/app/layout/theme";
 import { editableSettings } from "../settings.model";
 
 interface SettingsFormProps {
@@ -31,7 +30,6 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
   const [baseline, setBaseline] = useState<SettingsRead>({ etag, settings });
   const [conflict, setConflict] = useState<{ base: UpdateSettingsRequest; local: UpdateSettingsRequest } | null>(null);
   const [latest, setLatest] = useState<SettingsRead | null>(null);
-  const [importTheme, setImportTheme] = useState(legacyTheme);
   const values = editableSettings(baseline.settings);
   const {
     formState: { isDirty },
@@ -238,21 +236,6 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                 )}
               </Field>
             </div>
-            {importTheme !== undefined && (
-              <div className="mt-3">
-                <p>נמצאה העדפת ערכת נושא מקומית ישנה. היא לא תיובא ללא בחירה שלך.</p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setValue("ui_theme", importTheme, { shouldDirty: true });
-                    setImportTheme(undefined);
-                  }}
-                >
-                  שימוש בהעדפה המקומית הישנה
-                </Button>
-              </div>
-            )}
           </FormSection>
         </fieldset>
         <ActionBar

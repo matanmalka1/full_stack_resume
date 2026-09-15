@@ -165,7 +165,6 @@ An unrelated Knowledge change does not stale a draft. Exact dependency hashes de
 Review reasons are blockers that require an explicit user decision. Initial codes are:
 
 ```text
-MATERIAL_CLASSIFICATION_AMBIGUITY
 ANALYSIS_INCOMPLETE
 LOW_FIT_REQUIRES_ACCEPTANCE
 HARD_GAP_REQUIRES_DECISION

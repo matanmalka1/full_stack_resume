@@ -7,14 +7,8 @@ from sqlalchemy import insert, select
 from ...application.errors import StateConflict
 from ...domain.contracts.records import AuditRecord
 from ...util import canonical_json, new_id, sha256_text, utc_now
-from .base import SqlAlchemyRepositoryBase
+from .base import SqlAlchemyRepositoryBase, json_text_record
 from .tables import audit_records, fact_events
-
-
-def _json_text_record(row: Any, field: str) -> dict[str, Any]:
-    record = dict(row)
-    record[field] = canonical_json(record[field])
-    return record
 
 
 class SqlAlchemyAuditRepository(SqlAlchemyRepositoryBase):
@@ -46,7 +40,7 @@ class SqlAlchemyAuditRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .all()
             )
-        return [_json_text_record(row, "details_json") for row in rows]
+        return [json_text_record(row, "details_json") for row in rows]
 
     def record_fact_event(
         self,
@@ -105,7 +99,7 @@ class SqlAlchemyAuditRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
-        return None if row is None else _json_text_record(row, "fact_json")
+        return None if row is None else json_text_record(row, "fact_json")
 
     def fact_events(self, fact_id: str | None = None) -> list[dict[str, Any]]:
         visible_columns = [column for column in fact_events.c if column.name != "seq"]
@@ -115,7 +109,7 @@ class SqlAlchemyAuditRepository(SqlAlchemyRepositoryBase):
         statement = statement.order_by(fact_events.c.created_at, fact_events.c.seq)
         with self.read_connection() as connection:
             return [
-                _json_text_record(row, "fact_json")
+                json_text_record(row, "fact_json")
                 for row in connection.execute(statement).mappings()
             ]
 

@@ -487,7 +487,7 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
 
 
 def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
-    application_repo, draft_factory, classify
+    application_repo, draft_factory, analysis_document
 ) -> None:
     repository = application_repo
     app_id, snapshot_id = _create_application(
@@ -509,10 +509,11 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
         "content_hash",
         "prior_snapshot_id",
     }
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     document = draft_factory(
         "Python backend developer API React",
+        profile_override="development",
         application_id=app_id,
         job_snapshot_id=snapshot_id,
         job_analysis_id=analysis_id,
@@ -581,7 +582,7 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
 
 
 def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
-    application_repo, draft_factory, classify
+    application_repo, draft_factory, analysis_document
 ) -> None:
     repository = application_repo
     app_id, snapshot_id = _create_application(
@@ -590,10 +591,11 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     document = draft_factory(
         "Python backend developer API React",
+        profile_override="development",
         application_id=app_id,
         job_snapshot_id=snapshot_id,
         job_analysis_id=analysis_id,
@@ -625,7 +627,9 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         repository.create_working_draft(app_id, analysis_id, plan.id, document)
 
 
-def test_only_one_working_draft_per_application_can_be_active(application_repo, classify) -> None:
+def test_only_one_working_draft_per_application_can_be_active(
+    application_repo, analysis_document
+) -> None:
     """Product invariant 3, enforced by storage rather than by a filesystem path.
 
     Before this boundary "one active draft" was an accident of every draft living
@@ -677,7 +681,7 @@ def test_only_one_working_draft_per_application_can_be_active(application_repo, 
                 content_hash="h",
             )
         )
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     analysis_id, plan = _save_analysis(repository, "a", "s", analysis)
     assert analysis_id == plan.job_analysis_id
     with repository.transaction() as connection:
@@ -703,7 +707,7 @@ def test_only_one_working_draft_per_application_can_be_active(application_repo, 
         )
 
 
-def test_accepted_gaps_round_trip_and_default_empty(application_repo, classify) -> None:
+def test_accepted_gaps_round_trip_and_default_empty(application_repo, analysis_document) -> None:
     """The column is additive: a plan written without acceptance means none.
 
     `selection_plans` carries the immutability triggers, so acceptance is
@@ -717,7 +721,7 @@ def test_accepted_gaps_round_trip_and_default_empty(application_repo, classify) 
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
 
     # The initial plan of a new analysis accepts nothing.
@@ -749,7 +753,7 @@ def test_accepted_gaps_round_trip_and_default_empty(application_repo, classify) 
 
 
 def test_a_plan_row_without_the_column_value_reads_as_no_acceptance(
-    application_repo, classify
+    application_repo, analysis_document
 ) -> None:
     """A pre-migration row means no acceptance, which is what it meant."""
     repository = application_repo
@@ -759,7 +763,7 @@ def test_a_plan_row_without_the_column_value_reads_as_no_acceptance(
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
     with repository.read_connection() as connection:
         default = connection.execute(
@@ -769,7 +773,7 @@ def test_a_plan_row_without_the_column_value_reads_as_no_acceptance(
 
 
 def test_a_stale_acceptance_is_refused_rather_than_silently_rebased(
-    application_repo, classify
+    application_repo, analysis_document
 ) -> None:
     """The lost-update path, closed.
 
@@ -785,7 +789,7 @@ def test_a_stale_acceptance_is_refused_rather_than_silently_rebased(
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
 
     def acceptance(requirement_id: str) -> AcceptedGap:
@@ -823,7 +827,9 @@ def test_a_stale_acceptance_is_refused_rather_than_silently_rebased(
     assert sorted(gap.requirement_id for gap in second.accepted_gaps) == ["req-a", "req-b"]
 
 
-def test_acceptances_are_never_inherited_across_analyses(application_repo, classify) -> None:
+def test_acceptances_are_never_inherited_across_analyses(
+    application_repo, analysis_document
+) -> None:
     """A decision about one analysis's gaps is not a decision about another's."""
     repository = application_repo
     app_id, snapshot_id = _create_application(
@@ -832,7 +838,7 @@ def test_acceptances_are_never_inherited_across_analyses(application_repo, class
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     first_id, first_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     accepted = repository.create_selection_plan(
         app_id,
@@ -891,7 +897,7 @@ def test_a_plan_cannot_hold_an_acceptance_from_another_analysis() -> None:
 
 
 def test_a_plan_write_blocks_on_the_application_lock(
-    application_repo, database_url, classify
+    application_repo, database_url, analysis_document
 ) -> None:
     """Deterministic proof that the lock is taken, and taken before the read.
 
@@ -912,7 +918,7 @@ def test_a_plan_write_blocks_on_the_application_lock(
         target_role="Developer",
         text="Python backend developer API React",
     )
-    analysis = classify("Python backend developer API React")
+    analysis = analysis_document()
     analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
 
     impatient = create_engine(

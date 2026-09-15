@@ -8,7 +8,7 @@ from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.knowledge import Profile
 from ...domain.contracts.providers import SelectionProposal
 from ...domain.contracts.selection import AcceptedGap, SelectionManifest
-from ...domain.profiles import ProfileStore
+from ...domain.profiles import ProfileStore, classification_mismatch
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.selection import build_selection
 from ...util import utc_now
@@ -31,11 +31,12 @@ class AnalysisSelection:
             selected = profiles.get(analysis.profile)
         except (KeyError, ValueError) as exc:
             raise PreconditionFailed(f"analysis selected an unavailable Profile: {exc}") from exc
-        if analysis.track is not selected.track:
+        mismatch = classification_mismatch(selected, analysis.track, analysis.emphasis)
+        if mismatch == "track":
             raise StateConflict(
                 f"Track {analysis.track.value} and Profile {analysis.profile.value} are inconsistent"
             )
-        if analysis.emphasis not in selected.allowed_emphases:
+        if mismatch == "emphasis":
             raise StateConflict(
                 f"Emphasis {analysis.emphasis.value} is not allowed for Profile {analysis.profile.value}"
             )

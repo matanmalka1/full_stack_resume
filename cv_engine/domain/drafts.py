@@ -634,12 +634,3 @@ def add_claim(
     target.claims.append(claim)
     return _refresh_selection(draft, facts), claim.claim_id
 
-
-def register_linked_claim(
-    draft: DraftDocument,
-    claim_id: str,
-    new_text: str,
-    fact_ids: list[str],
-    facts: FactStore,
-) -> DraftDocument:
-    return apply_claim_edit(draft, claim_id, fact_ids, facts, text=new_text)

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from ..domain.contracts.analysis import JobAnalysis
 from ..domain.contracts.drafts import DraftDocument
+from ..domain.contracts.selection import SelectionPlan
 from ..domain.facts import FactStore
 from ..domain.profiles import ProfileStore
 from ..util import canonical_json, sha256_text
@@ -53,6 +54,20 @@ def material_analysis_key(analysis: JobAnalysis) -> str:
 
 class ChainError(ValueError):
     pass
+
+
+def draft_source_mismatch(
+    application_id: str,
+    analysis_id: str,
+    analysis_record: dict,
+    plan: SelectionPlan,
+) -> str | None:
+    """Return the invalid link in a named draft source pair, if any."""
+    if analysis_record["application_id"] != application_id:
+        return "analysis"
+    if plan.application_id != application_id or plan.job_analysis_id != analysis_id:
+        return "selection_plan"
+    return None
 
 
 @dataclass(frozen=True)

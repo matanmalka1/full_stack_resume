@@ -1,14 +1,12 @@
 .DS_Store
 __pycache__
 .pytest_cache/
+.ruff_cache/
+node_modules/
 .venv/
 *.egg-info/
 *.pyc
 artifacts/
-data/applications.sqlite3*
-data/migration/
-data/snapshots/
-data/verification/
 tmp/
 logs/
 
@@ -16,4 +14,3 @@ logs/
 .env
 .env.*
 !.env.example
-studio_ai/
