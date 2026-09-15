@@ -180,9 +180,11 @@ becomes a rules analysis: the UI offers configuration or retry rather than a fab
 result. Everything downstream of an existing analysis — editing, validation, approval,
 rendering, Ready, export and recruitment tracking — runs with no key at all.
 
-`POST /applications/{id}/analyses` still accepts an explicit `provider=deterministic`
-and produces a rules-only analysis; whether that stays in scope is the open question
-recorded in `docs/spec/product-spec.md` section 2.
+`POST /applications/{id}/analyses` only accepts `provider=openai`: creating a new
+`JobAnalysis` requires a configured provider, with no rules-based fallback
+(`docs/spec/product-spec.md` section 2, "Semantic analysis authority"). Draft creation
+keeps its own separate deterministic path (`provider=deterministic` on `create_draft`),
+unaffected by this.
 
 A configured key enables six structured OpenAI proposal tasks:
 `propose_requirement_extraction`, `propose_job_analysis`, `propose_selection_plan`,

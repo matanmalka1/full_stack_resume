@@ -2655,6 +2655,16 @@
             "title": "Application Id",
             "type": "string"
           },
+          "emphasis_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Emphasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "excluded_fact_ids": {
             "default": [],
             "items": {

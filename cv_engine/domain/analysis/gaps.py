@@ -100,8 +100,8 @@ def fit_level_from_score(fit_score: float | None, gaps: Sequence[Gap]) -> FitLev
        exactly this: "Fit remains unknown unless an independently established
        hard gap requires low" (state-and-use-cases.md §12,
        `apply_analysis_decisions`) - a known poor Fit is knowledge that an
-       otherwise-unassessed analysis must not erase. This is unchanged from the
-       the same policy applies after an interpretation correction.
+       otherwise-unassessed analysis must not erase. The same policy applies
+       unchanged after an interpretation correction.
     2. Failing that, no score at all (nothing was assessed, or extraction never
        produced a requirement list) reports UNKNOWN rather than guessing a level
        for a number that does not exist.

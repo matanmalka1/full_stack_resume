@@ -102,6 +102,10 @@ class CreateSelectionPlanRequest(SelectionOverlayRequest):
 
     application_id: str
     mode: Literal["deterministic", "ai"] = "deterministic"
+    #: An explicit Emphasis decision. Deterministic-mode only (§13): AI mode
+    #: proposes the plan under the analysis's own Emphasis, so this is
+    #: refused there the same way the fact overlay is.
+    emphasis_override: Emphasis | None = None
     expected_candidate_context_hash: str | None = None
     expected_facts_version: str | None = None
     expected_profile_version: str | None = None
