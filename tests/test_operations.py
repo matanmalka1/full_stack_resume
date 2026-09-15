@@ -6,7 +6,12 @@ from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
-from helpers import ACCOUNT_MANAGER_JOB, seed_analysis_for_command, validate_active_draft
+from helpers import (
+    ACCOUNT_MANAGER_JOB,
+    seed_analysis_for_command,
+    trivial_requirement_extraction,
+    validate_active_draft,
+)
 from pydantic import ValidationError
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import ProgrammingError
@@ -47,7 +52,7 @@ from cv_engine.application.operations import (
     is_terminal_operation,
     require_operation_transition,
 )
-from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.domain.models import JobClassificationProposal, ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.persistence.tables import (
@@ -785,8 +790,10 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     assert attempts == 1
 
 
-def test_foreground_analysis_reuses_an_explicit_idempotency_key(services) -> None:
-    ingested = services.applications.ingest(
+def test_foreground_analysis_reuses_an_explicit_idempotency_key(
+    ai_services, fake_openai, requirement_concepts
+) -> None:
+    ingested = ai_services.applications.ingest(
         IngestCommand(
             company="Foreground Operation Co",
             target_role="Account Manager",
@@ -800,18 +807,34 @@ def test_foreground_analysis_reuses_an_explicit_idempotency_key(services) -> Non
     )
 
     def submit_and_run() -> str:
-        operation = services.operations.submit_analysis(
+        fake_openai.script(
+            "propose_requirement_extraction",
+            trivial_requirement_extraction(ACCOUNT_MANAGER_JOB, requirement_concepts),
+        )
+        fake_openai.script(
+            "propose_job_analysis",
+            JobClassificationProposal(
+                track="sales",
+                profile="account-manager",
+                emphasis="account-growth",
+                language="en",
+                confidence=0.99,
+                rationale="fixture",
+                keywords=[],
+            ),
+        )
+        operation = ai_services.operations.submit_analysis(
             command,
             idempotency_key="analysis-idempotency-key",
-            analysis_service=services.analysis,
+            analysis_service=ai_services.analysis,
         )
-        return foreground_executor(services).execute(operation.id).id
+        return foreground_executor(ai_services).execute(operation.id).id
 
     first = submit_and_run()
     second = submit_and_run()
 
     assert first == second
-    assert services.repository.operation(first).status is OperationStatus.SUCCEEDED
+    assert ai_services.repository.operation(first).status is OperationStatus.SUCCEEDED
 
 
 def test_draft_operation_activates_one_validated_working_draft(services) -> None:

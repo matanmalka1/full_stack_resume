@@ -130,8 +130,11 @@ def test_post_analysis_uses_ai_operation_and_commits_both_records(
     assert response.status_code == 202, response.text
     completed = ai_api_worker.wait_for_operation(response.json()["id"])
     assert completed["status"] == "succeeded", completed
+    # Each scripted provider call (extraction, classification) also lands as
+    # its own provider_response output, preserved for provenance alongside
+    # the two immutable records the analysis actually commits.
     outputs = {item["output_type"]: item["output_id"] for item in completed["outputs"]}
-    assert set(outputs) == {"job_analysis", "selection_plan"}
+    assert set(outputs) == {"job_analysis", "selection_plan", "provider_response"}
     assert all(item["active"] for item in completed["outputs"])
     assert (
         ai_api_worker.services.repository.selection_plan(outputs["selection_plan"]).job_analysis_id
