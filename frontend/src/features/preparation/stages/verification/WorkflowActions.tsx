@@ -1,10 +1,12 @@
 import { type ReactElement, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { aiRegenerationAvailable } from "@/api/settings";
 import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
+import { Switch } from "@/ui/Switch";
 import { useWorkflowCommands } from "../../api/mutations";
 import { CommitBar, NEXT_STEP_LABEL } from "../../components/CommitBar";
 import { actionLabel } from "../../model/preparationLabels";
@@ -28,8 +30,27 @@ interface WorkflowActionsProps {
 }
 
 export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: WorkflowActionsProps) => {
-  const { analyze, archive, commandsBlocked, draft, editVersion, error, provider, replace, settings, workInFlight } =
-    useWorkflowCommands(detail, plan, onQueued);
+  /* This run's lane, chosen beside the button rather than in Settings. `undefined`
+     until touched means "follow the default", exactly like the override
+     `useAnalyzeCommand` takes - flipping the switch fixes an explicit choice for every
+     press after that, on this screen, independent of what the default is or later
+     becomes. It resets on remount, same as `keepPrevious` below: a choice made for one
+     visit to this screen, not a preference. */
+  const [analyzeOverride, setAnalyzeOverride] = useState<"openai" | "deterministic" | undefined>(undefined);
+
+  const {
+    analyze,
+    analyzeProvider,
+    archive,
+    commandsBlocked,
+    draft,
+    editVersion,
+    error,
+    provider,
+    replace,
+    settings,
+    workInFlight,
+  } = useWorkflowCommands(detail, plan, onQueued, analyzeOverride);
 
   /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
      draft carries manual wording that nothing regenerates, so the reader opts out of
@@ -172,6 +193,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
   const hasNotes =
     error !== null ||
     plan.unbuiltRecommendation !== null ||
+    (plan.analyze !== null && !plan.analyze.reanalysis && settings !== undefined) ||
     (plan.createDraft !== null && settings !== undefined) ||
     plan.replaceDraft !== null ||
     plan.archiveDraft !== null;
@@ -205,7 +227,37 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
           answer "why is that other button here", which is a question asked after the row
           is seen, not before.
 
-          The generate note names its sources and its cost in one sentence. Which cost is
+          The switch offers a one-run override only where AI is actually usable right
+          now; where it is not, `analyzeProvider` can only ever be the deterministic
+          default and a switch with one reachable position would be a control that looks
+          live and never does anything.
+
+          The analyze note names its cost the same way the generate note below it does:
+          read from the same `analyzeProvider` value `analyze.mutate()` is about to send -
+          the override folded in - so the reader sees which lane will run before the press
+          decides it. Only the first analysis is named here - `ReanalyzeCard` carries the
+          same switch and sentence for a re-analysis, beside the analysis it would
+          replace. */}
+          {plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? null : (
+            <div className="flex flex-col gap-2">
+              {!aiRegenerationAvailable(settings) ? null : (
+                <Switch
+                  checked={analyzeProvider !== undefined}
+                  description="עוקף את ברירת המחדל בהגדרות עבור הניתוח הזה בלבד."
+                  onChange={(checked) => setAnalyzeOverride(checked ? "openai" : "deterministic")}
+                >
+                  הרצת הניתוח הזה עם AI
+                </Switch>
+              )}
+              <p className="text-support leading-6 text-cv-text-muted">
+                {analyzeProvider === undefined
+                  ? "הניתוח רץ במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע."
+                  : "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
+              </p>
+            </div>
+          )}
+
+          {/* The generate note names its sources and its cost in one sentence. Which cost is
           read from the same `provider` value the command is sent with, so the sentence
           cannot describe a run different from the one the press would start. */}
           {plan.createDraft === null || settings === undefined ? null : (

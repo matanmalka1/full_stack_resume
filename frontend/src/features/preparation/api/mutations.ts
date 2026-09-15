@@ -30,19 +30,31 @@ import type { WorkflowActionPlan } from "../model/workflowActionPlan";
    in the diagnostics tab. Both send this exact command, and reaching it through the full
    command hook mounted the stale-draft version read and the in-flight Operation query a
    second time for a button that needs neither. */
-export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operationId: string) => void) => {
+export const useAnalyzeCommand = (
+  detail: ApplicationDetail,
+  onQueued: (operationId: string) => void,
+  /* A one-run override, read by the button that lets the reader pick AI over the
+     default for this exact press without touching Settings. `undefined` means "use
+     the default", exactly like a command that never mentions provider at all. */
+  analyzeProviderOverride?: "openai" | "deterministic",
+) => {
   const queryClient = useQueryClient();
   const { settings } = useSettings();
+  /* The default lane, unaffected by the override below - `useWorkflowCommands` also
+     hands this to the draft-generation command, which has no override of its own and
+     must keep following Settings exactly as before. */
   const provider = executionProvider(settings);
+  const analyzeProvider =
+    analyzeProviderOverride === undefined ? provider : analyzeProviderOverride === "openai" ? "openai" : undefined;
   const snapshotId = detail.active_job_snapshot_id;
-  /* One key per snapshot: an answer that never arrived can be sent again without
-     queueing a second analysis of the same posting. Derived rather than cached, since a
-     discarded useMemo would mint a new key on the same snapshot and break that
-     guarantee. */
-  const analyzeKey = `analyze:${detail.application.id}:${snapshotId}`;
+  /* One key per snapshot *and* chosen lane: switching the override between two presses
+     of the same snapshot is a different command, not a resend of the first one. Without
+     the lane, a deterministic attempt already on record would make the server refuse
+     the AI retry as the same idempotency key under a different payload. */
+  const analyzeKey = `analyze:${detail.application.id}:${snapshotId}:${analyzeProvider ?? "deterministic"}`;
 
   const analyze = useMutation({
-    mutationFn: () => startAnalysis(detail.application.id, snapshotId, analyzeKey, provider),
+    mutationFn: () => startAnalysis(detail.application.id, snapshotId, analyzeKey, analyzeProvider),
     /* Queueing does not navigate. The projection carries `active_operation` in full and
        starts polling the moment it appears, so the screen reports the work in place;
        what the accepted `202` buys is the first state, a poll earlier than the
@@ -54,7 +66,7 @@ export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operatio
     },
   });
 
-  return { analyze, provider, settings };
+  return { analyze, analyzeProvider, provider, settings };
 };
 
 interface AutomaticDraftAttempt {
@@ -249,6 +261,10 @@ export const useWorkflowCommands = (
   detail: ApplicationDetail,
   plan: WorkflowActionPlan,
   onQueued: (operationId: string) => void,
+  /* Forwarded to `useAnalyzeCommand` untouched - see its own docstring. Draft generation
+     below keeps reading `provider`, not this, so overriding the lane for one analyze
+     press never changes what a later "יצירת טיוטה" press would send. */
+  analyzeProviderOverride?: "openai" | "deterministic",
 ) => {
   const queryClient = useQueryClient();
   const { mark } = usePreparationContinuation(detail.application.id);
@@ -279,7 +295,7 @@ export const useWorkflowCommands = (
     [onQueued],
   );
 
-  const { analyze, provider, settings } = useAnalyzeCommand(detail, follow);
+  const { analyze, analyzeProvider, provider, settings } = useAnalyzeCommand(detail, follow, analyzeProviderOverride);
 
   /* The two commands that write a WorkingDraft, followed the same way and marked the same
      way: the draft they produce is worked on in the editor, so the run is registered as
@@ -410,6 +426,7 @@ export const useWorkflowCommands = (
 
   return {
     analyze,
+    analyzeProvider,
     archive,
     commandsBlocked,
     draft,
