@@ -11,6 +11,7 @@ import pytest
 from helpers import PAYME_TECH_SALES_JOB
 from pydantic import ValidationError
 
+from cv_engine.domain.contracts.analysis import RequirementAttestation
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import (
@@ -95,6 +96,11 @@ def test_job_keywords_cannot_outrank_profile_and_emphasis_semantics(draft_factor
         "Renewals and retention focus, retention metrics, retention reviews.",
         profile_override="account-manager",
         emphasis_override="new-business",
+        # `draft_factory` builds a synthetic analysis and does not itself read
+        # `keywords` from the posting text - real extraction is AI-sourced
+        # (D5). Stated explicitly here, standing in for what a provider would
+        # have proposed for this stuffed text.
+        keywords=["retention"],
     ).draft
 
     scores = {candidate.fact_id: candidate for candidate in stuffed.selection.candidates}
@@ -236,25 +242,70 @@ def test_every_role_block_reaches_its_floor(
 def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations(
     draft_factory,
 ) -> None:
+    boundary_quote = "inside Sales experience in a SaaS or tech-related industry"
+    boundary_start = PAYME_TECH_SALES_JOB.index(boundary_quote)
+    closing_quote = "guide the Sales process through closing"
+    closing_start = PAYME_TECH_SALES_JOB.index(closing_quote)
+    # `high` was never earned here. This posting states two requirements a real
+    # extraction would read: the boundary quote below - the exact context the
+    # candidate's own `sales.tech_sales.boundary` fact says is unverified, sales
+    # *at a technology company* - capped to `partial` coverage; and closing the
+    # sales process, which nothing evidences directly, so it is an unsupported
+    # hard gap substituted by the negotiation and leadership-pipeline facts
+    # (the "merged negotiation/tenders bullet and the leadership block" the
+    # comment below describes - that substitution is what earns them their
+    # section-budget seats, not the boundary requirement, which has no
+    # supporting or substitute facts of its own).
     setup = draft_factory(
         PAYME_TECH_SALES_JOB,
         track_override="tech-sales",
         profile_override="tech-sales",
         emphasis_override="new-business",
+        requirements=[
+            Requirement(
+                requirement_id="payme-tech-sales-boundary",
+                text=boundary_quote,
+                kind="presence",
+                mandatory=False,
+                coverage="partial",
+                boundary_fact_ids=["sales.tech_sales.boundary"],
+                attestation=RequirementAttestation(
+                    quote=boundary_quote,
+                    start=boundary_start,
+                    end=boundary_start + len(boundary_quote),
+                ),
+            ),
+            Requirement(
+                requirement_id="payme-tech-sales-closing",
+                text=closing_quote,
+                kind="presence",
+                mandatory=True,
+                coverage="unsupported",
+                attestation=RequirementAttestation(
+                    quote=closing_quote,
+                    start=closing_start,
+                    end=closing_start + len(closing_quote),
+                ),
+            ),
+        ],
+        gaps=[
+            Gap(
+                requirement=closing_quote,
+                severity="hard",
+                reason="No fact directly evidences guiding the sales process through closing.",
+                substitute_fact_ids=["sales.cycle.negotiation", "sales.leadership.pipeline"],
+                requirement_id="payme-tech-sales-closing",
+            )
+        ],
+        # `draft_factory` stores Fit as given rather than deriving it from
+        # `requirements`/`gaps` - these are exactly what
+        # fit_score_from_requirements and fit_level_from_score (gaps.py) would
+        # compute for one `partial` and one hard-gapped mandatory requirement.
+        fit="low",
+        fit_score=0.5,
     )
     draft = setup.draft
 
-    # `high` here was never earned. This posting states its one requirement -
-    # "inside Sales experience in a SaaS or tech-related industry" - in prose,
-    # and the vocabulary matched nothing in it, so `requirements` came out
-    # empty and `fit_score_from_requirements([])` answered `1.0`: "nothing
-    # demanded, nothing missing". That is exactly D1's false green, and the
-    # assertion was pinning it. Now the requirement is read, and the honest
-    # answer is `low`: what the posting asks for is sales *at a technology
-    # company*, and that context is a declared boundary of the candidate
-    # (`sales.tech_sales.boundary`), so the requirement is covered `partial`.
-    # What this test is actually about is the evidence selection below, which
-    # is unchanged either way.
     assert setup.analysis.fit.value == "low"
     assert setup.analysis.fit_score == 0.5
     assert "extraction-failed" not in setup.analysis.approval_reasons
