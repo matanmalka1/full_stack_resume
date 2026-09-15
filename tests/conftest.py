@@ -779,17 +779,17 @@ def draft_factory(
             emphasis=Emphasis(overrides.pop("emphasis_override", None) or profile.default_emphasis),
             confidence=0.99,
             rationale="test analysis fixture",
-            fit="high",
-            fit_score=1.0,
-            gaps=[],
-            requirements=[],
+            fit=overrides.pop("fit", "high"),
+            fit_score=overrides.pop("fit_score", 1.0),
+            gaps=overrides.pop("gaps", []),
+            requirements=overrides.pop("requirements", []),
             extraction_version="test-ai-v1",
             unmapped_statements=[],
             understanding={"by_ai": 0},
             interpretation_decisions=[],
             mandatory_requirements=[],
             preferred_requirements=[],
-            keywords=[],
+            keywords=overrides.pop("keywords", []),
             language=overrides.pop("language_override", "en"),
             **overrides,
         )
@@ -941,6 +941,7 @@ class PausedApiHarness:
 
     client: Any
     services: Services
+    fake_openai: FakeOpenAI | None = None
 
     def run_operation(self, operation_id: str) -> dict[str, Any]:
         """Execute one queued Operation here, in the calling thread."""
@@ -962,7 +963,14 @@ def api_paused(services: Services):
 
 
 @pytest.fixture
-def ai_api_worker(ai_services: Services):
+def ai_api_paused(ai_services: Services, fake_openai: FakeOpenAI):
     """The same arrangement, with the AI provider wired to the fake transport."""
-    with api_with_worker(ai_services) as harness:
+    with TestClient(create_app(build_api_services(ai_services))) as client:
+        yield PausedApiHarness(client=client, services=ai_services, fake_openai=fake_openai)
+
+
+@pytest.fixture
+def ai_api_worker(ai_services: Services, fake_openai: FakeOpenAI):
+    """The same arrangement, with the AI provider wired to the fake transport."""
+    with api_with_worker(ai_services, fake_openai=fake_openai) as harness:
         yield harness

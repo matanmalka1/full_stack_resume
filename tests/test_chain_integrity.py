@@ -86,6 +86,21 @@ def _persisted(services: Services) -> dict[str, int]:
 
 def _analyze(services: Services, application_id: str, **overrides):
     snapshot_id = services.repository.latest_snapshot(application_id)["id"]
+    analysis_values = {
+        key: overrides[key]
+        for key in (
+            "fit",
+            "fit_score",
+            "gaps",
+            "requirements",
+            "unmapped_statements",
+            "extraction_version",
+            "understanding",
+            "user_override",
+            "approval_reasons",
+        )
+        if key in overrides
+    }
     return seed_analysis_for_command(
         services,
         AnalyzeCommand(
@@ -96,6 +111,7 @@ def _analyze(services: Services, application_id: str, **overrides):
             emphasis_override=overrides.get("emphasis"),
             language_override=overrides.get("language"),
         ),
+        **analysis_values,
     )
 
 
@@ -116,7 +132,22 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
     project_root: Path, analyzed_application
 ) -> None:
     services, app_id = analyzed_application("Snapshot Race")
-    stale_analysis_id, _ = services.repository.latest_analysis(app_id)
+    analysis_id, _ = services.repository.latest_analysis(app_id)
+    selection_plan_id = services.repository.latest_selection_plan(app_id).id
+    # The fixture's extraction is trivial (every statement declared unmapped),
+    # so drafting against it is blocked on its own until the incomplete
+    # analysis is explicitly accepted - a different blocker than the one this
+    # test is about. Accept it first so only the snapshot race is exercised.
+    accepted = services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=app_id,
+            job_analysis_id=analysis_id,
+            expected_analysis_id=analysis_id,
+            expected_selection_plan_id=selection_plan_id,
+            accept_incomplete_analysis=True,
+        )
+    )
+    stale_analysis_id = accepted.job_analysis_id
     new_text = ACCOUNT_MANAGER_JOB + " The role also covers quarterly portfolio reviews."
     new_snapshot_id = str(uuid.uuid4())
     payload = services.payloads.commit_snapshot(app_id, new_snapshot_id, new_text)
@@ -218,7 +249,24 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
     setup = drafted_application("Rerun Analysis")
     services, app_id = setup.services, setup.application_id
     bound_analysis_id = parse_draft(setup.manifest.read_text(encoding="utf-8")).job_analysis_id
-    rerun = _analyze(services, app_id)
+    bound_analysis = services.repository.get_analysis(bound_analysis_id)["analysis"]
+    # A re-run that reproduces the same classification changes nothing
+    # material (README, "Default workflow"). Mirroring every material field
+    # `drafted_application`'s real, accepted-incomplete analysis actually
+    # carries - rather than guessing at a matching shape - is what makes this
+    # a same-classification re-run instead of a materially different one.
+    rerun = _analyze(
+        services,
+        app_id,
+        fit=bound_analysis.fit,
+        gaps=bound_analysis.gaps,
+        requirements=bound_analysis.requirements,
+        unmapped_statements=bound_analysis.unmapped_statements,
+        extraction_version=bound_analysis.extraction_version,
+        understanding=bound_analysis.understanding,
+        user_override=bound_analysis.user_override,
+        approval_reasons=bound_analysis.approval_reasons,
+    )
     assert rerun.analysis_id != bound_analysis_id
     working = services.repository.active_working_draft(app_id)
     plan = services.repository.selection_plan(working.selection_plan_id)
