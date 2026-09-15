@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from ....util import canonical_json, sha256_text
-from ...contracts.analysis import RequirementKind
 
 _HEADING_DECORATION = " \t*_#~`-\u2013\u2014\u2022\u2023\u25aa\u25e6:?.!,"
 _WHITESPACE = re.compile(r"\s+")
@@ -23,53 +22,17 @@ class RequirementConceptError(ValueError):
 
 
 @dataclass(frozen=True)
-class ConceptComponent:
-    """One named part of a compositional requirement.
-
-    A component with no satisfying facts or tags is not a modelling mistake: it
-    states that nothing in canonical Knowledge can establish this part. That is
-    how "sales carried out at a technology company" stays honestly missing
-    instead of being satisfied by finding a sales fact and a technology fact
-    separately.
-    """
-
-    component_id: str
-    label: str
-    satisfied_by_fact_ids: frozenset[str] = frozenset()
-    satisfied_by_tags: frozenset[str] = frozenset()
-
-
-@dataclass(frozen=True)
 class RequirementConcept:
     concept: str
-    label: str
-    kind: RequirementKind
     patterns: tuple[re.Pattern[str], ...]
-    components: tuple[ConceptComponent, ...] = ()
-    satisfied_by_fact_ids: frozenset[str] = frozenset()
-    satisfied_by_tags: frozenset[str] = frozenset()
     boundary_fact_ids: frozenset[str] = frozenset()
-    candidate_fact_ids: frozenset[str] = frozenset()
-    candidate_tags: frozenset[str] = frozenset()
-    scale: str = ""
-    demand_terms: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    demand_pattern: re.Pattern[str] | None = None
-    value_fact_ids: tuple[str, ...] = ()
 
 
 class RequirementConceptStore:
-    """The requirement vocabulary and its typed coverage rules.
-
-    Versioned like every other Knowledge dependency so that changing what a
-    requirement means is visible as a change, rather than silently reshaping
-    analyses that were already committed.
-    """
+    """Structural markers, scales, and boundary applicability rules."""
 
     def __init__(self, payload: dict[str, Any], *, origin: str = "requirement concepts"):
         self.origin = origin
-        self.extraction_version = str(payload.get("extraction_version", ""))
-        if not self.extraction_version:
-            raise RequirementConceptError(f"{origin}: extraction_version is required")
         self.scales: dict[str, tuple[str, ...]] = {
             name: tuple(str(value).casefold() for value in values)
             for name, values in (payload.get("scales") or {}).items()
@@ -150,52 +113,13 @@ class RequirementConceptStore:
         return cls(payload, origin=origin)
 
     def _concept(self, name: str, body: dict[str, Any]) -> RequirementConcept:
-        kind = body.get("kind")
-        if kind not in {"threshold", "compositional", "presence"}:
-            raise RequirementConceptError(
-                f"{self.origin}: concept {name} has unknown kind {kind!r}"
-            )
         patterns = tuple(
             re.compile(str(pattern), re.IGNORECASE) for pattern in body.get("patterns") or ()
         )
         if not patterns:
             raise RequirementConceptError(f"{self.origin}: concept {name} declares no patterns")
-        scale = str(body.get("scale", ""))
-        if kind == "threshold" and not scale:
-            raise RequirementConceptError(f"{self.origin}: threshold concept {name} needs a scale")
-        if scale and scale != "years" and scale not in self.scales:
-            raise RequirementConceptError(
-                f"{self.origin}: concept {name} names unknown scale {scale!r}"
-            )
-        if kind == "compositional" and not body.get("components"):
-            raise RequirementConceptError(
-                f"{self.origin}: compositional concept {name} declares no components"
-            )
-        demand = body.get("demand_pattern")
         return RequirementConcept(
             concept=name,
-            label=str(body.get("label", name)),
-            kind=kind,
             patterns=patterns,
-            components=tuple(
-                ConceptComponent(
-                    component_id=str(item["component_id"]),
-                    label=str(item.get("label", item["component_id"])),
-                    satisfied_by_fact_ids=frozenset(item.get("satisfied_by_fact_ids") or ()),
-                    satisfied_by_tags=frozenset(item.get("satisfied_by_tags") or ()),
-                )
-                for item in body.get("components") or ()
-            ),
-            satisfied_by_fact_ids=frozenset(body.get("satisfied_by_fact_ids") or ()),
-            satisfied_by_tags=frozenset(body.get("satisfied_by_tags") or ()),
             boundary_fact_ids=frozenset(body.get("boundary_fact_ids") or ()),
-            candidate_fact_ids=frozenset(body.get("candidate_fact_ids") or ()),
-            candidate_tags=frozenset(body.get("candidate_tags") or ()),
-            scale=scale,
-            demand_terms={
-                str(level): tuple(str(term).casefold() for term in terms)
-                for level, terms in (body.get("demand_terms") or {}).items()
-            },
-            demand_pattern=re.compile(str(demand), re.IGNORECASE) if demand else None,
-            value_fact_ids=tuple(body.get("value_fact_ids") or ()),
         )
