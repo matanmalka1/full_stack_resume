@@ -185,19 +185,28 @@ def cover_ai_requirement(
         # policy under D5, so the top-level `coverage` claim is not read here
         # at all. A member left undetermined keeps the whole requirement
         # undetermined unless another member already settles it - `any-of` is
-        # settled by one match, `all-of` by nothing short of all of them.
+        # settled by one match, `all-of` by nothing short of all of them. A
+        # `partial` member (itself possibly boundary-capped) is neither: it
+        # keeps the composite from being `unsupported` outright without
+        # letting it claim `matched`.
         if interpretation.composition == "any-of":
-            coverage: Coverage = (
-                "matched"
-                if "matched" in member_coverages
-                else ("undetermined" if "undetermined" in member_coverages else "unsupported")
-            )
+            if "matched" in member_coverages:
+                coverage: Coverage = "matched"
+            elif "undetermined" in member_coverages:
+                coverage = "undetermined"
+            elif "partial" in member_coverages:
+                coverage = "partial"
+            else:
+                coverage = "unsupported"
         else:  # all-of
-            coverage = (
-                "matched"
-                if member_coverages and all(item == "matched" for item in member_coverages)
-                else ("undetermined" if "undetermined" in member_coverages else "unsupported")
-            )
+            if member_coverages and all(item == "matched" for item in member_coverages):
+                coverage = "matched"
+            elif "undetermined" in member_coverages:
+                coverage = "undetermined"
+            elif any(item in ("matched", "partial") for item in member_coverages):
+                coverage = "partial"
+            else:
+                coverage = "unsupported"
         boundary = boundary_facts_for_quote(quote, concepts, facts)
         if boundary and coverage == "matched":
             coverage = "partial"

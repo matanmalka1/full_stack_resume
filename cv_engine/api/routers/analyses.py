@@ -120,6 +120,11 @@ def create_selection_plan(
             raise PreconditionFailed(
                 "acceptance_reason accompanies a user's gap decision and is not accepted in AI mode"
             )
+        if body.pop("emphasis_override") is not None:
+            raise PreconditionFailed(
+                "emphasis_override is a deterministic-mode decision; submit it through "
+                "the deterministic mode instead"
+            )
         queued = services.operations.submit_selection_plan_proposal(
             ProposeSelectionPlanCommand(
                 job_analysis_id=analysis_id,

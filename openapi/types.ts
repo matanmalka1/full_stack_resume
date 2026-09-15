@@ -2150,6 +2150,7 @@ export interface components {
             accepted_requirement_ids: string[];
             /** Application Id */
             application_id: string;
+            emphasis_override?: components["schemas"]["Emphasis"] | null;
             /**
              * Excluded Fact Ids
              * @default []
