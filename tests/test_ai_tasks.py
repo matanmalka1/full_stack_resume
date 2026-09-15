@@ -1163,6 +1163,173 @@ def test_a_requirement_not_quoted_in_the_posting_is_rejected(ai_services, fake_o
         ai_services.repository.latest_analysis(completed.application_id)
 
 
+def test_requirement_quote_missing_terminal_punctuation_is_reconciled(
+    ai_services, fake_openai
+) -> None:
+    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
+    quote = "Must have enterprise sales experience"
+    start = job_text.index(quote)
+    proposal = ProposedRequirement(
+        attestation=RequirementAttestation(
+            quote=quote,
+            start=start,
+            end=start + len(quote) + 1,
+        ),
+        interpretation=RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+        ),
+        kind="presence",
+        label=quote,
+    )
+
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
+    )
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+    extracted = next(
+        requirement
+        for requirement in analysis.requirements
+        if requirement.attestation is not None
+    )
+    assert extracted.attestation == RequirementAttestation(
+        quote=f"{quote}.", start=start, end=start + len(quote) + 1
+    )
+
+
+def test_requirement_quote_with_one_character_offset_drift_is_reconciled(
+    ai_services, fake_openai
+) -> None:
+    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
+    quote = "Must have enterprise sales experience"
+    start = job_text.index(quote)
+    proposal = ProposedRequirement(
+        attestation=RequirementAttestation(
+            quote=quote,
+            start=start - 1,
+            end=start + len(quote) - 1,
+        ),
+        interpretation=RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+        ),
+        kind="presence",
+        label=quote,
+    )
+
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
+    )
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+    extracted = next(
+        requirement
+        for requirement in analysis.requirements
+        if requirement.attestation is not None
+    )
+    assert extracted.attestation == RequirementAttestation(
+        quote=quote, start=start, end=start + len(quote)
+    )
+
+
+def test_requirement_quote_missing_one_final_letter_uses_the_source_span(
+    ai_services, fake_openai
+) -> None:
+    job_text = "Engineer.\nRequirements:\n- Communicate clearly in both directions."
+    actual = "Communicate clearly in both directions"
+    quote = "Communicate clearly in both direction"
+    start = job_text.index(actual)
+    proposal = ProposedRequirement(
+        attestation=RequirementAttestation(
+            quote=quote,
+            start=start,
+            end=start + len(actual),
+        ),
+        interpretation=RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+        ),
+        kind="presence",
+        label=quote,
+    )
+
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
+    )
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
+    extracted = next(
+        requirement
+        for requirement in analysis.requirements
+        if requirement.attestation is not None
+    )
+    assert extracted.attestation == RequirementAttestation(
+        quote=actual, start=start, end=start + len(actual)
+    )
+
+
+def test_requirement_quote_interior_letter_difference_is_not_reconciled(
+    ai_services, fake_openai
+) -> None:
+    job_text = "Engineer.\nRequirements:\n- Communicate clearly in both directions."
+    actual = "Communicate clearly in both directions"
+    quote = "Communicate clearly on both directions"
+    start = job_text.index(actual)
+    proposal = ProposedRequirement(
+        attestation=RequirementAttestation(
+            quote=quote,
+            start=start,
+            end=start + len(actual),
+        ),
+        interpretation=RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+        ),
+        kind="presence",
+        label=quote,
+    )
+
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
+    )
+
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+
+
 def test_softening_mandatory_to_preferred_without_a_quoted_marker_is_rejected(
     ai_services, fake_openai
 ) -> None:

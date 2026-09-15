@@ -46,7 +46,11 @@ from ...contracts.analysis import (
 from ...contracts.knowledge import FactStatus
 from ...contracts.providers import RequirementExtractionProposal
 from ...facts import FactStore
-from .attestation import InvalidRequirementAttestation, verify_attestation
+from .attestation import (
+    InvalidRequirementAttestation,
+    reconcile_attestation,
+    verify_attestation,
+)
 from .concepts import RequirementConcept, RequirementConceptStore
 from .coverage import satisfied_evidence, threshold_coverage
 from .extraction import (
@@ -533,9 +537,9 @@ def verify_and_cover_extraction(
     mapped_spans: list[tuple[int, int]] = []
 
     for proposed in proposal.requirements:
-        span = (proposed.attestation.start, proposed.attestation.end)
         try:
-            verify_attestation(proposed.attestation, source_text=source_text)
+            attestation = reconcile_attestation(proposed.attestation, source_text=source_text)
+            span = (attestation.start, attestation.end)
             verify_interpretation(
                 proposed.interpretation,
                 source_text=source_text,
@@ -545,7 +549,7 @@ def verify_and_cover_extraction(
         except (InvalidRequirementAttestation, InvalidRequirementInterpretation) as exc:
             raise RequirementExtractionRejected(str(exc)) from exc
 
-        quote = proposed.attestation.quote
+        quote = attestation.quote
         identity_span = normalize_span(quote)
         # `ordinal` is constant deliberately. The deterministic extractor needs
         # one because its dedup key (concept and demanded value) is *narrower*
@@ -592,13 +596,13 @@ def verify_and_cover_extraction(
             concepts=concepts,
         )
         requirements.append(
-            covered.model_copy(update={"attestation": proposed.attestation, "extractor": extractor})
+            covered.model_copy(update={"attestation": attestation, "extractor": extractor})
         )
 
     unmapped: list[UnmappedStatement] = []
     for statement in proposal.unmapped_statements:
         try:
-            verify_attestation(
+            attestation = reconcile_attestation(
                 RequirementAttestation(
                     quote=statement.text, start=statement.start, end=statement.end
                 ),
@@ -606,7 +610,15 @@ def verify_and_cover_extraction(
             )
         except InvalidRequirementAttestation as exc:
             raise RequirementExtractionRejected(str(exc)) from exc
-        unmapped.append(statement)
+        unmapped.append(
+            statement.model_copy(
+                update={
+                    "text": attestation.quote,
+                    "start": attestation.start,
+                    "end": attestation.end,
+                }
+            )
+        )
         # Unmapped statements are disclosed separately, not credited as understood.
 
     unmatched_lines = unmatched_requirement_lines(source_text, concepts, mapped_spans)
