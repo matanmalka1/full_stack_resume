@@ -3,13 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ...domain.analysis.approval import ACCEPTED_INCOMPLETE_ANALYSIS, merge_classification
-from ...domain.analysis.classification import classify_job, rebase_requirements
+from ...domain.analysis.classification import (
+    classification_confidence_for,
+    classify_job,
+    rebase_requirements,
+)
 from ...domain.analysis.requirements.ai_extraction import (
     RequirementExtractionRejected,
     apply_interpretation_corrections,
+    attested_spans,
     extraction_is_failed,
     verify_and_cover_extraction,
 )
+from ...domain.analysis.requirements.confidence import span_completeness
 from ...domain.analysis.requirements.segmentation import requirement_lines
 from ...domain.contracts.analysis import (
     JobAnalysis,
@@ -59,6 +65,7 @@ from .base import ServiceBase
 from .proposals import (
     ProviderEvidence,
     allowed_fact_pool,
+    analysis_fact_context,
     evidence_attached,
     fact_context,
     refuse_facts_outside_the_pool,
@@ -242,6 +249,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                         }
                         for line in requirement_lines(job_text, knowledge.requirement_concepts)
                     ],
+                    candidate_facts=analysis_fact_context(knowledge.facts),
                 ),
                 model=command.model,
                 reasoning_effort=command.reasoning_effort,
@@ -290,13 +298,24 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 extraction_version=extraction_namespace,
                 facts=knowledge.facts,
                 extraction_failed=extraction_is_failed(
-                    job_text, verified_requirements, unmapped, knowledge.requirement_concepts
+                    job_text, verified_requirements, knowledge.requirement_concepts
                 ),
                 # Both were just computed against this same `job_text`, in this
                 # same call, which is the condition `rebase_requirements` takes
                 # them explicitly for.
                 requirements_absent=not verified_requirements,
                 requirements_unmapped=bool(unmatched_lines) and bool(verified_requirements),
+                # The stored confidence is restated against the extraction that
+                # is now on record. `classify_job`'s own extraction score came
+                # from the concept vocabulary this call just replaced, and
+                # leaving it in place held the approval gate shut on a posting
+                # the provider read in full.
+                completeness=span_completeness(
+                    job_text,
+                    attested_spans(verified_requirements),
+                    knowledge.requirement_concepts,
+                ),
+                classification_score=classification_confidence_for(job_text, deterministic.profile),
             ).model_copy(
                 update={
                     "analysis_version": "1.1",
@@ -1037,6 +1056,16 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # neither can be re-derived here - only carried forward.
             requirements_absent="requirements-absent" in analysis.approval_reasons,
             requirements_unmapped="requirements-unmapped" in analysis.approval_reasons,
+            # Derived rather than inherited, and identical to what the analysis
+            # already carries unless a correction moved a requirement: both are
+            # functions of the same snapshot text and the attested spans on the
+            # requirements themselves, neither of which a correction invents.
+            completeness=span_completeness(
+                job_text,
+                attested_spans(corrected_requirements),
+                knowledge.requirement_concepts,
+            ),
+            classification_score=classification_confidence_for(job_text, analysis.profile),
         )
         result = rebased.model_copy(
             update={

@@ -287,6 +287,12 @@ class RequirementExtractionContext(StrictModel):
 
     job_text: str
     requirement_lines: list[dict[str, Any]]
+    #: Every canonical fact the extraction may cite as evidence (D5). Supplied
+    #: here because coverage is now part of what this task proposes: a provider
+    #: asked which requirements the candidate meets, and given no facts, could
+    #: only answer from the posting - which is how a reading of the employer's
+    #: wording became a claim about the candidate.
+    candidate_facts: list[dict[str, Any]] = []
 
 
 class JobAnalysisContext(StrictModel):

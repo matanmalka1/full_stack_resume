@@ -38,6 +38,20 @@ _MAX_HEADING_WORDS = 6
 _SENTENCE_END = (".", ",", ";", "!", "?")
 
 
+def overlaps(span: tuple[int, int], other: tuple[int, int]) -> bool:
+    """Whether two half-open posting spans touch.
+
+    The question "was this statement read" is asked by five measures - the
+    completeness denominator, the unmatched-statement splice on both paths,
+    `by_ai`, and `extraction_is_failed` - and their docstrings each promised to
+    ask it the same way as the others. Five hand-written copies of one
+    inequality is five chances for that promise to lapse, and a measure that
+    drifted would count a statement read in one place and unread in another:
+    the same posting would be both fully understood and a failed extraction.
+    """
+    return other[0] < span[1] and span[0] < other[1]
+
+
 @dataclass(frozen=True)
 class StatementLine:
     """One statement the posting makes, which kind, and where it sits.
@@ -227,6 +241,29 @@ def _statement_kind(
     return None
 
 
+def _resumes(char: str) -> bool:
+    """Whether this character reads as resuming the statement above it.
+
+    Lower case is positive evidence that a wrapped line continues rather than
+    opens. A cased script gives that evidence; a caseless one - Hebrew, which
+    half this product's postings are written in - gives none either way, and
+    `islower()` answers `False` for it. Demanding it meant a Hebrew statement
+    could never continue: every wrapped bullet was cut at the line break, and
+    its tail, carrying no bullet glyph and usually no cue word, was then
+    dropped as a fragment rather than read as part of the requirement it
+    belongs to. The requirement survived as its first line only, and the rest
+    of what the employer demanded was invisible to every later stage.
+
+    A caseless *letter* therefore leaves `open_ended` - the line above stopping
+    mid-sentence - to decide alone, which is the only evidence such a script
+    offers. A digit or a symbol is not covered: "5 years of experience
+    required" opening a line is a new demand far more often than the tail of
+    the line above, and merging two demands into one is the flattering
+    direction this module refuses everywhere else.
+    """
+    return char.islower() or (char.isalpha() and char.lower() == char.upper())
+
+
 def _segments(text: str, concepts: RequirementConceptStore) -> list[_Span]:
     """Read the posting once into typed, offset-carrying statements."""
     found: list[_Span] = []
@@ -283,16 +320,16 @@ def _segments(text: str, concepts: RequirementConceptStore) -> list[_Span]:
         content = (start + lead, start + len(line.rstrip()))
         if content[0] >= content[1]:
             continue
-        # A line continues the statement above it only on positive evidence:
-        # that statement stopped mid-sentence and this line resumes in lower
-        # case. Everything else opens a statement, including every line of a
-        # script that has no case, such as Hebrew.
+        # A line continues the statement above it only on evidence: that
+        # statement stopped mid-sentence, and this line does not read as
+        # opening a new one. `_resumes` is what "does not read as opening"
+        # means, and why a caseless script is decided by `open_ended` alone.
         #
         # The bias is deliberate. Splitting a wrapped statement costs
         # denominator and reads as less understood; merging two bullets hides
         # one requirement inside a statement that another requirement already
         # accounted for, and reads as more understood than the posting was.
-        continues = bool(buffered) and bullet is None and open_ended and text[content[0]].islower()
+        continues = bool(buffered) and bullet is None and open_ended and _resumes(text[content[0]])
         if not continues:
             flush()
             list_item = bullet is not None

@@ -19,11 +19,16 @@ from .approval import CONFIDENCE_APPROVAL_THRESHOLD, unresolved_reasons
 from .gaps import (
     derive_gaps,
     fit_level_from_score,
-    fit_score_from_requirements,
+    fit_score_for,
     gaps_from_requirements,
+    has_undetermined_mandatory,
 )
 from .requirements.concepts import RequirementConceptStore
-from .requirements.confidence import extraction_confidence, extraction_failed
+from .requirements.confidence import (
+    confidence_from_completeness,
+    extraction_confidence,
+    extraction_failed,
+)
 from .requirements.coverage import cover_requirements
 from .requirements.extraction import (
     RULE_INTERPRETATION,
@@ -184,6 +189,31 @@ def classification_confidence(top: int, second: int) -> float:
     return min(MAX_CLASSIFICATION_CONFIDENCE, 0.58 + 0.08 * top + 0.04 * max(0, top - second))
 
 
+def _term_scores(lowered: str) -> Counter[ProfileName]:
+    """How often each Profile's vocabulary appears in the posting."""
+    return Counter(
+        {
+            profile: sum(lowered.count(term) for term in terms)
+            for profile, terms in PROFILE_TERMS.items()
+        }
+    )
+
+
+def classification_confidence_for(text: str, profile: ProfileName) -> float:
+    """`classification_confidence` for a Profile already decided elsewhere.
+
+    The AI path settles on its own requirement set and has to restate the
+    stored confidence from it, but only the extraction half of that product
+    changes: how much the vocabulary backs the Profile on record is the same
+    question `classify_job` answered, asked of the same text. Deriving it here
+    rather than carrying the number through keeps one definition of it.
+    """
+    scores = _term_scores(text.casefold())
+    top = scores[profile]
+    second = max((scores[name] for name in ProfileName if name is not profile), default=0)
+    return classification_confidence(top, second)
+
+
 def detect_language(text: str) -> Language:
     letters = [char for char in text if char.isalpha()]
     if not letters:
@@ -243,6 +273,8 @@ def rebase_requirements(
     extraction_failed: bool,
     requirements_absent: bool,
     requirements_unmapped: bool,
+    completeness: float | None,
+    classification_score: float,
 ) -> JobAnalysis:
     """Step 7 of the stage-1 pipeline (§3.7): swap in a verified requirement set.
 
@@ -283,30 +315,39 @@ def rebase_requirements(
     would be reading a property of the text out of an argument that may not
     have been built from it. The caller that built the list knows; the caller
     that inherited it reads the answer off the analysis it is correcting.
+
+    `completeness` and `classification_score` restate the stored `confidence`
+    against the extraction that is actually on record. Without them the number
+    - and the `low-confidence-extraction` reason derived from it - stayed the
+    one `classify_job` computed from its own concept-vocabulary extraction,
+    which is precisely the extraction this function just replaced. A posting
+    the concept vocabulary could not read scored zero there, so a complete,
+    verified AI extraction inherited a failing confidence and a blocker only
+    `accepted-incomplete-analysis` could clear. The two halves stay separate
+    for the same reason `classify_job` keeps them separate: which one holds
+    the gate shut decides which override can open it.
     """
-    boundary_meanings = {
-        fact_id: facts.facts[fact_id].meaning
-        for requirement in requirements
-        for fact_id in requirement.boundary_fact_ids
-        if fact_id in facts.facts
-    }
-    gaps = gaps_from_requirements(requirements, boundary_meanings=boundary_meanings)
+    gaps = gaps_from_requirements(requirements, facts)
     # Stage-1 plan §3.6's table: an undetermined *mandatory* requirement still
     # blocks approval here - see `coverage-undetermined` below - even though it
     # no longer forces Fit itself to UNKNOWN; `fit_score_from_requirements`
-    # prices it in as zero credit instead (`gaps.py`). "We could not tell"
-    # about a preferred requirement is not a decision the user must be stopped
-    # to make; the posting did not demand it in the first place.
-    mandatory_undetermined = any(
-        requirement.coverage == "undetermined" and requirement.mandatory
-        for requirement in requirements
-    )
-    fit_score = (
-        None
-        if (extraction_failed or requirements_absent)
-        else fit_score_from_requirements(requirements)
+    # prices it in as zero credit instead (`gaps.py`).
+    mandatory_undetermined = has_undetermined_mandatory(requirements)
+    fit_score = fit_score_for(
+        requirements,
+        extraction_failed=extraction_failed,
+        requirements_absent=requirements_absent,
     )
     fit = fit_level_from_score(fit_score, gaps)
+    extraction_score = confidence_from_completeness(completeness)
+    confidence = round(extraction_score * classification_score, 4)
+    # Derived exactly as `classify_job` derives it, from the same threshold and
+    # the same ceiling: below this extraction score no classification value can
+    # reach the approval threshold, so naming a Track or Profile cannot open
+    # the gate and the reason recorded must be the one `analysis` answers.
+    extraction_blocks_approval = (
+        extraction_score < CONFIDENCE_APPROVAL_THRESHOLD / MAX_CLASSIFICATION_CONFIDENCE
+    )
     reasons = [
         *(
             reason
@@ -317,18 +358,30 @@ def rebase_requirements(
                 "coverage-undetermined",
                 "requirements-absent",
                 "requirements-unmapped",
+                "low-confidence-extraction",
+                "low-confidence-classification",
             }
         ),
         *(["extraction-failed"] if extraction_failed else []),
         *(["requirements-absent"] if requirements_absent else []),
         *(["requirements-unmapped"] if requirements_unmapped else []),
         *(["coverage-undetermined"] if mandatory_undetermined else []),
+        *(
+            [
+                "low-confidence-extraction"
+                if extraction_blocks_approval
+                else "low-confidence-classification"
+            ]
+            if confidence < CONFIDENCE_APPROVAL_THRESHOLD
+            else []
+        ),
     ]
     reasons = list(dict.fromkeys(reasons))
     return deterministic.model_copy(
         update={
             "requirements": requirements,
             "extraction_version": extraction_version,
+            "confidence": confidence,
             "gaps": gaps,
             "fit": fit,
             "fit_score": fit_score,
@@ -393,12 +446,7 @@ def classify_job(
         for ordinal, line in enumerate(unmatched_lines)
     ]
 
-    term_scores = Counter(
-        {
-            profile: sum(lowered.count(term) for term in terms)
-            for profile, terms in PROFILE_TERMS.items()
-        }
-    )
+    term_scores = _term_scores(lowered)
     coverage_scores = requirement_profile_scores(requirements, profiles)
     # What the posting asks for outranks how it is titled. The vocabulary is
     # kept as the tie-breaker rather than dropped: for a posting whose
@@ -500,7 +548,7 @@ def classify_job(
     # The rules are the other half of requirement understanding while they
     # still own the concepts they own, so they are computed before extraction
     # is judged. A posting the rules read is not one the engine failed to read.
-    rule_gaps = _identified(derive_gaps(lowered, track), normalized_hash, concepts)
+    rule_gaps = _identified(derive_gaps(lowered), normalized_hash, concepts)
     # `rule_gaps` is not consulted here. A rule reading one term the concept
     # vocabulary does not model is worth the confidence floor below, and no
     # more; it never established that the extraction as a whole succeeded.
@@ -525,12 +573,6 @@ def classify_job(
     extraction_blocks_approval = (
         extraction_score < CONFIDENCE_APPROVAL_THRESHOLD / MAX_CLASSIFICATION_CONFIDENCE
     )
-    boundary_meanings = {
-        fact_id: facts.facts[fact_id].meaning
-        for requirement in requirements
-        for fact_id in requirement.boundary_fact_ids
-        if fact_id in facts.facts
-    }
     # The rule gaps are unioned, with no dedup against the requirement gaps.
     # There was one - `gap.requirement not in {requirement.text ...}` - and the
     # two sides could not meet: `gap.requirement` is a label `derive_gaps`
@@ -546,7 +588,7 @@ def classify_job(
     # a rule reading a term the vocabulary does not model reports a real gap,
     # and duplication cannot arise from a term that has no concept.
     gaps = [
-        *gaps_from_requirements(requirements, boundary_meanings=boundary_meanings),
+        *gaps_from_requirements(requirements, facts),
         *rule_gaps,
     ]
     # Stage-1 plan §3.6: an undetermined mandatory requirement still blocks
@@ -554,10 +596,7 @@ def classify_job(
     # still never emits `undetermined`; the splice above now does, and those
     # entries are `mandatory=False` by construction, so this stays the question
     # it always was - about a requirement whose `mandatory` is a verified value.
-    mandatory_undetermined = any(
-        requirement.coverage == "undetermined" and requirement.mandatory
-        for requirement in requirements
-    )
+    mandatory_undetermined = has_undetermined_mandatory(requirements)
     # Both are computed from a `requirements` list built fresh against this
     # text, a few lines above, so neither needs the explicit parameter
     # `rebase_requirements` takes for the same two signals.
@@ -565,14 +604,11 @@ def classify_job(
     requirements_unmapped = bool(unmatched_lines) and not requirements_absent
     # An empty list here means the posting stated nothing readable as a
     # requirement, never that extraction dropped what it found: after the
-    # splice, every requirement-bearing statement produces an entry. So
-    # `fit_score_from_requirements`'s 1.0 on an empty list - correct in
-    # isolation, "nothing demanded, nothing missing" - is exactly the answer
-    # that must not be reported as certainty here. `gaps.py` is unchanged.
-    fit_score = (
-        None
-        if (failed_extraction or requirements_absent)
-        else fit_score_from_requirements(requirements)
+    # splice, every requirement-bearing statement produces an entry.
+    fit_score = fit_score_for(
+        requirements,
+        extraction_failed=failed_extraction,
+        requirements_absent=requirements_absent,
     )
     fit = fit_level_from_score(fit_score, gaps)
     candidate_overrides: dict[OverrideKey, str | None] = {

@@ -55,7 +55,16 @@ def satisfied_evidence(
     )
 
 
-def _years_from_effective_dates(value: str | None) -> float | None:
+def years_from_effective_dates(value: str | None) -> float | None:
+    """The span a fact's `effective_dates` covers, in years, or `None`.
+
+    The one structured numeric field a canonical fact carries, and therefore
+    the only thing a threshold in years can be checked against. Both paths ask
+    it here: the deterministic one below, and `evidence.py` for an AI
+    extraction. Two copies would be two answers to one question about the same
+    field, and the one that drifted would be deciding whether a candidate
+    clears a threshold.
+    """
     if not value:
         return None
     match = _DATE_SPAN.search(value)
@@ -116,7 +125,7 @@ def threshold_coverage(
             fact = _value_fact(concept, fact_id, facts)
             if fact is None:
                 continue
-            years = _years_from_effective_dates(fact.effective_dates)
+            years = years_from_effective_dates(fact.effective_dates)
             if years is not None:
                 held = max(held or 0.0, years)
     else:

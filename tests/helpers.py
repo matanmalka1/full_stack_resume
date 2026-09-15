@@ -77,15 +77,16 @@ def trivial_requirement_extraction(
     extraction step without asserting anything about what it extracted.
 
     Every requirement-bearing statement in `job_text` is declared as an
-    `unmapped_statements` entry rather than left uncovered: per §3.3's
-    completeness rule an unmapped-but-declared statement counts as handled
-    (capping completeness at `partial`, never failing it), so
-    `extraction_is_failed` is `False` and `fit`/`approval_reasons` compute as
-    if extraction were clean. No requirement is proposed, so this never
-    asserts a false `matched` either. It is a stub for "extraction succeeded
-    without reading anything of substance" - not a stand-in for a real,
-    content-bearing extraction, which a test asserting on requirements or
-    coverage must still script itself.
+    `unmapped_statements` entry rather than left silently uncovered, so the
+    stub discloses what it did not read instead of hiding it. That is all it
+    does: declaring a statement unmapped explains an omission and does not
+    read it, so an analysis built on this carries `extraction-failed` and a
+    zero extraction confidence, exactly as a posting nothing read should. No
+    requirement is proposed, so it never asserts a false `matched` either.
+
+    It is a stub for "the extraction step ran and returned something valid" -
+    not a stand-in for a content-bearing extraction. A test asserting on
+    requirements, coverage, confidence, or Fit must script its own proposal.
     """
     return RequirementExtractionProposal(
         requirements=[],

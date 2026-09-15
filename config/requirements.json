@@ -1,6 +1,5 @@
 {
-  "policy_version": "1.0.0",
-  "extraction_version": "4",
+  "extraction_version": "5",
   "scales": {
     "language_proficiency": [
       "basic",
@@ -161,7 +160,6 @@
       "value_fact_ids": [
         "common.language.english"
       ],
-      "value_source": "scale_term",
       "candidate_fact_ids": [
         "common.language.english"
       ]
@@ -178,7 +176,6 @@
       "value_fact_ids": [
         "sales.summary.tenure"
       ],
-      "value_source": "effective_dates_years",
       "candidate_fact_ids": [
         "sales.summary.tenure"
       ]

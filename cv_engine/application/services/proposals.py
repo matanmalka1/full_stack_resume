@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 from ...domain.contracts.drafts import DraftDocument
-from ...domain.contracts.knowledge import Profile
+from ...domain.contracts.knowledge import FactStatus, Profile
 from ...domain.contracts.providers import (
     ProposedClaim,
     ProviderTaskResult,
@@ -102,6 +102,29 @@ def fact_context(facts: FactStore, fact_ids: list[str], language: str) -> list[d
             }
         )
     return context
+
+
+def analysis_fact_context(facts: FactStore) -> list[dict[str, object]]:
+    """Every canonical fact an extraction may cite, as little of it as possible.
+
+    Meaning, tags, and the one structured numeric field a threshold can be
+    traced to (`effective_dates`) - no renderings, because analysis writes no
+    wording, and no provenance or lifecycle, for the reason `fact_context`
+    gives. The pool is the whole canonical fact store rather than a Profile's
+    allowed facts: which requirements the candidate meets is decided before
+    and independently of which Profile presents them, exactly as
+    `cover_requirements` decided it against the whole store.
+    """
+    return [
+        {
+            "fact_id": fact.fact_id,
+            "meaning": fact.meaning,
+            "tags": list(fact.tags),
+            "effective_dates": fact.effective_dates,
+        }
+        for fact in facts.facts.values()
+        if fact.status is FactStatus.CANONICAL
+    ]
 
 
 def refuse_facts_outside_the_pool(

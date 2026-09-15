@@ -65,7 +65,6 @@ from cv_engine.domain.models import (
     ProfileName,
     Requirement,
     RequirementKind,
-    Track,
 )
 
 
@@ -151,7 +150,7 @@ def test_every_gap_policy_substitute_resolves_to_a_canonical_fact(fact_store) ->
     substitutes = {
         fact_id
         for job_text in policy_cases
-        for gap in derive_gaps(job_text, Track.SALES)
+        for gap in derive_gaps(job_text)
         for fact_id in gap.substitute_fact_ids
     }
 
@@ -621,7 +620,7 @@ def test_no_concept_shadows_a_legacy_rule_gap(fact_store, requirement_concepts) 
         "must have 8+ years of experience",
     ]
     for probe in rule_probes:
-        rule_gaps = {gap.requirement.casefold() for gap in derive_gaps(probe, Track.SALES)}
+        rule_gaps = {gap.requirement.casefold() for gap in derive_gaps(probe)}
         if not rule_gaps:
             continue
         extracted = extract_requirements(
@@ -654,12 +653,7 @@ def test_no_concept_shadows_a_legacy_rule_gap(fact_store, requirement_concepts) 
     # that begins matching a rule's own wording gives the two sources a shared
     # axis, at which point the union really can duplicate a requirement and the
     # dedup question reopens - so that fails here rather than shipping.
-    labels = {
-        gap.requirement
-        for probe in rule_probes
-        for track in Track
-        for gap in derive_gaps(probe, track)
-    }
+    labels = {gap.requirement for probe in rule_probes for gap in derive_gaps(probe)}
     assert labels, "the probes no longer make derive_gaps fire; the check below proves nothing"
     for label in sorted(labels):
         for concept in requirement_concepts.concepts.values():
@@ -672,9 +666,7 @@ def test_no_concept_shadows_a_legacy_rule_gap(fact_store, requirement_concepts) 
 
 def test_company_age_does_not_create_a_development_experience_gap() -> None:
     """A global years match cannot establish what the number describes."""
-    gaps = derive_gaps(
-        "we are a company with 15 years in the market", Track.DEVELOPMENT
-    )
+    gaps = derive_gaps("we are a company with 15 years in the market")
 
     assert gaps == []
 
@@ -1069,7 +1061,7 @@ def _confidence_inputs(text: str, digest: str, analysis, concepts):
         text,
         extracted,
         concepts,
-        understood_elsewhere=bool(derive_gaps(text.casefold(), analysis.track)),
+        understood_elsewhere=bool(derive_gaps(text.casefold())),
     )
     term_scores = Counter(
         {
@@ -1580,6 +1572,41 @@ def test_a_wrapped_requirement_counts_once(requirement_concepts) -> None:
     assert requirement_lines(wrapped, requirement_concepts)[0].text == (
         "Native English speaker with excellent communication skills."
     )
+
+
+def test_a_hebrew_requirement_wrapped_across_a_line_counts_once(requirement_concepts) -> None:
+    """The wrapped-bullet rule has to work in the language half the postings use.
+
+    Continuation used to require the line to resume in lower case, which no
+    Hebrew line can do: every wrapped Hebrew requirement was cut at the break,
+    and the tail - no bullet glyph, usually no cue word - was dropped as a
+    fragment. The requirement survived as its first line only, so the demand
+    the employer actually stated was invisible to extraction, to coverage, and
+    to the quote any later stage would show.
+    """
+    one_line = "דרישות:\nניסיון של 3 שנים במכירות B2B מול ארגונים גדולים - חובה.\n"
+    wrapped = "דרישות:\nניסיון של 3 שנים במכירות B2B\nמול ארגונים גדולים - חובה.\n"
+    assert len(requirement_lines(one_line, requirement_concepts)) == 1
+    assert len(requirement_lines(wrapped, requirement_concepts)) == 1
+    assert (
+        requirement_lines(wrapped, requirement_concepts)[0].text
+        == requirement_lines(one_line, requirement_concepts)[0].text
+    )
+
+
+def test_a_digit_after_an_open_line_still_opens_a_requirement(requirement_concepts) -> None:
+    """Caseless does not mean "continues": only a caseless *letter* does.
+
+    "5 years of sales experience required" below an unterminated line is a new
+    demand far more often than the tail of that line, and merging two demands
+    into one is the flattering direction this module refuses everywhere. So the
+    continuation rule reads letters, not every character a cased script has no
+    opinion about.
+    """
+    job = "Requirements:\nWe are looking for someone great\n5 years of sales experience required\n"
+    assert [line.text for line in requirement_lines(job, requirement_concepts)] == [
+        "5 years of sales experience required"
+    ]
 
 
 def test_unpunctuated_bullets_are_separate_requirements(requirement_concepts) -> None:

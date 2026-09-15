@@ -4,33 +4,30 @@ Every `ProposedRequirement` reaching this module has already passed the
 source gate (`attestation.py`) and the interpretation gate
 (`interpretation.py`): its quote is proven to occur in the signed snapshot,
 and its `interpretation` has passed policy. What is decided here is coverage
-- whether canonical Knowledge verifies it - and that decision rests on one
-narrow, disclosed mechanism (stage-1 plan §3.5a): a proposed requirement maps
-to a concept in `config/requirements.json` only when that concept's own
-`patterns` match the *verified quote itself*, never on anything the provider
-labels it. The proposal carries no tag field at all: it used to, described
-here as a hint consulted in `coverage.py`, and `coverage.py` never read it
-either (A12).
+- whether canonical Knowledge verifies it - and under D5 the provider is the
+semantic authority for that reading: it proposes a coverage verdict and names
+the canonical facts behind it.
 
-A pattern match proves only that a concept's wording was **mentioned**. It is
-never evidence of coverage by itself: coverage is decided the same way the
-deterministic path decides it - `satisfied_evidence`/`threshold_coverage`
-against the concept's own declared satisfaction rule - never from
-`candidate_fact_ids` alone, which is a candidate-evidence hint the
-deterministic path also never treats as proof.
+The provider does not get the last word. `evidence.py` holds the gates D5
+keeps deterministic - every cited fact must exist and be canonical, a
+positive reading must retain inspectable evidence, a threshold is recomputed
+from the evidence facts' own structured fields rather than taken on report,
+and a canonical boundary fact caps `matched` to `partial` on applicability
+the vocabulary decides rather than the provider. A composite requirement's
+composition arithmetic is likewise the engine's.
 
-This is concept recognition, not semantic understanding. A real requirement
-the vocabulary does not model returns no concept and therefore
-`undetermined` coverage - a true statement about what the engine could
-verify, not a wrong guess. Extending the vocabulary to recognise more of what
-employers ask for is a deliberate, tracked addition to
-`config/requirements.json` (D3's exception list), never a special case
-written for one company's wording. `undetermined` on an acceptance case in
-`tailoring-acceptance-cases.md` is a disclosed limitation of this mechanism,
-not a passing result for that case.
+What no longer happens here is concept recognition deciding coverage. A
+proposed requirement used to map to `config/requirements.json` by pattern,
+and a real requirement those six concepts did not model returned
+`undetermined` however well the provider read it - the closed-vocabulary
+collapse product-spec §2 "Semantic analysis authority" removes. The vocabulary survives where it
+states something the posting cannot: which boundary facts apply, and how a
+named scale is ordered. Both only ever lower coverage.
 """
 
 from __future__ import annotations
+
+from typing import cast
 
 from ...contracts.analysis import (
     Coverage,
@@ -40,148 +37,88 @@ from ...contracts.analysis import (
     Requirement,
     RequirementAttestation,
     RequirementInterpretation,
+    RequirementMember,
     UnderstandingSources,
     UnmappedStatement,
 )
-from ...contracts.knowledge import FactStatus
-from ...contracts.providers import RequirementExtractionProposal
-from ...facts import FactStore
-from .attestation import (
-    InvalidRequirementAttestation,
-    reconcile_attestation,
-    verify_attestation,
+from ...contracts.providers import (
+    ProposedEvidence,
+    ProposedMemberCoverage,
+    RequirementExtractionProposal,
 )
-from .concepts import RequirementConcept, RequirementConceptStore
-from .coverage import satisfied_evidence, threshold_coverage
+from ...facts import FactStore
+from .attestation import InvalidRequirementAttestation, reconcile_attestation
+from .concepts import RequirementConceptStore
+from .confidence import span_completeness
+from .evidence import (
+    InvalidRequirementEvidence,
+    ProposedCoverage,
+    boundary_facts_for_quote,
+    decide_coverage,
+)
 from .extraction import (
-    ExtractedRequirement,
     normalize_span,
     requirement_id,
     undetermined_requirement,
     unmatched_requirement_lines,
 )
 from .interpretation import InvalidRequirementInterpretation, verify_interpretation
-from .segmentation import StatementLine, requirement_lines
-
-
-def concept_for_quote(quote: str, concepts: RequirementConceptStore) -> RequirementConcept | None:
-    """The one concept whose patterns match this exact verified quote, if any.
-
-    A pattern match proves only that the concept's wording was mentioned in
-    the quote - never obligation, negation, composition, or threshold
-    satisfaction, all of which come from the verified `interpretation` and
-    nowhere else (stage-1 plan §3.5a). Ambiguity - more than one concept
-    matching - is refused rather than guessed at: silently picking the first
-    match would misclassify coverage as confidently as picking none.
-    """
-    matches = [
-        concept
-        for concept in concepts.concepts.values()
-        if any(pattern.search(quote) for pattern in concept.patterns)
-    ]
-    return matches[0] if len(matches) == 1 else None
-
-
-def _boundary_facts(concept: RequirementConcept, facts: FactStore) -> list[str]:
-    return sorted(
-        fact_id
-        for fact_id in concept.boundary_fact_ids
-        if fact_id in facts.facts and facts.facts[fact_id].status is FactStatus.CANONICAL
-    )
-
-
-def _presence_coverage(
-    concept: RequirementConcept, facts: FactStore
-) -> tuple[Coverage, list[str], list[MissingComponent]]:
-    """A presence concept's coverage from its own declared satisfaction rule.
-
-    Mirrors `coverage.py::cover_requirements`'s presence branch exactly:
-    `satisfied_evidence` against `concept.satisfied_by_fact_ids` /
-    `concept.satisfied_by_tags`, capped by a canonical boundary fact. This is
-    deliberately not `candidate_fact_ids` - that function finds *candidate*
-    evidence for display and Profile scoring, and was never proof of
-    satisfaction on the deterministic path either.
-    """
-    evidence = satisfied_evidence(
-        concept.satisfied_by_fact_ids, concept.satisfied_by_tags, facts, concept.boundary_fact_ids
-    )
-    boundary = _boundary_facts(concept, facts)
-    coverage: Coverage = "matched" if evidence else "unsupported"
-    missing = (
-        [] if evidence else [MissingComponent(component_id=concept.concept, label=concept.label)]
-    )
-    if boundary and coverage == "matched":
-        coverage = "partial"
-    return coverage, evidence, missing
-
-
-def _compositional_concept_coverage(
-    concept: RequirementConcept, facts: FactStore
-) -> tuple[Coverage, list[str], list[MissingComponent]]:
-    """A compositional concept's own components, each checked independently.
-
-    Mirrors `coverage.py::cover_requirements`'s compositional branch: a
-    component with no evidence is missing, and the concept is `matched` only
-    when every component is, `partial` when some are, `unsupported` when none
-    are - never inferred from `candidate_fact_ids` overlap.
-    """
-    met: list[str] = []
-    supporting: list[str] = []
-    missing: list[MissingComponent] = []
-    for component in concept.components:
-        evidence = satisfied_evidence(
-            component.satisfied_by_fact_ids,
-            component.satisfied_by_tags,
-            facts,
-            concept.boundary_fact_ids,
-        )
-        if evidence:
-            met.append(component.component_id)
-            supporting.extend(evidence)
-        else:
-            missing.append(
-                MissingComponent(component_id=component.component_id, label=component.label)
-            )
-    coverage: Coverage = "matched" if not missing else ("partial" if met else "unsupported")
-    boundary = _boundary_facts(concept, facts)
-    if boundary and coverage == "matched":
-        coverage = "partial"
-    return coverage, sorted(set(supporting)), missing
+from .segmentation import StatementLine, overlaps, requirement_lines
 
 
 def _member_coverage(
-    member_quote: str | None, facts: FactStore, concepts: RequirementConceptStore
-) -> tuple[Coverage, list[str], RequirementConcept | None]:
-    """One `any-of`/`all-of` member's own coverage, mapped by its attested quote.
+    member: RequirementMember,
+    proposed: dict[str, ProposedMemberCoverage],
+    facts: FactStore,
+    concepts: RequirementConceptStore,
+    *,
+    where: str,
+) -> tuple[Coverage, list[str]]:
+    """One `any-of`/`all-of` member's coverage, from the evidence proposed for it.
 
-    `member_quote` is `None` when the member carries no attestation - a bare
-    `label` is a provider's description, not proof, and is never used to map
-    or decide coverage (stage-1 plan §3.5a addendum). An unattested or
-    unmapped member is `undetermined`, never guessed at as matched or
-    unsupported.
+    A member the proposal says nothing about is `undetermined`, never guessed
+    at as matched or unsupported: silence about a member is not a finding
+    about it. The same gate the top-level requirement passes runs here - cited
+    facts must be canonical, a positive reading must have evidence behind it,
+    and a boundary fact matching the member's own attested quote caps it -
+    because without that a boundary fact would protect every requirement
+    except the members of a composite one.
 
-    A concept found for the member is checked with the same rules
-    `cover_requirements` uses for its own kind - `satisfied_evidence` for
-    presence, per-component checks for compositional, `threshold_coverage`
-    for threshold - never a blanket "candidate facts exist" shortcut. A
-    boundary fact still caps `matched` to `partial` here, exactly as it does
-    on the top-level requirement; without this a boundary fact would protect
-    every requirement except the members of a composite one.
+    A member with no attestation is `undetermined` whatever the proposal says
+    about it. A bare `label` is a provider's description with no verification
+    behind it, so there is no quote for a boundary to apply to and nothing the
+    engine could show for a positive reading.
     """
-    if not member_quote:
-        return "undetermined", [], None
-    concept = concept_for_quote(member_quote, concepts)
-    if concept is None:
-        return "undetermined", [], None
-    if concept.kind == "presence":
-        coverage, supporting, _ = _presence_coverage(concept, facts)
-        return coverage, supporting, concept
-    if concept.kind == "compositional":
-        coverage, supporting, _ = _compositional_concept_coverage(concept, facts)
-        return coverage, supporting, concept
-    # threshold: a bare member quote carries no demanded value of its own to
-    # check a threshold against, so it cannot be resolved further here.
-    return "undetermined", [], concept
+    entry = proposed.get(member.member_id)
+    if entry is None or member.attestation is None:
+        return "undetermined", []
+    decision = decide_coverage(
+        proposed=entry.coverage,
+        evidence=entry.evidence,
+        quote=member.attestation.quote,
+        label=member.label,
+        kind="presence",
+        demanded=None,
+        facts=facts,
+        concepts=concepts,
+        where=f"{where} member {member.member_id!r}",
+    )
+    return decision.coverage, decision.supporting_fact_ids
+
+
+def attested_spans(requirements: list[Requirement]) -> list[tuple[int, int]]:
+    """Where in the posting this requirement set was actually read.
+
+    Attested spans only. A requirement with no attestation is one the engine
+    synthesized for a statement nothing read (`undetermined_requirement`), so
+    counting it would let an extraction certify its completeness with the very
+    entries that record its failure to be complete.
+    """
+    return [
+        (requirement.attestation.start, requirement.attestation.end)
+        for requirement in requirements
+        if requirement.attestation is not None
+    ]
 
 
 def cover_ai_requirement(
@@ -190,24 +127,41 @@ def cover_ai_requirement(
     *,
     kind: str,
     demanded: str | None,
+    coverage_claim: ProposedCoverage,
+    evidence: list[ProposedEvidence],
+    members_coverage: list[ProposedMemberCoverage],
+    label: str,
     requirement_id_value: str,
     facts: FactStore,
     concepts: RequirementConceptStore,
 ) -> Requirement:
-    """Decide coverage for one gate-verified AI requirement.
+    """Decide coverage for one gate-verified AI requirement (D5).
 
     `interpretation.negation` is checked first and unconditionally: a negated
     requirement is never positive coverage, matching the deterministic rule in
     `coverage.py` (stage-1 plan §3.2 rule 7).
+
+    Everything after that is the provider's reading under `evidence.py`'s
+    gates. What this function no longer does is ask
+    `concept_for_quote` whether the six concepts in
+    `config/requirements.json` happen to model this posting: that gate
+    returned `undetermined` for every real requirement outside a closed
+    sales vocabulary, whatever the provider read, and the spec's semantic-
+    analysis authority supersedes it. The
+    vocabulary still decides boundary applicability and scale ordering, both
+    of which only ever lower coverage.
     """
     text = normalize_span(quote)
+    mandatory = interpretation.obligation == "mandatory"
+    where = f"requirement {text[:60]!r}"
+
     if interpretation.negation:
         return Requirement(
             requirement_id=requirement_id_value,
             text=quote,
             kind="presence",
             concept=None,
-            mandatory=interpretation.obligation == "mandatory",
+            mandatory=mandatory,
             coverage="unsupported",
             missing_components=[
                 MissingComponent(component_id="negated", label="Negated statement")
@@ -215,25 +169,25 @@ def cover_ai_requirement(
             interpretation=interpretation,
         )
 
-    mandatory = interpretation.obligation == "mandatory"
-
     if interpretation.composition in ("any-of", "all-of"):
+        indexed = {entry.member_id: entry for entry in members_coverage}
         results = [
-            (
-                member,
-                *_member_coverage(
-                    member.attestation.quote if member.attestation else None, facts, concepts
-                ),
-            )
+            (member, *_member_coverage(member, indexed, facts, concepts, where=where))
             for member in interpretation.members
         ]
-        supporting = sorted({fact_id for _, _, ids, _ in results for fact_id in ids})
+        supporting = sorted({fact_id for _, _, ids in results for fact_id in ids})
         missing = [
             MissingComponent(component_id=member.member_id, label=member.label)
-            for member, member_coverage, _, _ in results
+            for member, member_coverage, _ in results
             if member_coverage != "matched"
         ]
-        member_coverages = [member_coverage for _, member_coverage, _, _ in results]
+        member_coverages = [member_coverage for _, member_coverage, _ in results]
+        # The composition arithmetic is the engine's, not the provider's:
+        # "internally checkable compositional consistency" is deterministic
+        # policy under D5, so the top-level `coverage` claim is not read here
+        # at all. A member left undetermined keeps the whole requirement
+        # undetermined unless another member already settles it - `any-of` is
+        # settled by one match, `all-of` by nothing short of all of them.
         if interpretation.composition == "any-of":
             coverage: Coverage = (
                 "matched"
@@ -243,9 +197,12 @@ def cover_ai_requirement(
         else:  # all-of
             coverage = (
                 "matched"
-                if all(item == "matched" for item in member_coverages)
+                if member_coverages and all(item == "matched" for item in member_coverages)
                 else ("undetermined" if "undetermined" in member_coverages else "unsupported")
             )
+        boundary = boundary_facts_for_quote(quote, concepts, facts)
+        if boundary and coverage == "matched":
+            coverage = "partial"
         return Requirement(
             requirement_id=requirement_id_value,
             text=text,
@@ -254,91 +211,34 @@ def cover_ai_requirement(
             mandatory=mandatory,
             coverage=coverage,
             supporting_fact_ids=supporting,
+            boundary_fact_ids=boundary,
             missing_components=missing if coverage != "matched" else [],
             interpretation=interpretation,
         )
 
-    concept = concept_for_quote(quote, concepts)
-    if concept is None:
-        return Requirement(
-            requirement_id=requirement_id_value,
-            text=text,
-            kind="presence" if kind not in ("threshold", "compositional", "presence") else kind,  # type: ignore[arg-type]
-            concept=None,
-            mandatory=mandatory,
-            coverage="undetermined",
-            missing_components=[
-                MissingComponent(component_id="unmapped", label="No recognised concept")
-            ],
-            interpretation=interpretation,
-        )
-
-    if concept.kind == "threshold":
-        extracted = ExtractedRequirement(
-            requirement_id=requirement_id_value,
-            concept=concept.concept,
-            kind=concept.kind,
-            span=quote,
-            identity_span=text,
-            ordinal=0,
-            mandatory=mandatory,
-            demanded=demanded,
-            start=0,
-            end=0,
-        )
-        coverage, missing_components = threshold_coverage(
-            concept, extracted, facts, concepts.scales
-        )
-        supporting = sorted(
-            {
-                fact_id
-                for fact_id in concept.value_fact_ids
-                if fact_id in facts.facts and facts.facts[fact_id].status is FactStatus.CANONICAL
-            }
-        )
-    elif concept.kind == "compositional":
-        coverage, supporting, missing_components = _compositional_concept_coverage(concept, facts)
-    else:
-        coverage, supporting, missing_components = _presence_coverage(concept, facts)
-
-    boundary = _boundary_facts(concept, facts)
-
+    decision = decide_coverage(
+        proposed=coverage_claim,
+        evidence=evidence,
+        quote=quote,
+        label=label or text,
+        kind=kind,
+        demanded=demanded,
+        facts=facts,
+        concepts=concepts,
+        where=where,
+    )
     return Requirement(
         requirement_id=requirement_id_value,
         text=text,
-        kind=concept.kind,
-        concept=concept.concept,
+        kind=kind if kind in ("threshold", "compositional", "presence") else "presence",  # type: ignore[arg-type]
+        concept=None,
         mandatory=mandatory,
-        coverage=coverage,
-        supporting_fact_ids=supporting,
-        boundary_fact_ids=boundary,
-        missing_components=missing_components,
+        coverage=decision.coverage,
+        supporting_fact_ids=decision.supporting_fact_ids,
+        boundary_fact_ids=decision.boundary_fact_ids,
+        missing_components=decision.missing_components,
         interpretation=interpretation,
     )
-
-
-def unmapped_statement_ids(
-    text: str, mapped_spans: list[tuple[int, int]], concepts: RequirementConceptStore
-) -> list[tuple[int, int, str]]:
-    """Requirement-bearing statements no verified requirement's offsets touch.
-
-    Same statement set the deterministic path measures against
-    (`requirement_lines`), so an AI extraction is judged against the same
-    reading of the posting (stage-1 plan §3.3).
-
-    Not the same *unit*: the deterministic completeness measure counts the
-    separate demands inside each statement (`statement_asks`), while this - and
-    `by_ai`, and `extraction_is_failed` - still counts statements. Aligning
-    them is part of the open question of what the AI path reports as its own
-    completeness, which is unresolved (A2), so the unit stays where it was
-    rather than being moved as a side effect.
-    """
-    lines = requirement_lines(text, concepts)
-    return [
-        (line.start, line.end, line.text)
-        for line in lines
-        if not any(start < line.end and line.start < end for start, end in mapped_spans)
-    ]
 
 
 def correct_interpretation(
@@ -392,11 +292,24 @@ def correct_interpretation(
         kind=requirement.kind,
         demanded=demanded,
     )
+    # A correction changes what the posting was read to *mean*, never what
+    # the candidate has, so the requirement's existing evidence is carried
+    # forward as the claim to re-gate rather than discarded. It is re-gated
+    # rather than copied: the corrected interpretation can turn a single
+    # requirement into a composite one, whose members nothing has read
+    # evidence for yet, and `undetermined` is the honest answer there.
     covered = cover_ai_requirement(
         quote,
         corrected,
         kind=requirement.kind,
         demanded=demanded,
+        coverage_claim=cast("ProposedCoverage", requirement.coverage),
+        evidence=[
+            ProposedEvidence(fact_id=fact_id, rationale="carried from the corrected requirement")
+            for fact_id in requirement.supporting_fact_ids
+        ],
+        members_coverage=[],
+        label=requirement.text,
         requirement_id_value=new_id,
         facts=facts,
         concepts=concepts,
@@ -586,15 +499,22 @@ def verify_and_cover_extraction(
         if req_id in seen_ids:
             continue
         seen_ids.add(req_id)
-        covered = cover_ai_requirement(
-            quote,
-            proposed.interpretation,
-            kind=proposed.kind,
-            demanded=proposed.demanded,
-            requirement_id_value=req_id,
-            facts=facts,
-            concepts=concepts,
-        )
+        try:
+            covered = cover_ai_requirement(
+                quote,
+                proposed.interpretation,
+                kind=proposed.kind,
+                demanded=proposed.demanded,
+                coverage_claim=proposed.coverage,
+                evidence=proposed.evidence,
+                members_coverage=proposed.members_coverage,
+                label=proposed.label,
+                requirement_id_value=req_id,
+                facts=facts,
+                concepts=concepts,
+            )
+        except InvalidRequirementEvidence as exc:
+            raise RequirementExtractionRejected(str(exc)) from exc
         requirements.append(
             covered.model_copy(update={"attestation": attestation, "extractor": extractor})
         )
@@ -632,15 +552,14 @@ def verify_and_cover_extraction(
         for ordinal, line in enumerate(unmatched_lines)
     ]
 
-    lines = requirement_lines(source_text, concepts)
     # Still counted against `mapped_spans` alone. A statement this function
     # synthesized an `undetermined` entry for was not read by the extraction;
     # crediting it here would make `by_ai` report the denominator back to
     # itself.
     by_ai = sum(
         1
-        for line in lines
-        if any(start < line.end and line.start < end for start, end in mapped_spans)
+        for line in requirement_lines(source_text, concepts)
+        if any(overlaps((line.start, line.end), span) for span in mapped_spans)
     )
     understanding = UnderstandingSources(by_concepts=0, by_rules=0, by_ai=by_ai)
     return requirements, unmapped, understanding, unmatched_lines
@@ -649,26 +568,24 @@ def verify_and_cover_extraction(
 def extraction_is_failed(
     source_text: str,
     requirements: list[Requirement],
-    _unmapped: list[UnmappedStatement],
     concepts: RequirementConceptStore,
 ) -> bool:
     """Whether no stated requirement was extracted.
 
-    An unmapped entry explains an omission but does not establish understanding,
-    so `_unmapped` is accepted and deliberately not read.
+    Exactly "completeness is zero", and asked of the one measure that answers
+    that (`confidence.span_completeness`) rather than re-deriving the statement
+    denominator and the overlap test a third time. It used to do both by hand,
+    with a docstring promising the result agreed with the measure that decides
+    confidence; now agreeing is not something either of them can fail at.
+
+    `None` completeness - the posting states no requirements at all - is not a
+    failure: there was nothing to read. That case is reported separately as
+    `requirements-absent`.
+
     Partial extraction remains distinct from total failure; this predicate does
-    not certify completeness and must not be presented as such.
+    not certify completeness and must not be presented as such. An unmapped
+    entry explains an omission but does not establish understanding, so the
+    proposal's `unmapped_statements` are deliberately not consulted.
     """
-    lines = requirement_lines(source_text, concepts)
-    if not lines:
-        return False
-    mapped_spans = [
-        (requirement.attestation.start, requirement.attestation.end)
-        for requirement in requirements
-        if requirement.attestation is not None
-    ]
-    # Declaring a statement unmapped explains the omission; it does not read it.
-    # A completely unread posting must retain UNKNOWN and its explicit decision.
-    return not any(
-        start < line.end and line.start < end for line in lines for start, end in mapped_spans
-    )
+    completeness = span_completeness(source_text, attested_spans(requirements), concepts)
+    return completeness == 0.0

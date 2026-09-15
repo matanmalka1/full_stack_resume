@@ -25,9 +25,10 @@ class Setting:
 
     `environment_only` refuses file-backed layers for one setting, so it can be
     supplied by a real environment variable and nothing else. It exists for
-    `OPENAI_API_KEY`. Everything in this repository - `CLAUDE.md`,
-    `docs/smoke-run.md`, and every test that asserts the offline path -
-    treats "the variable is unset" as "no provider is configured". A `.env`
+    `OPENAI_API_KEY`. Everything in this repository - `CLAUDE.md`, the live
+    smoke checklist in `docs/spec/test-and-acceptance-plan.md` section 6, and
+    every test that asserts the offline path - treats "the variable is unset"
+    as "no provider is configured". A `.env`
     able to supply the key would silently break that equivalence: `unset
     OPENAI_API_KEY` would no longer disarm AI, because unset is not the same
     as overridden, and a developer who forgot a file would spend money without

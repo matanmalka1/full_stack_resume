@@ -13,7 +13,13 @@ from ...contracts.analysis import (
     RequirementKind,
 )
 from .concepts import RequirementConcept, RequirementConceptStore
-from .segmentation import StatementLine, _segments, ask_bounds, requirement_lines
+from .segmentation import (
+    StatementLine,
+    _segments,
+    ask_bounds,
+    overlaps,
+    requirement_lines,
+)
 
 #: The interpretation stamped on every rule-derived and concept-derived
 #: requirement's identity. Explicit rather than `None`: a `None` interpretation
@@ -253,7 +259,7 @@ def unmatched_requirement_lines(
     return [
         line
         for line in requirement_lines(text, concepts)
-        if not any(start < line.end and line.start < end for start, end in mapped_spans)
+        if not any(overlaps((line.start, line.end), span) for span in mapped_spans)
     ]
 
 

@@ -6,7 +6,7 @@ from typing import Literal
 
 from .concepts import RequirementConceptStore
 from .extraction import ExtractedRequirement
-from .segmentation import StatementLine, requirement_lines, statement_asks
+from .segmentation import StatementLine, overlaps, requirement_lines, statement_asks
 
 ExtractionState = Literal["parsed", "partial", "unparsed", "absent"]
 
@@ -23,16 +23,54 @@ def _asks(text: str, lines: list[StatementLine]) -> list[tuple[int, int]]:
     return [ask for line in lines for ask in statement_asks(text, line)]
 
 
-def _understood(asks: list[tuple[int, int]], extracted: list[ExtractedRequirement]) -> int:
+def _understood(asks: list[tuple[int, int]], spans: list[tuple[int, int]]) -> int:
     """How many stated demands had something read inside them.
 
     Offset overlap, not `text.find`. The extracted span carries normalized
     text that a posting wrapping the requirement across a line no longer
     contains, so the search failed and the statement was counted unread.
     """
-    return sum(
-        1 for start, end in asks if any(item.start < end and start < item.end for item in extracted)
-    )
+    return sum(1 for ask in asks if any(overlaps(ask, span) for span in spans))
+
+
+def span_completeness(
+    text: str,
+    spans: list[tuple[int, int]],
+    concepts: RequirementConceptStore,
+) -> float | None:
+    """`extraction_completeness`, asked of spans rather than of concept matches.
+
+    The same independently derived structural denominator, so an AI extraction
+    and a deterministic one are measured against one ruler and neither can
+    inflate completeness by choosing a friendlier segmentation of the posting
+    (D5: a provider cannot certify its own completeness). `None` still means
+    the posting states no requirements at all.
+    """
+    lines = requirement_lines(text, concepts)
+    if not lines:
+        return None
+    asks = _asks(text, lines)
+    return _understood(asks, spans) / len(asks)
+
+
+def confidence_from_completeness(completeness: float | None) -> float:
+    """What a completeness measure alone is worth as an extraction score.
+
+    The same curve `extraction_confidence` applies, without the concept
+    classification factor: under D5 an AI extraction is not asked to map the
+    posting onto a closed vocabulary, so "how much of what was read the
+    vocabulary could classify" is no longer a question about it, and folding
+    in a 1.0 for a measure that does not apply would be arithmetic theatre.
+
+    `None` - the posting states no requirements - scores 1.0: there was
+    nothing to miss. The caller still records `requirements-absent` for it,
+    which is the reason a user actually needs to see.
+    """
+    if completeness is None:
+        return 1.0
+    if completeness == 0.0:
+        return 0.0
+    return round(_COVERAGE_FLOOR + (1.0 - _COVERAGE_FLOOR) * completeness, 4)
 
 
 def extraction_completeness(
@@ -59,7 +97,7 @@ def extraction_completeness(
     if not lines:
         return None
     asks = _asks(text, lines)
-    return _understood(asks, extracted) / len(asks)
+    return _understood(asks, [(item.start, item.end) for item in extracted]) / len(asks)
 
 
 def concept_classification_completeness(extracted: list[ExtractedRequirement]) -> float:

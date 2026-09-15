@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from ..contracts.analysis import FitLevel, Gap, JobAnalysis, Requirement
 from ..contracts.selection import SelectionPlan
-from ..contracts.taxonomy import Track
+from ..facts import FactStore
 
 #: Why a requirement is not met, when no boundary fact gives the authoritative
 #: account. Deterministic labels rather than generated prose: the reason is
@@ -70,6 +70,29 @@ def fit_score_from_requirements(requirements: Sequence[Requirement]) -> float:
     return total_value / total_weight
 
 
+def fit_score_for(
+    requirements: Sequence[Requirement],
+    *,
+    extraction_failed: bool,
+    requirements_absent: bool,
+) -> float | None:
+    """The Fit score, or `None` where there is nothing to score.
+
+    `fit_score_from_requirements` returns 1.0 for an empty list - correct in
+    isolation, "nothing demanded, nothing missing" - and that is exactly the
+    answer that must not be reported when the list is empty because the
+    extraction failed or the posting stated nothing readable. Neither of those
+    is visible from the list, so both are passed in.
+
+    Both paths asked this question, separately, in identical words. One
+    statement of it means a later change to when Fit is unknown cannot land on
+    the deterministic path and miss the AI one.
+    """
+    if extraction_failed or requirements_absent:
+        return None
+    return fit_score_from_requirements(requirements)
+
+
 def fit_level_from_score(fit_score: float | None, gaps: Sequence[Gap]) -> FitLevel:
     """`fit_score` is canonical; `fit_level` is read off it, gap-overridden.
 
@@ -100,10 +123,13 @@ def fit_level_from_score(fit_score: float | None, gaps: Sequence[Gap]) -> FitLev
     return FitLevel.LOW
 
 
-def gaps_from_requirements(
-    requirements: Sequence[Requirement], *, boundary_meanings: dict[str, str] | None = None
-) -> list[Gap]:
+def gaps_from_requirements(requirements: Sequence[Requirement], facts: FactStore) -> list[Gap]:
     """Project the unmet requirements as gaps.
+
+    The boundary meanings are read here, from the facts, rather than taken as
+    a prepared mapping. Both callers built that mapping with the same five
+    lines - a duplicated derivation with no decision in it, which only gave a
+    later edit somewhere to land on one path and not the other.
 
     A mandatory requirement produces a hard gap whether its coverage is
     `partial` or `unsupported`. Partial means relevant evidence exists, not
@@ -121,13 +147,14 @@ def gaps_from_requirements(
     The two fields stay distinct on `Requirement`, where they mean different
     things.
     """
-    meanings = boundary_meanings or {}
     gaps: list[Gap] = []
     for requirement in requirements:
         if requirement.coverage == "matched":
             continue
         authoritative = [
-            meanings[fact_id] for fact_id in requirement.boundary_fact_ids if fact_id in meanings
+            facts.facts[fact_id].meaning
+            for fact_id in requirement.boundary_fact_ids
+            if fact_id in facts.facts
         ]
         hard = requirement.mandatory and requirement.coverage != "undetermined"
         gaps.append(
@@ -142,6 +169,19 @@ def gaps_from_requirements(
             )
         )
     return gaps
+
+
+def has_undetermined_mandatory(requirements: Sequence[Requirement]) -> bool:
+    """Whether coverage could not be decided for something the posting demanded.
+
+    The `coverage-undetermined` approval reason, asked once for both paths.
+    "We could not tell" about a *preferred* requirement is not a decision the
+    user must be stopped to make; the posting did not demand it.
+    """
+    return any(
+        requirement.coverage == "undetermined" and requirement.mandatory
+        for requirement in requirements
+    )
 
 
 def unaccepted_hard_gaps(
@@ -196,7 +236,16 @@ def merge_gaps(deterministic: Sequence[Gap], proposed: Sequence[Gap]) -> list[Ga
     return list(merged.values())
 
 
-def derive_gaps(lowered: str, track: Track) -> list[Gap]:
+def derive_gaps(lowered: str) -> list[Gap]:
+    """The legacy wording rules, for the concepts no vocabulary entry models yet.
+
+    Track-independent, and the parameter that said otherwise is gone. Every
+    rule below keys on the posting's own wording; none has consulted the Track
+    since the years rule was removed for matching a company's age, so the
+    argument was a promise the body did not keep - and a caller reading the
+    signature would have believed a Development posting and a Sales posting
+    could get different gaps from the same text.
+    """
     gaps: list[Gap] = []
     hard_saas = bool(re.search(r"(?:direct|proven|must have|required).{0,40}saas sales", lowered))
     if hard_saas:

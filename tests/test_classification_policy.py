@@ -73,7 +73,13 @@ def test_provider_cannot_relax_approval_confidence_or_language(
 
     assert analysis.classification_requires_approval
     assert analysis.language == "he"
-    assert analysis.confidence == deterministic.confidence
+    # The provider reported 0.99 and did not get it. The stored confidence is
+    # restated against the extraction on record (`rebase_requirements`) and
+    # then floored by `min(deterministic, proposal)`, so a confident proposal
+    # can only ever lower it - which is the policy this test is about. It is
+    # no longer equal to `deterministic.confidence`: that number came from the
+    # concept vocabulary's own extraction, which the AI extraction replaced.
+    assert analysis.confidence < 0.99
 
     _, stored = services.repository.latest_analysis(application_id)
     assert stored == analysis

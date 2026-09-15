@@ -47,7 +47,12 @@ from cv_engine.domain.contracts.analysis import (
     RequirementInterpretation,
     RequirementMember,
 )
-from cv_engine.domain.contracts.providers import ProposedRequirement, RequirementExtractionProposal
+from cv_engine.domain.contracts.providers import (
+    ProposedEvidence,
+    ProposedMemberCoverage,
+    ProposedRequirement,
+    RequirementExtractionProposal,
+)
 from cv_engine.domain.models import (
     ClaimProposal,
     DraftProposal,
@@ -850,6 +855,39 @@ def test_selection_context_carries_the_profile_pool_and_not_every_fact(
     }
 
 
+def test_extraction_context_carries_canonical_facts_and_nothing_else_about_them(
+    ai_services, fake_openai: FakeOpenAI
+) -> None:
+    """Extraction now proposes coverage, so it is given the facts to propose it from.
+
+    The pool is the canonical fact store rather than a Profile's allowed
+    facts: which requirements the candidate meets is decided before and
+    independently of which Profile presents them. What each fact carries is
+    still the minimum the task needs - meaning, tags, and the one structured
+    field a threshold can be traced to. No rendering, because analysis writes
+    no wording, and nothing about lifecycle, provenance, or where a fact is
+    stored.
+    """
+    job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        RequirementExtractionProposal(requirements=[], unmapped_statements=[]),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    payload = fake_openai.calls_for("propose_requirement_extraction")[-1].payload
+    supplied = {fact["fact_id"] for fact in payload["candidate_facts"]}
+    canonical = {fact.fact_id for fact in ai_services.knowledge.facts().by_status("canonical")}
+    assert supplied == canonical
+    assert set(payload["candidate_facts"][0]) == {
+        "fact_id",
+        "meaning",
+        "tags",
+        "effective_dates",
+    }
+
+
 # --------------------------------------------------------------------------
 # Retry policy
 # --------------------------------------------------------------------------
@@ -1644,6 +1682,288 @@ def test_a_requirement_statement_the_ai_never_touched_enters_the_score(
     # The splice is not credited as reading: `by_ai` still counts only what the
     # proposal attested.
     assert analysis.understanding.by_ai == 1
+
+
+def _analysis_of(completed, ai_services):
+    analysis_id = next(
+        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
+    )
+    return ai_services.repository.get_analysis(analysis_id)["analysis"]
+
+
+def _single(job_text: str, quote: str, **overrides) -> RequirementExtractionProposal:
+    """One mandatory, single-condition requirement read out of `job_text`.
+
+    The shape every evidence test below varies one field of, so each test
+    states only what it is probing.
+    """
+    start = job_text.index(quote)
+    fields = {
+        "attestation": RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
+        "interpretation": RequirementInterpretation(
+            source_role="requirement",
+            obligation="mandatory",
+            composition="single",
+            negation=False,
+        ),
+        "kind": "presence",
+        "label": quote,
+        **overrides,
+    }
+    return RequirementExtractionProposal(
+        requirements=[ProposedRequirement(**fields)], unmapped_statements=[]
+    )
+
+
+def test_a_requirement_no_concept_models_is_matched_from_its_cited_evidence(
+    ai_services, fake_openai
+) -> None:
+    """The closed-vocabulary collapse, closed.
+
+    Sales team leadership is a real requirement that no concept in
+    `config/requirements.json` models. Coverage used to be decided by matching
+    the quote against those six concepts, so this requirement came back
+    `undetermined` however well the provider read it - zero credit in
+    `fit_score`, a `coverage-undetermined` blocker on the way to approval, and
+    the same answer for every posting outside one sales vocabulary. The
+    provider's reading, evidenced by a canonical fact, now decides it.
+    """
+    job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
+    quote = "Must have led a sales team"
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        _single(
+            job_text,
+            quote,
+            coverage="matched",
+            evidence=[
+                ProposedEvidence(
+                    fact_id="sales.summary.leadership",
+                    rationale="the candidate led a sales team",
+                )
+            ],
+        ),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    requirement = next(item for item in analysis.requirements if item.attestation is not None)
+    assert requirement.coverage == "matched"
+    assert requirement.supporting_fact_ids == ["sales.summary.leadership"]
+    assert "coverage-undetermined" not in analysis.approval_reasons
+
+
+def test_a_complete_extraction_no_longer_inherits_the_rule_extraction_confidence(
+    ai_services, fake_openai
+) -> None:
+    """The stored confidence describes the extraction that is on record.
+
+    `classify_job` scores its own concept-vocabulary extraction, and on a
+    posting those six concepts do not model that score is zero. The AI path
+    replaced the requirement list and left the number - so a complete,
+    verified extraction inherited a failing confidence and a
+    `low-confidence-extraction` blocker that only
+    `accepted-incomplete-analysis` could clear. `rebase_requirements` restates
+    it from the extraction that actually ran.
+    """
+    job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
+    concepts = ai_services.analysis.load_knowledge().requirement_concepts
+    knowledge_only = classify_job(
+        job_text,
+        facts=ai_services.analysis.load_knowledge().facts,
+        profiles=ai_services.analysis.load_knowledge().profiles,
+        concepts=concepts,
+        normalized_hash=sha256_text(job_text),
+    )
+    assert "low-confidence-extraction" in knowledge_only.approval_reasons
+
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        _single(
+            job_text,
+            "Must have led a sales team",
+            coverage="matched",
+            evidence=[ProposedEvidence(fact_id="sales.summary.leadership", rationale="led a team")],
+        ),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    assert "low-confidence-extraction" not in analysis.approval_reasons
+    assert analysis.confidence > knowledge_only.confidence
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        pytest.param(
+            {
+                "coverage": "matched",
+                "evidence": [
+                    ProposedEvidence(fact_id="sales.summary.invented", rationale="made up")
+                ],
+            },
+            id="fabricated-fact-id",
+        ),
+        pytest.param(
+            {"coverage": "matched", "evidence": []},
+            id="positive-coverage-with-nothing-behind-it",
+        ),
+    ],
+)
+def test_unverifiable_evidence_rejects_the_whole_proposal(
+    ai_services, fake_openai, overrides
+) -> None:
+    """A citation is not proof, and a verdict with no citation is not evidence.
+
+    Both are invalid output rather than a weaker reading: a provider that
+    names a fact the store does not have, or claims coverage it can show
+    nothing for, has not answered the task. One failing requirement voids the
+    proposal, as it does at the source and interpretation gates.
+    """
+    job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        _single(job_text, "Must have led a sales team", **overrides),
+    )
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+    # Nothing was written: a rejected proposal leaves no analysis behind.
+    assert not [output for output in completed.outputs if output.output_type == "job_analysis"]
+
+
+def test_a_threshold_is_recomputed_from_the_cited_fact_not_from_the_report(
+    ai_services, fake_openai
+) -> None:
+    """Arithmetic the provider performed on its own answer proves nothing.
+
+    The candidate's canonical tenure fact spans 2019-03/2025-01 - under six
+    years - so a demand for twenty is not met however confidently it is
+    reported met. The comparison is the engine's, run against the fact's own
+    structured dates, and a demand it cannot trace stays `undetermined`
+    rather than becoming either verdict.
+    """
+    job_text = "Account Manager.\nRequirements:\n- Must have 20 years of sales experience."
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        _single(
+            job_text,
+            "Must have 20 years of sales experience",
+            kind="threshold",
+            demanded="20",
+            coverage="matched",
+            evidence=[
+                ProposedEvidence(fact_id="sales.summary.tenure", rationale="long sales career")
+            ],
+        ),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    requirement = next(item for item in analysis.requirements if item.attestation is not None)
+    assert requirement.coverage == "unsupported"
+
+
+def test_a_boundary_fact_still_caps_coverage_with_no_concept_verdict(
+    ai_services, fake_openai
+) -> None:
+    """The one thing the concept vocabulary still decides.
+
+    Coverage is the provider's reading now, but a canonical boundary fact
+    states what is *not* verified, and its applicability is a deterministic
+    pattern match on the requirement's own quote - never a provider relation
+    or tag. A provider reading tech-company sales as fully matched is capped
+    to `partial` by the boundary the candidate's Knowledge carries, and the
+    limit is reported with the requirement.
+    """
+    quote = "Must have sales experience at a technology company"
+    job_text = f"Account Manager.\nRequirements:\n- {quote}."
+    completed = _extraction_operation(
+        ai_services,
+        fake_openai,
+        job_text,
+        _single(
+            job_text,
+            quote,
+            coverage="matched",
+            evidence=[ProposedEvidence(fact_id="sales.summary.tech", rationale="tech sales")],
+        ),
+    )
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    requirement = next(item for item in analysis.requirements if item.attestation is not None)
+    assert requirement.coverage == "partial"
+    assert "sales.tech_sales.boundary" in requirement.boundary_fact_ids
+
+
+def test_an_any_of_group_adds_up_deterministically_not_from_the_top_level_claim(
+    ai_services, fake_openai
+) -> None:
+    """The composition arithmetic is the engine's.
+
+    A provider may read each member; whether the group is met follows from the
+    members it evidenced, not from the verdict it wrote at the top. Here one
+    member is evidenced and the other is not, and `any-of` is satisfied by the
+    one - although the provider itself wrote `unsupported`.
+    """
+    quote = "Must have led a sales team or managed key accounts"
+    job_text = f"Account Manager.\nRequirements:\n- {quote}."
+    start = job_text.index(quote)
+    leading = "led a sales team"
+    proposal = RequirementExtractionProposal(
+        requirements=[
+            ProposedRequirement(
+                attestation=RequirementAttestation(
+                    quote=quote, start=start, end=start + len(quote)
+                ),
+                interpretation=RequirementInterpretation(
+                    source_role="requirement",
+                    obligation="mandatory",
+                    composition="any-of",
+                    members=[
+                        RequirementMember(
+                            member_id="leadership",
+                            label="sales team leadership",
+                            attestation=RequirementAttestation(
+                                quote=leading,
+                                start=job_text.index(leading),
+                                end=job_text.index(leading) + len(leading),
+                            ),
+                        ),
+                        RequirementMember(member_id="accounts", label="key account management"),
+                    ],
+                    negation=False,
+                ),
+                kind="compositional",
+                label=quote,
+                coverage="unsupported",
+                members_coverage=[
+                    ProposedMemberCoverage(
+                        member_id="leadership",
+                        coverage="matched",
+                        evidence=[
+                            ProposedEvidence(
+                                fact_id="sales.summary.leadership", rationale="led a team"
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+        unmapped_statements=[],
+    )
+    completed = _extraction_operation(ai_services, fake_openai, job_text, proposal)
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    requirement = next(item for item in analysis.requirements if item.attestation is not None)
+    # `any-of` is met by the evidenced member, whatever the top-level claim said.
+    assert requirement.coverage == "matched"
+    assert requirement.supporting_fact_ids == ["sales.summary.leadership"]
 
 
 def test_a_requirement_proposed_twice_is_one_requirement(ai_services, fake_openai) -> None:

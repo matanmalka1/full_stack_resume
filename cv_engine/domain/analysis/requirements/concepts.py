@@ -55,7 +55,6 @@ class RequirementConcept:
     demand_terms: dict[str, tuple[str, ...]] = field(default_factory=dict)
     demand_pattern: re.Pattern[str] | None = None
     value_fact_ids: tuple[str, ...] = ()
-    value_source: str = ""
 
 
 class RequirementConceptStore:
@@ -68,7 +67,6 @@ class RequirementConceptStore:
 
     def __init__(self, payload: dict[str, Any], *, origin: str = "requirement concepts"):
         self.origin = origin
-        self.policy_version = str(payload.get("policy_version", ""))
         self.extraction_version = str(payload.get("extraction_version", ""))
         if not self.extraction_version:
             raise RequirementConceptError(f"{origin}: extraction_version is required")
@@ -200,5 +198,4 @@ class RequirementConceptStore:
             },
             demand_pattern=re.compile(str(demand), re.IGNORECASE) if demand else None,
             value_fact_ids=tuple(body.get("value_fact_ids") or ()),
-            value_source=str(body.get("value_source", "")),
         )
