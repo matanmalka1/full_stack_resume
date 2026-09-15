@@ -1,12 +1,11 @@
 # Multi-Track CV Engine v2
 
 Fact-safe CV generation and application tracking for Development, Sales, and Tech
-Sales. A FastAPI backend and a React frontend; the deterministic workflow reaches
-Ready without an AI key.
+Sales. A FastAPI backend and a React frontend. Job analysis is where AI belongs; from an
+existing analysis, everything down to a Ready PDF runs with no key.
 
-The binding specifications are under [`docs/spec/`](docs/spec/):
-`product-spec.md`, `state-and-use-cases.md`, and `architecture.md`.
-[`docs/README.md`](docs/README.md) maps every document.
+The binding specifications are under [`docs/spec/`](docs/spec/).
+[`docs/README.md`](docs/README.md) says which document answers which question.
 
 ## Setup
 
@@ -43,8 +42,10 @@ each worktree. To install the browser again without replacing the environment:
   boundaries.
 - PostgreSQL stores mutable application state and immutable history, through
   SQLAlchemy Core and numbered Alembic revisions.
-- `artifacts/working/` contains replaceable working drafts; approved/rendered versions
-  are immutable version directories under `artifacts/<application-id>/`.
+- `artifacts/working/` contains the replaceable working draft. Immutable payloads live
+  under fixed key prefixes — `snapshots/`, `revisions/`, `outputs/`, `provider/`,
+  `manifests/` — whose layout is frozen in `docs/spec/architecture.md` section 6.2 so a
+  row reads the same under local storage and under an S3-compatible bucket.
 - `base/` and `profiles/` hold the canonical source facts used directly by the
   application, so they are live input rather than archive.
 
@@ -111,14 +112,17 @@ pool a section may draw from, and `config/emphasis.json` weights the canonical f
 per Emphasis, so the same Profile produces a different CV under `account-growth` than
 under `new-business`. Selection is deterministic and recorded: `resume.claims.json`
 carries the score, outcome and omission reason for every candidate considered. Because
-Emphasis now changes the document, a disagreement about it between the deterministic
-classifier and an AI proposal requires an explicit `--emphasis` decision.
+Emphasis changes the document, an unresolved Emphasis choice is a review reason the user
+answers through Apply Decisions, not something a classifier settles on its own.
 
-The analyzer also normalizes job language such as outbound, discovery, closing, CRM,
-pipeline, integrations, and onboarding into the canonical tag vocabulary. Unverified
-direct SaaS Sales, named Sales-CRM usage, and strategic-partnership ownership remain
-recorded gaps; verified substitute facts may be selected, but the missing experience
-is never inferred from them.
+Which requirements a posting states, and which canonical facts answer them, is the
+provider's reading. The engine does not accept it on report: every quote is verified
+byte-exact against the stored snapshot, every cited fact must exist and be canonical,
+thresholds are recomputed from the facts' own structured fields, and a canonical
+boundary fact caps a match regardless of what the provider proposed. Unverified direct
+SaaS Sales, named Sales-CRM usage, and strategic-partnership ownership are such
+boundaries: verified substitute facts may be selected, but the missing experience is
+never inferred from them.
 
 ## Fact lifecycle
 
@@ -168,14 +172,23 @@ not it passed, and `passed` is the field to read. Verification goes through the
 configured payload store, so it reports the truth under local storage and under an S3
 bucket alike.
 
-## Optional AI provider
+## AI provider
 
-The deterministic engine completes the entire workflow offline. Configuring a key
-enables six structured OpenAI proposal tasks: requirement extraction, classification,
-selection, initial draft wording, section regeneration, and claim regeneration. The Web
-settings page then offers a closed model catalog and
-low/medium/high reasoning effort; those defaults are frozen onto each queued AI
-Operation:
+Semantic job analysis — which requirements a posting states, and which canonical facts
+answer them — is the provider's. A failed or unconfigured provider never silently
+becomes a rules analysis: the UI offers configuration or retry rather than a fabricated
+result. Everything downstream of an existing analysis — editing, validation, approval,
+rendering, Ready, export and recruitment tracking — runs with no key at all.
+
+`POST /applications/{id}/analyses` still accepts an explicit `provider=deterministic`
+and produces a rules-only analysis; whether that stays in scope is the open question
+recorded in `docs/spec/product-spec.md` section 2.
+
+A configured key enables six structured OpenAI proposal tasks:
+`propose_requirement_extraction`, `propose_job_analysis`, `propose_selection_plan`,
+`draft_resume`, `regenerate_section`, and `regenerate_claim`. The Web settings page then
+offers a closed model catalog and low/medium/high reasoning effort; those defaults are
+frozen onto each queued AI Operation:
 
 ```bash
 export OPENAI_API_KEY='...'
@@ -193,6 +206,7 @@ Two ways to run it, for two different jobs.
 **Developing the frontend** — no build step:
 
 ```bash
+export CV_API_DEV_ORIGIN=http://localhost:5173
 ./.venv/bin/python -m uvicorn cv_engine.runtime.asgi:app --host 127.0.0.1 --port 8765 --reload
 ./.venv/bin/python -m cv_engine.worker  # queued work
 cd frontend && npm run dev              # localhost:5173
@@ -202,6 +216,10 @@ Vite compiles on demand and reloads on save. It proxies `/api` to the backend, s
 two are one origin from the browser's point of view. This is the normal loop; nothing
 here needs `npm run build`.
 
+Vite binds `localhost:5173` with a strict port and never falls back to another one,
+because a silent fallback would disagree with the backend's Origin allowlist — which is
+also why the backend needs `CV_API_DEV_ORIGIN` naming that exact origin.
+
 **Running the product** — no Node process:
 
 ```bash
@@ -210,6 +228,8 @@ cd frontend && npm run build   # once, and after changing the frontend
 ./.venv/bin/python -m cv_engine.worker
 ```
 
+`npm run build` writes to `frontend/dist`; a production caller passes that directory to
+`cv_engine.api.create_app` as `frontend_dist`.
 FastAPI serves the built assets itself, same-origin with the API. Without a build it
 still starts and serves the API alone - that is the dev loop above, where the UI comes
 from Vite. `npm run build` also runs `tsc -b` and the design-token check, so it is
@@ -220,6 +240,19 @@ application defaults are `127.0.0.1` and `8765`. Serving on another address need
 the corresponding environment setting and Uvicorn flag: the origin policy allows the
 origin the app believes it answers on, so changing only Uvicorn refuses every
 state-changing request from the app's own UI.
+
+## Generated API contract
+
+`openapi/openapi.json` and `openapi/types.ts` are both generated and both committed, so
+a change to a request or response schema arrives as a reviewable diff instead of as a
+silent rebuild. `tests/test_api_foundation.py` checks the first; `git diff --exit-code`
+after regeneration checks the second. Regenerate after any API change and state the
+diff in the commit message:
+
+```bash
+./.venv/bin/python openapi/generate_openapi.py
+cd openapi && npm ci && npm run generate
+```
 
 ## Tests
 
@@ -265,14 +298,18 @@ deselected.
 
 ## Historical artifacts
 
-The pre-v1 generation scripts have been retired, and the v1 submission data they wrote
-(`outputs/`, `jobs/status.csv`, `cv-html/`) has been removed: every row was an unsent
-`draft`, so it recorded no submission and preserved no evidence. The v1 source documents
-it was generated from — `base/cv_base.md`, `base/cv-formatted.md`, `base/cv-pdf/` — and
-the superseded `ai/prompts/system-v1.md` were removed with it. Nothing in v2 read them:
-the canonical fact sources are `common.md`, `sales.md`, `development.md`, and
-`situational_skills.md`, and the task contract names `system-v3.md`.
+The pre-v1 generation scripts and the v1 submission data they wrote (`outputs/`,
+`jobs/status.csv`, `cv-html/`) were removed: every row was an unsent `draft`, so it
+recorded no submission and preserved no evidence. The v1 source documents — `base/cv_base.md`,
+`base/cv-formatted.md`, `base/cv-pdf/` — went with them. Nothing in v2 read them: the
+canonical fact sources are `common.md`, `sales.md`, `development.md`, and
+`situational_skills.md`.
+
+`ai/prompts/` keeps superseded prompt versions alongside the current one. The task
+contract in `ai/contracts/task_contracts.json` names which version is live; the older
+files stay because approved revisions record the prompt version and hash they were
+produced under, and deleting one would leave that provenance unresolvable.
 
 Facts migrated out of `cv_base.md` still cite it in their `provenance`. Those strings are
 the historical record of where a fact came from and are deliberately left unchanged; the
-file they name is recoverable from Git history. New work uses `cv` exclusively.
+file they name is recoverable from Git history.

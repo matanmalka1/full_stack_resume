@@ -60,11 +60,13 @@ Three kinds of change need additional focused evidence:
 - **A change to rendering or an artifact path** also needs the golden hashes and the
   relevant browser tests.
 - **A change to a stored value's meaning, a public application/API signature, or a projection field**
-  also needs the deterministic no-AI pipeline test against a fresh PostgreSQL database
+  also needs the pipeline test against a fresh PostgreSQL database
   (`tests/test_pipeline_end_to_end.py`) — `ingest → analyze → draft → validate → approve
   → render → ready → reconcile`, `OPENAI_API_KEY` unset. It drives the application
   services directly, so it proves the engine works rather than that one client knows how
-  to call it.
+  to call it. Analysis is the one step that needs a provider (see Facts and AI
+  boundaries); the rest of the chain runs with none, and that is what this test holds:
+  everything downstream of an existing analysis reaches Ready without AI.
 
 While iterating, hand over only the focused commands. Hand over the boundary's scoped gates
 once, when the work closes, ordered, with what each command proves. A gate that already
@@ -96,11 +98,21 @@ Report what passed, what failed, and what remains. Never claim completion with
   same message.
 - Unsupported factual claims block approval and `ready_qualified`. No chained or
   no-pause flow may bypass that; a blocker refuses whatever is driving it.
-- AI proposes classification, selection, and wording. Canonical facts and deterministic
-  validation stay authoritative — authoritative over meaning, not over exact wording.
-  Deterministic validation may enforce semantic equivalence to the canonical fact; it is
-  not required to demand verbatim copying, and a check that does so is enforcing more
-  than this rule requires.
+- AI proposes classification, selection, wording, and — per `docs/spec/product-spec.md`
+  §2 "Semantic analysis authority" — requirement extraction, interpretation, and which
+  canonical facts answer a requirement. Creating a new analysis needs a provider; there
+  is no rules-based fallback for it, silent or otherwise. Canonical facts and
+  deterministic validation stay authoritative — authoritative over meaning, not over
+  exact wording. Deterministic validation may enforce semantic equivalence to the
+  canonical fact; it is not required to demand verbatim copying, and a check that does
+  so is enforcing more than this rule requires.
+- Deterministic policy keeps every check it can run itself: source attestation against
+  the signed snapshot, canonical-fact eligibility, requirement identity, structural
+  completeness, numeric and compositional consistency, boundary-fact applicability, Fit
+  calculation, review routing, and every approval boundary. A proposal may be narrowed
+  by those checks; it may never be widened by them. The closed concept vocabulary in
+  `config/requirements.json` no longer decides coverage — it states boundary
+  applicability and scale ordering, both of which only lower a verdict.
 - Preserve canonical job titles, dates, metrics, uncertainty, and source provenance.
 
 ## Working rules
@@ -125,7 +137,8 @@ Report what passed, what failed, and what remains. Never claim completion with
   argument, setting, or environment variable. A test needing another root injects
   `AppPaths.from_root(...)` into composition.
 - Routers map HTTP to a use-case and back. Logic belongs to the application layer,
-  which the API calls directly. The deterministic workflow reaches Ready with no AI key.
+  which the API calls directly. Once an analysis exists, the deterministic workflow
+  reaches Ready with no AI key.
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
 - Add a dependency only when it enforces a contract, reduces rendering risk, or gives a
   concrete portability benefit. The baseline is `docs/spec/architecture.md` section 2.

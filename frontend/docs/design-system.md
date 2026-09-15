@@ -17,11 +17,14 @@ two supplied pale-slate values are named `pale-slate-light` (`#ced4da`) and
 Semantic status roles share this neutral family; their meaning therefore comes from
 their Hebrew label, icon and structure rather than hue alone.
 
-The default follows `prefers-color-scheme`. The navigation toggle writes an explicit
-`data-theme="light"` or `data-theme="dark"` choice to the root and persists it under
-`cv-theme` in local storage. Until the first selection there is no attribute, so changes
-to the operating-system preference continue to apply. Both themes declare the matching
-`color-scheme`, allowing native controls to follow the selected theme.
+The theme is a server-owned setting (`ui_theme`: `system`, `light`, `dark`), read and
+written through Settings like any other preference. `system` writes no attribute, so
+changes to the operating-system preference keep applying live; an explicit choice stamps
+`data-theme="light"` or `data-theme="dark"` on the root. Local storage holds only
+`cv-theme-cache`, a startup cache so the first paint does not flash the wrong theme; it
+is never authoritative. The legacy `cv-theme` key is read once for import and is not
+written. Both themes declare the matching `color-scheme`, allowing native controls to
+follow the selected theme.
 
 | Role | Purpose |
 | --- | --- |

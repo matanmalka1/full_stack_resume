@@ -151,17 +151,15 @@ Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidenc
    reconcile only the cross-lane call sites left to integration.
 3. Prove no module still imports a moved symbol from its old home (grep the old paths).
 4. One verification at boundary close: the gate `AGENTS.md` owes this boundary, run over
-   the merged tree, plus the semantic-parity check. That is the non-browser suite, plus
-   whichever of `AGENTS.md`'s three named cases the boundary triggered — golden hashes and
-   the browser suite for a rendering or artifact-path change, the migration checks for a
-   schema change, the deterministic no-AI pipeline test for a change to a stored value's
-   meaning, a public signature, or a projection field. The browser suite is skipped only when the boundary
-   cannot affect a rendering or browser path.
+   the merged tree, plus the semantic-parity check. `AGENTS.md` owns which checks those
+   are, including its three additional-evidence triggers; this protocol adds only *when*
+   they run — once, over the merged tree, never per lane.
    This is not the re-run section 9 warns against — no lane produces a full-suite run, and
    the merged tree is not the tree any lane tested. It is the boundary's only full run, and
    the first one over the code as it will actually ship.
-5. Update the active delivery/status document named by `docs/README.md` with what landed
-   and what remains. Closed milestone trackers stay in Git history.
+5. Update the relevant record with what landed and what remains: a decision or delivery
+   state belongs in `docs/tailoring-decisions.md`, an open defect or task in
+   `docs/backlog/`. Closed trackers stay in Git history rather than in the tree.
 6. Report per package, with command evidence.
 
 ## 7. When not to use this

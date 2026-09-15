@@ -6,6 +6,8 @@ PostgreSQL transaction terminology amendment: **2026-08-25**
 
 Matching-configuration concurrency amendment: **2026-09-14**
 
+Semantic-analysis authority amendment (D5): **2026-09-15**
+
 Product authority: `docs/spec/product-spec.md`
 
 ## 1. Purpose
@@ -443,8 +445,11 @@ exempt for a deleted fact.
 ### `analyze_job(application_id, job_snapshot_id, provider, ...)`
 
 Asynchronous and idempotent. Creating a new analysis requires the configured AI provider.
-`analyze_job` supplies one structured Proposal containing source-attested requirements,
-their interpretation, evidence-linked coverage, and classification. Deterministic policy
+`analyze_job` runs the two provider tasks named in product-spec §12,
+`propose_requirement_extraction` and `propose_job_analysis`, and supplies their
+structured Proposals: source-attested requirements with their interpretation and
+evidence-linked coverage, and the Track/Profile/Emphasis/language classification. Each
+raw response is preserved separately. Deterministic policy
 validates source identity, canonical-fact eligibility, independent structural completeness,
 internally checkable numeric/compositional consistency, profile legality, and requirement
 identity, then derives gaps, Fit, and review reasons. A fact ID or provider-declared
@@ -974,6 +979,7 @@ POST   /api/v1/applications/{id}/status-corrections
 PATCH  /api/v1/applications/{id}/next-action
 GET    /api/v1/facts
 POST   /api/v1/facts
+GET    /api/v1/facts/attachment-targets
 POST   /api/v1/facts/from-claim
 GET    /api/v1/facts/history
 GET    /api/v1/facts/{id}

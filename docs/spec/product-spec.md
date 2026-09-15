@@ -55,8 +55,9 @@ remains. Only uncertainty requires focused user clarification. Final CV approval
 remains explicit. This is a policy for accepting reviewed evidence, not a claim that
 AI proves meaning or cannot miss an error.
 
-Sections 10–12 define the acceptance contract. Supporting design details live in
-[Wording validation design](../tailoring-wording-validation.md).
+Sections 10–12 define the acceptance contract. The approved decisions behind it, and
+the unimplemented review design they call for, live in
+[Tailoring decisions](../tailoring-decisions.md).
 
 ### Semantic analysis authority
 
@@ -87,6 +88,19 @@ still read historical analyses and perform deterministic editing, validation, ap
 rendering, integrity, export, and recruitment workflows whose prerequisites already
 exist. Provider failure never triggers a silent rules-based analysis. The UI presents
 provider configuration or retry instead of a fabricated semantic result.
+
+> **Unresolved conflict with the implementation (recorded 2026-09-15, not decided
+> here).** `POST /api/v1/applications/{id}/analyses` still accepts
+> `provider: "deterministic"` and still defaults to it, and
+> `AnalysisService.analyze` still produces a complete rules-only JobAnalysis
+> (`used_provider="deterministic"`, `used_model="rules-v1"`) on that branch. Settings
+> still offers `deterministic` as the default execution mode, and
+> `tests/test_pipeline_end_to_end.py` — the gate `AGENTS.md` names for a projection or
+> signature change — creates its analysis through that path with `OPENAI_API_KEY`
+> unset. Either this paragraph overstates D5 and an explicitly requested rules analysis
+> remains in scope, or the deterministic analysis branch and the test that depends on it
+> are due for removal. Resolving it is a product decision, and the no-silent-fallback
+> half of the rule binds under either answer.
 
 A user decision remains required for a material professional choice, a hard requirement
 gap, low Fit, incomplete analysis, or a manual correction of requirement meaning or
@@ -154,8 +168,8 @@ The product includes:
   through a replacement fact, and attachment to existing Profile sections. Contextual
   claim capture and use remain available in preparation flows. This surface is not a
   general Knowledge Manager and does not edit Profile definitions or arbitrary Knowledge.
-- OpenAI Responses API integration for five implemented Proposal tasks through strict
-  structured contracts. The approved sixth target task, `assess_claim_support`, is
+- OpenAI Responses API integration for six implemented Proposal tasks through strict
+  structured contracts. The approved seventh target task, `assess_claim_support`, is
   delivered only with the D1 evidence lifecycle described in sections 10–12.
 - Deterministic work from an existing JobAnalysis through Ready without further AI;
   creating a new JobAnalysis requires a configured AI provider.
@@ -454,15 +468,21 @@ the later tracking milestone, not the first vertical slice.
 
 The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
 protocol.
-The AI task catalog has five implemented tasks and one approved target task:
+The AI task catalog has six implemented tasks and one approved target task. Task names
+are the provider's; `analyze_job` is the application command that calls the first two:
 
-- `analyze_job` — quoted requirements, explicit interpretation, evidence-linked coverage,
-  and classification as one Proposal; it cannot decide Fit, review routing, approval, or
-  activation.
+- `propose_requirement_extraction` — quoted requirements, explicit interpretation, and
+  evidence-linked coverage as one Proposal.
+- `propose_job_analysis` — Track/Profile/Emphasis/language classification as one
+  Proposal.
 - `propose_selection_plan`
 - `draft_resume`
 - `regenerate_section`
 - `regenerate_claim`
+
+Neither analysis task may decide Fit, review routing, approval, or activation; those
+stay with deterministic policy under §2.
+
 - `assess_claim_support` — approved target, not yet implemented; separate semantic
   review of wording against supplied canonical sources and contextual attribution,
   returning evidence proposals only. It must not be advertised as available until the

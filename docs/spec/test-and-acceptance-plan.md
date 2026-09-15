@@ -4,7 +4,12 @@ Status: **Approved for v2.0 implementation (2026-08-17)**
 
 PostgreSQL/object-storage gate amendment: **2026-08-25**
 
-Product authority: `docs/spec/product-spec.md`
+D1 wording-evidence amendment: **2026-09-06** (§6)
+
+D5 semantic-analysis amendment: **2026-09-15** (§6)
+
+Product authority: `docs/spec/product-spec.md`. The approved decisions the §6
+amendments implement are recorded in `docs/tailoring-decisions.md`.
 
 ## 1. Test strategy
 
@@ -26,8 +31,9 @@ existing test cannot express clearly. Prefer extending the nearest meaningful te
 avoid tests whose only purpose is to restate a type annotation, enumerate equivalent
 adapter methods, pin private call counts, or freeze incidental package/file layout.
 
-The verified v1 baseline is `v1.0.0` / `2cc31c7` with 131 passing tests under
-`CV_REQUIRE_BROWSER=1`.
+The historical v1 baseline was `v1.0.0` / `2cc31c7` with 131 passing tests under
+`CV_REQUIRE_BROWSER=1`. It is a Git-history reference for where the safety invariants
+came from, not a suite that can be re-run: v1 is gone from the tree.
 
 ## 2. Test layers
 
@@ -133,10 +139,11 @@ Exercise immutable create-if-absent semantics, hash verification, key validation
 storage-neutral references against both object-store adapters. Environment-level backup
 drills are deployment evidence, not application test cases.
 
-## 3. Deterministic parity
+## 3. Semantic parity
 
-For the same input, Knowledge and policy versions, deterministic v2 must match v1
-semantically in:
+The parity bar was originally stated against v1. v1 code and data are no longer in the
+tree, so the golden fixtures in §4 now carry that bar: for the same input, Knowledge and
+policy versions, a change must not move
 
 - selected facts
 - rendered claims
@@ -144,11 +151,13 @@ semantically in:
 - Ready eligibility
 - decision behavior
 
-New IDs, paths, timestamps, storage envelopes, document schema versions, and other
-non-semantic persistence details may differ.
+unless the change was meant to move them. New IDs, paths, timestamps, storage
+envelopes, document schema versions, and other non-semantic persistence details may
+differ and are excluded from the comparison.
 
-Golden comparisons should report semantic differences explicitly rather than hiding
-them behind regenerated hashes.
+Golden comparisons must report semantic differences explicitly rather than hiding them
+behind regenerated hashes. A golden hash that moves without an intended output change
+is a failure, not a fixture to refresh.
 
 ## 4. Golden matrix
 
@@ -330,7 +339,8 @@ Prompt-injection regression inputs include at least:
 The content may affect a Proposal but may not change policy, allowed facts, validation,
 approval, or schema.
 
-Release requires a manual live OpenAI smoke checklist, not an automated CI gate:
+Release requires a manual live OpenAI smoke checklist, not an automated CI gate. This
+list is that checklist; there is no separate smoke-run document:
 
 - one `propose_job_analysis` call
 - one `draft_resume` call
@@ -501,14 +511,10 @@ Cover:
 
 ### Task delivery gates
 
-The user runs tests; agents hand over commands. For an ordinary task or checkpoint,
-select checks from the actual diff and affected behavior: frontend checks for
-frontend-only changes, backend checks for backend-only changes, and both when both
-are affected, including changed shared contracts. Prefer focused tests. Delivery does
-not automatically require a full suite; broader checks need a concrete uncovered risk,
-a failure, or an explicit CI/release requirement. Documentation-only changes need
-consistency review rather than product tests. The schema, rendering/artifact, and
-application/API contract triggers in `AGENTS.md` still require their relevant evidence.
+Per-task gate selection is owned by `AGENTS.md` (`CLAUDE.md`), not restated here: which
+checks a diff owes, when a full suite is warranted, and the three triggers that demand
+extra evidence — a schema change, a rendering/artifact-path change, and a change to a
+stored value's meaning, a public signature, or a projection field.
 
 ### CI and release requirements
 

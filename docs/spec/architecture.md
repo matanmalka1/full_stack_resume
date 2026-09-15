@@ -6,7 +6,8 @@ PostgreSQL/object-storage, secret-configuration, and fixed-root amendment: **202
 
 Product authority: `docs/spec/product-spec.md`
 
-Baseline: `v1.0.0` / `2cc31c7`
+Baseline: `v1.0.0` / `2cc31c7`. v1 is a Git-history reference only; no v1 code or data
+remains in the tree, and nothing in v2 reads it.
 
 ## 1. Architecture objective
 
@@ -50,9 +51,9 @@ Backend/runtime:
 - Playwright-managed Chromium for rendering and render validation
 - `pypdf` for PDF extraction and ATS checks
 - `boto3`, in the optional `s3` extra only, for the S3/R2 payload backend. Optional
-  because the local store is the default: the deterministic workflow must reach Ready
-  with nothing configured and no cloud SDK installed, so it is imported inside the
-  adapter rather than at module scope
+  because the local store is the default: from an existing JobAnalysis the workflow
+  must reach Ready with nothing configured and no cloud SDK installed, so it is
+  imported inside the adapter rather than at module scope
 
 Frontend:
 
@@ -142,9 +143,14 @@ Repository boundaries follow transactional ownership and use-cases rather than t
 - `OperationRepository`
 - `TrackingRepository`
 - `AuditRepository`
+- `SettingsRepository`
+- `KnowledgeMutationRepository`
 
 `PreparationRepository` may own JobSnapshot metadata, JobAnalysis, SelectionPlan,
 ValidationRun, and ApprovedRevision metadata where their transactions belong together.
+
+Read-only projection protocols (`QueryRepository`, `ReadinessRepository`) are narrowed
+views over the same tables for query services; they are not additional write owners.
 
 ### 3.4 API
 
@@ -469,16 +475,18 @@ temporary browser-startup failures.
 
 ## 11. AI adapter
 
-The provider-neutral protocol implements five of the six target tasks defined in
-product-spec §12. `assess_claim_support`, the sixth task introduced by D1
+The provider-neutral protocol implements six of the seven target tasks defined in
+product-spec §12. `assess_claim_support`, the seventh task introduced by D1
 (2026-09-06), remains design work and must not be represented as an available provider
 capability until its evidence lifecycle and activation rules are implemented.
 The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.
 
-`analyze_job` proposes requirement extraction, interpretation, evidence-linked coverage,
-and classification in one stateless structured response. Source quotes/offsets, canonical
+The `analyze_job` command calls two of those tasks, `propose_requirement_extraction`
+and `propose_job_analysis`, each a stateless structured response whose raw output is
+preserved separately. Together they propose requirement extraction, interpretation,
+evidence-linked coverage, and classification. Source quotes/offsets, canonical
 fact eligibility, an independently derived structural completeness denominator, and
 internally checkable numeric/compositional consistency are validated before deterministic
 Fit/gap calculation. Requirement identities incorporate interpretation and extractor
