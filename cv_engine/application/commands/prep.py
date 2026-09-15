@@ -62,10 +62,6 @@ class AnalyzeCommand(BoundaryDTO):
     emphasis_override: str | None = None
     language_override: str | None = None
     accept_low_fit: bool = False
-    #: Set only by an explicit acceptance submission, never by the analyze
-    #: endpoint. That is what keeps the decision from surviving a re-analysis:
-    #: a fresh analyze of a new snapshot starts with it unset and blocks again.
-    accept_incomplete_analysis: bool = False
     #: Gap acceptances submitted with the decision that creates this analysis.
     #: Set only by an explicit decision submission; the analyze endpoint never
     #: carries them, so a plain re-analysis starts with nothing accepted.

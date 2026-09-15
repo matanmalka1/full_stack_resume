@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...domain.analysis.approval import ACCEPTED_INCOMPLETE_ANALYSIS
 from ...domain.analysis.assembly import build_analysis
 from ...domain.analysis.requirements.ai_extraction import (
     RequirementExtractionRejected,
@@ -184,14 +183,9 @@ class AnalysisPreparation:
             )
             raise
 
-        accepted: dict[str, str] = {
-            **({"fit": "accepted-low-fit"} if command.accept_low_fit else {}),
-            **(
-                {"analysis": ACCEPTED_INCOMPLETE_ANALYSIS}
-                if command.accept_incomplete_analysis
-                else {}
-            ),
-        }
+        accepted: dict[str, str] = (
+            {"fit": "accepted-low-fit"} if command.accept_low_fit else {}
+        )
         if accepted:
             # Rebuilt through validation rather than model_copy(update=...), which
             # would skip the model validators that guard this state.
