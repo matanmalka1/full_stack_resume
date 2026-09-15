@@ -46,15 +46,12 @@ const GapAcceptanceFields = ({
 }) => (
   <div className="flex flex-col gap-3">
     <p className="text-support leading-6 text-cv-text-muted" dir="auto">
-      {acceptance.acceptable === 0
-        ? "אין פער חוסם שאפשר להכריע עליו מכאן. פער שנרשם בניתוח ישן דורש ניתוח מחדש של המשרה."
-        : acceptance.marked === 0
+      {acceptance.marked === 0
           ? "סימון פער חוסם ברשימת הפערים שלמעלה הוא ההכרעה שפותחת את המשך התהליך. הסימון אינו הופך את הפער למכוסה ואינו מתיר טענה שאין לה עובדה — הוא רושם שהמשכת ביודעין."
           : `${acceptance.marked} מתוך ${acceptance.acceptable} פערים חוסמים מסומנים לקבלה. הסימון אינו הופך את הפער למכוסה ואינו מתיר טענה שאין לה עובדה — הוא רושם שהמשכת ביודעין.`}
     </p>
 
-    {acceptance.acceptable === 0 ? null : (
-      <Field hint="הסיבה נרשמת יחד עם כל הפערים שסומנו בשליחה הזו." label="סיבת הקבלה" optional>
+    <Field hint="הסיבה נרשמת יחד עם כל הפערים שסומנו בשליחה הזו." label="סיבת הקבלה" optional>
         {(control) => (
           <Textarea
             {...control}
@@ -69,8 +66,7 @@ const GapAcceptanceFields = ({
             value={decisions.acceptance_reason ?? ""}
           />
         )}
-      </Field>
-    )}
+    </Field>
   </div>
 );
 

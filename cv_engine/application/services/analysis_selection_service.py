@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.taxonomy import Emphasis
 from ...domain.contracts.selection import SelectionPlan
+from ...domain.contracts.taxonomy import Emphasis
 from ...domain.profiles import allowed_fact_pool
 from ..commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand, SelectionPlanResult
 from ..errors import PreconditionFailed, UnknownRecord
@@ -223,12 +223,12 @@ class AnalysisSelectionService:
         prepared: PreparedSelectionProposal,
         repository: PreparationRepository | None = None,
     ) -> SelectionPlanResult:
-        """Commit the proposed overlay through the deterministic command.
+        """Commit the proposed overlay through the validated selection command.
 
         Every check `create_selection_plan` makes runs again here, against
         Knowledge as it is at activation - not as it was when the provider was
-        asked. That is the optimistic rule §13 requires, and it is why the AI
-        path cannot commit a plan the deterministic path would have refused.
+        asked. That is the optimistic rule §13 requires, and it prevents the AI
+        proposal from bypassing selection policy.
         """
         repo = repository or service.repo
         return service.create_selection_plan(prepared.command, repo)

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import fields
 from typing import Any, cast
 
+from ...chain import draft_source_mismatch
 from ...commands import (
     AnalyzeCommand,
     DraftCommand,
@@ -246,12 +247,13 @@ class DraftOperationHandler(AITaskHandler):
             snapshot["application_id"] != operation.application_id
             or snapshot["source_hash"] != sources.job_snapshot_hash
             or active_snapshot["id"] != sources.job_snapshot_id
-            or analysis["application_id"] != operation.application_id
+            or draft_source_mismatch(
+                operation.application_id, sources.job_analysis_id, analysis, plan
+            )
+            is not None
             or analysis["job_snapshot_id"] != sources.job_snapshot_id
             or active_analysis_id != sources.job_analysis_id
             or _model_hash(analysis["analysis"]) != dependencies.get("job_analysis")
-            or plan.application_id != operation.application_id
-            or plan.job_analysis_id != sources.job_analysis_id
             or active_plan.id != sources.selection_plan_id
             or _model_hash(plan) != dependencies.get("selection_plan")
         ):

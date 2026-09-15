@@ -78,9 +78,7 @@ def user_transition_targets(current: ApplicationStatus) -> tuple[ApplicationStat
     backend's policy without copying the graph or offering a command the status endpoint
     will refuse.
     """
-    return tuple(
-        status for status in ApplicationStatus if user_transition_allowed(current, status)
-    )
+    return tuple(status for status in ApplicationStatus if user_transition_allowed(current, status))
 
 
 def terminal_outcome_after(

@@ -73,11 +73,7 @@ class AnalysisSelection:
             return []
         if expected_plan_id is None:
             raise PreconditionFailed("accepting a gap requires expected_selection_plan_id")
-        hard = {
-            gap.requirement_id
-            for gap in analysis.gaps
-            if gap.severity == "hard" and gap.requirement_id is not None
-        }
+        hard = {gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"}
         unknown = sorted(set(requirement_ids) - hard)
         if unknown:
             raise PreconditionFailed(

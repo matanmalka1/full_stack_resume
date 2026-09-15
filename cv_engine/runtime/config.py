@@ -181,7 +181,6 @@ def mask_value(name: str, value: Any) -> Any:
     return MASK
 
 
-
 @dataclass(frozen=True)
 class Resolved:
     value: Any

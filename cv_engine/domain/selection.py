@@ -157,10 +157,7 @@ def _requirement_ranks(analysis: JobAnalysis) -> dict[str, int]:
     thing is genuinely held carried none, and a mandatory ask ranked level with
     a nice-to-have.
 
-    A gap takes the necessity of the requirement it projects. Gaps from an
-    analysis written before requirement extraction carry no `requirement_id`
-    and stay on one tier, exactly as they ranked before: such an analysis has no
-    requirements, so nothing reaches tier 2 and its selection is unchanged.
+    A gap takes the necessity of the requirement it projects.
     """
     necessity = {
         requirement.requirement_id: 2 if requirement.mandatory else 1

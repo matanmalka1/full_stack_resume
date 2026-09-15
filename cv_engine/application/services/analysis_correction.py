@@ -1,4 +1,4 @@
-"""Apply explicit user classification corrections to an existing analysis."""
+"""Apply explicit user corrections and risk decisions to an existing analysis."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ class AnalysisCorrection:
         """§13: one review-form submission, and the branch it actually takes.
 
         Meaning changed -> one new immutable JobAnalysis carrying the overrides,
-        together with its initial deterministic SelectionPlan, committed
+        together with its initial policy-derived SelectionPlan, committed
         atomically by `save_analysis`. Only Emphasis, fact selection, or gap
         acceptance changed -> one replacement SelectionPlan against the same
         analysis. Neither branch touches the records the user decided against.
@@ -158,7 +158,9 @@ class AnalysisCorrection:
                     "a classification decision creates a new analysis with its own initial "
                     "SelectionPlan; apply the fact overlay to that analysis in a second command"
                 )
-            result = service._correct_interpretations(command, analysis, record, merged)
+            result = AnalysisCorrection.correct_interpretations(
+                service, command, analysis, record, merged
+            )
             return AnalysisDecisionsResult(
                 application_id=command.application_id,
                 job_analysis_id=result.analysis_id,
@@ -186,7 +188,9 @@ class AnalysisCorrection:
             )
 
         if changes_meaning:
-            result = service._revise_classification(command, analysis, record, merged)
+            result = AnalysisCorrection.revise_classification(
+                service, command, analysis, record, merged
+            )
             return AnalysisDecisionsResult(
                 application_id=command.application_id,
                 job_analysis_id=result.analysis_id,

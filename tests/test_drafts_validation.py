@@ -4,9 +4,9 @@ from pathlib import Path
 
 from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
 
-from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.drafts import ClaimLine
+from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.drafts import apply_claim_edit
 from cv_engine.domain.validation import validate_draft
 from cv_engine.util import sha256_text

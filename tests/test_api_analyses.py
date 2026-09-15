@@ -549,11 +549,7 @@ def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(api_
 
 def _hard_gap_requirement_ids(api_worker, analysis_id: str) -> list[str]:
     analysis = api_worker.services.repository.get_analysis(analysis_id)["analysis"]
-    return [
-        gap.requirement_id
-        for gap in analysis.gaps
-        if gap.severity == "hard" and gap.requirement_id is not None
-    ]
+    return [gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"]
 
 
 def _active_plan_id(api_worker, application_id: str) -> str:

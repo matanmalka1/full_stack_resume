@@ -246,22 +246,6 @@ describe("the review decision, on the Application screen", () => {
     expect(screen.queryByLabelText("מסלול")).not.toBeInTheDocument();
   });
 
-  /* A hard gap without requirement identity cannot be accepted by ID. */
-  it("names a hard gap without an id as one it cannot decide", async () => {
-    const unidentified = detail({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] });
-    unidentified.latest_analysis!.analysis.gaps = [
-      { requirement: "5 years of Kubernetes", severity: "hard", reason: "missing" },
-    ];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(unidentified))),
-    );
-
-    renderPage();
-
-    expect(await screen.findByText(/ניתוח מחדש של המשרה יזהה את הדרישה/)).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: /5 years of Kubernetes/ })).not.toBeInTheDocument();
-  });
 
   it("sends an accepted gap with the plan the decision was taken against", async () => {
     let applied = false;

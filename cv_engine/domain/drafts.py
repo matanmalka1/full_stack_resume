@@ -633,4 +633,3 @@ def add_claim(
     )
     target.claims.append(claim)
     return _refresh_selection(draft, facts), claim.claim_id
-

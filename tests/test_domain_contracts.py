@@ -164,7 +164,9 @@ def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> Non
 def test_an_analysis_refuses_an_override_it_cannot_act_on(draft_factory) -> None:
     """An override is what clears an approval reason. A key nothing routes on
     would sit in the record looking like a decision while resolving nothing."""
-    analysis = draft_factory("Python backend developer API React", profile_override="development").analysis
+    analysis = draft_factory(
+        "Python backend developer API React", profile_override="development"
+    ).analysis
     payload = analysis.model_dump(mode="json")
 
     with pytest.raises(ValidationError):

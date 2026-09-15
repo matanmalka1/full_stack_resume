@@ -56,8 +56,8 @@ class RequirementMember(StrictModel):
     mapped against - the same verified-quote mechanism the requirement itself
     uses (stage-1 plan §3.5a addendum) - because a bare label is exactly as
     unverifiable as a requirement's own text would be without a source gate.
-    A member with no attestation, or one that fails verification, cannot be
-    mapped to a concept and stays `undetermined`.
+    A member with no attestation cannot retain inspectable source evidence and
+    stays `undetermined`.
     """
 
     member_id: str
@@ -116,7 +116,7 @@ class InterpretationOverride(StrictModel):
     prior_requirement_id: str
     interpretation: RequirementInterpretation
     #: Required to re-derive coverage when the corrected requirement is a
-    #: `threshold` concept - the demanded value is not stored on `Requirement`
+    #: threshold requirement - the demanded value is not stored on `Requirement`
     #: itself, only computed at extraction time, so a correction that changes
     #: a threshold's interpretation must resupply it explicitly or coverage
     #: cannot be recomputed at all.
@@ -169,7 +169,6 @@ class Requirement(StrictModel):
     requirement_id: str
     text: str
     kind: RequirementKind
-    concept: str | None = None
     mandatory: bool
     coverage: Coverage
     supporting_fact_ids: list[str] = []
@@ -188,8 +187,8 @@ class Gap(StrictModel):
     severity: Literal["warning", "hard"]
     reason: str
     substitute_fact_ids: list[str] = []
-    #: The `Requirement` this gap projects, when one produced it.
-    requirement_id: str | None = None
+    #: The `Requirement` this gap projects and an acceptance names.
+    requirement_id: str
 
 
 OverrideKey = Literal["track", "profile", "emphasis", "language", "fit", "analysis"]

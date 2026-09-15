@@ -72,13 +72,12 @@ export const ReviewDecisionPanel = ({
   const showFit = open.fit;
   const showGapAcceptance = open.gaps;
   const showIncompleteAnalysis = open.incompleteAnalysis;
-  /* Only a hard gap that names a Requirement can be accepted - the id is the whole of
-     what an acceptance records. `GapsSection` applies the same rule per gap; this is the
-     count the checklist and the form's helper sentence read. */
+  /* Only a hard gap is accepted; its requirement ID is the whole of what the
+     acceptance records. */
   const acceptableGapCount =
     classification === null
       ? 0
-      : classification.gaps.filter((gap) => gap.severity === "hard" && gap.requirementId !== null).length;
+      : classification.gaps.filter((gap) => gap.severity === "hard").length;
 
   /* The marks are the gap list's state, so they are merged in at the submission rather
      than copied into this panel's - one value, read where it is sent. */

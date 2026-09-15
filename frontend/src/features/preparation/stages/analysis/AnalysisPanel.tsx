@@ -73,10 +73,9 @@ export const AnalysisPanel = ({
         <Disclosure summary="פרטי הניתוח">
           <div className="flex flex-col divide-y divide-cv-border [&>section]:py-4 [&>section:first-child]:pt-1">
             <RationaleSection rationale={classification.rationale} />
-            {/* The full requirement picture - matched requirements included - once the
-                analysis carries one. An analysis stored before requirement coverage
-                existed carries no `requirements` at all, and falls back to the plain
-                mandatory/preferred term lists it always had. */}
+            {/* The full requirement picture, including matched requirements. When the
+                extractor returned none, the summary falls back to the provider's plain
+                mandatory/preferred terms. */}
             {classification.requirements.length > 0 || classification.unreadableRequirementCount > 0 ? (
               <RequirementCoverageSection
                 requirements={classification.requirements}

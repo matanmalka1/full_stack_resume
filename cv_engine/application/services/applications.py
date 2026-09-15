@@ -17,6 +17,7 @@ from ..commands import (
     UpdateApplicationNotesCommand,
     UpdatedApplicationNotes,
 )
+from ..commands.prep import SOURCE_URL_MAX_CHARACTERS
 from ..errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
@@ -33,7 +34,6 @@ from ..ports import (
 from .base import ServiceBase
 
 JOB_TEXT_MAX_BYTES = 1024 * 1024
-SOURCE_URL_MAX_CHARACTERS = 2048
 _LABEL_MAX_CHARACTERS = 500
 _SOURCE_URL = re.compile(r"https?://[^\s]+\Z", re.IGNORECASE)
 _DUPLICATE_WARNING: dict[DuplicateMatchReason, str] = {

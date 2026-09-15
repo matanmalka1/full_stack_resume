@@ -515,48 +515,6 @@ def test_a_gap_takes_the_necessity_of_the_requirement_it_projects(
     assert selected == ["sales.summary.tech"]
 
 
-def test_an_analysis_without_requirements_ranks_as_policy_1_0_0_did(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
-) -> None:
-    """Gaps from before requirement extraction stay on one tier.
-
-    Such an analysis has no requirements, so nothing reaches the mandatory tier
-    and every substitute sits together above every non-substitute - which is
-    exactly `int(gap_substitute)`. Splitting them by severity here would rerank
-    stored analyses the rework promised to leave alone.
-    """
-    gaps = [
-        Gap(
-            requirement="hard ask",
-            severity="hard",
-            reason="not held",
-            substitute_fact_ids=["sales.summary.tech"],
-        ),
-        Gap(
-            requirement="soft ask",
-            severity="warning",
-            reason="not held",
-            substitute_fact_ids=["sales.summary.new_business"],
-        ),
-    ]
-    selected, manifest = _summary_selection(
-        profile_store, policy_store, fact_store, analysis_document, gaps=gaps
-    )
-    # Both substitute, so severity must not separate them: the semantic score
-    # decides, 20 against 0, exactly as it did under `int(gap_substitute)`.
-    assert selected == ["sales.summary.new_business"]
-    tiers = {
-        candidate.fact_id: candidate.requirement_rank
-        for candidate in manifest.candidates
-        if candidate.section == "Professional Summary"
-    }
-    assert tiers == {
-        "sales.summary.account": 0,
-        "sales.summary.new_business": 1,
-        "sales.summary.tech": 1,
-    }
-
-
 # --- M3 Stage D: one user's pin/exclude overlay -----------------------------
 #
 # The overlay is what §13's `create_selection_plan` receives. It constrains the

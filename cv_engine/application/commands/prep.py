@@ -17,6 +17,8 @@ from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.validation import ValidationReport
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
 
+SOURCE_URL_MAX_CHARACTERS = 2048
+
 
 class IngestCommand(BoundaryDTO):
     company: str

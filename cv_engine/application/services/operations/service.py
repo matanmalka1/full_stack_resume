@@ -17,6 +17,7 @@ from ...ai_configuration import (
     normalize_ai_model,
     normalize_reasoning_effort,
 )
+from ...chain import draft_source_mismatch
 from ...commands import (
     AnalyzeCommand,
     ApprovalResult,
@@ -28,7 +29,6 @@ from ...commands import (
     RenderCommand,
     ReplaceWorkingDraftCommand,
 )
-from ...chain import draft_source_mismatch
 from ...errors import (
     IDEMPOTENCY_KEY_REUSED,
     ApplicationError,
@@ -159,9 +159,10 @@ class OperationService(ServiceBase[OperationRepository]):
             snapshot = drafts.get_snapshot(analysis["job_snapshot_id"])
         except UnknownRecord as exc:
             raise UnknownRecord("unknown source for draft generation") from exc
-        if draft_source_mismatch(
-            command.application_id, command.job_analysis_id, analysis, plan
-        ) is not None:
+        if (
+            draft_source_mismatch(command.application_id, command.job_analysis_id, analysis, plan)
+            is not None
+        ):
             raise LineageBroken("draft sources do not belong to the named Application")
         if command.parent_revision_id is not None:
             readiness = cast(ReadinessRepository, self.repo)
@@ -321,9 +322,10 @@ class OperationService(ServiceBase[OperationRepository]):
             raise UnknownRecord("unknown source for regeneration") from exc
         if (
             working.application_id != command.application_id
-            or analysis["application_id"] != command.application_id
-            or plan.application_id != command.application_id
-            or plan.job_analysis_id != command.job_analysis_id
+            or draft_source_mismatch(
+                command.application_id, command.job_analysis_id, analysis, plan
+            )
+            is not None
         ):
             raise LineageBroken("regeneration sources do not belong to the named Application")
         if working.edit_version != command.expected_edit_version:

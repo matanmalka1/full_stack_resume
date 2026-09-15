@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from ...application.commands.prep import SOURCE_URL_MAX_CHARACTERS
 from ...application.queries import PreparationState, WorkingDraftState
 from .health import HttpSchema
 from .operations import OperationResponse
@@ -14,7 +15,7 @@ class ApplicationIntake(HttpSchema):
     company: str = Field(min_length=1, max_length=500)
     target_role: str = Field(min_length=1, max_length=500)
     job_text: str = Field(min_length=1)
-    source_url: str | None = Field(default=None, max_length=2048)
+    source_url: str | None = Field(default=None, max_length=SOURCE_URL_MAX_CHARACTERS)
 
 
 class DuplicateCheckRequest(ApplicationIntake):
@@ -45,7 +46,7 @@ class CreateApplicationResponse(HttpSchema):
 
 class CreateJobSnapshotRequest(HttpSchema):
     job_text: str = Field(min_length=1)
-    source_url: str | None = Field(default=None, max_length=2048)
+    source_url: str | None = Field(default=None, max_length=SOURCE_URL_MAX_CHARACTERS)
     source_metadata: dict[str, Any] = {}
 
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from ...domain.contracts.analysis import JobAnalysis
 from ..commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
@@ -18,8 +17,6 @@ from .analysis_selection import AnalysisSelection, PreparedSelectionProposal
 from .analysis_selection_service import AnalysisSelectionService
 from .base import ServiceBase
 
-#: Single-user product: there is one actor, and the record says so plainly
-#: rather than inventing an identity the system does not have.
 ACCEPTANCE_ACTOR = "user"
 
 
@@ -78,7 +75,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             selection_policy_version=prepared.selection_policy_version,
             track_emphasis_dependencies=prepared.track_emphasis_dependencies,
             # Validated against the analysis about to be written, not the one
-            # the user decided on: a Track change can remove a rule-derived gap,
+            # the user decided on: an interpretation correction can remove a gap,
             # and an id that no longer names one is refused rather than stored.
             accepted_requirement_ids=sorted(
                 set(
@@ -130,25 +127,3 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         self, command: ApplyAnalysisDecisionsCommand
     ) -> AnalysisDecisionsResult:
         return AnalysisCorrection.apply_analysis_decisions(self, command)
-
-    def _revise_classification(
-        self,
-        command: ApplyAnalysisDecisionsCommand,
-        analysis: JobAnalysis,
-        record: dict,
-        merged_overrides: dict[str, str],
-    ) -> AnalysisResult:
-        return AnalysisCorrection.revise_classification(
-            self, command, analysis, record, merged_overrides
-        )
-
-    def _correct_interpretations(
-        self,
-        command: ApplyAnalysisDecisionsCommand,
-        analysis: JobAnalysis,
-        record: dict,
-        merged_overrides: dict[str, str],
-    ) -> AnalysisResult:
-        return AnalysisCorrection.correct_interpretations(
-            self, command, analysis, record, merged_overrides
-        )

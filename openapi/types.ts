@@ -3154,8 +3154,8 @@ export interface components {
          *     mapped against - the same verified-quote mechanism the requirement itself
          *     uses (stage-1 plan §3.5a addendum) - because a bare label is exactly as
          *     unverifiable as a requirement's own text would be without a source gate.
-         *     A member with no attestation, or one that fails verification, cannot be
-         *     mapped to a concept and stays `undetermined`.
+         *     A member with no attestation cannot retain inspectable source evidence and
+         *     stays `undetermined`.
          */
         RequirementMember: {
             attestation?: components["schemas"]["RequirementAttestation"] | null;

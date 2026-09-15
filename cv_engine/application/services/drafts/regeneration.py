@@ -17,7 +17,6 @@ from ...errors import (
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     LineageBroken,
     ProposalRejected,
-    StateConflict,
     UnknownRecord,
 )
 from ...ports import DraftRepository, RegenerateClaimContext, RegenerateSectionContext

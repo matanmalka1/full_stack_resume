@@ -1447,7 +1447,7 @@ def test_an_any_of_member_with_no_attestation_cannot_be_silently_matched(
         output.output_id for output in completed.outputs if output.output_type == "job_analysis"
     )
     analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-    # Neither member is attested, so neither can be mapped to a concept -
+    # Neither member is attested, so neither retains inspectable evidence -
     # the requirement is `undetermined`, never a false `matched`.
     assert analysis.requirements[0].coverage == "undetermined"
 

@@ -62,11 +62,7 @@ export const GapsSection = ({ acceptance, gaps }: { acceptance: GapAcceptance | 
                 {gap.reason}
               </p>
             );
-          /* Only a hard gap blocks, so only a hard gap is accepted - and only one that
-             names a Requirement, since that id is the whole of what an acceptance
-             records. A hard gap without one comes from an analysis written before
-             requirement extraction; it is named as such rather than given a control that
-             the server would refuse. */
+          /* Only a hard gap blocks, so only a hard gap is accepted. */
           const acceptableId = gap.severity === "hard" ? gap.requirementId : null;
 
           return (
@@ -109,12 +105,6 @@ export const GapsSection = ({ acceptance, gaps }: { acceptance: GapAcceptance | 
                 <>
                   {heading}
                   {reason}
-                  {acceptance !== null && gap.severity === "hard" ? (
-                    <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                      הפער הזה נרשם בניתוח שנעשה לפני חילוץ הדרישות, ולכן אין דרישה מזוהה לקבל אותה. ניתוח מחדש של המשרה
-                      יזהה את הדרישה ויאפשר להכריע עליה.
-                    </p>
-                  ) : null}
                 </>
               )}
             </li>

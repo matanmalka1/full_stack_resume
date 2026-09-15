@@ -159,7 +159,6 @@ def cover_ai_requirement(
             requirement_id=requirement_id_value,
             text=quote,
             kind="presence",
-            concept=None,
             mandatory=mandatory,
             coverage="unsupported",
             missing_components=[
@@ -206,7 +205,6 @@ def cover_ai_requirement(
             requirement_id=requirement_id_value,
             text=text,
             kind="compositional",
-            concept=None,
             mandatory=mandatory,
             coverage=coverage,
             supporting_fact_ids=supporting,
@@ -230,7 +228,6 @@ def cover_ai_requirement(
         requirement_id=requirement_id_value,
         text=text,
         kind=kind if kind in ("threshold", "compositional", "presence") else "presence",  # type: ignore[arg-type]
-        concept=None,
         mandatory=mandatory,
         coverage=decision.coverage,
         supporting_fact_ids=decision.supporting_fact_ids,
@@ -461,11 +458,7 @@ def verify_and_cover_extraction(
 
         quote = attestation.quote
         identity_span = normalize_span(quote)
-        # `ordinal` is constant deliberately. The deterministic extractor needs
-        # one because its dedup key (concept and demanded value) is *narrower*
-        # than its id key (the matched substring), so two genuinely different
-        # requirements can normalize to one `identity_span`
-        # Here every field that separates
+        # `ordinal` is constant deliberately. Every field that separates
         # two proposed requirements - quote, interpretation, kind, demanded
         # value - is already folded into the id, and a position on top would
         # only make two statements of one requirement look like two.

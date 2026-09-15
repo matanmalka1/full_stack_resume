@@ -5120,7 +5120,7 @@
       },
       "RequirementMember": {
         "additionalProperties": false,
-        "description": "One member of an `any-of`/`all-of` requirement.\n\n`label` is display text a provider proposes; it is never used to decide\ncoverage. `attestation`, when present, is what a member is actually\nmapped against - the same verified-quote mechanism the requirement itself\nuses (stage-1 plan §3.5a addendum) - because a bare label is exactly as\nunverifiable as a requirement's own text would be without a source gate.\nA member with no attestation, or one that fails verification, cannot be\nmapped to a concept and stays `undetermined`.",
+        "description": "One member of an `any-of`/`all-of` requirement.\n\n`label` is display text a provider proposes; it is never used to decide\ncoverage. `attestation`, when present, is what a member is actually\nmapped against - the same verified-quote mechanism the requirement itself\nuses (stage-1 plan §3.5a addendum) - because a bare label is exactly as\nunverifiable as a requirement's own text would be without a source gate.\nA member with no attestation cannot retain inspectable source evidence and\nstays `undetermined`.",
         "properties": {
           "attestation": {
             "anyOf": [

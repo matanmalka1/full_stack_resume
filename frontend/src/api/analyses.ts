@@ -182,11 +182,8 @@ interface AnalysisGap {
   requirement: string;
   severity: "hard" | "warning";
   reason: string;
-  /* The Requirement this gap projects, and the only thing an acceptance may name. Absent
-     on an analysis written before requirement extraction existed, whose stored gaps stay
-     authoritative exactly as recorded - and which therefore has no acceptable gap at all,
-     since the server refuses any id that names no hard gap of the analysis being written. */
-  requirementId: string | null;
+  /* The Requirement this gap projects, and the only thing an acceptance may name. */
+  requirementId: string;
 }
 
 export interface Classification {
@@ -211,13 +208,11 @@ export interface Classification {
   keywords: string[];
   mandatoryRequirements: string[];
   preferredRequirements: string[];
-  /* The complete requirement picture, matched requirements included - `gaps` above is
-     its unmet projection. Empty for an analysis stored before requirement coverage
-     existed, whose stored `gaps` stay the authoritative account and are not re-derived
-     from this list. */
+  /* The complete requirement picture, matched requirements included; `gaps` is
+     its unmet projection. */
   requirements: Requirement[];
   unreadableRequirementCount: number;
-  /* Why the classification still needs a decision, as the analysis recorded it. The
+  /* Why the analysis still needs a decision, as the analysis recorded it. The
      backend clears a reason only when an override that actually answers it is applied,
      so this list is what remains open rather than everything ever raised. */
   approvalReasons: string[];
@@ -238,7 +233,11 @@ const gapsFrom = (value: unknown): AnalysisGap[] => {
     return [];
   }
   return value.flatMap((gap) => {
-    if (!isRecord(gap) || typeof gap.requirement !== "string") {
+    if (
+      !isRecord(gap) ||
+      typeof gap.requirement !== "string" ||
+      typeof gap.requirement_id !== "string"
+    ) {
       return [];
     }
     return gap.severity === "hard" || gap.severity === "warning"
@@ -247,7 +246,7 @@ const gapsFrom = (value: unknown): AnalysisGap[] => {
             requirement: gap.requirement,
             severity: gap.severity,
             reason: typeof gap.reason === "string" ? gap.reason : "",
-            requirementId: typeof gap.requirement_id === "string" ? gap.requirement_id : null,
+            requirementId: gap.requirement_id,
           },
         ]
       : [];

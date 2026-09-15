@@ -9,7 +9,6 @@ from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     PreconditionFailed,
-    StateConflict,
     UnknownRecord,
 )
 from ..base import bound_analysis, working_draft_record

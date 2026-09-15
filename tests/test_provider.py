@@ -205,9 +205,7 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
             )
 
         if task == "propose_job_analysis":
-            assert {"fit", "approval_reasons"}.isdisjoint(
-                output_format["schema"]["properties"]
-            )
+            assert {"fit", "approval_reasons"}.isdisjoint(output_format["schema"]["properties"])
 
 
 def test_the_system_prompt_and_versions_come_from_the_contract_file(
