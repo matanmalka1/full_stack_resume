@@ -158,14 +158,8 @@ class DraftGeneration(DraftServiceBase):
         if incomplete:
             raise StateConflict(
                 "the analysis did not read this posting's requirements "
-                f"({', '.join(incomplete)}); a classification decision does not resolve "
-                "this, and generation stays blocked until an incomplete analysis is "
-                "explicitly accepted"
-            )
-        if unresolved:
-            raise StateConflict(
-                "ambiguous classification requires an explicit Track/Profile override: "
-                f"{unresolved}"
+                f"({', '.join(incomplete)}); generation stays blocked until an "
+                "incomplete analysis is explicitly accepted"
             )
         # The same question the state projection answers, asked last for the
         # same reason it is reported last: not knowing what the job is outranks

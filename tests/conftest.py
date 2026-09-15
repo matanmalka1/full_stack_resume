@@ -35,6 +35,7 @@ import cv_engine
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
     AnalyzeCommand,
+    ApplyAnalysisDecisionsCommand,
     ApprovalResult,
     DraftCommand,
     IngestCommand,
@@ -600,6 +601,20 @@ def drafted_application(analyzed_application):
         setup = analyzed_application(company, role, job_text)
         assert setup.analysis_id is not None
         assert setup.selection_plan_id is not None
+        accepted = setup.services.analysis.apply_analysis_decisions(
+            ApplyAnalysisDecisionsCommand(
+                application_id=setup.application_id,
+                job_analysis_id=setup.analysis_id,
+                expected_analysis_id=setup.analysis_id,
+                expected_selection_plan_id=setup.selection_plan_id,
+                accept_incomplete_analysis=True,
+            )
+        )
+        setup = replace(
+            setup,
+            analysis_id=accepted.job_analysis_id,
+            selection_plan_id=accepted.selection_plan_id,
+        )
         drafted = setup.services.drafts.draft(
             DraftCommand(
                 application_id=setup.application_id,
