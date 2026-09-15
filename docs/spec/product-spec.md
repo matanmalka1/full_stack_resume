@@ -1,15 +1,11 @@
 # CV Application Product Specification
 
-Status: **Approved for v2.0 implementation (2026-08-17)**
-
-Persistence, object-storage, secret-configuration, and fixed-root amendments: **2026-08-25**
+Status: **Approved for v2.0 implementation**
 
 ## תקציר מנהלים
 
-המערכת כוללת FastAPI מקומי, ממשק React בעברית, PostgreSQL ל-state מובנה
-ו-object-storage abstraction ל-snapshots ולתוצרים immutable. ברירת המחדל היא
-אחסון מקומי, וניתן לבחור bucket תואם S3 בלי לשנות references במסד.
-המערכת רצה בשני תהליכים מעל אותה שכבת application: ה-API ו-worker ה-Operations.
+כלי מקומי למועמד יחיד שמתאים קורות חיים למשרה, שומר כל טענה קשורה לעובדות
+הקנוניות של המועמד, ומפיק PDF קריא לאדם ול-ATS.
 
 הזרימה המרכזית היא:
 
@@ -21,8 +17,8 @@ Review הוא שער מבוסס חריגים, לא מסך חובה. המערכת
 ApprovedRevision וכל התוצרים הנגזרים ממנה הם immutable.
 
 AI מסווג ומציע ניסוח תחת חוזים מובנים. הוא אינו מקור אמת ואינו יוצר ישויות domain
-ישירות. עובדות canonical, policy דטרמיניסטי ו-validation נשארים סמכותיים. מסלול
-דטרמיניסטי מלא עד Ready PDF ממשיך לעבוד ללא API key.
+ישירות. עובדות canonical, policy דטרמיניסטי ו-validation נשארים סמכותיים. לאחר
+שקיים JobAnalysis, המסלול עד Ready PDF ממשיך לעבוד ללא API key.
 
 ## 1. Authority and interpretation
 
@@ -37,12 +33,12 @@ Authority is ordered as follows:
 4. The implementation and test plans define execution and evidence.
 
 Normative terms such as **must**, **must not**, **should**, and **may** are intentional.
-An internal naming or packaging decision may change without approval when observable
-behavior and every invariant remain unchanged. A semantic change, scope expansion,
+Internal implementation may change without approval when observable behavior and every
+invariant remain unchanged. Semantic changes and scope expansions require approval.
 
 ## 2. Product goal
 
-### Approved tailoring direction — 2026-09-06
+### Approved tailoring direction
 
 The user approved development and sales as equal tailoring targets, with rephrasing,
 shortening, and combining information from canonical facts without changing their
@@ -52,24 +48,19 @@ absolute proof. Unresolved support requires claim-specific clarification; genera
 approval cannot bypass it. New candidate information follows the fact lifecycle,
 separately from wording requests.
 
-Decision D1 was explicitly approved on 2026-09-06: new wording may proceed without
+New wording may proceed without
 claim-by-claim user confirmation when hard checks pass, semantic review covers every
 factual assertion and finds support, and no contradiction or unresolved uncertainty
 remains. Only uncertainty requires focused user clarification. Final CV approval
 remains explicit. This is a policy for accepting reviewed evidence, not a claim that
 AI proves meaning or cannot miss an error.
 
-Sections 10–12 and the companion specifications define the amended acceptance
-contract. [Wording validation design](../tailoring-wording-validation.md) retains
-supporting design details; proposed storage/UI mechanics there are not automatically
-approved by D1. The current extractive-only implementation does not yet implement this
-amendment. No runtime or existing record changes as a result of this documentation edit.
+Sections 10–12 define the acceptance contract. Supporting design details live in
+[Wording validation design](../tailoring-wording-validation.md).
 
-### Analysis decision D5 — semantic authority reset, approved 2026-09-15
+### Semantic analysis authority
 
-D5 supersedes D2–D4 where they assigned general semantic matching to the closed
-deterministic concept vocabulary or required a new analysis to run without an AI
-provider. Job analysis requires an AI provider. The provider proposes requirement
+Job analysis requires an AI provider. The provider proposes requirement
 extraction, interpretation, evidence matching, and Track/Profile/Emphasis classification
 from the exact JobSnapshot and the supplied canonical candidate facts. Deterministic
 policy remains authoritative over source attestation, canonical-fact eligibility,
@@ -122,12 +113,6 @@ views and diagnostic interfaces.
 - The domain must not hardcode `Matan`, a particular filename, or another candidate
   identity. A single `CandidateContext` supplies the candidate-specific policy.
 - There is no candidate selector, candidate CRUD, or multi-candidate UI.
-- React, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, and React Hook
-  Form form the frontend baseline. Radix primitives may be used selectively.
-- PostgreSQL stores structured state and relationships through SQLAlchemy Core and
-  explicit Alembic revisions.
-- Immutable or heavy payloads use a storage-neutral object-store boundary. Local
-  filesystem storage is the default; an S3-compatible bucket is optional.
 - Facts, Profiles, selection policies, prompts, task contracts, and rendering rules
   remain version-controlled files and independent sources of truth.
 - The Web UI is the product interface and reaches the system only through the API,
@@ -135,8 +120,6 @@ views and diagnostic interfaces.
   layer as an internal execution host; it serves no user. Maintenance is an API concern
   like any other. A second user-facing surface for a use-case the API owns has a second
   contract to keep compatible and no capability the first lacks.
-- The API calls the same application services directly; the deterministic workflow
-  reaches Ready with no AI key.
 - The application officially targets macOS. Portable code is preferred, but Windows and
   Linux do not block release.
 - The UI supports current Chrome/Chromium. No other browser is claimed, because none is
@@ -270,14 +253,14 @@ scope decision.
     individually reachable, and every immutable record already produced from it
     (JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision, Artifact,
     Submission) is preserved unchanged.
-20. Every approved output stores exact provenance sufficient to identify its candidate
+21. Every approved output stores exact provenance sufficient to identify its candidate
     context, job context, knowledge context, policies, prompts, provider execution, and
     artifacts.
-21. Normal queries never expose partially committed cross-store mutations.
-22. API and worker concurrency must remain correct through optimistic versions, atomic
+22. Normal queries never expose partially committed cross-store mutations.
+23. API and worker concurrency must remain correct through optimistic versions, atomic
     PostgreSQL claims, leases, idempotency where required, and commit-time precondition
     checks.
-23. v2 starts with an empty database. It is proven by running its own workflow, not by
+24. v2 starts with an empty database. It is proven by running its own workflow, not by
     being pointed at existing data to see what happens.
 
 ## 7. Candidate and application behavior
@@ -286,13 +269,9 @@ One CandidateContext is loaded from Knowledge. It points to canonical identity a
 contact fact IDs and supplies display/filename policy, locale, and timezone. Candidate
 names and contacts remain canonical facts rather than duplicated metadata.
 
-The recruiter-facing filename uses a configured Latin candidate name by default,
-including for Hebrew CVs:
-
-`Matan Malka - <Normalized Target Role> - CV.pdf`
-
-CandidateContext may explicitly override the filename name. Renderers and filename
-normalizers receive CandidateContext and must not contain a candidate literal.
+The recruiter-facing filename uses the configured Latin candidate name by default,
+including for Hebrew CVs. CandidateContext may override it. Renderers and filename
+normalizers must not contain a candidate literal.
 
 Knowledge, artifacts, temporary files, and logs use fixed directories below the project
 root. There is no selectable root, marker, or runtime identity file.
@@ -540,43 +519,11 @@ model behavior and is not a guarantee of universal injection resistance.
 
 Preparation and recruitment are separate views.
 
-`PreparationState` is one of:
-
-- `needs_analysis`
-- `needs_review`
-- `ready_to_draft`
-- `draft_in_progress`
-- `ready_for_approval`
-- `approved`
-- `ready`
-
-`WorkingDraftState` is one of:
-
-- `none`
-- `editing`
-- `validation_failed`
-- `validated`
-- `stale`
-
-An optimistic save conflict is a transient session outcome, not an intrinsic
-WorkingDraftState unless a future durable conflict entity is introduced.
-
-`RecruitmentStatus` is one of:
-
-- `saved`
-- `applied`
-- `recruiter_screen`
-- `interview`
-- `assignment`
-- `final_stage`
-- `offer`
-- `accepted`
-- `rejected`
-- `withdrawn`
-- `closed`
-
-`closed` is archival, not an outcome. The last terminal outcome remains available as a
-transactionally consistent projection and in history.
+Preparation state describes progress toward a usable CV. Working-draft state describes
+the active editable document. Recruitment status describes the application after it is
+saved or submitted. Their exact values and transitions belong to
+`state-and-use-cases.md`. Recruitment never changes preparation history, and `closed`
+is archival rather than a hiring outcome.
 
 Every Application projection includes current preparation and draft states, active
 context IDs, latest approved/ready references, review and stale reasons, active
@@ -618,7 +565,7 @@ Overdue is a computed warning when the date is before today and the Application 
 terminal. There are no notifications.
 
 There is no hard delete through Web. Applications created by mistake may move from
-`saved` to `closed`, or be soft-deleted via `delete_application` (§12): the record is
+`saved` to `closed`, or be soft-deleted via `delete_application`: the record is
 excluded from default listings but every immutable JobSnapshot, JobAnalysis,
 SelectionPlan, ValidationRun, ApprovedRevision, Artifact, Submission, and Operation
 record it produced is preserved unchanged and remains individually reachable.
@@ -637,24 +584,9 @@ belongs to provenance rather than the normal timeline label.
 
 ## 15. Runtime and local security
 
-The system runs as two processes over one database: `uvicorn cv_engine.runtime.asgi:app`
-serves HTTP and starts no background work, and `python -m cv_engine.worker` claims
-queued Operations under a lease. Neither supervises the other; a worker that dies leaves
-its claims to expire for the next worker to reclaim.
-
-The default endpoint is `127.0.0.1:8765`. The port is chosen by whoever starts the
-process, and the app is told the same value through `CV_API_PORT`, because the origin
-policy allows the origin the app believes it answers on. Nothing probes for a free port
-or opens a browser.
-
-Production serves the built React application from FastAPI under the same origin. The
-server binds only to loopback, has no wildcard CORS, and validates `Origin` on mutating
-requests. Development allows only the explicit Vite origin. The application does not add user
-authentication or a CSRF token.
-
-Node and frontend development details are not runtime requirements for the user.
-Playwright-managed Chromium is the normal renderer. Local Chrome is a diagnostic/manual
-fallback only and is never selected silently.
+The product is local-only, binds to loopback, and exposes the Web UI and API on the same origin in production.
+It has no authentication and must not accept mutating request from arbitrary origins.
+The API and Operation worker are separate processes over the same PostgreSQL database; neither supervises the other.
 
 Safe UI settings are limited to automatic generation when review is not required,
 `ai_enabled`, default execution mode (`ai` or `deterministic`), an allowlisted default
@@ -666,27 +598,12 @@ arbitrary model IDs, and secrets remain unavailable to the client.
 
 ## 16. Storage, provenance, and retention
 
-PostgreSQL stores Applications, analyses, SelectionPlans, WorkingDraft, ValidationRun
-metadata/reports, Operations, artifact metadata, submissions, safe settings, and audit.
+PostgreSQL owns structured state and relationships. The configured object store owns
+immutable and heavy payloads. Knowledge files own canonical candidate knowledge. Their
+technical layout is defined by the architecture specification.
 
-The configured object store holds immutable payloads under the same storage-neutral keys:
-
-```text
-snapshots/{application_id}/{snapshot_id}.txt
-revisions/{application_id}/{revision_id}/resume.json
-revisions/{application_id}/{revision_id}/resume.md
-drafts/{application_id}/{working_draft_id}-v{edit_version}.json
-outputs/{application_id}/{revision_id}/{artifact_id}.html
-outputs/{application_id}/{revision_id}/{artifact_id}.pdf
-provider/{application_id}/{operation_id}/{artifact_id}.json
-manifests/{manifest_id}.json
-```
-
-`LocalObjectStore` maps keys below `artifacts_root`;
-`S3ObjectStore` maps the same keys below the configured bucket/prefix. Database rows keep
-the same project-relative references under either backend. Friendly filenames exist
-only at export/download. Storage keys and local paths are never API inputs and are
-validated before access.
+Storage keys and local paths are never API inputs. Downloads are addressed by artifact
+ID, verify the registered content hash, and use a friendly filename.
 
 Each approved revision records a global knowledge-store version for coarse audit and an
 exact knowledge context containing the facts, candidate context, Profile, candidate
@@ -756,30 +673,12 @@ Long-running AI analysis, generation/regeneration, rendering, and materially lon
 browser validation run as persisted Operations outside HTTP requests. Ordinary saves,
 approval, selection editing, and recruitment status changes remain synchronous.
 
-Operation lifecycle is:
-
-- `queued`
-- `running`
-- `succeeded`
-- `failed`
-- `cancelled`
-- `interrupted`
-
-Failure reason is a separate machine-readable code such as `SOURCE_CHANGED`,
-`PROVIDER_TIMEOUT`, `INVALID_OUTPUT`, or `RENDER_FAILED`; it is never added to the status
-enum.
+Operation status and failure reason are separate. Lifecycle values and command behavior
+are defined in `state-and-use-cases.md`.
 
 The application permits one mutating Operation per Application, one global render/browser
 Operation, and low AI concurrency with a default ceiling of two. Locks are resource
 specific rather than one global mutex.
-
-Operations store a full structured, secret-free payload and hash, resource IDs,
-expected versions/hashes, provider/model/reasoning effort, timestamps, phases, safe user message,
-technical log reference, and failure metadata. The shared Operation runner uses atomic
-PostgreSQL claiming, leases, and heartbeat. The worker process hosts the background
-worker loops, and the claim contract holds for more than one of them: whichever claims a
-row first owns it. Expired queued/running work becomes `interrupted` after restart;
-AI/browser work is never resumed mid-call.
 
 Queued cancellation is immediate. Running cancellation is best-effort and prevents
 activation. A completed output after cancellation is recorded as inactive evidence.
@@ -792,13 +691,8 @@ explicit transient network/provider/browser-startup failures.
 
 ## 19. API and UX contracts
 
-The HTTP API is `/api/v1`. It is resource-oriented with action endpoints for real
-use-cases. Asynchronous work returns `202 Accepted` and an Operation `Location`.
-Synchronous entity creation returns `201 Created`.
-
-API request/response DTOs are explicit Pydantic models separate from domain objects,
-database rows, and filesystem paths. OpenAPI produces generated TypeScript types; a
-small handwritten client performs requests. CI fails on generated-type drift.
+The HTTP API is `/api/v1`. It exposes application use-cases without leaking database or
+filesystem representations. Asynchronous work returns an Operation reference.
 
 WorkingDraft HTTP updates use ETag/If-Match and return `409 Conflict` on mismatch.
 Domain precondition failures such as stale validation return `412`. Problems use a
@@ -809,60 +703,20 @@ NeedsReview and `ValidationRun(passed=false)` are successful domain outcomes, no
 errors. The API enforces an explicit body-size limit; oversized job text returns
 `413 Payload Too Large`.
 
-Artifacts are accessed only by artifact ID. Download resolves the registered reference,
-verifies the stored content hash, and supplies a friendly Content-Disposition filename.
-Containment is the backend's: the local store keeps every key below `artifacts_root`;
-the S3 store validates the key against its bucket and prefix. No general path endpoint
-exists.
-
 Data export uses a versioned v2 schema. A compatibility format is added only when a
 real existing consumer is identified; v2 does not create speculative compatibility.
 
-
-
-
 ## 20. v2.0 Definition of Done
 
-v2.0 is Release Ready only when all of the following are demonstrably true:
+v2.0 is Release Ready when a user can complete the Web workflow from job intake through
+a validated Ready PDF, understand and resolve every blocker, and track the subsequent
+recruitment lifecycle without knowing technical identifiers or architecture. The
+workflow must preserve every invariant in this specification, including immutable
+history, exact approval provenance, unsupported-claim blocking, concurrency safety,
+recoverable Operations, and deterministic work from an existing analysis through Ready.
 
-- [ ] The API and worker processes start the local application without manual Node steps.
-- [ ] The API enforces the action policy, and the worker executes only persisted
-      Operations through the shared Operation runner.
-- [ ] One Application completes the full Web vertical slice through Ready PDF.
-- [ ] The central failure paths are exercised through the same slice.
-- [ ] Review is exception-based and every review reason is explicit and resolvable.
-- [ ] A configured provider can create a new analysis; after an analysis exists, the
-      deterministic downstream workflow completes through Ready without further AI.
-- [ ] The five current AI tasks return Proposals and cannot bypass deterministic policy;
-      the sixth task, `assess_claim_support`, is implemented with its evidence lifecycle
-      before D1 wording is enabled.
-- [ ] D1 accepts fully reviewed supported wording without individual confirmation,
-      blocks uncertainty/contradiction, preserves evidence attribution and staleness,
-      and passes the Connecteam and WeDev acceptance scenarios.
-- [ ] Unsupported or unlinked edits are preserved but cannot pass approval.
-- [ ] Approval is bound to one exact WorkingDraft, validation, knowledge context,
-      snapshot, analysis, and SelectionPlan.
-- [ ] Ready resolves to an exact ApprovedRevision and exact passing artifacts.
-- [ ] Current preparation, blockers, staleness, active work, actions, and Ready state are
-      understandable from the UI without opening logs.
-- [ ] Normal Web use does not require technical IDs, hashes, paths, or architecture.
-- [ ] Concurrent saves and Operations preserve all invariants.
-- [ ] Idempotency, cancellation, retry, lease expiry, and SOURCE_CHANGED behavior pass.
-- [ ] Knowledge journal recovery is deterministic or explicitly quarantined under every
-      tested crash window.
-- [ ] Dashboard, timeline, tracking, internal/external submissions, corrections, and
-      next actions work after the vertical-slice gate.
-- [ ] Hebrew UI, Hebrew/English CV preview, RTL/LTR behavior, and Chrome checks
-      pass at their defined coverage levels.
-- [ ] Alembic topology and empty-database upgrade pass, and the configured environment's
-      PostgreSQL/object-store backup policy is verified outside the application.
-- [ ] Every applicable v1 safety invariant and material regression risk remains
-      represented and passing. Individual legacy test cases need not be retained when
-      a smaller scenario or matrix provides the same failure signal.
-- [ ] Linux/Chromium CI passes and macOS release verification passes.
-- [ ] A manual OpenAI smoke run records valid structured analysis/draft output and
-      execution metadata.
-- [ ] An acceptance report records pass, fail, and remaining evidence for every item.
+The executable evidence and release matrix are defined exclusively in
+`test-and-acceptance-plan.md`.
 
 ## 21. Change and stop conditions
 
