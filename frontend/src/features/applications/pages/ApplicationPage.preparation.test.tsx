@@ -705,6 +705,45 @@ describe("ApplicationPage at the preparation route", () => {
     expect((retryRequest?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe("retry:op-1");
   });
 
+  /* QA report finding 2: `available_actions`/`recommended_action` still name a plain
+     "analyze" after a terminal failure - the projection never withdrew it - but the
+     screen used to show only the Operation panel's own "retry", which can only ever
+     resend the failed run's own provider/model. A reader who switched Settings to
+     deterministic after an AI failure had no control on this screen that read that
+     switch. The fix renders this step's own action panel beside the failure, so its
+     analyze button - already wired to current Settings via `useAnalyzeCommand` - is
+     reachable without leaving the screen or predicting the projection in a new way. */
+  it("offers a fresh analysis against current Settings beside retry after a terminal analysis failure", async () => {
+    const failed = queued({
+      status: "failed",
+      is_terminal: true,
+      failure_code: "INVALID_OUTPUT",
+      available_actions: ["retry"],
+    });
+    const fresh = queued({ id: "op-fresh" });
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === ANALYSES_PATH && init?.method === "POST") return Promise.resolve(acceptedResponse(fresh));
+      if (url.endsWith("/operations/op-1")) return Promise.resolve(jsonResponse(failed));
+      return Promise.resolve(jsonResponse(detail({ latest_operation: failed, active_operation: null })));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage(deterministicSettings);
+
+    /* Both ways forward are on screen at once: retry (same provider) and a fresh
+       analyze (current Settings - deterministic here). Neither is offered instead of
+       the other; the projection permits both and the reader chooses. */
+    expect(await screen.findByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+    await clickEnabledButton("ניתוח המשרה");
+
+    const request = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(request?.[0]).toBe(ANALYSES_PATH);
+    /* Deterministic Settings omit `provider` entirely rather than sending the AI
+       provider the failed run used - a fresh command, not the same one retried. */
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1" });
+  });
+
   it("offers analysis after creation scheduling failed and does not retain creation news over later server work", async () => {
     vi.stubGlobal(
       "fetch",

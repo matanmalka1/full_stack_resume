@@ -150,19 +150,29 @@ export const ApplicationPage = () => {
               </Callout>
             )}
 
-            {/* Analysis work and preparation content are mutually exclusive product
-                states. The projection can still say `needs_analysis` for a poll after
-                the Operation starts (and after it succeeds); rendering both exposed the
-                internal state machine as a flash of an obsolete call to action. One
-                Operation panel call site covers every viewState - it is the same report
-                whether analysis is still running or already history. */}
+            {/* Live analysis work and preparation content are mutually exclusive: the
+                projection can still say `needs_analysis` for a poll after the Operation
+                starts, and rendering both then exposed the internal state machine as a
+                flash of an obsolete call to action. One Operation panel call site covers
+                every viewState - it is the same report whether analysis is still running
+                or already history. */}
             {(viewState === "processing" || viewState === "analysis_failed") && watched === undefined
               ? analysisPending
               : null}
             {watched === undefined ? null : (
               <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={watched} />
             )}
-            {viewState === "content" ? <PreparationView detail={detail} onQueued={watch} /> : null}
+            {/* A failed run is not the live-work exclusion above: it is history, and the
+                projection's own `available_actions`/`recommended_action` do not collapse
+                just because the last run failed - "analyze" is still there, and still
+                means a fresh run against current Settings, not a repeat of the failed
+                one's provider. Withholding this step's action panel here left the retry
+                inside the Operation panel as the only way forward, which can only ever
+                repeat the same provider/model that just failed - even after Settings is
+                switched to deterministic. */}
+            {viewState === "content" || viewState === "analysis_failed" ? (
+              <PreparationView detail={detail} onQueued={watch} />
+            ) : null}
 
             {/* The posting the CV is tailored to, and the files the work produced: reference
                 the reader checks or downloads, folded away so the step above stays the
