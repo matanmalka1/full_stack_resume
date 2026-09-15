@@ -37,6 +37,7 @@ def _build_case(draft_factory, case: dict):
         track_override=overrides.get("track") or case["track"],
         profile_override=overrides.get("profile") or case["profile"],
         emphasis_override=overrides.get("emphasis") or case["emphasis"],
+        language_override=overrides.get("language") or case["language"],
         application_id="00000000-0000-0000-0000-000000000001",
         job_snapshot_id="00000000-0000-0000-0000-000000000002",
     )
