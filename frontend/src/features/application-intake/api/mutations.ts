@@ -3,7 +3,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createApplication, invalidateApplicationViews, startAnalysis } from "@/api/applications";
 import type { ApplicationIntake } from "@/api/contracts";
 import { ApiProblem, type ProblemDetails } from "@/api/client";
-import { executionProvider, settingsQueryOptions } from "@/api/settings";
 
 export interface CreatedIntakeApplication {
   applicationId: string;
@@ -23,12 +22,10 @@ export const createIntakeApplication = async (
   void invalidateApplicationViews(queryClient, created.application_id);
 
   try {
-    const { settings } = await queryClient.ensureQueryData(settingsQueryOptions);
     await startAnalysis(
       created.application_id,
       created.job_snapshot_id,
       `create:${created.application_id}:${created.job_snapshot_id}`,
-      executionProvider(settings),
     );
 
     return { applicationId: created.application_id, analysisQueued: true, analysisProblem: null };
