@@ -469,30 +469,32 @@ temporary browser-startup failures.
 
 ## 11. AI adapter
 
-The provider-neutral protocol currently implements six of the seven target tasks defined
-in product-spec §12. `assess_claim_support`, the seventh task introduced by D1
+The provider-neutral protocol implements five of the six target tasks defined in
+product-spec §12. `assess_claim_support`, the sixth task introduced by D1
 (2026-09-06), remains design work and must not be represented as an available provider
 capability until its evidence lifecycle and activation rules are implemented.
 The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.
 
-`propose_requirement_extraction` is separate from classification and wording review.
-Source quotes/offsets and explicit interpretation are validated before deterministic
-coverage/gap calculation. Requirement identities incorporate interpretation and extractor
+`analyze_job` proposes requirement extraction, interpretation, evidence-linked coverage,
+and classification in one stateless structured response. Source quotes/offsets, canonical
+fact eligibility, an independently derived structural completeness denominator, and
+internally checkable numeric/compositional consistency are validated before deterministic
+Fit/gap calculation. Requirement identities incorporate interpretation and extractor
 version; corrections create another immutable JobAnalysis under the same Application.
 New interpretation, attestation and understanding fields absent from old records remain
 NULL unless safely derivable. A version-aware reader preserves old recorded gaps and
 IDs rather than reconstructing history with the new extractor. JSONB contract changes
 require historical-read coverage even when no Alembic migration is needed.
 
-Malformed thresholds are invalid provider output; well-formed thresholds with an
-unsupported scale yield undetermined coverage. Optional provider tags alone cannot
-establish boundary applicability or positive coverage. Extraction is active under
-these conservative rules: an unmapped concept or unresolved applicability remains
-`undetermined` and may block through `ANALYSIS_INCOMPLETE`; expanding deterministic
-coverage requires explicit mapping and validation contracts rather than optimistic
-inference.
+Malformed thresholds are invalid provider output. A provider-supplied held value is not
+accepted as numeric evidence merely because it agrees arithmetically with the proposed
+coverage; it must be traceable to canonical structured evidence or remain unresolved.
+Optional provider tags or relations alone cannot establish boundary applicability or
+positive coverage. The closed concept vocabulary is not a semantic authority in this
+path. Unresolved completeness or applicability remains `undetermined` and may block
+through `ANALYSIS_INCOMPLETE`.
 
 Each task receives minimal allowed context. Provider text and fact IDs pass schema and
 semantic support validation. A valid ID paired with strengthened wording fails. Claims

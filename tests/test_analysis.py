@@ -670,6 +670,15 @@ def test_no_concept_shadows_a_legacy_rule_gap(fact_store, requirement_concepts) 
                 )
 
 
+def test_company_age_does_not_create_a_development_experience_gap() -> None:
+    """A global years match cannot establish what the number describes."""
+    gaps = derive_gaps(
+        "we are a company with 15 years in the market", Track.DEVELOPMENT
+    )
+
+    assert gaps == []
+
+
 # --------------------------------------------------------------------------
 # Fit that was never assessed (Stage 2)
 # --------------------------------------------------------------------------

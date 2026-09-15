@@ -256,8 +256,9 @@ failures. Required behavior includes:
   change need not discard claim evidence but still invalidates document validation.
 - API and worker application paths enforce the same approval conditions, including
   chained flows. Prior approved records retain their evidence and artifacts unchanged.
-- The no-key deterministic pipeline still reaches Ready without semantic-review calls
-  or fabricated review metadata.
+- Given an existing eligible JobAnalysis, the no-key deterministic downstream pipeline
+  still reaches Ready without semantic-review calls or fabricated review metadata; it
+  does not claim to create a new analysis.
 
 The [Connecteam and WeDev cases](../tailoring-acceptance-cases.md) supply factual and
 editorial acceptance examples, including HubSpot fabrication, personal-project
@@ -266,31 +267,38 @@ not real model accuracy. Manual live evaluation must inspect both supported new
 wording and deliberately unsupported variants from both tracks before release.
 No new passing evidence is asserted by this specification amendment.
 
-### D2–D4 analysis acceptance — reconciled 2026-09-07
+### D5 semantic-analysis acceptance — approved 2026-09-15
 
 Extend the nearest existing tests for these material distinctions:
 
-- AI extraction is primary; legacy keyword gaps cannot silently re-enter its analysis.
+- AI semantic analysis is primary; legacy keyword/concept gaps cannot silently re-enter
+  or veto its analysis.
 - Exact quotes do not authorize incorrect requirement interpretation. Alternatives,
   responsibilities and company descriptions retain their distinct meanings.
-- Missing/incorrect provider tags cannot suppress an applicable canonical boundary or
-  produce unsupported positive coverage. Unresolved applicability remains explicit.
-- A malformed threshold fails as invalid output; a valid unsupported scale yields
-  undetermined coverage rather than an invented lack of candidate experience.
+- Missing/incorrect provider relations or tags cannot suppress an applicable canonical
+  boundary or produce unsupported positive coverage. Unresolved applicability remains
+  explicit.
+- A malformed threshold fails as invalid output. Arithmetic agreement between a proposed
+  held value and coverage is insufficient unless the held value is traceable to canonical
+  structured evidence; otherwise the numeric comparison remains unresolved.
+- Completeness is checked against an independently derived structural denominator. Empty
+  `unmapped_statements`, broad source spans, and a single apparently complete provider
+  response cannot certify their own completeness. Omission, duplication, and conflicting
+  granularity are covered explicitly.
 - Proceeding with incomplete analysis resolves only that reason; a separate hard gap
   and its low Fit survive until separately handled.
 - Interpretation changes change requirement identity and invalidate inherited gap
   acceptances; historical IDs, gaps, records and missing metadata remain unchanged.
-- Classifier disagreement alone does not force a professional choice under D4;
+- Classification uncertainty alone does not force a professional choice under D5;
   factual, incomplete-analysis and integrity blockers remain enforced.
 - With injected instructions, actual requirements retain their meaning and no injected
   actionable requirement changes gaps, Fit, coverage or review decisions. Include both
   deletion/softening and addition attacks. Mock-provider enforcement and manual live
   model evaluation are reported separately; neither is a universal safety proof.
-- The explicit deterministic no-key pipeline remains usable. Connecteam and WeDev
-  outcomes are reported per execution mode, not assumed identical across modes.
+- Without a configured provider, creating a new analysis is unavailable and never falls
+  back silently. Historical analyses and deterministic downstream workflows remain usable.
 
-The live release evaluation also covers `propose_requirement_extraction`, including
+The live release evaluation also covers `analyze_job`, including
 adversarial additions and omissions, alongside D1 writer/reviewer evaluation.
 
 ### Provider and integration coverage

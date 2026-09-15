@@ -268,13 +268,4 @@ def derive_gaps(lowered: str, track: Track) -> list[Gap]:
                 substitute_fact_ids=["sales.tool.priority", "sales.leadership.pipeline"],
             )
         )
-    years = [int(value) for value in re.findall(r"(\d+)\s*\+?\s*years?", lowered)]
-    if years and max(years) >= 5 and track is Track.DEVELOPMENT:
-        gaps.append(
-            Gap(
-                requirement=f"{max(years)}+ years of Development experience",
-                severity="hard",
-                reason="Canonical professional Development history does not meet this threshold.",
-            )
-        )
     return gaps

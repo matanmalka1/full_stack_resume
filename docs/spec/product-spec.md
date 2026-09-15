@@ -84,30 +84,43 @@ supporting design details; proposed storage/UI mechanics there are not automatic
 approved by D1. The current extractive-only implementation does not yet implement this
 amendment. No runtime or existing record changes as a result of this documentation edit.
 
-### Analysis decisions D2–D4 — reconciled 2026-09-07
+### Analysis decision D5 — semantic authority reset, approved 2026-09-15
 
-D2 makes validated AI requirement extraction the primary requirement source in AI
-mode. Source attestation and interpretation checks precede deterministic coverage,
-gap and Fit calculation. Legacy rule gaps are not automatically unioned into this
-analysis; a material discrepancy is investigated rather than resolved in favor of
-rules by default. Canonical boundary facts remain authoritative. Their applicability
-must not depend solely on optional provider tags; unresolved applicability cannot be
-reported as verified coverage. No new negative candidate facts are required merely
-to represent missing support.
+D5 supersedes D2–D4 where they assigned general semantic matching to the closed
+deterministic concept vocabulary or required a new analysis to run without an AI
+provider. Job analysis requires an AI provider. The provider proposes requirement
+extraction, interpretation, evidence matching, and Track/Profile/Emphasis classification
+from the exact JobSnapshot and the supplied canonical candidate facts. Deterministic
+policy remains authoritative over source attestation, canonical-fact eligibility,
+structural completeness, internally checkable numeric and compositional consistency,
+requirement identity, Fit calculation, review routing, provenance, immutable activation,
+and every later claim-validation and approval boundary.
 
-D3 retains an explicitly selected deterministic path through Ready, with limited
-coverage of common development requirements and honest incomplete-analysis reporting.
-It is not a second general language-understanding engine and is never a silent fallback.
+A canonical fact ID proves that the fact exists; it does not by itself prove that the
+fact semantically satisfies a requirement. Provider self-reports likewise do not prove
+source completeness, numeric values, or boundary applicability. Positive coverage must
+retain inspectable evidence, and any material condition that cannot be established by
+the implemented independent gates remains explicit and reviewable rather than being
+silently converted to either matched or unsupported.
 
-D4 requires a user decision for an unresolved material choice of development versus
-sales, professional experience included/omitted, professional emphasis, or proceeding
-despite a material gap. Classifier disagreement alone is not such a choice. This does
-not remove factual, incomplete-analysis, integrity, or execution blockers.
+Legacy rule gaps and the concept vocabulary do not constrain or merge into AI-mode
+coverage. In particular, deterministic rules do not attempt general semantic matching.
+Canonical boundary facts remain authoritative, and their applicability must not depend
+solely on an optional provider relation or tag. Completeness uses an independently
+derived structural denominator; a provider cannot certify its own completeness merely
+by returning no unmapped statements.
 
-These decisions amend the analysis target contract; they do not claim implementation.
-Stage 1 addresses job understanding before broader evidence matching, content budgets,
-and wording. Detailed unresolved mechanisms in the implementation plan remain design
-work, not implied permission to weaken these contracts.
+Without a configured provider, the application cannot create a new JobAnalysis. It may
+still read historical analyses and perform deterministic editing, validation, approval,
+rendering, integrity, export, and recruitment workflows whose prerequisites already
+exist. Provider failure never triggers a silent rules-based analysis. The UI presents
+provider configuration or retry instead of a fabricated semantic result.
+
+A user decision remains required for a material professional choice, a hard requirement
+gap, low Fit, incomplete analysis, or a manual correction of requirement meaning or
+coverage. Such a correction creates a new immutable JobAnalysis, re-derives dependent
+Fit/gaps and selection state, and never rewrites or silently inherits incompatible
+historical decisions.
 
 ### Current product contract
 
@@ -177,10 +190,11 @@ The product includes:
   through a replacement fact, and attachment to existing Profile sections. Contextual
   claim capture and use remain available in preparation flows. This surface is not a
   general Knowledge Manager and does not edit Profile definitions or arbitrary Knowledge.
-- OpenAI Responses API integration for six implemented Proposal tasks through strict
-  structured contracts. The approved seventh target task, `assess_claim_support`, is
+- OpenAI Responses API integration for five implemented Proposal tasks through strict
+  structured contracts. The approved sixth target task, `assess_claim_support`, is
   delivered only with the D1 evidence lifecycle described in sections 10–12.
-- A deterministic offline flow through Ready when no OpenAI key is configured.
+- Deterministic work from an existing JobAnalysis through Ready without further AI;
+  creating a new JobAnalysis requires a configured AI provider.
 - A Dashboard, Application Detail, unified timeline, recruitment tracking, next action,
   internal and external submissions, status correction, and overdue warnings after the
   first vertical slice is complete.
@@ -416,9 +430,10 @@ The precise clarification command and proposal-presentation lifecycle remain des
 work; no generic acknowledgement endpoint is authorized as a bypass.
 
 Review failure, cancellation, invalid output, missing assertion coverage, or stale
-evidence cannot make wording eligible. Provider failure remains explicit, with no
-silent fallback. The deterministic no-key path continues through Ready using its own
-proofs and without inventing provider-review metadata.
+evidence cannot make wording eligible. Provider failure remains explicit, with no silent
+fallback. Once a JobAnalysis exists, the deterministic downstream path continues through
+Ready using its own proofs and without inventing provider-review metadata; creating a new
+analysis still requires the configured provider.
 
 Autosave uses debounce/blur and optimistic concurrency. A stale save returns a conflict
 and does not overwrite. The UI shows the user's text and the current text for an
@@ -479,11 +494,11 @@ the later tracking milestone, not the first vertical slice.
 
 The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
 protocol.
-The AI task catalog has six implemented tasks and one approved target task:
+The AI task catalog has five implemented tasks and one approved target task:
 
-- `propose_requirement_extraction` — quoted requirements and explicit interpretation;
-  it cannot decide coverage, gaps, Fit, or approval.
-- `propose_job_analysis`
+- `analyze_job` — quoted requirements, explicit interpretation, evidence-linked coverage,
+  and classification as one Proposal; it cannot decide Fit, review routing, approval, or
+  activation.
 - `propose_selection_plan`
 - `draft_resume`
 - `regenerate_section`
@@ -503,18 +518,20 @@ Each task has explicit input/output schemas, semantic contract version, prompt v
 and hash, and structured output validation. Calls are stateless and do not depend on a
 prior response or hidden conversation.
 
-The provider receives only the relevant JobSnapshot, allowed facts, required analysis
-or plan, and policies needed for the task. It does not receive the entire fact store or
-historical artifacts by default. The UI explains that job descriptions and relevant
-profile facts may be sent when AI is enabled; no per-call consent dialog is required.
+The provider receives only the relevant JobSnapshot, canonical candidate facts required
+for evidence matching, the profile catalogue, and the policies needed for the task. It
+does not receive historical artifacts by default. The UI explains that job descriptions
+and canonical candidate facts may be sent when AI is enabled; no per-call consent dialog
+is required.
 
 An OpenAI key is backend/environment configuration only. It is resolved through the
 runtime configuration contract but is environment-only: `.env` and project config
 cannot enable it. It is never stored in PostgreSQL, sent to React, or written to logs.
 Settings expose only whether it is configured.
 
-When a key is configured, `ai_enabled` defaults to true. Commands still choose an
-explicit `ai` or `deterministic` mode. There is no ambiguous `auto` execution mode and
+When a key is configured, `ai_enabled` defaults to true. New analysis uses that configured
+provider; deterministic downstream commands remain explicit where applicable. There is
+no ambiguous `auto` execution mode and
 no dynamic model discovery. Settings offer a backend-supplied allowlist of supported
 models and `low`/`medium`/`high` reasoning effort. The selected defaults are copied into
 each new Operation, so a later settings change cannot alter queued work. Clients cannot
@@ -529,7 +546,7 @@ hidden chain-of-thought are never retained.
 Job descriptions and user content are untrusted data. They may influence the proposed
 content but never policy, allowed facts, validation, approval, or output schemas.
 
-Under D2, posting content can legitimately change extracted requirements and their
+Under D5, posting content can legitimately change extracted requirements and their
 derived gaps. Prompt-injection instructions are not additional job requirements.
 Acceptance compares the same posting with and without adversarial instructions:
 actual requirements retain their interpretation, and injected instructions must not
@@ -833,9 +850,10 @@ v2.0 is Release Ready only when all of the following are demonstrably true:
 - [ ] One Application completes the full Web vertical slice through Ready PDF.
 - [ ] The central failure paths are exercised through the same slice.
 - [ ] Review is exception-based and every review reason is explicit and resolvable.
-- [ ] The deterministic offline workflow completes through Ready.
-- [ ] The six current AI tasks return Proposals and cannot bypass deterministic policy;
-      the seventh task, `assess_claim_support`, is implemented with its evidence lifecycle
+- [ ] A configured provider can create a new analysis; after an analysis exists, the
+      deterministic downstream workflow completes through Ready without further AI.
+- [ ] The five current AI tasks return Proposals and cannot bypass deterministic policy;
+      the sixth task, `assess_claim_support`, is implemented with its evidence lifecycle
       before D1 wording is enabled.
 - [ ] D1 accepts fully reviewed supported wording without individual confirmation,
       blocks uncertainty/contradiction, preserves evidence attribution and staleness,

@@ -174,16 +174,14 @@ KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
 
 `ANALYSIS_INCOMPLETE` reports an approval reason that no classification decision
-answers: `extraction-failed` for requirements that were stated and none of them read,
-`requirements-absent` for a posting that stated nothing readable as a requirement at
-all, `requirements-unmapped` for requirement-bearing statements no concept matched,
-under D2 `coverage-undetermined` for mandatory requirements whose coverage cannot be
-resolved, and `low-confidence-extraction` for a stored confidence the extraction score
-alone holds below the threshold - one no classification score could lift over it.
-Naming the Track or Profile resolves none of them. Repeating the unchanged deterministic
-path is not a resolution. A corrected, newly validated analysis may remove the reason;
-otherwise proceeding requires the explicit `analysis` override, which answers nothing
-else. Missing evidence is not evidence of missing experience.
+answers: the independently derived structural denominator found requirement-bearing
+source units the Proposal omitted, a source unit could not be interpreted safely, or
+numeric/support/boundary applicability remained unresolved after the independent gates.
+The provider cannot clear this reason through an empty self-reported omissions list or
+an aggregate confidence value. Naming the Track or Profile resolves none of it. A
+corrected, newly validated analysis may remove the reason; otherwise proceeding requires
+the explicit `analysis` override, which answers nothing else. Missing evidence is not
+evidence of missing experience.
 
 A review reason advertises an action only when that action can actually close it. Which
 overrides answer which reason, and which review reason each is reported as, are one table
@@ -444,13 +442,16 @@ exempt for a deleted fact.
 
 ### `analyze_job(application_id, job_snapshot_id, provider, ...)`
 
-Asynchronous and idempotent. Deterministic mode runs the explicit rule/concept path.
-In AI mode, `propose_requirement_extraction` supplies the primary requirements after
-source and interpretation validation; coverage, applicable canonical boundaries,
-gaps and Fit are derived by application/domain policy. Legacy rule gaps are not
-unioned into that result. `propose_job_analysis` remains a separate classification
-Proposal and cannot erase hard gaps established from the validated requirements or
-override factual policy or schemas. Every successful activation atomically
+Asynchronous and idempotent. Creating a new analysis requires the configured AI provider.
+`analyze_job` supplies one structured Proposal containing source-attested requirements,
+their interpretation, evidence-linked coverage, and classification. Deterministic policy
+validates source identity, canonical-fact eligibility, independent structural completeness,
+internally checkable numeric/compositional consistency, profile legality, and requirement
+identity, then derives gaps, Fit, and review reasons. A fact ID or provider-declared
+relation is not by itself proof of semantic support or boundary applicability. Unresolved
+material completeness, support, or boundary applicability remains explicit and reviewable.
+Legacy concept/rule gaps are not unioned into or allowed to veto this result. Every
+successful activation atomically
 creates an immutable JobAnalysis and its initial immutable deterministic SelectionPlan,
 with the plan's frozen candidate/policy context. It returns both IDs and NeedsReview as
 a successful outcome when applicable. This guarantees that the no-review path can call
@@ -460,7 +461,7 @@ Preconditions:
 
 - snapshot belongs to Application
 - expected Knowledge/policy inputs still match before activation
-- AI mode requires a configured provider
+- a configured provider is available
 
 For AI mode, the application resolves the current allowlisted model and reasoning
 preference before writing the Operation. Those values are part of the immutable payload
