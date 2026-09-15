@@ -56,9 +56,7 @@ def reconcile_attestation(
         return RequirementAttestation(quote=actual, start=start, end=end)
 
     nearby: list[tuple[int, int]] = []
-    for candidate_start in range(
-        max(0, start - 1), min(len(source_text), start + 1) + 1
-    ):
+    for candidate_start in range(max(0, start - 1), min(len(source_text), start + 1) + 1):
         for candidate_end in range(
             max(candidate_start + 1, end - 1),
             min(len(source_text), end + 1) + 1,

@@ -231,8 +231,8 @@ const reviewDetail = (
         user_override: {},
         gaps: [{ requirement: "Kubernetes", severity: "hard", reason: "missing", requirement_id: "req-1" }],
       },
-      provider: "deterministic",
-      model: "rules-v1",
+      provider: "openai",
+      model: "gpt-5.6-terra",
       created_at: "2026-08-24T07:00:00Z",
     } as ApplicationDetail["latest_analysis"],
   });

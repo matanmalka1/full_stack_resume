@@ -1,6 +1,6 @@
-"""The deterministic pipeline, driven through the application layer.
+"""The downstream deterministic pipeline, driven through the application layer.
 
-`ingest -> analyze -> draft -> validate -> approve -> render -> ready ->
+`existing analysis -> draft -> validate -> approve -> render -> ready ->
 reconcile`, with no AI key and no HTTP server. This is the check CLAUDE.md
 names as the one that has caught real defects here - approval silently
 destroying unimported manual edits - and it belongs to the engine rather than
@@ -33,6 +33,8 @@ from cv_engine.application.maintenance import (
     build_application_export,
     reconcile_artifacts,
 )
+from cv_engine.application.services.analysis import PreparedAnalysis
+from cv_engine.application.services.analysis_selection import AnalysisSelection
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.runtime.composition import Services
 
@@ -47,10 +49,38 @@ def no_ai_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
 
+def _seed_existing_analysis(services, ingested, classify):
+    analysis = classify(ACCOUNT_MANAGER_JOB, profile_override="account-manager")
+    knowledge = services.analysis.load_knowledge()
+    profile = knowledge.profiles.get(analysis.profile)
+    return services.analysis.activate(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        ),
+        PreparedAnalysis(
+            result=analysis,
+            plan_manifest=AnalysisSelection.manifest(analysis, knowledge),
+            provider="test",
+            model="existing-analysis-fixture",
+            candidate_context_version=knowledge.candidate.context_version,
+            candidate_context_hash=knowledge.candidate.version_hash,
+            profile_version=knowledge.profiles.version,
+            selection_policy_version=knowledge.policies.version,
+            track_emphasis_dependencies={
+                "track": analysis.track.value,
+                "emphasis": analysis.emphasis.value,
+            },
+            normalized_role=profile.normalized_role,
+        ),
+    )
+
+
 def test_deterministic_pipeline_reaches_ready_and_reconciles(
     services: Services,
     deterministic_renderer: None,
     no_ai_key: None,
+    classify,
 ) -> None:
     assert os.environ.get("OPENAI_API_KEY") is None
 
@@ -68,12 +98,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     assert ingested.job_snapshot_id
 
     # analyze, against that exact snapshot
-    analysed = services.analysis.analyze(
-        AnalyzeCommand(
-            application_id=application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        )
-    )
+    analysed = _seed_existing_analysis(services, ingested, classify)
 
     # draft, from that exact analysis and plan
     drafted = services.drafts.draft(
@@ -155,6 +180,7 @@ def test_failed_pre_render_validation_blocks_approval(
     services: Services,
     no_ai_key: None,
     monkeypatch: pytest.MonkeyPatch,
+    classify,
 ) -> None:
     """A draft that fails pre-render validation cannot be approved.
 
@@ -196,12 +222,7 @@ def test_failed_pre_render_validation_blocks_approval(
             client="web",
         )
     )
-    analysed = services.analysis.analyze(
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        )
-    )
+    analysed = _seed_existing_analysis(services, ingested, classify)
     services.drafts.draft(
         DraftCommand(
             application_id=ingested.application_id,

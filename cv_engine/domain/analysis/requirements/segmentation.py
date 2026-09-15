@@ -363,7 +363,7 @@ def ask_bounds(text: str) -> list[tuple[int, int]]:
     """Where each separate demand inside one statement's text begins and ends.
 
     One definition of "where one demand stops and the next starts", used by
-    everything that has to answer that question. `extraction_completeness`
+    everything that has to answer that question. `span_completeness`
     counts by these (through `statement_asks`), and `_clause_around` reads a
     match's qualifiers out of the one it lands in - two measures that must
     agree, because a clause wider than the demand hands a match a qualifier

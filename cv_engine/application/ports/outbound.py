@@ -296,17 +296,10 @@ class RequirementExtractionContext(StrictModel):
 
 
 class JobAnalysisContext(StrictModel):
-    """`propose_job_analysis`: this snapshot and what the rules already decided.
-
-    The deterministic classification is supplied as context so the provider
-    answers against what the engine found rather than from nothing. It cannot
-    override it: the proposal contract is narrower than `JobAnalysis`, and
-    `merge_classification` decides what survives.
-    """
+    """`propose_job_analysis`: the snapshot and its verified requirements."""
 
     job_text: str
-    deterministic_classification: dict[str, Any]
-    deterministic_gaps: list[dict[str, Any]] = []
+    requirements: list[dict[str, Any]]
     overrides: dict[str, str] = {}
 
 

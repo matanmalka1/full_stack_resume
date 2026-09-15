@@ -1,125 +1,30 @@
+"""Review routing for AI-produced analyses."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
-from ..contracts.analysis import JobAnalysis, JobClassificationProposal
-from .gaps import fit_level_from_score, merge_gaps
+from ..contracts.analysis import JobAnalysis
 
-if TYPE_CHECKING:
-    from ..profiles import ProfileStore
-
-
-CONFIDENCE_APPROVAL_THRESHOLD = 0.72
-
-#: The override that records "proceed although the analysis read nothing".
-#: Its own key rather than `fit`, because it answers extraction alone. Stage 3
-#: removed the one checkbox that dismissed every blocker at once and this must
-#: not become the next one.
 ACCEPTED_INCOMPLETE_ANALYSIS = "accepted-incomplete-analysis"
-
-CLASSIFICATION_AMBIGUITY = "MATERIAL_CLASSIFICATION_AMBIGUITY"
 ANALYSIS_INCOMPLETE = "ANALYSIS_INCOMPLETE"
 
 
 @dataclass(frozen=True)
 class ApprovalReason:
-    """What settles one reason an approval was demanded for, and how it reads.
-
-    `overrides` is the set of explicit user overrides that answer this reason;
-    empty means no decision answers it. `review_code` is the review reason the
-    projection reports it as, so a posting that could not be read is not
-    reported as an ambiguous classification.
-    """
-
     overrides: frozenset[str]
     review_code: str
 
 
-# Every reason the engine can record, and what answers it. A Profile determines
-# its own Track, so choosing a Profile settles the pair; choosing only a Track
-# leaves the Profile inside it undecided. Each reason is settled only by an
-# override that actually answers it - an unrelated override must not open the
-# gate.
-#
-# The table is total on purpose. It used to omit `extraction-failed` to mean
-# "nothing resolves this", which made an absent entry ambiguous: a reason added
-# later and never registered here would be silently reported as a posting that
-# could not be read, rather than as the programming error it is. Now an empty
-# `overrides` states that deliberately, and an unregistered reason is caught by
-# the guard that derives this table's key set from the code that emits reasons.
 APPROVAL_REASONS: dict[str, ApprovalReason] = {
-    "ambiguous-signals": ApprovalReason(frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY),
-    # Kept exactly as it was, and still recorded, for the two cases that cannot
-    # be attributed. Analyses written before the split carry it, and tightening
-    # it to `analysis` would retroactively block records that were approvable.
-    # `merge_classification` records it too: it sees only
-    # `min(deterministic, proposal)` - a product of products - and has no access
-    # to either factor, so what it can honestly report there is a provider that
-    # declared itself unsure, which neither our extraction nor our
-    # classification caused and which choosing a Profile does answer.
-    "low-confidence": ApprovalReason(frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY),
-    # The stored confidence is a product of two independently diagnosable
-    # scores, and one reason used to speak for both - so a Profile override
-    # cleared a warning about requirements that were never read. Which half is
-    # the blocker decides what can answer it, and the sentence already written
-    # against `extraction-failed` below holds word for word here: naming the
-    # Track or Profile does not recover a requirement that was never read.
-    #
-    # The boundary is `classify_job`'s, derived from `CONFIDENCE_APPROVAL_
-    # THRESHOLD` and the ceiling of `classification_confidence` rather than
-    # tuned as a constant of its own: below it no classification score can
-    # reach the threshold, so the extraction is what holds the gate shut.
-    "low-confidence-extraction": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
-    "low-confidence-classification": ApprovalReason(
-        frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY
-    ),
-    "track-disagreement": ApprovalReason(frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY),
-    "profile-disagreement": ApprovalReason(frozenset({"profile"}), CLASSIFICATION_AMBIGUITY),
-    "emphasis-disagreement": ApprovalReason(frozenset({"emphasis"}), CLASSIFICATION_AMBIGUITY),
-    "inconsistent-proposal": ApprovalReason(
-        frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY
-    ),
-    # Analyses written before reasons were recorded: fail closed on the pair.
-    "unspecified-ambiguity": ApprovalReason(
-        frozenset({"track", "profile"}), CLASSIFICATION_AMBIGUITY
-    ),
-    # Naming the Track or Profile does not recover a requirement that was never
-    # read, so those do not answer this one. Only the explicit decision to
-    # proceed with an incomplete analysis does, and it answers nothing else.
     "extraction-failed": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
-    # A requirement whose coverage the engine could not decide at all - not "the
-    # facts do not verify this", which is `unsupported` and always resolvable by
-    # inspecting the facts. Answered the same way as a failed extraction: the
-    # explicit decision to proceed with an incomplete analysis, and nothing
-    # else, because naming a Track or Profile does not resolve the undecided
-    # scale (stage-1 plan §3.6).
     "coverage-undetermined": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
-    # The posting stated nothing this engine could read as a requirement at
-    # all, so `fit_score` is `None` rather than the 1.0 "nothing demanded,
-    # nothing missing" would otherwise report. Distinct from
-    # `extraction-failed`, which says requirements *were* stated and none were
-    # read: `extraction_state` separates "absent" from "unparsed" precisely so
-    # the two are not reported as one, and this reason is that separation
-    # surviving into approval. Same override, because the decision it asks the
-    # user for is the same one - proceed although the analysis is incomplete.
     "requirements-absent": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
-    # Requirement-bearing statements were found and at least one of them could
-    # not be classified to any concept. Separate from `coverage-undetermined`,
-    # which stays reserved for a requirement whose `mandatory` is a verified
-    # value: a statement nothing mapped carries no trustworthy `mandatory` or
-    # `section` to test, so this fires on the statement existing at all.
-    # Separate from `accepted-low-fit` too, and deliberately: the zero such a
-    # statement contributes to `fit_score` is arithmetic, not an assessment of
-    # the candidate, and answering it with "the fit is low, proceed" would tell
-    # the user the candidate failed a check that was never run.
     "requirements-unmapped": ApprovalReason(frozenset({"analysis"}), ANALYSIS_INCOMPLETE),
 }
 
-#: How an unregistered reason is treated: blocking, advertising nothing. It is
-#: unreachable while the guard passes, and failing closed is what makes the
-#: guard the only thing that has to be right.
 UNREGISTERED_REASON = ApprovalReason(frozenset(), ANALYSIS_INCOMPLETE)
 
 
@@ -128,12 +33,6 @@ def approval_reason(reason: str) -> ApprovalReason:
 
 
 def resolving_actions(reason: str) -> tuple[str, ...]:
-    """Which command can settle this reason.
-
-    Every override in the table is submitted through one command, so this is
-    derived from whether anything settles the reason at all rather than kept as
-    a second column that could drift out of step with the first.
-    """
     return ("apply_analysis_decisions",) if approval_reason(reason).overrides else ()
 
 
@@ -149,127 +48,7 @@ def unresolved_reasons(reasons: Sequence[str], overrides: Mapping[_OverrideKey, 
 def unresolved_approval_reasons(
     analysis: JobAnalysis, additional_overrides: Mapping[str, str] | None = None
 ) -> list[str]:
-    """Reasons the classification still needs a decision from the user.
-
-    A recorded reason clears only when the user overrode a field that actually
-    answers it, so an Emphasis or language override can no longer open a gate
-    that a Track/Profile ambiguity closed.
-    """
-    reasons = analysis.approval_reasons
-    if not reasons and analysis.classification_requires_approval:
-        reasons = ["unspecified-ambiguity"]
     return unresolved_reasons(
-        reasons,
+        analysis.approval_reasons,
         {**analysis.user_override, **dict(additional_overrides or {})},
-    )
-
-
-def merge_classification(
-    deterministic: JobAnalysis,
-    proposal: JobClassificationProposal,
-    profiles: ProfileStore,
-) -> JobAnalysis:
-    """Fold an AI classification proposal into deterministic policy.
-
-    The proposal may move Track/Profile/Emphasis, lower confidence, add gaps and
-    keywords, and supply a rationale. It cannot decide approval routing, Fit,
-    language, requirements, or which gaps survive, and an explicit user override
-    still wins over both classifiers.
-
-    `requirements`, `extraction_version`, `unmapped_statements`,
-    `understanding`, and `interpretation_decisions` are carried through
-    unchanged from `deterministic` rather than left at their model defaults.
-    When the AI extraction path (stage-1 plan §3.7) has already rebased
-    `deterministic` onto a verified requirement set, dropping these here would
-    silently discard that work the moment classification runs - the analysis
-    would report `extraction_version: "0"` and no understanding breakdown for
-    a record that, moments earlier, had both.
-    """
-    overrides = dict(deterministic.user_override)
-    consistent = profiles.get(proposal.profile).track is proposal.track
-    pinned = consistent and not ("track" in overrides or "profile" in overrides)
-    track = proposal.track if pinned else deterministic.track
-    profile = proposal.profile if pinned else deterministic.profile
-
-    allowed = profiles.get(profile).allowed_emphases
-    if "emphasis" in overrides:
-        emphasis = deterministic.emphasis
-    elif proposal.emphasis in allowed:
-        emphasis = proposal.emphasis
-    elif deterministic.emphasis in allowed:
-        emphasis = deterministic.emphasis
-    else:
-        emphasis = profiles.get(profile).default_emphasis
-
-    confidence = min(deterministic.confidence, proposal.confidence)
-
-    # Section 9.4 routes a materially ambiguous classification to the user. Two
-    # classifiers that disagree are exactly that: neither is authoritative, so
-    # neither may be applied silently. Emphasis is included because it now drives
-    # fact selection — a different Emphasis produces a different document, which
-    # is the definition of materially changing the CV. An internally inconsistent
-    # proposal is recorded as its own reason rather than trusted or raised.
-    reasons = list(deterministic.approval_reasons)
-    if not consistent:
-        reasons.append("inconsistent-proposal")
-    else:
-        if proposal.track is not deterministic.track:
-            reasons.append("track-disagreement")
-        if proposal.profile is not deterministic.profile:
-            reasons.append("profile-disagreement")
-    if emphasis is not deterministic.emphasis:
-        reasons.append("emphasis-disagreement")
-    # The unattributed reason, because this site cannot attribute: `confidence`
-    # here is a product of products, and neither factor of the deterministic
-    # half is in reach. It is recorded only when the *proposal* is what falls
-    # short - a deterministic confidence below the threshold already recorded
-    # its own attributed reason in `classify_job` and it is inherited above, so
-    # adding the bare code beside it would claim a provider uncertainty the
-    # provider never declared. Which analyses carry a confidence reason at all
-    # is unchanged: `min(a, b)` is below the threshold exactly when one of them
-    # is.
-    if proposal.confidence < CONFIDENCE_APPROVAL_THRESHOLD:
-        reasons.append("low-confidence")
-    reasons = list(dict.fromkeys(reasons))
-    gaps = merge_gaps(deterministic.gaps, proposal.gaps)
-    # `requirements` is carried through unchanged from `deterministic` below,
-    # so `fit_score` - which is a pure function of that same list - is too:
-    # the proposal supplies gaps, never Requirement-level coverage, so it has
-    # no numeric fit information of its own to fold in. What the proposal
-    # *can* do is raise a gap to hard severity (`merge_gaps`), and a hard gap
-    # in the merged list still overrides the score straight to LOW.
-    fit_score = deterministic.fit_score
-    fit = fit_level_from_score(fit_score, gaps)
-
-    rationale = proposal.rationale
-    if (track, profile) != (proposal.track, proposal.profile):
-        rationale = (
-            f"{deterministic.rationale} Proposed {proposal.track.value}/{proposal.profile.value} "
-            "was not applied."
-        )
-
-    return JobAnalysis(
-        analysis_version=deterministic.analysis_version,
-        track=track,
-        requirements=deterministic.requirements,
-        extraction_version=deterministic.extraction_version,
-        unmapped_statements=deterministic.unmapped_statements,
-        understanding=deterministic.understanding,
-        interpretation_decisions=deterministic.interpretation_decisions,
-        profile=profile,
-        emphasis=emphasis,
-        confidence=confidence,
-        deterministic_confidence=deterministic.confidence,
-        proposal_confidence=proposal.confidence,
-        rationale=rationale,
-        fit=fit,
-        fit_score=fit_score,
-        gaps=gaps,
-        mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
-        preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
-        keywords=sorted(set(deterministic.keywords) | set(proposal.keywords)),
-        language=deterministic.language,
-        classification_requires_approval=bool(unresolved_reasons(reasons, overrides)),
-        approval_reasons=reasons,
-        user_override=overrides,
     )

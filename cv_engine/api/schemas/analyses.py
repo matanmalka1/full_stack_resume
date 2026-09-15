@@ -61,7 +61,7 @@ class CreateAnalysisRequest(ClassificationOverrides):
     """
 
     job_snapshot_id: str
-    provider: Literal["deterministic", "openai"] = "deterministic"
+    provider: Literal["openai"] = "openai"
 
 
 class SelectionOverlayRequest(HttpSchema):

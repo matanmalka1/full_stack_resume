@@ -113,17 +113,10 @@ export const overrideKeyLabels: Record<string, string> = {
    rather than hidden - the reader learning an unfamiliar token beats being told nothing
    about a gate that is holding their work. */
 const approvalReasonLabels: Record<string, string> = {
-  "ambiguous-signals": "המשרה נושאת סימנים של יותר ממסלול אחד.",
-  "low-confidence": "רמת הביטחון בסיווג נמוכה מהסף.",
-  "low-confidence-classification": "רמת הביטחון בסיווג נמוכה מהסף: אוצר המילים של המשרה תומך חלשות בפרופיל שנבחר.",
-  "low-confidence-extraction":
-    "רמת הביטחון נמוכה מהסף בגלל קריאת הדרישות ולא בגלל הסיווג. בחירת מסלול או פרופיל לא תפתח את השער.",
-  "track-disagreement": "המודל הציע מסלול אחר מזה שהחוקים קבעו.",
-  "profile-disagreement": "המודל הציע פרופיל אחר מזה שהחוקים קבעו.",
-  "emphasis-disagreement": "המודל הציע דגש אחר מזה שהחוקים קבעו.",
-  "inconsistent-proposal": "הצעת המודל לא הייתה עקבית עם עצמה.",
   "extraction-failed": "לא ניתן היה לחלץ את דרישות המשרה מהנוסח שנשמר.",
-  "unspecified-ambiguity": "הניתוח נשמר לפני שנרשמה סיבת ההחלטה.",
+  "coverage-undetermined": "לדרישת חובה אחת לפחות לא נקבעה מידת כיסוי.",
+  "requirements-absent": "לא נמצאו דרישות בנוסח המשרה שנשמר.",
+  "requirements-unmapped": "חלק מהמשפטים בנוסח המשרה לא מופו לדרישה.",
 };
 
 export const approvalReasonLabel = (reason: string): string => approvalReasonLabels[reason] ?? reason;

@@ -36,7 +36,9 @@ authority" removes.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import date
 from typing import Literal
 
 from ...contracts.analysis import Coverage, MissingComponent
@@ -44,7 +46,20 @@ from ...contracts.knowledge import FactStatus
 from ...contracts.providers import ProposedEvidence
 from ...facts import FactStore
 from .concepts import RequirementConceptStore
-from .coverage import years_from_effective_dates
+
+_DATE_SPAN = re.compile(r"(\d{4})-(\d{2})\s*/\s*(\d{4})-(\d{2})")
+
+
+def years_from_effective_dates(value: str | None) -> float | None:
+    if not value:
+        return None
+    match = _DATE_SPAN.search(value)
+    if not match:
+        return None
+    start = date(int(match.group(1)), int(match.group(2)), 1)
+    end = date(int(match.group(3)), int(match.group(4)), 1)
+    return (end - start).days / 365.25
+
 
 #: What a provider may propose. The same vocabulary `Coverage` uses, because
 #: the provider is reading the same question - it just does not get the last

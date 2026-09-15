@@ -1,9 +1,6 @@
-import { useState } from "react";
-
 import { aiRegenerationAvailable } from "@/api/settings";
 import type { ApplicationDetail } from "@/api/contracts";
 import { Button } from "@/ui/Button";
-import { Switch } from "@/ui/Switch";
 import { useAnalyzeCommand } from "../../api/mutations";
 import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
 
@@ -26,12 +23,7 @@ export const ReanalyzeCard = ({
   onQueued: (operationId: string) => void;
   plan: WorkflowActionPlan;
 }) => {
-  /* Same one-run override as `WorkflowActions`' analyze button - see its own comment.
-     A separate `useState` because this card and that button are never mounted for the
-     same Application at once (`plan.analyze.reanalysis` picks exactly one of them), so
-     there is no shared choice to keep in sync. */
-  const [analyzeOverride, setAnalyzeOverride] = useState<"openai" | "deterministic" | undefined>(undefined);
-  const { analyze, analyzeProvider, settings } = useAnalyzeCommand(detail, onQueued, analyzeOverride);
+  const { analyze, settings } = useAnalyzeCommand(detail, onQueued);
 
   if (plan.analyze === null || !plan.analyze.reanalysis) {
     return null;
@@ -52,12 +44,12 @@ export const ReanalyzeCard = ({
               exactly like the first one does. */}
           {settings === undefined
             ? null
-            : analyzeProvider === undefined
-              ? "ניתוח מחדש זה ירוץ במסלול הדטרמיניסטי, ללא קריאת AI."
-              : "ניתוח מחדש זה יכלול קריאת AI בתשלום."}
+            : aiRegenerationAvailable(settings)
+              ? "ניתוח מחדש זה יכלול קריאת AI בתשלום."
+              : "כדי לנתח מחדש יש להגדיר ולהפעיל ספק AI."}
         </p>
         <Button
-          disabled={settings === undefined}
+          disabled={settings === undefined || !aiRegenerationAvailable(settings)}
           onClick={() => analyze.mutate()}
           pending={analyze.isPending}
           pendingLabel="מפעיל ניתוח…"
@@ -66,18 +58,6 @@ export const ReanalyzeCard = ({
           ניתוח מחדש של המשרה
         </Button>
       </div>
-
-      {/* Offered only where AI is actually usable right now - see the same guard in
-         `WorkflowActions`. */}
-      {settings === undefined || !aiRegenerationAvailable(settings) ? null : (
-        <Switch
-          checked={analyzeProvider !== undefined}
-          description="עוקף את ברירת המחדל בהגדרות עבור ניתוח מחדש זה בלבד."
-          onChange={(checked) => setAnalyzeOverride(checked ? "openai" : "deterministic")}
-        >
-          הרצת ניתוח מחדש זה עם AI
-        </Switch>
-      )}
     </div>
   );
 };

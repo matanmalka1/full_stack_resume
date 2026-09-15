@@ -154,11 +154,8 @@ class ServiceBase(Generic[RepoT]):
     def provider(self) -> AIProvider:
         """The AI provider, or the refusal that names it as the missing piece.
 
-        Refusing here rather than falling back is invariant 14: an AI command
-        that quietly ran deterministically would hand back a result the user did
-        not ask for, under provenance that says `deterministic`, with nothing to
-        distinguish it from a run they chose. Continuing deterministically is a
-        separate command the user issues.
+        Refusing here rather than falling back preserves the AI-only analysis
+        contract and prevents fabricated provider provenance.
         """
         if self._provider is None:
             raise DependencyUnavailable("AI mode was requested but no provider is configured")

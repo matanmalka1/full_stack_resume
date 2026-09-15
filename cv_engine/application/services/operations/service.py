@@ -110,10 +110,7 @@ class OperationService(ServiceBase[OperationRepository]):
         analysis_service: AnalysisService,
     ) -> OperationView:
         self.load_active_application(command.application_id)
-        if command.provider == "openai":
-            command = self._freeze_ai_execution(command)
-        elif command.provider == "deterministic":
-            command = command.model_copy(update={"model": "rules-v1", "reasoning_effort": None})
+        command = self._freeze_ai_execution(command)
         preparation = cast(PreparationRepository, self.repo)
         try:
             snapshot = preparation.get_snapshot(command.job_snapshot_id)

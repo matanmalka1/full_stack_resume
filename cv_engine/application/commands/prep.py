@@ -77,7 +77,7 @@ class AnalyzeCommand(BoundaryDTO):
     #: Internal flag carried to persistence so an explicit decision is refused
     #: while an Operation that can replace its Analysis/SelectionPlan is active.
     refuse_matching_context_operation: bool = False
-    provider: str = "deterministic"
+    provider: Literal["openai"] = "openai"
     model: str | None = None
     reasoning_effort: str | None = None
 

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cv_engine.application.commands import ApproveDraftCommand, ValidateDraftCommand
+from cv_engine.application.commands import AnalyzeCommand, ApproveDraftCommand, ValidateDraftCommand
+from cv_engine.application.services.analysis import PreparedAnalysis
+from cv_engine.application.services.analysis_selection import AnalysisSelection
 from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
 from cv_engine.domain.analysis.requirements.segmentation import requirement_lines
-from cv_engine.domain.contracts.analysis import UnmappedStatement
+from cv_engine.domain.contracts.analysis import JobAnalysis, UnmappedStatement
 from cv_engine.domain.contracts.providers import RequirementExtractionProposal
+from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.runtime.composition import Services
@@ -26,6 +29,55 @@ def store_draft(root: Path, draft):
     """Write a working draft and return its Markdown path and exact text."""
     stored = artifact_store(root).write_working_draft(draft)
     return stored.paths.markdown, stored.markdown
+
+
+def seed_existing_analysis(services: Services, ingested, **overrides):
+    """Persist an already-existing analysis for downstream tests without invoking AI."""
+    knowledge = services.analysis.load_knowledge()
+    profile_name = ProfileName(overrides.pop("profile_override", "account-manager"))
+    profile = knowledge.profiles.get(profile_name)
+    analysis = JobAnalysis(
+        analysis_version="2.0",
+        track=Track(overrides.pop("track_override", profile.track)),
+        profile=profile_name,
+        emphasis=Emphasis(overrides.pop("emphasis_override", profile.default_emphasis)),
+        language=overrides.pop("language_override", "en"),
+        confidence=0.99,
+        rationale="existing analysis test fixture",
+        fit="high",
+        fit_score=1.0,
+        gaps=[],
+        requirements=[],
+        extraction_version="test-ai-v1",
+        unmapped_statements=[],
+        understanding={"by_ai": 0},
+        interpretation_decisions=[],
+        mandatory_requirements=[],
+        preferred_requirements=[],
+        keywords=[],
+        **overrides,
+    )
+    return services.analysis.activate(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        ),
+        PreparedAnalysis(
+            result=analysis,
+            plan_manifest=AnalysisSelection.manifest(analysis, knowledge),
+            provider="test",
+            model="existing-analysis-fixture",
+            candidate_context_version=knowledge.candidate.context_version,
+            candidate_context_hash=knowledge.candidate.version_hash,
+            profile_version=knowledge.profiles.version,
+            selection_policy_version=knowledge.policies.version,
+            track_emphasis_dependencies={
+                "track": analysis.track.value,
+                "emphasis": analysis.emphasis.value,
+            },
+            normalized_role=profile.normalized_role,
+        ),
+    )
 
 
 ACCOUNT_MANAGER_JOB = (

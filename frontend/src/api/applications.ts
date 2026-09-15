@@ -340,21 +340,16 @@ export const updateApplicationNotes = async (
    source could classify something other than what the user was looking at, so the ID
    comes from the projection the screen is showing rather than from a default.
 
-   Manual Web actions may name `openai` when the effective Settings say AI; otherwise
-   `provider` and `model` remain omitted and the server's deterministic defaults keep
-   the path reachable with no AI key.
+   Analysis is AI-only; the provider is explicit in every queued request.
 */
 export const startAnalysis = async (
   applicationId: string,
   jobSnapshotId: string,
   idempotencyKey: string,
-  provider?: "openai",
 ): Promise<QueuedOperation> => {
-  /* The source is always explicit. Provider is conditional and never spells out the
-     deterministic default; the `Pick`s bind both field names to the generated contract. */
-  const body: Pick<CreateAnalysisRequest, "job_snapshot_id"> & Partial<Pick<CreateAnalysisRequest, "provider">> = {
+  const body: Pick<CreateAnalysisRequest, "job_snapshot_id" | "provider"> = {
     job_snapshot_id: jobSnapshotId,
-    ...(provider === undefined ? {} : { provider }),
+    provider: "openai",
   };
 
   return queuedOperation(

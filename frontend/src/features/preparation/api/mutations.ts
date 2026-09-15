@@ -33,10 +33,6 @@ import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 export const useAnalyzeCommand = (
   detail: ApplicationDetail,
   onQueued: (operationId: string) => void,
-  /* A one-run override, read by the button that lets the reader pick AI over the
-     default for this exact press without touching Settings. `undefined` means "use
-     the default", exactly like a command that never mentions provider at all. */
-  analyzeProviderOverride?: "openai" | "deterministic",
 ) => {
   const queryClient = useQueryClient();
   const { settings } = useSettings();
@@ -44,17 +40,12 @@ export const useAnalyzeCommand = (
      hands this to the draft-generation command, which has no override of its own and
      must keep following Settings exactly as before. */
   const provider = executionProvider(settings);
-  const analyzeProvider =
-    analyzeProviderOverride === undefined ? provider : analyzeProviderOverride === "openai" ? "openai" : undefined;
   const snapshotId = detail.active_job_snapshot_id;
-  /* One key per snapshot *and* chosen lane: switching the override between two presses
-     of the same snapshot is a different command, not a resend of the first one. Without
-     the lane, a deterministic attempt already on record would make the server refuse
-     the AI retry as the same idempotency key under a different payload. */
-  const analyzeKey = `analyze:${detail.application.id}:${snapshotId}:${analyzeProvider ?? "deterministic"}`;
+  /* One key per snapshot and the single analysis lane. */
+  const analyzeKey = `analyze:${detail.application.id}:${snapshotId}:openai`;
 
   const analyze = useMutation({
-    mutationFn: () => startAnalysis(detail.application.id, snapshotId, analyzeKey, analyzeProvider),
+    mutationFn: () => startAnalysis(detail.application.id, snapshotId, analyzeKey),
     /* Queueing does not navigate. The projection carries `active_operation` in full and
        starts polling the moment it appears, so the screen reports the work in place;
        what the accepted `202` buys is the first state, a poll earlier than the
@@ -66,7 +57,7 @@ export const useAnalyzeCommand = (
     },
   });
 
-  return { analyze, analyzeProvider, provider, settings };
+  return { analyze, provider, settings };
 };
 
 interface AutomaticDraftAttempt {
@@ -261,10 +252,6 @@ export const useWorkflowCommands = (
   detail: ApplicationDetail,
   plan: WorkflowActionPlan,
   onQueued: (operationId: string) => void,
-  /* Forwarded to `useAnalyzeCommand` untouched - see its own docstring. Draft generation
-     below keeps reading `provider`, not this, so overriding the lane for one analyze
-     press never changes what a later "יצירת טיוטה" press would send. */
-  analyzeProviderOverride?: "openai" | "deterministic",
 ) => {
   const queryClient = useQueryClient();
   const { mark } = usePreparationContinuation(detail.application.id);
@@ -295,7 +282,7 @@ export const useWorkflowCommands = (
     [onQueued],
   );
 
-  const { analyze, analyzeProvider, provider, settings } = useAnalyzeCommand(detail, follow, analyzeProviderOverride);
+  const { analyze, provider, settings } = useAnalyzeCommand(detail, follow);
 
   /* The two commands that write a WorkingDraft, followed the same way and marked the same
      way: the draft they produce is worked on in the editor, so the run is registered as
@@ -426,7 +413,6 @@ export const useWorkflowCommands = (
 
   return {
     analyze,
-    analyzeProvider,
     archive,
     commandsBlocked,
     draft,

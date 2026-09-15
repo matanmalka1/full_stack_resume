@@ -3,39 +3,15 @@ import type { JobAnalysisRecord } from "@/api/contracts";
 import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { formatDateTime } from "@/utils/formatDateTime";
-import { confidenceText, fitLabels, fitTones } from "../../model/analysisLabels";
+import { fitLabels, fitTones } from "../../model/analysisLabels";
 
-/* `deterministic_confidence` and `proposal_confidence` are recorded together, only on the
-   path where an AI proposal was actually merged in - and the merge takes the lower of the
-   two, so a reader looking at one merged number cannot otherwise tell whether it came from
-   the rules or was pulled down by the proposal. Absent on the deterministic-only path,
-   where the single confidence above is already the whole story. */
-const ConfidenceBreakdown = ({ classification }: { classification: Classification }) =>
-  classification.deterministicConfidence === null || classification.proposalConfidence === null ? null : (
-    <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-      מנוע הכללים {confidenceText(classification.deterministicConfidence)} · הצעת ה-AI{" "}
-      {confidenceText(classification.proposalConfidence)}
-    </p>
-  );
-
-const providerPhrase = (provider: string): string =>
-  provider === "deterministic" ? "במסלול הדטרמיניסטי" : "על ידי AI";
-
-/* Which run produced this classification, and when - the record's own provenance rather
-   than anything the analysis document itself claims about itself. Model names only the AI
-   path: `deterministic` always runs the same rule engine, so naming its internal model id
-   would be an implementation detail rather than something a reader could act on. */
+/* Which run produced this analysis, and when - the record's own provenance rather than
+   anything the analysis document itself claims about itself. Every analysis is an AI run
+   now, so the model id is what distinguishes one from another and is always shown. */
 const Provenance = ({ record }: { record: JobAnalysisRecord | null }) =>
   record === null ? null : (
     <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-      נותח {providerPhrase(record.provider)}
-      {record.provider === "deterministic" ? null : (
-        <>
-          {" ("}
-          <LtrText>{record.model}</LtrText>
-          {")"}
-        </>
-      )}{" "}
+      נותח על ידי AI (<LtrText>{record.model}</LtrText>){" "}
       · {formatDateTime(record.created_at)}
       {record.version_number <= 1 ? null : ` · ניתוח מס' ${record.version_number}`}
     </p>
@@ -75,7 +51,6 @@ export const AnalysisHeader = ({
         top of the screen. It stood here as well, and a third time in the decision panel's
         preamble - three copies of one sentence, each far enough from the others that a
         reader met it as new information every time. */}
-    <ConfidenceBreakdown classification={classification} />
     <Provenance record={record} />
   </div>
 );

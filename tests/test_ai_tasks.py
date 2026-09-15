@@ -35,9 +35,7 @@ from cv_engine.application.commands import (
 )
 from cv_engine.application.errors import StateConflict, UnknownRecord
 from cv_engine.application.operations import OperationFailureCode
-from cv_engine.application.services.proposals import allowed_fact_pool
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.analysis.requirements.interpretation import (
     InvalidRequirementInterpretation,
     verify_interpretation,
@@ -56,7 +54,6 @@ from cv_engine.domain.contracts.providers import (
 from cv_engine.domain.models import (
     ClaimProposal,
     DraftProposal,
-    JobAnalysis,
     JobClassificationProposal,
     ProposedClaim,
     SectionProposal,
@@ -68,9 +65,9 @@ CLASSIFICATION = JobClassificationProposal(
     track="sales",
     profile="account-manager",
     emphasis="account-growth",
+    language="en",
     confidence=0.92,
     rationale="provider rationale",
-    gaps=[],
     keywords=["retention"],
 )
 
@@ -956,141 +953,6 @@ def test_a_stale_draft_version_is_refused_before_any_provider_call(
 # --------------------------------------------------------------------------
 
 
-#: What a provider is allowed to speak to at all, taken from the proposal
-#: contract itself rather than restated.
-PROVIDER_OWNED_FIELDS = frozenset(JobClassificationProposal.model_fields)
-
-#: Fields that are neither policy nor proposal: provenance a deterministic run
-#: cannot be expected to reproduce. A deliberate exception list, so a new
-#: `JobAnalysis` field is policy-owned by default and forgetting to register it
-#: fails the guard instead of silently escaping it.
-#:
-#: `unmapped_statements`, `understanding`, and `interpretation_decisions` are
-#: here because they are populated only by the AI extraction step (stage-1
-#: plan §3.7), which the `classify_job`-only baseline this test compares
-#: against never runs at all - so the baseline always leaves them
-#: `None`/absent regardless of job text, and comparing them would fail on
-#: every injection for a reason that has nothing to do with injection safety.
-#: They are not exempt from scrutiny: an injected statement could not smuggle
-#: a fake entry into any of them without a fabricated attestation, which the
-#: source gate (`attestation.py`) rejects before any of this is ever written,
-#: voiding the whole extraction.
-#:
-#: `requirements`, `gaps`, `fit`, `fit_score`, `mandatory_requirements`, and
-#: `preferred_requirements` are here for the reason stage-1 plan §1.1 states
-#: directly: once AI extraction is authoritative for what a posting requires
-#: (D2), a verified extraction is *supposed* to diverge from the concept-only
-#: deterministic baseline - reading a requirement-bearing statement the
-#: baseline could not, and reporting completeness/Fit accordingly, is a
-#: correct result, not a leak. "Equal to the deterministic run" stopped being
-#: a safety measure for these fields and became a ceiling on extraction
-#: quality. What actually stands between an injected instruction and a
-#: fabricated or softened requirement is the explicit forbidden-behavior
-#: tests below (§1.1.A), not a literal-equality diff against a baseline that
-#: does not run extraction at all.
-#:
-#: `approval_reasons` and `classification_requires_approval` follow for the
-#: same reason: both can carry `extraction-failed`/`coverage-undetermined`,
-#: which are downstream of exactly the extraction outcome just excluded - a
-#: baseline that never runs extraction and a verified extraction that reads
-#: the posting differently can legitimately disagree on whether *that*
-#: specific reason is present, without either being unsafe.
-NON_POLICY_FIELDS = frozenset(
-    {
-        "analysis_version",
-        "confidence",
-        "deterministic_confidence",
-        "proposal_confidence",
-        "rationale",
-        "extraction_version",
-        "unmapped_statements",
-        "understanding",
-        "interpretation_decisions",
-        "requirements",
-        "gaps",
-        "fit",
-        "fit_score",
-        "mandatory_requirements",
-        "preferred_requirements",
-        "approval_reasons",
-        "classification_requires_approval",
-    }
-)
-
-#: Everything the deterministic policy owns that extraction cannot move at
-#: all: language and the user's overrides.
-POLICY_OWNED_FIELDS = tuple(
-    sorted(set(JobAnalysis.model_fields) - PROVIDER_OWNED_FIELDS - NON_POLICY_FIELDS)
-)
-
-
-def test_injected_job_text_changes_no_classification_policy(
-    ai_services, fake_openai: FakeOpenAI
-) -> None:
-    """§6/§1.1: injected text may not move classification, approval, or the fact pool.
-
-    This is the half of the old injection test that is still a literal-equality
-    comparison against the deterministic baseline, and still should be: nothing
-    about D2 gives extraction authority over Track/Profile/Emphasis/language,
-    approval routing, or the allowed-fact pool. `requirements`/`gaps`/`fit` are
-    excluded from `POLICY_OWNED_FIELDS` for the reason stated there - they are
-    covered by the malicious-extraction-proposal tests below instead, not by
-    this comparison.
-    """
-    assert POLICY_OWNED_FIELDS
-    for injection in INJECTIONS:
-        fake_openai.scripts["propose_job_analysis"].clear()
-        fake_openai.script("propose_job_analysis", CLASSIFICATION)
-        job_text = f"{ACCOUNT_MANAGER_JOB}\n\n{injection}"
-
-        ingested = _ingested(ai_services, f"Injection {injection[:8]}", job_text)
-        # The baseline runs over the same Knowledge and the same snapshot the
-        # service used, so requirement coverage and its identities are
-        # comparable rather than trivially different.
-        knowledge = ai_services.analysis.load_knowledge()
-        snapshot = ai_services.repository.get_snapshot(ingested.job_snapshot_id)
-        baseline = classify_job(
-            job_text,
-            facts=knowledge.facts,
-            profiles=knowledge.profiles,
-            concepts=knowledge.requirement_concepts,
-            normalized_hash=snapshot["normalized_hash"],
-        )
-        # Scripted fresh per injection: each iteration's `job_text` differs, and
-        # the default in `_analysis_operation` only fires once per test, which
-        # would otherwise silently replay the first iteration's extraction
-        # proposal against every later job_text. An honest extraction is
-        # scripted here - this test is not about extraction content.
-        fake_openai.scripts["propose_requirement_extraction"].clear()
-        fake_openai.script(
-            "propose_requirement_extraction",
-            trivial_requirement_extraction(job_text, knowledge.requirement_concepts),
-        )
-        completed = _run(ai_services, _analysis_operation(ai_services, ingested))
-        assert completed.status.value == "succeeded", completed.safe_failure_detail
-
-        call = fake_openai.calls_for("propose_job_analysis")[-1]
-        assert injection in call.payload["job_text"]
-        assert injection not in call.body["input"][0]["content"]
-        assert call.body["text"]["format"]["strict"] is True
-        assert call.body["text"]["format"]["name"] == "propose_job_analysis"
-
-        analysis_id = next(
-            output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-        )
-        analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-        committed = analysis.model_dump(mode="json")
-        expected = baseline.model_dump(mode="json")
-        assert {field: committed[field] for field in POLICY_OWNED_FIELDS} == {
-            field: expected[field] for field in POLICY_OWNED_FIELDS
-        }, injection
-
-        knowledge = ai_services.knowledge.load()
-        assert allowed_fact_pool(knowledge.profiles.get(analysis.profile)) == allowed_fact_pool(
-            knowledge.profiles.get(baseline.profile)
-        ), injection
-
-
 # --------------------------------------------------------------------------
 # Malicious extraction proposals (stage-1 plan §1.1.A): contract enforcement,
 # not model resilience (§1.1.C). A scripted fake provider proves the engine
@@ -1236,9 +1098,7 @@ def test_requirement_quote_missing_terminal_punctuation_is_reconciled(
     )
     analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
     extracted = next(
-        requirement
-        for requirement in analysis.requirements
-        if requirement.attestation is not None
+        requirement for requirement in analysis.requirements if requirement.attestation is not None
     )
     assert extracted.attestation == RequirementAttestation(
         quote=f"{quote}.", start=start, end=start + len(quote) + 1
@@ -1280,9 +1140,7 @@ def test_requirement_quote_with_one_character_offset_drift_is_reconciled(
     )
     analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
     extracted = next(
-        requirement
-        for requirement in analysis.requirements
-        if requirement.attestation is not None
+        requirement for requirement in analysis.requirements if requirement.attestation is not None
     )
     assert extracted.attestation == RequirementAttestation(
         quote=quote, start=start, end=start + len(quote)
@@ -1325,9 +1183,7 @@ def test_requirement_quote_missing_one_final_letter_uses_the_source_span(
     )
     analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
     extracted = next(
-        requirement
-        for requirement in analysis.requirements
-        if requirement.attestation is not None
+        requirement for requirement in analysis.requirements if requirement.attestation is not None
     )
     assert extracted.attestation == RequirementAttestation(
         quote=actual, start=start, end=start + len(actual)
@@ -1754,30 +1610,21 @@ def test_a_requirement_no_concept_models_is_matched_from_its_cited_evidence(
     assert "coverage-undetermined" not in analysis.approval_reasons
 
 
-def test_a_complete_extraction_no_longer_inherits_the_rule_extraction_confidence(
+def test_a_complete_extraction_records_the_confidence_of_the_run_that_produced_it(
     ai_services, fake_openai
 ) -> None:
     """The stored confidence describes the extraction that is on record.
 
-    `classify_job` scores its own concept-vocabulary extraction, and on a
-    posting those six concepts do not model that score is zero. The AI path
-    replaced the requirement list and left the number - so a complete,
-    verified extraction inherited a failing confidence and a
-    `low-confidence-extraction` blocker that only
-    `accepted-incomplete-analysis` could clear. `rebase_requirements` restates
-    it from the extraction that actually ran.
+    There used to be a second, rules-based extraction underneath this one: it
+    scored its own concept-vocabulary reading, and on a posting those six
+    concepts do not model that score was zero. The AI path replaced the
+    requirement list and left the number, so a complete, verified extraction
+    inherited a failing confidence and a blocker only an acceptance could
+    clear. That shadow analysis is gone - `build_analysis` states the
+    confidence of the one run that happened - and this pins that there is no
+    second number left to inherit.
     """
     job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
-    concepts = ai_services.analysis.load_knowledge().requirement_concepts
-    knowledge_only = classify_job(
-        job_text,
-        facts=ai_services.analysis.load_knowledge().facts,
-        profiles=ai_services.analysis.load_knowledge().profiles,
-        concepts=concepts,
-        normalized_hash=sha256_text(job_text),
-    )
-    assert "low-confidence-extraction" in knowledge_only.approval_reasons
-
     completed = _extraction_operation(
         ai_services,
         fake_openai,
@@ -1791,8 +1638,10 @@ def test_a_complete_extraction_no_longer_inherits_the_rule_extraction_confidence
     )
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     analysis = _analysis_of(completed, ai_services)
-    assert "low-confidence-extraction" not in analysis.approval_reasons
-    assert analysis.confidence > knowledge_only.confidence
+    assert analysis.confidence == CLASSIFICATION.confidence
+    # Nothing downstream of a verified extraction is left asking for review.
+    assert analysis.approval_reasons == []
+    assert not analysis.classification_requires_approval
 
 
 @pytest.mark.parametrize(

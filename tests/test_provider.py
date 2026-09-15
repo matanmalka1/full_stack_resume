@@ -54,7 +54,7 @@ EXTRACTION_CONTEXT = RequirementExtractionContext(
 )
 ANALYSIS_CONTEXT = JobAnalysisContext(
     job_text="...",
-    deterministic_classification={"track": "sales"},
+    requirements=[],
 )
 SELECTION_CONTEXT = SelectionPlanContext(
     job_analysis={"track": "sales"},
@@ -88,9 +88,9 @@ CLASSIFICATION = JobClassificationProposal(
     track="sales",
     profile="account-manager",
     emphasis="account-growth",
+    language="en",
     confidence=0.9,
     rationale="r",
-    gaps=[],
     keywords=["k"],
 )
 SELECTION = SelectionProposal(pinned_fact_ids=["a.b"], excluded_fact_ids=[], rationale="r")
@@ -205,7 +205,7 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
             )
 
         if task == "propose_job_analysis":
-            assert {"fit", "language", "classification_requires_approval"}.isdisjoint(
+            assert {"fit", "classification_requires_approval"}.isdisjoint(
                 output_format["schema"]["properties"]
             )
 

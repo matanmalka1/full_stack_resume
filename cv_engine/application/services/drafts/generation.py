@@ -14,6 +14,7 @@ from ....domain.analysis.gaps import unaccepted_hard_gaps
 from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.drafts import DraftDocument
 from ....domain.knowledge import Knowledge
+from ....domain.profiles import allowed_fact_pool
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import DraftCommand, DraftResult
 from ...errors import (
@@ -27,7 +28,6 @@ from ...errors import (
 from ...ports import DraftRepository, DraftResumeContext
 from ..proposals import (
     ProviderEvidence,
-    allowed_fact_pool,
     apply_proposed_claims,
     evidence_attached,
     fact_context,

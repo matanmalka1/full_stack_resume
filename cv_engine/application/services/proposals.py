@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 from ...domain.contracts.drafts import DraftDocument
-from ...domain.contracts.knowledge import FactStatus, Profile
+from ...domain.contracts.knowledge import FactStatus
 from ...domain.contracts.providers import (
     ProposedClaim,
     ProviderTaskResult,
@@ -68,16 +68,6 @@ def evidence_attached(evidence: ProviderEvidence) -> Iterator[None]:
         raise
 
 
-def allowed_fact_pool(profile: Profile) -> set[str]:
-    """Every fact this Profile is allowed to say, across all of its sections.
-
-    The pool, not the fact store. A provider is given this set as context and is
-    checked against the same set afterwards, so a fact it never saw cannot enter
-    a document by being named in an answer.
-    """
-    return {fact_id for section in profile.sections for fact_id in section.fact_ids}
-
-
 def fact_context(facts: FactStore, fact_ids: list[str], language: str) -> list[dict[str, object]]:
     """The minimal description of one fact a task needs to write about it.
 
@@ -113,7 +103,7 @@ def analysis_fact_context(facts: FactStore) -> list[dict[str, object]]:
     gives. The pool is the whole canonical fact store rather than a Profile's
     allowed facts: which requirements the candidate meets is decided before
     and independently of which Profile presents them, exactly as
-    `cover_requirements` decided it against the whole store.
+    `verify_and_cover_extraction` decides it against the whole store.
     """
     return [
         {

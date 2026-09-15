@@ -70,7 +70,7 @@ SETTINGS: dict[str, Setting] = {
             default="postgresql+psycopg://cv:cv@127.0.0.1:5433/cv",
             secret=True,
         ),
-        Setting("provider", "CV_PROVIDER", default="deterministic"),
+        Setting("provider", "CV_PROVIDER", default="openai"),
         Setting("model", "CV_MODEL", default="gpt-5.6"),
         # Read through the config contract rather than from `os.environ` at the
         # point of use, so that one layer decides where a credential comes from

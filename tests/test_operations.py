@@ -147,14 +147,14 @@ def _stored_request(application_id: str, key: str = "request-1") -> CreateOperat
     return CreateOperation(
         application_id=application_id,
         operation_type=OperationType.ANALYZE_JOB,
-        payload={"job_snapshot_id": "snapshot-id", "mode": "deterministic"},
+        payload={"job_snapshot_id": "snapshot-id", "provider": "openai"},
         idempotency_key=key,
         sources=OperationSources(
             job_snapshot_id="snapshot-id",
             job_snapshot_hash="a" * 64,
         ),
-        provider="deterministic",
-        model="rules-v1",
+        provider="openai",
+        model="gpt-5.6",
     )
 
 
@@ -757,7 +757,6 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
-            provider="deterministic",
             language_override="he",
         ),
         idempotency_key="missing-rendering-failure",

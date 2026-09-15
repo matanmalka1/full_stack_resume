@@ -208,12 +208,6 @@ export interface Classification {
      narrow way - an unreadable field is absent rather than `undefined` on screen. */
   rationale: string | null;
   confidence: number | null;
-  /* Set together, only when an AI proposal was actually merged in: `confidence` above is
-     `min(deterministicConfidence, proposalConfidence)` in that case, so the two together
-     are what explain a merged number a reader could otherwise not account for. Both stay
-     null on the deterministic-only path, where `confidence` is already the whole story. */
-  deterministicConfidence: number | null;
-  proposalConfidence: number | null;
   keywords: string[];
   mandatoryRequirements: string[];
   preferredRequirements: string[];
@@ -359,8 +353,6 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
     decided: Object.keys(override),
     rationale: typeof analysis.rationale === "string" ? analysis.rationale : null,
     confidence: finiteFraction(analysis.confidence),
-    deterministicConfidence: finiteFraction(analysis.deterministic_confidence),
-    proposalConfidence: finiteFraction(analysis.proposal_confidence),
     keywords: stringsFrom(analysis.keywords),
     mandatoryRequirements: stringsFrom(analysis.mandatory_requirements),
     preferredRequirements: stringsFrom(analysis.preferred_requirements),

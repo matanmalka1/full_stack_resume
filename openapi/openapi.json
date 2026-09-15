@@ -2472,11 +2472,8 @@
             ]
           },
           "provider": {
-            "default": "deterministic",
-            "enum": [
-              "deterministic",
-              "openai"
-            ],
+            "const": "openai",
+            "default": "openai",
             "title": "Provider",
             "type": "string"
           },
@@ -5057,7 +5054,7 @@
       },
       "RequirementInterpretation": {
         "additionalProperties": false,
-        "description": "A provider's declared reading of one requirement. All-or-nothing: a\n`Requirement` either carries a complete interpretation or none at all -\nsee `interpretation_of()` in `requirements/compat.py` for why a legacy\nrecord's absence of these fields is never filled in with a default.",
+        "description": "A provider's declared reading of one requirement. All-or-nothing: a\n`Requirement` either carries a complete interpretation or none at all -\n`unspecified` and absent member attestations preserve uncertainty explicitly.",
         "properties": {
           "composition": {
             "enum": [

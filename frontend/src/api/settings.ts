@@ -30,7 +30,7 @@ export const updateSettings = async (body: UpdateSettingsRequest, etag: string):
 };
 
 export const executionProvider = (settings: Settings | undefined): "openai" | undefined =>
-  settings?.default_execution_mode === "ai" && settings.provider_configured && settings.ai_enabled
+  settings?.provider_configured && settings.ai_enabled
     ? "openai"
     : undefined;
 

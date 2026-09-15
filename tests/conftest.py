@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic, sleep
+from types import SimpleNamespace
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -24,6 +25,7 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
     approve_active_draft,
+    seed_existing_analysis,
     trivial_requirement_extraction,
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
@@ -39,7 +41,6 @@ from cv_engine.application.commands import (
     DraftCommand,
     IngestCommand,
 )
-from cv_engine.domain.analysis.classification import classify_job
 from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
 from cv_engine.domain.candidate import contact_href
 from cv_engine.domain.drafts import build_draft
@@ -75,7 +76,7 @@ from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_api_services, build_services
 from cv_engine.runtime.config import resolve_config
 from cv_engine.runtime.paths import AppPaths
-from cv_engine.util import new_id, sha256_text
+from cv_engine.util import new_id
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 TESTS_DIR = Path(__file__).resolve().parent
@@ -342,20 +343,39 @@ def classify(
     profile_store: ProfileStore,
     requirement_concepts: RequirementConceptStore,
 ):
-    """`classify_job` bound to this project's Knowledge.
-
-    `classify_job` requires Knowledge rather than defaulting it, so that a
-    caller cannot silently produce an analysis with no requirements. Tests bind
-    it here once instead of each restating the dependency.
-    """
+    """Build an analysis document for downstream unit tests without running analysis."""
 
     def _classify(text: str, **overrides):
-        return classify_job(
-            text,
-            facts=fact_store,
-            profiles=profile_store,
-            concepts=requirement_concepts,
-            normalized_hash=sha256_text(text),
+        profile = ProfileName(
+            overrides.pop("profile_override", None)
+            or (
+                "development"
+                if any(term in text.casefold() for term in ("python", "developer", "backend"))
+                else "account-manager"
+            )
+        )
+        selected = profile_store.get(profile)
+        emphasis = Emphasis(overrides.pop("emphasis_override", None) or selected.default_emphasis)
+        language = overrides.pop("language_override", None) or "en"
+        return JobAnalysis(
+            analysis_version="2.0",
+            track=Track(overrides.pop("track_override", None) or selected.track),
+            profile=profile,
+            emphasis=emphasis,
+            confidence=0.99,
+            rationale="test analysis fixture",
+            fit="high",
+            fit_score=1.0,
+            gaps=[],
+            requirements=[],
+            extraction_version="test-ai-v1",
+            unmapped_statements=[],
+            understanding={"by_ai": 0},
+            interpretation_decisions=[],
+            mandatory_requirements=[],
+            preferred_requirements=[],
+            keywords=[],
+            language=language,
             **overrides,
         )
 
@@ -382,9 +402,34 @@ def candidate_context(project_root: Path, fact_store: FactStore):
     return load_candidate_context(project_root, fact_store)
 
 
+def _with_existing_analysis_seeder(services: Services) -> Services:
+    """Give downstream tests an explicit fixture seeder, not a product analysis path."""
+
+    def seed(command):
+        snapshot = services.repository.get_snapshot(command.job_snapshot_id)
+        if snapshot["application_id"] != command.application_id:
+            from cv_engine.application.errors import LineageBroken
+
+            raise LineageBroken("job snapshot does not belong to the named Application")
+        return seed_existing_analysis(
+            services,
+            SimpleNamespace(
+                application_id=command.application_id,
+                job_snapshot_id=command.job_snapshot_id,
+            ),
+            track_override=command.track_override,
+            profile_override=command.profile_override or "account-manager",
+            emphasis_override=command.emphasis_override,
+            language_override=command.language_override or "en",
+        )
+
+    services.analysis.analyze = seed  # type: ignore[attr-defined]
+    return services
+
+
 @pytest.fixture
 def services(app_paths: AppPaths) -> Services:
-    return build_services(app_paths)
+    return _with_existing_analysis_seeder(build_services(app_paths))
 
 
 @pytest.fixture
@@ -408,7 +453,9 @@ def ai_services(app_paths: AppPaths, fake_openai: FakeOpenAI, task_contracts) ->
     than reaching the network, and the offline guarantee is not weakened by the
     fixture that exercises AI.
     """
-    return build_services(app_paths, provider=fake_openai.provider(task_contracts))
+    return _with_existing_analysis_seeder(
+        build_services(app_paths, provider=fake_openai.provider(task_contracts))
+    )
 
 
 @pytest.fixture
@@ -523,13 +570,29 @@ def live_api_server(project_root: Path, database_url: str) -> Iterator[LiveApiSe
 
 
 @pytest.fixture
-def analyzed_application(services: Services):
+def analyzed_application(ai_services: Services, fake_openai: FakeOpenAI, requirement_concepts):
     def build(
         company: str,
         role: str = "Account Manager",
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
-        ingested = services.applications.ingest(
+        fake_openai.script(
+            "propose_requirement_extraction",
+            trivial_requirement_extraction(job_text, requirement_concepts),
+        )
+        fake_openai.script(
+            "propose_job_analysis",
+            JobClassificationProposal(
+                track="sales",
+                profile="account-manager",
+                emphasis="account-growth",
+                language="en",
+                confidence=0.99,
+                rationale="fixture",
+                keywords=[],
+            ),
+        )
+        ingested = ai_services.applications.ingest(
             IngestCommand(
                 company=company,
                 target_role=role,
@@ -538,18 +601,26 @@ def analyzed_application(services: Services):
                 client="web",
             )
         )
-        analysed = services.analysis.analyze(
+        queued = ai_services.operations.submit_analysis(
             AnalyzeCommand(
                 application_id=ingested.application_id,
                 job_snapshot_id=ingested.job_snapshot_id,
-            )
+            ),
+            idempotency_key=new_id(),
+            analysis_service=ai_services.analysis,
         )
+        completed = foreground_executor(ai_services).execute(queued.id)
+        if completed.status.value != "succeeded":
+            raise AssertionError(
+                f"analysis Operation failed: {completed.failure_code} {completed.safe_failure_detail}"
+            )
+        outputs = {output.output_type: output.output_id for output in completed.outputs}
         return WorkflowSetup(
-            services=services,
+            services=ai_services,
             application_id=ingested.application_id,
             snapshot_id=ingested.job_snapshot_id,
-            analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            analysis_id=outputs["job_analysis"],
+            selection_plan_id=outputs["selection_plan"],
         )
 
     return build
@@ -720,15 +791,36 @@ def draft_factory(
         write: bool = False,
         **overrides,
     ) -> DraftSetup:
-        analysis = classify_job(
-            job,
-            facts=fact_store,
-            profiles=profile_store,
-            concepts=load_requirement_concepts(project_root),
-            normalized_hash=sha256_text(job),
+        profile_name = ProfileName(
+            overrides.pop("profile_override", None)
+            or (
+                "development"
+                if any(term in job.casefold() for term in ("python", "developer", "backend"))
+                else "account-manager"
+            )
+        )
+        profile = profile_store.get(profile_name)
+        analysis = JobAnalysis(
+            analysis_version="2.0",
+            track=Track(overrides.pop("track_override", None) or profile.track),
+            profile=profile_name,
+            emphasis=Emphasis(overrides.pop("emphasis_override", None) or profile.default_emphasis),
+            confidence=0.99,
+            rationale="test analysis fixture",
+            fit="high",
+            fit_score=1.0,
+            gaps=[],
+            requirements=[],
+            extraction_version="test-ai-v1",
+            unmapped_statements=[],
+            understanding={"by_ai": 0},
+            interpretation_decisions=[],
+            mandatory_requirements=[],
+            preferred_requirements=[],
+            keywords=[],
+            language=overrides.pop("language_override", "en"),
             **overrides,
         )
-        profile = profile_store.get(analysis.profile)
         draft = build_draft(
             application_id=application_id,
             job_snapshot_id=job_snapshot_id,
@@ -749,7 +841,7 @@ def draft_factory(
 
 @pytest.fixture
 def classification_proposal():
-    """Build what an AI provider may return for `classify_job`.
+    """Build what an AI provider may return for `propose_job_analysis`.
 
     Defaults are a confident, internally consistent Account Manager proposal, so
     each test only states the field it is actually probing.
@@ -761,9 +853,9 @@ def classification_proposal():
                 "track": Track.SALES,
                 "profile": ProfileName.ACCOUNT_MANAGER,
                 "emphasis": Emphasis.ACCOUNT_GROWTH,
+                "language": "en",
                 "confidence": 0.99,
                 "rationale": "provider rationale",
-                "gaps": [],
                 "keywords": ["provider-keyword"],
                 **overrides,
             }

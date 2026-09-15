@@ -1,37 +1,25 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from ...domain.analysis.approval import ACCEPTED_INCOMPLETE_ANALYSIS, merge_classification
-from ...domain.analysis.classification import (
-    classification_confidence_for,
-    classify_job,
-    rebase_requirements,
+from ...domain.analysis.approval import (
+    ACCEPTED_INCOMPLETE_ANALYSIS,
 )
+from ...domain.analysis.assembly import build_analysis, rebase_requirements
 from ...domain.analysis.requirements.ai_extraction import (
     RequirementExtractionRejected,
     apply_interpretation_corrections,
-    attested_spans,
     extraction_is_failed,
     verify_and_cover_extraction,
 )
-from ...domain.analysis.requirements.confidence import span_completeness
 from ...domain.analysis.requirements.segmentation import requirement_lines
 from ...domain.contracts.analysis import (
     JobAnalysis,
     OverrideKey,
 )
-from ...domain.contracts.knowledge import Profile
-from ...domain.contracts.providers import SelectionProposal
 from ...domain.contracts.selection import (
-    AcceptedGap,
-    SelectionManifest,
     SelectionPlan,
 )
 from ...domain.contracts.taxonomy import Emphasis
-from ...domain.profiles import ProfileStore
-from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
-from ...domain.selection import build_selection
+from ...domain.profiles import allowed_fact_pool
 from ...util import utc_now
 from ..commands import (
     AnalysisDecisionsResult,
@@ -46,10 +34,8 @@ from ..errors import (
     ApplicationError,
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
-    DependencyUnavailable,
     InfrastructureFailure,
     LineageBroken,
-    MissingFactRendering,
     PreconditionFailed,
     ProviderInvalidOutput,
     StateConflict,
@@ -61,52 +47,17 @@ from ..ports import (
     RequirementExtractionContext,
     SelectionPlanContext,
 )
+from .analysis_correction import revise_classification
+from .analysis_preparation import PreparedAnalysis
+from .analysis_selection import AnalysisSelection, PreparedSelectionProposal
 from .base import ServiceBase
 from .proposals import (
     ProviderEvidence,
-    allowed_fact_pool,
     analysis_fact_context,
     evidence_attached,
     fact_context,
     refuse_facts_outside_the_pool,
 )
-
-
-@dataclass(frozen=True)
-class PreparedAnalysis:
-    result: JobAnalysis
-    plan_manifest: SelectionManifest
-    provider: str
-    model: str
-    candidate_context_version: str
-    candidate_context_hash: str
-    profile_version: str
-    selection_policy_version: str
-    track_emphasis_dependencies: dict[str, str]
-    normalized_role: str
-    evidence: ProviderEvidence | None = None
-    #: `propose_requirement_extraction`'s preserved response (stage-1 plan
-    #: §3.7), when the AI path ran it - separate from `evidence`
-    #: (`propose_job_analysis`'s) because both are preserved as immutable
-    #: artifacts and §18 requires each to have its own Operation output
-    #: reference, not just the one this dataclass used to carry.
-    extraction_evidence: ProviderEvidence | None = None
-
-
-@dataclass(frozen=True)
-class PreparedSelectionProposal:
-    """An AI `propose_selection_plan` result, reduced to a deterministic command.
-
-    The Proposal never becomes a plan directly. It becomes the same overlay a
-    user's review form submits, and activation runs `create_selection_plan`
-    over it - so the plan that lands passed the identical Profile, allowed-fact,
-    budget, and optimistic-source checks a deterministic plan passes (§13).
-    """
-
-    command: CreateSelectionPlanCommand
-    proposal: SelectionProposal
-    evidence: ProviderEvidence
-
 
 #: Single-user product: there is one actor, and the record says so plainly
 #: rather than inventing an identity the system does not have.
@@ -115,46 +66,6 @@ ACCEPTANCE_ACTOR = "user"
 
 class AnalysisService(ServiceBase[PreparationRepository]):
     """Classification, fit, and the analysis record."""
-
-    def analyze(
-        self,
-        command: AnalyzeCommand,
-    ) -> AnalysisResult:
-        """Classify one exact job snapshot.
-
-        The snapshot is named by the caller. `latest` is a query convenience
-        and belongs to the compatibility layer, not to a command: a command
-        that picks its own source can silently analyse something other than
-        what the caller was looking at.
-        """
-        self.load_active_application(command.application_id)
-        prepared = self.prepare(command)
-        return self.activate(command, prepared)
-
-    @staticmethod
-    def _consistent_profile(analysis: JobAnalysis, profiles: ProfileStore) -> Profile:
-        """The Profile this classification names, or the refusal that it disagrees.
-
-        A Track, Profile, and Emphasis that disagree can never produce a draft,
-        so the combination is refused wherever it is about to be acted on rather
-        than only where it is about to be written.
-        """
-        try:
-            selected = profiles.get(analysis.profile)
-        except (KeyError, ValueError) as exc:
-            raise PreconditionFailed(f"analysis selected an unavailable Profile: {exc}") from exc
-        if analysis.track is not selected.track:
-            raise StateConflict(
-                f"classified Track {analysis.track.value} and Profile "
-                f"{analysis.profile.value} are inconsistent: {analysis.profile.value} "
-                f"belongs to Track {selected.track.value}"
-            )
-        if analysis.emphasis not in selected.allowed_emphases:
-            raise StateConflict(
-                f"Emphasis {analysis.emphasis.value} is not allowed for Profile "
-                f"{analysis.profile.value}"
-            )
-        return selected
 
     def _analysis_record(
         self,
@@ -207,36 +118,11 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
         knowledge = self.load_knowledge()
         profiles = knowledge.profiles
-        try:
-            deterministic = classify_job(
-                job_text,
-                facts=knowledge.facts,
-                profiles=profiles,
-                concepts=knowledge.requirement_concepts,
-                normalized_hash=snapshot["normalized_hash"],
-                track_override=command.track_override,
-                profile_override=command.profile_override,
-                emphasis_override=command.emphasis_override,
-                language_override=command.language_override,
-            )
-        except ValueError as exc:
-            raise PreconditionFailed(f"invalid analysis request: {exc}") from exc
-        result = deterministic
-        used_provider, used_model = "deterministic", "rules-v1"
+        if command.provider != "openai" or operation_id is None:
+            raise PreconditionFailed("analysis requires an OpenAI Operation")
         evidence: ProviderEvidence | None = None
         extraction_evidence: ProviderEvidence | None = None
-        if command.provider == "openai":
-            if operation_id is None:
-                raise PreconditionFailed(
-                    "AI analysis runs as an Operation; there is no synchronous form"
-                )
-            # Stage-1 plan §3.7 steps 3-7: a verified AI extraction replaces
-            # `deterministic`'s requirements and their projected gaps *before*
-            # the classification proposal is asked for or merged. Extraction
-            # authority (D2) and classification authority (Track/Profile/
-            # Emphasis) are separate AI tasks with separate gates; folding them
-            # into one call would blur exactly the boundary product-spec §12
-            # is built on.
+        try:
             extracted_answer = self.provider.propose_requirement_extraction(
                 RequirementExtractionContext(
                     job_text=job_text,
@@ -292,78 +178,64 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 f"ai:{extracted_answer.provenance.context.task_contract_version}:"
                 f"{extracted_answer.provenance.context.prompt_version}"
             )
-            deterministic = rebase_requirements(
-                deterministic,
-                requirements=verified_requirements,
-                extraction_version=extraction_namespace,
-                facts=knowledge.facts,
-                extraction_failed=extraction_is_failed(
-                    job_text, verified_requirements, knowledge.requirement_concepts
+            answered = self.provider.propose_job_analysis(
+                JobAnalysisContext(
+                    job_text=job_text,
+                    requirements=[item.model_dump(mode="json") for item in verified_requirements],
+                    overrides={
+                        key: value
+                        for key, value in {
+                            "track": command.track_override,
+                            "profile": command.profile_override,
+                            "emphasis": command.emphasis_override,
+                            "language": command.language_override,
+                        }.items()
+                        if value is not None
+                    },
                 ),
-                # Both were just computed against this same `job_text`, in this
-                # same call, which is the condition `rebase_requirements` takes
-                # them explicitly for.
-                requirements_absent=not verified_requirements,
-                requirements_unmapped=bool(unmatched_lines) and bool(verified_requirements),
-                # The stored confidence is restated against the extraction that
-                # is now on record. `classify_job`'s own extraction score came
-                # from the concept vocabulary this call just replaced, and
-                # leaving it in place held the approval gate shut on a posting
-                # the provider read in full.
-                completeness=span_completeness(
-                    job_text,
-                    attested_spans(verified_requirements),
-                    knowledge.requirement_concepts,
-                ),
-                classification_score=classification_confidence_for(job_text, deterministic.profile),
-            ).model_copy(
-                update={
-                    "analysis_version": "1.1",
-                    "unmapped_statements": unmapped,
-                    "understanding": understanding,
-                }
+                model=command.model,
+                reasoning_effort=command.reasoning_effort,
             )
-            result = deterministic
-            # The provider sees the full deterministic picture as context, but it
-            # answers on the narrower proposal contract; deterministic policy decides
-            # what survives.
+            evidence = self.preserve(
+                command.application_id, operation_id, "propose_job_analysis", answered.provenance
+            )
+            overrides = {
+                key: value
+                for key, value in {
+                    "track": command.track_override,
+                    "profile": command.profile_override,
+                    "emphasis": command.emphasis_override,
+                    "language": command.language_override,
+                }.items()
+                if value is not None
+            }
             try:
-                answered = self.provider.propose_job_analysis(
-                    JobAnalysisContext(
-                        job_text=job_text,
-                        deterministic_classification={
-                            "track": deterministic.track.value,
-                            "profile": deterministic.profile.value,
-                            "emphasis": deterministic.emphasis.value,
-                            "confidence": deterministic.confidence,
-                            "language": deterministic.language,
-                        },
-                        deterministic_gaps=[
-                            gap.model_dump(mode="json") for gap in deterministic.gaps
-                        ],
-                        overrides={
-                            str(key): value for key, value in deterministic.user_override.items()
-                        },
+                result = build_analysis(
+                    requirements=verified_requirements,
+                    extraction_version=extraction_namespace,
+                    extraction_failed=extraction_is_failed(
+                        job_text, verified_requirements, knowledge.requirement_concepts
                     ),
-                    model=command.model,
-                    reasoning_effort=command.reasoning_effort,
+                    requirements_absent=not verified_requirements,
+                    requirements_unmapped=bool(unmatched_lines) and bool(verified_requirements),
+                    proposal=answered.proposal,
+                    profiles=profiles,
+                    facts=knowledge.facts,
+                    unmapped_statements=unmapped,
+                    understanding=understanding,
+                    overrides=overrides,
                 )
-                evidence = self.preserve(
-                    command.application_id,
-                    operation_id,
-                    "propose_job_analysis",
-                    answered.provenance,
-                )
-                result = merge_classification(deterministic, answered.proposal, profiles)
-                used_provider = answered.provenance.context.provider
-                used_model = answered.provenance.context.model
-            except ApplicationError as exc:
-                exc.completed_evidence = tuple(
-                    item for item in (extraction_evidence, evidence) if item is not None
-                )
-                raise
-        elif command.provider != "deterministic":
-            raise DependencyUnavailable(f"unsupported provider: {command.provider}")
+            except ValueError as exc:
+                failure = ProviderInvalidOutput(str(exc), provenance=answered.provenance)
+                failure.evidence = evidence
+                raise failure from exc
+            used_provider = answered.provenance.context.provider
+            used_model = answered.provenance.context.model
+        except ApplicationError as exc:
+            exc.completed_evidence = tuple(
+                item for item in (extraction_evidence, evidence) if item is not None
+            )
+            raise
 
         accepted: dict[str, str] = {
             **({"fit": "accepted-low-fit"} if command.accept_low_fit else {}),
@@ -385,25 +257,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         # and Emphasis disagree can never produce a draft, so persisting it would
         # only leave the application classified by a combination the engine
         # refuses to act on.
-        selected_profile = self._consistent_profile(result, profiles)
-
-        try:
-            _, plan_manifest = build_selection(
-                analysis=result,
-                profile=selected_profile,
-                policy=knowledge.policies.get(result.emphasis),
-                policy_store_version=knowledge.policies.version,
-                facts=knowledge.facts,
-                line_groups=(
-                    knowledge.presentations.line_groups(selected_profile, result.emphasis)
-                    if knowledge.presentations is not None
-                    else None
-                ),
-            )
-        except DomainMissingFactRendering as exc:
-            raise MissingFactRendering(exc.fact_id, exc.language) from exc
-        except ValueError as exc:
-            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
+        selected_profile = AnalysisSelection.profile(result, profiles)
+        plan_manifest = AnalysisSelection.manifest(result, knowledge)
 
         return PreparedAnalysis(
             result=result,
@@ -452,7 +307,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # and an id that no longer names one is refused rather than stored.
             accepted_requirement_ids=sorted(
                 set(
-                    self._acceptable_requirement_ids(
+                    AnalysisSelection.acceptable_requirement_ids(
                         list(command.accepted_requirement_ids),
                         prepared.result,
                         command.expected_selection_plan_id,
@@ -524,26 +379,13 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         selection_analysis = analysis.model_copy(update={"emphasis": effective_emphasis})
         knowledge = self.load_knowledge()
         self._refuse_moved_sources(command, knowledge)
-        selected_profile = self._consistent_profile(selection_analysis, knowledge.profiles)
-        try:
-            _, manifest = build_selection(
-                analysis=selection_analysis,
-                profile=selected_profile,
-                policy=knowledge.policies.get(effective_emphasis),
-                policy_store_version=knowledge.policies.version,
-                facts=knowledge.facts,
-                line_groups=(
-                    knowledge.presentations.line_groups(selected_profile, effective_emphasis)
-                    if knowledge.presentations is not None
-                    else None
-                ),
-                pinned_fact_ids=frozenset(command.pinned_fact_ids),
-                excluded_fact_ids=frozenset(command.excluded_fact_ids),
-            )
-        except DomainMissingFactRendering as exc:
-            raise MissingFactRendering(exc.fact_id, exc.language) from exc
-        except ValueError as exc:
-            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
+        AnalysisSelection.profile(selection_analysis, knowledge.profiles)
+        manifest = AnalysisSelection.manifest(
+            selection_analysis,
+            knowledge,
+            pinned_fact_ids=frozenset(command.pinned_fact_ids),
+            excluded_fact_ids=frozenset(command.excluded_fact_ids),
+        )
         manifest = manifest.model_copy(update={"emphasis_override": explicit_emphasis})
         plan = repo.create_selection_plan(
             command.application_id,
@@ -557,7 +399,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
                 "track": analysis.track.value,
                 "emphasis": effective_emphasis.value,
             },
-            new_acceptances=self._new_acceptances(command, analysis),
+            new_acceptances=AnalysisSelection.new_acceptances(command, analysis),
             expected_selection_plan_id=command.expected_selection_plan_id,
             enforce_expected_selection_plan=command.enforce_expected_selection_plan,
             refuse_matching_context_operation=command.refuse_matching_context_operation,
@@ -568,78 +410,6 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             selection_plan_id=plan.id,
             plan=plan,
         )
-
-    def _acceptable_requirement_ids(
-        self,
-        requirement_ids: list[str],
-        analysis: JobAnalysis,
-        expected_selection_plan_id: str | None,
-    ) -> list[str]:
-        """The submitted ids, refused unless each names a hard gap of this analysis.
-
-        The analysis checked against is the one the decision will be recorded
-        on. When a classification decision creates a new one, that is the new
-        analysis: requirement identity is keyed on the snapshot text, so an
-        extracted requirement keeps its id across a reclassification, while a
-        rule-derived gap can disappear when the Track moves. Validating against
-        the analysis being written is what keeps an id that no longer names a
-        gap from being stored as a decision about nothing.
-        """
-        if not requirement_ids:
-            return []
-        if expected_selection_plan_id is None:
-            # Optional in general - most plan writes accept nothing - but an
-            # acceptance without it is a decision applied to whatever plan is
-            # active now rather than the one the user was shown, which is the
-            # rebase the check exists to prevent.
-            raise PreconditionFailed(
-                "accepting a gap requires expected_selection_plan_id: the plan the "
-                "decision was made against"
-            )
-        hard = {
-            gap.requirement_id
-            for gap in analysis.gaps
-            if gap.severity == "hard" and gap.requirement_id is not None
-        }
-        unknown = sorted(set(requirement_ids) - hard)
-        if unknown:
-            raise PreconditionFailed(
-                f"no hard gap to accept for requirement(s): {', '.join(unknown)}"
-            )
-        return list(requirement_ids)
-
-    def _new_acceptances(
-        self, command: CreateSelectionPlanCommand, analysis: JobAnalysis
-    ) -> list[AcceptedGap]:
-        """The acceptances this submission adds, and nothing else.
-
-        Carrying the standing ones forward is the repository's job, done inside
-        the write transaction: doing it here meant reading a plan that could be
-        overtaken before the write, which dropped an acceptance silently.
-
-        Only a requirement that actually has a hard gap may be accepted. A
-        requirement id naming no hard gap is refused rather than stored: a
-        recorded decision about nothing would later read as a decision about
-        something.
-        """
-        accepted = self._acceptable_requirement_ids(
-            list(command.accepted_requirement_ids),
-            analysis,
-            command.expected_selection_plan_id,
-        )
-        if not accepted:
-            return []
-        now = utc_now()
-        return [
-            AcceptedGap(
-                requirement_id=requirement_id,
-                job_analysis_id=command.job_analysis_id,
-                actor=ACCEPTANCE_ACTOR,
-                accepted_at=now,
-                reason=command.acceptance_reason,
-            )
-            for requirement_id in sorted(set(accepted))
-        ]
 
     def prepare_selection_proposal(
         self,
@@ -672,12 +442,9 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             else analysis
         )
         knowledge = self.load_knowledge()
-        profile = self._consistent_profile(effective_analysis, knowledge.profiles)
+        profile = AnalysisSelection.profile(effective_analysis, knowledge.profiles)
         allowed = allowed_fact_pool(profile)
-        deterministic, manifest = self._deterministic_selection(
-            effective_analysis, profile, knowledge
-        )
-        del deterministic
+        manifest = AnalysisSelection.manifest(effective_analysis, knowledge)
 
         answered = self.provider.propose_selection_plan(
             SelectionPlanContext(
@@ -749,30 +516,6 @@ class AnalysisService(ServiceBase[PreparationRepository]):
         """
         repo = repository or self.repo
         return self.create_selection_plan(prepared.command, repo)
-
-    def _deterministic_selection(self, analysis: JobAnalysis, profile: Profile, knowledge):
-        """The plan the rules would build, as context for a proposal.
-
-        Shared with nothing else on purpose: it is context, not a commit. The
-        plan that lands is built again at activation from current Knowledge.
-        """
-        try:
-            return build_selection(
-                analysis=analysis,
-                profile=profile,
-                policy=knowledge.policies.get(analysis.emphasis),
-                policy_store_version=knowledge.policies.version,
-                facts=knowledge.facts,
-                line_groups=(
-                    knowledge.presentations.line_groups(profile, analysis.emphasis)
-                    if knowledge.presentations is not None
-                    else None
-                ),
-            )
-        except DomainMissingFactRendering as exc:
-            raise MissingFactRendering(exc.fact_id, exc.language) from exc
-        except ValueError as exc:
-            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
 
     @staticmethod
     def _refuse_moved_sources(command: CreateSelectionPlanCommand, knowledge) -> None:
@@ -932,34 +675,7 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             )
 
         if changes_meaning:
-            # Deterministic re-derivation under the user's overrides. The new
-            # record names `deterministic` as its provider truthfully: it is
-            # what produced it, whatever produced the analysis being decided on.
-            result = self.analyze(
-                AnalyzeCommand(
-                    application_id=command.application_id,
-                    job_snapshot_id=record["job_snapshot_id"],
-                    track_override=merged.get("track"),
-                    profile_override=merged.get("profile"),
-                    emphasis_override=merged.get("emphasis"),
-                    language_override=merged.get("language"),
-                    accept_low_fit=merged.get("fit") == "accepted-low-fit",
-                    # Carried across a decision the user takes on this same
-                    # posting, because a classification decision changes
-                    # neither the text nor what was read from it. A genuinely
-                    # new analysis - another snapshot, or changed Knowledge -
-                    # is reached through `analyze`, which never sets this, so
-                    # the acceptance does not survive one.
-                    accept_incomplete_analysis=(
-                        merged.get("analysis") == ACCEPTED_INCOMPLETE_ANALYSIS
-                    ),
-                    accepted_requirement_ids=list(command.accepted_requirement_ids),
-                    acceptance_reason=command.acceptance_reason,
-                    expected_analysis_id=command.expected_analysis_id,
-                    expected_selection_plan_id=command.expected_selection_plan_id,
-                    refuse_matching_context_operation=True,
-                )
-            )
+            result = self._revise_classification(command, analysis, record, merged)
             return AnalysisDecisionsResult(
                 application_id=command.application_id,
                 job_analysis_id=result.analysis_id,
@@ -1000,6 +716,45 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             created_analysis=False,
             analysis=analysis,
             plan=created.plan,
+        )
+
+    def _revise_classification(
+        self,
+        command: ApplyAnalysisDecisionsCommand,
+        analysis: JobAnalysis,
+        record: dict,
+        merged_overrides: dict[str, str],
+    ) -> AnalysisResult:
+        """Create a user-revised analysis without invoking an extractor or provider."""
+        knowledge = self.load_knowledge()
+        revised = revise_classification(analysis, merged_overrides, knowledge.profiles)
+        selected = AnalysisSelection.profile(revised, knowledge.profiles)
+        manifest = AnalysisSelection.manifest(revised, knowledge)
+        return self.activate(
+            AnalyzeCommand(
+                application_id=command.application_id,
+                job_snapshot_id=record["job_snapshot_id"],
+                accepted_requirement_ids=list(command.accepted_requirement_ids),
+                acceptance_reason=command.acceptance_reason,
+                expected_analysis_id=command.expected_analysis_id,
+                expected_selection_plan_id=command.expected_selection_plan_id,
+                refuse_matching_context_operation=True,
+            ),
+            PreparedAnalysis(
+                result=revised,
+                plan_manifest=manifest,
+                provider="user",
+                model="classification-correction-v1",
+                candidate_context_version=knowledge.candidate.context_version,
+                candidate_context_hash=knowledge.candidate.version_hash,
+                profile_version=knowledge.profiles.version,
+                selection_policy_version=knowledge.policies.version,
+                track_emphasis_dependencies={
+                    "track": revised.track.value,
+                    "emphasis": revised.emphasis.value,
+                },
+                normalized_role=selected.normalized_role,
+            ),
         )
 
     def _correct_interpretations(
@@ -1056,20 +811,10 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # neither can be re-derived here - only carried forward.
             requirements_absent="requirements-absent" in analysis.approval_reasons,
             requirements_unmapped="requirements-unmapped" in analysis.approval_reasons,
-            # Derived rather than inherited, and identical to what the analysis
-            # already carries unless a correction moved a requirement: both are
-            # functions of the same snapshot text and the attested spans on the
-            # requirements themselves, neither of which a correction invents.
-            completeness=span_completeness(
-                job_text,
-                attested_spans(corrected_requirements),
-                knowledge.requirement_concepts,
-            ),
-            classification_score=classification_confidence_for(job_text, analysis.profile),
         )
         result = rebased.model_copy(
             update={
-                "analysis_version": "1.1",
+                "analysis_version": "2.0",
                 "user_override": merged_overrides,
                 "interpretation_decisions": [
                     *(analysis.interpretation_decisions or []),
@@ -1078,24 +823,8 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             }
         )
 
-        selected_profile = self._consistent_profile(result, knowledge.profiles)
-        try:
-            _, plan_manifest = build_selection(
-                analysis=result,
-                profile=selected_profile,
-                policy=knowledge.policies.get(result.emphasis),
-                policy_store_version=knowledge.policies.version,
-                facts=knowledge.facts,
-                line_groups=(
-                    knowledge.presentations.line_groups(selected_profile, result.emphasis)
-                    if knowledge.presentations is not None
-                    else None
-                ),
-            )
-        except DomainMissingFactRendering as exc:
-            raise MissingFactRendering(exc.fact_id, exc.language) from exc
-        except ValueError as exc:
-            raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
+        selected_profile = AnalysisSelection.profile(result, knowledge.profiles)
+        plan_manifest = AnalysisSelection.manifest(result, knowledge)
 
         prepared = PreparedAnalysis(
             result=result,

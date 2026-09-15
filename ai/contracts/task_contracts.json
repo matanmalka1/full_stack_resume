@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "prompt": {
     "version": "system-v4",
     "file": "ai/prompts/system-v4.md"
@@ -14,11 +14,11 @@
       "critical_state": true
     },
     "propose_job_analysis": {
-      "version": "2.0.0",
+      "version": "3.0.0",
       "input": "JobAnalysisContext",
-      "input_schema_version": "2.0.0",
+      "input_schema_version": "3.0.0",
       "output": "JobClassificationProposal",
-      "output_schema_version": "2.0.0",
+      "output_schema_version": "3.0.0",
       "critical_state": true
     },
     "propose_selection_plan": {

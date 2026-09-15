@@ -6,7 +6,6 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { Switch } from "@/ui/Switch";
 import { useWorkflowCommands } from "../../api/mutations";
 import { CommitBar, NEXT_STEP_LABEL } from "../../components/CommitBar";
 import { actionLabel } from "../../model/preparationLabels";
@@ -30,17 +29,8 @@ interface WorkflowActionsProps {
 }
 
 export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: WorkflowActionsProps) => {
-  /* This run's lane, chosen beside the button rather than in Settings. `undefined`
-     until touched means "follow the default", exactly like the override
-     `useAnalyzeCommand` takes - flipping the switch fixes an explicit choice for every
-     press after that, on this screen, independent of what the default is or later
-     becomes. It resets on remount, same as `keepPrevious` below: a choice made for one
-     visit to this screen, not a preference. */
-  const [analyzeOverride, setAnalyzeOverride] = useState<"openai" | "deterministic" | undefined>(undefined);
-
   const {
     analyze,
-    analyzeProvider,
     archive,
     commandsBlocked,
     draft,
@@ -50,7 +40,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
     replace,
     settings,
     workInFlight,
-  } = useWorkflowCommands(detail, plan, onQueued, analyzeOverride);
+  } = useWorkflowCommands(detail, plan, onQueued);
 
   /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
      draft carries manual wording that nothing regenerates, so the reader opts out of
@@ -80,7 +70,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
   const analyzeButton =
     plan.analyze === null || plan.analyze.reanalysis ? null : (
       <Button
-        disabled={settings === undefined}
+        disabled={settings === undefined || !aiRegenerationAvailable(settings)}
         key="analyze"
         onClick={() => analyze.mutate()}
         pending={analyze.isPending}
@@ -227,32 +217,14 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
           answer "why is that other button here", which is a question asked after the row
           is seen, not before.
 
-          The switch offers a one-run override only where AI is actually usable right
-          now; where it is not, `analyzeProvider` can only ever be the deterministic
-          default and a switch with one reachable position would be a control that looks
-          live and never does anything.
-
-          The analyze note names its cost the same way the generate note below it does:
-          read from the same `analyzeProvider` value `analyze.mutate()` is about to send -
-          the override folded in - so the reader sees which lane will run before the press
-          decides it. Only the first analysis is named here - `ReanalyzeCard` carries the
-          same switch and sentence for a re-analysis, beside the analysis it would
-          replace. */}
+          Analysis has one AI-only lane, so the note reports availability and cost rather
+          than presenting an execution-mode switch. */}
           {plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? null : (
             <div className="flex flex-col gap-2">
-              {!aiRegenerationAvailable(settings) ? null : (
-                <Switch
-                  checked={analyzeProvider !== undefined}
-                  description="עוקף את ברירת המחדל בהגדרות עבור הניתוח הזה בלבד."
-                  onChange={(checked) => setAnalyzeOverride(checked ? "openai" : "deterministic")}
-                >
-                  הרצת הניתוח הזה עם AI
-                </Switch>
-              )}
               <p className="text-support leading-6 text-cv-text-muted">
-                {analyzeProvider === undefined
-                  ? "הניתוח רץ במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע."
-                  : "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
+                {aiRegenerationAvailable(settings)
+                  ? "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."
+                  : "כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות."}
               </p>
             </div>
           )}

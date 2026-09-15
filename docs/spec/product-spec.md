@@ -84,23 +84,10 @@ derived structural denominator; a provider cannot certify its own completeness m
 by returning no unmapped statements.
 
 Without a configured provider, the application cannot create a new JobAnalysis. It may
-still read historical analyses and perform deterministic editing, validation, approval,
+still use an existing analysis to perform deterministic editing, validation, approval,
 rendering, integrity, export, and recruitment workflows whose prerequisites already
 exist. Provider failure never triggers a silent rules-based analysis. The UI presents
 provider configuration or retry instead of a fabricated semantic result.
-
-> **Unresolved conflict with the implementation (recorded 2026-09-15, not decided
-> here).** `POST /api/v1/applications/{id}/analyses` still accepts
-> `provider: "deterministic"` and still defaults to it, and
-> `AnalysisService.analyze` still produces a complete rules-only JobAnalysis
-> (`used_provider="deterministic"`, `used_model="rules-v1"`) on that branch. Settings
-> still offers `deterministic` as the default execution mode, and
-> `tests/test_pipeline_end_to_end.py` — the gate `AGENTS.md` names for a projection or
-> signature change — creates its analysis through that path with `OPENAI_API_KEY`
-> unset. Either this paragraph overstates D5 and an explicitly requested rules analysis
-> remains in scope, or the deterministic analysis branch and the test that depends on it
-> are due for removal. Resolving it is a product decision, and the no-silent-fallback
-> half of the rule binds under either answer.
 
 A user decision remains required for a material professional choice, a hard requirement
 gap, low Fit, incomplete analysis, or a manual correction of requirement meaning or

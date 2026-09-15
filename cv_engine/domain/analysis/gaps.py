@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 
 from ..contracts.analysis import FitLevel, Gap, JobAnalysis, Requirement
@@ -99,9 +98,8 @@ def fit_level_from_score(fit_score: float | None, gaps: Sequence[Gap]) -> FitLev
 
     Order matters:
 
-    1. A hard gap - a mandatory requirement `derive_gaps`/`gaps_from_requirements`
-       could actually decide was unmet, at either the deterministic or the
-       AI-merged stage - forces LOW outright, even with no score at all.
+    1. A hard gap projected from a mandatory verified requirement forces LOW
+       outright, even with no score at all.
        `apply_analysis_decisions(accept_incomplete_analysis=True)` depends on
        exactly this: "Fit remains unknown unless an independently established
        hard gap requires low" (state-and-use-cases.md §12,
@@ -215,109 +213,3 @@ def unaccepted_hard_gaps(
         for gap in analysis.gaps
         if gap.severity == "hard" and gap.requirement_id not in accepted
     ]
-
-
-def merge_gaps(deterministic: Sequence[Gap], proposed: Sequence[Gap]) -> list[Gap]:
-    """Union the two gap sets under a monotonic policy.
-
-    Every deterministic gap survives with its own reason and substitute facts. A
-    proposal may add a gap or raise an existing one from warning to hard; it can
-    never drop a gap, soften its severity, or rewrite its authoritative text.
-    """
-    merged: dict[str, Gap] = {gap.requirement: gap for gap in deterministic}
-    for gap in proposed:
-        existing = merged.get(gap.requirement)
-        if existing is None:
-            merged[gap.requirement] = gap
-        elif gap.severity == "hard" and existing.severity == "warning":
-            merged[gap.requirement] = Gap(
-                requirement=existing.requirement,
-                severity="hard",
-                reason=existing.reason,
-                substitute_fact_ids=existing.substitute_fact_ids,
-                requirement_id=existing.requirement_id,
-            )
-    return list(merged.values())
-
-
-def derive_gaps(lowered: str) -> list[Gap]:
-    """The legacy wording rules, for the concepts no vocabulary entry models yet.
-
-    Track-independent, and the parameter that said otherwise is gone. Every
-    rule below keys on the posting's own wording; none has consulted the Track
-    since the years rule was removed for matching a company's age, so the
-    argument was a promise the body did not keep - and a caller reading the
-    signature would have believed a Development posting and a Sales posting
-    could get different gaps from the same text.
-    """
-    gaps: list[Gap] = []
-    if re.search(r"(?:direct|proven|must have|required).{0,40}saas sales", lowered):
-        gaps.append(
-            Gap(
-                requirement="Direct SaaS Sales",
-                severity="hard",
-                reason="Device Sales plus separate Development experience does not verify direct SaaS Sales.",
-                substitute_fact_ids=["sales.company.activity", "development.phdigital.role"],
-            )
-        )
-    elif "saas" in lowered:
-        gaps.append(
-            Gap(
-                requirement="Direct SaaS Sales preference",
-                severity="warning",
-                reason=(
-                    "Direct SaaS/software Sales is not verified; B2B Sales and separate "
-                    "professional Development experience may be presented without merging them."
-                ),
-                substitute_fact_ids=[
-                    "development.phdigital.role",
-                    "development.phdigital.fullstack",
-                ],
-            )
-        )
-    if re.search(
-        r"(?:using|use|experience|familiarity).{0,50}\bcrm\b|\bcrm\b.{0,30}(?:tool|system)", lowered
-    ):
-        gaps.append(
-            Gap(
-                requirement="Sales CRM usage",
-                severity="warning",
-                reason=(
-                    "Use of a named Sales CRM is not verified; canonical pipeline, Priority ERP, "
-                    "and CRM-development experience may be shown instead."
-                ),
-                substitute_fact_ids=[
-                    "sales.leadership.pipeline",
-                    "sales.tool.priority",
-                    "development.phdigital.crm",
-                ],
-            )
-        )
-    if re.search(
-        r"strategic partnerships?|distribution partners?|strategic b2b channels?", lowered
-    ):
-        gaps.append(
-            Gap(
-                requirement="Strategic partnerships / channel Sales experience",
-                severity="warning",
-                reason=(
-                    "Direct strategic-partnership or channel-Sales ownership is not verified; "
-                    "new-business prospecting, complex deals, and strategic-customer work may be shown."
-                ),
-                substitute_fact_ids=[
-                    "sales.cycle.prospecting",
-                    "sales.achievement.complex_deals",
-                    "sales.leadership.strategic_customers",
-                ],
-            )
-        )
-    if "salesforce" in lowered:
-        gaps.append(
-            Gap(
-                requirement="Salesforce",
-                severity="warning",
-                reason="Salesforce is not verified; Priority ERP and pipeline experience may be presented instead.",
-                substitute_fact_ids=["sales.tool.priority", "sales.leadership.pipeline"],
-            )
-        )
-    return gaps

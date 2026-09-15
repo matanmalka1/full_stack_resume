@@ -2072,10 +2072,10 @@ export interface components {
             profile_override?: components["schemas"]["ProfileName"] | null;
             /**
              * Provider
-             * @default deterministic
-             * @enum {string}
+             * @default openai
+             * @constant
              */
-            provider: "deterministic" | "openai";
+            provider: "openai";
             track_override?: components["schemas"]["Track"] | null;
         };
         /** CreateApplicationRequest */
@@ -3117,8 +3117,7 @@ export interface components {
          * RequirementInterpretation
          * @description A provider's declared reading of one requirement. All-or-nothing: a
          *     `Requirement` either carries a complete interpretation or none at all -
-         *     see `interpretation_of()` in `requirements/compat.py` for why a legacy
-         *     record's absence of these fields is never filled in with a default.
+         *     `unspecified` and absent member attestations preserve uncertainty explicitly.
          */
         RequirementInterpretation: {
             /**

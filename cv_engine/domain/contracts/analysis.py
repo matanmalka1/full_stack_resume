@@ -69,8 +69,7 @@ class RequirementMember(StrictModel):
 class RequirementInterpretation(StrictModel):
     """A provider's declared reading of one requirement. All-or-nothing: a
     `Requirement` either carries a complete interpretation or none at all -
-    see `interpretation_of()` in `requirements/compat.py` for why a legacy
-    record's absence of these fields is never filled in with a default.
+    `unspecified` and absent member attestations preserve uncertainty explicitly.
     """
 
     source_role: SourceRole
@@ -100,16 +99,8 @@ class UnmappedStatement(StrictModel):
 
 
 class UnderstandingSources(StrictModel):
-    """Where credit for reading a requirement-bearing statement came from.
+    """How many independently segmented demands the AI extraction covered."""
 
-    Three counts, not one `understood_elsewhere: bool`: a bool answers
-    "was anything understood" but not "by what", and attributing a failure
-    needs to know which of concepts, legacy rules, or an AI proposal did the
-    reading - or that none of them did.
-    """
-
-    by_concepts: int
-    by_rules: int
     by_ai: int
 
 
@@ -187,13 +178,12 @@ class Requirement(StrictModel):
     missing_components: list[MissingComponent] = []
     #: None = this record was written before the interpretation gate existed.
     #: Not "single, not negated" - that would be inventing a value the record
-    #: never carried. Read through `interpretation_of()`, never directly.
+    #: never carried. Consumers must preserve that unknown value.
     interpretation: RequirementInterpretation | None = None
     #: None = this record carries no attestation; do not infer which
     #: extractor produced it from that absence.
     attestation: RequirementAttestation | None = None
-    #: None = this record predates the extractor namespace introduced with
-    #: the interpretation gate.
+    #: None is used only for an engine-synthesized unmapped requirement.
     extractor: str | None = None
 
 
@@ -213,7 +203,7 @@ Language = Literal["en", "he"]
 
 
 class JobClassificationProposal(StrictModel):
-    """What an AI provider is allowed to propose for `classify_job`.
+    """What the classification provider is allowed to propose.
 
     Deliberately narrower than `JobAnalysis`: the fields that route safety
     decisions — language, Fit, approval, requirements, overrides, analysis
@@ -225,23 +215,18 @@ class JobClassificationProposal(StrictModel):
     track: Track
     profile: ProfileName
     emphasis: Emphasis
+    language: Language
     confidence: float = Field(ge=0, le=1)
     rationale: str
-    gaps: list[Gap]
     keywords: list[str]
 
 
 class JobAnalysis(StrictModel):
-    #: "1.1" carries `interpretation`/`attestation`/`understanding`/
-    #: `unmapped_statements`; "1.0" and unset predate them and read as `None`
-    #: through the explicit version adapter, never as an invented default.
-    analysis_version: str = "1.0"
+    analysis_version: Literal["2.0"] = "2.0"
     track: Track
     profile: ProfileName
     emphasis: Emphasis
     confidence: float = Field(ge=0, le=1)
-    deterministic_confidence: float | None = Field(default=None, ge=0, le=1)
-    proposal_confidence: float | None = Field(default=None, ge=0, le=1)
     rationale: str
     fit: FitLevel
     #: The canonical numeric fit measure `fit` is read off (`fit_level_from_score`,
@@ -252,21 +237,11 @@ class JobAnalysis(StrictModel):
     #: or extraction failed); absent on analyses written before this field existed.
     fit_score: float | None = Field(default=None, ge=0, le=1)
     gaps: list[Gap]
-    #: The complete requirement picture, matched requirements included. `gaps`
-    #: is its unmet projection. Defaulted so analyses stored before requirement
-    #: coverage existed - including those bound to approved and submitted
-    #: revisions - keep deserializing unchanged.
-    requirements: list[Requirement] = []
-    #: Which extractor produced `requirements`. "0" marks a legacy analysis
-    #: whose stored `gaps` are authoritative and are never re-derived.
-    extraction_version: str = "0"
-    #: None = this analysis never asked the completeness question (predates
-    #: the interpretation gate). [] = it asked, and found no unmapped
-    #: requirement-bearing statement. The distinction is deliberate: an empty
-    #: list is a finding, not a missing question.
-    unmapped_statements: list[UnmappedStatement] | None = None
-    understanding: UnderstandingSources | None = None
-    interpretation_decisions: list[InterpretationDecision] | None = None
+    requirements: list[Requirement]
+    extraction_version: str
+    unmapped_statements: list[UnmappedStatement]
+    understanding: UnderstandingSources
+    interpretation_decisions: list[InterpretationDecision] = []
     mandatory_requirements: list[str]
     preferred_requirements: list[str]
     keywords: list[str]

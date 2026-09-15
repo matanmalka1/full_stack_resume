@@ -56,7 +56,7 @@ from .evidence import (
     boundary_facts_for_quote,
     decide_coverage,
 )
-from .extraction import (
+from .identity import (
     normalize_span,
     requirement_id,
     undetermined_requirement,
@@ -468,7 +468,7 @@ def verify_and_cover_extraction(
         # one because its dedup key (concept and demanded value) is *narrower*
         # than its id key (the matched substring), so two genuinely different
         # requirements can normalize to one `identity_span`
-        # (`extract_requirements`'s `seen`). Here every field that separates
+        # Here every field that separates
         # two proposed requirements - quote, interpretation, kind, demanded
         # value - is already folded into the id, and a position on top would
         # only make two statements of one requirement look like two.
@@ -488,7 +488,7 @@ def verify_and_cover_extraction(
         # extraction did cover.
         mapped_spans.append(span)
         # A provider restating one requirement is one requirement - the answer
-        # `extract_requirements` already gives. Both copies passed both gates,
+        # the identity function already gives. Both copies passed both gates,
         # so a duplicate is collapsed rather than rejected; keeping both would
         # price one demand into `fit_score` twice and leave two entries under
         # one id, which nothing holding an id could tell apart. The key is the
@@ -561,7 +561,7 @@ def verify_and_cover_extraction(
         for line in requirement_lines(source_text, concepts)
         if any(overlaps((line.start, line.end), span) for span in mapped_spans)
     )
-    understanding = UnderstandingSources(by_concepts=0, by_rules=0, by_ai=by_ai)
+    understanding = UnderstandingSources(by_ai=by_ai)
     return requirements, unmapped, understanding, unmatched_lines
 
 

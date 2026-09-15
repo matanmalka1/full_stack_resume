@@ -233,3 +233,8 @@ def attach_fact_to_section(
     if pin and fact_id not in spec.setdefault("pinned_fact_ids", []):
         spec["pinned_fact_ids"].append(fact_id)
     return Profile.model_validate(payload), payload
+
+
+def allowed_fact_pool(profile: Profile) -> set[str]:
+    """Every fact a Profile permits across all of its sections."""
+    return {fact_id for section in profile.sections for fact_id in section.fact_ids}
