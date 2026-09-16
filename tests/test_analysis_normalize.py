@@ -10,6 +10,7 @@ about the candidate, and none of them discards the rest of the reading.
 from __future__ import annotations
 
 from cv_engine.domain.analysis.normalize import normalize_analysis_proposal
+from cv_engine.domain.analysis.projection import gaps
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal, ProposedRequirement
 from cv_engine.util import sha256_text
 
@@ -87,7 +88,7 @@ def test_a_fact_the_store_does_not_have_is_dropped_and_disclosed(
     """An invented citation never reaches the analysis, and never silently.
 
     Dropping the id alone would leave `matched` standing on nothing, so the
-    coverage falls with it - to `undetermined`, not `unsupported`: the evidence
+    coverage falls with it - to `unknown`, not `unsupported`: the evidence
     failed, which is not a finding that the candidate lacks the thing.
     """
     analysis = _normalize(
@@ -105,7 +106,7 @@ def test_a_fact_the_store_does_not_have_is_dropped_and_disclosed(
 
     requirement = analysis.requirements[0]
     assert requirement.supporting_fact_ids == []
-    assert requirement.coverage == "undetermined"
+    assert requirement.coverage == "unknown"
     # The incompleteness hint fires too - this posting states three
     # requirement lines and the proposal read one - and it is a hint, not a
     # finding about the entry under test.
@@ -131,7 +132,7 @@ def test_a_quote_the_posting_does_not_carry_is_kept_as_a_warning(
     )
 
     assert len(analysis.requirements) == 1
-    assert analysis.requirements[0].attestation is None
+    assert analysis.requirements[0].source is not None
     assert {issue.code for issue in analysis.issues} == {
         "quote_not_found",
         "analysis_may_be_incomplete",
@@ -156,7 +157,7 @@ def test_a_quote_the_posting_repeats_stays_verified_without_offsets(
         source_text=posting,
     )
 
-    assert analysis.requirements[0].attestation is None
+    assert analysis.requirements[0].source is not None
     assert "quote_ambiguous" in {issue.code for issue in analysis.issues}
     assert "quote_not_found" not in {issue.code for issue in analysis.issues}
     # Verified, and counted as verified: the missing span is not the question.
@@ -245,8 +246,6 @@ def test_the_record_carries_why_the_reading_was_narrowed(
     assert restored.source_coverage == 1.0
     assert restored.requirements[0].source is not None
     assert restored.requirements[0].source.match == "exact"
-    # The provider reported no classification confidence and none is invented.
-    assert restored.confidence is None
 
 
 def test_an_analysis_written_before_these_fields_still_reads(
@@ -307,9 +306,9 @@ def test_a_restated_requirement_keeps_the_stronger_demand(
     )
 
     requirement = analysis.requirements[0]
-    assert requirement.mandatory is True
+    assert requirement.importance == "mandatory"
     assert requirement.coverage == "unsupported"
-    assert [gap.severity for gap in analysis.gaps] == ["hard"]
+    assert [gap.severity for gap in gaps(analysis.requirements, fact_store)] == ["hard"]
 
 
 def test_a_duplicate_issue_points_at_the_proposal_the_provider_sent(
@@ -369,7 +368,7 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
     requirement = analysis.requirements[0]
     assert len(analysis.requirements) == 1
     assert requirement.coverage == "partial"
-    assert requirement.mandatory is True
+    assert requirement.importance == "mandatory"
     assert set(requirement.supporting_fact_ids) == {
         CANONICAL_FACT,
         "sales.cycle.account_management",

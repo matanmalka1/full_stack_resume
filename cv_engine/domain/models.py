@@ -9,14 +9,10 @@ older tests without recreating the former God Module.
 from .contracts.analysis import (
     Coverage,
     FitLevel,
-    Gap,
     JobAnalysis,
-    JobClassificationProposal,
     Language,
-    MissingComponent,
     OverrideKey,
     Requirement,
-    RequirementKind,
 )
 from .contracts.base import StrictModel
 from .contracts.drafts import (
@@ -57,13 +53,11 @@ from .contracts.records import (
 )
 from .contracts.recruitment import ApplicationStatus, TerminalOutcome
 from .contracts.selection import (
-    AcceptedGap,
     OmissionReason,
     SelectionCandidate,
     SelectionManifest,
     SelectionOutcome,
     SelectionPlan,
-    merge_accepted_gaps,
 )
 from .contracts.taxonomy import Emphasis, ProfileName, Track
 from .contracts.validation import (
@@ -73,7 +67,6 @@ from .contracts.validation import (
 )
 
 __all__ = [
-    "AcceptedGap",
     "ApplicationStatus",
     "ApprovedRevision",
     "AuditRecord",
@@ -93,11 +86,8 @@ __all__ = [
     "FactSource",
     "FactStatus",
     "FitLevel",
-    "Gap",
     "JobAnalysis",
-    "JobClassificationProposal",
     "Language",
-    "MissingComponent",
     "OmissionReason",
     "OverrideKey",
     "Profile",
@@ -110,7 +100,6 @@ __all__ = [
     "ProviderUsage",
     "ReadyQualification",
     "Requirement",
-    "RequirementKind",
     "ResumeSection",
     "ResumeSectionSpec",
     "SectionProposal",
@@ -126,5 +115,4 @@ __all__ = [
     "ValidationReport",
     "ValidationRunLineage",
     "WorkingDraft",
-    "merge_accepted_gaps",
 ]

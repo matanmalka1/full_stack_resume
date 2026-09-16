@@ -11,13 +11,12 @@ import pytest
 from helpers import PAYME_TECH_SALES_JOB
 from pydantic import ValidationError
 
-from cv_engine.domain.contracts.analysis import RequirementAttestation
+from cv_engine.domain.analysis.projection import fit_level, fit_score
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import (
     Coverage,
     Emphasis,
-    Gap,
     Profile,
     Requirement,
     SelectionCandidate,
@@ -243,9 +242,10 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
     draft_factory,
 ) -> None:
     boundary_quote = "inside Sales experience in a SaaS or tech-related industry"
-    boundary_start = PAYME_TECH_SALES_JOB.index(boundary_quote)
     closing_quote = "guide the Sales process through closing"
-    closing_start = PAYME_TECH_SALES_JOB.index(closing_quote)
+    # Both are genuinely in the posting; the engine locates them itself.
+    assert boundary_quote in PAYME_TECH_SALES_JOB
+    assert closing_quote in PAYME_TECH_SALES_JOB
     # `high` was never earned here. This posting states two requirements a real
     # extraction would read: the boundary quote below - the exact context the
     # candidate's own `sales.tech_sales.boundary` fact says is unverified, sales
@@ -265,50 +265,29 @@ def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations
             Requirement(
                 requirement_id="payme-tech-sales-boundary",
                 text=boundary_quote,
-                kind="presence",
-                mandatory=False,
+                importance="preferred",
                 coverage="partial",
                 boundary_fact_ids=["sales.tech_sales.boundary"],
-                attestation=RequirementAttestation(
-                    quote=boundary_quote,
-                    start=boundary_start,
-                    end=boundary_start + len(boundary_quote),
-                ),
             ),
             Requirement(
                 requirement_id="payme-tech-sales-closing",
                 text=closing_quote,
-                kind="presence",
-                mandatory=True,
+                importance="mandatory",
                 coverage="unsupported",
-                attestation=RequirementAttestation(
-                    quote=closing_quote,
-                    start=closing_start,
-                    end=closing_start + len(closing_quote),
-                ),
+                # The substitutes that earn these two facts their seats. They
+                # used to live on a separately stored gap; a gap's substitutes
+                # are the supporting facts of the requirement it projects, so
+                # they are stated here, once, and the gap is derived from it.
+                supporting_fact_ids=["sales.cycle.negotiation", "sales.leadership.pipeline"],
             ),
         ],
-        gaps=[
-            Gap(
-                requirement=closing_quote,
-                severity="hard",
-                reason="No fact directly evidences guiding the sales process through closing.",
-                substitute_fact_ids=["sales.cycle.negotiation", "sales.leadership.pipeline"],
-                requirement_id="payme-tech-sales-closing",
-            )
-        ],
-        # `draft_factory` stores Fit as given rather than deriving it from
-        # `requirements`/`gaps` - these are exactly what
-        # fit_score_from_requirements and fit_level_from_score (gaps.py) would
-        # compute for one `partial` and one hard-gapped mandatory requirement.
-        fit="low",
-        fit_score=0.5,
     )
     draft = setup.draft
 
-    assert setup.analysis.fit.value == "low"
-    assert setup.analysis.fit_score == 0.5
-    assert "extraction-failed" not in setup.analysis.approval_reasons
+    # Derived, as everywhere else: one partial preferred requirement and one
+    # unsupported mandatory one.
+    assert fit_level(setup.analysis.requirements).value == "low"
+    assert fit_score(setup.analysis.requirements) == pytest.approx(1 / 6)
     # `sales.cycle.closing` is deliberately absent: five lines per role is the
     # ceiling, and closing evidence already reaches the page through the merged
     # negotiation/tenders bullet and the leadership block. Outreach has no such
@@ -396,18 +375,17 @@ def _requirement(requirement_id: str, *, mandatory: bool, coverage: Coverage, su
     return Requirement(
         requirement_id=requirement_id,
         text="stated in the posting",
-        kind="presence",
-        mandatory=mandatory,
+        importance="mandatory" if mandatory else "preferred",
         coverage=coverage,
         supporting_fact_ids=supports,
     )
 
 
 def _summary_selection(
-    profile_store, policy_store, fact_store, analysis_document, *, requirements=(), gaps=()
+    profile_store, policy_store, fact_store, analysis_document, *, requirements=()
 ):
     analysis = analysis_document(profile_override="account-manager")
-    analysis = analysis.model_copy(update={"requirements": list(requirements), "gaps": list(gaps)})
+    analysis = analysis.model_copy(update={"requirements": list(requirements)})
     selected, manifest = build_selection(
         analysis=analysis,
         profile=profile_store.get("account-manager"),
@@ -533,25 +511,17 @@ def test_a_mandatory_requirement_outranks_a_preferred_one(
 def test_a_gap_takes_the_necessity_of_the_requirement_it_projects(
     profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
-    """A substitute is ranked by what it stands in for, not by being a substitute."""
+    """A substitute is ranked by what it stands in for, not by being a substitute.
+
+    A gap's substitutes are the supporting facts of the unmet requirement it
+    projects, so each substitute takes that requirement's necessity directly.
+    """
     requirements = [
-        _requirement("r-mand", mandatory=True, coverage="unsupported", supports=[]),
-        _requirement("r-pref", mandatory=False, coverage="unsupported", supports=[]),
-    ]
-    gaps = [
-        Gap(
-            requirement="preferred ask",
-            severity="warning",
-            reason="not held",
-            substitute_fact_ids=["sales.summary.account"],
-            requirement_id="r-pref",
+        _requirement(
+            "r-mand", mandatory=True, coverage="unsupported", supports=["sales.summary.tech"]
         ),
-        Gap(
-            requirement="mandatory ask",
-            severity="hard",
-            reason="not held",
-            substitute_fact_ids=["sales.summary.tech"],
-            requirement_id="r-mand",
+        _requirement(
+            "r-pref", mandatory=False, coverage="unsupported", supports=["sales.summary.account"]
         ),
     ]
     selected, _ = _summary_selection(
@@ -560,7 +530,6 @@ def test_a_gap_takes_the_necessity_of_the_requirement_it_projects(
         fact_store,
         analysis_document,
         requirements=requirements,
-        gaps=gaps,
     )
     # `sales.summary.account` substitutes too, and outscores the winner 200 to 0.
     assert selected == ["sales.summary.tech"]

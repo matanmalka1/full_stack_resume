@@ -125,7 +125,6 @@ def test_ai_selection_plan_mode_is_202_with_a_location_on_the_same_route(
     "user_decision",
     [
         {"pinned_fact_ids": ["a.b"]},
-        {"acceptance_reason": "I accept this gap"},
     ],
 )
 def test_ai_selection_plan_mode_refuses_a_user_decision_in_the_same_request(

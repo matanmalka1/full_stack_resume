@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.drafts import ClaimStyle, ClaimType, DraftDocument
@@ -37,12 +37,31 @@ class JobSnapshotHistoryView(BoundaryDTO):
     items: list[JobSnapshotHistoryItem]
 
 
+class GapView(BoundaryDTO):
+    requirement_id: str
+    requirement: str
+    severity: Literal["hard", "warning"]
+    reason: str
+    substitute_fact_ids: list[str] = []
+
+
 class JobAnalysisView(BoundaryDTO):
+    """The stored analysis, and what is projected from it for display.
+
+    `fit_level`, `fit_score` and `gaps` sit beside `analysis` rather than inside
+    it. The record holds requirements only; these are computed from them at read
+    time, so a reader sees the same answer the engine would compute and there is
+    no second stored copy to disagree with the first.
+    """
+
     id: str
     application_id: str
     job_snapshot_id: str
     version_number: int
     analysis: JobAnalysis
+    fit_level: str
+    fit_score: float | None = None
+    gaps: list[GapView] = []
     provider: str
     model: str
     created_at: str
@@ -166,7 +185,6 @@ class SelectionPlanDetailView(BoundaryDTO):
     profile_version: str
     selection_policy_version: str
     track_emphasis_dependencies: dict[str, str]
-    accepted_gaps: list[dict[str, Any]] = []
     created_at: str
     language: str
     facts_version: str

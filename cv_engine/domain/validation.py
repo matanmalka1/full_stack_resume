@@ -5,8 +5,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..util import sha256_text
-from .analysis.approval import unresolved_approval_reasons
-from .analysis.gaps import unaccepted_hard_gaps
 from .contracts.analysis import JobAnalysis
 from .contracts.drafts import ClaimLine, DraftDocument
 from .contracts.knowledge import Profile
@@ -293,44 +291,16 @@ def _profile_matches(context: _ValidationContext) -> None:
             "selection-plan-emphasis-mismatch",
             "Draft Emphasis differs from its authoritative SelectionPlan.",
         )
-    if (
-        context.analysis.fit.value == "low"
-        and context.analysis.user_override.get("fit") != "accepted-low-fit"
-    ):
-        context.add_issue("profile", "low-fit", "Low fit requires an explicit recorded override.")
-    # The draft names the analysis it was built from, so that is what the plan
-    # has to match. Passing the plan's own id compared it with itself and proved
-    # nothing.
-    blocking = unaccepted_hard_gaps(
-        context.analysis,
-        context.plan,
-        job_analysis_id=context.draft.job_analysis_id,
-    )
-    if blocking:
-        context.add_issue(
-            "profile",
-            "hard-gap-not-accepted",
-            f"Each hard requirement gap requires an explicit acceptance: "
-            f"{[gap.requirement for gap in blocking]}",
-        )
-    # Two different findings, because two different decisions answer them. A
-    # posting the engine could not read was reported as a classification
-    # ambiguity, which named a decision that cannot resolve it - and the wrong
-    # name was written into an immutable validation report.
-    selection_overrides = (
-        {"emphasis": context.plan.plan.emphasis_override.value}
-        if context.plan is not None and context.plan.plan.emphasis_override is not None
-        else None
-    )
-    unresolved = unresolved_approval_reasons(context.analysis, selection_overrides)
-    if unresolved:
-        context.add_issue(
-            "profile",
-            "incomplete-analysis-not-accepted",
-            "The posting analysis is incomplete "
-            f"({', '.join(unresolved)}); proceeding requires accepting an incomplete "
-            "analysis.",
-        )
+    # Neither low Fit nor an unaccepted hard gap is a validation finding. Both
+    # say the candidate is a poor match for this posting, which is the user's
+    # judgement to make and not a defect in the document: a CV may be submitted
+    # for a job its author knows they are a stretch for. What validation
+    # refuses is a document that is not truthful - an unsupported claim, a fact
+    # that is not canonical, a claim linked to nothing.
+    # An incomplete reading is no longer a validation finding: the analysis
+    # is kept and shown with its issues, and nothing about it stops the
+    # document. What validation still refuses is content - an unsupported
+    # claim reaching approval - which is where the guarantee belongs.
 
 
 def _sections_match_profile(context: _ValidationContext) -> None:

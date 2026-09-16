@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import model_validator
 
-from ...domain.contracts.analysis import InterpretationOverride, JobAnalysis
+from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.validation import ValidationReport
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
@@ -61,12 +61,6 @@ class AnalyzeCommand(BoundaryDTO):
     profile_override: str | None = None
     emphasis_override: str | None = None
     language_override: str | None = None
-    accept_low_fit: bool = False
-    #: Gap acceptances submitted with the decision that creates this analysis.
-    #: Set only by an explicit decision submission; the analyze endpoint never
-    #: carries them, so a plain re-analysis starts with nothing accepted.
-    accepted_requirement_ids: list[str] = []
-    acceptance_reason: str | None = None
     #: Present only when analysis is the write branch of an explicit decision
     #: against an already active context. A fresh analysis has no prior
     #: analysis to compare with.
@@ -108,11 +102,6 @@ class CreateSelectionPlanCommand(SelectionOverlay):
     #: of JobAnalysis. A value here creates a replacement plan and records the
     #: explicit choice on its manifest.
     emphasis_override: str | None = None
-    #: Requirement IDs whose hard gaps the user knowingly proceeds past. Named
-    #: one by one: accepting a deficiency the user has seen must never dismiss
-    #: one they have not.
-    accepted_requirement_ids: list[str] = []
-    acceptance_reason: str | None = None
     #: The plan the user was looking at when they decided. Set, and the active
     #: plan has moved on, the command is refused rather than quietly rebased
     #: onto a plan the user never saw - which is how an acceptance went missing
@@ -136,8 +125,13 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     """One local review-form submission (§13).
 
     Carries both kinds of decision because one form does. Track/Profile/
-    language and interpretation change analysis meaning; Emphasis, fact
-    selection and gap acceptance can replace only SelectionPlan.
+    language change analysis meaning; Emphasis and fact selection can replace
+    only SelectionPlan.
+
+    There is nothing here to accept. Low Fit and hard gaps describe how well
+    the candidate matches the posting and are shown rather than gated, and an
+    interpretation is no longer a separate thing a requirement carries, so
+    there is no correction for it to submit.
     """
 
     application_id: str
@@ -150,26 +144,7 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     profile_override: str | None = None
     emphasis_override: str | None = None
     language_override: str | None = None
-    #: Clears `LOW_FIT_REQUIRES_ACCEPTANCE` and nothing else. It used to clear
-    #: every hard gap along with it, so one checkbox dismissed deficiencies the
-    #: user had never been shown.
-    accept_low_fit: bool = False
-    #: Clears `ANALYSIS_INCOMPLETE` and nothing else: the user proceeds knowing
-    #: the engine did not read this posting's requirements. It answers neither
-    #: low Fit nor any hard gap, for the same reason low Fit no longer answers
-    #: a gap.
-    accept_incomplete_analysis: bool = False
-    #: Requirement IDs whose hard gaps the user knowingly proceeds past.
-    accepted_requirement_ids: list[str] = []
-    acceptance_reason: str | None = None
     expected_selection_plan_id: str | None = None
-    #: Corrections to a requirement's interpretation (stage-1 plan §3.5).
-    #: Product-spec §9 already treats a change to a requirement's meaning as
-    #: creating a new JobAnalysis; this is that change, submitted through the
-    #: same review-form command rather than a new one. A non-empty list makes
-    #: `changes_meaning` true even when none of the four classification
-    #: overrides above are set.
-    requirement_interpretations: list[InterpretationOverride] = []
 
 
 class ProposeSelectionPlanCommand(SelectionOverlay):

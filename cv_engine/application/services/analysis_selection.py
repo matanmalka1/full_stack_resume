@@ -7,11 +7,10 @@ from dataclasses import dataclass
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.knowledge import Profile
 from ...domain.contracts.providers import SelectionProposal
-from ...domain.contracts.selection import AcceptedGap, SelectionManifest
+from ...domain.contracts.selection import SelectionManifest
 from ...domain.profiles import ProfileStore, classification_mismatch
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.selection import build_selection
-from ...util import utc_now
 from ..commands import CreateSelectionPlanCommand
 from ..errors import MissingFactRendering, PreconditionFailed, StateConflict
 from .proposals import ProviderEvidence
@@ -64,36 +63,3 @@ class AnalysisSelection:
             raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except ValueError as exc:
             raise PreconditionFailed(f"selection plan could not be built: {exc}") from exc
-
-    @staticmethod
-    def acceptable_requirement_ids(
-        requirement_ids: list[str], analysis: JobAnalysis, expected_plan_id: str | None
-    ) -> list[str]:
-        if not requirement_ids:
-            return []
-        if expected_plan_id is None:
-            raise PreconditionFailed("accepting a gap requires expected_selection_plan_id")
-        hard = {gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"}
-        unknown = sorted(set(requirement_ids) - hard)
-        if unknown:
-            raise PreconditionFailed(
-                f"no hard gap to accept for requirement(s): {', '.join(unknown)}"
-            )
-        return requirement_ids
-
-    @classmethod
-    def new_acceptances(cls, command, analysis: JobAnalysis) -> list[AcceptedGap]:
-        accepted = cls.acceptable_requirement_ids(
-            list(command.accepted_requirement_ids), analysis, command.expected_selection_plan_id
-        )
-        now = utc_now()
-        return [
-            AcceptedGap(
-                requirement_id=requirement_id,
-                job_analysis_id=command.job_analysis_id,
-                actor="user",
-                accepted_at=now,
-                reason=command.acceptance_reason,
-            )
-            for requirement_id in sorted(set(accepted))
-        ]

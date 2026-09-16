@@ -13,11 +13,9 @@ from ..errors import LineageBroken, UnknownRecord
 from ..ports import PreparationRepository
 from .analysis_correction import AnalysisCorrection
 from .analysis_preparation import AnalysisPreparation, PreparedAnalysis
-from .analysis_selection import AnalysisSelection, PreparedSelectionProposal
+from .analysis_selection import PreparedSelectionProposal
 from .analysis_selection_service import AnalysisSelectionService
 from .base import ServiceBase
-
-ACCEPTANCE_ACTOR = "user"
 
 
 class AnalysisService(ServiceBase[PreparationRepository]):
@@ -74,20 +72,6 @@ class AnalysisService(ServiceBase[PreparationRepository]):
             # actually be compared against.
             selection_policy_version=prepared.selection_policy_version,
             track_emphasis_dependencies=prepared.track_emphasis_dependencies,
-            # Validated against the analysis about to be written, not the one
-            # the user decided on: an interpretation correction can remove a gap,
-            # and an id that no longer names one is refused rather than stored.
-            accepted_requirement_ids=sorted(
-                set(
-                    AnalysisSelection.acceptable_requirement_ids(
-                        list(command.accepted_requirement_ids),
-                        prepared.result,
-                        command.expected_selection_plan_id,
-                    )
-                )
-            ),
-            acceptance_actor=ACCEPTANCE_ACTOR,
-            acceptance_reason=command.acceptance_reason,
             expected_analysis_id=command.expected_analysis_id,
             expected_selection_plan_id=command.expected_selection_plan_id,
             enforce_expected_selection_plan=command.expected_analysis_id is not None,

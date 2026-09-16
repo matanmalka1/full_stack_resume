@@ -162,8 +162,12 @@ def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> Non
 
 
 def test_an_analysis_refuses_an_override_it_cannot_act_on(draft_factory) -> None:
-    """An override is what clears an approval reason. A key nothing routes on
-    would sit in the record looking like a decision while resolving nothing."""
+    """A key nothing routes on would sit in the record looking like a decision.
+
+    `fit` and `analysis` used to be accepted because they cleared the low-Fit
+    and incomplete-analysis approval reasons. Neither reason exists, so both
+    keys are refused along with any other the engine has no use for.
+    """
     analysis = draft_factory(
         "Python backend developer API React", profile_override="development"
     ).analysis
@@ -172,5 +176,8 @@ def test_an_analysis_refuses_an_override_it_cannot_act_on(draft_factory) -> None
     with pytest.raises(ValidationError):
         JobAnalysis.model_validate({**payload, "user_override": {"seniority": "senior"}})
 
-    accepted = JobAnalysis.model_validate({**payload, "user_override": {"fit": "accepted-low-fit"}})
-    assert accepted.user_override["fit"] == "accepted-low-fit"
+    with pytest.raises(ValidationError):
+        JobAnalysis.model_validate({**payload, "user_override": {"fit": "accepted-low-fit"}})
+
+    accepted = JobAnalysis.model_validate({**payload, "user_override": {"profile": "development"}})
+    assert accepted.user_override["profile"] == "development"

@@ -116,15 +116,6 @@ class AnalysisPreparation:
             exc.completed_evidence = tuple(item for item in (evidence,) if item is not None)
             raise
 
-        accepted: dict[str, str] = {"fit": "accepted-low-fit"} if command.accept_low_fit else {}
-        if accepted:
-            # Rebuilt through validation rather than model_copy(update=...), which
-            # would skip the model validators that guard this state.
-            accepted_overrides = {**result.user_override, **accepted}
-            result = JobAnalysis.model_validate(
-                {**result.model_dump(mode="json"), "user_override": accepted_overrides}
-            )
-
         # Checked before anything is written. An analysis whose Track, Profile,
         # and Emphasis disagree can never produce a draft, so persisting it would
         # only leave the application classified by a combination the engine

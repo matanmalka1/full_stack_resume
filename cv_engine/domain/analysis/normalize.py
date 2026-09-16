@@ -18,15 +18,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from typing import cast
 
-from ..contracts.analysis import (
-    Coverage,
-    JobAnalysis,
-    OverrideKey,
-    Requirement,
-    RequirementAttestation,
-    UnderstandingSources,
-)
+from ..contracts.analysis import JobAnalysis, Language, OverrideKey, Requirement
 from ..contracts.analysis_proposal import (
     AnalysisIssue,
     AnalysisProposal,
@@ -35,9 +29,7 @@ from ..contracts.analysis_proposal import (
     RequirementSource,
 )
 from ..facts import FactStore, FactStoreError
-from ..profiles import ProfileStore
-from .assembly import _classified_values
-from .gaps import fit_level_from_score, fit_score_from_requirements, gaps_from_requirements
+from ..profiles import ProfileStore, classification_mismatch
 from .requirements.concepts import RequirementConceptStore
 from .requirements.evidence import boundary_facts_for_quote
 from .requirements.identity import normalize_span, requirement_id
@@ -50,8 +42,7 @@ from .requirements.segmentation import requirement_lines
 #: provider was asked, and belongs with the provider provenance; it is recorded
 #: and it is *not* an input to identity, because rewording a prompt into v6
 #: would otherwise turn every unchanged requirement in an unchanged posting into
-#: a new entity, orphaning the gap acceptances and decisions attached to the old
-#: ids. `REQUIREMENT_ID_VERSION` names the identity algorithm itself, so that a
+#: a new entity. `REQUIREMENT_ID_VERSION` names the identity algorithm itself, so that a
 #: change to how identity is computed can still be stated as one.
 EXTRACTION_VERSION = "analysis-v1"
 PROMPT_VERSION = "system-v5"
@@ -64,14 +55,30 @@ REQUIREMENT_ID_VERSION = "v1"
 _COVERAGE_ORDER: tuple[str, ...] = ("unknown", "unsupported", "partial", "matched")
 _IMPORTANCE_ORDER: tuple[Importance, ...] = ("unknown", "preferred", "mandatory")
 
-#: `unknown` is this contract's word for what `Requirement` has always called
-#: `undetermined`. The stored vocabulary is not changed here.
-_STORED_COVERAGE: dict[str, Coverage] = {
-    "matched": "matched",
-    "partial": "partial",
-    "unsupported": "unsupported",
-    "unknown": "undetermined",
-}
+
+def _classified_values(proposal, profiles: ProfileStore, overrides: Mapping[OverrideKey, str]):
+    """Reconcile a proposed classification with the user's overrides.
+
+    Moved here from the old assembly module, which is gone: it was the one part
+    of it that survived, and leaving a file behind for one function would have
+    kept the old build path looking alive.
+    """
+    profile = type(proposal.profile)(overrides.get("profile", proposal.profile.value))
+    track = type(proposal.track)(overrides.get("track", proposal.track.value))
+    emphasis = type(proposal.emphasis)(overrides.get("emphasis", proposal.emphasis.value))
+    selected = profiles.get(profile)
+    mismatch = classification_mismatch(selected, track, emphasis)
+    if mismatch == "track":
+        raise ValueError(
+            f"classified Track {track.value} and Profile {profile.value} are inconsistent"
+        )
+    if mismatch == "emphasis":
+        raise ValueError(f"Emphasis {emphasis.value} is not allowed for Profile {profile.value}")
+    language = overrides.get("language", proposal.language)
+    if language not in ("en", "he"):
+        raise ValueError(f"unsupported analysis language: {language}")
+    return track, profile, emphasis, cast(Language, language)
+
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -243,30 +250,20 @@ def normalize_requirement(
         # is not verified. It caps a match and never lifts one.
         coverage = "partial"
 
-    attestation = (
-        RequirementAttestation(quote=source.quote, start=source.start, end=source.end)
-        if source.start is not None and source.end is not None
-        else None
-    )
     requirement = Requirement(
         requirement_id=requirement_id(
             normalized_hash=normalized_hash,
             # The posting and the requirement's own words, plus the version of
             # this algorithm. Nothing about who read it or how they were asked.
-            extraction_version=REQUIREMENT_ID_VERSION,
+            identity_version=REQUIREMENT_ID_VERSION,
             identity_span=normalize_span(text),
             ordinal=ordinal,
         ),
         text=text,
-        kind="presence",
-        mandatory=proposed.importance == "mandatory",
-        coverage=_STORED_COVERAGE[coverage],
+        importance=proposed.importance,
+        coverage=coverage,
         supporting_fact_ids=supporting,
         boundary_fact_ids=boundaries,
-        missing_components=[],
-        interpretation=None,
-        attestation=attestation,
-        extractor=EXTRACTION_VERSION,
         source=source,
     )
     return requirement, issues
@@ -318,8 +315,6 @@ def normalize_analysis_proposal(
     if len(requirement_lines(source_text, concepts)) > len(requirements):
         issues.append(AnalysisIssue(code="analysis_may_be_incomplete"))
 
-    gaps = gaps_from_requirements(requirements, facts)
-    fit_score = fit_score_from_requirements(requirements) if requirements else None
     verified = sum(
         1
         for requirement in requirements
@@ -332,31 +327,15 @@ def normalize_analysis_proposal(
         proposal, profiles, dict(overrides or {})
     )
     analysis = JobAnalysis(
-        analysis_version="2.0",
         track=track,
         profile=profile,
         emphasis=emphasis,
-        # Absent, not substituted. This contract asks for no classification
-        # confidence, and the share of anchored requirements - a different
-        # measurement entirely - travels on the result instead of being
-        # projected as if it answered this question.
-        confidence=None,
-        rationale=proposal.summary,
-        fit=fit_level_from_score(fit_score, gaps),
-        fit_score=fit_score,
-        gaps=gaps,
-        requirements=requirements,
-        extraction_version=EXTRACTION_VERSION,
-        unmapped_statements=[],
-        understanding=UnderstandingSources(by_ai=len(requirements)),
-        interpretation_decisions=[],
-        mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
-        preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
-        keywords=sorted(set(proposal.keywords)),
         language=language,
-        approval_reasons=[],
-        user_override=dict(overrides or {}),
+        summary=proposal.summary,
+        keywords=sorted(set(proposal.keywords)),
+        requirements=requirements,
         issues=issues,
         source_coverage=(verified / len(requirements)) if requirements else None,
+        user_override=dict(overrides or {}),
     )
     return analysis

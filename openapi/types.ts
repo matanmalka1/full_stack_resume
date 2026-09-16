@@ -1250,32 +1250,6 @@ export interface components {
             recommended: boolean;
         };
         /**
-         * AcceptedGap
-         * @description One hard gap the user knowingly proceeded past.
-         *
-         *     Acceptance means only that: it never changes a gap to satisfied, never
-         *     authorizes an unsupported claim, and never touches requirement coverage or
-         *     fact ranking. It is recorded per gap, keyed on the `Requirement` the gap
-         *     projects, so accepting one deficiency cannot dismiss another the user has
-         *     not seen.
-         *
-         *     It lives on the SelectionPlan rather than the JobAnalysis because it is not
-         *     a change to what the requirement *means* - the analysis is untouched and
-         *     stays reusable - only to whether the user proceeds despite it.
-         */
-        AcceptedGap: {
-            /** Accepted At */
-            accepted_at: string;
-            /** Actor */
-            actor: string;
-            /** Job Analysis Id */
-            job_analysis_id: string;
-            /** Reason */
-            reason?: string | null;
-            /** Requirement Id */
-            requirement_id: string;
-        };
-        /**
          * ActivityFilter
          * @description Which side of the recruitment axis the caller is asking about.
          *
@@ -1369,8 +1343,6 @@ export interface components {
             available_actions: string[];
             /** Blocked Actions */
             blocked_actions: components["schemas"]["BlockedActionResponse"][];
-            /** Classification Confidence */
-            classification_confidence?: number | null;
             /** Company */
             company: string;
             /** Created At */
@@ -1519,8 +1491,6 @@ export interface components {
         ApplicationPreset: "needs_attention" | "ready_to_send" | "active_interviews";
         /** ApplicationResponse */
         ApplicationResponse: {
-            /** Classification Confidence */
-            classification_confidence?: number | null;
             /** Company */
             company: string;
             /** Created At */
@@ -1637,23 +1607,6 @@ export interface components {
          *     both. Which immutable records are created is decided by what changed.
          */
         ApplyAnalysisDecisionsRequest: {
-            /**
-             * Accept Incomplete Analysis
-             * @default false
-             */
-            accept_incomplete_analysis: boolean;
-            /**
-             * Accept Low Fit
-             * @default false
-             */
-            accept_low_fit: boolean;
-            /** Acceptance Reason */
-            acceptance_reason?: string | null;
-            /**
-             * Accepted Requirement Ids
-             * @default []
-             */
-            accepted_requirement_ids: string[];
             /** Application Id */
             application_id: string;
             emphasis_override?: components["schemas"]["Emphasis"] | null;
@@ -1674,11 +1627,6 @@ export interface components {
              */
             pinned_fact_ids: string[];
             profile_override?: components["schemas"]["ProfileName"] | null;
-            /**
-             * Requirement Interpretations
-             * @default []
-             */
-            requirement_interpretations: components["schemas"]["InterpretationOverride"][];
             track_override?: components["schemas"]["Track"] | null;
         };
         /**
@@ -2059,11 +2007,6 @@ export interface components {
          *     could classify something other than what the user was looking at.
          */
         CreateAnalysisRequest: {
-            /**
-             * Accept Low Fit
-             * @default false
-             */
-            accept_low_fit: boolean;
             emphasis_override?: components["schemas"]["Emphasis"] | null;
             /** Job Snapshot Id */
             job_snapshot_id: string;
@@ -2141,13 +2084,6 @@ export interface components {
          *     router refuses that combination rather than silently preferring one.
          */
         CreateSelectionPlanRequest: {
-            /** Acceptance Reason */
-            acceptance_reason?: string | null;
-            /**
-             * Accepted Requirement Ids
-             * @default []
-             */
-            accepted_requirement_ids: string[];
             /** Application Id */
             application_id: string;
             emphasis_override?: components["schemas"]["Emphasis"] | null;
@@ -2628,6 +2564,25 @@ export interface components {
              */
             reason: string;
         };
+        /** GapResponse */
+        GapResponse: {
+            /** Reason */
+            reason: string;
+            /** Requirement */
+            requirement: string;
+            /** Requirement Id */
+            requirement_id: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "hard" | "warning";
+            /**
+             * Substitute Fact Ids
+             * @default []
+             */
+            substitute_fact_ids: string[];
+        };
         /**
          * GenerateWorkingDraftRequest
          * @description What `POST /applications/{id}/working-draft/generate` accepts.
@@ -2667,25 +2622,13 @@ export interface components {
             status: string;
         };
         /**
-         * InterpretationOverride
-         * @description One user-submitted correction to a requirement's interpretation (§3.5).
+         * JobAnalysisResponse
+         * @description The stored analysis and its read-time projection.
          *
-         *     Submitted through `apply_analysis_decisions` like any other classification
-         *     decision. `prior_requirement_id` names the requirement, on the analysis
-         *     being decided on, whose interpretation the user is correcting - not a
-         *     requirement id on some other analysis, since identity is scoped to one
-         *     analysis's snapshot and extractor namespace.
+         *     Fit and gaps are shown to the user and gate nothing. They are computed from
+         *     `analysis.requirements` when the response is built, so they appear here
+         *     beside the document rather than inside it.
          */
-        InterpretationOverride: {
-            /** Demanded */
-            demanded?: string | null;
-            interpretation: components["schemas"]["RequirementInterpretation"];
-            /** Prior Requirement Id */
-            prior_requirement_id: string;
-            /** Reason */
-            reason?: string | null;
-        };
-        /** JobAnalysisResponse */
         JobAnalysisResponse: {
             /** Analysis */
             analysis: {
@@ -2695,6 +2638,15 @@ export interface components {
             application_id: string;
             /** Created At */
             created_at: string;
+            /** Fit Level */
+            fit_level: string;
+            /** Fit Score */
+            fit_score?: number | null;
+            /**
+             * Gaps
+             * @default []
+             */
+            gaps: components["schemas"]["GapResponse"][];
             /** Id */
             id: string;
             /** Job Snapshot Id */
@@ -3098,74 +3050,6 @@ export interface components {
             working_draft_id: string;
         };
         /**
-         * RequirementAttestation
-         * @description The source gate's proof: offsets into the signed snapshot text as read
-         *     from the payload store, and the quote they are supposed to name.
-         *
-         *     A gate failure is not represented here - it is a rejected proposal, never
-         *     a partially-populated attestation. When this is present, `quote` was
-         *     already verified to equal `text[start:end]` in the exact snapshot string.
-         */
-        RequirementAttestation: {
-            /** End */
-            end: number;
-            /** Quote */
-            quote: string;
-            /** Start */
-            start: number;
-        };
-        /**
-         * RequirementInterpretation
-         * @description A provider's declared reading of one requirement. All-or-nothing: a
-         *     `Requirement` either carries a complete interpretation or none at all -
-         *     `unspecified` and absent member attestations preserve uncertainty explicitly.
-         */
-        RequirementInterpretation: {
-            /**
-             * Composition
-             * @enum {string}
-             */
-            composition: "single" | "any-of" | "all-of";
-            /** Context Quote */
-            context_quote?: string | null;
-            /**
-             * Members
-             * @default []
-             */
-            members: components["schemas"]["RequirementMember"][];
-            /** Negation */
-            negation: boolean;
-            /**
-             * Obligation
-             * @enum {string}
-             */
-            obligation: "mandatory" | "preferred" | "unspecified";
-            /**
-             * Source Role
-             * @enum {string}
-             */
-            source_role: "requirement" | "responsibility" | "company-description" | "benefit" | "other";
-        };
-        /**
-         * RequirementMember
-         * @description One member of an `any-of`/`all-of` requirement.
-         *
-         *     `label` is display text a provider proposes; it is never used to decide
-         *     coverage. `attestation`, when present, is what a member is actually
-         *     mapped against - the same verified-quote mechanism the requirement itself
-         *     uses (stage-1 plan §3.5a addendum) - because a bare label is exactly as
-         *     unverifiable as a requirement's own text would be without a source gate.
-         *     A member with no attestation cannot retain inspectable source evidence and
-         *     stays `undetermined`.
-         */
-        RequirementMember: {
-            attestation?: components["schemas"]["RequirementAttestation"] | null;
-            /** Label */
-            label: string;
-            /** Member Id */
-            member_id: string;
-        };
-        /**
          * SelectionCandidate
          * @description One fact's full accounting in the selection decision.
          *
@@ -3288,11 +3172,6 @@ export interface components {
          * @description One immutable, versioned fact-selection decision for an analysis.
          */
         SelectionPlan: {
-            /**
-             * Accepted Gaps
-             * @default []
-             */
-            accepted_gaps: components["schemas"]["AcceptedGap"][];
             /** Application Id */
             application_id: string;
             /** Candidate Context Hash */
@@ -3337,13 +3216,6 @@ export interface components {
         };
         /** SelectionPlanDetailResponse */
         SelectionPlanDetailResponse: {
-            /**
-             * Accepted Gaps
-             * @default []
-             */
-            accepted_gaps: {
-                [key: string]: unknown;
-            }[];
             /** Application Id */
             application_id: string;
             /** Candidate Context Hash */
@@ -3383,13 +3255,6 @@ export interface components {
         };
         /** SelectionPlanResponse */
         SelectionPlanResponse: {
-            /**
-             * Accepted Gaps
-             * @default []
-             */
-            accepted_gaps: {
-                [key: string]: unknown;
-            }[];
             /** Application Id */
             application_id: string;
             /** Candidate Context Hash */

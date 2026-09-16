@@ -40,27 +40,15 @@ def seed_existing_analysis(
     knowledge = services.analysis.load_knowledge()
     profile_name = ProfileName(overrides.pop("profile_override", "account-manager"))
     profile = knowledge.profiles.get(profile_name)
-    gaps = overrides.pop("gaps", [])
     requirements = overrides.pop("requirements", [])
     analysis = JobAnalysis(
-        analysis_version="2.0",
         track=Track(overrides.pop("track_override", None) or profile.track),
         profile=profile_name,
         emphasis=Emphasis(overrides.pop("emphasis_override", None) or profile.default_emphasis),
         language=overrides.pop("language_override", None) or "en",
-        confidence=0.99,
-        rationale="existing analysis test fixture",
-        fit=overrides.pop("fit", "high"),
-        fit_score=overrides.pop("fit_score", 1.0),
-        gaps=gaps,
+        summary=overrides.pop("summary", "existing analysis test fixture"),
+        keywords=overrides.pop("keywords", []),
         requirements=requirements,
-        extraction_version=overrides.pop("extraction_version", "test-ai-v1"),
-        unmapped_statements=overrides.pop("unmapped_statements", []),
-        understanding=overrides.pop("understanding", {"by_ai": len(requirements)}),
-        interpretation_decisions=[],
-        mandatory_requirements=[gap.requirement for gap in gaps if gap.severity == "hard"],
-        preferred_requirements=[gap.requirement for gap in gaps if gap.severity == "warning"],
-        keywords=[],
         **overrides,
     )
     return services.analysis.activate(

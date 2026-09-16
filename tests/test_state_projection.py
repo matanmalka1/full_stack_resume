@@ -15,16 +15,10 @@ from cv_engine.application.commands import (
 )
 from cv_engine.application.queries import PreparationState, WorkingDraftState
 from cv_engine.application.state import ProjectionContext, derive_review_reasons
-from cv_engine.domain.analysis.approval import (
-    ACCEPTED_INCOMPLETE_ANALYSIS,
-    ANALYSIS_INCOMPLETE,
-    APPROVAL_REASONS,
-)
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.knowledge import Knowledge
 from cv_engine.domain.models import (
     FactStatus,
-    FitLevel,
     JobAnalysis,
     ValidationIssue,
     ValidationReport,
@@ -149,156 +143,21 @@ def _reasons_for(knowledge: Knowledge, analysis: JobAnalysis) -> dict[str, list[
     }
 
 
-def _analysis_needing(reason: str) -> JobAnalysis:
+def _analysis_without_a_plan() -> JobAnalysis:
     return JobAnalysis.model_validate(
         {
             "track": "sales",
             "profile": "account-executive",
             "emphasis": "new-business",
-            "confidence": 0.4,
-            "rationale": "projection fixture",
-            "fit": "unknown",
-            "gaps": [],
-            "requirements": [],
-            "extraction_version": "test-ai-v1",
-            "unmapped_statements": [],
-            "understanding": {"by_ai": 0},
-            "mandatory_requirements": [],
-            "preferred_requirements": [],
-            "keywords": [],
             "language": "en",
-            "approval_reasons": [reason],
+            "summary": "projection fixture",
         }
     )
 
 
 def test_a_missing_selection_plan_offers_the_command_that_creates_it(knowledge) -> None:
-    reasons = _reasons_for(knowledge, _analysis_needing("extraction-failed"))
+    reasons = _reasons_for(knowledge, _analysis_without_a_plan())
     assert reasons["FACT_SELECTION_UNRESOLVED"] == ["create_selection_plan"]
-
-
-@pytest.mark.parametrize("reason", sorted(APPROVAL_REASONS))
-def test_every_registered_reason_is_offered_the_command_that_decides_it(knowledge, reason) -> None:
-    """Derived from the table, so a reason cannot change kind without saying so.
-
-    Every registered reason now routes to one review code. The classification
-    ambiguity that used to be the second kind is gone with the rules-based
-    classifier: there is no deterministic reading for an AI proposal to be
-    ambiguous against, so no reason can be reported as one. Reading the codes
-    off the table rather than naming `ANALYSIS_INCOMPLETE` directly is what
-    makes a future second kind fail here instead of passing silently.
-    """
-    reasons = _reasons_for(knowledge, _analysis_needing(reason))
-    assert reasons[APPROVAL_REASONS[reason].review_code] == ["apply_analysis_decisions"]
-    assert {entry.review_code for entry in APPROVAL_REASONS.values()} == {ANALYSIS_INCOMPLETE}
-
-
-def test_extraction_failure_is_its_own_reason_with_its_own_decision(knowledge) -> None:
-    """It blocks, and it has a way out.
-
-    It was once projected as a classification ambiguity offering
-    `apply_analysis_decisions`, which committed, returned success and left the
-    same blocker standing - naming a Track recovers nothing. Reporting it with
-    no action at all was honest but left a blocked state with no exit, which is
-    not a review reason either. The acceptance is what settles it.
-    """
-    reasons = _reasons_for(knowledge, _analysis_needing("extraction-failed"))
-    assert reasons[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
-
-
-def test_an_unregistered_reason_blocks_and_advertises_nothing(knowledge) -> None:
-    """Fail closed, so the guard is the only thing that has to be right.
-
-    A reason the table does not know cannot be said to be resolvable by
-    anything, and must not be silently dropped either. It blocks with no
-    action, and grouping it beside a reason that *is* resolvable takes the
-    intersection - so the resolvable one's command is not advertised as
-    settling what it cannot.
-    """
-    reasons = _reasons_for(knowledge, _analysis_needing("brand-new-reason"))
-    assert reasons[ANALYSIS_INCOMPLETE] == []
-
-    analysis = _analysis_needing("extraction-failed")
-    both = JobAnalysis.model_validate(
-        {
-            **analysis.model_dump(mode="json"),
-            "approval_reasons": ["extraction-failed", "brand-new-reason"],
-        }
-    )
-    assert _reasons_for(knowledge, both)[ANALYSIS_INCOMPLETE] == []
-
-
-def test_an_unreadable_posting_stays_blocked_after_the_classification_is_decided(
-    services,
-) -> None:
-    """A Track/Profile decision does not settle a posting that was not read.
-
-    The blocker belongs to the extraction half of the product and is recorded
-    under ANALYSIS_INCOMPLETE. The Track/Profile decision taken below - which
-    the user may still make for their own reasons - answers none of it. The
-    acceptance is what settles it, and that is the whole point of attributing
-    the reason.
-    """
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Unreadable Posting Co",
-            target_role="Account Executive",
-            job_text=UNREADABLE_POSTING,
-            client="web",
-        )
-    )
-    analysed = seed_analysis_for_command(
-        services,
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-        fit="unknown",
-        fit_score=None,
-        approval_reasons=["extraction-failed"],
-    )
-    detail = services.queries.application_detail(ingested.application_id)
-    assert detail.preparation_state is PreparationState.NEEDS_REVIEW
-    offered = {reason.code: reason.allowed_resolution_actions for reason in detail.review_reasons}
-    # One reason, advertising the one command that takes the decision it needs.
-    assert offered[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
-
-    services.analysis.apply_analysis_decisions(
-        ApplyAnalysisDecisionsCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            expected_analysis_id=analysed.analysis_id,
-            expected_selection_plan_id=analysed.selection_plan_id,
-            track_override="sales",
-            profile_override="account-executive",
-        )
-    )
-
-    after = services.queries.application_detail(ingested.application_id)
-    offered = {reason.code: reason.allowed_resolution_actions for reason in after.review_reasons}
-    # Naming the pair did not close anything.
-    assert offered[ANALYSIS_INCOMPLETE] == ["apply_analysis_decisions"]
-    assert after.preparation_state is PreparationState.NEEDS_REVIEW
-    blocked = {item.action: item.reasons for item in after.blocked_actions}
-    assert ANALYSIS_INCOMPLETE in blocked["create_draft"]
-
-    # The decision that does answer it, and what it leaves standing.
-    accepted = services.analysis.apply_analysis_decisions(
-        ApplyAnalysisDecisionsCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=after.active_analysis_id or "",
-            expected_analysis_id=after.active_analysis_id or "",
-            expected_selection_plan_id=after.active_selection_plan_id,
-            accept_incomplete_analysis=True,
-        )
-    )
-    settled = services.queries.application_detail(ingested.application_id)
-    assert ANALYSIS_INCOMPLETE not in {reason.code for reason in settled.review_reasons}
-    assert settled.preparation_state is PreparationState.READY_TO_DRAFT
-    # Accepted, not understood: the analysis still reports it read nothing.
-    assert accepted.analysis.fit is FitLevel.UNKNOWN
-    assert "extraction-failed" in accepted.analysis.approval_reasons
-    assert accepted.analysis.user_override["analysis"] == ACCEPTED_INCOMPLETE_ANALYSIS
 
 
 def test_ready_milestone_survives_a_new_draft_for_the_same_context(ready_application) -> None:

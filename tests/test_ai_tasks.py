@@ -14,7 +14,6 @@ prompt-injection fixtures. The transport half is `test_provider.py`.
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
@@ -27,7 +26,6 @@ from helpers import (
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
-    ApplyAnalysisDecisionsCommand,
     CreateJobSnapshotCommand,
     CreateSelectionPlanCommand,
     DraftCommand,
@@ -39,6 +37,7 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import StateConflict, UnknownRecord
 from cv_engine.application.operations import OperationFailureCode
 from cv_engine.application.settings import UpdateSettings
+from cv_engine.domain.analysis.projection import fit_level, fit_score
 from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
 from cv_engine.domain.models import (
     ClaimProposal,
@@ -84,42 +83,12 @@ def _analyzed(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
         ),
-        fit="unknown",
-        fit_score=None,
-        approval_reasons=["requirements-absent"],
     )
     return ingested, analysed
 
 
-def _accepting_incomplete_analysis(services, ingested, analysed):
-    """Answer the analysis-completeness gate the way a user answers it.
-
-    The seeded analysis records `requirements-absent`, so drafting stays blocked
-    until someone decides to proceed. Tests focused on later AI tasks answer
-    that precondition through the same `apply_analysis_decisions` command the
-    product offers.
-
-    A decision creates a new analysis and a new plan, so the caller must use the
-    ids this returns.
-    """
-    decided = services.analysis.apply_analysis_decisions(
-        ApplyAnalysisDecisionsCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            expected_analysis_id=analysed.analysis_id,
-            expected_selection_plan_id=analysed.selection_plan_id,
-            accept_incomplete_analysis=True,
-        )
-    )
-    return SimpleNamespace(
-        analysis_id=decided.job_analysis_id,
-        selection_plan_id=decided.selection_plan_id,
-    )
-
-
 def _drafted(services, company: str):
     ingested, analysed = _analyzed(services, company)
-    analysed = _accepting_incomplete_analysis(services, ingested, analysed)
     services.drafts.draft(
         DraftCommand(
             application_id=ingested.application_id,
@@ -344,13 +313,7 @@ def test_draft_resume_commits_wording_its_facts_support(
             profile_override="tech-sales",
             emphasis_override="tech-consultative-sales",
         ),
-        fit="unknown",
-        fit_score=None,
-        approval_reasons=["requirements-absent"],
     )
-    # The existing analysis fixture has an incomplete-extraction review gate;
-    # answering it is a precondition for drafting, not this test's subject.
-    analysed = _accepting_incomplete_analysis(ai_services, ingested, analysed)
     # Build a supported document from the existing analysis first, so the
     # proposal can echo wording the validation contract accepts.
     ai_services.drafts.draft(
@@ -969,8 +932,8 @@ def test_a_reading_with_no_requirements_does_not_become_a_fit(ai_services, fake_
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     analysis = _analysis_of(completed, ai_services)
     assert analysis.requirements == []
-    assert analysis.fit.value == "unknown"
-    assert analysis.fit_score is None
+    assert fit_level(analysis.requirements).value == "unknown"
+    assert fit_score(analysis.requirements) is None
     # The posting does state a requirement, and the engine says so - as a
     # disclosure on the record, not as a refusal.
     assert "analysis_may_be_incomplete" in {issue.code for issue in analysis.issues}
@@ -980,7 +943,7 @@ def test_a_fact_the_store_does_not_have_does_not_fell_the_reading(ai_services, f
     """The live path narrows one requirement instead of refusing the analysis.
 
     This is the service's proof that it runs the normalizer: the unknown id is
-    dropped, the coverage that rested on it falls to `undetermined`, the reason
+    dropped, the coverage that rested on it falls to `unknown`, the reason
     is on the record, and the requirement the provider read correctly survives
     beside it.
     """
@@ -1018,7 +981,7 @@ def test_a_fact_the_store_does_not_have_does_not_fell_the_reading(ai_services, f
     assert read.coverage == "matched"
     assert read.supporting_fact_ids == ["sales.summary.leadership"]
     assert invented.supporting_fact_ids == []
-    assert invented.coverage == "undetermined"
+    assert invented.coverage == "unknown"
     assert {"unknown_fact", "coverage_without_evidence"} <= {
         issue.code for issue in analysis.issues
     }

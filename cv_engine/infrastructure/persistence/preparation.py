@@ -15,10 +15,8 @@ from ...application.operations import MATCHING_CONTEXT_OPERATION_TYPES
 from ...application.ports import UnitOfWork
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.selection import (
-    AcceptedGap,
     SelectionManifest,
     SelectionPlan,
-    merge_accepted_gaps,
 )
 from ...util import canonical_json, new_id, utc_now
 from .applications import SqlAlchemyApplicationRepository
@@ -312,9 +310,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
-        accepted_requirement_ids: list[str] | None = None,
-        acceptance_actor: str = "",
-        acceptance_reason: str | None = None,
         expected_analysis_id: str | None = None,
         expected_selection_plan_id: str | None = None,
         enforce_expected_selection_plan: bool = False,
@@ -373,33 +368,21 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 selection_policy_version,
                 track_emphasis_dependencies,
                 now,
-                # A new analysis inherits nothing: the carry is keyed on the
-                # analysis id, and this one did not exist a moment ago. What it
-                # may carry is an acceptance submitted with the decision that
-                # created it, stamped with the analysis allocated above so it
-                # can never read as a decision about a different one.
-                accepted_gaps=[
-                    AcceptedGap(
-                        requirement_id=requirement_id,
-                        job_analysis_id=analysis_id,
-                        actor=acceptance_actor,
-                        accepted_at=now,
-                        reason=acceptance_reason,
-                    )
-                    for requirement_id in accepted_requirement_ids or []
-                ],
             )
             connection.execute(
                 update(applications)
                 .where(applications.c.id == application_id)
+                # Classification only. Fit and the classification confidence
+                # used to be copied here as well, which made the row a second
+                # place the same answer was stored and could drift from the
+                # analysis it was derived from. Fit is projected from the
+                # requirements where it is read (`analysis/projection.py`), and
+                # no confidence is reported at all under this contract.
                 .values(
                     language=analysis.language,
                     track=analysis.track.value,
                     profile=analysis.profile.value,
                     emphasis=analysis.emphasis.value,
-                    classification_confidence=analysis.confidence,
-                    fit_level=analysis.fit.value,
-                    fit_score=analysis.fit_score,
                     updated_at=now,
                 )
             )
@@ -423,7 +406,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
-        new_acceptances: list[AcceptedGap] | None = None,
         expected_selection_plan_id: str | None = None,
         enforce_expected_selection_plan: bool = False,
         refuse_matching_context_operation: bool = False,
@@ -461,14 +443,18 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 )
             if refuse_matching_context_operation:
                 self._refuse_matching_context_operation(connection, application_id)
-            carried = self._standing_acceptances(
+            # Read for its refusal, not for its value. The acceptance carry that
+            # used to call it is gone, and with it went the optimistic check it
+            # performed on the way: a decision made against a plan that has
+            # since moved must still be refused rather than quietly rebased onto
+            # one the user never saw.
+            self._active_plan(
                 connection,
                 application_id,
-                job_analysis_id,
                 expected_selection_plan_id,
                 enforce_expected_selection_plan,
+                compatible_job_analysis_id=job_analysis_id,
             )
-            accepted_gaps = merge_accepted_gaps(carried, list(new_acceptances or []))
             existing = (
                 connection.execute(
                     select(selection_plans).where(selection_plans.c.id == selection_plan_id)
@@ -487,7 +473,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                     "profile_version": profile_version,
                     "selection_policy_version": selection_policy_version,
                     "track_emphasis_dependencies": track_emphasis_dependencies,
-                    "accepted_gaps": accepted_gaps,
                     "created_at": now,
                 }
                 actual = {key: getattr(stored, key) for key in expected}
@@ -506,7 +491,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 selection_policy_version,
                 track_emphasis_dependencies,
                 now,
-                accepted_gaps=accepted_gaps,
             )
             if plan.emphasis_override is not None:
                 # Application.emphasis is the current matching configuration,
@@ -681,32 +665,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 f"{competing['operation_type']} {competing['id']}"
             )
 
-    def _standing_acceptances(
-        self,
-        connection: Connection,
-        application_id: str,
-        job_analysis_id: str,
-        expected_selection_plan_id: str | None,
-        enforce_expected_selection_plan: bool = False,
-    ) -> list[AcceptedGap]:
-        """The acceptances the next plan version inherits, read under the write.
-
-        Inherited only from a plan for the *same* analysis. An acceptance is a
-        decision about the gaps as one analysis stated them, so carrying it
-        onto a plan for a different analysis would report a decision the user
-        never made.
-        """
-        latest = self._active_plan(
-            connection,
-            application_id,
-            expected_selection_plan_id,
-            enforce_expected_selection_plan,
-            compatible_job_analysis_id=job_analysis_id,
-        )
-        if latest is None or latest.job_analysis_id != job_analysis_id:
-            return []
-        return list(latest.accepted_gaps)
-
     @staticmethod
     def _insert_selection_plan(
         connection: Connection,
@@ -720,8 +678,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
         created_at: str,
-        *,
-        accepted_gaps: list[AcceptedGap],
     ) -> None:
         analysis = (
             connection.execute(
@@ -751,7 +707,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
                 profile_version=profile_version,
                 selection_policy_version=selection_policy_version,
                 track_emphasis_dependencies_json=track_emphasis_dependencies,
-                accepted_gaps_json=[gap.model_dump(mode="json") for gap in accepted_gaps],
                 created_at=created_at,
             )
         )
@@ -772,9 +727,6 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
             profile_version=record["profile_version"],
             selection_policy_version=record["selection_policy_version"],
             track_emphasis_dependencies=record["track_emphasis_dependencies_json"],
-            accepted_gaps=[
-                AcceptedGap.model_validate(gap) for gap in record.get("accepted_gaps_json") or []
-            ],
             created_at=record["created_at"],
         )
 
@@ -810,7 +762,18 @@ class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
     @staticmethod
     def _analysis_record(row: Any) -> dict[str, Any]:
         record = dict(row)
-        record["analysis"] = JobAnalysis.model_validate(record.pop("structured_json"))
+        document = record.pop("structured_json")
+        version = document.get("analysis_version") if isinstance(document, dict) else None
+        if version != "3.0":
+            # Said out loud rather than adapted. A reader that filled in the
+            # fields a 2.0 document lacks would be inventing an analysis nobody
+            # produced, and one that kept both shapes alive would leave two
+            # models in the one place this stage exists to reduce to one.
+            raise UnknownRecord(
+                f"job analysis {record.get('id')} is stored as analysis_version "
+                f"{version!r}; only 3.0 can be read"
+            )
+        record["analysis"] = JobAnalysis.model_validate(document)
         return record
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]:

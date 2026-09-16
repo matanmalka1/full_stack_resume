@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
+from ...domain.analysis.projection import gaps as project_gaps
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.taxonomy import Emphasis
@@ -119,7 +122,6 @@ class AnalysisSelectionService:
                 "track": analysis.track.value,
                 "emphasis": effective_emphasis.value,
             },
-            new_acceptances=AnalysisSelection.new_acceptances(command, analysis),
             expected_selection_plan_id=command.expected_selection_plan_id,
             enforce_expected_selection_plan=command.enforce_expected_selection_plan,
             refuse_matching_context_operation=command.refuse_matching_context_operation,
@@ -169,7 +171,9 @@ class AnalysisSelectionService:
                     "emphasis": effective_analysis.emphasis.value,
                     "language": analysis.language,
                     "keywords": list(analysis.keywords),
-                    "gaps": [gap.model_dump(mode="json") for gap in analysis.gaps],
+                    "gaps": [
+                        asdict(gap) for gap in project_gaps(analysis.requirements, knowledge.facts)
+                    ],
                 },
                 allowed_facts=fact_context(
                     knowledge.facts, sorted(allowed), effective_analysis.language

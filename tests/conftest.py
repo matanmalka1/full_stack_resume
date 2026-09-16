@@ -35,7 +35,6 @@ import cv_engine
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
     AnalyzeCommand,
-    ApplyAnalysisDecisionsCommand,
     ApprovalResult,
     DraftCommand,
     IngestCommand,
@@ -349,24 +348,11 @@ def analysis_document(
         emphasis = Emphasis(overrides.pop("emphasis_override", None) or selected.default_emphasis)
         language = overrides.pop("language_override", None) or "en"
         return JobAnalysis(
-            analysis_version="2.0",
             track=Track(overrides.pop("track_override", None) or selected.track),
             profile=profile,
             emphasis=emphasis,
-            confidence=0.99,
-            rationale="test analysis fixture",
-            fit="high",
-            fit_score=1.0,
-            gaps=[],
-            requirements=[],
-            extraction_version="test-ai-v1",
-            unmapped_statements=[],
-            understanding={"by_ai": 0},
-            interpretation_decisions=[],
-            mandatory_requirements=[],
-            preferred_requirements=[],
-            keywords=[],
             language=language,
+            summary="test analysis fixture",
             **overrides,
         )
 
@@ -585,20 +571,9 @@ def drafted_application(analyzed_application):
         setup = analyzed_application(company, role, job_text)
         assert setup.analysis_id is not None
         assert setup.selection_plan_id is not None
-        accepted = setup.services.analysis.apply_analysis_decisions(
-            ApplyAnalysisDecisionsCommand(
-                application_id=setup.application_id,
-                job_analysis_id=setup.analysis_id,
-                expected_analysis_id=setup.analysis_id,
-                expected_selection_plan_id=setup.selection_plan_id,
-                accept_incomplete_analysis=True,
-            )
-        )
-        setup = replace(
-            setup,
-            analysis_id=accepted.job_analysis_id,
-            selection_plan_id=accepted.selection_plan_id,
-        )
+        # Drafted straight from the analysis. There used to be a decision here
+        # accepting the incomplete reading first, because the analysis blocked
+        # drafting until someone did; a partial reading blocks nothing now.
         drafted = setup.services.drafts.draft(
             DraftCommand(
                 application_id=setup.application_id,
@@ -815,25 +790,25 @@ def draft_factory(
     ) -> DraftSetup:
         profile_name = ProfileName(overrides.pop("profile_override", None) or "account-manager")
         profile = profile_store.get(profile_name)
+        # Refused rather than dropped. These fields are derived from
+        # `requirements` now, and a golden scenario that still passes them is
+        # stating something the analysis can no longer carry - most
+        # dangerously gap substitutes that are not a requirement's supporting
+        # facts, whose silent loss would move selected content with no
+        # visible cause.
+        removed = sorted(set(overrides) & {"fit", "fit_score", "gaps", "confidence", "rationale"})
+        if removed:
+            raise TypeError(
+                f"draft_factory no longer accepts {removed}: state them as requirements"
+            )
         analysis = JobAnalysis(
-            analysis_version="2.0",
             track=Track(overrides.pop("track_override", None) or profile.track),
             profile=profile_name,
             emphasis=Emphasis(overrides.pop("emphasis_override", None) or profile.default_emphasis),
-            confidence=0.99,
-            rationale="test analysis fixture",
-            fit=overrides.pop("fit", "high"),
-            fit_score=overrides.pop("fit_score", 1.0),
-            gaps=overrides.pop("gaps", []),
-            requirements=overrides.pop("requirements", []),
-            extraction_version="test-ai-v1",
-            unmapped_statements=[],
-            understanding={"by_ai": 0},
-            interpretation_decisions=[],
-            mandatory_requirements=[],
-            preferred_requirements=[],
-            keywords=overrides.pop("keywords", []),
             language=overrides.pop("language_override", "en"),
+            summary="test analysis fixture",
+            keywords=overrides.pop("keywords", []),
+            requirements=overrides.pop("requirements", []),
             **overrides,
         )
         draft = build_draft(

@@ -30,7 +30,12 @@ class ApplicationView(BoundaryDTO):
     track: str | None = None
     profile: str | None = None
     emphasis: str | None = None
-    classification_confidence: float | None = None
+    #: Projected from the active analysis's requirements at read time
+    #: (`analysis/projection.py`), never read from a stored column: Fit is a
+    #: function of the requirements, and a copy of it beside them is a second
+    #: answer that can disagree with the first. `None` when no analysis exists.
+    #: There is no classification confidence - the analysis contract reports
+    #: none, so the field is gone rather than always null.
     fit_level: str | None = None
     fit_score: float | None = None
     current_status: str

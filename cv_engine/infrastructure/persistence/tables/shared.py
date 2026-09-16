@@ -1,7 +1,7 @@
 """Tables that are not owned by prep, tracking, or knowledge alone.
 
 `applications` is the root entity both mechanisms hold a foreign key into, and
-it carries prep columns (`track`, `profile`, `emphasis`, `fit_level`, ...) and
+it carries prep columns (`track`, `profile`, `emphasis`) and
 tracking columns (`current_status`, `next_action`, ...) side by side on
 purpose — see the architecture spec on `applications` as the authoritative
 current-state projection paired with append-only event tables. `artifacts`/
@@ -21,7 +21,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
-    Float,
     ForeignKey,
     Index,
     Integer,
@@ -96,9 +95,6 @@ applications = Table(
     Column("track", Text),
     Column("profile", Text),
     Column("emphasis", Text),
-    Column("classification_confidence", Float),
-    Column("fit_level", Text),
-    Column("fit_score", Float),
     Column("current_status", Text, nullable=False),
     Column("last_contact_date", Text),
     Column("next_action", Text),
@@ -121,10 +117,6 @@ applications = Table(
     CheckConstraint(
         f"terminal_outcome IS NULL OR terminal_outcome IN ({sql_values(TERMINAL_OUTCOMES)})",
         name="terminal_outcome",
-    ),
-    CheckConstraint(
-        "fit_score IS NULL OR (fit_score >= 0 AND fit_score <= 1)",
-        name="fit_score",
     ),
 )
 

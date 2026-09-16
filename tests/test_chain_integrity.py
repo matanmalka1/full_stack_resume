@@ -20,7 +20,6 @@ from helpers import (
     AMBIGUOUS_HEBREW_JOB,
     approve_active_draft,
     seed_analysis_for_command,
-    seed_existing_analysis,
     validate_active_draft,
 )
 from sqlalchemy import delete, func, select, update
@@ -42,7 +41,6 @@ from cv_engine.application.errors import (
     WorkflowError,
 )
 from cv_engine.application.ready import qualify_ready_revision
-from cv_engine.domain.contracts.analysis import Gap, Requirement
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.models import DecisionRecord
 from cv_engine.infrastructure.persistence.artifacts import SqlAlchemyArtifactRepository
@@ -51,9 +49,7 @@ from cv_engine.infrastructure.persistence.repository import Repository
 from cv_engine.infrastructure.persistence.tables import (
     approved_revisions,
     decision_records,
-    job_analyses,
     metadata,
-    selection_plans,
 )
 from cv_engine.runtime.composition import Services, build_api_services
 from cv_engine.runtime.paths import AppPaths
@@ -88,17 +84,7 @@ def _analyze(services: Services, application_id: str, **overrides):
     snapshot_id = services.repository.latest_snapshot(application_id)["id"]
     analysis_values = {
         key: overrides[key]
-        for key in (
-            "fit",
-            "fit_score",
-            "gaps",
-            "requirements",
-            "unmapped_statements",
-            "extraction_version",
-            "understanding",
-            "user_override",
-            "approval_reasons",
-        )
+        for key in ("requirements", "user_override", "summary", "keywords")
         if key in overrides
     }
     return seed_analysis_for_command(
@@ -133,21 +119,7 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
 ) -> None:
     services, app_id = analyzed_application("Snapshot Race")
     analysis_id, _ = services.repository.latest_analysis(app_id)
-    selection_plan_id = services.repository.latest_selection_plan(app_id).id
-    # The fixture's extraction is trivial (every statement declared unmapped),
-    # so drafting against it is blocked on its own until the incomplete
-    # analysis is explicitly accepted - a different blocker than the one this
-    # test is about. Accept it first so only the snapshot race is exercised.
-    accepted = services.analysis.apply_analysis_decisions(
-        ApplyAnalysisDecisionsCommand(
-            application_id=app_id,
-            job_analysis_id=analysis_id,
-            expected_analysis_id=analysis_id,
-            expected_selection_plan_id=selection_plan_id,
-            accept_incomplete_analysis=True,
-        )
-    )
-    stale_analysis_id = accepted.job_analysis_id
+    stale_analysis_id = analysis_id
     new_text = ACCOUNT_MANAGER_JOB + " The role also covers quarterly portfolio reviews."
     new_snapshot_id = str(uuid.uuid4())
     payload = services.payloads.commit_snapshot(app_id, new_snapshot_id, new_text)
@@ -258,14 +230,10 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
     rerun = _analyze(
         services,
         app_id,
-        fit=bound_analysis.fit,
-        gaps=bound_analysis.gaps,
         requirements=bound_analysis.requirements,
-        unmapped_statements=bound_analysis.unmapped_statements,
-        extraction_version=bound_analysis.extraction_version,
-        understanding=bound_analysis.understanding,
         user_override=bound_analysis.user_override,
-        approval_reasons=bound_analysis.approval_reasons,
+        summary=bound_analysis.summary,
+        keywords=bound_analysis.keywords,
     )
     assert rerun.analysis_id != bound_analysis_id
     working = services.repository.active_working_draft(app_id)
@@ -691,87 +659,13 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
     )
 
 
-def _hard_gap_ids(services: Services, analysis_id: str) -> list[str]:
-    analysis = services.repository.get_analysis(analysis_id)["analysis"]
-    return [gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"]
-
-
-def test_a_classification_decision_carries_its_gap_acceptance_in_one_write(
-    services: Services,
-) -> None:
-    """Both decisions, one record, and the acceptance names the analysis it landed on.
-
-    The submission used to be refused so the client could send the acceptance
-    again against an analysis it had not asked for. A gap acceptance names a
-    requirement, and requirement identity is keyed on the snapshot text rather
-    than on the classification, so it survives the reclassification and is
-    re-checked against the analysis being written.
-    """
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Atomic Decision Co",
-            target_role="Account Manager",
-            job_text=AMBIGUOUS_HEBREW_JOB,
-            client="web",
-        )
-    )
-    requirement_id = "test-direct-saas-sales"
-    analysed = seed_existing_analysis(
-        services,
-        ingested,
-        requirements=[
-            Requirement(
-                requirement_id=requirement_id,
-                text="must have direct saas sales",
-                kind="presence",
-                mandatory=True,
-                coverage="unsupported",
-            )
-        ],
-        gaps=[
-            Gap(
-                requirement="must have direct saas sales",
-                severity="hard",
-                reason="canonical facts do not establish this requirement",
-                requirement_id=requirement_id,
-            )
-        ],
-    )
-    accepted_id = _hard_gap_ids(services, analysed.analysis_id)[0]
-
-    result = services.analysis.apply_analysis_decisions(
-        ApplyAnalysisDecisionsCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            expected_analysis_id=analysed.analysis_id,
-            profile_override="account-manager",
-            accepted_requirement_ids=[accepted_id],
-            expected_selection_plan_id=analysed.selection_plan_id,
-        )
-    )
-
-    assert result.created_analysis is True
-    plan = services.repository.selection_plan(result.selection_plan_id)
-    assert [accepted.requirement_id for accepted in plan.accepted_gaps] == [accepted_id]
-    # Stamped with the analysis it was written beside, never the one decided on.
-    assert {accepted.job_analysis_id for accepted in plan.accepted_gaps} == {result.job_analysis_id}
-    assert plan.job_analysis_id == result.job_analysis_id
-    # One plan for the new analysis, not an initial one and then a replacement.
-    assert len(_rows(services, selection_plans)) == 2
-    assert len(_rows(services, job_analyses)) == 2
-
-    detail = services.queries.application_detail(ingested.application_id)
-    assert "HARD_GAP_REQUIRES_DECISION" not in {reason.code for reason in detail.review_reasons}
-
-
 def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
     services: Services,
 ) -> None:
     """The refusal narrowed to what it was actually about.
 
     A fact overlay is decided against candidate accounting the new analysis has
-    not produced yet, so it stays a second command. That is a different question
-    from a gap acceptance, which names a requirement the new analysis restates.
+    not produced yet, so it stays a second command.
     """
     ingested = services.applications.ingest(
         IngestCommand(
