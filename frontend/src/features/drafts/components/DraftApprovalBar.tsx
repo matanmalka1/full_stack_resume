@@ -1,4 +1,4 @@
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, FileCheck2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { CommitBar, NEXT_STEP_LABEL } from "@/features/preparation";
@@ -14,6 +14,8 @@ interface DraftApprovalBarProps {
      current context and the projection's blockers to clear. */
   exactPassingRunId: string | null;
   onApprove: () => void;
+  onValidate: () => void;
+  validationPending: boolean;
   /* The projection's own blockers. Approval is refused by the backend either way; what
      the bar owes the reader is the reason it is shut, not a second rule. */
   reviewBlocked: boolean;
@@ -38,20 +40,24 @@ export const DraftApprovalBar = ({
   applicationHref,
   exactPassingRunId,
   onApprove,
+  onValidate,
   reviewBlocked,
   stale,
   validationResult,
   unavailable,
+  validationPending,
 }: DraftApprovalBarProps) => {
   const reason = reviewBlocked
-    ? "יש חסימה שדורשת החלטה לפני אישור."
+    ? "יש חסימה שדורשת החלטה לפני הכנת הקובץ."
     : stale
-      ? "הטיוטה השתנתה מאז האימות. יש להריץ אימות חדש."
+      ? "הטיוטה השתנתה מאז הבדיקה. יש לבדוק את הגרסה הנוכחית מחדש."
       : unavailable
-        ? "יש להשלים את שמירת העריכות ורענון ההקשר לפני אישור."
+        ? "יש להשלים את שמירת העריכות לפני בדיקת הקובץ."
         : exactPassingRunId === null
-          ? "האישור נפתח אחרי אימות שעבר על הגרסה המוצגת."
-          : "האימות עבר על הגרסה המוצגת.";
+          ? "המערכת תבדוק את הגרסה המוצגת לפני הכנת ה־PDF."
+          : "הבדיקה עברה. נשאר לאשר את הגרסה ולהכין את ה־PDF.";
+
+  const readyForApproval = exactPassingRunId !== null && !reviewBlocked && !stale && !unavailable;
 
   return (
     <CommitBar
@@ -64,9 +70,14 @@ export const DraftApprovalBar = ({
       label={NEXT_STEP_LABEL}
       result={validationResult}
       primary={
-        <Button disabled={exactPassingRunId === null || reviewBlocked || stale || unavailable} onClick={onApprove}>
-          <ShieldCheck aria-hidden="true" className="size-icon-md" />
-          אישור הגרסה
+        <Button
+          disabled={reviewBlocked || unavailable || (!readyForApproval && validationPending)}
+          onClick={readyForApproval ? onApprove : onValidate}
+          pending={validationPending}
+          pendingLabel="בודק את הקובץ…"
+        >
+          <FileCheck2 aria-hidden="true" className="size-icon-md" />
+          {readyForApproval ? "אישור והכנת PDF" : stale ? "בדיקה מחדש והכנת PDF" : "בדיקה והכנת PDF"}
         </Button>
       }
     >

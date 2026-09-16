@@ -93,18 +93,18 @@ export const DraftApprovalDialog = ({
             disabled={warnings.length > 0 && !acknowledged}
             onClick={() => approval.mutate()}
             pending={approval.isPending}
-            pendingLabel="מאשר…"
+            pendingLabel="מאשר ומכין…"
           >
-            אישור הגרסה
+            אישור והכנת PDF
           </Button>
         </>
       }
       headingId="approval-dialog-heading"
       onClose={onClose}
       open={open}
-      title="אישור גרסה קבועה"
+      title="אישור והכנת PDF"
     >
-      <p>האישור יוצר רשומה קבועה מהטיוטה ומריצת האימות המדויקות הבאות.</p>
+      <p>בדקתי את קורות החיים ואני מאשר/ת את הגרסה הזו להפקת PDF. לאחר האישור לא ניתן לערוך את הגרסה הזו.</p>
       {detail === undefined || draft === undefined || run === undefined ? null : (
         <div className="flex flex-col gap-3">
           <SummaryList

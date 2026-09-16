@@ -279,7 +279,6 @@ const renderPage = (aiEnabled = true) => {
 /* The screen shows the draft as text; a line becomes a field when its own pencil is
    pressed. Tests that type into a line open that line first, the way a user does. */
 const editRow = async (index = 0) => {
-  fireEvent.click(await screen.findByRole("button", { name: "בדיקת עובדות ועריכה" }));
   fireEvent.click((await screen.findAllByRole("button", { name: "עריכת השורה" }))[index]!);
 };
 
@@ -293,13 +292,15 @@ afterEach(() => {
 });
 
 describe("DraftEditorPage", () => {
-  it("opens on the document to approve and keeps factual editing one explicit switch away", async () => {
+  it("opens in the split editing workspace with a focused preview option", async () => {
     stubReads({});
 
     renderPage();
 
-    expect(await screen.findByRole("button", { name: "מסמך לאישור" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "בדיקת עובדות ועריכה" })).toHaveAttribute("aria-pressed", "false");
+    expect(await screen.findByRole("button", { name: "עריכה ותצוגה" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "תצוגה מלאה" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
   });
 
   it("reports a requested validation in the pinned commit bar", async () => {
@@ -321,11 +322,32 @@ describe("DraftEditorPage", () => {
     });
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "אימות הטיוטה" }));
+    fireEvent.click(await screen.findByRole("button", { name: "בדיקה והכנת PDF" }));
 
-    const result = await screen.findByText("האימות הושלם והטיוטה לא עברה. פרטי הכשל מופיעים לצד הטיוטה.");
+    const result = await screen.findByText("הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים לצד הטיוטה.");
     expect(result.closest(".sticky")).not.toBeNull();
     expect(result.closest('[role="status"]')).not.toBeNull();
+  });
+
+  it("opens explicit approval immediately after the finish check passes", async () => {
+    stubReads({
+      validation: () =>
+        jsonResponse({
+          application_id: "app-1",
+          content_hash: "hash-4",
+          edit_version: 4,
+          passed: true,
+          report: { evidence: {}, groups: { facts: true }, issues: [] },
+          validation_run_id: "run-1",
+          working_draft_id: "wd-1",
+        }),
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "בדיקה והכנת PDF" }));
+
+    expect(await screen.findByRole("dialog", { name: "אישור והכנת PDF" })).toBeInTheDocument();
+    expect(screen.getByText(/אני מאשר\/ת את הגרסה הזו להפקת PDF/)).toBeInTheDocument();
   });
 
   it("gates AI regeneration through effective Settings without offering a silent fallback", async () => {
@@ -802,7 +824,6 @@ describe("DraftEditorPage", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
       renderPage();
-      fireEvent.click(await screen.findByRole("button", { name: "בדיקת עובדות ועריכה" }));
       fireEvent.click(await screen.findByText("הפיכת הטקסט לעובדה מאושרת"));
       fireEvent.click(await screen.findByRole("checkbox"));
       if (outcome === "edit-during-confirmation") {
@@ -821,19 +842,19 @@ describe("DraftEditorPage", () => {
       expect(await screen.findByText("העובדה אושרה ונבחרה")).toBeInTheDocument();
       if (outcome.endsWith("error")) {
         const retryButton = await screen.findByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" });
-        expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
         retry = true;
         fireEvent.click(retryButton);
         await waitFor(() => expect(screen.queryByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" })).toBeNull());
       }
       if (outcome === "stale") {
         expect(await screen.findByText("The fact changed the selection plan.")).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "אימות הטיוטה" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
         expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/validate"))).toBe(false);
-        expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
       } else {
         await screen.findByRole("heading", {
-          name: outcome === "failed" ? "הטיוטה לא עברה אימות" : "הטיוטה עברה אימות",
+          name: outcome === "failed" ? "נדרשים תיקונים בקובץ" : "הקובץ עבר בדיקה",
         });
         const request = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/validate"));
         expect(JSON.parse(String(request![1]!.body))).toEqual({
@@ -851,7 +872,7 @@ describe("DraftEditorPage", () => {
           (call) => String(call[0]).endsWith("/approve") || String(call[0]).endsWith("/generate"),
         ),
       ).toBe(false);
-      expect(screen.queryByRole("dialog", { name: "אישור גרסה קבועה" })).toBeNull();
+      expect(screen.queryByRole("dialog", { name: "אישור והכנת PDF" })).toBeNull();
     },
   );
 
@@ -1170,10 +1191,10 @@ describe("DraftEditorPage preview", () => {
     expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Owned the CRM migration end to end.")).toBeInTheDocument();
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
-    /* The decision the screen exists for, pinned rather than left at the foot of a
-       column - and shut, with the reason beside it, until a run describes this version. */
-    expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
-    expect(screen.getByText("האישור נפתח אחרי אימות שעבר על הגרסה המוצגת.")).toBeInTheDocument();
+    /* The single finish action is pinned rather than left at the foot of a column. It
+       starts with validation and changes to explicit approval only after that passes. */
+    expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
+    expect(screen.getByText("המערכת תבדוק את הגרסה המוצגת לפני הכנת ה־PDF.")).toBeInTheDocument();
   });
 
   it("shows the text just typed when the line is closed, not the version on the server", async () => {

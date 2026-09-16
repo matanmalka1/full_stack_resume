@@ -58,7 +58,7 @@ export const DraftReviewPanel = ({
             }
           >
             <p dir="auto">{reason.message}</p>
-            <p>ההחלטה הזו חוסמת אישור גם אם אימות הטיוטה עבר.</p>
+            <p>יש להשלים את ההחלטה הזו לפני שאפשר להכין את קובץ ה־PDF.</p>
             {claim !== undefined && editAllowed ? (
               <p>
                 {pending

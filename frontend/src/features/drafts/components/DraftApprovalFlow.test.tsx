@@ -46,10 +46,14 @@ const DraftFlow = () => {
   return (
     <>
       <DraftValidationPanel validation={validation} />
-      {/* Approval sits beside the report rather than inside it: the panel draws a verdict
-          and the screen holding it decides what that verdict opens. */}
-      <button disabled={validation.exactPassingRunId === null} onClick={() => setOpen(true)} type="button">
-        פתיחת אישור
+      {/* The editor exposes one finish action: it validates first and opens the explicit
+          approval only when the exact displayed version has passed. */}
+      <button
+        disabled={!validation.canValidate && validation.exactPassingRunId === null}
+        onClick={validation.exactPassingRunId === null ? validation.validate : () => setOpen(true)}
+        type="button"
+      >
+        {validation.exactPassingRunId === null ? "בדיקה והכנת PDF" : "אישור והכנת PDF"}
       </button>
       <DraftApprovalDialog
         applicationId="app-1"
@@ -111,7 +115,7 @@ describe("DraftValidationPanel", () => {
        itself is not shown: `UNKNOWN_HARD` names the failure in a vocabulary the reader
        has no use for, and the message beside it already says what went wrong. */
     expect(screen.queryByText(/UNKNOWN_HARD/)).toBeNull();
-    expect(screen.getByRole("button", { name: "אימות מחדש" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeInTheDocument();
   });
 
   it("posts the exact edit version and exposes approval only after a passing response", async () => {
@@ -128,12 +132,11 @@ describe("DraftValidationPanel", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    const validate = await screen.findByRole("button", { name: "אימות הטיוטה" });
+    const validate = await screen.findByRole("button", { name: "בדיקה והכנת PDF" });
     await waitFor(() => expect(validate).toBeEnabled());
     /* Approval is closed until a passing run for this exact version exists. */
-    expect(screen.getByRole("button", { name: "פתיחת אישור" })).toBeDisabled();
     fireEvent.click(validate);
-    await waitFor(() => expect(screen.getByRole("button", { name: "פתיחת אישור" })).toBeEnabled());
+    await screen.findByRole("button", { name: "אישור והכנת PDF" });
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_edit_version: 4 });
   });
@@ -179,20 +182,19 @@ describe("DraftValidationPanel", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    const validate = await screen.findByRole("button", { name: "אימות הטיוטה" });
+    const validate = await screen.findByRole("button", { name: "בדיקה והכנת PDF" });
     await waitFor(() => expect(validate).toBeEnabled());
     fireEvent.click(validate);
     edited = true;
     await act(async () => finishValidation(json(validationFixture())));
-    await waitFor(() => expect(screen.getByRole("button", { name: "אימות הטיוטה" })).toBeEnabled());
-    expect(screen.queryByRole("heading", { name: "הטיוטה עברה אימות" })).toBeNull();
-    expect(screen.getByRole("button", { name: "פתיחת אישור" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled());
+    expect(screen.queryByRole("heading", { name: "הקובץ עבר בדיקה" })).toBeNull();
     newRun = true;
     await act(async () => {
       await client.invalidateQueries({ queryKey: workingDraftQueryOptions("draft-1").queryKey });
     });
-    expect(await screen.findByRole("heading", { name: "הטיוטה לא עברה אימות" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "פתיחת אישור" })).toBeDisabled();
+    expect(await screen.findByRole("heading", { name: "נדרשים תיקונים בקובץ" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
   });
 });
 
@@ -228,7 +230,7 @@ describe("DraftApprovalDialog", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    const openApproval = await screen.findByRole("button", { name: "אישור והכנת PDF" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
     const dialog = await screen.findByRole("dialog");
@@ -239,7 +241,7 @@ describe("DraftApprovalDialog", () => {
        is bound to that exact run, and the request assertion at the end of this test is
        what proves it - the collapsed identifier only proved it had been printed. */
     expect(screen.queryByText("run-1")).toBeNull();
-    const approve = await screen.findByRole("button", { name: "אישור הגרסה" });
+    const approve = within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" });
     expect(approve).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(approve);
@@ -281,10 +283,10 @@ describe("DraftApprovalDialog", () => {
       ),
     );
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    const openApproval = await screen.findByRole("button", { name: "אישור והכנת PDF" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
-    fireEvent.click(await screen.findByRole("button", { name: "אישור הגרסה" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
     const dialog = await screen.findByRole("dialog");
     /* STATE_CONFLICT is a known code, so the callout shows the client's own translation
        rather than the server's literal `detail` - the assertion is on that text. */
@@ -321,10 +323,10 @@ describe("DraftApprovalDialog", () => {
       ),
     );
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    const openApproval = await screen.findByRole("button", { name: "אישור והכנת PDF" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
-    fireEvent.click(await screen.findByRole("button", { name: "אישור הגרסה" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
 
     expect(await screen.findByText("נמצא שינוי בקובץ העבודה שלא יובא לטיוטה")).toBeInTheDocument();
     expect(screen.getByText(/השינוי נשמר ולא נדרס/)).toBeInTheDocument();
@@ -359,12 +361,12 @@ describe("DraftApprovalDialog", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    const openApproval = await screen.findByRole("button", { name: "פתיחת אישור" });
+    const openApproval = await screen.findByRole("button", { name: "אישור והכנת PDF" });
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
-    fireEvent.click(await screen.findByRole("button", { name: "אישור הגרסה" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
     /* The panel says the draft moved on; nothing re-validated or re-approved by itself. */
-    expect(await screen.findByText("הטיוטה השתנתה מאז האימות")).toBeInTheDocument();
+    expect(await screen.findByText("הטיוטה השתנתה מאז הבדיקה")).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
   });
 });

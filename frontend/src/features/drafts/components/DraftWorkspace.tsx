@@ -3,13 +3,9 @@ import type { ReactNode } from "react";
 import { cx } from "@/ui/cx";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 
-/* What the screen is for at this moment.
-
-   The switch used to choose a layout - editor, split, preview - while the claims below it
-   were always editable, so a screen opened to read a document and sign it opened as a page
-   of sixty textareas. There is no screen-wide editing mode now: `read` shows the draft as
-   text with the facts behind each line and a pencil on every row, and `document` drops the
-   rows for the rendered preview alone. Changing one line is a decision about that line. */
+/* What the screen is for at this moment. `read` is the primary desktop workspace: clean
+   inline editing beside the rendered document. `document` is a focused preview for narrow
+   screens or for a final full-width read. */
 export type DraftWorkspaceMode = "read" | "document";
 
 interface DraftWorkspaceProps {
@@ -36,8 +32,8 @@ export const DraftWorkspace = ({ editor, mode, onModeChange, preview }: DraftWor
         label="בחירת תצוגת סביבת העבודה"
         onChange={onModeChange}
         options={[
-          { label: "בדיקת עובדות ועריכה", value: "read" },
-          { label: "מסמך לאישור", value: "document" },
+          { label: "עריכה ותצוגה", value: "read" },
+          { label: "תצוגה מלאה", value: "document" },
         ]}
         value={mode}
       />

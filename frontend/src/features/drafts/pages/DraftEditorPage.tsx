@@ -90,11 +90,11 @@ export const DraftEditorPage = () => {
       detail?.working_draft_state === "stale",
   );
 
-  /* Open on the document the user is deciding about. Claim provenance and editing are
-     one deliberate switch away instead of making every fact and advanced control part
-     of the first reading surface. */
-  const [mode, setMode] = useState<DraftWorkspaceMode>("document");
+  /* The daily workspace opens with editing and the rendered document together. A focused
+     full-width preview remains available, especially on narrow screens. */
+  const [mode, setMode] = useState<DraftWorkspaceMode>("read");
   const [approvalOpen, setApprovalOpen] = useState(false);
+  const [finishRequested, setFinishRequested] = useState(false);
   /* The revision this editor just approved. Held here rather than read from the projection
      so the render step names the exact revision the approval returned. */
   const [approvedRevisionId, setApprovedRevisionId] = useState<string | null>(null);
@@ -205,7 +205,7 @@ export const DraftEditorPage = () => {
       if (currentDetail.working_draft_state === "stale" || !currentDetail.available_actions.includes("validate"))
         return;
       // Settle once more after the reads, then validate the exact version read back.
-      if (!(await editing.settle())) throw new Error("יש לשמור את העריכות לפני אימות הטיוטה.");
+      if (!(await editing.settle())) throw new Error("יש לשמור את העריכות לפני בדיקת הקובץ.");
       const latest = await queryClient.fetchQuery({ ...workingDraftQueryOptions(id), staleTime: 0 });
       await validation.validateExact(latest.draft);
     } catch (error) {
@@ -245,6 +245,27 @@ export const DraftEditorPage = () => {
     detail.working_draft_state === "stale" ||
     detail.stale_reasons.length > 0 ||
     validation.stale;
+
+  /* One press starts the finish flow. Validation remains its own exact backend boundary;
+     once it passes, the UI opens the explicit approval dialog instead of making the user
+     find and press the same footer action a second time. A failed run or request ends this
+     attempt and leaves its actionable report beside the preview. */
+  useEffect(() => {
+    if (!finishRequested) return;
+    if (validation.exactPassingRunId !== null && !approvalUnavailable) {
+      setFinishRequested(false);
+      setApprovalOpen(true);
+      return;
+    }
+    if (validation.error != null || validation.lastRun?.passed === false) setFinishRequested(false);
+  }, [
+    approvalUnavailable,
+    finishRequested,
+    validation.error,
+    validation.exactPassingRunId,
+    validation.lastRun,
+  ]);
+
   // A blocker closes this explicit choice permanently; clearing it never reopens approval.
   if (approvalOpen && approvalUnavailable) setApprovalOpen(false);
 
@@ -418,21 +439,26 @@ export const DraftEditorPage = () => {
               onApprove={() => {
                 if (!approvalUnavailable && validation.exactPassingRunId !== null) setApprovalOpen(true);
               }}
+              onValidate={() => {
+                setFinishRequested(true);
+                validation.validate();
+              }}
               unavailable={approvalUnavailable}
               reviewBlocked={(detail?.review_reasons ?? []).length > 0}
               stale={validation.stale}
+              validationPending={validation.isPending}
               validationResult={
                 validation.error !== null && validation.error !== undefined
-                  ? "לא ניתן להשלים את האימות. פרטי השגיאה מופיעים לצד הטיוטה."
+                  ? "לא ניתן להשלים את בדיקת הקובץ. פרטי השגיאה מופיעים לצד הטיוטה."
                   : validation.lastRun === undefined
                     ? undefined
                     : validation.lastRun.passed && validation.exactPassingRunId !== null
                       ? approvalUnavailable
-                        ? "האימות עבר על הגרסה המוצגת. יש לפתור את החסמים לפני אישור."
-                        : "האימות הושלם בהצלחה. הטיוטה מוכנה לאישור."
+                        ? "הבדיקה עברה על הגרסה המוצגת. יש לפתור את החסמים לפני הכנת ה־PDF."
+                        : "הבדיקה הושלמה בהצלחה. אפשר לאשר ולהכין את ה־PDF."
                       : validation.lastRun.passed
-                        ? "האימות הושלם, אך הטיוטה השתנתה מאז. יש להריץ אימות חדש."
-                        : "האימות הושלם והטיוטה לא עברה. פרטי הכשל מופיעים לצד הטיוטה."
+                        ? "הבדיקה הושלמה, אך הטיוטה השתנתה מאז. יש לבדוק את הגרסה החדשה."
+                        : "הבדיקה הושלמה ונדרשים תיקונים. הפרטים מופיעים לצד הטיוטה."
               }
             />
 

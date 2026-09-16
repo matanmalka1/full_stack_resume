@@ -1,5 +1,4 @@
 import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
-import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { ValidationReportView } from "@/features/revisions";
 import type { DraftValidation } from "../hooks/useDraftValidation";
@@ -16,22 +15,17 @@ interface DraftValidationPanelProps {
    open - is derived upstream from the same values, so nothing is reported back out of
    here through an effect. */
 export const DraftValidationPanel = ({ validation }: DraftValidationPanelProps) => {
-  const { canValidate, error, isPending, run, stale, validate } = validation;
+  const { error, run, stale } = validation;
 
   return (
     <section aria-labelledby="validation-summary" className="flex flex-col gap-3 border-t border-cv-border pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-heading-sm font-bold text-cv-text" id="validation-summary">
-          {run === undefined ? "אימות הטיוטה" : run.passed ? "הטיוטה עברה אימות" : "הטיוטה לא עברה אימות"}
-        </h2>
-        <Button disabled={!canValidate} onClick={validate} pending={isPending} pendingLabel="מאמת…" variant="secondary">
-          {run === undefined ? "אימות הטיוטה" : "אימות מחדש"}
-        </Button>
-      </div>
+      <h2 className="text-heading-sm font-bold text-cv-text" id="validation-summary">
+        {run === undefined ? "בדיקת הקובץ" : run.passed ? "הקובץ עבר בדיקה" : "נדרשים תיקונים בקובץ"}
+      </h2>
 
       {stale ? (
-        <Callout title="הטיוטה השתנתה מאז האימות" tone="warning">
-          יש להריץ אימות חדש לגרסה הנוכחית. לא הופעל אישור ולא בוצע אימות מחדש אוטומטי.
+        <Callout title="הטיוטה השתנתה מאז הבדיקה" tone="warning">
+          יש לבדוק מחדש את הגרסה הנוכחית לפני הכנת ה־PDF.
         </Callout>
       ) : null}
 
@@ -39,13 +33,13 @@ export const DraftValidationPanel = ({ validation }: DraftValidationPanelProps) 
         <ErrorCallout
           error={error}
           fallbackDetail={briefServerFailureDetail}
-          fallbackTitle="לא ניתן להשלים את האימות"
+          fallbackTitle="לא ניתן להשלים את בדיקת הקובץ"
         />
       )}
 
       {run === undefined ? (
         <p className="text-support leading-6 text-cv-text-muted">
-          האימות בודק את גרסת הטיוטה המדויקת שמוצגת כאן, לפני אישור.
+          הבדיקה תופעל מכפתור הכנת ה־PDF ותוודא שהגרסה המוצגת מוכנה למסירה.
         </p>
       ) : (
         <ValidationReportView report={run.report} />
