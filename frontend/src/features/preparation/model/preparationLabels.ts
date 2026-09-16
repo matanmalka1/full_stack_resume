@@ -1,4 +1,4 @@
-import type { ApplicationDetail, PreparationState, WorkingDraftState } from "@/api/contracts";
+import type { PreparationState, WorkingDraftState } from "@/api/contracts";
 import {
   BadgeCheck,
   CircleCheck,
@@ -51,20 +51,6 @@ export const workingDraftStateTones: Record<WorkingDraftState, Tone> = {
   validated: "success",
   stale: "warning",
 };
-
-/* `working_draft_state === "none"` is news only while a draft is expected but absent.
-   Before drafting it merely restates the preparation stage; after approval it is the
-   normal result of deactivating the draft behind an immutable milestone. */
-const preparationStatesImplyingNoDraft = new Set<PreparationState>([
-  "needs_analysis",
-  "needs_review",
-  "ready_to_draft",
-  "approved",
-  "ready",
-]);
-
-export const draftStateIsImplied = (detail: ApplicationDetail): boolean =>
-  detail.working_draft_state === "none" && preparationStatesImplyingNoDraft.has(detail.preparation_state);
 
 /* Hebrew names for the actions the projection reports. Deliberately a partial map over
    an open set of strings rather than a Record over an enum this layer invented: the
