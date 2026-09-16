@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from typing import Any
 
+from ...domain.analysis.projection import fit_level, fit_score
+from ...domain.analysis.projection import gaps as project_gaps
+from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.records import ApprovedRevision
 from ...domain.contracts.selection import SelectionPlan
@@ -30,8 +34,20 @@ from .views_shared import ApplicationListItemView, ApplicationStateView, Applica
 from .views_tracking import RecruitmentTimelineItemView
 
 
-def application_view(record: dict[str, Any]) -> ApplicationView:
-    return ApplicationView.model_validate(record)
+def _fit_projection(analysis: JobAnalysis | None) -> dict[str, Any]:
+    """Fit as the requirements make it, for a record that no longer stores it."""
+    if analysis is None:
+        return {"fit_level": None, "fit_score": None}
+    return {
+        "fit_level": fit_level(analysis.requirements).value,
+        "fit_score": fit_score(analysis.requirements),
+    }
+
+
+def application_view(
+    record: dict[str, Any], analysis: JobAnalysis | None = None
+) -> ApplicationView:
+    return ApplicationView.model_validate({**record, **_fit_projection(analysis)})
 
 
 def _claim_view(claim: Any) -> DraftClaimView:
@@ -147,12 +163,13 @@ def selection_plan_detail_view(
 
 
 def application_list_item_view(
-    record: dict[str, Any], state: ApplicationStateView
+    record: dict[str, Any], state: ApplicationStateView, analysis: JobAnalysis | None = None
 ) -> ApplicationListItemView:
     return ApplicationListItemView.model_validate(
         {
             **record,
             **state.model_dump(mode="python"),
+            **_fit_projection(analysis),
             "is_closed": application_is_closed(state.terminal_outcome, state.recruitment_status),
         }
     )
@@ -226,11 +243,18 @@ def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:
     )
 
 
-def analysis_view(record: dict[str, Any]) -> JobAnalysisView:
+def analysis_view(record: dict[str, Any], facts: FactStore) -> JobAnalysisView:
+    analysis: JobAnalysis = record["analysis"]
+    projected = {"fit_level", "fit_score", "gaps", "analysis"}
     return JobAnalysisView.model_validate(
         {
-            **{key: record.get(key) for key in JobAnalysisView.model_fields if key != "analysis"},
-            "analysis": record["analysis"],
+            **{
+                key: record.get(key) for key in JobAnalysisView.model_fields if key not in projected
+            },
+            "analysis": analysis,
+            "fit_level": fit_level(analysis.requirements).value,
+            "fit_score": fit_score(analysis.requirements),
+            "gaps": [asdict(gap) for gap in project_gaps(analysis.requirements, facts)],
         }
     )
 

@@ -103,23 +103,23 @@ export const overrideKeyLabels: Record<string, string> = {
   profile: "פרופיל",
   emphasis: "דגש",
   language: "שפה",
-  fit: "התאמה",
 };
 
-/* Why a classification needs a decision, in the vocabulary the analysis records. This is
-   an open string map rather than a Record over a union: `approval_reasons` is a list of
-   plain strings inside the analysis document, which travels as an opaque object on
-   purpose. A reason this build does not recognise is therefore shown as its raw code
-   rather than hidden - the reader learning an unfamiliar token beats being told nothing
-   about a gate that is holding their work. */
-const approvalReasonLabels: Record<string, string> = {
-  "extraction-failed": "לא ניתן היה לחלץ את דרישות המשרה מהנוסח שנשמר.",
-  "coverage-undetermined": "לדרישת חובה אחת לפחות לא נקבעה מידת כיסוי.",
-  "requirements-absent": "לא נמצאו דרישות בנוסח המשרה שנשמר.",
-  "requirements-unmapped": "חלק מהמשפטים בנוסח המשרה לא מופו לדרישה.",
+/* Where the engine narrowed a reading, in words. An open string map rather than a Record
+   over a union: issues travel inside the analysis document, which is an opaque object on the
+   wire. A code this build does not recognise is shown raw rather than hidden - an unfamiliar
+   token still tells the reader that something was narrowed. */
+const analysisIssueLabels: Record<string, string> = {
+  quote_not_found: "נוסח של דרישה לא אותר במודעה השמורה; הדרישה נשמרה ללא עיגון.",
+  quote_ambiguous: "נוסח של דרישה מופיע במודעה יותר מפעם אחת.",
+  unknown_fact: "עובדה שצוטטה אינה קיימת במאגר והוסרה מהדרישה.",
+  fact_not_canonical: "עובדה שצוטטה אינה מאושרת והוסרה מהדרישה.",
+  coverage_without_evidence: "כיסוי חיובי שלא נשארה לו ראיה הורד ל״לא הוכרע״.",
+  duplicate_requirement: "דרישה שהופיעה פעמיים אוחדה לאחת.",
+  requirement_unusable: "דרישה ריקה או לא קריאה דולגה.",
 };
 
-export const approvalReasonLabel = (reason: string): string => approvalReasonLabels[reason] ?? reason;
+export const analysisIssueLabel = (code: string): string => analysisIssueLabels[code] ?? code;
 
 /* Confidence is a 0..1 float in the document and a percentage to a reader.
 
@@ -131,28 +131,30 @@ export const approvalReasonLabel = (reason: string): string => approvalReasonLab
 export const confidenceText = (confidence: number): string => `${Math.round(confidence * 100)}%`;
 
 export const gapSeverityLabels: Record<"hard" | "warning", string> = {
-  hard: "פער חוסם",
+  // Named for what it is, not for what it used to do: a hard gap is a demanded
+  // requirement the facts do not support, and it blocks nothing.
+  hard: "פער בדרישת חובה",
   warning: "פער לתשומת לב",
 };
 
 /* The coverage a Requirement carries independently of its gap projection: `matched` and
    `partial` have no gap at all, so this is the only place either is named for the
    reader. Ordered as a scale, like Fit's tones above - `matched` reads as the safe end
-   and `unsupported` as the blocked one, with `partial` between them. `undetermined` is
+   and `unsupported` as the blocked one, with `partial` between them. `unknown` is
    not a point on that scale - it means the engine could not decide, not that the facts
-   fall short, so it is never worded or toned like `unsupported` (stage-1 plan §3.6). */
+   fall short, so it is never worded or toned like `unsupported`. */
 export const coverageLabels: Record<RequirementCoverage, string> = {
   matched: "מכוסה",
   partial: "מכוסה חלקית",
   unsupported: "לא מכוסה",
-  undetermined: "לא הוכרע",
+  unknown: "לא הוכרע",
 };
 
 export const coverageTones: Record<RequirementCoverage, Tone> = {
   matched: "success",
   partial: "warning",
   unsupported: "blocker",
-  undetermined: "neutral",
+  unknown: "neutral",
 };
 
 /* One derivation, used by every select on the review form: the option list is the map's

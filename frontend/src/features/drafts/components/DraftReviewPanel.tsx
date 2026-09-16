@@ -1,7 +1,6 @@
 import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
-import { classificationFromAnalysis } from "@/api/analyses";
 import { routePaths } from "@/app/routePaths";
-import { reasonTitle, resolvedByReviewDecision, ReviewDecisionPanel } from "@/features/preparation";
+import { reasonTitle } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
@@ -9,13 +8,11 @@ import { Card } from "@/ui/Card";
 export const DraftReviewPanel = ({
   detail,
   draft,
-  beforeResolve,
   onNavigate,
   onShowClaim,
 }: {
   detail: ApplicationDetail;
   draft: WorkingDraft;
-  beforeResolve: () => Promise<void>;
   onNavigate: (href: string) => void;
   onShowClaim: (claimId: string) => void;
 }) => {
@@ -29,7 +26,6 @@ export const DraftReviewPanel = ({
     <Card aria-label="החלטות שחוסמות את אישור הטיוטה" className="flex flex-col gap-4 p-5">
       <h2 className="text-body font-semibold text-cv-text">יש לפתור את ההחלטות לפני אישור הטיוטה</h2>
       {detail.review_reasons.map((reason) => {
-        const analysisDecision = resolvedByReviewDecision(reason);
         const pending = reason.code === "PENDING_FACT_REQUIRES_RESOLUTION";
         const deleted = reason.code === "FACT_DELETED_REQUIRES_RESOLUTION";
         const claim = pending
@@ -50,7 +46,7 @@ export const DraftReviewPanel = ({
             title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור")}
             tone="blocker"
             action={
-              analysisDecision ? undefined : claim !== undefined && editAllowed ? (
+              claim !== undefined && editAllowed ? (
                 <Button variant="secondary" onClick={() => onShowClaim(claim.claim_id)}>
                   {pending ? "מעבר לפתרון השורה" : "מעבר לשורה להסרת התלות בעובדה"}
                 </Button>
@@ -63,12 +59,7 @@ export const DraftReviewPanel = ({
           >
             <p dir="auto">{reason.message}</p>
             <p>ההחלטה הזו חוסמת אישור גם אם אימות הטיוטה עבר.</p>
-            {analysisDecision ? (
-              <p>
-                הפתרון נמצא בטופס ההחלטות שלהלן. החלטה עשויה לשנות את הניתוח או את תוכנית הבחירה ולחייב טיוטה מעודכנת
-                ואימות חדש.
-              </p>
-            ) : claim !== undefined && editAllowed ? (
+            {claim !== undefined && editAllowed ? (
               <p>
                 {pending
                   ? editableClaim
@@ -78,23 +69,16 @@ export const DraftReviewPanel = ({
               </p>
             ) : selectionAllowed ? (
               <p>יש ליצור תוכנית בחירה עבור הניתוח הפעיל. טופס החלטות הסיווג אינו פותר את החסר הזה.</p>
-            ) : !analysisDecision ? (
+            ) : (
               <p>
                 {reason.code === "KNOWLEDGE_RECONCILIATION_REQUIRED"
                   ? "נדרשת השלמת התאמה של מאגר הידע. טופס החלטות הניתוח אינו פותר זאת, ואין בעורך פעולה זמינה שסוגרת את החסם."
                   : "אין בעורך פעולה זמינה שסוגרת את הסיבה הזו בהקשר הנוכחי. יש לפתור את התלות במקור לפני המשך; טופס החלטות הניתוח אינו פותר אותה."}
               </p>
-            ) : null}
+            )}
           </Callout>
         );
       })}
-      <ReviewDecisionPanel
-        key={`${detail.active_analysis_id}:${detail.active_selection_plan_id}`}
-        classification={classificationFromAnalysis(detail)}
-        detail={detail}
-        beforeApply={beforeResolve}
-        inline
-      />
     </Card>
   );
 };

@@ -15,7 +15,6 @@ from ...domain.contracts.records import (
     ValidationRunLineage,
 )
 from ...domain.contracts.selection import (
-    AcceptedGap,
     SelectionManifest,
     SelectionPlan,
 )
@@ -128,9 +127,6 @@ class JobStore(Protocol):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
-        accepted_requirement_ids: list[str] | None = ...,
-        acceptance_actor: str = ...,
-        acceptance_reason: str | None = ...,
         expected_analysis_id: str | None = ...,
         expected_selection_plan_id: str | None = ...,
         enforce_expected_selection_plan: bool = ...,
@@ -154,7 +150,6 @@ class JobStore(Protocol):
         profile_version: str,
         selection_policy_version: str,
         track_emphasis_dependencies: dict[str, str],
-        new_acceptances: list[AcceptedGap] | None = None,
         expected_selection_plan_id: str | None = None,
         enforce_expected_selection_plan: bool = False,
         refuse_matching_context_operation: bool = False,

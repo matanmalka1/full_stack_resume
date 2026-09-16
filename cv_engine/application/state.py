@@ -10,13 +10,6 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from ..domain.analysis.approval import (
-    ANALYSIS_INCOMPLETE,
-    approval_reason,
-    resolving_actions,
-    unresolved_approval_reasons,
-)
-from ..domain.analysis.gaps import unaccepted_hard_gaps
 from ..domain.contracts.analysis import JobAnalysis
 from ..domain.contracts.drafts import WorkingDraft
 from ..domain.contracts.knowledge import FactStatus
@@ -47,7 +40,6 @@ STALE_PRECEDENCE = (
 
 PREPARATION_ACTIONS = (
     "analyze",
-    "apply_analysis_decisions",
     "edit_matching_configuration",
     "create_selection_plan",
     "confirm_and_use_fact",
@@ -95,18 +87,6 @@ def _reason(
         entity_references=references or {},
         allowed_resolution_actions=actions or [],
     )
-
-
-def _approval_message(code: str, reasons: list[str]) -> str:
-    """What the projection says about the approval reasons it is reporting.
-
-    The incomplete-analysis sentence names the reasons it stands for. A blocker
-    that says only "requires a decision" while offering no way to take one is
-    what this reason was split off to stop saying.
-    """
-    if code == ANALYSIS_INCOMPLETE:
-        return f"The analysis did not read this posting's requirements: {', '.join(reasons)}."
-    return "The job classification requires an explicit decision."
 
 
 def derive_staleness(context: ProjectionContext) -> list[ReasonView]:
@@ -227,65 +207,13 @@ def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -
     plan = context.active_selection_plan
     draft = context.active_working_draft
     reasons: list[ReasonView] = []
-    # Which review reason an approval reason is reported as, and what resolves
-    # it, both come from one table in the domain. The projection asks it rather
-    # than deciding for itself, so a reason cannot be advertised here as
-    # something a command can settle when the table says nothing settles it.
-    selection_overrides = (
-        {"emphasis": plan.plan.emphasis_override.value}
-        if plan is not None and plan.plan.emphasis_override is not None
-        else None
-    )
-    unresolved = (
-        unresolved_approval_reasons(analysis, selection_overrides) if analysis is not None else []
-    )
-    grouped: dict[str, list[str]] = {}
-    for reason in unresolved:
-        grouped.setdefault(approval_reason(reason).review_code, []).append(reason)
-    for code, names in grouped.items():
-        # The intersection, not the union: every reason reported under this code
-        # must be one the advertised command can actually close. Offering an
-        # action that settles only some of what the reason reports is the same
-        # false advertisement in a smaller form.
-        actions = set(resolving_actions(names[0]))
-        for name in names[1:]:
-            actions &= set(resolving_actions(name))
-        reasons.append(
-            _reason(
-                code,
-                _approval_message(code, names),
-                {"job_analysis_id": context.active_analysis_id or ""},
-                sorted(actions),
-            )
-        )
-    if (
-        analysis is not None
-        and analysis.fit.value == "low"
-        and (analysis.user_override.get("fit") != "accepted-low-fit")
-    ):
-        reasons.append(
-            _reason(
-                "LOW_FIT_REQUIRES_ACCEPTANCE",
-                "Low fit requires explicit acceptance before drafting.",
-                {"job_analysis_id": context.active_analysis_id or ""},
-                ["apply_analysis_decisions"],
-            )
-        )
-    # One shared question, asked here, in draft generation and in validation.
-    # The analysis-level `accepted-low-fit` override is deliberately not part
-    # of it: that answers low Fit, and letting it answer this too meant one
-    # checkbox dismissed every hard gap at once, including unseen ones.
-    if analysis is not None and unaccepted_hard_gaps(
-        analysis, plan, job_analysis_id=context.active_analysis_id
-    ):
-        reasons.append(
-            _reason(
-                "HARD_GAP_REQUIRES_DECISION",
-                "A hard requirement gap requires an explicit decision.",
-                {"job_analysis_id": context.active_analysis_id or ""},
-                ["apply_analysis_decisions"],
-            )
-        )
+    # An incomplete reading is no longer a review reason. The analysis is kept
+    # and shown with its issues; nothing about how much of the posting it read
+    # asks the user for a decision before they may see a document.
+    # Low Fit and hard gaps are shown, not asked about. Both describe how well
+    # the candidate matches this posting, which is theirs to weigh; neither
+    # says the document would be untrue, and a decision the user cannot get
+    # wrong is not a decision worth blocking on.
     if analysis is not None and plan is None:
         reasons.append(
             _reason(
@@ -572,9 +500,7 @@ def derive_actions(
         if action in available:
             continue
         reasons: list[str]
-        if action == "apply_analysis_decisions":
-            reasons = ["NO_REVIEW_DECISION_REQUIRED"]
-        elif action == "edit_matching_configuration":
+        if action == "edit_matching_configuration":
             if context.active_analysis is None:
                 reasons = ["ANALYSIS_REQUIRED"]
             elif context.matching_context_operation_active:
@@ -587,9 +513,8 @@ def derive_actions(
             "create_selection_plan",
             "confirm_and_use_fact",
         }:
-            # True of this command specifically: no outstanding decision is one
-            # it takes. A blocker it cannot resolve - `ANALYSIS_INCOMPLETE` -
-            # is reported as its own review reason, not as this action's.
+            # These commands resolve selection or fact state, never a general
+            # workflow blocker reported by another projection.
             reasons = ["NO_REVIEW_DECISION_REQUIRED"]
         elif action == "create_draft":
             reasons = review_codes or stale_codes or ["ANALYSIS_OR_SELECTION_PLAN_REQUIRED"]

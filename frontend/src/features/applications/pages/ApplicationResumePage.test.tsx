@@ -126,7 +126,7 @@ describe("ApplicationResumePage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("heading", { name: "מוכן" })).not.toBeInTheDocument();
     await act(async () =>
-      resolve(json(detail({ preparation_state: "needs_review", recommended_action: "apply_analysis_decisions" }))),
+      resolve(json(detail({ preparation_state: "needs_review", recommended_action: "edit_matching_configuration" }))),
     );
     expect(await screen.findByRole("heading", { name: "ניתוח" })).toBeInTheDocument();
   });

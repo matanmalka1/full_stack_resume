@@ -103,9 +103,9 @@ ValidationRun passed, so approving requires obtaining that run first: nothing ca
 approve content that nothing vouched for. Rendering runs the same content, claim, PDF,
 ATS, link, direction, filename, and visual gates every time.
 
-Low fit and material classification ambiguity stop by default. Explicit Track, Profile,
-and Emphasis overrides are recorded as decisions, as is accepting a low fit. Overrides
-never authorize fabricated facts.
+Low fit and requirement gaps are diagnostic information, not workflow blockers. Explicit
+Track, Profile, and Emphasis overrides are recorded as decisions. Overrides never
+authorize fabricated facts, and unsupported draft claims still block approval.
 
 Emphasis is a content decision, not a label. A Profile's `fact_ids` are the candidate
 pool a section may draw from, and `config/emphasis.json` weights the canonical fact tags
@@ -116,13 +116,18 @@ Emphasis changes the document, an unresolved Emphasis choice is a review reason 
 answers through Apply Decisions, not something a classifier settles on its own.
 
 Which requirements a posting states, and which canonical facts answer them, is the
-provider's reading. The engine does not accept it on report: every quote is verified
-byte-exact against the stored snapshot, every cited fact must exist and be canonical,
-thresholds are recomputed from the facts' own structured fields, and a canonical
-boundary fact caps a match regardless of what the provider proposed. Unverified direct
-SaaS Sales, named Sales-CRM usage, and strategic-partnership ownership are such
-boundaries: verified substitute facts may be selected, but the missing experience is
-never inferred from them.
+provider's reading. The engine does not accept it on report: it locates every quoted
+requirement in the stored snapshot itself, every cited fact must exist and be canonical,
+a positive reading with no canonical evidence left falls back to unknown, and a
+canonical boundary fact caps a match regardless of what the provider proposed.
+Unverified direct SaaS Sales, named Sales-CRM usage, and strategic-partnership ownership
+are such boundaries: verified substitute facts may be selected, but the missing
+experience is never inferred from them.
+
+None of those checks discards the reading. Each one lowers what the analysis claims and
+records the reason on the record, so an analysis says why it claims less than the
+posting appears to ask for. A response that cannot be parsed at all is the one failure
+that is still a failure.
 
 ## Fact lifecycle
 
@@ -186,9 +191,11 @@ rendering, Ready, export and recruitment tracking — runs with no key at all.
 keeps its own separate deterministic path (`provider=deterministic` on `create_draft`),
 unaffected by this.
 
-A configured key enables six structured OpenAI proposal tasks:
-`propose_requirement_extraction`, `propose_job_analysis`, `propose_selection_plan`,
-`draft_resume`, `regenerate_section`, and `regenerate_claim`. The Web settings page then
+A configured key enables five structured OpenAI proposal tasks: `propose_analysis`,
+`propose_selection_plan`, `draft_resume`, `regenerate_section`, and `regenerate_claim`.
+`propose_analysis` reads the posting once and returns the classification and the
+requirements together; a flawed entry in its reading is narrowed and disclosed as an
+analysis issue rather than discarding the whole reading. The Web settings page then
 offers a closed model catalog and low/medium/high reasoning effort; those defaults are
 frozen onto each queued AI Operation:
 
@@ -196,7 +203,7 @@ frozen onto each queued AI Operation:
 export OPENAI_API_KEY='...'
 ```
 
-Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.
+Provider output is Pydantic-validated and deterministic hard gaps remain visible.
 The adapter uses strict Structured Outputs through the Responses API. Each provider
 artifact preserves token usage, the dated pricing snapshot, and its calculated USD
 cost; the Operation panel shows the selected model, effort, and final cost.

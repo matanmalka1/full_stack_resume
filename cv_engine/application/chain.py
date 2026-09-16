@@ -22,20 +22,21 @@ from .errors import UnknownRecord
 from .ports import DraftRepository
 
 # What a re-analysis may change without invalidating a draft built from an
-# earlier one. Everything else -- Track, Profile, Emphasis, language, Fit, gaps,
-# keywords, requirements, approval routing, user overrides -- either changes what
+# earlier one. Everything else -- Track, Profile, Emphasis, language, keywords,
+# requirements, and user overrides -- either changes what
 # the document selects and says or changes a gate it had to pass, so a later
 # analysis that differs there supersedes the draft rather than re-describing it.
 IMMATERIAL_ANALYSIS_FIELDS = frozenset(
     {
-        "rationale",
-        "confidence",
-        # `fit_score` is a pure function of `requirements` and `gaps`, both of
-        # which are already material: it cannot change without one of them
-        # changing too, so it carries no invalidation information `requirements`/
-        # `gaps` does not already carry. `fit` itself stays material - it is the
-        # field a draft's staleness is actually reported against.
-        "fit_score",
+        # An account of where the reading was narrowed, and a measurement of how
+        # much of it the engine anchored in the posting. Neither changes what
+        # the document selects or says: a re-run that reads the same
+        # requirements the same way, and happens to record one more dropped
+        # citation, has not superseded a draft built from the first one. What
+        # those issues were *about* - a coverage lowered, a fact removed - is
+        # already in `requirements`, which stays material.
+        "issues",
+        "source_coverage",
     }
 )
 

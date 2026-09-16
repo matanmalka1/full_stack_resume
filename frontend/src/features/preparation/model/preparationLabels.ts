@@ -59,7 +59,6 @@ export const workingDraftStateTones: Record<WorkingDraftState, Tone> = {
    itself rather than guessed at. */
 const actionLabels: Record<string, string> = {
   analyze: "ניתוח המשרה",
-  apply_analysis_decisions: "החלת החלטות הסקירה",
   edit_matching_configuration: "עריכת הגדרות ההתאמה",
   create_selection_plan: "בחירת העובדות",
   confirm_and_use_fact: "אישור עובדה ושימוש בה",
@@ -94,9 +93,6 @@ const blockedReasonLabels: Record<string, string> = {
   VALIDATION_FAILED: "האימות נכשל. צריך לתקן ולאמת מחדש.",
   VALIDATION_STALE: "הטיוטה השתנתה מאז האימות.",
   DRAFT_EDITED_AFTER_VALIDATION: "הטיוטה השתנתה מאז האימות.",
-  ANALYSIS_INCOMPLETE: "הניתוח לא הצליח לקרוא את דרישות המשרה.",
-  LOW_FIT_REQUIRES_ACCEPTANCE: "צריך לאשר התאמה נמוכה.",
-  HARD_GAP_REQUIRES_DECISION: "צריך להכריע פער חוסם.",
   PENDING_FACT_REQUIRES_RESOLUTION: "יש טענה בלי עובדה מאושרת מאחוריה.",
   KNOWLEDGE_RECONCILIATION_REQUIRED: "צריך להשלים התאמת עובדות.",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "צריך לאשר שזו מועמדות כפולה.",
@@ -115,9 +111,6 @@ export const blockedReasonLabel = (reason: string): string | null => blockedReas
    `blockedReasonLabel` answers null: a `SCREAMING_SNAKE` identifier on screen is a
    missing translation shown to the wrong audience. */
 const reasonTitles: Record<string, string> = {
-  ANALYSIS_INCOMPLETE: "הניתוח לא קרא את דרישות המשרה",
-  LOW_FIT_REQUIRES_ACCEPTANCE: "ההתאמה למשרה נמוכה",
-  HARD_GAP_REQUIRES_DECISION: "יש פער חוסם מול הדרישות",
   PENDING_FACT_REQUIRES_RESOLUTION: "טענה בלי עובדה מאושרת",
   KNOWLEDGE_RECONCILIATION_REQUIRED: "נדרשת התאמת עובדות",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "מועמדות כפולה",

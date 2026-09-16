@@ -85,9 +85,9 @@ export type ArchivedWorkingDraft = ApiSchemas["ArchivedWorkingDraftResponse"];
 export type ApproveDraftRequest = ApiSchemas["ApproveDraftRequest"];
 export type RenderRevisionRequest = ApiSchemas["RenderRevisionRequest"];
 
-/* §13 `apply_analysis_decisions`: one synchronous commit, not an Operation. The four
-   classification overrides are real unions rather than `string`, so the Hebrew option
-   maps keyed by them stay exhaustive and an added Track fails the build. */
+/* §13 `apply_analysis_decisions`: one synchronous matching-configuration commit, not an
+   Operation. The classification overrides are real unions rather than `string`, so the
+   Hebrew option maps keyed by them stay exhaustive and an added Track fails the build. */
 export type ApplyAnalysisDecisionsRequest = ApiSchemas["ApplyAnalysisDecisionsRequest"];
 export type AnalysisDecisions = ApiSchemas["AnalysisDecisionsResponse"];
 /* The analysis record's own provenance - provider, model, version, timestamp - as

@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..util import canonical_json, sha256_text
+from .analysis.projection import gaps
 from .contracts.analysis import JobAnalysis
 from .contracts.knowledge import EmphasisPolicy, Fact, Profile, ResumeSectionSpec
 from .contracts.selection import (
@@ -157,24 +158,17 @@ def _requirement_ranks(analysis: JobAnalysis) -> dict[str, int]:
     thing is genuinely held carried none, and a mandatory ask ranked level with
     a nice-to-have.
 
-    A gap takes the necessity of the requirement it projects.
+    A gap's substitutes are the supporting facts of the requirement it
+    projects, so they are ranked here already, at that requirement's necessity.
+    A second pass over the gaps used to add them again under the same level,
+    which changed nothing and read as if substitutes had an authority of their
+    own.
     """
-    necessity = {
-        requirement.requirement_id: 2 if requirement.mandatory else 1
-        for requirement in analysis.requirements
-    }
     ranks: dict[str, int] = {}
-
-    def hold(fact_id: str, level: int) -> None:
-        ranks[fact_id] = max(ranks.get(fact_id, 0), level)
-
     for requirement in analysis.requirements:
+        level = 2 if requirement.importance == "mandatory" else 1
         for fact_id in requirement.supporting_fact_ids:
-            hold(fact_id, necessity[requirement.requirement_id])
-    for gap in analysis.gaps:
-        level = necessity.get(gap.requirement_id, 1) if gap.requirement_id else 1
-        for fact_id in gap.substitute_fact_ids:
-            hold(fact_id, level)
+            ranks[fact_id] = max(ranks.get(fact_id, 0), level)
     return ranks
 
 
@@ -430,7 +424,7 @@ def build_selection(
         )
 
     gap_substitutes = frozenset(
-        fact_id for gap in analysis.gaps for fact_id in gap.substitute_fact_ids
+        fact_id for gap in gaps(analysis.requirements, facts) for fact_id in gap.substitute_fact_ids
     )
     requirement_ranks = _requirement_ranks(analysis)
 

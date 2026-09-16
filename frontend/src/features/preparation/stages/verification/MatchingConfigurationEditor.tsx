@@ -34,10 +34,6 @@ const valuesFrom = (classification: Classification): MatchingValues | null =>
       };
 
 const emptySubmission = (): ClassificationDecisions => ({
-  accept_incomplete_analysis: false,
-  accept_low_fit: false,
-  acceptance_reason: null,
-  accepted_requirement_ids: [],
   emphasis_override: null,
   language_override: null,
   profile_override: null,

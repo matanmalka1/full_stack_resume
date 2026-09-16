@@ -5,51 +5,16 @@ import { Callout } from "@/ui/Callout";
 import type { Tone } from "@/ui/tone";
 import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/analysisLabels";
 
-/* The state of the analysis, above everything this screen offers.
-
-   It used to be readable only at the foot of the page, under every decision card: the
-   reader was asked to choose a track and to accept a risk before being told that the
-   requirements had not been read at all and that the confidence behind the classification
-   was zero. The verdict is what those decisions are about, so it is stated first.
-
-   It is the one place the verdict is explained. The same sentence stood in the analysis
-   masthead, in the decision panel's own preamble, and again on the control that accepts
-   it; here it is said once and the full diagnosis is a link away rather than a repeat.
-
-   How many decisions are open is not the banner's to say. That count is carried by the
-   decisions sub-tab's badge, where it is a target, and by the commit checklist, where it
-   is live progress against named decisions; stated a third time here it was the same
-   number in a place that could disagree with them on any refetch. The banner keeps only
-   the fact the count implies - that decisions are open - in its tone, not a tally, and it
-   takes that fact as the boolean it uses rather than a count it immediately compares
-   against zero. */
+/* The analysis verdict is stated before the detailed diagnostics. Fit is information,
+   not an acknowledgement request, so the banner never changes tone based on whether the
+   user has accepted it. */
 interface BannerContent {
   body: string;
   title: ReactNode;
   tone: Tone;
 }
 
-/* Fit% (requirement coverage) and confidence% (how sure the classifier is about its
-   own read) are unrelated measures - see `Classification.fitScore` vs `.confidence`
-   in `@/api/analyses`. Stacked as two lines rather than one joined string, so neither
-   reads as an explanation or a component of the other. */
-const VerdictTitle = ({ fitLine, confidenceLine }: { fitLine: string; confidenceLine: string | null }) => (
-  <span className="flex flex-col gap-0.5">
-    <span>{fitLine}</span>
-    {confidenceLine === null ? null : (
-      <span className="text-support font-normal text-cv-text-muted">{confidenceLine}</span>
-    )}
-  </span>
-);
-
-const bannerContent = (
-  classification: Classification | null,
-  hasOpenDecisions: boolean,
-  supersededAnalysis: boolean,
-  incompleteAnalysisAccepted: boolean,
-  lowFitDecisionOpen: boolean,
-  lowFitAccepted: boolean,
-): BannerContent => {
+const bannerContent = (classification: Classification | null, supersededAnalysis: boolean): BannerContent => {
   if (supersededAnalysis) {
     return {
       body: "הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול התצלום הפעיל הוא מה שיציג את הסיווג העדכני.",
@@ -66,80 +31,35 @@ const bannerContent = (
     };
   }
 
-  if (incompleteAnalysisAccepted) {
-    return {
-      body: "המערכת לא הצליחה לקרוא את דרישות המשרה. ההמשך ללא דירוג התאמה אושר ונשמר כהחלטה על הניתוח הזה.",
-      title: "המשך ללא ניתוח דרישות אושר",
-      tone: hasOpenDecisions ? "warning" : "success",
-    };
-  }
-
-  if (classification.fit === "low" && lowFitAccepted) {
-    return {
-      body: "המשך התהליך למרות ההתאמה הנמוכה אושר ונשמר כהחלטה על הניתוח הזה.",
-      title: "המשך עם התאמה נמוכה אושר",
-      tone: hasOpenDecisions ? "warning" : "success",
-    };
-  }
-
-  /* Fit and confidence are recorded independently - a classification may carry one
-     without the other - so the headline states whichever exists rather than a sentence
-     that would be wrong when only one is present. */
+  /* Fit is shown and decided on by nobody: a low Fit or a hard gap tells the user how well
+     they match this posting, and they may still draft and apply. There is no confidence
+     line beside it - the analysis contract reports no classification confidence, and a
+     second percentage here would invite reading one as an explanation of the other. */
   const fitLevelPart = classification.fit === null ? "הניתוח הושלם" : fitLabels[classification.fit];
   const fitLine =
     classification.fitScore === null
       ? fitLevelPart
       : `התאמה למשרה: ${confidenceText(classification.fitScore)} · ${fitLevelPart}`;
-  const confidenceLine =
-    classification.confidence === null ? null : `ביטחון בניתוח: ${confidenceText(classification.confidence)}`;
-  const explanation = (() => {
-    if (classification.fit === null) {
-      return "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה.";
-    }
-    if (classification.fit === "low" && !lowFitDecisionOpen) {
-      return "דירוג ההתאמה שנקבע הוא נמוך. פרטי האבחון המלאים מראים את הפערים שנמצאו.";
-    }
-    return fitDescriptions[classification.fit];
-  })();
+  const explanation =
+    classification.fit === null
+      ? "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה."
+      : fitDescriptions[classification.fit];
 
   return {
     body: explanation,
-    title: <VerdictTitle confidenceLine={confidenceLine} fitLine={fitLine} />,
-    /* Warning, not blocker, while a decision is open: `needs_review` is the same state
-       `preparationStateTones` already reports as "warning" everywhere else on this
-       screen - the stepper, the header badge - and a decision here is always answerable
-       from the form directly below, never a dead end. Blocker is reserved for what a
-       reader cannot act their way out of, which is not this. With nothing open, the tone
-       is the verdict's own. */
-    tone: hasOpenDecisions ? "warning" : classification.fit === null ? "neutral" : fitTones[classification.fit],
+    title: fitLine,
+    tone: classification.fit === null ? "neutral" : fitTones[classification.fit],
   };
 };
 
 export const AnalysisStatusBanner = ({
   classification,
-  hasOpenDecisions,
   supersededAnalysis,
-  incompleteAnalysisAccepted = false,
-  lowFitDecisionOpen,
-  lowFitAccepted,
 }: {
   classification: Classification | null;
-  hasOpenDecisions: boolean;
   supersededAnalysis: boolean;
-  /* Once the dedicated review reason has been resolved, the unread analysis is history
-     rather than an instruction that still claims a decision is required. */
-  incompleteAnalysisAccepted?: boolean;
-  lowFitDecisionOpen: boolean;
-  lowFitAccepted: boolean;
 }) => {
-  const { body, title, tone } = bannerContent(
-    classification,
-    hasOpenDecisions,
-    supersededAnalysis,
-    incompleteAnalysisAccepted,
-    lowFitDecisionOpen,
-    lowFitAccepted,
-  );
+  const { body, title, tone } = bannerContent(classification, supersededAnalysis);
 
   return (
     <Callout emphasis="banner" title={title} tone={tone}>

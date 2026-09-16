@@ -22,9 +22,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field
-
-from ...domain.contracts.analysis import InterpretationOverride, Language
+from ...domain.contracts.analysis import Language
 from ...domain.contracts.selection import OmissionReason, SelectionOutcome
 from ...domain.contracts.taxonomy import (
     Emphasis,
@@ -50,7 +48,6 @@ class ClassificationOverrides(HttpSchema):
     profile_override: ProfileName | None = None
     emphasis_override: Emphasis | None = None
     language_override: Language | None = None
-    accept_low_fit: bool = False
 
 
 class CreateAnalysisRequest(ClassificationOverrides):
@@ -74,15 +71,9 @@ class SelectionOverlayRequest(HttpSchema):
 
     pinned_fact_ids: list[str] = []
     excluded_fact_ids: list[str] = []
-    #: Requirement IDs whose hard gaps the user knowingly proceeds past, named
-    #: one at a time. Acceptance records that the user proceeds; it never marks
-    #: a gap satisfied and never authorizes an unsupported claim.
-    accepted_requirement_ids: list[str] = []
-    acceptance_reason: str | None = Field(default=None, max_length=500)
-    #: The plan the client had in front of it when the user decided. Optional
-    #: for a submission that accepts nothing; **required** as soon as
-    #: `accepted_requirement_ids` is non-empty, because without it the decision
-    #: is applied to whatever plan is active now rather than the one shown.
+    #: The plan the client had in front of it when the user decided. A decision
+    #: made against a plan that has since moved is refused rather than applied
+    #: to one the user never saw.
     expected_selection_plan_id: str | None = None
 
 
@@ -124,17 +115,6 @@ class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverr
     #: identity so the write can compare the observation as well as resolve the
     #: immutable source being addressed.
     expected_analysis_id: str
-    #: Deliberately here and not on `ClassificationOverrides`, which
-    #: `CreateAnalysisRequest` also uses: accepting an analysis that read
-    #: nothing is a decision about an analysis the user has seen. Offering it
-    #: on the analyze endpoint would let a client pre-accept a posting before
-    #: anyone had looked at what the engine made of it.
-    accept_incomplete_analysis: bool = False
-    #: Corrections to a requirement's interpretation (stage-1 plan §3.5).
-    #: A non-empty list creates a new JobAnalysis, the same way a
-    #: classification override does, and is refused together with a fact
-    #: overlay for the same reason the four classification overrides are.
-    requirement_interpretations: list[InterpretationOverride] = []
 
 
 class SelectionPlanResponse(HttpSchema):
@@ -148,7 +128,6 @@ class SelectionPlanResponse(HttpSchema):
     profile_version: str
     selection_policy_version: str
     track_emphasis_dependencies: dict[str, str]
-    accepted_gaps: list[dict[str, Any]] = []
     created_at: str
 
 

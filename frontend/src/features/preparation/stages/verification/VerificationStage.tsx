@@ -1,9 +1,6 @@
-import type { Classification } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
-import { openDecisionCount, openDecisions } from "../../model/reviewDecisions";
 import { hasWorkflowActionsContent, type WorkflowActionPlan } from "../../model/workflowActionPlan";
 import { PreparationAlerts } from "./PreparationAlerts";
-import { ReviewDecisionPanel } from "./ReviewDecisionPanel";
 import { WorkflowActions } from "./WorkflowActions";
 
 /* The "what do I need to decide, and what do I do next" workspace: everything the
@@ -17,40 +14,21 @@ import { WorkflowActions } from "./WorkflowActions";
    spacing between them - no extra chrome - they still read as one continuous next step
    rather than as unrelated regions. */
 export const VerificationStage = ({
-  classification,
   detail,
   hasRecommendation,
   onQueued,
   plan,
 }: {
-  classification: Classification | null;
   detail: ApplicationDetail;
-  /* Whether the projection is naming one specific action - `recommended_action`, or a
-     review decision this tab holds the control for - rather than merely permitting
+  /* Whether the projection names one specific action rather than merely permitting
      several. Decides which visual weight the action surface below takes. */
   hasRecommendation: boolean;
   onQueued: (operationId: string) => void;
   plan: WorkflowActionPlan;
 }) => {
-  /* One commit at a time. The decision panel owns a viewport-sticky commit bar; drawing
-     the action card below it put two "do this next" surfaces on the tab and let the sticky
-     bar float over the second. While a decision this screen owns is open it is the next
-     step - and it gates the actions the card would offer anyway - so the card waits for the
-     refreshed projection after the commit rather than sitting behind the bar that resolves
-     what blocks it. */
-  const decisionOpen = openDecisionCount(openDecisions(detail)) > 0;
-
   return (
     <>
       <PreparationAlerts detail={detail} />
-
-      {/* Review answers belong to the immutable analysis/plan pair on screen. Remounting
-          on a context change clears them before they can be applied to the new pair. */}
-      <ReviewDecisionPanel
-        classification={classification}
-        detail={detail}
-        key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
-      />
 
       {/* The step's action, not a card around it. The action used to sit in an emphasized
           bordered box to mark it as recommended - but on a wizard step the action is the
@@ -63,7 +41,7 @@ export const VerificationStage = ({
           tell whether anything is actually left here to name: the commit bar portals out
           to the shell's action slot, so a labelled landmark drawn around it from here was
           empty on every step that offers a route and nothing else. */}
-      {!decisionOpen && hasWorkflowActionsContent(plan) ? (
+      {hasWorkflowActionsContent(plan) ? (
         <WorkflowActions detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
       ) : null}
     </>

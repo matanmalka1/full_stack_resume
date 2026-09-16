@@ -77,20 +77,21 @@ const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): Applicatio
       job_snapshot_id: "snap-1",
       version_number: 1,
       analysis: {
+        analysis_version: "3.0",
         track: "development",
         profile: "development",
         emphasis: "development-backend",
         language: "en",
-        fit: "medium",
-        confidence: 0.82,
-        rationale: "The posting is a backend role.",
+        summary: "The posting is a backend role.",
         keywords: ["FastAPI", "PostgreSQL"],
-        mandatory_requirements: ["5 years of Python"],
-        preferred_requirements: ["Kubernetes"],
-        gaps: [{ requirement: "Kubernetes", severity: "warning", reason: "no matching fact" }],
-        approval_reasons: ["coverage-undetermined"],
+        requirements: [],
+        issues: [],
+        source_coverage: 1,
         user_override: {},
       },
+      fit_level: "high",
+      fit_score: 1,
+      gaps: [],
       provider: "openai",
       model: "gpt-5.6-terra",
       created_at: "2026-08-24T07:00:00Z",
@@ -570,40 +571,6 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.queryByText("The posting is a backend role.")).not.toBeInTheDocument();
   });
 
-  it("presents an accepted incomplete analysis as recorded history, not an open instruction", async () => {
-    const accepted = analyzed_detail();
-    const latest = accepted.latest_analysis!;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse({
-          ...accepted,
-          preparation_state: "ready",
-          working_draft_state: "none",
-          active_working_draft_id: null,
-          latest_ready_revision_id: "revision-1",
-          review_reasons: [],
-          latest_analysis: {
-            ...latest,
-            analysis: {
-              ...(latest.analysis as Record<string, unknown>),
-              fit: "unknown",
-              confidence: 0,
-              approval_reasons: ["extraction-failed"],
-              user_override: { accept_incomplete_analysis: true },
-            },
-          },
-        }),
-      ),
-    );
-
-    renderPage();
-
-    expect(await screen.findByText("המשך ללא ניתוח דרישות אושר")).toBeInTheDocument();
-    expect(screen.getByText(/ההמשך ללא דירוג התאמה אושר ונשמר כהחלטה/)).toBeInTheDocument();
-    expect(screen.queryByText(/נדרשת הכרעה מפורשת לפני יצירת טיוטה/)).not.toBeInTheDocument();
-  });
-
   it("shows requirement coverage, resolving supporting facts by id, once the analysis carries requirements", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       if (String(input).includes("/facts")) {
@@ -625,55 +592,58 @@ describe("ApplicationPage at the preparation route", () => {
               job_snapshot_id: "snap-1",
               version_number: 1,
               analysis: {
+                analysis_version: "3.0",
                 track: "development",
                 profile: "development",
                 emphasis: "development-backend",
                 language: "en",
-                fit: "medium",
-                confidence: 0.82,
-                rationale: "The posting is a backend role.",
+                summary: "The posting is a backend role.",
                 keywords: ["FastAPI"],
-                mandatory_requirements: ["5 years of Python"],
-                preferred_requirements: [],
-                gaps: [],
                 requirements: [
                   {
                     requirement_id: "req-1",
                     text: "5 years of Python",
-                    kind: "threshold",
-                    mandatory: true,
+                    importance: "mandatory",
                     coverage: "matched",
                     supporting_fact_ids: ["fact-1"],
                     boundary_fact_ids: [],
-                    missing_components: [],
+                    source: null,
                   },
                   {
                     requirement_id: "req-2",
                     text: "Production Kubernetes experience",
-                    kind: "experience",
-                    mandatory: true,
+                    importance: "mandatory",
                     coverage: "partial",
                     supporting_fact_ids: [],
                     boundary_fact_ids: ["fact-boundary"],
-                    missing_components: [
-                      { component_id: "production", label: "ניסיון בסביבת production", demanded: "3 years" },
-                    ],
+                    source: null,
                   },
                   {
                     requirement_id: "req-3",
                     text: "Terraform",
-                    kind: "skill",
-                    mandatory: false,
+                    importance: "preferred",
                     coverage: "unsupported",
                     supporting_fact_ids: [],
                     boundary_fact_ids: [],
-                    missing_components: [],
+                    source: null,
                   },
-                  { requirement_id: "", text: "Malformed requirement", mandatory: true, coverage: "matched" },
+                  {
+                    requirement_id: "",
+                    text: "Malformed requirement",
+                    importance: "mandatory",
+                    coverage: "matched",
+                    supporting_fact_ids: [],
+                    boundary_fact_ids: [],
+                    source: null,
+                  },
                 ],
-                approval_reasons: [],
+                issues: [],
+                source_coverage: 1,
                 user_override: {},
               },
+              fit_level: "high",
+              fit_score: 1,
+              gaps: [],
               provider: "openai",
               model: "gpt-5.6-terra",
               created_at: "2026-08-24T07:00:00Z",
@@ -696,7 +666,6 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.getByText("דרישה אחת אינה ניתנת להצגה")).toBeInTheDocument();
     expect(await screen.findByText(/5 years building backend systems in Python/)).toBeInTheDocument();
     expect(screen.getByText(/למה הכיסוי מוגבל: Used Kubernetes in a personal lab/)).toBeInTheDocument();
-    expect(screen.getByText(/ניסיון בסביבת production \(נדרש: 3 years\)/)).toBeInTheDocument();
     /* Coverage supersedes the plain mandatory/preferred term lists once an analysis
        carries `requirements` - they would otherwise show the same requirement twice,
        once with its coverage and once as a bare string. */
@@ -887,53 +856,38 @@ describe("ApplicationPage at the preparation route", () => {
     expect(keys).toEqual(["auto-draft:analysis-1:plan-1", "auto-draft:analysis-1:plan-1"]);
   });
 
-  it.each([
-    "review",
-    "blocked",
-    "new-analysis",
-    "new-plan",
-    "inactive-output",
-    "cancelled",
-    "deleted",
-    "existing-draft",
-  ])("does not authorize a restored automatic draft with %s", (scenario) => {
-    const analyzed = queued({
-      status: "succeeded",
-      is_terminal: true,
-      outputs: [
-        { output_type: "job_analysis", output_id: "analysis-1", active: true },
-        { output_type: "selection_plan", output_id: "plan-1", active: true },
-      ],
-    });
-    const projection = analyzed_detail({ active_selection_plan_id: "plan-1" });
-    if (scenario === "review")
-      projection.review_reasons = [
-        {
-          code: "HARD_GAP_REQUIRES_DECISION",
-          message: "Decision required",
-          entity_references: {},
-          allowed_resolution_actions: ["apply_analysis_decisions"],
-        },
-      ];
-    if (scenario === "blocked")
-      projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
-    if (scenario === "new-analysis") projection.active_analysis_id = "analysis-2";
-    if (scenario === "new-plan") projection.active_selection_plan_id = "plan-2";
-    if (scenario === "inactive-output")
-      analyzed.outputs.forEach((output) => {
-        output.active = false;
+  it.each(["blocked", "new-analysis", "new-plan", "inactive-output", "cancelled", "deleted", "existing-draft"])(
+    "does not authorize a restored automatic draft with %s",
+    (scenario) => {
+      const analyzed = queued({
+        status: "succeeded",
+        is_terminal: true,
+        outputs: [
+          { output_type: "job_analysis", output_id: "analysis-1", active: true },
+          { output_type: "selection_plan", output_id: "plan-1", active: true },
+        ],
       });
-    if (scenario === "cancelled") analyzed.status = "cancelled";
-    if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
-    if (scenario === "existing-draft") projection.active_working_draft_id = "draft-1";
-    expect(
-      autoDraftSources(
-        analyzed,
-        { ...deterministicSettings, auto_generate_when_review_not_required: true },
-        projection,
-      ),
-    ).toBeNull();
-  });
+      const projection = analyzed_detail({ active_selection_plan_id: "plan-1" });
+      if (scenario === "blocked")
+        projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
+      if (scenario === "new-analysis") projection.active_analysis_id = "analysis-2";
+      if (scenario === "new-plan") projection.active_selection_plan_id = "plan-2";
+      if (scenario === "inactive-output")
+        analyzed.outputs.forEach((output) => {
+          output.active = false;
+        });
+      if (scenario === "cancelled") analyzed.status = "cancelled";
+      if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
+      if (scenario === "existing-draft") projection.active_working_draft_id = "draft-1";
+      expect(
+        autoDraftSources(
+          analyzed,
+          { ...deterministicSettings, auto_generate_when_review_not_required: true },
+          projection,
+        ),
+      ).toBeNull();
+    },
+  );
 
   it("isolates late watched analysis results across URL changes and Back / Forward", async () => {
     let resolveOld: (response: Response) => void = () => {};
@@ -1055,7 +1009,7 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
     expect(screen.queryByText("הטיוטה נוצרה. מעבר לעורך הטיוטה…")).not.toBeInTheDocument();
   });
-  it.each(["inactive", "stale", "newer-draft", "review"])(
+  it.each(["inactive", "stale", "newer-draft"])(
     "does not consume a restored navigation receipt for %s work",
     async (scenario) => {
       const generated = queued({
@@ -1071,15 +1025,6 @@ describe("ApplicationPage at the preparation route", () => {
         active_working_draft_id: scenario === "newer-draft" ? "draft-2" : "draft-1",
         working_draft_state: scenario === "stale" ? "stale" : "editing",
       });
-      if (scenario === "review")
-        projection.review_reasons = [
-          {
-            code: "HARD_GAP_REQUIRES_DECISION",
-            message: "Decision required",
-            entity_references: {},
-            allowed_resolution_actions: [],
-          },
-        ];
       vi.stubGlobal(
         "fetch",
         vi.fn((input: RequestInfo | URL) =>

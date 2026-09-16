@@ -29,18 +29,16 @@ from cv_engine.application.errors import (
     ProviderUnavailable,
 )
 from cv_engine.application.ports import (
+    AnalysisContext,
     DraftResumeContext,
-    JobAnalysisContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
-    RequirementExtractionContext,
     SelectionPlanContext,
 )
-from cv_engine.domain.contracts.providers import RequirementExtractionProposal
+from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.models import (
     ClaimProposal,
     DraftProposal,
-    JobClassificationProposal,
     ProposedClaim,
     SectionProposal,
     SelectionProposal,
@@ -48,13 +46,9 @@ from cv_engine.domain.models import (
 from cv_engine.infrastructure.providers import TASK_OUTPUT_MODELS
 from cv_engine.util import canonical_json, sha256_text
 
-EXTRACTION_CONTEXT = RequirementExtractionContext(
+ANALYSIS_CONTEXT = AnalysisContext(
     job_text="...",
-    requirement_lines=[{"start": 0, "end": 3, "text": "...", "section": "other"}],
-)
-ANALYSIS_CONTEXT = JobAnalysisContext(
-    job_text="...",
-    requirements=[],
+    candidate_facts=[],
 )
 SELECTION_CONTEXT = SelectionPlanContext(
     job_analysis={"track": "sales"},
@@ -83,14 +77,13 @@ CLAIM_CONTEXT = RegenerateClaimContext(
     allowed_facts=[{"fact_id": "a.b"}],
 )
 
-EXTRACTION = RequirementExtractionProposal(requirements=[], unmapped_statements=[])
-CLASSIFICATION = JobClassificationProposal(
+ANALYSIS = AnalysisProposal(
     track="sales",
     profile="account-manager",
     emphasis="account-growth",
     language="en",
-    confidence=0.9,
-    rationale="r",
+    requirements=[],
+    summary="r",
     keywords=["k"],
 )
 SELECTION = SelectionProposal(pinned_fact_ids=["a.b"], excluded_fact_ids=[], rationale="r")
@@ -110,8 +103,7 @@ CLAIM = ClaimProposal(claim_id="c1", text="t", fact_ids=["a.b"], rationale="r")
 #: coverage of every task §6 asks for is then structural rather than
 #: remembered.
 TASKS = [
-    ("propose_requirement_extraction", EXTRACTION_CONTEXT, EXTRACTION),
-    ("propose_job_analysis", ANALYSIS_CONTEXT, CLASSIFICATION),
+    ("propose_analysis", ANALYSIS_CONTEXT, ANALYSIS),
     ("propose_selection_plan", SELECTION_CONTEXT, SELECTION),
     ("draft_resume", DRAFT_CONTEXT, DRAFT),
     ("regenerate_section", SECTION_CONTEXT, SECTION),
@@ -169,6 +161,10 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
     """§6: strict schema generation, and task-specific Proposal parsing."""
     assert set(task_contracts.tasks) == set(TASK_OUTPUT_MODELS)
     assert {name for name, _context, _proposal in TASKS} == set(TASK_OUTPUT_MODELS)
+    assert task_contracts.prompt_version != "system-v4"
+    assert {"propose_requirement_extraction", "propose_job_analysis"}.isdisjoint(
+        task_contracts.tasks
+    )
     provider = fake_openai.provider(task_contracts)
     for task, context, proposal in TASKS:
         fake_openai.script(task, proposal)
@@ -204,8 +200,13 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
                 f"{task}: {path} leaves a property optional"
             )
 
-        if task == "propose_job_analysis":
-            assert {"fit", "approval_reasons"}.isdisjoint(output_format["schema"]["properties"])
+        if task == "propose_analysis":
+            # The fields that route safety decisions stay out of provider
+            # reach: Fit and approval routing are derived from the requirements
+            # the engine kept, never reported.
+            assert {"fit", "fit_score", "gaps", "approval_reasons", "issues"}.isdisjoint(
+                output_format["schema"]["properties"]
+            )
 
 
 def test_the_system_prompt_and_versions_come_from_the_contract_file(
@@ -217,15 +218,15 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     both the contract file's, so a record can never name a prompt the call did
     not send.
     """
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
-    answered = _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
-    body = fake_openai.calls_for("propose_job_analysis")[-1].body
+    fake_openai.script("propose_analysis", ANALYSIS)
+    answered = _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
+    body = fake_openai.calls_for("propose_analysis")[-1].body
     assert body["input"][0]["content"] == task_contracts.prompt_text
     context = answered.provenance.context
     assert context.prompt_version == task_contracts.prompt_version
     assert context.prompt_hash == task_contracts.prompt_hash
     assert context.system_version == task_contracts.version
-    contract = task_contracts.get("propose_job_analysis")
+    contract = task_contracts.get("propose_analysis")
     assert context.task_contract_version == contract.version
     assert context.input_schema_version == contract.input_schema_version
     assert context.output_schema_version == contract.output_schema_version
@@ -237,9 +238,9 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     # schema *is* transmitted, and `_strict_schema` rewrote it on the way out -
     # so the hash has to be of the document in the request, not of the model it
     # was derived from.
-    sent = fake_openai.calls_for("propose_job_analysis")[-1].body["text"]["format"]["schema"]
+    sent = fake_openai.calls_for("propose_analysis")[-1].body["text"]["format"]["schema"]
     assert context.input_schema_hash == sha256_text(
-        canonical_json(JobAnalysisContext.model_json_schema())
+        canonical_json(AnalysisContext.model_json_schema())
     )
     assert context.output_schema_hash == sha256_text(canonical_json(sent))
     assert context.provider == "openai"
@@ -263,9 +264,9 @@ def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
     fake_openai: FakeOpenAI, task_contracts
 ) -> None:
     """§6: refusal handling, with the answer kept as evidence."""
-    fake_openai.script("propose_job_analysis", refusal_envelope())
+    fake_openai.script("propose_analysis", refusal_envelope())
     with pytest.raises(ProviderRefused) as raised:
-        _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
+        _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
     provenance = raised.value.provenance
     assert provenance is not None
     assert "resp_fake_refusal" in provenance.sanitized_response
@@ -295,10 +296,10 @@ def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
     ]
     provider = fake_openai.provider(task_contracts)
     for text in texts:
-        fake_openai.scripts["propose_job_analysis"].clear()
-        fake_openai.script("propose_job_analysis", envelope(text))
+        fake_openai.scripts["propose_analysis"].clear()
+        fake_openai.script("propose_analysis", envelope(text))
         with pytest.raises(ProviderSchemaViolation) as raised:
-            _call(provider, "propose_job_analysis", ANALYSIS_CONTEXT)
+            _call(provider, "propose_analysis", ANALYSIS_CONTEXT)
         assert raised.value.provenance is not None, text
         assert raised.value.provenance.sanitized_response, text
 
@@ -318,7 +319,7 @@ def test_a_response_that_is_not_json_at_all_is_a_schema_violation(
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: _Raw())
     with pytest.raises(ProviderSchemaViolation):
-        _call(fake_openai.provider(task_contracts), "propose_job_analysis", ANALYSIS_CONTEXT)
+        _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
 
 
 def test_transport_failures_are_classified_by_status_not_by_message(
@@ -341,7 +342,7 @@ def test_transport_failures_are_classified_by_status_not_by_message(
     ]
     provider = fake_openai.provider(task_contracts)
     for answer, expected in cases:
-        fake_openai.scripts["propose_job_analysis"].clear()
-        fake_openai.script("propose_job_analysis", answer)
+        fake_openai.scripts["propose_analysis"].clear()
+        fake_openai.script("propose_analysis", answer)
         with pytest.raises(expected):
-            _call(provider, "propose_job_analysis", ANALYSIS_CONTEXT)
+            _call(provider, "propose_analysis", ANALYSIS_CONTEXT)

@@ -14,18 +14,14 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
     REVIEW_DECISION_JOB,
+    analysis_proposal,
     seed_existing_analysis,
-    trivial_requirement_extraction,
 )
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.domain.contracts.analysis import (
-    Gap,
-    JobClassificationProposal,
     Requirement,
-    RequirementAttestation,
-    RequirementInterpretation,
 )
 
 
@@ -55,40 +51,24 @@ def _existing_analysis(harness, application_id: str, **analysis_values) -> dict[
     }
 
 
-def _unmet_requirement(job_text: str, quote: str, requirement_id: str):
-    start = job_text.index(quote)
-    requirement = Requirement(
+def _unmet_requirement(quote: str, requirement_id: str) -> Requirement:
+    """One mandatory requirement no canonical fact verifies - a hard gap.
+
+    Stored as the requirement alone. Its gap, the Fit it lowers and its severity
+    are derived from it where they are read, so nothing here states them twice.
+    """
+    return Requirement(
         requirement_id=requirement_id,
         text=quote,
-        kind="presence",
-        mandatory=True,
+        importance="mandatory",
         coverage="unsupported",
-        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-        ),
-        extractor="test-ai-v1",
     )
-    gap = Gap(
-        requirement=quote,
-        severity="hard",
-        reason="Canonical facts do not verify this requirement.",
-        requirement_id=requirement_id,
-    )
-    return requirement, gap
 
 
-_review_requirement, _review_gap = _unmet_requirement(
-    REVIEW_DECISION_JOB, "Sales experience at a SaaS company.", "review-saas-company"
-)
 REVIEW_ANALYSIS = {
-    "requirements": [_review_requirement],
-    "gaps": [_review_gap],
-    "fit": "low",
-    "fit_score": 0.0,
+    "requirements": [
+        _unmet_requirement("Sales experience at a SaaS company.", "review-saas-company")
+    ],
 }
 
 
@@ -105,20 +85,8 @@ def test_post_analysis_uses_ai_operation_and_commits_both_records(
     ai_api_worker, fake_openai, requirement_concepts
 ) -> None:
     fake_openai.script(
-        "propose_requirement_extraction",
-        trivial_requirement_extraction(ACCOUNT_MANAGER_JOB, requirement_concepts),
-    )
-    fake_openai.script(
-        "propose_job_analysis",
-        JobClassificationProposal(
-            track="sales",
-            profile="account-manager",
-            emphasis="account-growth",
-            language="en",
-            confidence=0.92,
-            rationale="account management role",
-            keywords=["retention"],
-        ),
+        "propose_analysis",
+        analysis_proposal(summary="account management role", keywords=["retention"]),
     )
     application_id = _application(ai_api_worker.services, "AI Operation Co")
     snapshot_id = ai_api_worker.services.repository.latest_snapshot(application_id)["id"]
@@ -223,7 +191,6 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
             "expected_analysis_id": outputs["job_analysis"],
             "expected_selection_plan_id": outputs["selection_plan"],
             "profile_override": "account-manager",
-            "accept_low_fit": True,
         },
         headers=MUTATION_HEADERS,
     )
@@ -233,10 +200,7 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
     assert body["created_analysis"] is True
     assert body["job_analysis_id"] != outputs["job_analysis"]
     assert body["selection_plan_id"] != outputs["selection_plan"]
-    assert body["analysis"]["user_override"] == {
-        "profile": "account-manager",
-        "fit": "accepted-low-fit",
-    }
+    assert body["analysis"]["user_override"] == {"profile": "account-manager"}
     assert body["plan"]["job_analysis_id"] == body["job_analysis_id"]
 
     # The analysis and plan the user decided against are untouched history.
@@ -251,19 +215,8 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
     assert body["state"]["available_actions"] == state["available_actions"]
     assert body["state"]["recommended_action"] == state["recommended_action"]
 
-    # The classification is settled, but the hard gap is a separate decision and
-    # is deliberately still standing: `accepted-low-fit` answers low Fit alone.
-    # It used to clear every hard gap with it.
-    assert {reason["code"] for reason in state["review_reasons"]} == {"HARD_GAP_REQUIRES_DECISION"}
-    accepted = _accept(
-        api_worker,
-        application_id,
-        body["job_analysis_id"],
-        _hard_gap_requirement_ids(api_worker, body["job_analysis_id"]),
-        expected_selection_plan_id=body["selection_plan_id"],
-    )
-    assert accepted.status_code == 201, accepted.text
-    state = _state(api_worker, application_id)
+    # The hard gap is still there and still hard. It is information for the
+    # user, not a question they must answer before the document exists.
     assert state["review_reasons"] == []
     assert state["preparation_state"] == "ready_to_draft"
 
@@ -550,33 +503,8 @@ def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(api_
     assert response.json()["code"] == "PRECONDITION_FAILED"
 
 
-def _hard_gap_requirement_ids(api_worker, analysis_id: str) -> list[str]:
-    analysis = api_worker.services.repository.get_analysis(analysis_id)["analysis"]
-    return [gap.requirement_id for gap in analysis.gaps if gap.severity == "hard"]
-
-
 def _active_plan_id(api_worker, application_id: str) -> str:
     return api_worker.services.repository.latest_selection_plan(application_id).id
-
-
-def _accept(api_worker, application_id, analysis_id, requirement_ids, **extra):
-    """Accept gaps the way a client must: naming the plan the user was shown.
-
-    `expected_selection_plan_id` is required once anything is accepted, so a
-    helper that omitted it would only ever exercise the refusal.
-    """
-    body = {
-        "application_id": application_id,
-        "expected_analysis_id": analysis_id,
-        "accepted_requirement_ids": list(requirement_ids),
-        **extra,
-    }
-    body.setdefault("expected_selection_plan_id", _active_plan_id(api_worker, application_id))
-    return api_worker.client.post(
-        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
-        json=body,
-        headers=MUTATION_HEADERS,
-    )
 
 
 RIVERSIDE_POSTING = (
@@ -589,141 +517,65 @@ RIVERSIDE_POSTING = (
 )
 
 
-_riverside_unmet = [
-    _unmet_requirement(
-        RIVERSIDE_POSTING,
-        "1+ years of sales closing experience in the market at a technology company",
-        "riverside-tech-sales",
-    ),
-    _unmet_requirement(
-        RIVERSIDE_POSTING,
-        "Native English speaker",
-        "riverside-native-english",
-    ),
-]
 RIVERSIDE_ANALYSIS = {
-    "requirements": [requirement for requirement, _ in _riverside_unmet],
-    "gaps": [gap for _, gap in _riverside_unmet],
-    "fit": "low",
-    "fit_score": 0.0,
+    "requirements": [
+        _unmet_requirement(
+            "1+ years of sales closing experience in the market at a technology company",
+            "riverside-tech-sales",
+        ),
+        _unmet_requirement("Native English speaker", "riverside-native-english"),
+    ],
 }
 
 
-def test_accepting_a_gap_creates_a_plan_and_never_a_new_analysis(api_worker) -> None:
-    """Acceptance is a selection decision, so the analysis stays reusable.
+def _pin(api_worker, application_id, analysis_id, fact_ids, **extra):
+    """A plan-replacing decision the way a client must send it: naming the plan shown.
 
-    It does not change what the requirement means, what covers it, or how the
-    job is classified - only that the user proceeds despite it.
+    A pin replaces the SelectionPlan without touching the analysis, which is
+    exactly the write the optimistic check guards. Gap acceptances used to be
+    the vehicle for these tests; the check they exercised is unchanged.
     """
-    application_id = _application(api_worker.services, "Riverside", job_text=RIVERSIDE_POSTING)
-    outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
-    analysis_id = outputs["job_analysis"]
-    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
-    assert len(hard) >= 2, "the posting must produce more than one hard gap"
-
-    response = _accept(api_worker, application_id, analysis_id, hard[:1], acceptance_reason="ok")
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["created_analysis"] is False
-    assert body["job_analysis_id"] == analysis_id
-    assert body["selection_plan_id"] != outputs["selection_plan"]
-
-    plan = api_worker.services.repository.selection_plan(body["selection_plan_id"])
-    assert [gap.requirement_id for gap in plan.accepted_gaps] == hard[:1]
-    assert plan.accepted_gaps[0].job_analysis_id == analysis_id
-    assert plan.accepted_gaps[0].actor
-    assert plan.accepted_gaps[0].accepted_at
-    assert plan.accepted_gaps[0].reason == "ok"
-
-
-def test_accepting_one_gap_leaves_the_others_unresolved(api_worker) -> None:
-    """The failure this stage exists to remove: one decision clearing all of them."""
-    application_id = _application(api_worker.services, "Riverside Two", job_text=RIVERSIDE_POSTING)
-    outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
-    analysis_id = outputs["job_analysis"]
-    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
-
-    _accept(api_worker, application_id, analysis_id, hard[:1])
-    state = _state(api_worker, application_id)
-    codes = {reason["code"] for reason in state["review_reasons"]}
-    assert "HARD_GAP_REQUIRES_DECISION" in codes, "the remaining gap still needs a decision"
-
-    _accept(api_worker, application_id, analysis_id, hard[1:])
-    state = _state(api_worker, application_id)
-    codes = {reason["code"] for reason in state["review_reasons"]}
-    assert "HARD_GAP_REQUIRES_DECISION" not in codes
-
-
-def test_acceptance_accumulates_rather_than_replacing(api_worker) -> None:
-    """A second decision must not silently retract the first."""
-    application_id = _application(
-        api_worker.services, "Riverside Three", job_text=RIVERSIDE_POSTING
-    )
-    outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
-    analysis_id = outputs["job_analysis"]
-    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
-
-    _accept(api_worker, application_id, analysis_id, hard[:1])
-    second = _accept(api_worker, application_id, analysis_id, hard[1:])
-    plan = api_worker.services.repository.selection_plan(second.json()["selection_plan_id"])
-    assert sorted(gap.requirement_id for gap in plan.accepted_gaps) == sorted(hard)
-
-
-def test_accepted_low_fit_no_longer_clears_a_hard_gap(api_worker) -> None:
-    """One checkbox used to dismiss every deficiency, seen or not."""
-    application_id = _application(api_worker.services, "Riverside Four", job_text=RIVERSIDE_POSTING)
-    outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_analysis_id": outputs["job_analysis"],
-            "expected_selection_plan_id": outputs["selection_plan"],
-            "accept_low_fit": True,
-        },
+    body = {
+        "application_id": application_id,
+        "expected_analysis_id": analysis_id,
+        "pinned_fact_ids": list(fact_ids),
+        **extra,
+    }
+    body.setdefault("expected_selection_plan_id", _active_plan_id(api_worker, application_id))
+    return api_worker.client.post(
+        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
+        json=body,
         headers=MUTATION_HEADERS,
     )
-    assert response.status_code == 201, response.text
-    state = _state(api_worker, application_id)
-    codes = {reason["code"] for reason in state["review_reasons"]}
-    assert "LOW_FIT_REQUIRES_ACCEPTANCE" not in codes
-    assert "HARD_GAP_REQUIRES_DECISION" in codes
-
-
-def test_a_requirement_with_no_hard_gap_cannot_be_accepted(api_worker) -> None:
-    """A recorded decision about nothing would later read as one about something."""
-    application_id = _application(api_worker.services, "Riverside Five", job_text=RIVERSIDE_POSTING)
-    outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
-    response = _accept(api_worker, application_id, outputs["job_analysis"], ["not-a-requirement"])
-    assert response.status_code == 412, response.text
-    assert "no hard gap to accept" in response.text
 
 
 def test_deciding_without_naming_both_active_sources_is_refused(api_worker) -> None:
     """A decision has to name the analysis and plan it was made against.
 
-    Without it the acceptance is applied to whatever plan is active at the
+    Without it the decision is applied to whatever plan is active at the
     moment it arrives, which is the silent rebase the field exists to prevent.
     The plan is conditional only on one existing; normal analyses always create
     an initial plan, so omitting it is a stale-context conflict even for an
-    overlay that accepts no gap.
+    overlay that replaces nothing else.
     """
     application_id = _application(
         api_worker.services, "Unnamed Plan Co", job_text=RIVERSIDE_POSTING
     )
     outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
     analysis_id = outputs["job_analysis"]
-    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
 
     refused = api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
         json={
             "application_id": application_id,
             "expected_analysis_id": analysis_id,
-            "accepted_requirement_ids": hard[:1],
+            "pinned_fact_ids": ["sales.summary.new_business"],
         },
         headers=MUTATION_HEADERS,
     )
+    # A missing token is a malformed request, not a lost race: 412. A token
+    # naming a plan that has since moved is the race, and that is the 409
+    # `test_naming_a_plan_that_has_been_replaced_is_refused` asserts.
     assert refused.status_code == 412, refused.text
     assert "expected_selection_plan_id" in refused.text
 
@@ -761,16 +613,15 @@ def test_naming_a_plan_that_has_been_replaced_is_refused(api_worker) -> None:
     application_id = _application(api_worker.services, "Moved Plan Co", job_text=RIVERSIDE_POSTING)
     outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
     analysis_id = outputs["job_analysis"]
-    hard = _hard_gap_requirement_ids(api_worker, analysis_id)
 
-    first = _accept(api_worker, application_id, analysis_id, hard[:1])
+    first = _pin(api_worker, application_id, analysis_id, ["sales.summary.new_business"])
     assert first.status_code == 201, first.text
 
-    stale = _accept(
+    stale = _pin(
         api_worker,
         application_id,
         analysis_id,
-        hard[1:],
+        ["sales.summary.account"],
         expected_selection_plan_id=outputs["selection_plan"],
     )
     assert stale.status_code == 409, stale.text

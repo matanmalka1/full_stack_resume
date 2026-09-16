@@ -145,8 +145,9 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             with self.repo.read_transaction() as transaction:
                 items = []
                 for row in transaction.list_applications():
-                    state, _, _ = self._state_inputs(transaction, row, knowledge)
-                    items.append(application_list_item_view(row, state))
+                    state, _, analyses = self._state_inputs(transaction, row, knowledge)
+                    latest = analyses[-1]["analysis"] if analyses else None
+                    items.append(application_list_item_view(row, state, latest))
                 return narrow_application_list(items, query or ApplicationListQuery())
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application projection is invalid: {exc}") from exc
@@ -156,9 +157,11 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         try:
             with self.repo.read_transaction() as transaction:
                 application_record = transaction.get_application(application_id)
-                application = application_view(application_record)
                 state, snapshot_record, analyses = self._state_inputs(
                     transaction, application_record, knowledge
+                )
+                application = application_view(
+                    application_record, analyses[-1]["analysis"] if analyses else None
                 )
                 snapshot = snapshot_view(
                     snapshot_record,
@@ -167,7 +170,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
                         snapshot_record["source_hash"],
                     ),
                 )
-                latest = analysis_view(analyses[-1]) if analyses else None
+                latest = analysis_view(analyses[-1], knowledge.facts) if analyses else None
                 timeline = recruitment_timeline_view(
                     transaction.recruitment_events(application_id),
                     transaction.submissions(application_id),

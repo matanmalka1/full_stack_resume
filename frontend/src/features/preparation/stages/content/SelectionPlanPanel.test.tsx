@@ -65,7 +65,6 @@ const plan: SelectionPlanDetail = {
   profile_version: "profile-hash",
   selection_policy_version: "policy-hash",
   track_emphasis_dependencies: {},
-  accepted_gaps: [],
   created_at: "2026-09-06T10:00:00Z",
   language: "he",
   facts_version: "facts-hash",

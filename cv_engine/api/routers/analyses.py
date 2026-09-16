@@ -99,8 +99,6 @@ def create_selection_plan(
     overlay = {
         "pinned_fact_ids": body.pop("pinned_fact_ids"),
         "excluded_fact_ids": body.pop("excluded_fact_ids"),
-        "accepted_requirement_ids": body.pop("accepted_requirement_ids"),
-        "acceptance_reason": body.pop("acceptance_reason"),
         "expected_selection_plan_id": body.pop("expected_selection_plan_id"),
     }
     if mode == "ai":
@@ -108,17 +106,6 @@ def create_selection_plan(
             raise PreconditionFailed(
                 "AI mode proposes the fact overlay; submit pins and exclusions "
                 "through the deterministic mode instead"
-            )
-        if overlay["accepted_requirement_ids"]:
-            # Proceeding despite a known deficiency is the user's judgement,
-            # and a provider must not be able to express it at all.
-            raise PreconditionFailed(
-                "accepting a gap is a user decision; submit it through the "
-                "deterministic mode instead"
-            )
-        if overlay["acceptance_reason"] is not None:
-            raise PreconditionFailed(
-                "acceptance_reason accompanies a user's gap decision and is not accepted in AI mode"
             )
         if body.pop("emphasis_override") is not None:
             raise PreconditionFailed(

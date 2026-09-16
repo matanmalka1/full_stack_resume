@@ -76,7 +76,6 @@ class ApplicationResponse(HttpSchema):
     track: str | None = None
     profile: str | None = None
     emphasis: str | None = None
-    classification_confidence: float | None = None
     fit_level: str | None = None
     fit_score: float | None = None
     current_status: str
@@ -160,12 +159,30 @@ class JobSnapshotResponse(HttpSchema):
     prior_snapshot_id: str | None = None
 
 
+class GapResponse(HttpSchema):
+    requirement_id: str
+    requirement: str
+    severity: Literal["hard", "warning"]
+    reason: str
+    substitute_fact_ids: list[str] = []
+
+
 class JobAnalysisResponse(HttpSchema):
+    """The stored analysis and its read-time projection.
+
+    Fit and gaps are shown to the user and gate nothing. They are computed from
+    `analysis.requirements` when the response is built, so they appear here
+    beside the document rather than inside it.
+    """
+
     id: str
     application_id: str
     job_snapshot_id: str
     version_number: int
     analysis: dict[str, Any]
+    fit_level: str
+    fit_score: float | None = None
+    gaps: list[GapResponse] = []
     provider: str
     model: str
     created_at: str

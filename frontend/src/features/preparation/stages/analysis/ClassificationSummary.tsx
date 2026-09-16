@@ -32,8 +32,8 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
 
   return (
     <section>
-      {trackProfileText === "" && classification.fitScore === null && classification.confidence === null ? null : (
-        <div className="grid gap-3 sm:grid-cols-3">
+      {trackProfileText === "" && classification.fitScore === null ? null : (
+        <div className="grid gap-3 sm:grid-cols-2">
           {trackProfileText === "" ? null : (
             <div className="rounded-control bg-cv-surface-muted p-3">
               <p className="text-support text-cv-text-muted">סיווג שהוצע</p>
@@ -50,14 +50,6 @@ export const ClassificationSummary = ({ classification }: { classification: Clas
               <p className="text-support text-cv-text-muted">התאמה למשרה</p>
               <p className={`mt-0.5 text-heading-sm font-bold ${confidenceToneClasses[fitTone]}`}>
                 {confidenceText(classification.fitScore)}
-              </p>
-            </div>
-          )}
-          {classification.confidence === null ? null : (
-            <div className="rounded-control bg-cv-surface-muted p-3">
-              <p className="text-support text-cv-text-muted">ביטחון בניתוח</p>
-              <p className="mt-0.5 text-heading-sm font-bold text-cv-text">
-                {confidenceText(classification.confidence)}
               </p>
             </div>
           )}

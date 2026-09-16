@@ -657,44 +657,6 @@ def test_no_test_asserts_a_bare_builtin_from_a_repository() -> None:
     assert not offenders, offenders
 
 
-def test_carry_forward_of_accepted_gaps_has_one_implementation() -> None:
-    """No caller may hand a plan write a whole acceptance list.
-
-    This replaces an earlier guard that required every plan writer to *name*
-    what happens to accepted gaps. That guard matched the old design, where the
-    column defaulted to empty and forgetting silently retracted decisions. The
-    repository now reads, merges and writes the standing acceptances inside the
-    write transaction under the Application lock, so forgetting is the safe
-    default and the old guard would only fail honest callers.
-
-    What is dangerous now is the opposite: a caller that assembles the list and
-    passes it in, bypassing the analysis check and the lock. That is exactly how
-    a plan for one analysis came to inherit another's. A writer may say what it
-    *adds* (`new_acceptances`); it may not say what the plan ends up holding.
-
-    Reading `accepted_gaps` stays free - the gate, the model validator and the
-    decision record all legitimately do - because reading cannot lose a write.
-    """
-    root = Path(__file__).resolve().parents[1] / "cv_engine"
-    offenders: list[str] = []
-    for path in sorted(root.rglob("*.py")):
-        source = path.read_text(encoding="utf-8")
-        for node in ast.walk(ast.parse(source)):
-            if not isinstance(node, ast.Call):
-                continue
-            name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
-            if name not in {"create_selection_plan", "_insert_selection_plan"}:
-                continue
-            if any(keyword.arg == "accepted_gaps" for keyword in node.keywords):
-                if path.name == "preparation.py":
-                    continue
-                offenders.append(f"{path.relative_to(root).as_posix()}:{node.lineno}")
-    assert not offenders, (
-        "these hand a plan write its whole acceptance list; only the repository "
-        f"may do that, under the lock and the analysis check: {offenders}"
-    )
-
-
 def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
     """The lock has to precede the read it protects, in every writer.
 

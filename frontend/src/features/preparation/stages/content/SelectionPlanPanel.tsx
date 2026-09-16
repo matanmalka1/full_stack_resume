@@ -75,8 +75,6 @@ export const SelectionPlanPanel = ({
     mode,
     pinned_fact_ids: mode === "ai" ? [] : pinned,
     excluded_fact_ids: mode === "ai" ? [] : excluded,
-    accepted_requirement_ids: [],
-    acceptance_reason: null,
     expected_selection_plan_id: activePlanId,
     expected_candidate_context_hash: plan?.candidate_context_hash ?? null,
     expected_facts_version: plan?.facts_version ?? null,

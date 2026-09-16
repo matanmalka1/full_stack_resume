@@ -1,120 +1,130 @@
-"""Focused tests for the active, AI-only analysis domain."""
+"""Fit and gaps as projections of the requirements they come from.
+
+They used to be stored on the analysis beside those requirements, and the tests
+here checked the assembly that filled them in. There is nothing to assemble
+now: the same inputs are asked the same question wherever the answer is needed,
+so what is worth pinning is the arithmetic and the two judgements inside it -
+what an unread requirement scores, and what counts as a hard gap.
+"""
 
 from __future__ import annotations
 
 import pytest
 
-from cv_engine.domain.analysis.assembly import build_analysis, rebase_requirements
-from cv_engine.domain.analysis.gaps import fit_score_for
-from cv_engine.domain.contracts.analysis import (
-    JobClassificationProposal,
-    Requirement,
-    UnderstandingSources,
+from cv_engine.domain.analysis.projection import (
+    FIT_SCORE_HIGH_THRESHOLD,
+    fit_level,
+    fit_score,
+    gaps,
+    hard_gaps,
 )
+from cv_engine.domain.contracts.analysis import FitLevel, Requirement
 
 
-def _proposal(**changes) -> JobClassificationProposal:
-    return JobClassificationProposal.model_validate(
+def _requirement(**changes) -> Requirement:
+    return Requirement.model_validate(
         {
-            "track": "sales",
-            "profile": "account-manager",
-            "emphasis": "account-growth",
-            "language": "en",
-            "confidence": 0.91,
-            "rationale": "provider rationale",
-            "keywords": ["retention"],
+            "requirement_id": changes.pop("requirement_id", "r1"),
+            "text": "Own enterprise accounts",
+            "importance": "mandatory",
+            "coverage": "matched",
             **changes,
         }
     )
 
 
-def test_fit_score_for_is_the_single_empty_analysis_policy() -> None:
-    assert fit_score_for([], extraction_failed=True, requirements_absent=False) is None
-    assert fit_score_for([], extraction_failed=False, requirements_absent=True) is None
-    assert fit_score_for([], extraction_failed=False, requirements_absent=False) == 1.0
+def test_a_posting_nothing_was_read_from_has_no_fit() -> None:
+    """`None`, not zero and not 1.0.
+
+    A score claims an assessment happened. Nothing was assessed here, and both
+    a flattering default and a punishing one would assert something about the
+    candidate that no reading produced.
+    """
+    assert fit_score([]) is None
+    assert fit_level([]) is FitLevel.UNKNOWN
 
 
-def test_ai_analysis_is_built_without_rule_or_concept_gaps(profile_store, fact_store) -> None:
-    requirement = Requirement(
-        requirement_id="r1",
-        text="Own enterprise accounts",
-        kind="presence",
-        mandatory=True,
-        coverage="unsupported",
-    )
-    analysis = build_analysis(
-        requirements=[requirement],
-        extraction_version="ai:test",
-        extraction_failed=False,
-        requirements_absent=False,
-        requirements_unmapped=False,
-        proposal=_proposal(),
-        profiles=profile_store,
-        facts=fact_store,
-        unmapped_statements=[],
-        understanding=UnderstandingSources(by_ai=1),
-    )
-    assert analysis.analysis_version == "2.0"
-    assert [gap.requirement_id for gap in analysis.gaps] == ["r1"]
-    assert analysis.fit.value == "low"
-    assert analysis.language == "en"
+def test_an_unread_requirement_earns_no_credit_but_stays_in_the_denominator() -> None:
+    """Otherwise an incompletely read posting outscores a fully read one.
+
+    Dropping `unknown` from the denominator would make "we could not tell"
+    score exactly like "we checked and it is met".
+    """
+    one_of_two = [_requirement(), _requirement(requirement_id="r2", coverage="unknown")]
+    assert fit_score(one_of_two) == 0.5
+    assert fit_score([_requirement()]) == 1.0
 
 
-def test_inconsistent_provider_classification_is_refused(profile_store, fact_store) -> None:
-    with pytest.raises(ValueError, match="inconsistent"):
-        build_analysis(
-            requirements=[],
-            extraction_version="ai:test",
-            extraction_failed=False,
-            requirements_absent=True,
-            requirements_unmapped=False,
-            proposal=_proposal(track="development"),
-            profiles=profile_store,
-            facts=fact_store,
-            unmapped_statements=[],
-            understanding=UnderstandingSources(by_ai=0),
-        )
+def test_an_unstated_importance_is_weighted_as_a_preference() -> None:
+    """Silence is not a demand.
+
+    A requirement the posting never marked as required is weighted like one it
+    marked preferred: weighting it as mandatory would let the posting's silence
+    move the score as much as its demands.
+    """
+    unknown_importance = [
+        _requirement(importance="unknown", coverage="unsupported"),
+        _requirement(requirement_id="r2", coverage="matched"),
+    ]
+    mandatory = [
+        _requirement(importance="mandatory", coverage="unsupported"),
+        _requirement(requirement_id="r2", coverage="matched"),
+    ]
+    assert fit_score(unknown_importance) > fit_score(mandatory)
 
 
-def test_rebase_uses_fit_score_for(profile_store, fact_store) -> None:
-    analysis = build_analysis(
-        requirements=[],
-        extraction_version="ai:test",
-        extraction_failed=False,
-        requirements_absent=True,
-        requirements_unmapped=False,
-        proposal=_proposal(),
-        profiles=profile_store,
-        facts=fact_store,
-        unmapped_statements=[],
-        understanding=UnderstandingSources(by_ai=0),
-    )
-    rebased = rebase_requirements(
-        analysis,
-        requirements=[],
-        extraction_version=analysis.extraction_version,
-        facts=fact_store,
-        extraction_failed=True,
-        requirements_absent=False,
-        requirements_unmapped=False,
-    )
-    assert rebased.fit_score is None
-    assert rebased.fit.value == "unknown"
-
-
-def test_low_classification_confidence_does_not_create_a_review_reason(
-    profile_store, fact_store
+@pytest.mark.parametrize(
+    ("importance", "coverage", "severity"),
+    [
+        ("mandatory", "unsupported", "hard"),
+        # Partial means relevant evidence exists, not that the demand is met.
+        ("mandatory", "partial", "hard"),
+        # "We could not tell" is not "you lack this", so it is never hard -
+        # asking the user to accept a deficiency nobody established is the
+        # question this rule exists to stop asking.
+        ("mandatory", "unknown", "warning"),
+        ("preferred", "unsupported", "warning"),
+        ("unknown", "unsupported", "warning"),
+    ],
+)
+def test_only_an_established_failure_of_a_demand_is_a_hard_gap(
+    fact_store, importance, coverage, severity
 ) -> None:
-    analysis = build_analysis(
-        requirements=[],
-        extraction_version="ai:test",
-        extraction_failed=False,
-        requirements_absent=False,
-        requirements_unmapped=False,
-        proposal=_proposal(confidence=0.01, rationale="uncertain", keywords=[]),
-        profiles=profile_store,
-        facts=fact_store,
-        unmapped_statements=[],
-        understanding=UnderstandingSources(by_ai=0),
+    projected = gaps([_requirement(importance=importance, coverage=coverage)], fact_store)
+    assert [gap.severity for gap in projected] == [severity]
+
+
+def test_a_matched_requirement_projects_no_gap(fact_store) -> None:
+    assert gaps([_requirement()], fact_store) == []
+
+
+def test_a_hard_gap_caps_the_level_however_well_the_rest_scored(fact_store) -> None:
+    """One demanded requirement the facts contradict is not offset by strengths.
+
+    Nine matched requirements and one unsupported demand still score above the
+    high threshold; the level is LOW anyway, because the posting asked for
+    something the candidate cannot show.
+    """
+    requirements = [_requirement(requirement_id=f"r{index}") for index in range(9)]
+    requirements.append(_requirement(requirement_id="gap", coverage="unsupported"))
+    assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
+    assert fit_level(requirements) is FitLevel.LOW
+    assert [gap.requirement_id for gap in hard_gaps(requirements, fact_store)] == ["gap"]
+
+
+def test_a_boundary_fact_explains_the_gap_in_the_candidates_own_words(fact_store) -> None:
+    """The reason is the candidate's confirmed meaning, not a generic label.
+
+    A boundary fact is what the candidate said about the limit themselves, so
+    where one applies it is the authoritative account of why the requirement is
+    not verified.
+    """
+    boundary = "sales.tech_sales.boundary"
+    requirement = _requirement(coverage="partial", boundary_fact_ids=[boundary])
+    projected = gaps([requirement], fact_store)
+
+    assert projected[0].reason == fact_store.facts[boundary].meaning
+    assert (
+        projected[0].reason
+        != "Canonical facts cover part of this requirement; the rest is not verified."
     )
-    assert analysis.approval_reasons == []

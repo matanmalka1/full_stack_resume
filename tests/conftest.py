@@ -22,9 +22,9 @@ from fastapi.testclient import TestClient
 from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
-    AMBIGUOUS_HEBREW_JOB,
+    analysis_proposal,
     approve_active_draft,
-    trivial_requirement_extraction,
+    seed_existing_analysis,
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
 from sqlalchemy import text
@@ -35,7 +35,6 @@ import cv_engine
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
     AnalyzeCommand,
-    ApplyAnalysisDecisionsCommand,
     ApprovalResult,
     DraftCommand,
     IngestCommand,
@@ -47,7 +46,6 @@ from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import (
     Emphasis,
     JobAnalysis,
-    JobClassificationProposal,
     ProfileName,
     Track,
 )
@@ -350,24 +348,11 @@ def analysis_document(
         emphasis = Emphasis(overrides.pop("emphasis_override", None) or selected.default_emphasis)
         language = overrides.pop("language_override", None) or "en"
         return JobAnalysis(
-            analysis_version="2.0",
             track=Track(overrides.pop("track_override", None) or selected.track),
             profile=profile,
             emphasis=emphasis,
-            confidence=0.99,
-            rationale="test analysis fixture",
-            fit="high",
-            fit_score=1.0,
-            gaps=[],
-            requirements=[],
-            extraction_version="test-ai-v1",
-            unmapped_statements=[],
-            understanding={"by_ai": 0},
-            interpretation_decisions=[],
-            mandatory_requirements=[],
-            preferred_requirements=[],
-            keywords=[],
             language=language,
+            summary="test analysis fixture",
             **overrides,
         )
 
@@ -541,22 +526,7 @@ def analyzed_application(ai_services: Services, fake_openai: FakeOpenAI, require
         role: str = "Account Manager",
         job_text: str = ACCOUNT_MANAGER_JOB,
     ) -> WorkflowSetup:
-        fake_openai.script(
-            "propose_requirement_extraction",
-            trivial_requirement_extraction(job_text, requirement_concepts),
-        )
-        fake_openai.script(
-            "propose_job_analysis",
-            JobClassificationProposal(
-                track="sales",
-                profile="account-manager",
-                emphasis="account-growth",
-                language="en",
-                confidence=0.99,
-                rationale="fixture",
-                keywords=[],
-            ),
-        )
+        fake_openai.script("propose_analysis", analysis_proposal())
         ingested = ai_services.applications.ingest(
             IngestCommand(
                 company=company,
@@ -601,20 +571,9 @@ def drafted_application(analyzed_application):
         setup = analyzed_application(company, role, job_text)
         assert setup.analysis_id is not None
         assert setup.selection_plan_id is not None
-        accepted = setup.services.analysis.apply_analysis_decisions(
-            ApplyAnalysisDecisionsCommand(
-                application_id=setup.application_id,
-                job_analysis_id=setup.analysis_id,
-                expected_analysis_id=setup.analysis_id,
-                expected_selection_plan_id=setup.selection_plan_id,
-                accept_incomplete_analysis=True,
-            )
-        )
-        setup = replace(
-            setup,
-            analysis_id=accepted.job_analysis_id,
-            selection_plan_id=accepted.selection_plan_id,
-        )
+        # Drafted straight from the analysis. There used to be a decision here
+        # accepting the incomplete reading first, because the analysis blocked
+        # drafting until someone did; a partial reading blocks nothing now.
         drafted = setup.services.drafts.draft(
             DraftCommand(
                 application_id=setup.application_id,
@@ -643,6 +602,65 @@ def approved_application(drafted_application):
         setup = drafted_application(company, role, job_text)
         approved = approve_active_draft(setup.services, setup.application_id)
         return replace(setup, approved=approved)
+
+    return build
+
+
+@pytest.fixture
+def artifact_approved_application(services: Services):
+    """An approved application for tests whose subject is the artifact, not analysis.
+
+    Built on a seeded analysis rather than a queued `analyze_job` Operation,
+    and on the same `services` the API harness runs, because the alternative
+    raced. `approved_application` submits its Operation through `ai_services`
+    and then executes it in the foreground; a test that also asks for
+    `api_worker` has a second, provider-less worker polling the same database,
+    and whichever runner claims the queued row first wins. Under load the
+    worker won and failed the analysis with `PROVIDER_REFUSED` - an
+    intermittent failure in fifteen artifact tests that assert nothing about
+    analysis at all.
+
+    Seeding removes the claimable row instead of hiding it: no lock, no paused
+    worker, nothing that would leave the race in place behind a mechanism. What
+    the artifact tests do rely on - draft, validation, approval - still runs
+    through the ordinary services.
+    """
+
+    def build(
+        company: str = "Ready Co",
+        role: str = "Account Manager",
+        job_text: str = ACCOUNT_MANAGER_JOB,
+    ) -> WorkflowSetup:
+        ingested = services.applications.ingest(
+            IngestCommand(
+                company=company,
+                target_role=role,
+                job_text=job_text,
+                acknowledged_duplicates=True,
+                client="web",
+            )
+        )
+        activated = seed_existing_analysis(services, ingested)
+        drafted = services.drafts.draft(
+            DraftCommand(
+                application_id=ingested.application_id,
+                job_analysis_id=activated.analysis_id,
+                selection_plan_id=activated.selection_plan_id,
+            )
+        )
+        paths = services.artifacts.working_paths(ingested.application_id)
+        approved = approve_active_draft(services, ingested.application_id)
+        return WorkflowSetup(
+            services=services,
+            application_id=ingested.application_id,
+            snapshot_id=ingested.job_snapshot_id,
+            analysis_id=activated.analysis_id,
+            selection_plan_id=activated.selection_plan_id,
+            markdown=paths.markdown,
+            manifest=paths.manifest,
+            draft_report=drafted.validation,
+            approved=approved,
+        )
 
     return build
 
@@ -772,25 +790,25 @@ def draft_factory(
     ) -> DraftSetup:
         profile_name = ProfileName(overrides.pop("profile_override", None) or "account-manager")
         profile = profile_store.get(profile_name)
+        # Refused rather than dropped. These fields are derived from
+        # `requirements` now, and a golden scenario that still passes them is
+        # stating something the analysis can no longer carry - most
+        # dangerously gap substitutes that are not a requirement's supporting
+        # facts, whose silent loss would move selected content with no
+        # visible cause.
+        removed = sorted(set(overrides) & {"fit", "fit_score", "gaps", "confidence", "rationale"})
+        if removed:
+            raise TypeError(
+                f"draft_factory no longer accepts {removed}: state them as requirements"
+            )
         analysis = JobAnalysis(
-            analysis_version="2.0",
             track=Track(overrides.pop("track_override", None) or profile.track),
             profile=profile_name,
             emphasis=Emphasis(overrides.pop("emphasis_override", None) or profile.default_emphasis),
-            confidence=0.99,
-            rationale="test analysis fixture",
-            fit=overrides.pop("fit", "high"),
-            fit_score=overrides.pop("fit_score", 1.0),
-            gaps=overrides.pop("gaps", []),
-            requirements=overrides.pop("requirements", []),
-            extraction_version="test-ai-v1",
-            unmapped_statements=[],
-            understanding={"by_ai": 0},
-            interpretation_decisions=[],
-            mandatory_requirements=[],
-            preferred_requirements=[],
-            keywords=overrides.pop("keywords", []),
             language=overrides.pop("language_override", "en"),
+            summary="test analysis fixture",
+            keywords=overrides.pop("keywords", []),
+            requirements=overrides.pop("requirements", []),
             **overrides,
         )
         draft = build_draft(
@@ -809,106 +827,6 @@ def draft_factory(
         return DraftSetup(fact_store, profile, analysis, draft, markdown, candidate_context)
 
     return build
-
-
-@pytest.fixture
-def classification_proposal():
-    """Build what an AI provider may return for `propose_job_analysis`.
-
-    Defaults are a confident, internally consistent Account Manager proposal, so
-    each test only states the field it is actually probing.
-    """
-
-    def build(**overrides) -> JobClassificationProposal:
-        return JobClassificationProposal(
-            **{
-                "track": Track.SALES,
-                "profile": ProfileName.ACCOUNT_MANAGER,
-                "emphasis": Emphasis.ACCOUNT_GROWTH,
-                "language": "en",
-                "confidence": 0.99,
-                "rationale": "provider rationale",
-                "keywords": ["provider-keyword"],
-                **overrides,
-            }
-        )
-
-    return build
-
-
-@pytest.fixture
-def provider_analysis(ai_services: Services, fake_openai: FakeOpenAI):
-    """Run one AI `propose_job_analysis` Operation end to end against the fake.
-
-    It goes through the Operation runner rather than calling the service,
-    because AI analysis has no synchronous form: the provider response has to
-    be preserved against an Operation ID, and a test that bypassed the runner
-    would be exercising a path the product does not have.
-    """
-
-    def run(
-        response: JobClassificationProposal,
-        *,
-        job_text: str = AMBIGUOUS_HEBREW_JOB,
-        company: str = "Provider Co",
-        role: str = "Account Manager",
-        **analyze_kwargs,
-    ) -> ProposalSetup:
-        fake_openai.script("propose_job_analysis", response)
-        # Stage-1 plan §3.7: `propose_requirement_extraction` runs before
-        # `propose_job_analysis` on every AI-mode analyze Operation. This
-        # fixture is about classification-merge policy, not extraction
-        # content, so a passing, honest-about-what-it-covers default is
-        # scripted unless the caller already scripted one explicitly.
-        if not fake_openai.scripts.get("propose_requirement_extraction"):
-            concepts = ai_services.analysis.load_knowledge().requirement_concepts
-            fake_openai.script(
-                "propose_requirement_extraction",
-                trivial_requirement_extraction(job_text, concepts),
-            )
-        ingested = ai_services.applications.ingest(
-            IngestCommand(
-                company=company,
-                target_role=role,
-                job_text=job_text,
-                acknowledged_duplicates=True,
-                client="web",
-            )
-        )
-        queued = ai_services.operations.submit_analysis(
-            AnalyzeCommand(
-                application_id=ingested.application_id,
-                job_snapshot_id=ingested.job_snapshot_id,
-                track_override=analyze_kwargs.pop("track", None),
-                profile_override=analyze_kwargs.pop("profile", None),
-                emphasis_override=analyze_kwargs.pop("emphasis", None),
-                language_override=analyze_kwargs.pop("language", None),
-                accept_low_fit=analyze_kwargs.pop("accept_low_fit", False),
-                provider="openai",
-                model="gpt-5.6-terra",
-                **analyze_kwargs,
-            ),
-            idempotency_key=new_id(),
-            analysis_service=ai_services.analysis,
-        )
-        completed = foreground_executor(ai_services).execute(queued.id)
-        if completed.status.value != "succeeded":
-            raise AssertionError(
-                f"analysis Operation failed: {completed.failure_code} "
-                f"{completed.safe_failure_detail}"
-            )
-        outputs = {output.output_type: output.output_id for output in completed.outputs}
-        analysis_id = outputs["job_analysis"]
-        return ProposalSetup(
-            services=ai_services,
-            application_id=ingested.application_id,
-            analysis_id=analysis_id,
-            analysis=ai_services.repository.get_analysis(analysis_id)["analysis"],
-            payload=fake_openai.calls_for("propose_job_analysis")[-1].payload,
-            operation_id=completed.id,
-        )
-
-    return run
 
 
 @pytest.fixture

@@ -13,7 +13,6 @@ import {
   warningDetail,
   warningTitle,
 } from "../../model/preparationLabels";
-import { resolvedByReviewDecision } from "../../model/reviewDecisions";
 
 /* Review reasons and stale reasons carry the same shape, and both are reported as a
    short title plus the control that resolves them. The server's complete message stays
@@ -70,19 +69,13 @@ export const PreparationAlerts = ({
   showReviewReasons = true,
 }: {
   detail: ApplicationDetail;
-  /* The current screen decides whether a reason's resolution is already beside it.
-     Review controls owned by another region can suppress this read-only copy below. */
+  /* The current screen decides whether a reason's resolution is already beside it. */
   screen?: PreparationScreen;
   /* The editor renders review reasons with their inline resolution controls. */
   showReviewReasons?: boolean;
 }) => {
   const currentPath = screenPath(screen, detail.application.id);
-  /* A reason resolved by the decision form is presented with its control instead of
-     once here as an alert and once again below as a decision - but only where that form
-     is actually rendered. */
-  const reviewReasons = detail.review_reasons.filter(
-    (reason) => showReviewReasons && !(screen === "preparation" && resolvedByReviewDecision(reason)),
-  );
+  const reviewReasons = showReviewReasons ? detail.review_reasons : [];
   const statedReasonCodes = new Set([...detail.review_reasons, ...detail.stale_reasons].map((reason) => reason.code));
   /* `blocked_actions` contains the normal future workflow as well as exceptional
      blockers. Only translated exceptions are useful here, and a reason already stated
@@ -112,8 +105,6 @@ export const PreparationAlerts = ({
 
   return (
     <Card aria-label="התראות" className="flex flex-col gap-3 bg-cv-surface-muted p-3">
-      {/* A review reason whose control is in the decision panel states the requirement
-          and stops there. Other reasons retain the action that resolves them. */}
       {reviewReasons.map((reason) => (
         <ReasonCallout
           applicationId={detail.application.id}

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
+from ....domain.analysis.projection import fit_level
+from ....domain.analysis.projection import gaps as project_gaps
 from ....domain.contracts.drafts import (
     DraftDocument,
     WorkingDraft,
@@ -165,10 +169,15 @@ class DraftApproval(DraftServiceBase):
             # analysis is current: the record explains this draft, and a later
             # re-analysis under a language override must not restate its language.
             "language": draft.language,
-            "confidence": analysis.confidence,
-            "rationale": analysis.rationale,
-            "fit": analysis.fit.value,
-            "gaps": [gap.model_dump(mode="json") for gap in analysis.gaps],
+            # Frozen here on purpose, unlike on the analysis. This record is what
+            # the user approved against, and Fit and gaps as they stood at that
+            # moment are part of that evidence: a later change to how they are
+            # projected must not rewrite what an approved revision says it was
+            # approved with. The analysis stores none of it; the record keeps
+            # the one copy that is allowed to be a copy.
+            "summary": analysis.summary,
+            "fit": fit_level(analysis.requirements).value,
+            "gaps": [asdict(gap) for gap in project_gaps(analysis.requirements, facts)],
             "selected_fact_ids": draft.selected_fact_ids,
             "omitted_facts": draft.omitted_facts,
             "derived_statements": [
@@ -176,17 +185,6 @@ class DraftApproval(DraftServiceBase):
                 for section in draft.sections
                 for claim in section.claims
                 if claim.claim_type in {"composite", "derived"}
-            ],
-            # Kept as it was for records already written; it never described
-            # per-gap acceptance, which now lives on the SelectionPlan.
-            "accepted_warnings_or_gaps": decision_overrides,
-            # The gaps this CV was knowingly approved despite, with who accepted
-            # each and when. An ApprovedRevision is immutable and is the one
-            # record that cannot be regenerated, so a decision it was built on
-            # has to be legible from the record itself rather than recovered by
-            # joining through whichever plan happens to still be reachable.
-            "accepted_gaps": [
-                accepted.model_dump(mode="json") for accepted in selection_plan.accepted_gaps
             ],
             "user_overrides": decision_overrides,
             "fact_store_version": facts.version,

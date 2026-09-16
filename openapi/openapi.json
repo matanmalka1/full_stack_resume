@@ -55,47 +55,6 @@
         "title": "AIModelOptionResponse",
         "type": "object"
       },
-      "AcceptedGap": {
-        "additionalProperties": false,
-        "description": "One hard gap the user knowingly proceeded past.\n\nAcceptance means only that: it never changes a gap to satisfied, never\nauthorizes an unsupported claim, and never touches requirement coverage or\nfact ranking. It is recorded per gap, keyed on the `Requirement` the gap\nprojects, so accepting one deficiency cannot dismiss another the user has\nnot seen.\n\nIt lives on the SelectionPlan rather than the JobAnalysis because it is not\na change to what the requirement *means* - the analysis is untouched and\nstays reusable - only to whether the user proceeds despite it.",
-        "properties": {
-          "accepted_at": {
-            "title": "Accepted At",
-            "type": "string"
-          },
-          "actor": {
-            "title": "Actor",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "requirement_id": {
-            "title": "Requirement Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "requirement_id",
-          "job_analysis_id",
-          "actor",
-          "accepted_at"
-        ],
-        "title": "AcceptedGap",
-        "type": "object"
-      },
       "ActivityFilter": {
         "description": "Which side of the recruitment axis the caller is asking about.\n\nOPEN is the default the list screen uses: a finished process stays stored and\nreachable, but it is not what a board of live work is asking about.",
         "enum": [
@@ -439,17 +398,6 @@
             },
             "title": "Blocked Actions",
             "type": "array"
-          },
-          "classification_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Classification Confidence"
           },
           "company": {
             "title": "Company",
@@ -907,17 +855,6 @@
       "ApplicationResponse": {
         "additionalProperties": false,
         "properties": {
-          "classification_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Classification Confidence"
-          },
           "company": {
             "title": "Company",
             "type": "string"
@@ -1319,36 +1256,6 @@
         "additionalProperties": false,
         "description": "One review-form submission (§13).\n\nCarries analysis and selection-policy decisions because one form may submit\nboth. Which immutable records are created is decided by what changed.",
         "properties": {
-          "accept_incomplete_analysis": {
-            "default": false,
-            "title": "Accept Incomplete Analysis",
-            "type": "boolean"
-          },
-          "accept_low_fit": {
-            "default": false,
-            "title": "Accept Low Fit",
-            "type": "boolean"
-          },
-          "acceptance_reason": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Acceptance Reason"
-          },
-          "accepted_requirement_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Accepted Requirement Ids",
-            "type": "array"
-          },
           "application_id": {
             "title": "Application Id",
             "type": "string"
@@ -1418,14 +1325,6 @@
                 "type": "null"
               }
             ]
-          },
-          "requirement_interpretations": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/InterpretationOverride"
-            },
-            "title": "Requirement Interpretations",
-            "type": "array"
           },
           "track_override": {
             "anyOf": [
@@ -2427,11 +2326,6 @@
         "additionalProperties": false,
         "description": "What `POST /applications/{id}/analyses` accepts.\n\n`job_snapshot_id` is explicit: an analyze command that picked its own source\ncould classify something other than what the user was looking at.",
         "properties": {
-          "accept_low_fit": {
-            "default": false,
-            "title": "Accept Low Fit",
-            "type": "boolean"
-          },
           "emphasis_override": {
             "anyOf": [
               {
@@ -2631,26 +2525,6 @@
         "additionalProperties": false,
         "description": "What `POST /analyses/{id}/selection-plans` accepts, in both modes.\n\n`mode` is what makes the route answer `201` or `202`. It is explicit and has\nno `auto` value (§12): the deterministic form commits a plan inside the\nrequest, the AI form queues an Operation, and a client is never left\nguessing which of the two it got.\n\nThe overlay lists are the user's own decisions and belong to the\ndeterministic form. In AI mode the provider proposes the overlay, so\nsending both would be two answers to the same question - which is why the\nrouter refuses that combination rather than silently preferring one.",
         "properties": {
-          "acceptance_reason": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Acceptance Reason"
-          },
-          "accepted_requirement_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Accepted Requirement Ids",
-            "type": "array"
-          },
           "application_id": {
             "title": "Application Id",
             "type": "string"
@@ -3868,6 +3742,47 @@
         "title": "FactTransitionRequest",
         "type": "object"
       },
+      "GapResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requirement": {
+            "title": "Requirement",
+            "type": "string"
+          },
+          "requirement_id": {
+            "title": "Requirement Id",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "hard",
+              "warning"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "substitute_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Substitute Fact Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "requirement_id",
+          "requirement",
+          "severity",
+          "reason"
+        ],
+        "title": "GapResponse",
+        "type": "object"
+      },
       "GenerateWorkingDraftRequest": {
         "additionalProperties": false,
         "description": "What `POST /applications/{id}/working-draft/generate` accepts.\n\nBoth source IDs are explicit. A generate that resolved the latest analysis\nand plan for itself could build from a plan the user has never seen -\n§5.4's fifth acceptance item is exactly that commands take explicit source\nIDs.",
@@ -3942,49 +3857,9 @@
         "title": "HealthResponse",
         "type": "object"
       },
-      "InterpretationOverride": {
-        "additionalProperties": false,
-        "description": "One user-submitted correction to a requirement's interpretation (§3.5).\n\nSubmitted through `apply_analysis_decisions` like any other classification\ndecision. `prior_requirement_id` names the requirement, on the analysis\nbeing decided on, whose interpretation the user is correcting - not a\nrequirement id on some other analysis, since identity is scoped to one\nanalysis's snapshot and extractor namespace.",
-        "properties": {
-          "demanded": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Demanded"
-          },
-          "interpretation": {
-            "$ref": "#/components/schemas/RequirementInterpretation"
-          },
-          "prior_requirement_id": {
-            "title": "Prior Requirement Id",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          }
-        },
-        "required": [
-          "prior_requirement_id",
-          "interpretation"
-        ],
-        "title": "InterpretationOverride",
-        "type": "object"
-      },
       "JobAnalysisResponse": {
         "additionalProperties": false,
+        "description": "The stored analysis and its read-time projection.\n\nFit and gaps are shown to the user and gate nothing. They are computed from\n`analysis.requirements` when the response is built, so they appear here\nbeside the document rather than inside it.",
         "properties": {
           "analysis": {
             "additionalProperties": true,
@@ -3998,6 +3873,29 @@
           "created_at": {
             "title": "Created At",
             "type": "string"
+          },
+          "fit_level": {
+            "title": "Fit Level",
+            "type": "string"
+          },
+          "fit_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fit Score"
+          },
+          "gaps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GapResponse"
+            },
+            "title": "Gaps",
+            "type": "array"
           },
           "id": {
             "title": "Id",
@@ -4026,6 +3924,7 @@
           "job_snapshot_id",
           "version_number",
           "analysis",
+          "fit_level",
           "provider",
           "model",
           "created_at"
@@ -5037,127 +4936,6 @@
         "title": "ReplaceWorkingDraftRequest",
         "type": "object"
       },
-      "RequirementAttestation": {
-        "additionalProperties": false,
-        "description": "The source gate's proof: offsets into the signed snapshot text as read\nfrom the payload store, and the quote they are supposed to name.\n\nA gate failure is not represented here - it is a rejected proposal, never\na partially-populated attestation. When this is present, `quote` was\nalready verified to equal `text[start:end]` in the exact snapshot string.",
-        "properties": {
-          "end": {
-            "title": "End",
-            "type": "integer"
-          },
-          "quote": {
-            "title": "Quote",
-            "type": "string"
-          },
-          "start": {
-            "title": "Start",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "quote",
-          "start",
-          "end"
-        ],
-        "title": "RequirementAttestation",
-        "type": "object"
-      },
-      "RequirementInterpretation": {
-        "additionalProperties": false,
-        "description": "A provider's declared reading of one requirement. All-or-nothing: a\n`Requirement` either carries a complete interpretation or none at all -\n`unspecified` and absent member attestations preserve uncertainty explicitly.",
-        "properties": {
-          "composition": {
-            "enum": [
-              "single",
-              "any-of",
-              "all-of"
-            ],
-            "title": "Composition",
-            "type": "string"
-          },
-          "context_quote": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context Quote"
-          },
-          "members": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/RequirementMember"
-            },
-            "title": "Members",
-            "type": "array"
-          },
-          "negation": {
-            "title": "Negation",
-            "type": "boolean"
-          },
-          "obligation": {
-            "enum": [
-              "mandatory",
-              "preferred",
-              "unspecified"
-            ],
-            "title": "Obligation",
-            "type": "string"
-          },
-          "source_role": {
-            "enum": [
-              "requirement",
-              "responsibility",
-              "company-description",
-              "benefit",
-              "other"
-            ],
-            "title": "Source Role",
-            "type": "string"
-          }
-        },
-        "required": [
-          "source_role",
-          "obligation",
-          "composition",
-          "negation"
-        ],
-        "title": "RequirementInterpretation",
-        "type": "object"
-      },
-      "RequirementMember": {
-        "additionalProperties": false,
-        "description": "One member of an `any-of`/`all-of` requirement.\n\n`label` is display text a provider proposes; it is never used to decide\ncoverage. `attestation`, when present, is what a member is actually\nmapped against - the same verified-quote mechanism the requirement itself\nuses (stage-1 plan §3.5a addendum) - because a bare label is exactly as\nunverifiable as a requirement's own text would be without a source gate.\nA member with no attestation cannot retain inspectable source evidence and\nstays `undetermined`.",
-        "properties": {
-          "attestation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RequirementAttestation"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          },
-          "member_id": {
-            "title": "Member Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "member_id",
-          "label"
-        ],
-        "title": "RequirementMember",
-        "type": "object"
-      },
       "SelectionCandidate": {
         "additionalProperties": false,
         "description": "One fact's full accounting in the selection decision.\n\nRecorded so a later reader can answer not only which policy ran but why\nfact A beat fact B: the ranking is the lexicographic tuple\n(requirement_rank, semantic_score, keyword_hits, -pool_index).\n\n`requirement_rank` is 2 where the fact bears on a mandatory requirement, 1\nfor a preferred one, 0 where the posting never asked. `gap_substitute` held\nthat slot under policy 1.0.0 and is still recorded: it says something the\ntier does not - that the fact was offered as a stand-in for something\nmissing rather than as evidence of something held - and manifests already\nwritten carry it. Reading either field on an older record means reading\n`policy_version` first.",
@@ -5381,14 +5159,6 @@
         "additionalProperties": false,
         "description": "One immutable, versioned fact-selection decision for an analysis.",
         "properties": {
-          "accepted_gaps": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AcceptedGap"
-            },
-            "title": "Accepted Gaps",
-            "type": "array"
-          },
           "application_id": {
             "title": "Application Id",
             "type": "string"
@@ -5519,15 +5289,6 @@
       "SelectionPlanDetailResponse": {
         "additionalProperties": false,
         "properties": {
-          "accepted_gaps": {
-            "default": [],
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Accepted Gaps",
-            "type": "array"
-          },
           "application_id": {
             "title": "Application Id",
             "type": "string"
@@ -5630,15 +5391,6 @@
       "SelectionPlanResponse": {
         "additionalProperties": false,
         "properties": {
-          "accepted_gaps": {
-            "default": [],
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Accepted Gaps",
-            "type": "array"
-          },
           "application_id": {
             "title": "Application Id",
             "type": "string"

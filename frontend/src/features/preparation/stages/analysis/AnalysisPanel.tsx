@@ -5,9 +5,9 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
 import { AnalysisHeader } from "./AnalysisHeader";
-import { ApprovalReasonsSection } from "./ApprovalReasonsSection";
 import { ClassificationSummary } from "./ClassificationSummary";
 import { GapsSection } from "./GapsSection";
+import { IssuesSection } from "./IssuesSection";
 import { RationaleSection } from "./RationaleSection";
 import { RequirementCoverageSection, RequirementCoverageSummary } from "./RequirementCoverageSection";
 import { RequirementsSection } from "./RequirementsSection";
@@ -16,11 +16,10 @@ import { RequirementsSection } from "./RequirementsSection";
    its own: the analysis is the reasoning behind the stage this screen already reports,
    and a separate screen would ask the reader to leave the actions to read it.
 
-   It reports the analysis and decides nothing. The one control it carries - marking a
-   hard gap as accepted - is submitted by the decision panel below, in that panel's single
-   request; overriding a classification stays there too, which the projection opens
-   through `available_actions`. A second place that *commits* the same values would be the
-   second workflow state machine A.1 forbids.
+   It reports the analysis and decides nothing. Overriding a classification is the decision
+   panel's, which the projection opens through `available_actions`; a second place that
+   *commits* the same values would be the second workflow state machine A.1 forbids. Fit,
+   gaps and issues are information, and nothing here asks the reader to accept them.
 
    The panel itself only composes: the masthead and the findings below it each live in
    their own file under this folder, so a change to one - a new gap presentation, a
@@ -65,28 +64,21 @@ export const AnalysisPanel = ({
         />
       )}
 
-      <ApprovalReasonsSection reasons={classification.approvalReasons} />
+      {showGaps ? <GapsSection gaps={classification.gaps} /> : null}
 
-      {showGaps ? <GapsSection acceptance={null} gaps={classification.gaps} /> : null}
+      <IssuesSection issues={classification.issues} />
 
       <section>
         <Disclosure summary="פרטי הניתוח">
           <div className="flex flex-col divide-y divide-cv-border [&>section]:py-4 [&>section:first-child]:pt-1">
-            <RationaleSection rationale={classification.rationale} />
-            {/* The full requirement picture, including matched requirements. When the
-                extractor returned none, the summary falls back to the provider's plain
-                mandatory/preferred terms. */}
+            <RationaleSection rationale={classification.summary} />
+            {/* The full requirement picture, including matched requirements. */}
             {classification.requirements.length > 0 || classification.unreadableRequirementCount > 0 ? (
               <RequirementCoverageSection
                 requirements={classification.requirements}
                 unreadableRequirementCount={classification.unreadableRequirementCount}
               />
-            ) : (
-              <>
-                <RequirementsSection items={classification.mandatoryRequirements} title="דרישות חובה שזוהו" />
-                <RequirementsSection items={classification.preferredRequirements} title="דרישות מועדפות שזוהו" />
-              </>
-            )}
+            ) : null}
             <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
           </div>
         </Disclosure>
