@@ -10,6 +10,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
+import { surfaceClasses } from "@/ui/surface";
 import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../../model/analysisLabels";
 
 interface MatchingValues {
@@ -143,9 +144,12 @@ export const MatchingConfigurationEditor = ({
   }
 
   return (
-    <section aria-labelledby="matching-configuration-heading" className="flex flex-col gap-4">
+    <section
+      aria-labelledby="matching-configuration-heading"
+      className={surfaceClasses("flex flex-col gap-4 bg-cv-surface p-5")}
+    >
       <div>
-        <h2 className="text-support font-semibold text-cv-text" id="matching-configuration-heading">
+        <h2 className="text-body font-semibold text-cv-text" id="matching-configuration-heading">
           מסלול, פרופיל ודגשים
         </h2>
         <p className="mt-1 text-support leading-6 text-cv-text-muted">
