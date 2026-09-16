@@ -61,8 +61,8 @@ const analysisPending = (
    panel and a recruitment column above them all - several readings of one projection side
    by side. A wizard shows the step, not the record: the progress spine says where the work
    stands across analysis, draft and ready; `PreparationView` is the one action the step is
-   waiting on with its supporting detail folded away; and the posting and the files sit
-   below as reference a press away, never as panels competing for the same space.
+   waiting on, beside the diagnosis behind it; and the posting and the files sit below as
+   reference a press away, never as panels competing for the same space.
 
    Recruitment is not here at all. Where the application stands with the employer moves on
    its own axis and is managed from the board; putting it beside the CV work claimed a
@@ -98,13 +98,18 @@ export const ApplicationPage = () => {
   const hasArtifacts = detail !== undefined && detail.latest_ready_revision_id != null;
 
   return (
-    /* The analysis step of the wizard. Its name, its spine and its measure are the shell's;
-       what is left here is the one thing this step is identified by - who the CV is for.
-       The heading used to be the target role, which named the record rather than the step
-       and left the reader's position stated only by the rail. */
+    /* The analysis step of the wizard. Its name and its spine are the shell's; what is left
+       here is the one thing this step is identified by - who the CV is for. The heading
+       used to be the target role, which named the record rather than the step and left the
+       reader's position stated only by the rail.
+
+       Wide, like the draft and ready steps after it: `PreparationView` puts the facts
+       checklist and the matching form beside the full diagnosis, the same two-column shape
+       those later steps put the document beside its evidence in. */
     <WizardStepShell
       applicationId={applicationId}
       detail={detail}
+      measure="wide"
       queryError={query.error}
       /* Held at one line's width while the projection is in flight. Absent, the masthead
          drew the heading a line higher and dropped it when the name arrived - the page's

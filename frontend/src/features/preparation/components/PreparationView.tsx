@@ -22,11 +22,19 @@ import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
    weight. None of that is the task. The task is the one thing the workflow is waiting on,
    and it is stated once: the verdict, then the single action panel that answers it.
 
-   What supported the old tabs is still reachable below the action, in the same reading
+   What supported the old tabs is still reachable below the verdict, in the same reading
    order this list once put behind disclosures. The matching configuration and the full
-   diagnosis now render open, because a reader deciding whether to trust the verdict needs
-   that picture without an extra click; only the facts-selection panel, a refinement of a
-   later step rather than information about this one, still folds away until wanted. */
+   diagnosis render open, because a reader deciding whether to trust the verdict needs that
+   picture without an extra click; only the facts-selection panel, a refinement of a later
+   step rather than information about this one, still folds away until wanted.
+
+   With the diagnosis open by default alongside the work, one narrow column stacked all of
+   it - the facts checklist and the full requirement coverage both run long - into a single
+   scroll a reader had to hold in their head at once. This is the other step whose body
+   wants two readable columns rather than one: what changes this step (the action, the
+   matching form, the facts checklist) beside what explains it (the verdict's reasoning),
+   the same split `DraftWorkspace` draws between the editable draft and its evidence, at
+   the same wide measure the shell gives that step for the same reason. */
 export const PreparationView = ({
   detail,
   onQueued,
@@ -64,51 +72,63 @@ export const PreparationView = ({
           function's decision rather than being pre-empted here. */}
       <AnalysisStatusBanner classification={classification} supersededAnalysis={supersededAnalysis} />
 
-      {/* The one thing to do now: run the analysis, resolve the open decisions, or generate
-          the draft and move to the editor. The reference material below it - matching
-          configuration, the diagnosis - is read, not acted on, from this step. */}
-      <VerificationStage detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
+      {/* The work column beside the reasoning column, at the same breakpoint and the same
+          basis split `DraftWorkspace` uses: what this step changes stays wide enough to
+          use, and what explains it stays in view beside that work instead of pushed below
+          a long checklist. */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8 xl:gap-10">
+        <div className="flex min-w-0 flex-col gap-6 lg:flex-1 lg:basis-7/12">
+          {/* The one thing to do now: run the analysis, resolve the open decisions, or
+              generate the draft and move to the editor. */}
+          <VerificationStage detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
 
-      {/* A voluntary configuration edit is a different intent from resolving a review
-          blocker even though both currently reach the same backend command. While this
-          screen already owns a required decision, its form is the single commit surface;
-          otherwise this section is the explicit entry for changing a settled context.
-          The CAS source pair is also the local form's lifetime: a changed pair remounts
-          the editor before older local choices can be submitted against the new pair. */}
-      {classification === null ? null : (
-        <MatchingConfigurationEditor
-          classification={classification}
-          detail={detail}
-          onSaved={setMatchingSaved}
-          key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
-        />
-      )}
+          {/* A voluntary configuration edit is a different intent from resolving a review
+              blocker even though both currently reach the same backend command. While this
+              screen already owns a required decision, its form is the single commit surface;
+              otherwise this section is the explicit entry for changing a settled context.
+              The CAS source pair is also the local form's lifetime: a changed pair remounts
+              the editor before older local choices can be submitted against the new pair. */}
+          {classification === null ? null : (
+            <MatchingConfigurationEditor
+              classification={classification}
+              detail={detail}
+              onSaved={setMatchingSaved}
+              key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
+            />
+          )}
 
-      {matchingSaveInContext && matchingSaved !== null && (
-        // Callout renders a semantic output for its status prop.
-        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
-          {matchingSaved.state.recommended_action == null
-            ? "מצב המועמדות עודכן לפי ההקשר החדש."
-            : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
-        </Callout>
-      )}
+          {matchingSaveInContext && matchingSaved !== null && (
+            // Callout renders a semantic output for its status prop.
+            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+            <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
+              {matchingSaved.state.recommended_action == null
+                ? "מצב המועמדות עודכן לפי ההקשר החדש."
+                : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
+            </Callout>
+          )}
 
-      {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
-          parallel destination - offered where it is done, folded away until wanted. */}
-      {selectionPlanAction === null ? null : (
-        <Disclosure summary="התאמת העובדות שייכנסו לקורות החיים">
-          <div className="pt-2">
-            <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
+          {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
+              parallel destination - offered where it is done, folded away until wanted. */}
+          {selectionPlanAction === null ? null : (
+            <Disclosure summary="התאמת העובדות שייכנסו לקורות החיים">
+              <div className="pt-2">
+                <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
+              </div>
+            </Disclosure>
+          )}
+        </div>
+
+        {/* The reasoning behind the verdict, for a reader who wants to check it before
+            acting. It decides nothing; the acceptance controls it once held are in the
+            work column. Sticky for the same reason the draft's evidence pane is: it is
+            read, not acted on, from this step, so it stays in view while the work beside
+            it scrolls. */}
+        {classification === null ? null : (
+          <div className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:flex-1 lg:basis-5/12">
+            <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
           </div>
-        </Disclosure>
-      )}
-
-      {/* The reasoning behind the verdict, for a reader who wants to check it before acting.
-          It decides nothing; the acceptance controls it once held are in the step above. */}
-      {classification === null ? null : (
-        <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
-      )}
+        )}
+      </div>
     </div>
   );
 };
