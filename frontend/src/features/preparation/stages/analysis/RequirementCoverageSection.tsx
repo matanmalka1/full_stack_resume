@@ -164,9 +164,7 @@ export const RequirementCoverageSection = ({
               <StatusBadge tone={coverageTones[requirement.coverage]}>
                 {coverageLabels[requirement.coverage]}
               </StatusBadge>
-              <span className="text-support text-cv-text-muted">
-                {importanceLabels[requirement.importance]}
-              </span>
+              <span className="text-support text-cv-text-muted">{importanceLabels[requirement.importance]}</span>
             </div>
 
             {factsQuery.data === undefined || requirement.supportingFactIds.length === 0 ? null : (
@@ -183,7 +181,6 @@ export const RequirementCoverageSection = ({
                 למה הכיסוי מוגבל: {requirement.boundaryFactIds.map(factLabel).join(" · ")}
               </p>
             )}
-
           </li>
         ))}
       </ul>

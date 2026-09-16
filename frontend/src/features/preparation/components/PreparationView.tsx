@@ -63,20 +63,12 @@ export const PreparationView = ({
           sentence for it - fit and confidence, in the verdict's own tone. The banner now
           renders whenever this step renders, and which of its branches speaks stays that
           function's decision rather than being pre-empted here. */}
-      <AnalysisStatusBanner
-        classification={classification}
-        supersededAnalysis={supersededAnalysis}
-      />
+      <AnalysisStatusBanner classification={classification} supersededAnalysis={supersededAnalysis} />
 
       {/* The one thing to do now: run the analysis, resolve the open decisions, or generate
           the draft and move to the editor. Everything else on the screen is below it and
           closed. */}
-      <VerificationStage
-        detail={detail}
-        hasRecommendation={hasRecommendation}
-        onQueued={onQueued}
-        plan={plan}
-      />
+      <VerificationStage detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
 
       {/* A voluntary configuration edit is a different intent from resolving a review
           blocker even though both currently reach the same backend command. While this
@@ -118,13 +110,7 @@ export const PreparationView = ({
       {classification === null ? null : (
         <Disclosure summary="פרטי הניתוח והאבחון">
           <div className="pt-2">
-            <AnalysisStage
-              classification={classification}
-              detail={detail}
-              onQueued={onQueued}
-              plan={plan}
-              showGaps
-            />
+            <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} showGaps />
           </div>
         </Disclosure>
       )}

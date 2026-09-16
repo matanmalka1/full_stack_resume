@@ -200,10 +200,7 @@ const stubReads = (
 };
 
 const reviewDetail = (
-  codes = [
-    "PENDING_FACT_REQUIRES_RESOLUTION",
-    "KNOWLEDGE_RECONCILIATION_REQUIRED",
-  ],
+  codes = ["PENDING_FACT_REQUIRES_RESOLUTION", "KNOWLEDGE_RECONCILIATION_REQUIRED"],
 ): ApplicationDetail =>
   detail({
     review_reasons: codes.map((code) => ({
