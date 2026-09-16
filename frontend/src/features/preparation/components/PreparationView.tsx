@@ -22,11 +22,11 @@ import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
    weight. None of that is the task. The task is the one thing the workflow is waiting on,
    and it is stated once: the verdict, then the single action panel that answers it.
 
-   What supported the old tabs is still reachable, but as reference a press away rather
-   than as panels competing for the same space. The facts the CV will carry, the full
-   diagnosis, and the posting text sit below the action in collapsed disclosures - opened
-   when a reader wants to adjust or check something, closed by default so the screen shows
-   the step and its action and nothing beside them. */
+   What supported the old tabs is still reachable below the action, in the same reading
+   order this list once put behind disclosures. The matching configuration and the full
+   diagnosis now render open, because a reader deciding whether to trust the verdict needs
+   that picture without an extra click; only the facts-selection panel, a refinement of a
+   later step rather than information about this one, still folds away until wanted. */
 export const PreparationView = ({
   detail,
   onQueued,
@@ -56,9 +56,8 @@ export const PreparationView = ({
 
           It used to be drawn only when something was wrong or had been decided - a
           superseded analysis, a missing one, an open decision, an accepted risk. A clean
-          analysis that nobody had to rule on therefore said nothing, and because every
-          other part of this step is collapsed by default, a finished Application opened
-          on a step with no subject at all: a heading over four closed rows. The verdict of
+          analysis that nobody had to rule on therefore said nothing, and a finished
+          Application opened on a step with no subject stated at all. The verdict of
           a settled analysis is still the verdict, and `bannerContent` has always had the
           sentence for it - fit and confidence, in the verdict's own tone. The banner now
           renders whenever this step renders, and which of its branches speaks stays that
@@ -66,14 +65,14 @@ export const PreparationView = ({
       <AnalysisStatusBanner classification={classification} supersededAnalysis={supersededAnalysis} />
 
       {/* The one thing to do now: run the analysis, resolve the open decisions, or generate
-          the draft and move to the editor. Everything else on the screen is below it and
-          closed. */}
+          the draft and move to the editor. The reference material below it - matching
+          configuration, the diagnosis - is read, not acted on, from this step. */}
       <VerificationStage detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
 
       {/* A voluntary configuration edit is a different intent from resolving a review
           blocker even though both currently reach the same backend command. While this
           screen already owns a required decision, its form is the single commit surface;
-          otherwise this disclosure is the explicit entry for changing a settled context.
+          otherwise this section is the explicit entry for changing a settled context.
           The CAS source pair is also the local form's lifetime: a changed pair remounts
           the editor before older local choices can be submitted against the new pair. */}
       {classification === null ? null : (
@@ -108,11 +107,7 @@ export const PreparationView = ({
       {/* The reasoning behind the verdict, for a reader who wants to check it before acting.
           It decides nothing; the acceptance controls it once held are in the step above. */}
       {classification === null ? null : (
-        <Disclosure summary="פרטי הניתוח והאבחון">
-          <div className="pt-2">
-            <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
-          </div>
-        </Disclosure>
+        <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
       )}
     </div>
   );

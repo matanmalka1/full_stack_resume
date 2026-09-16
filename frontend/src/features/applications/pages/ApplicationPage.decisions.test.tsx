@@ -133,7 +133,7 @@ describe("voluntary matching configuration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
-    fireEvent.click(await screen.findByText("ערוך הגדרות התאמה"));
+    await screen.findByText("מסלול, פרופיל ודגשים");
     expect(screen.getByLabelText("מסלול")).toHaveValue("sales");
     expect(screen.getByLabelText("פרופיל")).toHaveValue("account-manager");
     expect(screen.getByLabelText("דגש")).toHaveValue("account-growth");
@@ -171,7 +171,7 @@ describe("voluntary matching configuration", () => {
       vi.fn(() => Promise.resolve(jsonResponse(detail({ preparation_state, ...extra })))),
     );
     renderPage();
-    fireEvent.click(await screen.findByText("ערוך הגדרות התאמה"));
+    await screen.findByText("מסלול, פרופיל ודגשים");
     expect(screen.getByText(message)).toBeInTheDocument();
   });
 
@@ -187,7 +187,7 @@ describe("voluntary matching configuration", () => {
     );
 
     renderPage();
-    fireEvent.click(await screen.findByText("ערוך הגדרות התאמה"));
+    await screen.findByText("מסלול, פרופיל ודגשים");
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות ההתאמה" }));
 

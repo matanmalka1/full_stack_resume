@@ -6,7 +6,6 @@ import { invalidateApplicationViews } from "@/api/applications";
 import type { ApplicationDetail, Emphasis, Language, ProfileName, Track } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { Disclosure } from "@/ui/Disclosure";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -144,94 +143,92 @@ export const MatchingConfigurationEditor = ({
   }
 
   return (
-    <Disclosure summary="ערוך הגדרות התאמה">
-      <section aria-labelledby="matching-configuration-heading" className="flex flex-col gap-4 pt-2">
-        <div>
-          <h2 className="text-support font-semibold text-cv-text" id="matching-configuration-heading">
-            מסלול, פרופיל ודגשים
-          </h2>
-          <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            הערכים המוצגים הם ההקשר הפעיל. רק שדות ששונו יישלחו, והשרת יוודא שהניתוח ותוכנית הבחירה לא התחלפו מאז פתיחת
-            הטופס.
-          </p>
-        </div>
+    <section aria-labelledby="matching-configuration-heading" className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-support font-semibold text-cv-text" id="matching-configuration-heading">
+          מסלול, פרופיל ודגשים
+        </h2>
+        <p className="mt-1 text-support leading-6 text-cv-text-muted">
+          הערכים המוצגים הם ההקשר הפעיל. רק שדות ששונו יישלחו, והשרת יוודא שהניתוח ותוכנית הבחירה לא התחלפו מאז פתיחת
+          הטופס.
+        </p>
+      </div>
 
-        {unavailableBecauseOperation ? (
-          <Callout title="ההגדרות נעולות בזמן שינוי ההקשר" tone="warning">
-            יש להמתין לסיום ניתוח המשרה או שינוי תוכנית הבחירה, ואז לפתוח את ההגדרות המעודכנות.
-          </Callout>
-        ) : null}
+      {unavailableBecauseOperation ? (
+        <Callout title="ההגדרות נעולות בזמן שינוי ההקשר" tone="warning">
+          יש להמתין לסיום ניתוח המשרה או שינוי תוכנית הבחירה, ואז לפתוח את ההגדרות המעודכנות.
+        </Callout>
+      ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <ConfigurationSelect
-            disabled={!canEdit || save.isPending}
-            label="מסלול"
-            labels={trackLabels}
-            onChange={(track) => update("track", track)}
-            value={values.track}
-          />
-          <ConfigurationSelect
-            disabled={!canEdit || save.isPending}
-            label="פרופיל"
-            labels={profileLabels}
-            onChange={(profile) => update("profile", profile)}
-            value={values.profile}
-          />
-          <ConfigurationSelect
-            disabled={!canEdit || save.isPending}
-            label="דגש"
-            labels={emphasisLabels}
-            onChange={(emphasis) => update("emphasis", emphasis)}
-            value={values.emphasis}
-          />
-          <ConfigurationSelect
-            disabled={!canEdit || save.isPending}
-            label="שפת קורות החיים"
-            labels={languageLabels}
-            onChange={(language) => update("language", language)}
-            value={values.language}
-          />
-        </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <ConfigurationSelect
+          disabled={!canEdit || save.isPending}
+          label="מסלול"
+          labels={trackLabels}
+          onChange={(track) => update("track", track)}
+          value={values.track}
+        />
+        <ConfigurationSelect
+          disabled={!canEdit || save.isPending}
+          label="פרופיל"
+          labels={profileLabels}
+          onChange={(profile) => update("profile", profile)}
+          value={values.profile}
+        />
+        <ConfigurationSelect
+          disabled={!canEdit || save.isPending}
+          label="דגש"
+          labels={emphasisLabels}
+          onChange={(emphasis) => update("emphasis", emphasis)}
+          value={values.emphasis}
+        />
+        <ConfigurationSelect
+          disabled={!canEdit || save.isPending}
+          label="שפת קורות החיים"
+          labels={languageLabels}
+          onChange={(language) => update("language", language)}
+          value={values.language}
+        />
+      </div>
 
-        <p className="text-support leading-6 text-cv-text-muted">{consequence(detail, createsAnalysis)}</p>
+      <p className="text-support leading-6 text-cv-text-muted">{consequence(detail, createsAnalysis)}</p>
 
-        {changed ? (
-          <p className="text-support font-medium text-cv-text">זוהו שינויים שלא נשמרו.</p>
-        ) : (
-          <p className="text-support text-cv-text-muted">לא בוצעו שינויים.</p>
-        )}
+      {changed ? (
+        <p className="text-support font-medium text-cv-text">זוהו שינויים שלא נשמרו.</p>
+      ) : (
+        <p className="text-support text-cv-text-muted">לא בוצעו שינויים.</p>
+      )}
 
-        {save.error === null ? null : (
-          <ErrorCallout
-            error={save.error}
-            fallbackDetail="ההגדרות לא נשמרו. ייתכן שהניתוח או תוכנית הבחירה התחלפו; הערכים שבחרת נשארו בטופס כדי שאפשר יהיה להשוות ולנסות שוב לאחר רענון."
-            fallbackTitle="הגדרות ההתאמה לא נשמרו"
-          />
-        )}
+      {save.error === null ? null : (
+        <ErrorCallout
+          error={save.error}
+          fallbackDetail="ההגדרות לא נשמרו. ייתכן שהניתוח או תוכנית הבחירה התחלפו; הערכים שבחרת נשארו בטופס כדי שאפשר יהיה להשוות ולנסות שוב לאחר רענון."
+          fallbackTitle="הגדרות ההתאמה לא נשמרו"
+        />
+      )}
 
-        <LiveRegion>{save.isPending ? "שומר את הגדרות ההתאמה…" : undefined}</LiveRegion>
+      <LiveRegion>{save.isPending ? "שומר את הגדרות ההתאמה…" : undefined}</LiveRegion>
 
-        <div className="flex flex-wrap gap-3">
-          <Button
-            disabled={!canEdit || !changed}
-            pending={save.isPending}
-            pendingLabel="שומר…"
-            onClick={() => save.mutate()}
-          >
-            שמירת הגדרות ההתאמה
-          </Button>
-          <Button
-            disabled={!changed || save.isPending}
-            onClick={() => {
-              save.reset();
-              setValues(current);
-            }}
-            variant="secondary"
-          >
-            ביטול השינויים
-          </Button>
-        </div>
-      </section>
-    </Disclosure>
+      <div className="flex flex-wrap gap-3">
+        <Button
+          disabled={!canEdit || !changed}
+          pending={save.isPending}
+          pendingLabel="שומר…"
+          onClick={() => save.mutate()}
+        >
+          שמירת הגדרות ההתאמה
+        </Button>
+        <Button
+          disabled={!changed || save.isPending}
+          onClick={() => {
+            save.reset();
+            setValues(current);
+          }}
+          variant="secondary"
+        >
+          ביטול השינויים
+        </Button>
+      </div>
+    </section>
   );
 };
