@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from .analysis_proposal import AnalysisIssue, RequirementSource
 from .base import StrictModel
 from .taxonomy import Emphasis, ProfileName, Track
 
@@ -180,6 +181,11 @@ class Requirement(StrictModel):
     attestation: RequirementAttestation | None = None
     #: None is used only for an engine-synthesized unmapped requirement.
     extractor: str | None = None
+    #: How the posting was found to carry this requirement's text. `attestation`
+    #: can only hold a single exact span, so it cannot express "the posting says
+    #: this in two places" or "says it wrapped differently" - both verified, and
+    #: both spanless. Absent on records written before this field existed.
+    source: RequirementSource | None = None
 
 
 class Gap(StrictModel):
@@ -219,7 +225,12 @@ class JobAnalysis(StrictModel):
     track: Track
     profile: ProfileName
     emphasis: Emphasis
-    confidence: float = Field(ge=0, le=1)
+    #: The provider's own confidence in the *classification*, when it reported
+    #: one. `None` where nothing reported it: the field says how sure the
+    #: provider was about Track/Profile/Emphasis, so no other number may be
+    #: substituted into it, and a stand-in would be projected as
+    #: `classification_confidence` and read as if it meant that.
+    confidence: float | None = Field(default=None, ge=0, le=1)
     rationale: str
     fit: FitLevel
     #: The canonical numeric fit measure `fit` is read off (`fit_level_from_score`,
@@ -241,3 +252,12 @@ class JobAnalysis(StrictModel):
     language: Literal["en", "he"]
     approval_reasons: list[str] = []
     user_override: dict[OverrideKey, str] = {}
+    #: Where this reading was narrowed: a citation dropped, a coverage lowered,
+    #: a quote the posting does not carry. Kept on the record because the
+    #: question a user asks about an analysis is why it says less than the
+    #: posting seems to ask for, and an in-memory answer cannot be read back.
+    issues: list[AnalysisIssue] = []
+    #: The share of requirements whose text was found in the posting. A
+    #: measurement of this reading's grounding, and deliberately not
+    #: `confidence`, which is the provider's own account of the classification.
+    source_coverage: float | None = Field(default=None, ge=0, le=1)
