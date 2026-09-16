@@ -94,7 +94,6 @@ export const DraftEditorPage = () => {
      full-width preview remains available, especially on narrow screens. */
   const [mode, setMode] = useState<DraftWorkspaceMode>("read");
   const [approvalOpen, setApprovalOpen] = useState(false);
-  const [finishRequested, setFinishRequested] = useState(false);
   /* The revision this editor just approved. Held here rather than read from the projection
      so the render step names the exact revision the approval returned. */
   const [approvedRevisionId, setApprovedRevisionId] = useState<string | null>(null);
@@ -246,28 +245,22 @@ export const DraftEditorPage = () => {
     detail.stale_reasons.length > 0 ||
     validation.stale;
 
-  /* One press starts the finish flow. Validation remains its own exact backend boundary;
-     once it passes, the UI opens the explicit approval dialog instead of making the user
-     find and press the same footer action a second time. A failed run or request ends this
-     attempt and leaves its actionable report beside the preview. */
-  useEffect(() => {
-    if (!finishRequested) return;
-    if (validation.exactPassingRunId !== null && !approvalUnavailable) {
-      setFinishRequested(false);
-      setApprovalOpen(true);
-      return;
-    }
-    if (validation.error != null || validation.lastRun?.passed === false) setFinishRequested(false);
-  }, [
-    approvalUnavailable,
-    finishRequested,
-    validation.error,
-    validation.exactPassingRunId,
-    validation.lastRun,
-  ]);
-
   // A blocker closes this explicit choice permanently; clearing it never reopens approval.
   if (approvalOpen && approvalUnavailable) setApprovalOpen(false);
+
+  /* One press starts the finish flow. Validation remains its own exact backend boundary;
+     once it passes, the event that requested it opens the explicit approval dialog instead
+     of making the user press the footer action again. The hook retains and displays any
+     validation failure, so the rejected promise needs no second error state here. */
+  const validateAndOpenApproval = async () => {
+    if (draft === undefined || approvalUnavailable) return;
+    try {
+      const run = await validation.validateExact(draft);
+      if (run.passed) setApprovalOpen(true);
+    } catch {
+      // useDraftValidation exposes the mutation error beside the preview.
+    }
+  };
 
   return (
     /* No description: `DraftHeaderCard` below names the company and the target role
@@ -440,8 +433,7 @@ export const DraftEditorPage = () => {
                 if (!approvalUnavailable && validation.exactPassingRunId !== null) setApprovalOpen(true);
               }}
               onValidate={() => {
-                setFinishRequested(true);
-                validation.validate();
+                void validateAndOpenApproval();
               }}
               unavailable={approvalUnavailable}
               reviewBlocked={(detail?.review_reasons ?? []).length > 0}
