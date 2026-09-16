@@ -526,28 +526,6 @@ checks a diff owes, when a full suite is warranted, and the three triggers that 
 extra evidence — a schema change, a rendering/artifact-path change, and a change to a
 stored value's meaning, a public signature, or a projection field.
 
-### CI and release requirements
-
-CI must include:
-
-- Python formatting/static checks selected by implementation
-- backend unit/integration tests
-- frontend typecheck/lint/unit tests
-- OpenAPI validation and generated-type drift
-- real PostgreSQL plus local-object-store integration
-- Alembic topology and empty-database upgrade checks
-- focused S3-compatible object-store contract tests
-- rendering/PDF/ATS tests
-- security and failure-injection tests
-
-Release additionally requires:
-
-- macOS runtime and browser verification
-- manual live OpenAI smoke
-- environment-level PostgreSQL/object-store data-protection verification when configured
-- performance review
-- completed acceptance report
-
 There is no global coverage-percentage or test-count gate. Critical
 domain/application modules may adopt focused thresholds if they add value, but
 invariant and journey evidence remains authoritative. At each milestone, review the
