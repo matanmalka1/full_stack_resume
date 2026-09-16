@@ -392,7 +392,9 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     # longer dismisses the hard gaps along with it.
     state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert {reason["code"] for reason in state["review_reasons"]} == {"HARD_GAP_REQUIRES_DECISION"}
-    analysis = ai_api_worker.services.repository.get_analysis(resolved["job_analysis_id"])["analysis"]
+    analysis = ai_api_worker.services.repository.get_analysis(resolved["job_analysis_id"])[
+        "analysis"
+    ]
     accepted = _post(
         ai_api_worker,
         f"/analyses/{resolved['job_analysis_id']}/apply-decisions",

@@ -183,9 +183,7 @@ class AnalysisPreparation:
             )
             raise
 
-        accepted: dict[str, str] = (
-            {"fit": "accepted-low-fit"} if command.accept_low_fit else {}
-        )
+        accepted: dict[str, str] = {"fit": "accepted-low-fit"} if command.accept_low_fit else {}
         if accepted:
             # Rebuilt through validation rather than model_copy(update=...), which
             # would skip the model validators that guard this state.

@@ -201,7 +201,8 @@ def test_generation_records_the_explicit_parent_approved_revision(ai_api_worker)
         if output["output_type"] == "working_draft"
     )
     assert (
-        _read(ai_api_worker, draft_id).json()["parent_revision_id"] == approved.json()["revision_id"]
+        _read(ai_api_worker, draft_id).json()["parent_revision_id"]
+        == approved.json()["revision_id"]
     )
 
 
@@ -519,7 +520,10 @@ def test_removing_a_pending_claim_is_the_resolution_no_other_command_reaches(
     application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Removal Co")
     edit = _unsupported_edit(ai_api_worker, application_id)
     pending = _patch(
-        ai_api_worker, working_draft_id, _read(ai_api_worker, working_draft_id).headers["ETag"], [edit]
+        ai_api_worker,
+        working_draft_id,
+        _read(ai_api_worker, working_draft_id).headers["ETag"],
+        [edit],
     )
     assert pending.status_code == 200, pending.text
     assert pending.json()["pending_claim_ids"] == [edit["claim_id"]]
@@ -888,7 +892,9 @@ def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapsho
     # `_audit` asserts there is exactly one record for the action, which is the assertion
     # that matters here: a second Keep would write a second audit record beside the second
     # snapshot. `details_json` is canonical JSON text rather than a mapping.
-    kept = json.loads(_audit(ai_api_paused, application_id, "replace_working_draft")["details_json"])
+    kept = json.loads(
+        _audit(ai_api_paused, application_id, "replace_working_draft")["details_json"]
+    )
     assert kept["kept"] is True
     assert kept["edit_version"] == before["edit_version"]
 
@@ -983,7 +989,9 @@ def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
         item["metadata"]["edit_version"] for item in _snapshots(ai_api_paused, application_id)
     ] == [before["edit_version"]]
     _audit(ai_api_paused, application_id, "replace_working_draft")
-    assert _read(ai_api_paused, working_draft_id).json()["edit_version"] == before["edit_version"] + 1
+    assert (
+        _read(ai_api_paused, working_draft_id).json()["edit_version"] == before["edit_version"] + 1
+    )
 
 
 def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(ai_api_paused) -> None:
@@ -1023,7 +1031,9 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(ai_
     # The snapshot is registered, and then its payload is corrupted underneath the row.
     snapshot = _snapshots(ai_api_paused, application_id)[0]
     stored = ai_api_paused.services.repository.artifact_version(snapshot["id"])
-    ai_api_paused.services.artifacts.resolve(stored["path"]).write_text("tampered", encoding="utf-8")
+    ai_api_paused.services.artifacts.resolve(stored["path"]).write_text(
+        "tampered", encoding="utf-8"
+    )
 
     refused = _post(ai_api_paused, path, body, **key)
 
@@ -1083,9 +1093,9 @@ def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(ai_ap
     body = response.json()
     assert body["passed"] is False
     assert any(issue["code"] == "pending-claim" for issue in body["report"]["issues"])
-    assert ai_api_worker.services.repository.validation_report(body["validation_run_id"]).passed is (
-        False
-    )
+    assert ai_api_worker.services.repository.validation_report(
+        body["validation_run_id"]
+    ).passed is (False)
     assert _state(ai_api_worker, application_id)["working_draft_state"] == "validation_failed"
     stale = _post(
         ai_api_worker,

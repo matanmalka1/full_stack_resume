@@ -20,6 +20,7 @@ from threading import Event, Thread
 from time import monotonic, sleep
 from typing import Any
 
+from fake_provider import FakeOpenAI
 from fastapi.testclient import TestClient
 from helpers import trivial_requirement_extraction
 
@@ -28,7 +29,6 @@ from cv_engine.api.schemas.operations import OperationResponse
 from cv_engine.application.operations import TERMINAL_OPERATION_STATUSES
 from cv_engine.domain.models import JobClassificationProposal
 from cv_engine.runtime.composition import Services, build_api_services
-from fake_provider import FakeOpenAI
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
