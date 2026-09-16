@@ -145,6 +145,8 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           aria-expanded="true"
           className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0"
           dir="auto"
+          id="global-search-input"
+          name="global-search"
           onChange={(event) => {
             setSearch(event.target.value);
             setSelectedIndex(0);
