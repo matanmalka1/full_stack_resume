@@ -12,7 +12,15 @@ import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
 import { Input, Textarea } from "@/ui/Input";
-import { SOURCE_URL_MAX_CHARACTERS } from "../model/applicationInput";
+import { SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "../model/applicationInput";
+
+/* The save rule this mirrors: text is sent verbatim and an empty URL becomes `null`.
+   Comparing the raw field to that same shape is what "unchanged" means here - trimming
+   the text before comparing would call a whitespace-only edit unchanged too. */
+const normalizedSourceUrl = (value: string): string | null => {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+};
 
 interface PostingFields {
   job_text: string;
@@ -34,20 +42,24 @@ interface PostingFields {
    that - this screen only sends the posting.
 
    The current text is loaded into the field because the common case is a posting that was
-   amended rather than rewritten. Submitting it unchanged is refused by the server, which
-   holds a snapshot per exact content; that refusal is shown as it arrives. */
+   amended rather than rewritten. An unchanged text and URL are refused before the request
+   is sent, as a field error rather than a round trip - the server would refuse the same
+   content anyway, since it holds a snapshot per exact content. */
 export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
   const queryClient = useQueryClient();
   const applicationId = detail.application.id;
   const snapshot = detail.latest_snapshot;
+  const originalJobText = typeof snapshot.job_text === "string" ? snapshot.job_text : "";
+  const originalSourceUrl = snapshot.source_url ?? null;
   const [open, setOpen] = useState(false);
   const {
     formState: { errors },
+    getValues,
     handleSubmit,
     register,
   } = useAppForm<PostingFields>({
     defaultValues: {
-      job_text: typeof snapshot.job_text === "string" ? snapshot.job_text : "",
+      job_text: originalJobText,
       source_url: snapshot.source_url ?? "",
     },
   });
@@ -164,7 +176,13 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
               <Textarea
                 {...control}
                 {...register("job_text", {
-                  validate: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
+                  validate: (value) => {
+                    if (value.trim() === "") return "יש להזין את טקסט המשרה.";
+                    const unchanged =
+                      value === originalJobText &&
+                      normalizedSourceUrl(getValues("source_url")) === originalSourceUrl;
+                    return !unchanged || "הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה.";
+                  },
                 })}
                 className="min-h-48 max-h-[55vh] [field-sizing:content]"
                 dir="auto"
@@ -173,6 +191,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
           </Field>
 
           <Field
+            error={errors.source_url?.message}
             hint="נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."
             label="כתובת המשרה"
             optional
@@ -181,7 +200,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
               /* A.3: a URL is an LTR island even inside the RTL shell. */
               <Input
                 {...control}
-                {...register("source_url")}
+                {...register("source_url", { validate: validateSourceUrl })}
                 className="ltr-island max-w-xl"
                 dir="ltr"
                 inputMode="url"

@@ -303,4 +303,34 @@ describe("ApplicationPage", () => {
       source_url: "https://example.com/jobs/1",
     });
   });
+
+  it("blocks a job posting update that changes nothing, without a request", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
+    );
+    renderPage(fetchMock);
+
+    fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
+    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
+
+    expect(await screen.findByText("הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
+  });
+
+  it("blocks a job posting update with a malformed URL, without a request", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
+    );
+    renderPage(fetchMock);
+
+    fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
+      target: { value: "Senior Backend Engineer, now remote" },
+    });
+    fireEvent.change(screen.getByLabelText("כתובת המשרה"), { target: { value: "not-a-url" } });
+    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
+
+    expect(await screen.findByText("הכתובת חייבת להתחיל ב-http:// או https:// וללא רווחים.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
+  });
 });
