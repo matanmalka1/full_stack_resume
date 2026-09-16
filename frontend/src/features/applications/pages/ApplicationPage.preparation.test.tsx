@@ -658,14 +658,15 @@ describe("ApplicationPage at the preparation route", () => {
 
     expect(await screen.findByText("5 years of Python")).toBeInTheDocument();
     expect(screen.getByText("מכוסה")).toBeInTheDocument();
-    expect(screen.getByText("מכוסות: 1")).toBeInTheDocument();
-    expect(screen.getByText("חלקיות: 1")).toBeInTheDocument();
-    expect(screen.getByText("לא מכוסות: 1")).toBeInTheDocument();
+    expect(screen.getByText("מכוסות")).toBeInTheDocument();
+    expect(screen.getByText("חלקיות")).toBeInTheDocument();
+    expect(screen.getByText("לא מכוסות")).toBeInTheDocument();
     expect(screen.getByText("לא ניתנות להצגה: 1")).toBeInTheDocument();
     expect(screen.getByText("דרישת חובה אחת עדיין אינה מכוסה במלואה.")).toBeInTheDocument();
     expect(screen.getByText("דרישה אחת אינה ניתנת להצגה")).toBeInTheDocument();
     expect(await screen.findByText(/5 years building backend systems in Python/)).toBeInTheDocument();
-    expect(screen.getByText(/למה הכיסוי מוגבל: Used Kubernetes in a personal lab/)).toBeInTheDocument();
+    expect(screen.getByText(/^למה הכיסוי מוגבל/)).toBeInTheDocument();
+    expect(screen.getByText("Used Kubernetes in a personal lab")).toBeInTheDocument();
     /* Coverage supersedes the plain mandatory/preferred term lists once an analysis
        carries `requirements` - they would otherwise show the same requirement twice,
        once with its coverage and once as a bare string. */

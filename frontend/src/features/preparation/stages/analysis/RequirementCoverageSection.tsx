@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Check, CircleAlert, FileCheck2, ShieldAlert } from "lucide-react";
 import { useMemo } from "react";
 
 import type { Requirement, RequirementCoverage, RequirementImportance } from "@/api/analyses";
@@ -16,13 +17,6 @@ const importanceLabels: Record<RequirementImportance, string> = {
   mandatory: "דרישת חובה",
   preferred: "דרישה מועדפת",
   unknown: "חשיבות לא צוינה",
-};
-
-const coverageBorderClasses: Record<RequirementCoverage, string> = {
-  matched: "border-cv-success/50",
-  partial: "border-cv-warning/50",
-  unsupported: "border-cv-blocker/50",
-  unknown: "border-cv-text-muted/50",
 };
 
 /* `unknown` sits between `partial` and `matched`: it is not evidence of a
@@ -63,24 +57,48 @@ export const RequirementCoverageSummary = ({
     (requirement) => requirement.importance === "mandatory" && requirement.coverage !== "matched",
   ).length;
 
+  const metrics = [
+    { label: "מכוסות", value: counts.matched },
+    { label: "חלקיות", value: counts.partial },
+    { label: "לא מכוסות", value: counts.unsupported },
+    { label: "לא הוכרעו", value: counts.unknown },
+  ];
+  const total = requirements.length + unreadableRequirementCount;
+
   return (
     <AnalysisSection title="תמונת הכיסוי">
-      <div className="flex flex-wrap gap-2">
-        <StatusBadge tone="success">מכוסות: {counts.matched}</StatusBadge>
-        <StatusBadge tone="warning">חלקיות: {counts.partial}</StatusBadge>
-        <StatusBadge tone="blocker">לא מכוסות: {counts.unsupported}</StatusBadge>
-        {counts.unknown === 0 ? null : <StatusBadge tone="neutral">לא הוכרעו: {counts.unknown}</StatusBadge>}
-        {unreadableRequirementCount === 0 ? null : (
-          <StatusBadge tone="warning">לא ניתנות להצגה: {unreadableRequirementCount}</StatusBadge>
-        )}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-y border-cv-border py-3">
+        <div>
+          <p className="text-heading-md font-bold text-cv-text">
+            {counts.matched} מתוך {total}
+          </p>
+          <p className="text-support text-cv-text-muted">דרישות מכוסות במלואן</p>
+        </div>
+        <dl className="flex flex-wrap gap-x-5 gap-y-2">
+          {metrics.map((metric) => (
+            <div className="flex items-baseline gap-1.5" key={metric.label}>
+              <dt className="text-support text-cv-text-muted">{metric.label}</dt>
+              <dd className="text-body font-bold text-cv-text">{metric.value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
-      <p className="mt-2 text-support text-cv-text-muted">
-        {uncoveredMandatory === 0
-          ? "אין דרישות חובה ללא כיסוי מלא."
-          : uncoveredMandatory === 1
-            ? "דרישת חובה אחת עדיין אינה מכוסה במלואה."
-            : `${uncoveredMandatory} דרישות חובה עדיין אינן מכוסות במלואן.`}
-      </p>
+      <Callout
+        className="mt-3"
+        title={
+          uncoveredMandatory === 0
+            ? "אין דרישות חובה ללא כיסוי מלא."
+            : uncoveredMandatory === 1
+              ? "דרישת חובה אחת עדיין אינה מכוסה במלואה."
+              : `${uncoveredMandatory} דרישות חובה עדיין אינן מכוסות במלואן.`
+        }
+        tone={uncoveredMandatory === 0 ? "success" : "blocker"}
+      />
+      {unreadableRequirementCount === 0 ? null : (
+        <p className="mt-2 text-support text-cv-text-muted">
+          לא ניתנות להצגה: {unreadableRequirementCount}
+        </p>
+      )}
     </AnalysisSection>
   );
 };
@@ -119,11 +137,72 @@ export const RequirementCoverageSection = ({
   }
 
   const factLabel = (factId: string): string => factMeanings.get(factId) ?? `העובדה ${factId} אינה קיימת במאגר הנוכחי.`;
+  const ordered = orderedRequirements(requirements);
+  const attentionRequirements = ordered.filter((requirement) => requirement.coverage !== "matched");
+  const matchedRequirements = ordered.filter((requirement) => requirement.coverage === "matched");
+
+  const requirementRow = (requirement: Requirement) => (
+    <article className="py-4 first:pt-0 last:pb-0" key={requirement.requirementId} role="listitem">
+      <div className="flex items-start gap-3">
+        <div
+          className={cx(
+            "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-pill border",
+            requirement.coverage === "matched"
+              ? "border-cv-success/30 bg-cv-success-soft text-cv-success"
+              : "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
+          )}
+        >
+          {requirement.coverage === "matched" ? (
+            <Check aria-hidden="true" className="size-icon-md" />
+          ) : (
+            <CircleAlert aria-hidden="true" className="size-icon-md" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-body font-bold text-cv-text" dir="auto">
+              {requirement.text}
+            </h4>
+            <StatusBadge tone={coverageTones[requirement.coverage]}>
+              {coverageLabels[requirement.coverage]}
+            </StatusBadge>
+          </div>
+          <p className="mt-0.5 text-caption font-semibold text-cv-text-muted">
+            {importanceLabels[requirement.importance]}
+          </p>
+
+          {factsQuery.data === undefined ||
+          (requirement.supportingFactIds.length === 0 && requirement.boundaryFactIds.length === 0) ? null : (
+            <div className="mt-3 flex flex-col gap-2 border-s-2 border-cv-border ps-3">
+              {requirement.supportingFactIds.length === 0 ? null : (
+                <div className="flex items-start gap-2">
+                  <FileCheck2 aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-success" />
+                  <p className="text-support text-cv-text-muted" dir="auto">
+                    <span className="font-bold text-cv-text">ראיות תומכות: </span>
+                    {requirement.supportingFactIds.map(factLabel).join(" · ")}
+                  </p>
+                </div>
+              )}
+              {requirement.boundaryFactIds.length === 0 ? null : (
+                <div className="flex items-start gap-2">
+                  <ShieldAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-warning" />
+                  <p className="text-support text-cv-text-muted" dir="auto">
+                    <span className="font-bold text-cv-text">למה הכיסוי מוגבל: </span>
+                    {requirement.boundaryFactIds.map(factLabel).join(" · ")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  );
 
   return (
     <AnalysisSection title="דרישות המשרה וכיסויין">
-      <p className="mb-3 text-support text-cv-text-muted">
-        הראיות מוצגות בנוסחן הנוכחי במאגר. דרישות חובה ופערים מוצגים ראשונים.
+      <p className="mb-4 text-support text-cv-text-muted">
+        הדרישות מסודרות לפי הצורך בפעולה. הראיות מוצגות בנוסחן הנוכחי במאגר.
       </p>
       {unreadableRequirementCount === 0 ? null : (
         <Callout
@@ -151,39 +230,34 @@ export const RequirementCoverageSection = ({
           fallbackTitle="לא ניתן לטעון את הראיות התומכות"
         />
       )}
-      <ul className="flex flex-col gap-3">
-        {orderedRequirements(requirements).map((requirement) => (
-          <li
-            className={cx("border-s-2 ps-3", coverageBorderClasses[requirement.coverage])}
-            key={requirement.requirementId}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-support font-medium text-cv-text" dir="auto">
-                {requirement.text}
-              </span>
-              <StatusBadge tone={coverageTones[requirement.coverage]}>
-                {coverageLabels[requirement.coverage]}
-              </StatusBadge>
-              <span className="text-support text-cv-text-muted">{importanceLabels[requirement.importance]}</span>
+      <div aria-label="פירוט כיסוי דרישות המשרה" role="list">
+        {attentionRequirements.length === 0 ? null : (
+          <section aria-labelledby="requirements-attention-heading">
+            <div className="flex items-center gap-2 border-b border-cv-border pb-2">
+              <CircleAlert aria-hidden="true" className="size-icon-md text-cv-warning" />
+              <h4 className="text-support font-bold text-cv-text" id="requirements-attention-heading">
+                דורשות תשומת לב ({attentionRequirements.length})
+              </h4>
             </div>
+            <div className="divide-y divide-cv-border">{attentionRequirements.map(requirementRow)}</div>
+          </section>
+        )}
 
-            {factsQuery.data === undefined || requirement.supportingFactIds.length === 0 ? null : (
-              <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                ראיות תומכות (מהמאגר הנוכחי): {requirement.supportingFactIds.map(factLabel).join(" · ")}
-              </p>
-            )}
-
-            {/* Named separately from support on purpose: a boundary fact caps coverage
-                rather than adding to it, and listing it beside "עובדות תומכות" would read
-                as more evidence for a requirement the analysis just said falls short. */}
-            {factsQuery.data === undefined || requirement.boundaryFactIds.length === 0 ? null : (
-              <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                למה הכיסוי מוגבל: {requirement.boundaryFactIds.map(factLabel).join(" · ")}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
+        {matchedRequirements.length === 0 ? null : (
+          <section
+            aria-labelledby="requirements-covered-heading"
+            className={attentionRequirements.length === 0 ? undefined : "mt-6"}
+          >
+            <div className="flex items-center gap-2 border-b border-cv-border pb-2">
+              <Check aria-hidden="true" className="size-icon-md text-cv-success" />
+              <h4 className="text-support font-bold text-cv-text" id="requirements-covered-heading">
+                מכוסות במלואן ({matchedRequirements.length})
+              </h4>
+            </div>
+            <div className="divide-y divide-cv-border">{matchedRequirements.map(requirementRow)}</div>
+          </section>
+        )}
+      </div>
     </AnalysisSection>
   );
 };

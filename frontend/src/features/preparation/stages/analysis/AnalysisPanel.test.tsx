@@ -45,6 +45,8 @@ describe("AnalysisPanel", () => {
 
     expect(screen.queryByText("פערים מול העובדות")).not.toBeInTheDocument();
     expect(screen.getByText("דרישות המשרה וכיסויין")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "פירוט כיסוי דרישות המשרה" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Experience selling AWS-based solutions" })).toBeInTheDocument();
     expect(screen.getAllByText("Experience selling AWS-based solutions")).toHaveLength(1);
   });
 });
