@@ -61,11 +61,19 @@ def _classified_values(proposal, profiles: ProfileStore, overrides: Mapping[Over
     Moved here from the old assembly module, which is gone: it was the one part
     of it that survived, and leaving a file behind for one function would have
     kept the old build path looking alive.
+
+    A Profile already owns exactly one Track. Treating both provider fields as
+    independent choices makes the provider capable of returning an impossible
+    pair even though the Profile is otherwise usable. The Profile therefore
+    supplies the Track for an ordinary proposal. An explicit user Track
+    override is different: it is a material classification decision, so keep
+    it and let the consistency guard refuse a mismatched partial correction
+    rather than silently changing what the user chose.
     """
     profile = type(proposal.profile)(overrides.get("profile", proposal.profile.value))
-    track = type(proposal.track)(overrides.get("track", proposal.track.value))
     emphasis = type(proposal.emphasis)(overrides.get("emphasis", proposal.emphasis.value))
     selected = profiles.get(profile)
+    track = type(proposal.track)(overrides.get("track", selected.track.value))
     mismatch = classification_mismatch(selected, track, emphasis)
     if mismatch == "track":
         raise ValueError(
@@ -312,9 +320,9 @@ def normalize_analysis_proposal(
         for requirement in requirements
         if requirement.source is not None and requirement.source.verified
     )
-    # Reuses the one resolver that already reconciles a proposal with the
-    # user's overrides and refuses a Track/Profile/Emphasis combination the
-    # Profile does not allow. That rule is unchanged by this contract.
+    # Reuses the one resolver that derives the provider's Track from its
+    # Profile, reconciles explicit user overrides, and refuses an Emphasis (or
+    # user-overridden Track) the Profile does not allow.
     track, profile, emphasis, language = _classified_values(
         proposal, profiles, dict(overrides or {})
     )

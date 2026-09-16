@@ -57,6 +57,20 @@ def _normalize(proposal, fact_store, profile_store, requirement_concepts, source
     )
 
 
+def test_profile_supplies_track_when_provider_returns_an_impossible_pair(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    analysis = _normalize(
+        _proposal(profile="account-executive", track="tech-sales"),
+        fact_store,
+        profile_store,
+        requirement_concepts,
+    )
+
+    assert analysis.profile == "account-executive"
+    assert analysis.track == "sales"
+
+
 def test_one_unusable_requirement_does_not_cost_the_others(
     fact_store, profile_store, requirement_concepts
 ) -> None:
