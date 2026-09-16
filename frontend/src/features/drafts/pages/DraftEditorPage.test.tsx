@@ -201,8 +201,6 @@ const stubReads = (
 
 const reviewDetail = (
   codes = [
-    "HARD_GAP_REQUIRES_DECISION",
-    "ANALYSIS_INCOMPLETE",
     "PENDING_FACT_REQUIRES_RESOLUTION",
     "KNOWLEDGE_RECONCILIATION_REQUIRED",
   ],
@@ -213,11 +211,7 @@ const reviewDetail = (
       message: `Reason: ${code}`,
       entity_references: {},
       allowed_resolution_actions:
-        code === "PENDING_FACT_REQUIRES_RESOLUTION"
-          ? ["confirm_and_use_fact", "update_working_draft"]
-          : code === "KNOWLEDGE_RECONCILIATION_REQUIRED"
-            ? []
-            : ["apply_analysis_decisions"],
+        code === "PENDING_FACT_REQUIRES_RESOLUTION" ? ["confirm_and_use_fact", "update_working_draft"] : [],
     })),
     latest_analysis: {
       id: "an-1",
@@ -612,7 +606,7 @@ describe("DraftEditorPage", () => {
     expect(screen.queryByRole("link", { name: "עריכת הטיוטה" })).toBeNull();
   });
 
-  it("offers analysis decisions inline and takes pending facts to their own row with focus", async () => {
+  it("takes pending facts to their own row with focus", async () => {
     stubReads({
       detail: () => jsonResponse(reviewDetail()),
       draft: () =>
@@ -634,9 +628,7 @@ describe("DraftEditorPage", () => {
         ),
     });
     renderPage();
-    expect(await screen.findByRole("heading", { name: "החלטות נדרשות כדי להמשיך" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "שמירת ההחלטות" })).toBeVisible();
-    expect(screen.queryByRole("link", { name: "החלת החלטות הסקירה" })).toBeNull();
+    expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeVisible();
     expect(screen.getByText(/נדרשת השלמת התאמה של מאגר הידע/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "מעבר לפתרון השורה" }));
     await waitFor(() => expect(document.activeElement?.id).toBe("draft-claim-c-1"));
@@ -664,102 +656,6 @@ describe("DraftEditorPage", () => {
     await waitFor(() => expect(document.activeElement?.id).toBe("draft-claim-c-1"));
     expect(screen.queryByText("הפיכת הטקסט לעובדה מאושרת")).toBeNull();
     expect(screen.queryByRole("button", { name: "שמירת ההחלטות" })).toBeNull();
-  });
-
-  it.each(["HARD_GAP_REQUIRES_DECISION", "ANALYSIS_INCOMPLETE"])(
-    "keeps approval closed with an exact passing run and an open %s decision",
-    async (code) => {
-      const fetchMock = stubReads({
-        detail: () => jsonResponse(reviewDetail([code])),
-        validation: () =>
-          jsonResponse({
-            application_id: "app-1",
-            working_draft_id: "wd-1",
-            content_hash: "hash-4",
-            edit_version: 4,
-            passed: true,
-            validation_run_id: "run-1",
-            report: { evidence: {}, groups: {}, issues: [] },
-          }),
-      });
-      renderPage();
-      fireEvent.click(await screen.findByRole("button", { name: "אימות הטיוטה" }));
-      await screen.findByText("האימות עבר על הגרסה המוצגת. יש לפתור את החסמים לפני אישור.");
-      await waitFor(() =>
-        expect(fetchMock.mock.calls.some((call) => String(call[0]) === "/api/v1/validation-runs/run-1")).toBe(true),
-      );
-      await waitFor(() => expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled());
-      expect(screen.queryByRole("dialog", { name: "אישור גרסה קבועה" })).toBeNull();
-    },
-  );
-
-  it("saves local wording before decisions, refreshes the draft and keeps approval closed after context changes", async () => {
-    let resolveSave: (response: Response) => void = () => {};
-    const save = new Promise<Response>((resolve) => {
-      resolveSave = resolve;
-    });
-    let applied = false;
-    let saved = false;
-    let draftReads = 0;
-    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
-      const url = String(input);
-      if (url === DRAFT_PATH && init?.method === "PATCH") return save;
-      if (url.endsWith("/apply-decisions")) {
-        applied = true;
-        return Promise.resolve(
-          jsonResponse({ job_analysis_id: "an-1", selection_plan_id: "sp-2", created_analysis: false }),
-        );
-      }
-      if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(facts()));
-      if (url === DRAFT_PATH) {
-        draftReads += 1;
-        return Promise.resolve(
-          jsonResponse({ ...draft(), edit_version: saved ? 5 : 4, content_hash: saved ? "hash-5" : "hash-4" }),
-        );
-      }
-      if (url === "/api/v1/facts/history") return Promise.resolve(jsonResponse({ events: [] }));
-      return Promise.resolve(
-        jsonResponse(
-          applied
-            ? detail({
-                active_selection_plan_id: "sp-2",
-                working_draft_state: "stale",
-                stale_reasons: [
-                  {
-                    code: "SELECTION_PLAN_REPLACED",
-                    message: "The selection plan changed.",
-                    entity_references: {},
-                    allowed_resolution_actions: ["replace_working_draft"],
-                  },
-                ],
-              })
-            : reviewDetail(["ANALYSIS_INCOMPLETE"]),
-        ),
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    renderPage();
-    await editRow(2);
-    const editor = await screen.findByDisplayValue("Owned the CRM migration.");
-    fireEvent.change(editor, { target: { value: "My local wording." } });
-    fireEvent.click(screen.getByRole("switch", { name: /הדרישות לא נקראו/ }));
-    fireEvent.click(screen.getByRole("button", { name: "שמירת ההחלטות" }));
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.some((call) => (call[1] as RequestInit)?.method === "PATCH")).toBe(true),
-    );
-    expect(applied).toBe(false);
-    await act(async () => {
-      saved = true;
-      resolveSave(updateResponse(5));
-    });
-    await waitFor(() => expect(applied).toBe(true));
-    expect(await screen.findByText("The selection plan changed.")).toBeInTheDocument();
-    expect(draftReads).toBeGreaterThan(1);
-    expect(screen.getByRole("button", { name: "אישור הגרסה" })).toBeDisabled();
-    expect(screen.queryByRole("dialog", { name: "אישור גרסה קבועה" })).toBeNull();
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/generate"))).toBe(false);
-    const patch = fetchMock.mock.calls.find((call) => (call[1] as RequestInit)?.method === "PATCH");
-    expect(JSON.parse(String((patch![1] as RequestInit).body)).claim_edits[0].text).toBe("My local wording.");
   });
 
   it.each(["stale", "passed", "failed", "refresh-error", "validation-error", "edit-during-confirmation"])(

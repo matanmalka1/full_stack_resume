@@ -1,11 +1,10 @@
 import { useState } from "react";
 
-import { classificationFromAnalysis, lowFitAcceptedFromAnalysis } from "@/api/analyses";
+import { classificationFromAnalysis } from "@/api/analyses";
 import { actionLabel } from "../model/preparationLabels";
 import { Callout } from "@/ui/Callout";
 import type { AnalysisDecisions, ApplicationDetail } from "@/api/contracts";
 import { Disclosure } from "@/ui/Disclosure";
-import { openDecisionCount, openDecisions, resolvedByReviewDecision } from "../model/reviewDecisions";
 import { workflowActionPlan } from "../model/workflowActionPlan";
 import { AnalysisStage } from "../stages/analysis/AnalysisStage";
 import { SelectionPlanPanel } from "../stages/content/SelectionPlanPanel";
@@ -46,16 +45,8 @@ export const PreparationView = ({
   const supersededAnalysis = classification === null && detail.latest_analysis != null;
 
   const plan = workflowActionPlan(detail);
-  const open = openDecisions(detail);
-  const decisionCount = openDecisionCount(open);
-  const lowFitAccepted = lowFitAcceptedFromAnalysis(detail);
-  const hasRecommendation = detail.review_reasons.some(resolvedByReviewDecision) || detail.recommended_action != null;
+  const hasRecommendation = detail.recommended_action != null;
   const selectionPlanAction = plan.createSelectionPlan;
-
-  /* Open decisions stay visible until answered. A recorded low-fit acceptance remains as
-     useful history, but with copy that names it as closed. */
-  const incompleteAnalysisAccepted =
-    classification?.fit === "unknown" && !open.incompleteAnalysis && detail.preparation_state !== "needs_analysis";
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,10 +65,6 @@ export const PreparationView = ({
           function's decision rather than being pre-empted here. */}
       <AnalysisStatusBanner
         classification={classification}
-        hasOpenDecisions={decisionCount > 0}
-        incompleteAnalysisAccepted={incompleteAnalysisAccepted}
-        lowFitAccepted={lowFitAccepted}
-        lowFitDecisionOpen={open.fit}
         supersededAnalysis={supersededAnalysis}
       />
 
@@ -85,7 +72,6 @@ export const PreparationView = ({
           the draft and move to the editor. Everything else on the screen is below it and
           closed. */}
       <VerificationStage
-        classification={classification}
         detail={detail}
         hasRecommendation={hasRecommendation}
         onQueued={onQueued}
@@ -98,7 +84,7 @@ export const PreparationView = ({
           otherwise this disclosure is the explicit entry for changing a settled context.
           The CAS source pair is also the local form's lifetime: a changed pair remounts
           the editor before older local choices can be submitted against the new pair. */}
-      {classification === null || detail.review_reasons.some(resolvedByReviewDecision) ? null : (
+      {classification === null ? null : (
         <MatchingConfigurationEditor
           classification={classification}
           detail={detail}
@@ -137,7 +123,7 @@ export const PreparationView = ({
               detail={detail}
               onQueued={onQueued}
               plan={plan}
-              showGaps={!open.gaps}
+              showGaps
             />
           </div>
         </Disclosure>

@@ -46,19 +46,13 @@ export const ApplicationFitStatus = ({
   }
 
   const label = fitLevelLabel(item.fit_level);
-  // Two independent numbers, never concatenated into one string: fit% is how well
-  // the posting's requirements are covered, confidence% is how sure the classifier
-  // is about its own read of the posting. Conflating them here would reproduce the
-  // exact ambiguity this field split was meant to remove.
+  // Fit is projected from the analysis's requirements when the list is built. There is
+  // no classification confidence to show beside it.
   const fitScoreLabel = item.fit_score == null ? null : confidenceText(item.fit_score);
-  const confidenceTitle =
-    item.classification_confidence == null
-      ? undefined
-      : `ביטחון בניתוח: ${confidenceText(item.classification_confidence)}`;
 
   if (variant === "card") {
     return (
-      <span title={confidenceTitle}>
+      <span>
         <StatusBadge
           className="shrink-0 px-2 py-0.5"
           icon={fitLevelIcon(item.fit_level)}
@@ -75,7 +69,7 @@ export const ApplicationFitStatus = ({
   }
 
   return (
-    <span title={confidenceTitle}>
+    <span>
       <QuietStatus icon={fitLevelIcon(item.fit_level)} tone={fitLevelTone(item.fit_level)}>
         {fitScoreLabel == null ? label : `${label} · ${fitScoreLabel}`}
       </QuietStatus>

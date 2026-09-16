@@ -270,13 +270,13 @@ describe("ApplicationListPage", () => {
      rather than counting it, and the badge is the way into the Application that states
      each item beside the control that resolves it. */
   it("names a blocking reason and links it to preparation", async () => {
-    stubList([item({ review_reasons: [reason("HARD_GAP_REQUIRES_DECISION")] })]);
+    stubList([item({ review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] })]);
 
     renderPage();
 
-    const attention = await screen.findByRole("link", { name: "Acme: יש פער חוסם מול הדרישות" });
+    const attention = await screen.findByRole("link", { name: "Acme: טענה בלי עובדה מאושרת" });
     expect(attention).toHaveAttribute("href", "/applications/app-1");
-    expect(within(attention).getByText("יש פער חוסם מול הדרישות")).toBeInTheDocument();
+    expect(within(attention).getByText("טענה בלי עובדה מאושרת")).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "מוקד פעולות" })).getByRole("link")).toHaveAttribute(
       "href",
       "/applications/app-1",

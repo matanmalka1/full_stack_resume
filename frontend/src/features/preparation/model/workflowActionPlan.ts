@@ -45,9 +45,6 @@ export interface WorkflowActionPlan {
      a different URL. */
   draftScreen: { emphasized: boolean; href: string; label: string } | null;
   readyRevision: { emphasized: boolean; href: string } | null;
-  /* The review decision's control is a panel on this same screen, so it is handled here
-     more completely than a link ever handled it - and must not be reported as unbuilt. */
-  reviewHandledHere: boolean;
   /* A recommended action with no control here and no destination anywhere. It is a claim
      about existence, not availability, so it asks the same route table the reason callouts
      ask: gating it on availability would let this say a screen does not exist while a
@@ -153,7 +150,6 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
   const archiveDraft =
     stale && available("archive_working_draft") && workingDraftId !== null ? { workingDraftId } : null;
 
-  const reviewHandledHere = available("apply_analysis_decisions");
   const handledHere = new Set(
     [
       analyze === null ? null : "analyze",
@@ -161,7 +157,6 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
       createDraft === null ? null : "create_draft",
       replaceDraft === null ? null : "replace_working_draft",
       archiveDraft === null ? null : "archive_working_draft",
-      reviewHandledHere ? "apply_analysis_decisions" : null,
       editHref === null ? null : "update_working_draft",
       validationHref === null ? null : "validate",
       approvalHref === null ? null : "approve",
@@ -186,7 +181,6 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
     replaceDraft,
     draftScreen,
     readyRevision,
-    reviewHandledHere,
     unbuiltRecommendation,
   };
 };

@@ -37,7 +37,6 @@ export { useAutomaticDraft } from "./api/mutations";
 
 /* What the projection is asking the reader to decide, for a caller that counts it into a
    badge. Where those decisions are taken stays inside. */
-export { openDecisionCount, openDecisions } from "./model/reviewDecisions";
 
 export {
   actionDestination,
@@ -66,6 +65,3 @@ export {
 /* What the SelectionPlan decided about a fact. The draft editor names the same decisions
    beside the facts it offers to include, so the words are defined once. */
 export { omissionReasonLabels, selectionOutcomeLabels } from "./model/selectionLabels";
-
-export { ReviewDecisionPanel } from "./stages/verification/ReviewDecisionPanel";
-export { resolvedByReviewDecision } from "./model/reviewDecisions";

@@ -351,7 +351,6 @@ export const DraftEditorPage = () => {
               <DraftReviewPanel
                 detail={detail}
                 draft={draft}
-                beforeResolve={beforeResolve}
                 onNavigate={(href) => {
                   if (!resolving) void navigateSaved(href);
                 }}

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { Requirement, RequirementCoverage } from "@/api/analyses";
+import type { Requirement, RequirementCoverage, RequirementImportance } from "@/api/analyses";
 import { factsQueryOptions } from "@/api/facts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
@@ -10,21 +10,29 @@ import { cx } from "@/ui/cx";
 import { coverageLabels, coverageTones } from "../../model/analysisLabels";
 import { AnalysisSection } from "./AnalysisSection";
 
+/* A posting that never says whether something is required is not thereby saying it is
+   optional, so `unknown` is worded as exactly that rather than folded into "preferred". */
+const importanceLabels: Record<RequirementImportance, string> = {
+  mandatory: "דרישת חובה",
+  preferred: "דרישה מועדפת",
+  unknown: "חשיבות לא צוינה",
+};
+
 const coverageBorderClasses: Record<RequirementCoverage, string> = {
   matched: "border-cv-success/50",
   partial: "border-cv-warning/50",
   unsupported: "border-cv-blocker/50",
-  undetermined: "border-cv-text-muted/50",
+  unknown: "border-cv-text-muted/50",
 };
 
-/* `undetermined` sits between `partial` and `matched`: it is not evidence of a
+/* `unknown` sits between `partial` and `matched`: it is not evidence of a
    shortfall the way `unsupported`/`partial` are, but it is also not a settled
    `matched`, so a reader still sees it before the requirements that are actually
    covered. */
 const coveragePriority: Record<RequirementCoverage, number> = {
   unsupported: 0,
   partial: 1,
-  undetermined: 2,
+  unknown: 2,
   matched: 3,
 };
 
@@ -33,7 +41,7 @@ const orderedRequirements = (requirements: Requirement[]): Requirement[] =>
   // oxlint-disable-next-line unicorn/no-array-sort
   [...requirements].sort(
     (left, right) =>
-      Number(right.mandatory) - Number(left.mandatory) ||
+      Number(right.importance === "mandatory") - Number(left.importance === "mandatory") ||
       coveragePriority[left.coverage] - coveragePriority[right.coverage],
   );
 
@@ -49,10 +57,10 @@ export const RequirementCoverageSummary = ({
       result[requirement.coverage] += 1;
       return result;
     },
-    { matched: 0, partial: 0, unsupported: 0, undetermined: 0 } satisfies Record<RequirementCoverage, number>,
+    { matched: 0, partial: 0, unsupported: 0, unknown: 0 } satisfies Record<RequirementCoverage, number>,
   );
   const uncoveredMandatory = requirements.filter(
-    (requirement) => requirement.mandatory && requirement.coverage !== "matched",
+    (requirement) => requirement.importance === "mandatory" && requirement.coverage !== "matched",
   ).length;
 
   return (
@@ -61,7 +69,7 @@ export const RequirementCoverageSummary = ({
         <StatusBadge tone="success">מכוסות: {counts.matched}</StatusBadge>
         <StatusBadge tone="warning">חלקיות: {counts.partial}</StatusBadge>
         <StatusBadge tone="blocker">לא מכוסות: {counts.unsupported}</StatusBadge>
-        {counts.undetermined === 0 ? null : <StatusBadge tone="neutral">לא הוכרעו: {counts.undetermined}</StatusBadge>}
+        {counts.unknown === 0 ? null : <StatusBadge tone="neutral">לא הוכרעו: {counts.unknown}</StatusBadge>}
         {unreadableRequirementCount === 0 ? null : (
           <StatusBadge tone="warning">לא ניתנות להצגה: {unreadableRequirementCount}</StatusBadge>
         )}
@@ -157,7 +165,7 @@ export const RequirementCoverageSection = ({
                 {coverageLabels[requirement.coverage]}
               </StatusBadge>
               <span className="text-support text-cv-text-muted">
-                {requirement.mandatory ? "דרישת חובה" : "דרישה מועדפת"}
+                {importanceLabels[requirement.importance]}
               </span>
             </div>
 
@@ -176,16 +184,6 @@ export const RequirementCoverageSection = ({
               </p>
             )}
 
-            {requirement.missingComponents.length === 0 ? null : (
-              <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                מה חסר:{" "}
-                {requirement.missingComponents
-                  .map((component) =>
-                    component.demanded === null ? component.label : `${component.label} (נדרש: ${component.demanded})`,
-                  )
-                  .join(" · ")}
-              </p>
-            )}
           </li>
         ))}
       </ul>

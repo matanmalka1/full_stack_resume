@@ -16,7 +16,6 @@ const destinations: Record<string, (applicationId: string) => string> = {
      screen, not a summary beside one. It carried a second URL ending in `/preparation`
      for exactly these links; one address answers them now. */
   analyze: routePaths.application,
-  apply_analysis_decisions: routePaths.application,
   /* `MatchingConfigurationEditor` is a control inside `PreparationView`, which this screen
      renders, so the action resolves to the screen already holding it. */
   edit_matching_configuration: routePaths.application,
