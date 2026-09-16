@@ -118,7 +118,6 @@ IssueCode = Literal[
     "coverage_without_evidence",
     "duplicate_requirement",
     "requirement_unusable",
-    "analysis_may_be_incomplete",
 ]
 
 

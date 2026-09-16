@@ -33,6 +33,7 @@ from .views_prep import (
 from .views_shared import ApplicationListItemView, ApplicationStateView, ApplicationView
 from .views_tracking import RecruitmentTimelineItemView
 
+
 def _fit_projection(analysis: JobAnalysis | None) -> dict[str, Any]:
     """Fit as the requirements make it, for a record that no longer stores it."""
     if analysis is None:

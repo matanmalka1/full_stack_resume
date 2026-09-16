@@ -33,7 +33,6 @@ from ..profiles import ProfileStore, classification_mismatch
 from .requirements.concepts import RequirementConceptStore
 from .requirements.evidence import boundary_facts_for_quote
 from .requirements.identity import normalize_span, requirement_id
-from .requirements.segmentation import requirement_lines
 
 #: Three versions, deliberately separate, because they answer three questions
 #: that used to be one string answering all of them at once.
@@ -307,13 +306,6 @@ def normalize_analysis_proposal(
         issues += requirement_issues
         if normalized is not None:
             requirements.append(normalized)
-
-    # A statement count is a hint, never a verdict. The segmenter reads bullets
-    # and headings with patterns; it is in no position to tell a model that read
-    # the language that it missed a requirement, so a shortfall is disclosed and
-    # nothing more.
-    if len(requirement_lines(source_text, concepts)) > len(requirements):
-        issues.append(AnalysisIssue(code="analysis_may_be_incomplete"))
 
     verified = sum(
         1
