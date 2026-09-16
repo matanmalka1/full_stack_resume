@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 
-import { Check } from "lucide-react";
+import { Check, ChevronLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { cx } from "@/ui/cx";
@@ -23,7 +23,8 @@ interface WorkflowStepsRailProps {
    set to scroll, what it actually did was cut the flow's last steps off the frame at the
    widths this screen is read at. Nothing here is positioned outside the box, so the corners
    survive without it. */
-const railClasses = "w-full min-w-0";
+const railClasses =
+  "w-full min-w-0 rounded-control border border-cv-border bg-cv-surface px-3 py-4 shadow-surface sm:px-4";
 
 const stepMarkClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-success/25 bg-cv-success-soft text-cv-success",
@@ -59,8 +60,8 @@ const StepMark = ({ index, state }: { index: number; state: WorkflowStepState })
 /* One step: a mark and its label, the whole rail's only content. The state used to carry
    its own caption underneath ("הושלם" / "בתהליך" / "בהמשך") - a second line that made a
    navigational rail read as a content section three rows tall. It was never the only
-   place that information lived: a `Link`'s own accessible name already says "חזרה" for a
-   completed step and "מעבר" for one still ahead, and `aria-current="step"` already marks
+   place that information lived: a `Link`'s own accessible name already says "חזרה" or
+   "מעבר" from its position relative to the open screen, and `aria-current="step"` marks
    the current one, so the caption was sighted users' only source for a fact assistive
    tech already had another way to reach. What remains carries the same three states in
    the mark's own shape (a check, a filled circle, an outline) and in the label's weight
@@ -72,15 +73,19 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
       /* Tightens rather than truncates: below the wide breakpoints the padding and the gap
          between mark and label give up their room first, so the words themselves never
          have to. */
-      "relative flex shrink-0 items-center gap-3 py-1 text-heading-sm transition-colors duration-200",
+      "relative flex min-w-0 flex-1 items-center gap-3 px-2 py-2 text-heading-sm transition-colors duration-200",
       stepLabelClasses[step.state],
       step.state === "current" && "font-bold",
-      step.here === true && "rounded-control bg-cv-accent-soft",
-      step.href !== undefined && "group-hover:bg-cv-surface-muted",
     )}
   >
     <StepMark index={index} state={step.state} />
-    <span className="whitespace-nowrap">{step.label}</span>
+    <span className="min-w-0 flex-1 whitespace-nowrap">{step.label}</span>
+    {step.href === undefined ? null : (
+      <ChevronLeft
+        aria-hidden="true"
+        className="size-icon-md shrink-0 text-cv-text-muted transition-transform duration-200 group-hover:-translate-x-0.5 group-hover:text-cv-accent"
+      />
+    )}
   </span>
 );
 
@@ -93,6 +98,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
   const position = current === undefined ? null : steps.indexOf(current) + 1;
   const completed = current === undefined && steps.length > 0 && steps.every((step) => step.state === "complete");
   const here = steps.find((step) => step.here === true);
+  const hereIndex = steps.findIndex((step) => step.here === true);
   const elsewhere = here !== undefined && here !== current;
 
   const spoken = completed
@@ -123,7 +129,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
       : `שלב ${position} מתוך ${steps.length}`;
 
   const content = (
-    <div className="flex flex-col gap-4 py-1">
+    <div className="flex flex-col gap-4">
       {/* Decorative: the nav's own `aria-label` already states the label and the
           position in words, so this repeats it for sighted readers only. */}
       <div aria-hidden="true" className="flex shrink-0 flex-wrap items-baseline gap-x-2">
@@ -148,7 +154,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
           split window - a second line is better than a row running off the frame, so the
           row may shrink and wrap again. */}
       <div className="min-w-0">
-        <div className="flex flex-col items-start">
+        <div className="flex flex-col">
           {steps.map((step, index) => {
             const body = <StepBody index={index} step={step} />;
             const next = steps[index + 1];
@@ -156,16 +162,30 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
             return (
               <Fragment key={step.label}>
                 {step.href === undefined ? (
-                  <div aria-hidden="true">{body}</div>
+                  <div
+                    aria-hidden="true"
+                    className={cx(
+                      "flex w-full rounded-control border border-transparent",
+                      step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
+                    )}
+                  >
+                    {body}
+                  </div>
                 ) : (
                   <Link
                     aria-current={step.state === "current" ? "step" : undefined}
                     aria-label={
                       completed && index === steps.length - 1
                         ? `פתיחת שלב ${step.label}`
-                        : `${step.state === "complete" ? "חזרה" : "מעבר"} לשלב ${step.label}`
+                        : `${hereIndex !== -1 && index < hereIndex ? "חזרה" : "מעבר"} לשלב ${step.label}`
                     }
-                    className="group flex min-h-11 items-center"
+                    className={cx(
+                      "group flex min-h-12 w-full items-center rounded-control border border-transparent",
+                      "transition-[background-color,border-color,box-shadow] duration-200",
+                      "hover:border-cv-border hover:bg-cv-surface-muted",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cv-accent focus-visible:ring-offset-2 focus-visible:ring-offset-cv-surface",
+                      step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
+                    )}
                     to={step.href}
                   >
                     {body}
@@ -175,7 +195,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                 {next === undefined ? null : (
                   <span
                     aria-hidden="true"
-                    className={cx("ms-[0.95rem] h-7 w-px shrink-0", connectorClasses[next.state])}
+                    className={cx("ms-[1.45rem] h-5 w-px shrink-0", connectorClasses[next.state])}
                   />
                 )}
               </Fragment>

@@ -57,8 +57,11 @@ const stepsFor = (
 
     return Object.assign(
       { label: workflowStageLabels[entry], state },
-      /* Never forward. A future stage has no record to open. */
-      state !== "upcoming" && destinations[entry] !== undefined ? { href: destinations[entry] } : {},
+      /* A destination exists only when the corresponding record exists. The projection
+         may still draw that stage as upcoming relative to the screen being revisited, but
+         hiding its destination would make an existing draft reachable from the board and
+         its direct URL while inexplicably unreachable from this workflow landmark. */
+      destinations[entry] !== undefined ? { href: destinations[entry] } : {},
     );
   });
 };

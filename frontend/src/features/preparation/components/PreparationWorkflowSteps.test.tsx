@@ -43,6 +43,40 @@ describe("PreparationWorkflowSteps", () => {
     expect(railLabel()).toContain("שלב 2 מתוך 4");
   });
 
+  it("links an existing draft while an earlier stage is being revisited", () => {
+    render(
+      <MemoryRouter initialEntries={["/applications/app-1"]}>
+        <PreparationWorkflowSteps
+          applicationId="app-1"
+          detail={detail({ active_working_draft_id: "draft-1", preparation_state: "draft_in_progress" })}
+          stage="analysis"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "מעבר לשלב טיוטה ואימות" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/draft",
+    );
+  });
+
+  it("names navigation by its direction from the open screen rather than completion state", () => {
+    render(
+      <MemoryRouter initialEntries={["/applications/app-1"]}>
+        <PreparationWorkflowSteps
+          applicationId="app-1"
+          detail={detail({ latest_ready_revision_id: "revision-1", preparation_state: "ready" })}
+          stage="analysis"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "מעבר לשלב מוכן למסירה" })).toHaveAttribute(
+      "href",
+      "/revisions/revision-1",
+    );
+  });
+
   it("marks the ready stage complete rather than current once its own screen is open", () => {
     render(
       <MemoryRouter>

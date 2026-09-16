@@ -107,6 +107,26 @@ afterEach(() => {
 });
 
 describe("ApplicationPage", () => {
+  it("shows the route not-found frame without presenting a missing Application as a workflow step", async () => {
+    renderPage(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            type: "about:blank#not-found",
+            title: "Not found",
+            status: 404,
+            code: "APPLICATION_NOT_FOUND",
+            detail: "unknown application: app-1",
+          }),
+          { status: 404, headers: { "Content-Type": "application/problem+json" } },
+        ),
+      ),
+    );
+
+    expect(await screen.findByRole("heading", { name: "העמוד לא נמצא" })).toBeInTheDocument();
+    expect(screen.queryByText("שלבי הכנת קורות החיים")).not.toBeInTheDocument();
+  });
+
   /* One navigation landmark and one way out. The breadcrumb trail that used to draw
      board › Application above the spine is gone: it claimed a record hierarchy over a
      linear flow, and its only destination the spine did not already offer was the board. */

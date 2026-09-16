@@ -105,6 +105,7 @@ export const ApplicationPage = () => {
     <WizardStepShell
       applicationId={applicationId}
       detail={detail}
+      queryError={query.error}
       /* Held at one line's width while the projection is in flight. Absent, the masthead
          drew the heading a line higher and dropped it when the name arrived - the page's
          own title moving under the reader as the first thing it did. */
