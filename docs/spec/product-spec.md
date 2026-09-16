@@ -131,7 +131,9 @@ The product includes:
   WorkingDraft, immutable ApprovedRevisions, immutable artifacts, and append-only
   submissions and audit history.
 - Duplicate warnings based on identical URL, normalized-text hash, and a light
-  company/title heuristic. Duplicates are never blocked.
+  company/title heuristic. A duplicate never refuses creation permanently: the first
+  attempt is refused (412) until the caller resends with explicit acknowledgement, then
+  creation proceeds.
 - Deterministic action policy with analysis issues, Fit, and gaps presented as diagnostics.
 - Track, Profile, Emphasis, language, requirement coverage, fact selection, and pending
   fact creation through the preparation flow.
@@ -287,8 +289,11 @@ Editing job text creates a new immutable JobSnapshot. The old snapshot and every
 analysis/revision linked to it remain historically valid for their own context.
 
 Duplicate detection runs before creation for UX and again inside the create command.
-The user may open an existing Application or explicitly create another. Duplicate
-results are warnings, never blockers.
+The user may open an existing Application or explicitly create another. A duplicate is
+never a dead end, but the create command does refuse the first attempt: when matches
+exist and the caller has not set `acknowledged_duplicates`, `create_application` raises
+`DuplicateAcknowledgementRequired` (412) instead of creating the Application. Creation
+proceeds once the caller resends the same request with `acknowledged_duplicates=true`.
 
 ## 9. Analysis, selection, and review
 
