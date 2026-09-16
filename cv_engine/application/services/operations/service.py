@@ -618,10 +618,14 @@ class OperationService(ServiceBase[OperationRepository]):
         self.load_active_application(original.application_id)
         if not is_terminal_operation(original.status):
             raise StateConflict("only a terminal Operation can be retried")
-        if original.failure_code is OperationFailureCode.MISSING_FACT_RENDERING:
+        failure_code = original.failure_code
+        if failure_code in {
+            OperationFailureCode.MISSING_FACT_RENDERING,
+            OperationFailureCode.SOURCE_CHANGED,
+        }:
             raise StateConflict(
-                "an Operation with a missing fact rendering cannot be retried against "
-                "the same frozen sources"
+                f"an Operation that failed with {failure_code.value} cannot be retried "
+                "against the same frozen sources"
             )
         request = CreateOperation(
             application_id=original.application_id,

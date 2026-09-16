@@ -111,6 +111,14 @@ def test_operation_actions_are_derived_by_the_lifecycle() -> None:
         )
         == ()
     )
+    assert (
+        available_operation_actions(
+            OperationStatus.FAILED,
+            None,
+            OperationFailureCode.SOURCE_CHANGED,
+        )
+        == ()
+    )
 
 
 def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> None:

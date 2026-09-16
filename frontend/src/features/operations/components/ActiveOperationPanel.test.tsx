@@ -160,4 +160,19 @@ describe("ActiveOperationPanel progress", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("יש להשלים ניסוח לעובדה בשפת היעד");
     expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
   });
+
+  it("directs a source-changed failure to a fresh action without offering retry", () => {
+    renderPanel(
+      operation({
+        available_actions: [],
+        failure_code: "SOURCE_CHANGED",
+        is_terminal: true,
+        phase: "completed",
+        status: "failed",
+      }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("יש ליצור פעולה חדשה");
+    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
+  });
 });

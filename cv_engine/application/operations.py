@@ -58,10 +58,10 @@ def available_operation_actions(
     """
     if status in {OperationStatus.QUEUED, OperationStatus.RUNNING}:
         return (OperationAction.CANCEL,) if cancellation_requested_at is None else ()
-    if (
-        status is OperationStatus.FAILED
-        and failure_code is OperationFailureCode.MISSING_FACT_RENDERING
-    ):
+    if status is OperationStatus.FAILED and failure_code in {
+        OperationFailureCode.MISSING_FACT_RENDERING,
+        OperationFailureCode.SOURCE_CHANGED,
+    }:
         return ()
     if status in TERMINAL_OPERATION_STATUSES:
         return (OperationAction.RETRY,)

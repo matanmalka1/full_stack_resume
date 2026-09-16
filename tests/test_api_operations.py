@@ -13,6 +13,7 @@ from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import AnalyzeCommand, IngestCommand
+from cv_engine.application.operations import OperationFailureCode
 from cv_engine.runtime.composition import build_api_services
 
 
@@ -122,3 +123,26 @@ def test_retrying_work_that_is_not_terminal_is_a_conflict(services) -> None:
     assert refused.status_code == 409
     assert refused.json()["code"] == "STATE_CONFLICT"
     assert refused.json()["type"] == "about:blank#state_conflict"
+
+
+def test_source_changed_operation_withholds_and_refuses_retry(services) -> None:
+    operation = _queued_analysis(services, "Changed Source Co")
+    services.repository.claim_operation(operation.id, runner_id="runner")
+    services.repository.fail_operation(
+        operation.id,
+        OperationFailureCode.SOURCE_CHANGED,
+        "Operation sources changed.",
+        runner_id="runner",
+    )
+
+    with TestClient(create_app(build_api_services(services))) as api:
+        failed = api.get(f"{API_PREFIX}/operations/{operation.id}")
+        refused = api.post(
+            f"{API_PREFIX}/operations/{operation.id}/retry",
+            headers=MUTATION_HEADERS,
+        )
+
+    assert failed.status_code == 200
+    assert failed.json()["available_actions"] == []
+    assert refused.status_code == 409
+    assert refused.json()["code"] == "STATE_CONFLICT"
