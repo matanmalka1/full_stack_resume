@@ -319,7 +319,10 @@ describe("NewApplicationPage", () => {
       },
       {
         path: ANALYSES_PATH,
-        body: { job_snapshot_id: "snap-1" },
+        /* Analysis has one lane and it is the AI one, so the command names its provider
+           unconditionally rather than omitting it for a deterministic run that no longer
+           exists. */
+        body: { job_snapshot_id: "snap-1", provider: "openai" },
       },
     ]);
   });

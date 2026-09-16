@@ -21,10 +21,3 @@ export const formatDate = (value: string): string => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(parsed.getTime()) ? value : dateFormatter.format(parsed);
 };
-
-export const dateTimesMatch = (left: string, right: string): boolean => {
-  const leftTime = new Date(left).getTime();
-  const rightTime = new Date(right).getTime();
-
-  return Number.isNaN(leftTime) || Number.isNaN(rightTime) ? left === right : leftTime === rightTime;
-};

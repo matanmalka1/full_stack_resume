@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..application.ai_configuration import DEFAULT_AI_MODEL
+
 CONFIG_NAME = "cv.config.json"
 
 
@@ -71,7 +73,13 @@ SETTINGS: dict[str, Setting] = {
             secret=True,
         ),
         Setting("provider", "CV_PROVIDER", default="openai"),
-        Setting("model", "CV_MODEL", default="gpt-5.6"),
+        # Taken from the catalog rather than restated, because restating it is
+        # what went wrong before: this default was the `gpt-5.6` alias, which
+        # `normalize_ai_model` resolved to `gpt-5.6-sol` - twice the price of
+        # the model the catalog marks `recommended`. A composed application
+        # therefore ran on the most expensive model while the catalog said
+        # otherwise, and nothing surfaced the disagreement.
+        Setting("model", "CV_MODEL", default=DEFAULT_AI_MODEL),
         # Read through the config contract rather than from `os.environ` at the
         # point of use, so that one layer decides where a credential comes from
         # and one flag decides how it is shown. Absent means no AI adapter is

@@ -27,5 +27,3 @@ export const useInWorkflow = (): boolean => {
 
   return intake !== null || preparation !== null || resume !== null || draft !== null || revision !== null;
 };
-
-export const workflowRoutePatterns = workflowPatterns;
