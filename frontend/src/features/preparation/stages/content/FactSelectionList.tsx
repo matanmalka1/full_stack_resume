@@ -106,9 +106,9 @@ export const FactSelectionList = ({
 }) => {
   const searchId = useId();
   const [query, setQuery] = useState("");
-  /* Collapsed state is per section and starts open: a reader arriving to check what the
-     CV will carry should see it, not a row of closed drawers. */
-  const [collapsed, setCollapsed] = useState<readonly string[]>([]);
+  /* Expanded state is per section and starts closed: a reader arriving sees the section
+     counts first and opens only the ones they want to inspect. */
+  const [expanded, setExpanded] = useState<readonly string[]>([]);
   const groups = factGroups(candidates, pinned, excluded, query);
   const totals = factTotals(candidates, pinned, excluded);
 
@@ -152,7 +152,7 @@ export const FactSelectionList = ({
       ) : (
         <div className="flex flex-col gap-3">
           {groups.map((group) => {
-            const open = !collapsed.includes(group.section);
+            const open = expanded.includes(group.section);
             const includable = includableFactIds(group, pinned, excluded);
             const panelId = `${searchId}-${group.section.replace(/\s+/g, "-")}`;
 
@@ -164,8 +164,8 @@ export const FactSelectionList = ({
                     aria-expanded={open}
                     className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-control text-start"
                     onClick={() =>
-                      setCollapsed((current) =>
-                        open ? [...current, group.section] : current.filter((section) => section !== group.section),
+                      setExpanded((current) =>
+                        open ? current.filter((section) => section !== group.section) : [...current, group.section],
                       )
                     }
                     type="button"
