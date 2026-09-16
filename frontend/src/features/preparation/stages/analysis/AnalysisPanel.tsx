@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 
 import type { Classification } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
-import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
 import { AnalysisHeader } from "./AnalysisHeader";
 import { ClassificationSummary } from "./ClassificationSummary";
@@ -59,21 +58,17 @@ export const AnalysisPanel = ({
 
       <IssuesSection issues={classification.issues} />
 
-      <section>
-        <Disclosure summary="פרטי הניתוח">
-          <div className="flex flex-col divide-y divide-cv-border [&>section]:py-4 [&>section:first-child]:pt-1">
-            <RationaleSection rationale={classification.summary} />
-            {/* The full requirement picture, including matched requirements. */}
-            {classification.requirements.length > 0 || classification.unreadableRequirementCount > 0 ? (
-              <RequirementCoverageSection
-                requirements={classification.requirements}
-                unreadableRequirementCount={classification.unreadableRequirementCount}
-              />
-            ) : null}
-            <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
-          </div>
-        </Disclosure>
-      </section>
+      <RationaleSection rationale={classification.summary} />
+
+      {/* The full requirement picture, including matched requirements. */}
+      {classification.requirements.length > 0 || classification.unreadableRequirementCount > 0 ? (
+        <RequirementCoverageSection
+          requirements={classification.requirements}
+          unreadableRequirementCount={classification.unreadableRequirementCount}
+        />
+      ) : null}
+
+      <RequirementsSection items={classification.keywords} title="מילות מפתח מהמשרה" />
 
       {footer === undefined ? null : <section>{footer}</section>}
     </div>
