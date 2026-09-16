@@ -103,9 +103,9 @@ ValidationRun passed, so approving requires obtaining that run first: nothing ca
 approve content that nothing vouched for. Rendering runs the same content, claim, PDF,
 ATS, link, direction, filename, and visual gates every time.
 
-Low fit and material classification ambiguity stop by default. Explicit Track, Profile,
-and Emphasis overrides are recorded as decisions, as is accepting a low fit. Overrides
-never authorize fabricated facts.
+Low fit and requirement gaps are diagnostic information, not workflow blockers. Explicit
+Track, Profile, and Emphasis overrides are recorded as decisions. Overrides never
+authorize fabricated facts, and unsupported draft claims still block approval.
 
 Emphasis is a content decision, not a label. A Profile's `fact_ids` are the candidate
 pool a section may draw from, and `config/emphasis.json` weights the canonical fact tags
@@ -203,7 +203,7 @@ frozen onto each queued AI Operation:
 export OPENAI_API_KEY='...'
 ```
 
-Provider output is Pydantic-validated and deterministic hard gaps remain authoritative.
+Provider output is Pydantic-validated and deterministic hard gaps remain visible.
 The adapter uses strict Structured Outputs through the Responses API. Each provider
 artifact preserves token usage, the dated pricing snapshot, and its calculated USD
 cost; the Operation panel shows the selected model, effort, and final cost.

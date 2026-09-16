@@ -88,11 +88,11 @@ rendering, integrity, export, and recruitment workflows whose prerequisites alre
 exist. Provider failure never triggers a silent rules-based analysis. The UI presents
 provider configuration or retry instead of a fabricated semantic result.
 
-A user decision remains required for a material professional choice, a hard requirement
-gap, low Fit, incomplete analysis, or a manual correction of requirement meaning or
-coverage. Such a correction creates a new immutable JobAnalysis, re-derives dependent
-Fit/gaps and selection state, and never rewrites or silently inherits incompatible
-historical decisions.
+A user decision remains required for a material professional choice such as changing the
+matching classification or selecting facts. Hard gaps, low Fit and incomplete analysis
+are visible diagnostics, not acknowledgement gates. A matching correction creates a new
+immutable JobAnalysis or SelectionPlan as appropriate, re-derives dependent Fit/gaps and
+selection state, and never rewrites incompatible historical records.
 
 ### Current product contract
 
@@ -132,9 +132,9 @@ The product includes:
   submissions and audit history.
 - Duplicate warnings based on identical URL, normalized-text hash, and a light
   company/title heuristic. Duplicates are never blocked.
-- Exception-based analysis review and deterministic action policy.
-- Track, Profile, Emphasis, language, requirement interpretation, gap classification,
-  fact selection, accepted gaps, and pending fact creation through the review flow.
+- Deterministic action policy with analysis issues, Fit, and gaps presented as diagnostics.
+- Track, Profile, Emphasis, language, requirement coverage, fact selection, and pending
+  fact creation through the preparation flow.
 - A structured section/bullet editor, fact inclusion/exclusion, deterministic changes,
   targeted AI regeneration, free-text edits, optimistic autosave, and isolated HTML
   preview.
@@ -292,9 +292,10 @@ results are warnings, never blockers.
 
 ## 9. Analysis, selection, and review
 
-JobAnalysis owns requirement interpretation, classification, fit, gaps, and ambiguity.
-SelectionPlan owns selected, excluded, and pinned facts, content emphasis overrides,
-candidate context, and explicit accepted gaps. Both are immutable and versioned.
+JobAnalysis owns classification, normalized requirements, analysis issues, and source
+coverage. Fit and gaps are pure projections of its requirements. SelectionPlan owns
+selected, excluded, and pinned facts, content emphasis overrides, and candidate context.
+Both are immutable and versioned.
 
 Every successful `analyze_job` commit creates both the immutable JobAnalysis and one
 initial deterministic SelectionPlan for that exact analysis. The plan is produced by
@@ -307,16 +308,11 @@ A change to the meaning or classification of a requirement creates a JobAnalysis
 change only to which facts will address an already understood requirement creates a
 SelectionPlan.
 
-Analysis review is exception-based. When no material decision is required and the
-global auto-generation setting has been turned on -- it is off by default -- the
+Fit, analysis issues, and gaps are displayed but never require acknowledgement. Review is
+reserved for active-context integrity problems such as unresolved fact selection or a
+pending/deleted fact on which the active plan or claim depends. When those are absent and
+the global auto-generation setting has been turned on -- it is off by default -- the
 workflow may continue to drafting.
-Review is required only for active-context reasons such as material ambiguity, low fit,
-a hard gap requiring an explicit decision, unresolved fact selection, or a pending fact
-on which the active plan or claim depends.
-
-Accepted gaps live in SelectionPlan. Acceptance records gap ID, analysis ID, actor, and
-timestamp, with an optional reason. It means only that the user knowingly proceeds; it
-never changes a gap to satisfied or authorizes an unsupported claim.
 
 Analysis Review is a local form. Applying its decisions creates one new immutable
 version rather than one version per toggle.

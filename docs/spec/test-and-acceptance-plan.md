@@ -158,8 +158,8 @@ suite:
 
 Cross-cutting variants, covered through the application layer and the API:
 
-- material ambiguity -> NeedsReview
-- low fit/hard gap -> explicit decision
+- malformed provider payload -> failed Operation with preserved evidence
+- low fit/hard gap -> visible diagnostics without a review stop
 - no-review auto-generation
 - unsupported free-text claim -> save succeeds, approval blocks
 - stale snapshot/analysis/plan/draft/validation
@@ -188,13 +188,12 @@ Assert state/action projection after every step.
 Assert Analyze atomically returns an initial deterministic SelectionPlan ID and the
 no-review path passes that explicit ID to Draft without another plan-creation request.
 
-### 5.2 Review path
+### 5.2 Low-fit and hard-gap path
 
 ```text
 Create
--> Analyze -> NeedsReview
--> Apply Decisions once
--> immutable Analysis/SelectionPlan created
+-> Analyze -> immutable Analysis/SelectionPlan created
+-> Fit and gaps remain visible
 -> Draft -> Validate -> Approve -> Render -> Ready
 ```
 
@@ -305,10 +304,10 @@ Extend the nearest existing tests for these material distinctions:
   `unmapped_statements`, broad source spans, and a single apparently complete provider
   response cannot certify their own completeness. Omission, duplication, and conflicting
   granularity are covered explicitly.
-- Proceeding with incomplete analysis resolves only that reason; a separate hard gap
-  and its low Fit survive until separately handled.
-- Interpretation changes change requirement identity and invalidate inherited gap
-  acceptances; historical IDs, gaps, records and missing metadata remain unchanged.
+- Analysis issues, hard gaps, and low Fit survive as visible diagnostics without an
+  acknowledgement command.
+- Requirement identity remains stable across prompt versions; historical records are
+  never reconstructed with a newer identity algorithm.
 - Classification uncertainty alone does not force a professional choice;
   factual, incomplete-analysis and integrity blockers remain enforced.
 - With injected instructions, actual requirements retain their meaning and no injected

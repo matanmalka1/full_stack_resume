@@ -159,33 +159,23 @@ An unrelated Knowledge change does not stale a draft. Exact dependency hashes de
 Review reasons are blockers that require an explicit user decision. Initial codes are:
 
 ```text
-ANALYSIS_INCOMPLETE
-LOW_FIT_REQUIRES_ACCEPTANCE
-HARD_GAP_REQUIRES_DECISION
 FACT_SELECTION_UNRESOLVED
 PENDING_FACT_REQUIRES_RESOLUTION
 FACT_DELETED_REQUIRES_RESOLUTION
 KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
 
-`ANALYSIS_INCOMPLETE` reports an approval reason that no classification decision
-answers: the independently derived structural denominator found requirement-bearing
-source units the Proposal omitted, a source unit could not be interpreted safely, or
-numeric/support/boundary applicability remained unresolved after the independent gates.
-The provider cannot clear this reason through an empty self-reported omissions list or
-an aggregate confidence value. Naming the Track or Profile resolves none of it. A
-corrected, newly validated analysis may remove the reason; otherwise proceeding requires
-the explicit `analysis` override, which answers nothing else. Missing evidence is not
-evidence of missing experience.
+Analysis issues, low Fit and hard gaps are diagnostics, not review reasons. They remain
+visible to the user but do not require acknowledgement and do not block drafting,
+approval, rendering or Ready. Missing evidence is not evidence of missing experience;
+an uncertain requirement therefore remains `unknown` rather than becoming unsupported.
 
-A review reason advertises an action only when that action can actually close it. Which
-overrides answer which reason, and which review reason each is reported as, are one table
-in the domain (`APPROVAL_REASONS`); the table is total, so a reason that resolves to
-nothing states that deliberately and an unregistered reason is a programming error the
-gates catch rather than a blocker reported under the wrong name.
+A review reason advertises an action only when that action can actually close it. The
+projection derives those actions from the underlying fact or integrity condition; it
+does not maintain a second catalogue of analysis acknowledgements.
 
 `PENDING_FACT_REQUIRES_RESOLUTION` applies only when the active SelectionPlan, active
-claim, requested selection, or active gap resolution depends on that fact. Pending
+claim, or requested selection depends on that fact. Pending
 facts elsewhere in Knowledge do not affect unrelated Applications.
 
 `FACT_DELETED_REQUIRES_RESOLUTION` applies only when the active SelectionPlan, active
@@ -260,10 +250,9 @@ The complete projection is computed in one read transaction. `recommended_action
 deterministic and nullable. Action identifiers are stable application commands, not UI
 labels.
 
-`apply_analysis_decisions` means resolving an advertised review reason;
-`edit_matching_configuration` means voluntarily editing an otherwise settled matching
-context. They currently commit through the same backend command but remain separate
-action-policy intents. The voluntary action is available when the Application is not
+`edit_matching_configuration` means voluntarily editing the matching context. It is
+committed through the `apply_analysis_decisions` backend endpoint; the latter is an
+implementation name, not a separate advertised review action. The voluntary action is available when the Application is not
 deleted, an active JobAnalysis exists, and no queued/running Operation can replace the
 active JobAnalysis or SelectionPlan.
 
@@ -452,8 +441,8 @@ material completeness, support, or boundary applicability remains explicit and r
 Legacy concept/rule gaps are not unioned into or allowed to veto this result. Every
 successful activation atomically
 creates an immutable JobAnalysis and its initial immutable deterministic SelectionPlan,
-with the plan's frozen candidate/policy context. It returns both IDs and NeedsReview as
-a successful outcome when applicable. This guarantees that the no-review path can call
+with the plan's frozen candidate/policy context. It returns both IDs and the projected
+state. This guarantees that a path without an actual fact or integrity blocker can call
 `create_draft` with explicit source IDs.
 
 Preconditions:
@@ -473,13 +462,13 @@ Track/Profile/language classification changes, it creates one new immutable JobA
 together with that analysis's initial deterministic SelectionPlan. An Emphasis decision
 changes selection and presentation policy, not the meaning of the analysis; when it is
 the only configuration change it is recorded on one replacement SelectionPlan. Fact
-selection and accepted-gap decisions likewise create only a replacement SelectionPlan.
+Fact-selection decisions likewise create only a replacement SelectionPlan.
 When an Emphasis decision accompanies a change that already requires a new analysis, the
 new analysis and its initial plan carry that decision in the same atomic write. No branch
 mutates the original analysis or plan.
 
-The command serves both a required review decision and a voluntary matching-configuration
-edit. A review reason is required only for the former. Every request names the immutable
+The command serves fact-resolution decisions and voluntary matching-configuration edits.
+Every request names the immutable
 analysis it addresses and separately carries `expected_analysis_id`; when an active
 SelectionPlan exists it also carries `expected_selection_plan_id`. Under the Application
 write lock, both expected IDs must still equal the active context. A mismatch returns a
@@ -496,48 +485,26 @@ through the ordinary projection rules. ApprovedRevision and Ready qualification 
 rewritten; when their Analysis is no longer active they remain immutable historical
 milestones and the active-context warning rules apply.
 
-A gap acceptance may accompany a classification decision, and both land in that one
-write. New extraction contracts key requirement identity on the snapshot, source span,
-extractor version and normalized interpretation, including obligation, composition,
-members, negation, kind and threshold. A classification-only change need not change
-that identity; an interpretation change does. Submitted gap acceptances are checked
-against the resulting analysis. A changed interpretation cannot inherit the prior
-requirement's acceptance, and an absent hard-gap ID refuses the whole submission.
-Historical requirement IDs and decisions are never rewritten. A *fact* overlay may not
-accompany one: pinned and excluded facts are decided against candidate accounting the
-new analysis has not produced yet, so they stay a second command.
+A *fact* overlay may not accompany a classification change: pinned and excluded facts
+are decided against candidate accounting the new analysis has not produced yet, so they
+stay a second command. Historical analyses, plans and decisions are never rewritten.
 
-It also carries `accept_incomplete_analysis`, the explicit decision to proceed when
-requirements were not understood. The UI identifies the unresolved requirements and the
-limits of analysis. It records the `analysis` override and resolves `ANALYSIS_INCOMPLETE`
-alone: coverage remains undetermined, no gap is accepted, and no classification question
-is settled. It is offered only here and never on `analyze`, so a client cannot pre-accept
-a posting nobody has looked at, and a genuinely new analysis - another snapshot, or
-changed Knowledge - starts without it and blocks again.
-
-Fit remains `unknown` when extraction itself failed (nothing was understood, so nothing
-can be scored) unless an independently established hard gap requires `low` - a known
-poor Fit is knowledge a failed assessment must not erase; that gap requires its own
-acceptance. An individual mandatory requirement whose coverage could not be determined,
-with extraction otherwise successful, no longer forces the whole classification to
-`unknown` (revised; see `fit_score` below) - it still requires the same
-`accept_incomplete_analysis` decision through `coverage-undetermined`/`ANALYSIS_INCOMPLETE`,
-but the *Fit* it reports is `fit_score`'s own threshold, which already prices the
-undetermined requirement in at zero credit rather than blanking the verdict.
+Fit remains `unknown` when nothing can be scored. An individual requirement whose
+coverage is `unknown` receives zero credit without becoming an approval blocker.
 
 `fit_score` is the canonical numeric Fit measure `fit` is read off:
 a weighted fraction of requirement coverage (mandatory requirements weighted double),
-where `undetermined` counts at zero credit rather than being excluded - an incompletely
+where `unknown` counts at zero credit rather than being excluded - an incompletely
 assessed posting must not outscore a fully assessed one. `fit` (`high`/`medium`/`low`)
 is derived from `fit_score` against fixed thresholds, with any hard gap still forcing
-`low` outright regardless of the score. `fit_score` is `null` only when nothing at all
-could be scored (extraction failed, or the analysis predates this field).
+`low` outright regardless of the score. This remains diagnostic. `fit_score` is `null`
+only when nothing at all could be scored.
 
 ### `create_selection_plan`
 
 The deterministic form is synchronous and returns the immutable plan directly. It
 receives an explicit analysis ID, candidate context, selected/excluded/pinned facts,
-accepted gaps, an optional explicit Emphasis decision, and policy versions. It validates
+an optional explicit Emphasis decision, and policy versions. It validates
 Profile/Track/Emphasis and allowed-fact constraints, verifies under the Application lock
 that the named analysis is still active, then creates an immutable plan and frozen
 candidate context. The manifest distinguishes its effective `emphasis` from nullable

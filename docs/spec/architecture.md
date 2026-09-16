@@ -483,18 +483,16 @@ stated identity-algorithm version. The prompt version is recorded as provenance 
 deliberately not an identity input, so rewording a prompt does not turn unchanged
 requirements into new entities. Corrections create another immutable JobAnalysis under
 the same Application.
-New interpretation, attestation and understanding fields absent from old records remain
-NULL unless safely derivable. A version-aware reader preserves old recorded gaps and
-IDs rather than reconstructing history with the new extractor. JSONB contract changes
-require historical-read coverage even when no Alembic migration is needed.
+The current reader accepts analysis contract `3.0` only. It does not invent fields for
+older JSONB documents or reconstruct historical results with a newer extractor.
 
 Malformed thresholds are invalid provider output. A provider-supplied held value is not
 accepted as numeric evidence merely because it agrees arithmetically with the proposed
 coverage; it must be traceable to canonical structured evidence or remain unresolved.
 Optional provider tags or relations alone cannot establish boundary applicability or
 positive coverage. The closed concept vocabulary is not a semantic authority in this
-path. Unresolved completeness or applicability remains `undetermined` and may block
-through `ANALYSIS_INCOMPLETE`.
+path. Unresolved completeness or applicability remains `unknown` and is reported rather
+than turned into an approval blocker.
 
 Each task receives minimal allowed context. Provider text and fact IDs pass schema and
 semantic support validation. A valid ID paired with strengthened wording fails. Claims
