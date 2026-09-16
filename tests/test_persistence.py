@@ -95,6 +95,14 @@ def _save_analysis(repository, application_id: str, snapshot_id: str, analysis):
     )
 
 
+@pytest.mark.parametrize("document", [{"analysis_version": "2.0"}, {}])
+def test_non_3_analysis_documents_are_rejected_without_an_adapter(document) -> None:
+    with pytest.raises(UnknownRecord, match="only 3.0 can be read"):
+        SqlAlchemyPreparationRepository._analysis_record(
+            {"id": "historical-analysis", "structured_json": document}
+        )
+
+
 def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
     application_repo,
 ) -> None:

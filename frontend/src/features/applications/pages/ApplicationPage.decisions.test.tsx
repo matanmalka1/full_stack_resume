@@ -110,7 +110,7 @@ describe("voluntary matching configuration", () => {
     const before = detail();
     const after = detail({ active_selection_plan_id: "plan-2" });
     after.application = { ...before.application, emphasis: "new-business" };
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === APPLY_PATH) {
         applied = true;
         return Promise.resolve(

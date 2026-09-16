@@ -14,10 +14,7 @@ interface BannerContent {
   tone: Tone;
 }
 
-const bannerContent = (
-  classification: Classification | null,
-  supersededAnalysis: boolean,
-): BannerContent => {
+const bannerContent = (classification: Classification | null, supersededAnalysis: boolean): BannerContent => {
   if (supersededAnalysis) {
     return {
       body: "הניתוח האחרון שנשמר נעשה מול תצלום משרה קודם, ולכן אינו מוצג כאן. ניתוח חדש מול התצלום הפעיל הוא מה שיציג את הסיווג העדכני.",

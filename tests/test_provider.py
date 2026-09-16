@@ -161,6 +161,10 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
     """§6: strict schema generation, and task-specific Proposal parsing."""
     assert set(task_contracts.tasks) == set(TASK_OUTPUT_MODELS)
     assert {name for name, _context, _proposal in TASKS} == set(TASK_OUTPUT_MODELS)
+    assert task_contracts.prompt_version != "system-v4"
+    assert {"propose_requirement_extraction", "propose_job_analysis"}.isdisjoint(
+        task_contracts.tasks
+    )
     provider = fake_openai.provider(task_contracts)
     for task, context, proposal in TASKS:
         fake_openai.script(task, proposal)

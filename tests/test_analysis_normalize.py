@@ -9,9 +9,17 @@ about the candidate, and none of them discards the rest of the reading.
 
 from __future__ import annotations
 
+from cv_engine.domain.analysis import normalize as normalization
 from cv_engine.domain.analysis.normalize import normalize_analysis_proposal
 from cv_engine.domain.analysis.projection import gaps
-from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal, ProposedRequirement
+from cv_engine.domain.contracts.analysis import Coverage
+from cv_engine.domain.contracts.analysis_proposal import (
+    AnalysisProposal,
+    Importance,
+    ProposedRequirement,
+)
+from cv_engine.domain.contracts.knowledge import FactStatus
+from cv_engine.domain.facts import FactStore
 from cv_engine.util import sha256_text
 
 JOB = (
@@ -107,12 +115,59 @@ def test_a_fact_the_store_does_not_have_is_dropped_and_disclosed(
     requirement = analysis.requirements[0]
     assert requirement.supporting_fact_ids == []
     assert requirement.coverage == "unknown"
-    # The incompleteness hint fires too - this posting states three
-    # requirement lines and the proposal read one - and it is a hint, not a
-    # finding about the entry under test.
     assert {"unknown_fact", "coverage_without_evidence"} <= {
         issue.code for issue in analysis.issues
     }
+
+
+def test_a_noncanonical_fact_is_dropped_and_positive_coverage_becomes_unknown(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    facts = dict(fact_store.facts)
+    facts[CANONICAL_FACT] = facts[CANONICAL_FACT].model_copy(
+        update={"status": FactStatus.CONFIRMED}
+    )
+    noncanonical = FactStore(facts, dict(fact_store.source_versions))
+
+    analysis = _normalize(
+        _proposal(
+            ProposedRequirement(
+                text="- Experience working with Web-based systems - required.",
+                coverage="matched",
+                fact_ids=[CANONICAL_FACT],
+            )
+        ),
+        noncanonical,
+        profile_store,
+        requirement_concepts,
+    )
+
+    requirement = analysis.requirements[0]
+    assert requirement.supporting_fact_ids == []
+    assert requirement.coverage == "unknown"
+    assert {issue.code for issue in analysis.issues} == {
+        "fact_not_canonical",
+        "coverage_without_evidence",
+    }
+
+
+def test_one_exact_quote_has_verified_source_and_snapshot_offsets(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    quote = "- Comfortable presenting to customers."
+    analysis = _normalize(
+        _proposal(ProposedRequirement(text=quote)),
+        fact_store,
+        profile_store,
+        requirement_concepts,
+    )
+
+    source = analysis.requirements[0].source
+    assert source is not None
+    assert source.verified is True
+    assert source.match == "exact"
+    assert (source.start, source.end) == (JOB.index(quote), JOB.index(quote) + len(quote))
+    assert JOB[source.start : source.end] == quote
 
 
 def test_a_quote_the_posting_does_not_carry_is_kept_as_a_warning(
@@ -132,11 +187,12 @@ def test_a_quote_the_posting_does_not_carry_is_kept_as_a_warning(
     )
 
     assert len(analysis.requirements) == 1
-    assert analysis.requirements[0].source is not None
-    assert {issue.code for issue in analysis.issues} == {
-        "quote_not_found",
-        "analysis_may_be_incomplete",
-    }
+    source = analysis.requirements[0].source
+    assert source is not None
+    assert source.verified is False
+    assert source.match == "not_found"
+    assert source.start is None and source.end is None
+    assert {issue.code for issue in analysis.issues} == {"quote_not_found"}
 
 
 def test_a_quote_the_posting_repeats_stays_verified_without_offsets(
@@ -248,34 +304,6 @@ def test_the_record_carries_why_the_reading_was_narrowed(
     assert restored.requirements[0].source.match == "exact"
 
 
-def test_an_analysis_written_before_these_fields_still_reads(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    """Old records keep what they carried and gain nothing they did not.
-
-    `structured_json` is a JSONB document, so these fields arrived without a
-    migration - which is exactly the case where a reader can quietly invent
-    values for records that never had them.
-    """
-    analysis = _normalize(
-        _proposal(ProposedRequirement(text="- Comfortable presenting to customers.")),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-    )
-    document = analysis.model_dump(mode="json")
-    for field in ("issues", "source_coverage"):
-        document.pop(field)
-    for requirement in document["requirements"]:
-        requirement.pop("source")
-
-    historical = type(analysis).model_validate(document)
-
-    assert historical.issues == []
-    assert historical.source_coverage is None
-    assert historical.requirements[0].source is None
-
-
 def test_a_restated_requirement_keeps_the_stronger_demand(
     fact_store, profile_store, requirement_concepts
 ) -> None:
@@ -376,6 +404,55 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
     assert "duplicate_requirement" in {issue.code for issue in analysis.issues}
 
 
+def test_duplicate_merge_uses_the_full_importance_and_coverage_orders(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    quote = "- Comfortable presenting to customers."
+    importance_cases: list[tuple[Importance, Importance, Importance]] = [
+        ("unknown", "preferred", "preferred"),
+        ("preferred", "mandatory", "mandatory"),
+    ]
+    coverage_cases: list[tuple[Coverage, Coverage, Coverage]] = [
+        ("matched", "partial", "partial"),
+        ("partial", "unsupported", "unsupported"),
+        ("unsupported", "unknown", "unknown"),
+    ]
+
+    for first, second, expected in importance_cases:
+        analysis = _normalize(
+            _proposal(
+                ProposedRequirement(
+                    text=quote,
+                    importance=first,
+                    coverage="matched",
+                    fact_ids=[CANONICAL_FACT],
+                ),
+                ProposedRequirement(
+                    text=quote,
+                    importance=second,
+                    coverage="matched",
+                    fact_ids=[CANONICAL_FACT],
+                ),
+            ),
+            fact_store,
+            profile_store,
+            requirement_concepts,
+        )
+        assert analysis.requirements[0].importance == expected
+
+    for first, second, expected in coverage_cases:
+        analysis = _normalize(
+            _proposal(
+                ProposedRequirement(text=quote, coverage=first, fact_ids=[CANONICAL_FACT]),
+                ProposedRequirement(text=quote, coverage=second, fact_ids=[CANONICAL_FACT]),
+            ),
+            fact_store,
+            profile_store,
+            requirement_concepts,
+        )
+        assert analysis.requirements[0].coverage == expected
+
+
 def test_a_canonical_boundary_still_caps_a_match(
     fact_store, profile_store, requirement_concepts
 ) -> None:
@@ -402,3 +479,15 @@ def test_a_canonical_boundary_still_caps_a_match(
     requirement = analysis.requirements[0]
     assert requirement.boundary_fact_ids
     assert requirement.coverage == "partial"
+
+
+def test_prompt_version_does_not_change_requirement_identity(
+    fact_store, profile_store, requirement_concepts, monkeypatch
+) -> None:
+    proposed = _proposal(ProposedRequirement(text="- Comfortable presenting to customers."))
+    before = _normalize(proposed, fact_store, profile_store, requirement_concepts)
+
+    monkeypatch.setattr(normalization, "PROMPT_VERSION", "system-v999")
+    after = _normalize(proposed, fact_store, profile_store, requirement_concepts)
+
+    assert before.requirements[0].requirement_id == after.requirements[0].requirement_id

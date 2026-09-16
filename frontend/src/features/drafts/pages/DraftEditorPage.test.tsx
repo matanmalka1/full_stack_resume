@@ -218,10 +218,19 @@ const reviewDetail = (
       analysis: {
         track: "sales",
         profile: "account-manager",
-        fit: "medium",
         user_override: {},
-        gaps: [{ requirement: "Kubernetes", severity: "hard", reason: "missing", requirement_id: "req-1" }],
       },
+      fit_level: "medium",
+      fit_score: 0.5,
+      gaps: [
+        {
+          requirement: "Kubernetes",
+          severity: "hard",
+          reason: "missing",
+          requirement_id: "req-1",
+          substitute_fact_ids: [],
+        },
+      ],
       provider: "openai",
       model: "gpt-5.6-terra",
       created_at: "2026-08-24T07:00:00Z",

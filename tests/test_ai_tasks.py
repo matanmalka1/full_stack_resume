@@ -632,9 +632,6 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     assert '"reasoning"' not in stored
     assert "account-manager" in stored
 
-    # Two `provider_response` outputs exist now (extraction's and
-    # classification's); the one that names this specific artifact is found
-    # by id rather than assuming which one `next()` would hand back first.
     reference = next(
         output
         for output in completed.outputs
@@ -934,9 +931,7 @@ def test_a_reading_with_no_requirements_does_not_become_a_fit(ai_services, fake_
     assert analysis.requirements == []
     assert fit_level(analysis.requirements).value == "unknown"
     assert fit_score(analysis.requirements) is None
-    # The posting does state a requirement, and the engine says so - as a
-    # disclosure on the record, not as a refusal.
-    assert "analysis_may_be_incomplete" in {issue.code for issue in analysis.issues}
+    assert analysis.issues == []
 
 
 def test_a_fact_the_store_does_not_have_does_not_fell_the_reading(ai_services, fake_openai) -> None:

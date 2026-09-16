@@ -327,6 +327,11 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert state["review_reasons"] == []
     assert state["preparation_state"] == "ready_to_draft"
+    assert state["latest_analysis"]["fit_level"] == "low"
+    assert [gap["severity"] for gap in state["latest_analysis"]["gaps"]] == ["hard"]
+    assert {"fit", "fit_level", "fit_score", "gaps"}.isdisjoint(
+        state["latest_analysis"]["analysis"]
+    )
     analysis = ai_api_worker.services.repository.get_analysis(original["job_analysis"])["analysis"]
     assert [
         gap.severity

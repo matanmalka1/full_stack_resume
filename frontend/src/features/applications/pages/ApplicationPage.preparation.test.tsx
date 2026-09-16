@@ -89,6 +89,9 @@ const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): Applicatio
         source_coverage: 1,
         user_override: {},
       },
+      fit_level: "high",
+      fit_score: 1,
+      gaps: [],
       provider: "openai",
       model: "gpt-5.6-terra",
       created_at: "2026-08-24T07:00:00Z",
@@ -638,6 +641,9 @@ describe("ApplicationPage at the preparation route", () => {
                 source_coverage: 1,
                 user_override: {},
               },
+              fit_level: "high",
+              fit_score: 1,
+              gaps: [],
               provider: "openai",
               model: "gpt-5.6-terra",
               created_at: "2026-08-24T07:00:00Z",
@@ -1003,7 +1009,7 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
     expect(screen.queryByText("הטיוטה נוצרה. מעבר לעורך הטיוטה…")).not.toBeInTheDocument();
   });
-  it.each(["inactive", "stale", "newer-draft", "review"])(
+  it.each(["inactive", "stale", "newer-draft"])(
     "does not consume a restored navigation receipt for %s work",
     async (scenario) => {
       const generated = queued({

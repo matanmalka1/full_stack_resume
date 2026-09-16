@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ApplicationDetail, Reason } from "@/api/contracts";
-import { workflowActionPlan, hasWorkflowActionsContent } from "./workflowActionPlan";
+import { workflowActionPlan } from "./workflowActionPlan";
 
 /* §14. The two stale-draft commands are the only actions this screen sends that are
    addressed to a specific version of a specific record, and the only ones whose wrong

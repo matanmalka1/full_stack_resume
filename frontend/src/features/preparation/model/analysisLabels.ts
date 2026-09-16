@@ -117,7 +117,6 @@ const analysisIssueLabels: Record<string, string> = {
   coverage_without_evidence: "כיסוי חיובי שלא נשארה לו ראיה הורד ל״לא הוכרע״.",
   duplicate_requirement: "דרישה שהופיעה פעמיים אוחדה לאחת.",
   requirement_unusable: "דרישה ריקה או לא קריאה דולגה.",
-  analysis_may_be_incomplete: "ייתכן שלא כל דרישות המודעה נקראו.",
 };
 
 export const analysisIssueLabel = (code: string): string => analysisIssueLabels[code] ?? code;
