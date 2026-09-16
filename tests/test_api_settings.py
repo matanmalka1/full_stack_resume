@@ -55,7 +55,11 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
         "ai_enabled": False,
         "ai_enabled_override": None,
         "default_execution_mode": "deterministic",
-        "default_ai_model": "gpt-5.6-sol",
+        # The catalog's `recommended` model. This assertion used to read
+        # `gpt-5.6-sol` - it pinned the defect rather than the contract, because
+        # the `CV_MODEL` default was the `gpt-5.6` family alias and resolving it
+        # picked the most expensive tier.
+        "default_ai_model": "gpt-5.6-terra",
         "default_reasoning_effort": "medium",
         "available_ai_models": [
             {

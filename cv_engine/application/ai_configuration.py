@@ -70,11 +70,14 @@ class ExecutionCost(TypedDict):
 
 
 def normalize_ai_model(value: str | None) -> AIModel:
-    """Resolve the supported legacy alias and reject arbitrary provider slugs."""
-    normalized = "gpt-5.6-sol" if value == "gpt-5.6" else value
-    if normalized not in _MODELS_BY_ID:
+    """Reject anything that is not a catalog model id.
+
+    There is no alias: a family name like `gpt-5.6` names no price tier, and
+    resolving one silently picked a tier nobody asked for.
+    """
+    if value not in _MODELS_BY_ID:
         raise ValueError(f"unsupported AI model: {value}")
-    return cast(AIModel, normalized)
+    return cast(AIModel, value)
 
 
 def normalize_reasoning_effort(value: str | None) -> ReasoningEffort:

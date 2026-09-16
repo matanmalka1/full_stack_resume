@@ -159,7 +159,7 @@ def _stored_request(application_id: str, key: str = "request-1") -> CreateOperat
             job_snapshot_hash="a" * 64,
         ),
         provider="openai",
-        model="gpt-5.6",
+        model="gpt-5.6-terra",
     )
 
 
