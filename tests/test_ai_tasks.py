@@ -1452,6 +1452,219 @@ def test_an_any_of_member_with_no_attestation_cannot_be_silently_matched(
     assert analysis.requirements[0].coverage == "undetermined"
 
 
+#: One requirement line whose second member ends at the line break. A live
+#: model proposed exactly this shape: the member quote was right and its end
+#: offset reached one character past the sentence, onto the newline.
+MEMBER_JOB = "Requirements:\n- knows how to sell, and presents clearly.\n"
+
+
+def _member_reading(*members: RequirementMember) -> RequirementInterpretation:
+    return RequirementInterpretation(
+        source_role="requirement",
+        obligation="mandatory",
+        composition="all-of",
+        members=list(members),
+        negation=False,
+    )
+
+
+def test_a_member_quote_missing_one_boundary_character_is_reconciled_like_the_requirement(
+    requirement_concepts,
+) -> None:
+    """The member gate repairs what the requirement gate already repairs.
+
+    A requirement's own attestation goes through `reconcile_attestation`,
+    which exists because a provider may miss one boundary character. A member
+    quote is the same claim about the same source text, and holding it to a
+    stricter rule threw away a whole 16-requirement proposal over one member
+    span that reached onto its line's newline. Reconciliation ends at exact
+    source text, so the repaired member names what the posting says.
+    """
+    selling = "knows how to sell"
+    presenting = "presents clearly."
+    sell_start = MEMBER_JOB.index(selling)
+    present_start = MEMBER_JOB.index(presenting)
+    reading = _member_reading(
+        RequirementMember(
+            member_id="selling",
+            label="Selling",
+            attestation=RequirementAttestation(
+                quote=selling, start=sell_start, end=sell_start + len(selling)
+            ),
+        ),
+        RequirementMember(
+            member_id="presenting",
+            label="Presenting",
+            attestation=RequirementAttestation(
+                quote=presenting,
+                start=present_start,
+                # One past the sentence: the newline the provider swallowed.
+                end=present_start + len(presenting) + 1,
+            ),
+        ),
+    )
+
+    reconciled = verify_interpretation(
+        reading,
+        source_text=MEMBER_JOB,
+        concepts=requirement_concepts,
+        requirement_span=(MEMBER_JOB.index("-"), len(MEMBER_JOB)),
+    )
+
+    repaired = reconciled.members[1].attestation
+    assert repaired is not None
+    assert repaired.quote == MEMBER_JOB[repaired.start : repaired.end]
+    assert repaired.quote == presenting + "\n"
+    # The member that was already exact is returned untouched.
+    assert reconciled.members[0] == reading.members[0]
+
+
+def test_a_member_quote_the_source_does_not_say_is_still_refused(requirement_concepts) -> None:
+    """The repair is bounded, not a licence to paraphrase.
+
+    An interior difference is not a missed boundary character, and reconciling
+    a member must not become a way to attest text the posting never carried.
+    """
+    reading = _member_reading(
+        RequirementMember(
+            member_id="selling",
+            label="Selling",
+            attestation=RequirementAttestation(
+                quote="knows how to sell",
+                start=MEMBER_JOB.index("knows"),
+                end=MEMBER_JOB.index("knows") + 17,
+            ),
+        ),
+        RequirementMember(
+            member_id="invented",
+            label="Invented",
+            attestation=RequirementAttestation(
+                quote="presents to the board",
+                start=MEMBER_JOB.index("presents"),
+                end=MEMBER_JOB.index("presents") + 21,
+            ),
+        ),
+    )
+
+    with pytest.raises(InvalidRequirementInterpretation, match="attestation is invalid"):
+        verify_interpretation(
+            reading,
+            source_text=MEMBER_JOB,
+            concepts=requirement_concepts,
+            requirement_span=(MEMBER_JOB.index("-"), len(MEMBER_JOB)),
+        )
+
+
+#: The live shape behind the located-span rule: a requirement whose repeated
+#: phrase makes one member resolvable and one genuinely not. Both models under
+#: test proposed a reading of exactly this sentence.
+REPEATED_PHRASE_JOB = (
+    "Requirements:\n"
+    "- Experience with infrastructure, project management, or project management systems.\n"
+)
+
+
+def test_a_quote_the_provider_misplaced_is_located_in_the_source(requirement_concepts) -> None:
+    """Offsets are a pointer; the posting is the evidence.
+
+    A live model returned a 219-character quote word for word and placed its
+    start 137 characters away. Refusing that treats a transcription the engine
+    can verify itself as if it were a fabrication. When the quote occurs once,
+    the source answers where it is and the engine does not need to be told.
+    """
+    quote = "presents clearly."
+    true_start = MEMBER_JOB.index(quote)
+    reading = _member_reading(
+        RequirementMember(
+            member_id="selling",
+            label="Selling",
+            attestation=RequirementAttestation(
+                quote="knows how to sell",
+                start=MEMBER_JOB.index("knows"),
+                end=MEMBER_JOB.index("knows") + len("knows how to sell"),
+            ),
+        ),
+        RequirementMember(
+            member_id="presenting",
+            label="Presenting",
+            # Nowhere near the truth, and not repairable by an edge character.
+            attestation=RequirementAttestation(quote=quote, start=0, end=len(quote)),
+        ),
+    )
+
+    located = verify_interpretation(
+        reading,
+        source_text=MEMBER_JOB,
+        concepts=requirement_concepts,
+        requirement_span=(MEMBER_JOB.index("-"), len(MEMBER_JOB)),
+    )
+
+    repaired = located.members[1].attestation
+    assert repaired is not None
+    assert (repaired.start, repaired.end) == (true_start, true_start + len(quote))
+    assert repaired.quote == MEMBER_JOB[repaired.start : repaired.end]
+
+
+def test_a_member_phrase_the_requirement_repeats_is_undetermined_not_a_rejection(
+    requirement_concepts,
+) -> None:
+    """Ambiguity lowers one member; it does not void everything else read.
+
+    "project management" occurs twice inside its own requirement - once alone
+    and once inside "project management systems". The engine cannot say which
+    sentence the member points at, and picking one would attach evidence to a
+    place nobody named. Dropping the attestation says exactly that: an
+    unattested member is `undetermined`, which only ever lowers coverage, while
+    the requirements the provider read correctly survive.
+    """
+    ambiguous = "project management"
+    systems = "project management systems"
+    reading = _member_reading(
+        RequirementMember(
+            member_id="infrastructure",
+            label="Infrastructure",
+            attestation=RequirementAttestation(
+                quote="infrastructure",
+                start=REPEATED_PHRASE_JOB.index("infrastructure"),
+                end=REPEATED_PHRASE_JOB.index("infrastructure") + len("infrastructure"),
+            ),
+        ),
+        RequirementMember(
+            member_id="project-management",
+            label="Project management",
+            # Ten characters off, so no edge repair applies and the phrase has
+            # to be located - and inside this requirement it is there twice.
+            attestation=RequirementAttestation(
+                quote=ambiguous,
+                start=REPEATED_PHRASE_JOB.index(ambiguous) + 10,
+                end=REPEATED_PHRASE_JOB.index(ambiguous) + 10 + len(ambiguous),
+            ),
+        ),
+        RequirementMember(
+            member_id="project-management-systems",
+            label="Project management systems",
+            attestation=RequirementAttestation(
+                quote=systems,
+                start=REPEATED_PHRASE_JOB.index(systems),
+                end=REPEATED_PHRASE_JOB.index(systems) + len(systems),
+            ),
+        ),
+    )
+
+    resolved = verify_interpretation(
+        reading,
+        source_text=REPEATED_PHRASE_JOB,
+        concepts=requirement_concepts,
+        requirement_span=(REPEATED_PHRASE_JOB.index("-"), len(REPEATED_PHRASE_JOB)),
+    )
+
+    assert resolved.members[1].attestation is None
+    # The unambiguous members keep their proof, so one repeated phrase costs
+    # one member rather than the reading it appears in.
+    assert resolved.members[0].attestation is not None
+    assert resolved.members[2].attestation is not None
+
+
 def test_a_proposal_cannot_add_experience_that_is_not_in_the_facts(
     ai_services, fake_openai: FakeOpenAI
 ) -> None:

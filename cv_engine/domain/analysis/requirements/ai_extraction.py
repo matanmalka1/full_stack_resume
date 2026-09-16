@@ -283,7 +283,7 @@ def correct_interpretation(
         if requirement.attestation
         else None
     )
-    verify_interpretation(
+    corrected = verify_interpretation(
         corrected, source_text=source_text, concepts=concepts, requirement_span=span
     )
     identity_span = normalize_span(quote)
@@ -456,7 +456,7 @@ def verify_and_cover_extraction(
         try:
             attestation = reconcile_attestation(proposed.attestation, source_text=source_text)
             span = (attestation.start, attestation.end)
-            verify_interpretation(
+            interpretation = verify_interpretation(
                 proposed.interpretation,
                 source_text=source_text,
                 concepts=concepts,
@@ -476,7 +476,7 @@ def verify_and_cover_extraction(
             extraction_version=extractor,
             identity_span=identity_span,
             ordinal=0,
-            interpretation=proposed.interpretation,
+            interpretation=interpretation,
             kind=proposed.kind,
             demanded=proposed.demanded,
         )
@@ -501,7 +501,7 @@ def verify_and_cover_extraction(
         try:
             covered = cover_ai_requirement(
                 quote,
-                proposed.interpretation,
+                interpretation,
                 kind=proposed.kind,
                 demanded=proposed.demanded,
                 coverage_claim=proposed.coverage,

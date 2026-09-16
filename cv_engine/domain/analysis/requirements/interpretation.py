@@ -12,8 +12,17 @@ different interpretation - see stage-1 plan §3.2.
 
 from __future__ import annotations
 
-from ...contracts.analysis import RequirementAttestation, RequirementInterpretation
-from .attestation import InvalidRequirementAttestation, verify_attestation
+from ...contracts.analysis import (
+    RequirementAttestation,
+    RequirementInterpretation,
+    RequirementMember,
+)
+from .attestation import (
+    AmbiguousRequirementAttestation,
+    InvalidRequirementAttestation,
+    reconcile_attestation,
+    verify_attestation,
+)
 from .concepts import RequirementConceptStore
 from .segmentation import _segments, _Span
 
@@ -33,8 +42,11 @@ def verify_interpretation(
     source_text: str,
     concepts: RequirementConceptStore,
     requirement_span: tuple[int, int] | None = None,
-) -> None:
+) -> RequirementInterpretation:
     """Refuse an interpretation the policy will not accept, before it is trusted.
+
+    Returns the interpretation whose member attestations name exact source
+    text, which is the argument itself whenever nothing needed reconciling.
 
     Source structure constrains the proposed obligation independently of the
     provider's context. `context_quote` is verified before any rule reads it
@@ -124,23 +136,49 @@ def verify_interpretation(
         # (stage-1 plan §3.5a addendum). Verifying it here, at the same gate
         # that verifies the requirement's own quote, keeps "how do we know
         # this member is real" answered in exactly one place.
+        #
+        # The same gate means the same repair. A requirement's own attestation
+        # is reconciled before it is trusted, because a provider may miss one
+        # boundary character; a member quote is the same kind of claim about
+        # the same source text, and holding it to a stricter rule rejected a
+        # whole proposal over one member span that reached one character past
+        # its sentence. Reconciliation ends at exact source text either way,
+        # so nothing that passed before is read differently now.
+        reconciled: list[RequirementMember] = []
         for member in interpretation.members:
-            if member.attestation is not None:
-                try:
-                    verify_attestation(member.attestation, source_text=source_text)
-                    if requirement_span is not None and not (
-                        requirement_span[0]
-                        <= member.attestation.start
-                        < member.attestation.end
-                        <= requirement_span[1]
-                    ):
-                        raise InvalidRequirementInterpretation(
-                            "member attestation must be contained in its requirement quote"
-                        )
-                except InvalidRequirementAttestation as exc:
-                    raise InvalidRequirementInterpretation(
-                        f"member {member.member_id!r} attestation is invalid: {exc}"
-                    ) from exc
+            if member.attestation is None:
+                reconciled.append(member)
+                continue
+            try:
+                attestation = reconcile_attestation(
+                    member.attestation, source_text=source_text, scope=requirement_span
+                )
+            except AmbiguousRequirementAttestation:
+                # The phrase really is in this requirement twice - "project
+                # management" inside a requirement that also says "project
+                # management systems". Choosing one occurrence would attach the
+                # member's evidence to a sentence nobody pointed at, and voiding
+                # the proposal would throw away every other requirement the
+                # provider read correctly over a phrase the posting genuinely
+                # repeats. An unattested member is `undetermined`, which is the
+                # honest answer and the one that only ever lowers coverage.
+                reconciled.append(member.model_copy(update={"attestation": None}))
+                continue
+            except InvalidRequirementAttestation as exc:
+                raise InvalidRequirementInterpretation(
+                    f"member {member.member_id!r} attestation is invalid: {exc}"
+                ) from exc
+            if requirement_span is not None and not (
+                requirement_span[0] <= attestation.start < attestation.end <= requirement_span[1]
+            ):
+                raise InvalidRequirementInterpretation(
+                    "member attestation must be contained in its requirement quote"
+                )
+            reconciled.append(member.model_copy(update={"attestation": attestation}))
+        if reconciled != list(interpretation.members):
+            return interpretation.model_copy(update={"members": reconciled})
+
+    return interpretation
 
 
 def _verify_context_quote_occurs(
