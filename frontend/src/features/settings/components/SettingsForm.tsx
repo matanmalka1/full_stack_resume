@@ -151,7 +151,10 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                 </Switch>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field hint="דטרמיניסטי משתמש בחוקים ובשומרי הסף בלבד." label="מצב ביצוע ברירת מחדל">
+                  <Field
+                    hint="קובע את מסלול יצירת הטיוטה: דטרמיניסטי משתמש בחוקים ובשומרי הסף בלבד, ללא קריאת AI. ניתוח משרה רץ תמיד עם AI."
+                    label="מצב ביצוע ברירת מחדל"
+                  >
                     {(control) => (
                       <Select {...control} {...register("default_execution_mode")}>
                         <option value="deterministic">דטרמיניסטי</option>

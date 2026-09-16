@@ -137,6 +137,14 @@ const deterministicSettings: Settings = {
    analyze button reads `provider_configured && ai_enabled` and is inert without both. */
 const aiSettings: Settings = { ...deterministicSettings, ai_enabled: true, provider_configured: true };
 
+/* A provider is configured and AI is on, and the reader still left the default execution
+   mode on deterministic. Analysis runs either way; the draft lane is what this state
+   actually decides. */
+const aiEnabledDeterministicLane: Settings = { ...aiSettings };
+
+/* The same provider, with the AI lane actually chosen. */
+const aiLaneSettings: Settings = { ...aiSettings, default_execution_mode: "ai" };
+
 /* Retries are off. Query-specific polling options override the client's default,
    so tests that require a completion tick explicitly refresh the watched Operation. */
 const HistoryControls = () => {
@@ -414,6 +422,54 @@ describe("ApplicationPage at the preparation route", () => {
        so nothing else may queue a second generate behind it. */
     expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
   });
+  /* The draft lane follows the Settings execution mode, not the mere presence of a
+     provider. Enabling AI is permission; the mode is the choice, and a reader who left it
+     on deterministic was still being charged for every generated draft. */
+  it.each([
+    {
+      body: { job_analysis_id: "analysis-1", selection_plan_id: "plan-1" },
+      name: "runs the draft deterministically while AI is enabled but the mode is not",
+      note: "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע.",
+      settings: aiEnabledDeterministicLane,
+    },
+    {
+      body: { job_analysis_id: "analysis-1", provider: "openai", selection_plan_id: "plan-1" },
+      name: "runs the draft through the provider once the mode names the AI lane",
+      note: "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע.",
+      settings: aiLaneSettings,
+    },
+  ])("$name", async ({ body, note, settings }) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return Promise.resolve(acceptedResponse(queued({ id: "op-draft", operation_type: "create_draft" })));
+      }
+      return Promise.resolve(
+        jsonResponse(
+          String(input).includes("/settings")
+            ? settings
+            : analyzed_detail({
+                available_actions: ["create_draft"],
+                recommended_action: "create_draft",
+                active_selection_plan_id: "plan-1",
+              }),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage(settings);
+
+    /* The sentence shares its paragraph with the line naming the draft's sources, so the
+       lane clause is matched inside it rather than as a whole element. */
+    expect(await screen.findByText(note, { exact: false })).toBeInTheDocument();
+    await clickEnabledButton("יצירת טיוטה");
+
+    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
+    const post = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
+    expect(String(post?.[0])).toContain("/applications/app-1/working-draft/generate");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual(body);
+  });
+
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen
        watches the Operation it queued, so a fixed queue of answers would leave that read

@@ -33,10 +33,6 @@ import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operationId: string) => void) => {
   const queryClient = useQueryClient();
   const { settings } = useSettings();
-  /* The default lane, unaffected by the override below - `useWorkflowCommands` also
-     hands this to the draft-generation command, which has no override of its own and
-     must keep following Settings exactly as before. */
-  const provider = executionProvider(settings);
   const snapshotId = detail.active_job_snapshot_id;
   /* One key per snapshot and the single analysis lane. */
   const analyzeKey = `analyze:${detail.application.id}:${snapshotId}:openai`;
@@ -54,7 +50,7 @@ export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operatio
     },
   });
 
-  return { analyze, provider, settings };
+  return { analyze, settings };
 };
 
 interface AutomaticDraftAttempt {
@@ -279,7 +275,13 @@ export const useWorkflowCommands = (
     [onQueued],
   );
 
-  const { analyze, provider, settings } = useAnalyzeCommand(detail, follow);
+  const { analyze, settings } = useAnalyzeCommand(detail, follow);
+
+  /* The lane the two draft commands run in. Neither offers the reader a choice on the
+     screen, so both take the Settings default - which is the only place that choice is
+     made. It lives here rather than in `useAnalyzeCommand` because analysis stopped
+     reading it when it became AI-only. */
+  const provider = executionProvider(settings);
 
   /* The two commands that write a WorkingDraft, followed the same way and marked the same
      way: the draft they produce is worked on in the editor, so the run is registered as

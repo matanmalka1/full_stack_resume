@@ -1,15 +1,9 @@
 # v2.0 Test and Acceptance Plan
 
-Status: **Approved for v2.0 implementation (2026-08-17)**
+Status: **Approved for v2.0 implementation**
 
-PostgreSQL/object-storage gate amendment: **2026-08-25**
-
-D1 wording-evidence amendment: **2026-09-06** (§6)
-
-D5 semantic-analysis amendment: **2026-09-15** (§6)
-
-Product authority: `docs/spec/product-spec.md`. The approved decisions the §6
-amendments implement are recorded in `docs/tailoring-decisions.md`.
+Product authority: `docs/spec/product-spec.md`. Decision history is recorded in
+`docs/tailoring-decisions.md`.
 
 ## 1. Test strategy
 
@@ -18,10 +12,8 @@ It is not based on a broad line-coverage percentage or raw test count. Raw count
 nevertheless a useful review signal: rapid growth without new product risk usually
 indicates duplicated scenarios or tests coupled to implementation shape.
 
-All applicable v1 safety invariants and material regression risks remain represented.
-Individual v1 test items do not have to survive when one clearer scenario, table-driven
-matrix, or end-to-end journey detects the same failures. Refactoring may move, merge,
-or delete tests, but it may not silently remove coverage of factual safety,
+All material safety invariants and regression risks remain represented. Refactoring may
+move, merge, or delete tests, but it may not silently remove coverage of factual safety,
 deterministic validation, rendering, ATS, or artifact immutability.
 
 The lists in this plan define required evidence, not a one-test-per-bullet structure.
@@ -30,10 +22,6 @@ justified only by a distinct failure mode, boundary, or diagnostic signal that a
 existing test cannot express clearly. Prefer extending the nearest meaningful test;
 avoid tests whose only purpose is to restate a type annotation, enumerate equivalent
 adapter methods, pin private call counts, or freeze incidental package/file layout.
-
-The historical v1 baseline was `v1.0.0` / `2cc31c7` with 131 passing tests under
-`CV_REQUIRE_BROWSER=1`. It is a Git-history reference for where the safety invariants
-came from, not a suite that can be re-run: v1 is gone from the tree.
 
 ## 2. Test layers
 
@@ -117,7 +105,7 @@ Avoid blanket DOM snapshots.
 
 ### 2.6 Rendering/PDF/ATS tests
 
-Retain and expand v1 coverage for:
+Cover:
 
 - HTML generated from exact approved structured source
 - PDF generation and corruption checks
@@ -141,8 +129,7 @@ drills are deployment evidence, not application test cases.
 
 ## 3. Semantic parity
 
-The parity bar was originally stated against v1. v1 code and data are no longer in the
-tree, so the golden fixtures in §4 now carry that bar: for the same input, Knowledge and
+The golden fixtures in §4 define semantic parity: for the same input, Knowledge and
 policy versions, a change must not move
 
 - selected facts
@@ -250,7 +237,7 @@ Create
 
 ## 6. AI tests
 
-### D1 acceptance amendment — 2026-09-06
+### Wording-evidence acceptance
 
 Extend the nearest existing claim/proposal/application tests for material uncovered
 failures. Required behavior includes:
@@ -298,9 +285,9 @@ Mock review outputs prove policy enforcement, not real model accuracy. Manual li
 evaluation must inspect both supported new wording and deliberately unsupported
 variants, across a sales-track and a development-track posting, before release.
 Postings live in test fixtures and are freely replaceable; no specification names a
-particular one. No new passing evidence is asserted by this specification amendment.
+particular one. Specification text alone is not passing evidence.
 
-### D5 semantic-analysis acceptance — approved 2026-09-15
+### Semantic-analysis acceptance
 
 Extend the nearest existing tests for these material distinctions:
 
@@ -322,7 +309,7 @@ Extend the nearest existing tests for these material distinctions:
   and its low Fit survive until separately handled.
 - Interpretation changes change requirement identity and invalidate inherited gap
   acceptances; historical IDs, gaps, records and missing metadata remain unchanged.
-- Classification uncertainty alone does not force a professional choice under D5;
+- Classification uncertainty alone does not force a professional choice;
   factual, incomplete-analysis and integrity blockers remain enforced.
 - With injected instructions, actual requirements retain their meaning and no injected
   actionable requirement changes gaps, Fit, coverage or review decisions. Include both
@@ -332,7 +319,7 @@ Extend the nearest existing tests for these material distinctions:
   back silently. Historical analyses and deterministic downstream workflows remain usable.
 
 The live release evaluation also covers `analyze_job`, including
-adversarial additions and omissions, alongside D1 writer/reviewer evaluation.
+adversarial additions and omissions, alongside writer/reviewer evaluation.
 
 ### Provider and integration coverage
 
@@ -453,7 +440,7 @@ variants, and redaction fields should normally be grouped:
 - Operation payload and log sanitization
 - sanitized raw provider artifact
 - prompt-injection fixtures
-- no runtime root selector or v1 data reader
+- no runtime root selector or historical-data reader
 - health reports product, API, and schema versions without secrets
 
 The final job-text limit is set during implementation in the approved 1-2 MB order of

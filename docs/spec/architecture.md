@@ -1,13 +1,8 @@
 # v2.0 Architecture
 
-Status: **Approved for v2.0 implementation (2026-08-17)**
-
-PostgreSQL/object-storage, secret-configuration, and fixed-root amendment: **2026-08-25**
+Status: **Approved for v2.0 implementation**
 
 Product authority: `docs/spec/product-spec.md`
-
-Baseline: `v1.0.0` / `2cc31c7`. v1 is a Git-history reference only; no v1 code or data
-remains in the tree, and nothing in v2 reads it.
 
 ## 1. Architecture objective
 
@@ -66,13 +61,6 @@ Frontend:
 - `lucide-react` for the icon set
 - generated TypeScript types from OpenAPI
 - selective Radix primitives only when an accessible complex primitive is warranted
-
-Testing additions:
-
-- Vitest, with `jsdom` as its DOM environment
-- React Testing Library, with `@testing-library/jest-dom` matchers
-- Playwright browser tests over the built frontend
-- axe checks on the screens those tests cover, through `@axe-core/playwright`
 
 Redux, a full component framework, Celery, Redis, WebSockets, SSE, and a DI framework are
 not part of the product.
@@ -168,10 +156,6 @@ Every product use-case belongs to the API and the Web UI. A second surface for a
 use-case the API owns has a second contract to keep compatible and no capability the
 first lacks.
 
-The v1 `Engine` compatibility façade was removed once the clients called the
-application services directly. It was never a v2 architectural boundary, and no code
-refers to it.
-
 ### 3.5 Runtime and composition
 
 `cv_engine/runtime/composition.py` is the manual composition root. It builds fixed application paths,
@@ -203,8 +187,7 @@ logs_root
 
 All mutable and immutable local paths remain contained below that root. Tests inject a
 temporary root directly into composition; the running processes do not expose that
-injection surface. Nothing points v2 at v1. The archive is read by a person with a text
-editor or `git worktree add`, never by this engine.
+injection surface. Historical archives are not runtime inputs.
 
 ## 5. CandidateContext
 
@@ -475,10 +458,10 @@ temporary browser-startup failures.
 
 ## 11. AI adapter
 
-The provider-neutral protocol implements six of the seven target tasks defined in
-product-spec §12. `assess_claim_support`, the seventh task introduced by D1
-(2026-09-06), remains design work and must not be represented as an available provider
-capability until its evidence lifecycle and activation rules are implemented.
+The provider-neutral protocol implements the available tasks defined in product-spec
+§12. `assess_claim_support` remains design work and must not be represented as an
+available provider capability until its evidence lifecycle and activation rules are
+implemented.
 The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.
@@ -523,7 +506,7 @@ Any new immutable records receive the existing derived trigger protections.
 
 Pre-approval validation remains synchronous and deterministic over stored evidence;
 it starts no AI work. A separate asynchronous review supplies evidence in advance.
-Historical records retain their original semantics and missing metadata; the amendment
+Historical records retain their original semantics and missing metadata; this contract
 does not synthesize past reviews, rewrite approved artifacts, or alter their paths.
 
 Calls are stateless. The settings query exposes a closed backend-owned model catalog;
@@ -655,8 +638,8 @@ committed safe inventory of supported variables.
 ## 16. Database lifecycle and upgrade
 
 The application has no built-in backup or restore command. PostgreSQL lifecycle and any
-environment-level backup policy remain outside the application; this development-only
-replacement starts from an empty database and does not migrate historical data.
+environment-level backup policy remain outside the application. A fresh installation
+starts from an empty database.
 
 Schema upgrade is explicit through `alembic upgrade head`. Runtime surfaces report the
 current schema revision and database integrity result; a new binary/runtime never

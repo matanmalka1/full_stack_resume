@@ -29,8 +29,20 @@ export const updateSettings = async (body: UpdateSettingsRequest, etag: string):
   return { settings: response.data, etag: response.etag };
 };
 
+/* Which lane a command that has both of them runs in when the screen did not ask the
+   reader to choose one. All three answers have to agree: a provider configured, AI
+   enabled, and the Settings default naming the AI lane. Enabling AI is permission, not
+   the choice itself - a reader who left the default on deterministic asked for the
+   deterministic lane, and this used to hand them the paid one anyway.
+
+   `undefined` omits `provider` from the request, which is the deterministic lane.
+
+   Analysis does not read this. It is AI-only with no deterministic form to default to,
+   so it reads `aiRegenerationAvailable` and is simply unavailable without a provider. */
 export const executionProvider = (settings: Settings | undefined): "openai" | undefined =>
-  settings?.provider_configured && settings.ai_enabled ? "openai" : undefined;
+  settings?.provider_configured && settings.ai_enabled && settings.default_execution_mode === "ai"
+    ? "openai"
+    : undefined;
 
 export const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
   settings?.provider_configured === true && settings.ai_enabled === true;

@@ -1,12 +1,6 @@
 # v2.0 State and Use-Case Contracts
 
-Status: **Approved for v2.0 implementation (2026-08-17)**
-
-PostgreSQL transaction terminology amendment: **2026-08-25**
-
-Matching-configuration concurrency amendment: **2026-09-14**
-
-Semantic-analysis authority amendment (D5): **2026-09-15**
+Status: **Approved for v2.0 implementation**
 
 Product authority: `docs/spec/product-spec.md`
 
@@ -563,10 +557,9 @@ draft move atomically.
 
 ## 14. Draft commands
 
-### D1 wording evidence amendment — 2026-09-06
+### Wording evidence contract
 
-The following acceptance rules amend generation, regeneration, editing, validation,
-and approval; they are required target behavior, not a claim of current implementation.
+The following rules govern generation, regeneration, editing, validation, and approval.
 Canonical/extractive/presentation proof or complete eligible reviewed evidence under
 product-spec §10.1 may establish claim support. Positive reviewed evidence needs no
 individual user confirmation. Uncertainty cannot be downgraded to a warning; known
@@ -581,14 +574,14 @@ activated after cancellation or against a newer draft/source context.
 A missing/stale review or unresolved clarification blocks approval through both action
 policy and application services. Claim-level evidence may remain reusable after an
 unrelated edit only when its actual dependencies still match. No previous document
-ValidationRun becomes reusable as a consequence. Proposal presentation, clarification
+ValidationRun becomes reusable as a consequence. Proposal presentation, clarification,
 and acceptance command/HTTP DTOs must be specified before implementation; this
-amendment does not silently add routes or PreparationState enum values.
+contract does not implicitly add routes or PreparationState enum values.
 
 ### `create_draft(application_id, job_analysis_id, selection_plan_id, provider)`
 
-Asynchronous and idempotent for generation. The deterministic path constructs the v1
-compatible DraftDocument. AI mode uses `draft_resume` Proposal and semantic validation.
+Asynchronous and idempotent for generation. The deterministic path constructs the
+canonical DraftDocument. AI mode uses `draft_resume` Proposal and semantic validation.
 Before activation it confirms Application/snapshot/analysis/plan/Knowledge preconditions
 again. It creates or replaces the one active WorkingDraft only after a successful
 commit.
@@ -649,8 +642,8 @@ Validation records:
 - validator versions
 - issues/groups/evidence
 
-For D1 wording, evidence includes exact review/proof references and their dependency
-context. Validation checks hard-rule results, full assertion coverage, permitted
+For reviewed wording, evidence includes exact review/proof references and their
+dependency context. Validation checks hard-rule results, full assertion coverage, permitted
 evidence kind, no unresolved contradiction/uncertainty, and current source/context
 matches. It does not call a provider or infer success from a missing review.
 
@@ -929,72 +922,11 @@ rows or local paths.
 
 ## 21. HTTP mapping baseline
 
-Implemented endpoints relevant to the documented use-cases:
-
-```text
-GET    /api/v1/health
-POST   /api/v1/applications
-GET    /api/v1/applications
-POST   /api/v1/applications/duplicate-check
-GET    /api/v1/applications/{id}
-PATCH  /api/v1/applications/{id}/notes
-GET    /api/v1/applications/{id}/job-snapshots
-POST   /api/v1/applications/{id}/job-snapshots
-POST   /api/v1/applications/{id}/analyses
-GET    /api/v1/applications/{id}/artifacts
-GET    /api/v1/applications/{id}/decision
-POST   /api/v1/applications/{id}/close
-POST   /api/v1/applications/{id}/delete
-POST   /api/v1/analyses/{id}/apply-decisions
-POST   /api/v1/analyses/{id}/selection-plans
-GET    /api/v1/selection-plans/{id}
-POST   /api/v1/applications/{id}/working-draft/generate
-POST   /api/v1/applications/{id}/working-draft/replace
-GET    /api/v1/working-drafts/{id}
-GET    /api/v1/working-drafts/{id}/facts
-GET    /api/v1/working-drafts/{id}/preview
-PATCH  /api/v1/working-drafts/{id}
-POST   /api/v1/working-drafts/{id}/apply-selection-change
-POST   /api/v1/working-drafts/{id}/validate
-POST   /api/v1/working-drafts/{id}/approve
-POST   /api/v1/working-drafts/{id}/regenerate-section
-POST   /api/v1/working-drafts/{id}/regenerate-claim
-POST   /api/v1/working-drafts/{id}/archive
-GET    /api/v1/validation-runs/{id}
-GET    /api/v1/approved-revisions/{id}
-GET    /api/v1/approved-revisions/{id}/preview
-POST   /api/v1/approved-revisions/{id}/render
-GET    /api/v1/approved-revisions/{id}/recruiter-pdf
-GET    /api/v1/approved-revisions/{id}/decision-markdown
-GET    /api/v1/artifacts/{id}
-GET    /api/v1/artifacts/{id}/download
-GET    /api/v1/operations/{id}
-POST   /api/v1/operations/{id}/cancel
-POST   /api/v1/operations/{id}/retry
-POST   /api/v1/applications/{id}/submissions
-POST   /api/v1/applications/{id}/external-submissions
-POST   /api/v1/applications/{id}/status
-POST   /api/v1/applications/{id}/status-corrections
-PATCH  /api/v1/applications/{id}/next-action
-GET    /api/v1/facts
-POST   /api/v1/facts
-GET    /api/v1/facts/attachment-targets
-POST   /api/v1/facts/from-claim
-GET    /api/v1/facts/history
-GET    /api/v1/facts/{id}
-GET    /api/v1/facts/{id}/history
-POST   /api/v1/facts/{id}/confirm
-POST   /api/v1/facts/{id}/promote
-POST   /api/v1/facts/{id}/delete
-POST   /api/v1/facts/{id}/attachments
-POST   /api/v1/facts/{id}/confirm-and-use
-GET    /api/v1/settings
-PATCH  /api/v1/settings
-POST   /api/v1/maintenance/reconciliations
-```
-
-`POST /analyses/{id}/selection-plans` returns `201` for deterministic mode and `202`
-plus `Location` for AI proposal mode.
+The API maps each documented command and query to `/api/v1` without adding a second
+business contract. Synchronous creation returns `201`; asynchronous commands return
+`202` plus an Operation `Location`. The generated OpenAPI document is the authoritative
+endpoint inventory. Command sections above remain authoritative for source IDs,
+preconditions, idempotency, and synchronous versus asynchronous behavior.
 
 ## 22. HTTP outcomes
 
@@ -1019,27 +951,3 @@ KNOWLEDGE_RECONCILIATION_REQUIRED
 ```
 
 NeedsReview and domain validation issues are data, not exceptions.
-
-## 23. First vertical slice
-
-The mandatory sequence is:
-
-```text
-Create
--> Analyze
--> Review if required
--> Draft
--> Edit
--> Validate
--> Approve
--> Render
--> Ready
-```
-
-Auto-generation is opt-in: the setting is off by default, and drafting continues
-automatically only when review is not required *and* the setting has been turned on.
-Successful Analyze already returns the explicit initial SelectionPlan ID used by Draft.
-The UI may chain commands, but each remains an independent application use-case.
-
-Dashboard and recruitment management may not begin until this path and its central
-failure modes pass through both the Application API and the Web UI.

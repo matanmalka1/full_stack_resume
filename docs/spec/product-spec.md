@@ -55,9 +55,8 @@ remains. Only uncertainty requires focused user clarification. Final CV approval
 remains explicit. This is a policy for accepting reviewed evidence, not a claim that
 AI proves meaning or cannot miss an error.
 
-Sections 10–12 define the acceptance contract. The approved decisions behind it, and
-the unimplemented review design they call for, live in
-[Tailoring decisions](../tailoring-decisions.md).
+Sections 10–12 define the current acceptance contract. Decision history and unresolved
+design work are recorded separately in [Tailoring decisions](../tailoring-decisions.md).
 
 ### Semantic analysis authority
 
@@ -103,24 +102,19 @@ historical decisions.
 > every blocker and available action, and track the recruitment process through the
 > Web client backed by one application layer.
 
-The Web UI makes the v1 engine accessible; it does not replace its safety model. A
-normal Web workflow must not require the user to know entity IDs, hashes, filesystem
+The Web UI must not require the user to know entity IDs, hashes, filesystem
 paths, database details, or architecture. Those details remain available in provenance
 views and diagnostic interfaces.
 
 ## 3. Product boundaries
 
-- The application represents one candidate and one canonical knowledge source.
 - The domain must not hardcode `Matan`, a particular filename, or another candidate
   identity. A single `CandidateContext` supplies the candidate-specific policy.
 - There is no candidate selector, candidate CRUD, or multi-candidate UI.
 - Facts, Profiles, selection policies, prompts, task contracts, and rendering rules
   remain version-controlled files and independent sources of truth.
-- The Web UI is the product interface and reaches the system only through the API,
-  which is the only user-facing adapter. The Operation worker calls the same application
-  layer as an internal execution host; it serves no user. Maintenance is an API concern
-  like any other. A second user-facing surface for a use-case the API owns has a second
-  contract to keep compatible and no capability the first lacks.
+- The Web UI is the product interface and reaches the system only through the API.
+  Worker and adapter boundaries are defined by the architecture specification.
 - The application officially targets macOS. Portable code is preferred, but Windows and
   Linux do not block release.
 - The UI supports current Chrome/Chromium. No other browser is claimed, because none is
@@ -130,9 +124,7 @@ views and diagnostic interfaces.
 
 The product includes:
 
-- An application rooted in the project, run as an API process and a worker process.
 - A Hebrew, desktop-first Web UI with basic responsive behavior.
-- FastAPI `/api/v1` endpoints backed by explicit application use-cases.
 - Job creation from required pasted text, an optional provenance URL, and a browser-read
   `.txt` convenience input.
 - Immutable JobSnapshots, versioned analyses, immutable SelectionPlans, one mutable
@@ -155,14 +147,12 @@ The product includes:
   through a replacement fact, and attachment to existing Profile sections. Contextual
   claim capture and use remain available in preparation flows. This surface is not a
   general Knowledge Manager and does not edit Profile definitions or arbitrary Knowledge.
-- OpenAI Responses API integration for six implemented Proposal tasks through strict
-  structured contracts. The approved seventh target task, `assess_claim_support`, is
-  delivered only with the D1 evidence lifecycle described in sections 10–12.
+- Structured AI Proposal tasks, including separate claim-support review when its
+  evidence lifecycle in sections 10–12 is implemented.
 - Deterministic work from an existing JobAnalysis through Ready without further AI;
   creating a new JobAnalysis requires a configured AI provider.
 - A Dashboard, Application Detail, unified timeline, recruitment tracking, next action,
-  internal and external submissions, status correction, and overdue warnings after the
-  first vertical slice is complete.
+  internal and external submissions, status correction, and overdue warnings.
 - Recruiter-facing PDF download and human-readable provenance/decision Markdown export.
 - Explicit schema upgrade and reconciliation commands. PostgreSQL and remote-bucket
   backup/restore remain environment responsibilities rather than application commands.
@@ -209,60 +199,48 @@ scope decision.
    Submission, and completed Operation records are immutable/versioned as specified.
 5. An approved revision is never edited. Editing it creates a new WorkingDraft with an
    explicit parent revision and source analysis/selection plan.
-6. `ReadyRevision` is not an entity. `ready_qualified` is a context-independent
-   projection over an ApprovedRevision with exact artifacts, passing render/PDF/ATS
-   validation, and successful current integrity verification.
-   `PreparationState=ready` is the separate active-context projection of a compatible
-   `ready_qualified` revision.
-7. `latest_ready_revision_id` refers to the newest currently `ready_qualified`
-   ApprovedRevision across the Application's full history, regardless of active-context
-   compatibility. `PreparationState` and historical-context warnings state whether it
-   is compatible with the active JobSnapshot + JobAnalysis.
-8. Ready compatibility is defined by JobSnapshot + JobAnalysis, not SelectionPlan. A
-   new plan or draft under the same snapshot and analysis does not demote the active
-   Ready projection. A new snapshot or analysis removes it from the active projection
-   without changing qualification solely because the active context moved. Missing or
-   corrupted artifacts may still make `ready_qualified=false`.
-9. Approval requires a passing ValidationRun for the exact WorkingDraft ID,
+6. `ReadyRevision` is not an entity. Ready is a projection over an ApprovedRevision
+   whose exact artifacts and validation remain valid. Active-context compatibility and
+   projection precedence are defined exclusively in `state-and-use-cases.md`.
+7. Approval requires a passing ValidationRun for the exact WorkingDraft ID,
    `edit_version`, content hash, facts and knowledge context, analysis context, and
    validator versions being approved.
-10. Changing one character after validation makes that ValidationRun ineligible for
+8. Changing one character after validation makes that ValidationRun ineligible for
     approval.
-11. Unsupported, pending, unlinked, strengthened, or semantically unverified claims may
+9. Unsupported, pending, unlinked, strengthened, or semantically unverified claims may
     be saved in the editor but must block approval.
-12. The presence of a valid fact ID does not prove that generated wording is supported;
+10. The presence of a valid fact ID does not prove that generated wording is supported;
     semantic factual validation remains mandatory.
-13. AI outputs are Proposals. Schema validation, deterministic policy, factual
+11. AI outputs are Proposals. Schema validation, deterministic policy, factual
     validation, and application commit decide what becomes state.
-14. AI failure never triggers a silent deterministic fallback. The user may explicitly
+12. AI failure never triggers a silent deterministic fallback. The user may explicitly
     retry or continue deterministically.
-15. A provider output, cancelled output, or stale-operation output may exist as inactive
+13. A provider output, cancelled output, or stale-operation output may exist as inactive
     immutable evidence, but it never becomes current without a successful optimistic
     commit against its original preconditions.
-16. Recruitment lifecycle and preparation lifecycle are independent.
-17. Recruitment history is append-only. Corrections add events and never rewrite past
+14. Recruitment lifecycle and preparation lifecycle are independent.
+15. Recruitment history is append-only. Corrections add events and never rewrite past
     events.
-18. Submitted artifacts and ApprovedRevisions are never overwritten or automatically
+16. Submitted artifacts and ApprovedRevisions are never overwritten or automatically
     deleted.
-19. PostgreSQL owns structured state and relationships; the configured object store owns
-    immutable/heavy payloads; Knowledge files own canonical knowledge. No mutable content
-    has two simultaneous sources of truth.
-20. `delete_fact` and `delete_application` are soft deletes: a terminal disposition flag
+17. No mutable content has two simultaneous sources of truth. Storage ownership is
+    defined in the architecture specification.
+18. `delete_fact` and `delete_application` are soft deletes: a terminal disposition flag
     on an otherwise-mutable row, appended to its audit trail like any other transition.
     Neither ever removes a row, rewrites prior content, or touches an immutable table.
     A deleted Fact or Application is excluded from default active listings but remains
     individually reachable, and every immutable record already produced from it
     (JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision, Artifact,
     Submission) is preserved unchanged.
-21. Every approved output stores exact provenance sufficient to identify its candidate
+19. Every approved output stores exact provenance sufficient to identify its candidate
     context, job context, knowledge context, policies, prompts, provider execution, and
     artifacts.
-22. Normal queries never expose partially committed cross-store mutations.
-23. API and worker concurrency must remain correct through optimistic versions, atomic
+20. Normal queries never expose partially committed cross-store mutations.
+21. API and worker concurrency must remain correct through optimistic versions, atomic
     PostgreSQL claims, leases, idempotency where required, and commit-time precondition
     checks.
-24. v2 starts with an empty database. It is proven by running its own workflow, not by
-    being pointed at existing data to see what happens.
+22. A fresh installation starts with an empty database and is proven through its own
+    workflow.
 
 ## 7. Candidate and application behavior
 
@@ -365,7 +343,7 @@ canonical fact lifecycle, or removed. Unlinked text requires explicit allowed fa
 links before semantic review. A provider cannot autonomously turn edited text into
 canonical facts or authorize its own wording.
 
-### 10.1 Reviewed wording — D1 amendment, 2026-09-06
+### 10.1 Reviewed wording
 
 Wording may paraphrase, shorten, or combine information from multiple canonical facts
 without changing meaning. Each fact retains its identity; a combined sentence must
@@ -413,7 +391,7 @@ only after an ApprovedRevision is rendered.
 A failed ValidationRun is a successful domain result with `passed=false` and structured
 issues. An exception is reserved for a validator that could not run.
 
-Under D1, pre-approval validation deterministically checks eligibility and currency of
+Pre-approval validation deterministically checks eligibility and currency of
 the exact proof/review evidence for every claim. It does not call AI. Evidence binds
 wording, language, supporting sources and their content, contextual attribution,
 allowed-fact scope, and review-policy versions. Relevant edits invalidate eligibility
@@ -448,8 +426,7 @@ The context change alone does not affect `ready_qualified`; artifact/integrity c
 still do.
 
 The Ready screen contains preview, recruiter-facing PDF download, validation summary,
-revision/provenance summary, and creation of a new WorkingDraft. Submission is added in
-the later tracking milestone, not the first vertical slice.
+revision/provenance summary, and creation of a new WorkingDraft.
 
 ## 12. AI behavior
 
@@ -470,7 +447,7 @@ are the provider's; `analyze_job` is the application command that calls the firs
 Neither analysis task may decide Fit, review routing, approval, or activation; those
 stay with deterministic policy under §2.
 
-- `assess_claim_support` — approved target, not yet implemented; separate semantic
+- `assess_claim_support` — separate semantic
   review of wording against supplied canonical sources and contextual attribution,
   returning evidence proposals only. It must not be advertised as available until the
   evidence, clarification, staleness, and activation contracts in §10.1 are implemented.
@@ -513,7 +490,7 @@ hidden chain-of-thought are never retained.
 Job descriptions and user content are untrusted data. They may influence the proposed
 content but never policy, allowed facts, validation, approval, or output schemas.
 
-Under D5, posting content can legitimately change extracted requirements and their
+Posting content can legitimately change extracted requirements and their
 derived gaps. Prompt-injection instructions are not additional job requirements.
 Acceptance compares the same posting with and without adversarial instructions:
 actual requirements retain their interpretation, and injected instructions must not
@@ -542,8 +519,8 @@ The backend owns action policy. React does not implement a second state machine.
 
 ## 14. Recruitment tracking
 
-The first architectural slice ends at Ready. After that gate passes, the product adds a table
-Dashboard with search, filters, sorting, preparation/recruitment state, last activity,
+The product includes a table Dashboard with search, filters, sorting,
+preparation/recruitment state, last activity,
 next action/date, active Operation, and warnings. It does not include charts.
 
 Application Detail contains header/status/next action, current preparation, one unified
@@ -605,9 +582,7 @@ arbitrary model IDs, and secrets remain unavailable to the client.
 
 ## 16. Storage, provenance, and retention
 
-PostgreSQL owns structured state and relationships. The configured object store owns
-immutable and heavy payloads. Knowledge files own canonical candidate knowledge. Their
-technical layout is defined by the architecture specification.
+Storage ownership and technical layout are defined by the architecture specification.
 
 Storage keys and local paths are never API inputs. Downloads are addressed by artifact
 ID, verify the registered content hash, and use a friendly filename.
@@ -634,8 +609,8 @@ Knowledge stays file-based and version-controlled. UI writes follow:
 
 The application never performs an automatic Git commit.
 
-New facts receive UUIDv4 technical IDs. Semantic fact IDs survive only in the seed
-knowledge carried over from v1, which keeps them; nothing creates new ones.
+New facts receive UUIDv4 technical IDs. Existing semantic fact IDs remain valid, but
+nothing creates new ones.
 The UI does not expose fact-ID creation. A system-generated human slug may exist but is
 not identity.
 
@@ -683,18 +658,13 @@ approval, selection editing, and recruitment status changes remain synchronous.
 Operation status and failure reason are separate. Lifecycle values and command behavior
 are defined in `state-and-use-cases.md`.
 
-The application permits one mutating Operation per Application, one global render/browser
-Operation, and low AI concurrency with a default ceiling of two. Locks are resource
-specific rather than one global mutex.
-
 Queued cancellation is immediate. Running cancellation is best-effort and prevents
 activation. A completed output after cancellation is recorded as inactive evidence.
 Retry creates a new Operation with `retry_of_operation_id` and a new idempotency key.
 
-Analyze, generate, approve, and render use idempotency. The scope is operation type +
-key. Reuse with the same payload hash returns the original result;
-reuse with another hash fails. Automatic retry is limited to one delayed attempt for
-explicit transient network/provider/browser-startup failures.
+Concurrency, lease, idempotency, and automatic-retry mechanics are defined by the
+architecture specification; their observable command outcomes are defined by
+`state-and-use-cases.md`.
 
 ## 19. API and UX contracts
 
