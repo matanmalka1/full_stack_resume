@@ -555,10 +555,7 @@ Overdue is a computed warning when the date is before today and the Application 
 terminal. There are no notifications.
 
 There is no hard delete through Web. Applications created by mistake may move from
-`saved` to `closed`, or be soft-deleted via `delete_application`: the record is
-excluded from default listings but every immutable JobSnapshot, JobAnalysis,
-SelectionPlan, ValidationRun, ApprovedRevision, Artifact, Submission, and Operation
-record it produced is preserved unchanged and remains individually reachable.
+`saved` to `closed`, or be soft-deleted via `delete_application` (invariant 18, §6).
 `delete_application` is orthogonal to `RecruitmentStatus`: it does not replace `closed`
 and is available regardless of the Application's current status.
 

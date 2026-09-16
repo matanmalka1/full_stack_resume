@@ -637,11 +637,10 @@ action explicitly creates another WorkingDraft with `parent_revision_id`, analys
 and SelectionPlan ID. The same idempotency key/payload returns the same revision. A
 reused key with another payload fails.
 
-A no-pause flow is an explicit user approval action. It may orchestrate
-validate -> approve -> render -> Ready checks with `actor_type=user` and the
-originating client, but it is subject to every exact-validation, warning confirmation,
-blocker, and idempotency rule above. No interface offers it; the rule binds
-whichever one does.
+A no-pause flow (product-spec.md §11) is an explicit user approval action here too: it
+may orchestrate validate -> approve -> render -> Ready checks with `actor_type=user` and
+the originating client, but it is subject to every exact-validation, warning
+confirmation, blocker, and idempotency rule above.
 
 Warnings may require one general confirmation. No warning that actually requires a
 specific resolution may reach this command as a warning.

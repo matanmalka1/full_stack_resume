@@ -24,14 +24,8 @@ lifecycle transitions are defined to change.
 ## Specifications
 
 `docs/spec/` holds the binding specifications. They are not required reading before every
-task. Read the one that owns what you are changing:
-
-| Changing | Read |
-| --- | --- |
-| Product scope, invariants, non-goals | `docs/spec/product-spec.md` |
-| Lifecycle, commands, queries, permissions | `docs/spec/state-and-use-cases.md` |
-| Layer boundaries, filesystem layout, schema shape | `docs/spec/architecture.md` |
-| Test layers and release gates | `docs/spec/test-and-acceptance-plan.md` |
+task. Read the one that owns what you are changing — `docs/README.md` maps topics to the
+owning document.
 
 If a specification conflicts with existing behavior, say so. Do not reinterpret a
 conflict silently.

@@ -76,81 +76,27 @@ tail -f logs/operations.jsonl
 Request bodies, headers, and query strings are excluded; credential-like values in
 exception details and tracebacks are redacted.
 
-Everything below describes what the engine does. The Web UI calls the same application
-services the API exposes.
+Everything below is a brief summary; the full workflow semantics — staleness rules,
+draft-edit classification, Emphasis weighting, and requirement-attestation boundaries —
+are defined in [`docs/spec/product-spec.md`](docs/spec/product-spec.md) and
+[`docs/spec/state-and-use-cases.md`](docs/spec/state-and-use-cases.md). The Web UI calls
+the same application services the API exposes.
 
-**Create the application and its immutable job snapshot.** A posting is captured once
-and never re-fetched, because a job description that later vanishes from the web is
-evidence nothing else can reproduce.
-
-**Analyze, draft, review.** A draft records the exact job snapshot and job analysis it
-was built from, and every later step — validation, approval, rendering, and the Ready
-recheck — uses that exact analysis rather than whichever one is newest. Two
-consequences follow. A new job snapshot must be analyzed before anything is drafted
-against it, and a later analysis that materially changes Track, Profile, Emphasis,
-language, Fit, gaps, or keywords invalidates the working draft, so regenerate it before
-approving. A re-run that reproduces the same classification changes nothing and leaves
-the draft valid.
-
-Drafting stops for review and never renders by default. Manual edits are classified as
-exact canonical wording, a versioned deterministic composite, conservatively extractive
-derived wording, or a pending claim that blocks approval. Unsupported wording is
-retained as `pending`; it is never silently discarded and cannot be approved. Structural
-Markdown edits or removed claim markers remain hard failures.
-
-**Approve, render, and read Ready.** Approval freezes exactly the content one
-ValidationRun passed, so approving requires obtaining that run first: nothing can
-approve content that nothing vouched for. Rendering runs the same content, claim, PDF,
-ATS, link, direction, filename, and visual gates every time.
-
-Low fit and requirement gaps are diagnostic information, not workflow blockers. Explicit
-Track, Profile, and Emphasis overrides are recorded as decisions. Overrides never
-authorize fabricated facts, and unsupported draft claims still block approval.
-
-Emphasis is a content decision, not a label. A Profile's `fact_ids` are the candidate
-pool a section may draw from, and `config/emphasis.json` weights the canonical fact tags
-per Emphasis, so the same Profile produces a different CV under `account-growth` than
-under `new-business`. Selection is deterministic and recorded: `resume.claims.json`
-carries the score, outcome and omission reason for every candidate considered. Because
-Emphasis changes the document, an unresolved Emphasis choice is a review reason the user
-answers through Apply Decisions, not something a classifier settles on its own.
-
-Which requirements a posting states, and which canonical facts answer them, is the
-provider's reading. The engine does not accept it on report: it locates every quoted
-requirement in the stored snapshot itself, every cited fact must exist and be canonical,
-a positive reading with no canonical evidence left falls back to unknown, and a
-canonical boundary fact caps a match regardless of what the provider proposed.
-Unverified direct SaaS Sales, named Sales-CRM usage, and strategic-partnership ownership
-are such boundaries: verified substitute facts may be selected, but the missing
-experience is never inferred from them.
-
-None of those checks discards the reading. Each one lowers what the analysis claims and
-records the reason on the record, so an analysis says why it claims less than the
-posting appears to ask for. A response that cannot be parsed at all is the one failure
-that is still a failure.
+**Create → analyze → draft → review → approve → render → Ready.** A job posting is
+captured once as an immutable snapshot and never re-fetched. Drafting stops for review
+and never renders by default; unsupported wording is retained as `pending` rather than
+discarded, and cannot be approved. Approval freezes exactly the content one
+ValidationRun passed, and rendering then runs the same content, claim, PDF, ATS, link,
+direction, filename, and visual gates every time. Low fit and requirement gaps are
+diagnostic information, not workflow blockers.
 
 ## Fact lifecycle
 
-New information is never written straight into a CV. It enters the store as a `pending`
-fact, is confirmed, is promoted to `canonical`, and only then may a Profile section offer
-it to the selection policy. Every step writes to the canonical source file under `base/`
-and appends an immutable event to `fact_events`, so the status survives the
-process and the trail explains who promoted what.
-
-A manual draft edit the fact store cannot support becomes a `pending` claim that blocks
-approval. Its wording is captured as a candidate fact rather than retyped: the claim's
-exact text becomes the fact's rendering, with no AI rewriting, and meaning, tags, and
-provenance are explicit input.
-
-Explicit confirmation is required for every promotion, and `pending -> canonical` in one
-step is refused. Until a fact is canonical it cannot be rendered, linked to a claim, or
-attached to a Profile, and adding or confirming one never invalidates drafts already
-built from the canonical facts. Promoting one to canonical does change the canonical
-surface, so the working draft is rebuilt afterwards.
-
-Correcting a canonical fact means creating a replacement that `replaces` it, which
-`POST /api/v1/facts` accepts. Identity is always generated - a caller-chosen fact ID is
-refused - and a correction never mutates the fact it supersedes.
+New information follows `pending -> confirmed -> canonical` (`docs/spec/product-spec.md`
+§17); every promotion writes to the canonical source file under `base/` and appends an
+immutable event to `fact_events`. Correcting a canonical fact means creating a
+replacement that `replaces` it via `POST /api/v1/facts` — identity is always generated,
+and a correction never mutates the fact it supersedes.
 
 ## Tracking and inspection
 
@@ -179,34 +125,24 @@ bucket alike.
 
 ## AI provider
 
-Semantic job analysis — which requirements a posting states, and which canonical facts
-answer them — is the provider's. A failed or unconfigured provider never silently
-becomes a rules analysis: the UI offers configuration or retry rather than a fabricated
-result. Everything downstream of an existing analysis — editing, validation, approval,
-rendering, Ready, export and recruitment tracking — runs with no key at all.
-
-`POST /applications/{id}/analyses` only accepts `provider=openai`: creating a new
-`JobAnalysis` requires a configured provider, with no rules-based fallback
-(`docs/spec/product-spec.md` section 2, "Semantic analysis authority"). Draft creation
-keeps its own separate deterministic path (`provider=deterministic` on `create_draft`),
-unaffected by this.
+Creating a new `JobAnalysis` requires a configured provider, with no rules-based
+fallback (`docs/spec/product-spec.md` §2, "Semantic analysis authority"). Everything
+downstream of an existing analysis — editing, validation, approval, rendering, Ready,
+export, and recruitment tracking — runs with no key at all. Draft creation keeps its own
+separate deterministic path (`provider=deterministic` on `create_draft`), unaffected by
+this.
 
 A configured key enables five structured OpenAI proposal tasks: `propose_analysis`,
 `propose_selection_plan`, `draft_resume`, `regenerate_section`, and `regenerate_claim`.
-`propose_analysis` reads the posting once and returns the classification and the
-requirements together; a flawed entry in its reading is narrowed and disclosed as an
-analysis issue rather than discarding the whole reading. The Web settings page then
-offers a closed model catalog and low/medium/high reasoning effort; those defaults are
-frozen onto each queued AI Operation:
+The Web settings page offers a closed model catalog and low/medium/high reasoning
+effort, frozen onto each queued AI Operation:
 
 ```bash
 export OPENAI_API_KEY='...'
 ```
 
-Provider output is Pydantic-validated and deterministic hard gaps remain visible.
-The adapter uses strict Structured Outputs through the Responses API. Each provider
-artifact preserves token usage, the dated pricing snapshot, and its calculated USD
-cost; the Operation panel shows the selected model, effort, and final cost.
+Provider output is Pydantic-validated through strict Structured Outputs; each provider
+artifact preserves token usage, the dated pricing snapshot, and its calculated USD cost.
 
 ## Local Web UI
 
