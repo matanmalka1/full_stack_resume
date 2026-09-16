@@ -1,10 +1,11 @@
-import { Check } from "lucide-react";
+import { Activity, Check, Clock3 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
+import { Disclosure } from "@/ui/Disclosure";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
@@ -28,6 +29,15 @@ const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, 
 };
 
 const CANCEL_REVEAL_DELAY_MS = 4_000;
+
+const panelAccentClasses: Record<Operation["status"], string> = {
+  queued: "border-s-cv-accent",
+  running: "border-s-cv-accent",
+  succeeded: "border-s-cv-success",
+  failed: "border-s-cv-blocker",
+  cancelled: "border-s-cv-border-strong",
+  interrupted: "border-s-cv-warning",
+};
 
 const useCancelVisibility = (operation: Operation): boolean => {
   const [revealedOperationId, setRevealedOperationId] = useState<string | null>(null);
@@ -92,6 +102,13 @@ export const ActiveOperationPanel = ({
   const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
   const produced = activeOutputLabels(operation);
   const aiExecution = operation.provider === "openai" && operation.model != null;
+  const summary =
+    continuation ??
+    (terminal
+      ? produced.length === 0
+        ? "הפעולה הסתיימה."
+        : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`
+      : "העמוד מתעדכן מעצמו עד לסיום הפעולה.");
   const executionDetail = aiExecution ? (
     <span className="text-support text-cv-text-muted">
       <LtrText>{operation.model}</LtrText>
@@ -117,32 +134,35 @@ export const ActiveOperationPanel = ({
 
   if (settled) {
     return (
-      /* One settled fact, so it is set as one line rather than as five. The full panel
-         earns a heading, a badge, a sentence and two controls because each is doing
-         separate work while the run is live; collapsed, the same five treatments in a
-         single 40px row read as five competing things to look at. Everything here is
-         muted body text on one baseline, and the only marks that survive are the
-         status word, which carries the outcome, and the two controls. */
+      /* One settled fact, so it is grouped into one compact summary rather than retaining
+         the live panel's badge, progress surface and alerts. The success mark anchors the
+         result, while an optional re-run remains visually secondary to what completed. */
       <Card
         aria-labelledby={settledHeadingId}
-        className="cv-settle-in flex flex-wrap items-center gap-x-3 gap-y-2 bg-cv-surface-muted px-4 py-2.5 text-support text-cv-text-muted"
+        className="cv-settle-in flex flex-wrap items-center gap-3 border-s-4 border-s-cv-success bg-cv-surface px-4 py-3 text-support shadow-surface"
       >
-        <Check aria-hidden="true" className="size-icon-md shrink-0 text-cv-success" />
-        <h2 className="font-medium text-cv-text" id={settledHeadingId}>
-          הרצת {operationTypeLabels[operation.operation_type]}
-        </h2>
-        <p dir="auto">
-          {produced.length === 0
-            ? statusLabels[operation.status]
-            : `${statusLabels[operation.status]} · יצרה ${joinHebrewList(produced)}`}
-        </p>
-        {executionDetail}
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-pill bg-cv-success-soft text-cv-success">
+          <Check aria-hidden="true" className="size-icon-md" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-cv-text" id={settledHeadingId}>
+            הרצת {operationTypeLabels[operation.operation_type]}
+          </h2>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-cv-text-muted">
+            <p dir="auto">
+              {produced.length === 0
+                ? statusLabels[operation.status]
+                : `${statusLabels[operation.status]} · יצרה ${joinHebrewList(produced)}`}
+            </p>
+            {executionDetail}
+          </div>
+        </div>
 
         {/* A.5: the row a watched run collapses into is the moment worth announcing, so
             the live region survives the change of shape. Without it the panel went quiet
             exactly as it reached the status the reader was waiting for. */}
         <LiveRegion>{statusLabels[operation.status]}</LiveRegion>
-        <div className="ms-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
           {/* Retry stays reachable - it is the Operation's own action - but at the weight
               of a link rather than a button, because re-running work that succeeded
               supersedes the result the screen is showing. */}
@@ -155,39 +175,58 @@ export const ActiveOperationPanel = ({
   return (
     <WorkCardFrame
       badge={<StatusBadge tone={statusTones[operation.status]}>{progressLabel}</StatusBadge>}
+      className={`border-s-4 ${panelAccentClasses[operation.status]}`}
       /* The run, not its subject. `operationTypeLabels` names the work ("ניתוח המשרה"),
          which is also what the panel reporting the resulting analysis calls itself - two
          adjacent regions carrying one accessible name, which reads as a duplicated section
          rather than as a run and its conclusion. Naming the event here keeps the noun for
          the panel that owns the result. */
-      heading={<>הרצת {operationTypeLabels[operation.operation_type]}</>}
+      heading={
+        <span className="flex items-center gap-2.5">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-surface-muted text-cv-text-muted">
+            <Activity aria-hidden="true" className="size-icon-md" />
+          </span>
+          <span>הרצת {operationTypeLabels[operation.operation_type]}</span>
+        </span>
+      }
     >
       {/* A.5: announce the same single progress sentence shown in the badge, so an
           identical poll tick re-renders without speaking. */}
       <LiveRegion>{continuation ?? progressLabel}</LiveRegion>
 
-      {executionDetail}
-      <p className="text-support leading-6 text-cv-text-muted" dir="auto">
-        {continuation ??
-          (terminal
-            ? produced.length === 0
-              ? "הפעולה הסתיימה."
-              : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`
-            : "העמוד מתעדכן מעצמו עד לסיום הפעולה.")}
-      </p>
+      <div className="rounded-control border border-cv-border bg-cv-surface-muted p-3.5 sm:p-4">
+        <div className="flex items-start gap-3">
+          <Clock3 aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-cv-accent" />
+          <div className="min-w-0 flex-1">
+            <p className="text-support font-medium leading-6 text-cv-text" dir="auto">
+              {summary}
+            </p>
 
-      {/* A.3: the backend's safe progress line is English today, so it picks its own
-          direction rather than inheriting the RTL shell.
+            {/* A.3: the backend's safe progress line is English today, so it picks its
+                own direction rather than inheriting the RTL shell. The line's place is
+                held by the stable status surface while live work has not reported one. */}
+            <p className="mt-1 min-h-6 text-support leading-6 text-cv-text-muted" dir="auto">
+              {operation.message === "" ? (terminal ? null : "ממתינים לעדכון מהפעולה…") : operation.message}
+            </p>
+          </div>
+        </div>
 
-          Its place is held open while the run is live rather than mounted when the first
-          message arrives: the line appears partway through a run, and a paragraph
-          appearing between two poll ticks pushed everything below it down mid-read. */}
-      {operation.message !== "" ? (
-        <p className="text-body leading-7" dir="auto">
-          {operation.message}
-        </p>
-      ) : terminal ? null : (
-        <div aria-hidden="true" className="h-7" />
+        {terminal ? null : (
+          <div
+            aria-label={`התקדמות: ${progressLabel}`}
+            aria-valuetext={progressLabel}
+            className="mt-3 h-1.5 overflow-hidden rounded-pill bg-cv-border"
+            role="progressbar"
+          >
+            <div className="cv-operation-progress h-full w-2/5 rounded-pill bg-cv-accent" />
+          </div>
+        )}
+      </div>
+
+      {executionDetail === null ? null : (
+        <Disclosure className="rounded-control border border-cv-border px-3.5 py-3" summary="פרטי ביצוע">
+          {executionDetail}
+        </Disclosure>
       )}
 
       {failure === null && operation.safe_failure_detail == null ? null : (

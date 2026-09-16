@@ -46,6 +46,7 @@ describe("ActiveOperationPanel progress", () => {
     renderPanel(operation());
 
     expect(screen.getByRole("status")).toHaveTextContent("מתבצעת");
+    expect(screen.getByRole("progressbar", { name: "התקדמות: מתבצעת" })).toBeInTheDocument();
     expect(screen.queryByText("בביצוע")).not.toBeInTheDocument();
   });
 
@@ -60,7 +61,19 @@ describe("ActiveOperationPanel progress", () => {
     renderPanel(operation({ status: "succeeded", phase: "activating", is_terminal: true }));
 
     expect(screen.getByRole("status")).toHaveTextContent("הושלמה");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText("מפעילה את התוצר")).not.toBeInTheDocument();
+  });
+
+  it("keeps optional AI execution metadata behind an interactive disclosure", () => {
+    renderPanel(operation({ cost_usd: "0.012", model: "gpt-test", provider: "openai", reasoning_effort: "high" }));
+
+    const details = screen.getByText("פרטי ביצוע").closest("details");
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("פרטי ביצוע"));
+    expect(details).toHaveAttribute("open");
+    expect(screen.getByText("gpt-test")).toBeVisible();
+    expect(screen.getByText(/מאמץ גבוה/)).toBeVisible();
   });
 
   it("does not expose safe English detail for a known failure code", () => {

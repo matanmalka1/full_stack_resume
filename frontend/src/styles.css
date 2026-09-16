@@ -571,6 +571,22 @@ dialog::backdrop {
   animation: cv-settle-in 180ms ease-out;
 }
 
+/* Operations do not expose a trustworthy percentage, so the bar communicates ongoing
+   activity rather than pretending to approach 100%. It crosses the track and starts
+   again; the global reduced-motion rule above lets it settle into a plain accent segment. */
+@keyframes cv-operation-progress {
+  from {
+    transform: translateX(-160%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+.cv-operation-progress {
+  animation: cv-operation-progress 1.4s ease-in-out infinite;
+}
+
 /* The workflow rail's one decorative beacon: a soft ring breathing behind the current
    stage's mark. `prefers-reduced-motion` above already collapses every animation on the
    page to a single, near-instant frame, so this needs no separate opt-out. */

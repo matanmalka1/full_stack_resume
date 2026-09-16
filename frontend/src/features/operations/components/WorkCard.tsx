@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from "react";
 
 import { Card } from "@/ui/Card";
+import { cx } from "@/ui/cx";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
 
@@ -18,10 +19,12 @@ import { StatusBadge } from "@/ui/StatusBadge";
 export const WorkCardFrame = ({
   badge,
   children,
+  className,
   heading,
 }: {
   badge: ReactNode;
   children?: ReactNode;
+  className?: string;
   heading: ReactNode;
 }) => {
   /* Per instance rather than one constant for the frame. Two of these can be on a screen
@@ -31,7 +34,7 @@ export const WorkCardFrame = ({
   const headingId = useId();
 
   return (
-    <Card aria-labelledby={headingId} className="p-5">
+    <Card aria-labelledby={headingId} className={cx("p-5", className)}>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <h2 className="text-body font-semibold text-cv-text" id={headingId}>
           {heading}
