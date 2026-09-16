@@ -8,9 +8,13 @@ Product authority: `docs/spec/product-spec.md`. Decision history is recorded in
 ## 1. Test strategy
 
 Release readiness is based on invariants, failure recovery, and complete user journeys.
-It is not based on a broad line-coverage percentage or raw test count. Raw count is
-nevertheless a useful review signal: rapid growth without new product risk usually
-indicates duplicated scenarios or tests coupled to implementation shape.
+There is no global coverage-percentage or test-count gate; critical domain/application
+modules may adopt focused thresholds if they add value, but invariant and journey
+evidence remains authoritative. Raw test count is nevertheless a useful review signal:
+rapid growth without new product risk usually indicates duplicated scenarios or tests
+coupled to implementation shape. At each milestone, review the collected-test delta:
+additions should correspond to new risk, and redundant tests should be merged or
+removed before the milestone closes.
 
 All material safety invariants and regression risks remain represented. Refactoring may
 move, merge, or delete tests, but it may not silently remove coverage of factual safety,
@@ -496,13 +500,7 @@ deployment policy is introduced, its restore drill belongs in deployment evidenc
 must cover both stores consistently; the application does not claim that a project copy
 is a complete backup.
 
-## 14. Evidence rule
-
-**A file is not evidence of a decision.** Nothing is treated as approved, submitted,
-or Ready because a file exists at a path; those states come from records, and a record
-that was never written stays absent rather than being inferred.
-
-## 15. Tracking acceptance
+## 14. Tracking acceptance
 
 Cover:
 
@@ -517,22 +515,18 @@ Cover:
 - one active next action, event history, and computed overdue warning
 - no hard delete through UI
 
-## 16. CI and release gates
-
-### Task delivery gates
+## 15. CI and release gates
 
 Per-task gate selection is owned by `AGENTS.md` (`CLAUDE.md`), not restated here: which
 checks a diff owes, when a full suite is warranted, and the three triggers that demand
 extra evidence — a schema change, a rendering/artifact-path change, and a change to a
 stored value's meaning, a public signature, or a projection field.
 
-There is no global coverage-percentage or test-count gate. Critical
-domain/application modules may adopt focused thresholds if they add value, but
-invariant and journey evidence remains authoritative. At each milestone, review the
-collected-test delta: additions should correspond to new risk, and redundant tests
-should be merged or removed before the milestone closes.
+## 16. Acceptance report format
 
-## 17. Acceptance report format
+**A file is not evidence of a decision.** Nothing is treated as approved, submitted,
+or Ready because a file exists at a path; those states come from records, and a record
+that was never written stays absent rather than being inferred.
 
 The final report records for every product DoD item:
 
