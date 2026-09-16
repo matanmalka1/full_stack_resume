@@ -432,20 +432,25 @@ revision/provenance summary, and creation of a new WorkingDraft.
 
 The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
 protocol.
-The AI task catalog has six implemented tasks and one approved target task. Task names
-are the provider's; `analyze_job` is the application command that calls the first two:
+The AI task catalog has five implemented tasks and one approved target task. Task names
+are the provider's; `analyze_job` is the application command that calls the first:
 
-- `propose_requirement_extraction` — quoted requirements, explicit interpretation, and
-  evidence-linked coverage as one Proposal.
-- `propose_job_analysis` — Track/Profile/Emphasis/language classification as one
-  Proposal.
+- `propose_analysis` — the posting's requirements with their importance and
+  evidence-linked coverage, together with Track/Profile/Emphasis/language
+  classification, as one Proposal from one call.
 - `propose_selection_plan`
 - `draft_resume`
 - `regenerate_section`
 - `regenerate_claim`
 
-Neither analysis task may decide Fit, review routing, approval, or activation; those
+The analysis task may not decide Fit, review routing, approval, or activation; those
 stay with deterministic policy under §2.
+
+A flawed part of a reading narrows that part and is disclosed as an analysis issue
+rather than voiding the reading. A requirement whose text the engine cannot locate in
+the posting is kept and marked unverified; an unresolvable citation is dropped and any
+positive coverage resting on it falls to unknown. Uncertainty is recorded as unknown and
+never as an absence of experience.
 
 - `assess_claim_support` — separate semantic
   review of wording against supplied canonical sources and contextual attribution,

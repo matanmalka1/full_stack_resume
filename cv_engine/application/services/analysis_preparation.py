@@ -4,13 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...domain.analysis.assembly import build_analysis
-from ...domain.analysis.requirements.ai_extraction import (
-    RequirementExtractionRejected,
-    extraction_is_failed,
-    verify_and_cover_extraction,
-)
-from ...domain.analysis.requirements.segmentation import requirement_lines
+from ...domain.analysis.normalize import normalize_analysis_proposal
 from ...domain.contracts.analysis import JobAnalysis, OverrideKey
 from ...domain.contracts.selection import SelectionManifest
 from ..commands import AnalyzeCommand
@@ -22,7 +16,7 @@ from ..errors import (
     ProviderInvalidOutput,
     UnknownRecord,
 )
-from ..ports import JobAnalysisContext, RequirementExtractionContext
+from ..ports import AnalysisContext
 from .analysis_selection import AnalysisSelection
 from .proposals import ProviderEvidence, analysis_fact_context
 
@@ -40,7 +34,6 @@ class PreparedAnalysis:
     track_emphasis_dependencies: dict[str, str]
     normalized_role: str
     evidence: ProviderEvidence | None = None
-    extraction_evidence: ProviderEvidence | None = None
 
 
 class AnalysisPreparation:
@@ -77,98 +70,40 @@ class AnalysisPreparation:
         if command.provider != "openai" or operation_id is None:
             raise PreconditionFailed("analysis requires an OpenAI Operation")
         evidence: ProviderEvidence | None = None
-        extraction_evidence: ProviderEvidence | None = None
+        override_candidates: dict[OverrideKey, str | None] = {
+            "track": command.track_override,
+            "profile": command.profile_override,
+            "emphasis": command.emphasis_override,
+            "language": command.language_override,
+        }
+        overrides: dict[OverrideKey, str] = {
+            key: value for key, value in override_candidates.items() if value is not None
+        }
         try:
-            extracted_answer = service.provider.propose_requirement_extraction(
-                RequirementExtractionContext(
+            answered = service.provider.propose_analysis(
+                AnalysisContext(
                     job_text=job_text,
-                    requirement_lines=[
-                        {
-                            "start": line.start,
-                            "end": line.end,
-                            "text": line.text,
-                            "section": line.section,
-                        }
-                        for line in requirement_lines(job_text, knowledge.requirement_concepts)
-                    ],
                     candidate_facts=analysis_fact_context(knowledge.facts),
-                ),
-                model=command.model,
-                reasoning_effort=command.reasoning_effort,
-            )
-            extraction_evidence = service.preserve(
-                command.application_id,
-                operation_id,
-                "propose_requirement_extraction",
-                extracted_answer.provenance,
-            )
-            try:
-                (
-                    verified_requirements,
-                    unmapped,
-                    understanding,
-                    unmatched_lines,
-                ) = verify_and_cover_extraction(
-                    extracted_answer.proposal,
-                    source_text=job_text,
-                    normalized_hash=snapshot["normalized_hash"],
-                    facts=knowledge.facts,
-                    concepts=knowledge.requirement_concepts,
-                    task_version=extracted_answer.provenance.context.task_contract_version,
-                    prompt_version=extracted_answer.provenance.context.prompt_version,
-                )
-            except RequirementExtractionRejected as exc:
-                # The sanitized response was already preserved and registered
-                # above via `service.preserve` (invariant 15: a refused output
-                # stays inactive immutable evidence rather than being dropped
-                # at the raise site). `.evidence` is set, not just
-                # `provenance=`, so `_preserve_rejected` finds it already
-                # registered and only adds the missing Operation output
-                # reference - calling `service.preserve` a second time on the
-                # same payload would collide on `artifact_versions.path`
-                # UNIQUE, exactly as that function's docstring warns against.
-                failure = ProviderInvalidOutput(str(exc), provenance=extracted_answer.provenance)
-                failure.evidence = extraction_evidence
-                raise failure from exc
-            extraction_namespace = (
-                f"ai:{extracted_answer.provenance.context.task_contract_version}:"
-                f"{extracted_answer.provenance.context.prompt_version}"
-            )
-            override_candidates: dict[OverrideKey, str | None] = {
-                "track": command.track_override,
-                "profile": command.profile_override,
-                "emphasis": command.emphasis_override,
-                "language": command.language_override,
-            }
-            overrides: dict[OverrideKey, str] = {
-                key: value for key, value in override_candidates.items() if value is not None
-            }
-            answered = service.provider.propose_job_analysis(
-                JobAnalysisContext(
-                    job_text=job_text,
-                    requirements=[item.model_dump(mode="json") for item in verified_requirements],
                     overrides={str(key): value for key, value in overrides.items()},
                 ),
                 model=command.model,
                 reasoning_effort=command.reasoning_effort,
             )
             evidence = service.preserve(
-                command.application_id, operation_id, "propose_job_analysis", answered.provenance
+                command.application_id, operation_id, "propose_analysis", answered.provenance
             )
             try:
-                result = build_analysis(
-                    requirements=verified_requirements,
-                    extraction_version=extraction_namespace,
-                    extraction_failed=extraction_is_failed(
-                        job_text, verified_requirements, knowledge.requirement_concepts
-                    ),
-                    requirements_absent=not verified_requirements,
-                    requirements_unmapped=bool(unmatched_lines) and bool(verified_requirements),
-                    proposal=answered.proposal,
-                    profiles=profiles,
+                # Normalization does not raise over one bad requirement; what
+                # can still fail here is a reading the engine cannot act on at
+                # all - a Track/Profile/Emphasis combination the Profile does
+                # not allow, or a language outside the supported set.
+                result = normalize_analysis_proposal(
+                    answered.proposal,
+                    source_text=job_text,
                     facts=knowledge.facts,
-                    unmapped_statements=unmapped,
-                    understanding=understanding,
+                    profiles=profiles,
+                    concepts=knowledge.requirement_concepts,
+                    normalized_hash=snapshot["normalized_hash"],
                     overrides=overrides,
                 )
             except ValueError as exc:
@@ -178,9 +113,7 @@ class AnalysisPreparation:
             used_provider = answered.provenance.context.provider
             used_model = answered.provenance.context.model
         except ApplicationError as exc:
-            exc.completed_evidence = tuple(
-                item for item in (extraction_evidence, evidence) if item is not None
-            )
+            exc.completed_evidence = tuple(item for item in (evidence,) if item is not None)
             raise
 
         accepted: dict[str, str] = {"fit": "accepted-low-fit"} if command.accept_low_fit else {}
@@ -214,5 +147,4 @@ class AnalysisPreparation:
             },
             normalized_role=selected_profile.normalized_role,
             evidence=evidence,
-            extraction_evidence=extraction_evidence,
         )

@@ -49,15 +49,14 @@ from ..application.errors import (
 )
 from ..application.ports import (
     AIProposal,
+    AnalysisContext,
     DraftResumeContext,
-    JobAnalysisContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
-    RequirementExtractionContext,
     SelectionPlanContext,
     TaskContracts,
 )
-from ..domain.contracts.analysis import JobClassificationProposal
+from ..domain.contracts.analysis_proposal import AnalysisProposal
 from ..domain.contracts.base import StrictModel
 from ..domain.contracts.providers import (
     ClaimProposal,
@@ -67,7 +66,6 @@ from ..domain.contracts.providers import (
     ProviderPricing,
     ProviderTaskResult,
     ProviderUsage,
-    RequirementExtractionProposal,
     SectionProposal,
     SelectionProposal,
 )
@@ -392,8 +390,7 @@ class OpenAIResponsesProvider:
 #: satisfy. Derived from here by both the request schema and the parse, so a
 #: task cannot be requested under one schema and validated against another.
 TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
-    "propose_requirement_extraction": RequirementExtractionProposal,
-    "propose_job_analysis": JobClassificationProposal,
+    "propose_analysis": AnalysisProposal,
     "propose_selection_plan": SelectionProposal,
     "draft_resume": DraftProposal,
     "regenerate_section": SectionProposal,
@@ -437,7 +434,7 @@ class OpenAIProvider:
         output_model = TASK_OUTPUT_MODELS[task]
         # The contract file names the input and output models. Checked here
         # rather than trusted, because a name nobody enforces is a comment: a
-        # contract that says `JobClassificationProposal` while the code sends
+        # contract that says `AnalysisProposal` while the code sends
         # something else would persist a false `output_schema_version` into an
         # immutable record, and every test would still pass.
         declared = {"input": contract.input, "output": contract.output}
@@ -457,34 +454,17 @@ class OpenAIProvider:
             input_model=type(context),
         )
 
-    def propose_requirement_extraction(
+    def propose_analysis(
         self,
-        context: RequirementExtractionContext,
+        context: AnalysisContext,
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> AIProposal[RequirementExtractionProposal]:
+    ) -> AIProposal[AnalysisProposal]:
         proposal, provenance = self._run(
-            "propose_requirement_extraction",
-            context,
-            model=model,
-            reasoning_effort=reasoning_effort,
+            "propose_analysis", context, model=model, reasoning_effort=reasoning_effort
         )
-        return AIProposal(
-            proposal=cast(RequirementExtractionProposal, proposal), provenance=provenance
-        )
-
-    def propose_job_analysis(
-        self,
-        context: JobAnalysisContext,
-        *,
-        model: str | None = None,
-        reasoning_effort: str | None = None,
-    ) -> AIProposal[JobClassificationProposal]:
-        proposal, provenance = self._run(
-            "propose_job_analysis", context, model=model, reasoning_effort=reasoning_effort
-        )
-        return AIProposal(proposal=cast(JobClassificationProposal, proposal), provenance=provenance)
+        return AIProposal(proposal=cast(AnalysisProposal, proposal), provenance=provenance)
 
     def propose_selection_plan(
         self,

@@ -146,7 +146,7 @@ class AITaskHandler:
 
 
 class AnalysisOperationHandler(AITaskHandler):
-    task = "propose_job_analysis"
+    task = "propose_analysis"
 
     def __init__(self, service: AnalysisService):
         self.service = service

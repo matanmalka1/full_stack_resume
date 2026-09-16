@@ -164,6 +164,46 @@ D5 ביטלה את החצי הראשון: אין יותר יצירת ניתוח 
 [architecture §11](spec/architecture.md),
 [acceptance/live-provider-run.md](acceptance/live-provider-run.md).
 
+### D7 — גבול AI סובלני, קריאה אחת (2026-09-16)
+
+**זו ההחלטה האחרונה והיא גוברת על D5 ו־D6 בכל מקום שהן נוגעות בחוזה הניתוח.**
+
+העיקרון: **פלט חלקי או לא מדויק של המודל יוצר תוצאה חלקית עם warnings; רק תשובה
+שאי אפשר לפענח מכשילה את הפעולה.**
+
+**מה שהשתנה בחוזה.** `propose_requirement_extraction` ו־`propose_job_analysis`
+אוחדו ל־`propose_analysis` אחת. מהחוזה הוסרו `start`, `end`, `source_role`,
+`context_quote`, `kind`, `demanded`, `composition`, `members`, `members_coverage`
+ו־`unmapped_statements`. מה שנשאר לכל דרישה: `text`, `importance`
+(`mandatory`/`preferred`/`unknown`), `coverage` (`matched`/`partial`/`unsupported`/
+`unknown`), `fact_ids` ו־`rationale`.
+
+**מה שנשאר דטרמיניסטי.** המנוע מאתר בעצמו כל ציטוט בתצלום; בודק שכל עובדה מצוטטת
+קיימת וקנונית; מוריד כיסוי חיובי שנשאר בלי ראיה; ומחיל עובדות גבול שממשיכות לחסום
+`matched` ל־`partial`. בדיקה שנכשלת **מצמצמת את הדרישה שהיא נוגעת בה ונרשמת
+כ־`AnalysisIssue` על הרשומה** — היא אינה מבטלת את הקריאה.
+
+**מה שכבר אינו שער.** הסגמנטציה אינה מכריזה על כשל חילוץ, אינה מייצרת דרישות
+סינתטיות ואינה חוסמת אישור. ספירת ההיגדים נשארת, וכשהיא גבוהה ממספר הדרישות
+שנקראו היא מדווחת כ־`analysis_may_be_incomplete` — אזהרה, לא blocker.
+
+**זהות דרישה** נשענת על התצלום ועל הטקסט המנורמל של הדרישה תחת גרסת אלגוריתם
+מוצהרת. גרסת הפרומפט נשמרת כ־provenance ואינה קלט לזהות: ניסוח מחדש של פרומפט אינו
+הופך דרישות שלא השתנו לישויות חדשות.
+
+**אי־ודאות** נרשמת כ־`unknown` ולעולם לא כ־`unsupported`. „לא ידענו” ו„למועמד אין”
+הם ממצאים שונים, והשני מוחק ניסיון אמיתי מקורות החיים.
+
+**מה שהניע את זה:** שתי הרצות חיות ב־2026-09-16 שנדחו במלואן — אחת איבדה 16 דרישות
+שנקראו נכון בגלל span שחרג בתו אחד, והשנייה 15 בגלל `context_quote` בן מילה אחת
+שהפירוש לא נזקק לו כלל. ראו [acceptance/live-provider-run.md](acceptance/live-provider-run.md)
+ו־[ממצא F1](acceptance/live-provider-run.md) על יציבות הקריאה.
+
+עוגן ב־[product-spec §12](spec/product-spec.md),
+[state-and-use-cases §13](spec/state-and-use-cases.md),
+[architecture §11](spec/architecture.md),
+[test-and-acceptance-plan §6](spec/test-and-acceptance-plan.md).
+
 ## 3. מצב המסירות
 
 שלוש מסירות לפי תוצאה שימושית, לא גלים לכל שכבה טכנית. התלויות נשמרות: הבנת משרה
@@ -181,7 +221,9 @@ D5 ביטלה את החצי הראשון: אין יותר יצירת ניתוח 
 
 ### 3.1 מסירה 1 — מה מומש
 
-- `propose_requirement_extraction` היא משימת ספק נפרדת מסיווג המשרה.
+- `propose_requirement_extraction` הייתה משימת ספק נפרדת מסיווג המשרה. **הוחלף:**
+  שתי המשימות אוחדו ל־`propose_analysis` אחת, וחלק מהמנגנונים שלהלן הוסרו איתן —
+  ראו D7.
 - כל דרישת AI עוברת אימות ציטוט והיסטים מול תצלום המשרה לפני שימוש בה.
 - פירוש מפורש שומר source role, obligation, composition, members ו־negation;
   `context_quote` נבדק בתוך אותו היגד או סעיף.

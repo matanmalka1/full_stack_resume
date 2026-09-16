@@ -8,8 +8,8 @@ import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
+    analysis_proposal,
     seed_analysis_for_command,
-    trivial_requirement_extraction,
     validate_active_draft,
 )
 from pydantic import ValidationError
@@ -52,7 +52,7 @@ from cv_engine.application.operations import (
     is_terminal_operation,
     require_operation_transition,
 )
-from cv_engine.domain.models import JobClassificationProposal, ValidationIssue, ValidationReport
+from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.persistence.tables import (
@@ -807,22 +807,7 @@ def test_foreground_analysis_reuses_an_explicit_idempotency_key(
     )
 
     def submit_and_run() -> str:
-        fake_openai.script(
-            "propose_requirement_extraction",
-            trivial_requirement_extraction(ACCOUNT_MANAGER_JOB, requirement_concepts),
-        )
-        fake_openai.script(
-            "propose_job_analysis",
-            JobClassificationProposal(
-                track="sales",
-                profile="account-manager",
-                emphasis="account-growth",
-                language="en",
-                confidence=0.99,
-                rationale="fixture",
-                keywords=[],
-            ),
-        )
+        fake_openai.script("propose_analysis", analysis_proposal())
         operation = ai_services.operations.submit_analysis(
             command,
             idempotency_key="analysis-idempotency-key",

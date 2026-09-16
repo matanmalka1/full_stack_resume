@@ -31,16 +31,15 @@ import os
 
 from api_harness import MUTATION_HEADERS
 from fake_provider import FakeOpenAI
-from helpers import ACCOUNT_MANAGER_JOB, REVIEW_DECISION_JOB, working_claim
+from helpers import (
+    ACCOUNT_MANAGER_JOB,
+    REVIEW_DECISION_JOB,
+    analysis_proposal,
+    working_claim,
+)
 
 from cv_engine.api.app import API_PREFIX
-from cv_engine.domain.contracts.analysis import RequirementAttestation, RequirementInterpretation
-from cv_engine.domain.contracts.providers import (
-    ProposedEvidence,
-    ProposedRequirement,
-    RequirementExtractionProposal,
-)
-from cv_engine.domain.models import JobClassificationProposal
+from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
 
 
 def _post(harness, path: str, body: dict | None = None, **headers):
@@ -73,40 +72,20 @@ def _outputs(finished: dict) -> dict[str, str]:
     return {output["output_type"]: output["output_id"] for output in finished["outputs"]}
 
 
-def _matched(job_text: str, quote: str, fact_id: str) -> ProposedRequirement:
-    """One mandatory, single-condition requirement, evidenced and matched."""
-    start = job_text.index(quote)
+def _matched(quote: str, fact_id: str) -> ProposedRequirement:
+    """One mandatory requirement, evidenced and matched."""
     return ProposedRequirement(
-        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-        ),
-        kind="presence",
-        label=quote,
+        text=quote,
+        importance="mandatory",
         coverage="matched",
-        evidence=[ProposedEvidence(fact_id=fact_id, rationale="stated in the posting")],
+        fact_ids=[fact_id],
+        rationale="stated in the posting",
     )
 
 
-def _unsupported(job_text: str, quote: str) -> ProposedRequirement:
+def _unsupported(quote: str) -> ProposedRequirement:
     """One mandatory requirement no fact evidences - a hard gap."""
-    start = job_text.index(quote)
-    return ProposedRequirement(
-        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-        ),
-        kind="presence",
-        label=quote,
-        coverage="unsupported",
-        evidence=[],
-    )
+    return ProposedRequirement(text=quote, importance="mandatory", coverage="unsupported")
 
 
 def test_the_full_api_journey_reaches_ready_offline(
@@ -127,29 +106,13 @@ def test_the_full_api_journey_reaches_ready_offline(
         "the deterministic slice must reach Ready with no provider configured"
     )
     fake_openai.script(
-        "propose_requirement_extraction",
-        RequirementExtractionProposal(
+        "propose_analysis",
+        analysis_proposal(
+            summary="account management role with a clear sales-cycle requirement",
             requirements=[
-                _matched(
-                    ACCOUNT_MANAGER_JOB,
-                    "Experience owning the full sales cycle.",
-                    "sales.summary.new_business",
-                ),
-                _matched(ACCOUNT_MANAGER_JOB, "Fluent English.", "common.language.english"),
+                _matched("Experience owning the full sales cycle.", "sales.summary.new_business"),
+                _matched("Fluent English.", "common.language.english"),
             ],
-            unmapped_statements=[],
-        ),
-    )
-    fake_openai.script(
-        "propose_job_analysis",
-        JobClassificationProposal(
-            track="sales",
-            profile="account-manager",
-            emphasis="account-growth",
-            language="en",
-            confidence=0.95,
-            rationale="account management role with a clear sales-cycle requirement",
-            keywords=[],
         ),
     )
 
@@ -319,29 +282,13 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     ai_api_worker, fake_openai: FakeOpenAI, deterministic_renderer
 ) -> None:
     fake_openai.script(
-        "propose_requirement_extraction",
-        RequirementExtractionProposal(
+        "propose_analysis",
+        analysis_proposal(
+            summary="account management with an unverified SaaS-specific requirement",
             requirements=[
-                _matched(
-                    REVIEW_DECISION_JOB,
-                    "Experience owning the full sales cycle.",
-                    "sales.summary.new_business",
-                ),
-                _unsupported(REVIEW_DECISION_JOB, "Sales experience at a SaaS company."),
+                _matched("Experience owning the full sales cycle.", "sales.summary.new_business"),
+                _unsupported("Sales experience at a SaaS company."),
             ],
-            unmapped_statements=[],
-        ),
-    )
-    fake_openai.script(
-        "propose_job_analysis",
-        JobClassificationProposal(
-            track="sales",
-            profile="account-manager",
-            emphasis="account-growth",
-            language="en",
-            confidence=0.9,
-            rationale="account management with an unverified SaaS-specific requirement",
-            keywords=[],
         ),
     )
     created = _post(

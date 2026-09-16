@@ -466,14 +466,23 @@ The OpenAI adapter uses the Responses API and strict Structured Outputs. It
 returns task-specific Proposal DTOs and provider provenance; it cannot save domain
 state.
 
-The `analyze_job` command calls two of those tasks, `propose_requirement_extraction`
-and `propose_job_analysis`, each a stateless structured response whose raw output is
-preserved separately. Together they propose requirement extraction, interpretation,
-evidence-linked coverage, and classification. Source quotes/offsets, canonical
-fact eligibility, an independently derived structural completeness denominator, and
-internally checkable numeric/compositional consistency are validated before deterministic
-Fit/gap calculation. Requirement identities incorporate interpretation and extractor
-version; corrections create another immutable JobAnalysis under the same Application.
+The `analyze_job` command calls one of those tasks, `propose_analysis`: a stateless
+structured response proposing the requirements, their importance, evidence-linked
+coverage, and the classification together. Its raw output is preserved.
+
+What the engine validates before deterministic Fit/gap calculation is what it can
+establish itself: that the posting carries each quoted requirement, which it locates in
+the snapshot rather than being told where it is; that every cited fact exists and is
+canonical; that a positive reading keeps evidence after that check; and that a canonical
+boundary fact still caps a match. A check that fails narrows that requirement and
+records an `AnalysisIssue` on the analysis. It does not discard the reading: a response
+that cannot be parsed is the one failure that fails the Operation.
+
+Requirement identity is the snapshot and the requirement's own normalized text under a
+stated identity-algorithm version. The prompt version is recorded as provenance and is
+deliberately not an identity input, so rewording a prompt does not turn unchanged
+requirements into new entities. Corrections create another immutable JobAnalysis under
+the same Application.
 New interpretation, attestation and understanding fields absent from old records remain
 NULL unless safely derivable. A version-aware reader preserves old recorded gaps and
 IDs rather than reconstructing history with the new extractor. JSONB contract changes

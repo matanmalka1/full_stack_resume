@@ -43,10 +43,19 @@ from .requirements.evidence import boundary_facts_for_quote
 from .requirements.identity import normalize_span, requirement_id
 from .requirements.segmentation import requirement_lines
 
-#: The task and contract this reading came from. One name, because there is now
-#: one call: a requirement's identity no longer has to record which of two
-#: providers read it or which of two prompts was in play.
-EXTRACTOR = "ai:3.0.0:propose_analysis"
+#: Three versions, deliberately separate, because they answer three questions
+#: that used to be one string answering all of them at once.
+#:
+#: `EXTRACTION_VERSION` is what produced the record. `PROMPT_VERSION` is how the
+#: provider was asked, and belongs with the provider provenance; it is recorded
+#: and it is *not* an input to identity, because rewording a prompt into v6
+#: would otherwise turn every unchanged requirement in an unchanged posting into
+#: a new entity, orphaning the gap acceptances and decisions attached to the old
+#: ids. `REQUIREMENT_ID_VERSION` names the identity algorithm itself, so that a
+#: change to how identity is computed can still be stated as one.
+EXTRACTION_VERSION = "analysis-v1"
+PROMPT_VERSION = "system-v5"
+REQUIREMENT_ID_VERSION = "v1"
 
 #: Least claim first. Merging duplicates and resolving conflicts both take the
 #: lowest, because two readings of one sentence that disagree are not evidence
@@ -242,7 +251,9 @@ def normalize_requirement(
     requirement = Requirement(
         requirement_id=requirement_id(
             normalized_hash=normalized_hash,
-            extraction_version=EXTRACTOR,
+            # The posting and the requirement's own words, plus the version of
+            # this algorithm. Nothing about who read it or how they were asked.
+            extraction_version=REQUIREMENT_ID_VERSION,
             identity_span=normalize_span(text),
             ordinal=ordinal,
         ),
@@ -255,7 +266,7 @@ def normalize_requirement(
         missing_components=[],
         interpretation=None,
         attestation=attestation,
-        extractor=EXTRACTOR,
+        extractor=EXTRACTION_VERSION,
         source=source,
     )
     return requirement, issues
@@ -335,7 +346,7 @@ def normalize_analysis_proposal(
         fit_score=fit_score,
         gaps=gaps,
         requirements=requirements,
-        extraction_version=EXTRACTOR,
+        extraction_version=EXTRACTION_VERSION,
         unmapped_statements=[],
         understanding=UnderstandingSources(by_ai=len(requirements)),
         interpretation_decisions=[],

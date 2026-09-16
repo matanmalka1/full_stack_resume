@@ -19,8 +19,11 @@ from types import SimpleNamespace
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
 from foreground import foreground_executor
-from helpers import ACCOUNT_MANAGER_JOB, seed_analysis_for_command, trivial_requirement_extraction
-from pydantic import ValidationError
+from helpers import (
+    ACCOUNT_MANAGER_JOB,
+    analysis_proposal,
+    seed_analysis_for_command,
+)
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
@@ -36,40 +39,19 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import StateConflict, UnknownRecord
 from cv_engine.application.operations import OperationFailureCode
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.analysis.requirements.interpretation import (
-    InvalidRequirementInterpretation,
-    verify_interpretation,
-)
-from cv_engine.domain.contracts.analysis import (
-    RequirementAttestation,
-    RequirementInterpretation,
-    RequirementMember,
-)
-from cv_engine.domain.contracts.providers import (
-    ProposedEvidence,
-    ProposedMemberCoverage,
-    ProposedRequirement,
-    RequirementExtractionProposal,
-)
+from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
 from cv_engine.domain.models import (
     ClaimProposal,
     DraftProposal,
-    JobClassificationProposal,
     ProposedClaim,
     SectionProposal,
     SelectionProposal,
 )
 from cv_engine.util import new_id, sha256_text
 
-CLASSIFICATION = JobClassificationProposal(
-    track="sales",
-    profile="account-manager",
-    emphasis="account-growth",
-    language="en",
-    confidence=0.92,
-    rationale="provider rationale",
-    keywords=["retention"],
-)
+#: One valid reading, for tests whose subject is the machinery around the call
+#: rather than what was read.
+ANALYSIS = analysis_proposal(summary="provider rationale", keywords=["retention"])
 
 #: The five §6 prompt-injection inputs, verbatim.
 INJECTIONS = [
@@ -181,29 +163,24 @@ def _analysis_operation(
     *,
     model: str = "gpt-5.6-terra",
     fake_openai: FakeOpenAI | None = None,
-    job_text: str = ACCOUNT_MANAGER_JOB,
+    **overrides,
 ):
     """Submit one AI analysis Operation.
 
-    Stage-1 plan §3.7 makes `propose_requirement_extraction` the first AI call
-    every AI-mode `analyze` Operation makes, ahead of `propose_job_analysis`.
-    A caller here is testing something downstream of extraction - the
-    classification merge, retry policy, provenance, cancellation - and does
-    not want to assert anything about extraction itself, so a passing,
-    honest-about-what-it-covers default is scripted unless the caller already
-    scripted one explicitly (`fake_openai.scripts` already has an entry).
+    An AI-mode `analyze` makes exactly one provider call. A caller testing
+    something around it - retry policy, provenance, cancellation - does not
+    want to assert anything about the reading itself, so an empty, valid one
+    is scripted unless the caller already scripted its own.
     """
-    if fake_openai is not None and not fake_openai.scripts.get("propose_requirement_extraction"):
-        concepts = services.analysis.load_knowledge().requirement_concepts
-        fake_openai.script(
-            "propose_requirement_extraction", trivial_requirement_extraction(job_text, concepts)
-        )
+    if fake_openai is not None and not fake_openai.scripts.get("propose_analysis"):
+        fake_openai.script("propose_analysis", analysis_proposal())
     return services.operations.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
             provider="openai",
             model=model,
+            **overrides,
         ),
         idempotency_key=new_id(),
         analysis_service=services.analysis,
@@ -215,10 +192,10 @@ def _analysis_operation(
 # --------------------------------------------------------------------------
 
 
-def test_propose_job_analysis_commits_an_analysis_and_its_initial_plan(
+def test_propose_analysis_commits_an_analysis_and_its_initial_plan(
     ai_services, fake_openai: FakeOpenAI
 ) -> None:
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
+    fake_openai.script("propose_analysis", analysis_proposal())
     ingested = _ingested(ai_services, "Analysis Co")
     completed = _run(
         ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
@@ -245,7 +222,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
             ui_theme="system",
         ),
     )
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
+    fake_openai.script("propose_analysis", ANALYSIS)
     ingested = _ingested(ai_services, "Frozen Preferences Co")
     queued = _analysis_operation(ai_services, ingested, model=None, fake_openai=fake_openai)
 
@@ -266,7 +243,7 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
         ),
     )
     completed = _run(ai_services, queued)
-    request = fake_openai.calls_for("propose_job_analysis")[-1].body
+    request = fake_openai.calls_for("propose_analysis")[-1].body
 
     assert request["model"] == "gpt-5.6-luna"
     assert request["reasoning"] == {"effort": "high"}
@@ -622,7 +599,7 @@ def test_a_provider_failure_never_produces_a_deterministic_result(
     ai_services, fake_openai: FakeOpenAI
 ) -> None:
     """Invariant 14. The Operation fails; nothing is committed in its place."""
-    fake_openai.script("propose_job_analysis", HTTPStatus(400))
+    fake_openai.script("propose_analysis", HTTPStatus(400))
     ingested = _ingested(ai_services, "Fallback Co")
     completed = _run(
         ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
@@ -631,7 +608,7 @@ def test_a_provider_failure_never_produces_a_deterministic_result(
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.PROVIDER_REFUSED
     artifacts = _provider_artifacts(ai_services, ingested.application_id)
-    assert len(artifacts) == 1  # extraction succeeded before classification failed
+    assert artifacts == []  # the one call failed, so nothing was preserved
     assert {output.output_id for output in completed.outputs} == {
         artifact["id"] for artifact in artifacts
     }
@@ -660,13 +637,13 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
 ) -> None:
     """§6: raw sanitization, artifact registration, and exact metadata."""
     dirty = envelope(
-        CLASSIFICATION,
+        ANALYSIS,
         api_key="sk-live-secret",
         reasoning={"summary": "hidden chain of thought"},
     )
     dirty["output"].insert(0, {"type": "reasoning", "summary": ["hidden thinking"]})
     dirty["output"][1]["Authorization"] = "Bearer sk-live"
-    fake_openai.script("propose_job_analysis", dirty)
+    fake_openai.script("propose_analysis", dirty)
 
     ingested = _ingested(ai_services, "Provenance Co")
     completed = _run(
@@ -674,14 +651,14 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     )
     assert completed.status.value == "succeeded", completed.safe_failure_detail
 
-    # Two provider responses are registered now that extraction (stage-1 plan
-    # §3.7) runs before classification - this test is about `propose_job_analysis`
-    # specifically, so it selects that one rather than asserting a total count.
+    # One call, so one provider response: the analysis no longer registers an
+    # extraction artifact beside a classification one.
     artifacts = _provider_artifacts(ai_services, ingested.application_id)
-    matching = [row for row in artifacts if row["logical_name"] == "propose_job_analysis"]
+    assert len(artifacts) == 1
+    matching = [row for row in artifacts if row["logical_name"] == "propose_analysis"]
     assert len(matching) == 1
     row = matching[0]
-    assert row["logical_name"] == "propose_job_analysis"
+    assert row["logical_name"] == "propose_analysis"
     assert row["lifecycle_status"] == "provider-output"
     assert row["path"].startswith("artifacts/provider/")
     assert row["path"].endswith(".json")
@@ -717,7 +694,7 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     }
     assert metadata["pricing"]["version"] == "openai-2026-09-03"
     assert metadata["cost"]["total_usd"] == "0.00028060"
-    assert metadata["task"] == "propose_job_analysis"
+    assert metadata["task"] == "propose_analysis"
     assert metadata["prompt_version"] and metadata["prompt_hash"]
     assert metadata["task_contract_version"] and metadata["system_version"]
     assert metadata["input_schema_version"] and metadata["output_schema_version"]
@@ -757,22 +734,21 @@ def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
         ai_services.repository.request_operation_cancellation(operation_id)
         return prepared
 
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
+    fake_openai.script("propose_analysis", ANALYSIS)
     monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "cancelled"
-    # Two provider responses are preserved now that extraction (stage-1 plan
-    # §3.7) runs before classification - both must be registered and both
-    # references inactive, so this compares sets rather than a single id.
+    # One call, so one preserved response - registered, and referenced
+    # inactive.
     artifacts = _provider_artifacts(ai_services, ingested.application_id)
-    assert len(artifacts) == 2, "a preserved response was left unregistered"
+    assert len(artifacts) == 1, "a preserved response was left unregistered"
     references = [
         output for output in completed.outputs if output.output_type == "provider_response"
     ]
     assert {output.output_id for output in references} == {row["id"] for row in artifacts}
     assert all(not output.active for output in references)
-    assert len(fake_openai.calls_for("propose_job_analysis")) == 1
+    assert len(fake_openai.calls_for("propose_analysis")) == 1
     # Cancellation prevents activation, so nothing was committed.
     assert not any(output.output_type == "job_analysis" for output in completed.outputs)
     with pytest.raises(UnknownRecord):
@@ -803,23 +779,22 @@ def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_eviden
         )
         return prepared
 
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
+    fake_openai.script("propose_analysis", ANALYSIS)
     monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_move_the_source)
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.SOURCE_CHANGED
-    # Two provider responses are preserved now that extraction (stage-1 plan
-    # §3.7) runs before classification - both must be registered and both
-    # references inactive, so this compares sets rather than a single id.
+    # One call, so one preserved response - registered, and referenced
+    # inactive.
     artifacts = _provider_artifacts(ai_services, ingested.application_id)
-    assert len(artifacts) == 2, "a preserved response was left unregistered"
+    assert len(artifacts) == 1, "a preserved response was left unregistered"
     references = [
         output for output in completed.outputs if output.output_type == "provider_response"
     ]
     assert {output.output_id for output in references} == {row["id"] for row in artifacts}
     assert all(not output.active for output in references)
-    assert len(fake_openai.calls_for("propose_job_analysis")) == 1
+    assert len(fake_openai.calls_for("propose_analysis")) == 1
 
 
 def test_selection_context_carries_the_profile_pool_and_not_every_fact(
@@ -855,10 +830,10 @@ def test_selection_context_carries_the_profile_pool_and_not_every_fact(
     }
 
 
-def test_extraction_context_carries_canonical_facts_and_nothing_else_about_them(
+def test_the_analysis_context_carries_canonical_facts_and_nothing_else_about_them(
     ai_services, fake_openai: FakeOpenAI
 ) -> None:
-    """Extraction now proposes coverage, so it is given the facts to propose it from.
+    """Analysis proposes coverage, so it is given the facts to propose it from.
 
     The pool is the canonical fact store rather than a Profile's allowed
     facts: which requirements the candidate meets is decided before and
@@ -869,14 +844,14 @@ def test_extraction_context_carries_canonical_facts_and_nothing_else_about_them(
     stored.
     """
     job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[], unmapped_statements=[]),
-    )
+    completed = _analysis_run(ai_services, fake_openai, job_text, analysis_proposal())
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    payload = fake_openai.calls_for("propose_requirement_extraction")[-1].payload
+    payload = fake_openai.calls_for("propose_analysis")[-1].payload
+    # No statement segmentation travels with it any more: a pattern match over
+    # bullets is in no position to tell a model that read the language what it
+    # missed, so the engine keeps that count and reports a shortfall as an
+    # issue instead of sending it as a denominator.
+    assert set(payload) == {"job_text", "candidate_facts", "overrides"}
     supplied = {fact["fact_id"] for fact in payload["candidate_facts"]}
     canonical = {fact.fact_id for fact in ai_services.knowledge.facts().by_status("canonical")}
     assert supplied == canonical
@@ -897,19 +872,19 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
     ai_services, fake_openai: FakeOpenAI
 ) -> None:
     """§6: one transient retry, and zero retries for terminal failures."""
-    fake_openai.script("propose_job_analysis", Timeout(), CLASSIFICATION)
+    fake_openai.script("propose_analysis", Timeout(), ANALYSIS)
     ingested = _ingested(ai_services, "Transient Co")
     completed = _run(
         ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     )
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    assert len(fake_openai.calls_for("propose_job_analysis")) == 2
+    assert len(fake_openai.calls_for("propose_analysis")) == 2
     assert completed.attempts_completed == 2
 
-    fake_openai.scripts["propose_job_analysis"].clear()
-    calls_before = len(fake_openai.calls_for("propose_job_analysis"))
-    fake_openai.script("propose_job_analysis", HTTPStatus(429))
+    fake_openai.scripts["propose_analysis"].clear()
+    calls_before = len(fake_openai.calls_for("propose_analysis"))
+    fake_openai.script("propose_analysis", HTTPStatus(429))
     ingested = _ingested(ai_services, "Persistent Co")
     completed = _run(
         ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
@@ -917,7 +892,7 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.PROVIDER_RATE_LIMITED
-    assert len(fake_openai.calls_for("propose_job_analysis")) - calls_before == 2
+    assert len(fake_openai.calls_for("propose_analysis")) - calls_before == 2
 
     terminal_cases = [
         (refusal_envelope(), OperationFailureCode.PROVIDER_REFUSED),
@@ -925,9 +900,9 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
         (HTTPStatus(400), OperationFailureCode.PROVIDER_REFUSED),
     ]
     for index, (answer, expected) in enumerate(terminal_cases):
-        fake_openai.scripts["propose_job_analysis"].clear()
-        calls_before = len(fake_openai.calls_for("propose_job_analysis"))
-        fake_openai.script("propose_job_analysis", answer)
+        fake_openai.scripts["propose_analysis"].clear()
+        calls_before = len(fake_openai.calls_for("propose_analysis"))
+        fake_openai.script("propose_analysis", answer)
         ingested = _ingested(ai_services, f"Terminal {index} Co")
         completed = _run(
             ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
@@ -935,7 +910,7 @@ def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
 
         assert completed.status.value == "failed", index
         assert completed.failure_code is expected, index
-        assert len(fake_openai.calls_for("propose_job_analysis")) - calls_before == 1, index
+        assert len(fake_openai.calls_for("propose_analysis")) - calls_before == 1, index
         assert completed.attempts_completed == 1, index
 
 
@@ -966,792 +941,12 @@ def test_a_stale_draft_version_is_refused_before_any_provider_call(
 # --------------------------------------------------------------------------
 
 
-def _extraction_operation(ai_services, fake_openai: FakeOpenAI, job_text: str, proposal):
-    ingested = _ingested(ai_services, f"Malicious {new_id()[:8]}", job_text)
-    fake_openai.scripts["propose_job_analysis"].clear()
-    fake_openai.script("propose_job_analysis", CLASSIFICATION)
-    fake_openai.scripts["propose_requirement_extraction"].clear()
-    fake_openai.script("propose_requirement_extraction", proposal)
+def _analysis_run(ai_services, fake_openai: FakeOpenAI, job_text: str, proposal):
+    """One `propose_analysis` Operation, run to completion against the fake."""
+    ingested = _ingested(ai_services, f"Reading {new_id()[:8]}", job_text)
+    fake_openai.scripts.pop("propose_analysis", None)
+    fake_openai.script("propose_analysis", proposal)
     return _run(ai_services, _analysis_operation(ai_services, ingested, fake_openai=None))
-
-
-@pytest.mark.parametrize("declare_unmapped", [False, True])
-def test_unread_ai_requirements_do_not_become_high_fit(
-    ai_services, fake_openai, declare_unmapped
-) -> None:
-    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
-    concepts = ai_services.analysis.load_knowledge().requirement_concepts
-    proposal = trivial_requirement_extraction(job_text, concepts)
-    if not declare_unmapped:
-        proposal = RequirementExtractionProposal(requirements=[], unmapped_statements=[])
-    completed = _extraction_operation(ai_services, fake_openai, job_text, proposal)
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-    assert analysis.fit.value == "unknown"
-    assert "extraction-failed" in analysis.approval_reasons
-    assert analysis.understanding.by_ai == 0
-
-
-def test_member_quote_cannot_be_borrowed_from_another_requirement(ai_services, fake_openai):
-    job_text = "Requirements:\n- Must know React or Vue.\n- Must have enterprise sales experience."
-    quote = "Must know React or Vue"
-    other = "enterprise sales experience"
-    start = job_text.index(quote)
-    members = [
-        RequirementMember(
-            member_id=value,
-            label=value,
-            attestation=RequirementAttestation(
-                quote=value, start=job_text.index(value), end=job_text.index(value) + len(value)
-            ),
-        )
-        for value in ("React", other)
-    ]
-    proposal = ProposedRequirement(
-        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="any-of",
-            members=members,
-            negation=False,
-        ),
-        kind="compositional",
-        label=quote,
-    )
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
-    )
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
-
-
-def test_a_requirement_not_quoted_in_the_posting_is_rejected(ai_services, fake_openai) -> None:
-    """The source gate refuses a requirement whose quote the posting never said.
-
-    This is what actually stands between injected text and a fabricated
-    requirement: the quote must be verbatim and at the claimed offsets in the
-    signed snapshot. A quote lifted from an injected instruction would still
-    pass this gate, because it *is* in the signed text - proving that is
-    exactly why §1.1 does not call this an injection defense. What it does
-    catch is a provider inventing a requirement with no textual basis at all.
-    """
-    job_text = ACCOUNT_MANAGER_JOB
-    fabricated = ProposedRequirement(
-        attestation=RequirementAttestation(
-            quote="10 years of HubSpot administration", start=0, end=10
-        ),
-        interpretation=RequirementInterpretation(
-            source_role="requirement", obligation="mandatory", composition="single", negation=False
-        ),
-        kind="presence",
-        label="HubSpot administration",
-    )
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[fabricated], unmapped_statements=[]),
-    )
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
-    with pytest.raises(UnknownRecord):
-        ai_services.repository.latest_analysis(completed.application_id)
-
-
-def test_requirement_quote_missing_terminal_punctuation_is_reconciled(
-    ai_services, fake_openai
-) -> None:
-    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
-    quote = "Must have enterprise sales experience"
-    start = job_text.index(quote)
-    proposal = ProposedRequirement(
-        attestation=RequirementAttestation(
-            quote=quote,
-            start=start,
-            end=start + len(quote) + 1,
-        ),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-        ),
-        kind="presence",
-        label=quote,
-    )
-
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
-    )
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-    extracted = next(
-        requirement for requirement in analysis.requirements if requirement.attestation is not None
-    )
-    assert extracted.attestation == RequirementAttestation(
-        quote=f"{quote}.", start=start, end=start + len(quote) + 1
-    )
-
-
-def test_requirement_quote_with_one_character_offset_drift_is_reconciled(
-    ai_services, fake_openai
-) -> None:
-    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
-    quote = "Must have enterprise sales experience"
-    start = job_text.index(quote)
-    proposal = ProposedRequirement(
-        attestation=RequirementAttestation(
-            quote=quote,
-            start=start - 1,
-            end=start + len(quote) - 1,
-        ),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-        ),
-        kind="presence",
-        label=quote,
-    )
-
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
-    )
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-    extracted = next(
-        requirement for requirement in analysis.requirements if requirement.attestation is not None
-    )
-    assert extracted.attestation == RequirementAttestation(
-        quote=quote, start=start, end=start + len(quote)
-    )
-
-
-def test_requirement_quote_missing_one_final_letter_uses_the_source_span(
-    ai_services, fake_openai
-) -> None:
-    job_text = "Engineer.\nRequirements:\n- Communicate clearly in both directions."
-    actual = "Communicate clearly in both directions"
-    quote = "Communicate clearly in both direction"
-    start = job_text.index(actual)
-    proposal = ProposedRequirement(
-        attestation=RequirementAttestation(
-            quote=quote,
-            start=start,
-            end=start + len(actual),
-        ),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-        ),
-        kind="presence",
-        label=quote,
-    )
-
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
-    )
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-    extracted = next(
-        requirement for requirement in analysis.requirements if requirement.attestation is not None
-    )
-    assert extracted.attestation == RequirementAttestation(
-        quote=actual, start=start, end=start + len(actual)
-    )
-
-
-def test_requirement_quote_interior_letter_difference_is_not_reconciled(
-    ai_services, fake_openai
-) -> None:
-    job_text = "Engineer.\nRequirements:\n- Communicate clearly in both directions."
-    actual = "Communicate clearly in both directions"
-    quote = "Communicate clearly on both directions"
-    start = job_text.index(actual)
-    proposal = ProposedRequirement(
-        attestation=RequirementAttestation(
-            quote=quote,
-            start=start,
-            end=start + len(actual),
-        ),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-        ),
-        kind="presence",
-        label=quote,
-    )
-
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[proposal], unmapped_statements=[]),
-    )
-
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
-
-
-def test_softening_mandatory_to_preferred_without_a_quoted_marker_is_rejected(
-    ai_services, fake_openai
-) -> None:
-    """An explicit Requirements block cannot be demoted to a responsibility."""
-    job_text = "Account Manager.\nRequirements:\n- 5+ years of enterprise sales experience."
-    quote = "5+ years of enterprise sales experience"
-    start = job_text.index(quote)
-    softened = ProposedRequirement(
-        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        interpretation=RequirementInterpretation(
-            # Claiming this is a mere responsibility, with no quoted marker to
-            # justify treating a Requirements-block bullet as optional.
-            source_role="responsibility",
-            obligation="preferred",
-            composition="single",
-            negation=False,
-        ),
-        kind="presence",
-        label="enterprise sales experience",
-    )
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[softened], unmapped_statements=[]),
-    )
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
-    with pytest.raises(UnknownRecord):
-        ai_services.repository.latest_analysis(completed.application_id)
-
-
-def test_a_context_quote_from_elsewhere_cannot_justify_mandatory(ai_services, fake_openai) -> None:
-    """A quoted mandatory marker only counts when it sits in the requirement's
-    own statement (stage-1 plan §3.5a addendum to §3.2) - one lifted from an
-    unrelated sentence is refused by the interpretation gate outright, which
-    is a stronger result than merely not applying it.
-    """
-    job_text = (
-        "Responsibilities: manage inbound leads.\n\nRequirements: 3 years of experience (must)."
-    )
-    quote = "manage inbound leads"
-    start = job_text.index(quote)
-    fake_marker = "(must)"
-    smuggled = ProposedRequirement(
-        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        interpretation=RequirementInterpretation(
-            source_role="responsibility",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
-            context_quote=fake_marker,
-        ),
-        kind="presence",
-        label="inbound lead management",
-    )
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[smuggled], unmapped_statements=[]),
-    )
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
-    with pytest.raises(UnknownRecord):
-        ai_services.repository.latest_analysis(completed.application_id)
-
-
-#: A posting whose preferred block comes before its Requirements block, so a span
-#: can cross from one section into the other without the crossing itself dragging a
-#: marker word along: "Requirements:" is not a `mandatory_marker`, while every
-#: heading that opens a preferred block necessarily contains a `preferred_marker`.
-#: That is what makes the two sections separable here and only here.
-TWO_SECTION_JOB = (
-    "Account Manager.\n"
-    "Nice to have:\n"
-    "- Salesforce administration certification.\n"
-    "Requirements:\n"
-    "- 5+ years of enterprise sales experience.\n"
-)
-#: Both cross the boundary between the two bullets. Neither is contained in a single
-#: statement, which is what used to make the source-structure check skip them.
-MOSTLY_PREFERRED = (40, 95)
-MOSTLY_REQUIRED = (70, 125)
-
-
-def _reading(**overrides) -> RequirementInterpretation:
-    return RequirementInterpretation(
-        **{
-            "source_role": "requirement",
-            "obligation": "mandatory",
-            "composition": "single",
-            "negation": False,
-            **overrides,
-        }
-    )
-
-
-def test_a_quote_crossing_two_statements_is_checked_against_the_one_it_is_mostly_in(
-    requirement_concepts,
-) -> None:
-    """A7: the gate used to skip exactly the quote that most needed it.
-
-    The source-structure check demanded that the requirement's span be
-    *contained* in one statement, and a span reaching from one bullet into the
-    next is contained in none - so the loop ended without checking anything and
-    every obligation the provider declared passed unexamined. It is now read
-    against its home statement: the one it overlaps most.
-    """
-    # Mostly inside the preferred bullet: calling it mandatory strengthens a
-    # requirement the posting marked optional.
-    with pytest.raises(InvalidRequirementInterpretation, match="strengthens"):
-        verify_interpretation(
-            _reading(),
-            source_text=TWO_SECTION_JOB,
-            concepts=requirement_concepts,
-            requirement_span=MOSTLY_PREFERRED,
-        )
-    # Mostly inside the Requirements bullet: calling it a responsibility
-    # contradicts a requirement the posting stated explicitly.
-    with pytest.raises(InvalidRequirementInterpretation, match="contradicts"):
-        verify_interpretation(
-            _reading(source_role="responsibility", obligation="preferred"),
-            source_text=TWO_SECTION_JOB,
-            concepts=requirement_concepts,
-            requirement_span=MOSTLY_REQUIRED,
-        )
-
-
-def test_the_home_statement_is_the_one_the_quote_is_mostly_in_not_every_one_it_touches(
-    requirement_concepts,
-) -> None:
-    """The gate did not become stricter than the posting supports.
-
-    Both spans touch the preferred bullet. Judging a requirement against every
-    statement it overlaps would refuse `mandatory` on both, because one of them
-    is optional - and would reject a reading the requirement's own bullet
-    states outright. A few characters of spill-over do not move a requirement
-    into the neighbouring section.
-    """
-    verify_interpretation(
-        _reading(),
-        source_text=TWO_SECTION_JOB,
-        concepts=requirement_concepts,
-        requirement_span=MOSTLY_REQUIRED,
-    )
-    # And a span touching no statement at all is the segmenter not modelling
-    # the text (A1), not a claim about the proposal: it is left unchecked here
-    # rather than rejected on evidence this gate does not have.
-    verify_interpretation(
-        _reading(),
-        source_text="   \n",
-        concepts=requirement_concepts,
-        requirement_span=(0, 3),
-    )
-
-
-def test_the_extraction_contract_carries_no_tag_field_for_a_gate_that_never_existed(
-    requirement_concepts,
-) -> None:
-    """A12: the promise is gone, and so is the field it promised a gate over.
-
-    Documentation stated that `topic_tags` was consulted and that "a foreign
-    tag disqualifies the proposal". Nothing read the field anywhere, while the strict output schema
-    still obliged every provider to fill it on every requirement. The field is
-    refused now rather than quietly accepted, so it cannot come back as data
-    before it comes back as a decision: nothing declares a tag vocabulary for
-    "foreign" to be measured against.
-    """
-    assert "topic_tags" not in ProposedRequirement.model_fields
-    quote = "5+ years of enterprise sales experience"
-    start = TWO_SECTION_JOB.index(quote)
-    with pytest.raises(ValidationError):
-        ProposedRequirement(
-            attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-            interpretation=_reading(),
-            kind="presence",
-            label="enterprise sales experience",
-            topic_tags=["quantum-photonics"],
-        )
-
-
-def test_an_any_of_member_with_no_attestation_cannot_be_silently_matched(
-    ai_services, fake_openai
-) -> None:
-    """A member's `label` alone cannot drive coverage to `matched` (stage-1
-    plan §3.5a addendum): an unattested member is `undetermined`, and an
-    `any-of` requirement is `matched` only if some member truly is - so a
-    fabricated, unattested member cannot manufacture false coverage.
-    """
-    job_text = "Account Manager. Requirements: React, Angular, or Vue experience."
-    quote = "React, Angular, or Vue experience"
-    start = job_text.index(quote)
-    unattested = ProposedRequirement(
-        attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        interpretation=RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="any-of",
-            members=[
-                RequirementMember(member_id="react", label="React"),
-                RequirementMember(
-                    member_id="fabricated", label="10 years of anything the candidate wants"
-                ),
-            ],
-            negation=False,
-        ),
-        kind="compositional",
-        label="frontend framework",
-    )
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(requirements=[unattested], unmapped_statements=[]),
-    )
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-    # Neither member is attested, so neither retains inspectable evidence -
-    # the requirement is `undetermined`, never a false `matched`.
-    assert analysis.requirements[0].coverage == "undetermined"
-
-
-#: One requirement line whose second member ends at the line break. A live
-#: model proposed exactly this shape: the member quote was right and its end
-#: offset reached one character past the sentence, onto the newline.
-MEMBER_JOB = "Requirements:\n- knows how to sell, and presents clearly.\n"
-
-
-def _member_reading(*members: RequirementMember) -> RequirementInterpretation:
-    return RequirementInterpretation(
-        source_role="requirement",
-        obligation="mandatory",
-        composition="all-of",
-        members=list(members),
-        negation=False,
-    )
-
-
-def test_a_member_quote_missing_one_boundary_character_is_reconciled_like_the_requirement(
-    requirement_concepts,
-) -> None:
-    """The member gate repairs what the requirement gate already repairs.
-
-    A requirement's own attestation goes through `reconcile_attestation`,
-    which exists because a provider may miss one boundary character. A member
-    quote is the same claim about the same source text, and holding it to a
-    stricter rule threw away a whole 16-requirement proposal over one member
-    span that reached onto its line's newline. Reconciliation ends at exact
-    source text, so the repaired member names what the posting says.
-    """
-    selling = "knows how to sell"
-    presenting = "presents clearly."
-    sell_start = MEMBER_JOB.index(selling)
-    present_start = MEMBER_JOB.index(presenting)
-    reading = _member_reading(
-        RequirementMember(
-            member_id="selling",
-            label="Selling",
-            attestation=RequirementAttestation(
-                quote=selling, start=sell_start, end=sell_start + len(selling)
-            ),
-        ),
-        RequirementMember(
-            member_id="presenting",
-            label="Presenting",
-            attestation=RequirementAttestation(
-                quote=presenting,
-                start=present_start,
-                # One past the sentence: the newline the provider swallowed.
-                end=present_start + len(presenting) + 1,
-            ),
-        ),
-    )
-
-    reconciled = verify_interpretation(
-        reading,
-        source_text=MEMBER_JOB,
-        concepts=requirement_concepts,
-        requirement_span=(MEMBER_JOB.index("-"), len(MEMBER_JOB)),
-    )
-
-    repaired = reconciled.members[1].attestation
-    assert repaired is not None
-    assert repaired.quote == MEMBER_JOB[repaired.start : repaired.end]
-    assert repaired.quote == presenting + "\n"
-    # The member that was already exact is returned untouched.
-    assert reconciled.members[0] == reading.members[0]
-
-
-def test_a_member_quote_the_source_does_not_say_is_still_refused(requirement_concepts) -> None:
-    """The repair is bounded, not a licence to paraphrase.
-
-    An interior difference is not a missed boundary character, and reconciling
-    a member must not become a way to attest text the posting never carried.
-    """
-    reading = _member_reading(
-        RequirementMember(
-            member_id="selling",
-            label="Selling",
-            attestation=RequirementAttestation(
-                quote="knows how to sell",
-                start=MEMBER_JOB.index("knows"),
-                end=MEMBER_JOB.index("knows") + 17,
-            ),
-        ),
-        RequirementMember(
-            member_id="invented",
-            label="Invented",
-            attestation=RequirementAttestation(
-                quote="presents to the board",
-                start=MEMBER_JOB.index("presents"),
-                end=MEMBER_JOB.index("presents") + 21,
-            ),
-        ),
-    )
-
-    with pytest.raises(InvalidRequirementInterpretation, match="attestation is invalid"):
-        verify_interpretation(
-            reading,
-            source_text=MEMBER_JOB,
-            concepts=requirement_concepts,
-            requirement_span=(MEMBER_JOB.index("-"), len(MEMBER_JOB)),
-        )
-
-
-#: The live shape behind the located-span rule: a requirement whose repeated
-#: phrase makes one member resolvable and one genuinely not. Both models under
-#: test proposed a reading of exactly this sentence.
-REPEATED_PHRASE_JOB = (
-    "Requirements:\n"
-    "- Experience with infrastructure, project management, or project management systems.\n"
-)
-
-
-def test_a_quote_the_provider_misplaced_is_located_in_the_source(requirement_concepts) -> None:
-    """Offsets are a pointer; the posting is the evidence.
-
-    A live model returned a 219-character quote word for word and placed its
-    start 137 characters away. Refusing that treats a transcription the engine
-    can verify itself as if it were a fabrication. When the quote occurs once,
-    the source answers where it is and the engine does not need to be told.
-    """
-    quote = "presents clearly."
-    true_start = MEMBER_JOB.index(quote)
-    reading = _member_reading(
-        RequirementMember(
-            member_id="selling",
-            label="Selling",
-            attestation=RequirementAttestation(
-                quote="knows how to sell",
-                start=MEMBER_JOB.index("knows"),
-                end=MEMBER_JOB.index("knows") + len("knows how to sell"),
-            ),
-        ),
-        RequirementMember(
-            member_id="presenting",
-            label="Presenting",
-            # Nowhere near the truth, and not repairable by an edge character.
-            attestation=RequirementAttestation(quote=quote, start=0, end=len(quote)),
-        ),
-    )
-
-    located = verify_interpretation(
-        reading,
-        source_text=MEMBER_JOB,
-        concepts=requirement_concepts,
-        requirement_span=(MEMBER_JOB.index("-"), len(MEMBER_JOB)),
-    )
-
-    repaired = located.members[1].attestation
-    assert repaired is not None
-    assert (repaired.start, repaired.end) == (true_start, true_start + len(quote))
-    assert repaired.quote == MEMBER_JOB[repaired.start : repaired.end]
-
-
-def test_a_member_phrase_the_requirement_repeats_is_undetermined_not_a_rejection(
-    requirement_concepts,
-) -> None:
-    """Ambiguity lowers one member; it does not void everything else read.
-
-    "project management" occurs twice inside its own requirement - once alone
-    and once inside "project management systems". The engine cannot say which
-    sentence the member points at, and picking one would attach evidence to a
-    place nobody named. Dropping the attestation says exactly that: an
-    unattested member is `undetermined`, which only ever lowers coverage, while
-    the requirements the provider read correctly survive.
-    """
-    ambiguous = "project management"
-    systems = "project management systems"
-    reading = _member_reading(
-        RequirementMember(
-            member_id="infrastructure",
-            label="Infrastructure",
-            attestation=RequirementAttestation(
-                quote="infrastructure",
-                start=REPEATED_PHRASE_JOB.index("infrastructure"),
-                end=REPEATED_PHRASE_JOB.index("infrastructure") + len("infrastructure"),
-            ),
-        ),
-        RequirementMember(
-            member_id="project-management",
-            label="Project management",
-            # Ten characters off, so no edge repair applies and the phrase has
-            # to be located - and inside this requirement it is there twice.
-            attestation=RequirementAttestation(
-                quote=ambiguous,
-                start=REPEATED_PHRASE_JOB.index(ambiguous) + 10,
-                end=REPEATED_PHRASE_JOB.index(ambiguous) + 10 + len(ambiguous),
-            ),
-        ),
-        RequirementMember(
-            member_id="project-management-systems",
-            label="Project management systems",
-            attestation=RequirementAttestation(
-                quote=systems,
-                start=REPEATED_PHRASE_JOB.index(systems),
-                end=REPEATED_PHRASE_JOB.index(systems) + len(systems),
-            ),
-        ),
-    )
-
-    resolved = verify_interpretation(
-        reading,
-        source_text=REPEATED_PHRASE_JOB,
-        concepts=requirement_concepts,
-        requirement_span=(REPEATED_PHRASE_JOB.index("-"), len(REPEATED_PHRASE_JOB)),
-    )
-
-    assert resolved.members[1].attestation is None
-    # The unambiguous members keep their proof, so one repeated phrase costs
-    # one member rather than the reading it appears in.
-    assert resolved.members[0].attestation is not None
-    assert resolved.members[2].attestation is not None
-
-
-def test_a_proposal_cannot_add_experience_that_is_not_in_the_facts(
-    ai_services, fake_openai: FakeOpenAI
-) -> None:
-    """ "Add experience that is not in the facts", obeyed, is refused."""
-    ingested, analysed, working = _drafted(ai_services, "Invented Co")
-    _section, claim = _canonical_claim(working)
-    fake_openai.script(
-        "regenerate_claim",
-        ClaimProposal(
-            claim_id=claim.claim_id,
-            text="Led a 40-person engineering organisation at a FTSE 100 company.",
-            fact_ids=list(claim.fact_ids),
-            rationale="the job text asked for it",
-        ),
-    )
-    completed = _run(
-        ai_services, _regenerate_claim(ai_services, ingested, analysed, working, claim)
-    )
-
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
-    assert len(fake_openai.calls_for("regenerate_claim")) == 1
-    unchanged = ai_services.repository.active_working_draft(ingested.application_id)
-    assert unchanged.content_hash == working.content_hash
-
-
-def test_a_requirement_statement_the_ai_never_touched_enters_the_score(
-    ai_services, fake_openai
-) -> None:
-    """Unread statements are spliced into the score as `undetermined`.
-
-    A provider that reads one of two requirement statements and says nothing
-    about the other used to produce a `requirements` list of length one and a
-    `fit_score` computed over that one alone - a false green.
-    `unmapped_statements` did not close it
-    either: nothing downstream scored them.
-    """
-    job_text = (
-        "Account Manager.\n"
-        "Requirements:\n"
-        "- Must have enterprise sales experience.\n"
-        "- Must have exceptional gravitas in boardroom settings."
-    )
-    quote = "Must have enterprise sales experience"
-    start = job_text.index(quote)
-    proposal = RequirementExtractionProposal(
-        requirements=[
-            ProposedRequirement(
-                attestation=RequirementAttestation(
-                    quote=quote, start=start, end=start + len(quote)
-                ),
-                interpretation=RequirementInterpretation(
-                    source_role="requirement",
-                    obligation="mandatory",
-                    composition="single",
-                    negation=False,
-                ),
-                kind="presence",
-                label=quote,
-            )
-        ],
-        unmapped_statements=[],
-    )
-    completed = _extraction_operation(ai_services, fake_openai, job_text, proposal)
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
-
-    # Two entries, not one: the statement the proposal never attested is in the
-    # list `fit_score` reads.
-    assert len(analysis.requirements) == 2
-    synthetic = [
-        requirement for requirement in analysis.requirements if requirement.attestation is None
-    ]
-    assert len(synthetic) == 1
-    assert synthetic[0].coverage == "undetermined"
-    assert synthetic[0].mandatory is False
-    assert synthetic[0].text == "Must have exceptional gravitas in boardroom settings."
-    assert [component.component_id for component in synthetic[0].missing_components] == [
-        "unmapped-statement"
-    ]
-    assert "requirements-unmapped" in analysis.approval_reasons
-    # The splice is not credited as reading: `by_ai` still counts only what the
-    # proposal attested.
-    assert analysis.understanding.by_ai == 1
 
 
 def _analysis_of(completed, ai_services):
@@ -1761,281 +956,80 @@ def _analysis_of(completed, ai_services):
     return ai_services.repository.get_analysis(analysis_id)["analysis"]
 
 
-def _single(job_text: str, quote: str, **overrides) -> RequirementExtractionProposal:
-    """One mandatory, single-condition requirement read out of `job_text`.
+def test_a_reading_with_no_requirements_does_not_become_a_fit(ai_services, fake_openai) -> None:
+    """Nothing read is not a good match.
 
-    The shape every evidence test below varies one field of, so each test
-    states only what it is probing.
+    A provider that returns no requirements has said nothing about the
+    candidate, and `fit` stays unknown rather than defaulting to a score no
+    assessment produced.
     """
-    start = job_text.index(quote)
-    fields = {
-        "attestation": RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-        "interpretation": RequirementInterpretation(
-            source_role="requirement",
-            obligation="mandatory",
-            composition="single",
-            negation=False,
+    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
+    completed = _analysis_run(ai_services, fake_openai, job_text, analysis_proposal())
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    assert analysis.requirements == []
+    assert analysis.fit.value == "unknown"
+    assert analysis.fit_score is None
+    # The posting does state a requirement, and the engine says so - as a
+    # disclosure on the record, not as a refusal.
+    assert "analysis_may_be_incomplete" in {issue.code for issue in analysis.issues}
+
+
+def test_a_fact_the_store_does_not_have_does_not_fell_the_reading(ai_services, fake_openai) -> None:
+    """The live path narrows one requirement instead of refusing the analysis.
+
+    This is the service's proof that it runs the normalizer: the unknown id is
+    dropped, the coverage that rested on it falls to `undetermined`, the reason
+    is on the record, and the requirement the provider read correctly survives
+    beside it.
+    """
+    job_text = (
+        "Account Manager.\n"
+        "Requirements:\n"
+        "- Must have led a sales team.\n"
+        "- Must have enterprise sales experience."
+    )
+    completed = _analysis_run(
+        ai_services,
+        fake_openai,
+        job_text,
+        analysis_proposal(
+            requirements=[
+                ProposedRequirement(
+                    text="Must have led a sales team.",
+                    importance="mandatory",
+                    coverage="matched",
+                    fact_ids=["sales.summary.leadership"],
+                ),
+                ProposedRequirement(
+                    text="Must have enterprise sales experience.",
+                    importance="mandatory",
+                    coverage="matched",
+                    fact_ids=["fact.nobody.declared"],
+                ),
+            ],
         ),
-        "kind": "presence",
-        "label": quote,
-        **overrides,
+    )
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    read, invented = analysis.requirements
+    assert read.coverage == "matched"
+    assert read.supporting_fact_ids == ["sales.summary.leadership"]
+    assert invented.supporting_fact_ids == []
+    assert invented.coverage == "undetermined"
+    assert {"unknown_fact", "coverage_without_evidence"} <= {
+        issue.code for issue in analysis.issues
     }
-    return RequirementExtractionProposal(
-        requirements=[ProposedRequirement(**fields)], unmapped_statements=[]
-    )
-
-
-def test_a_requirement_no_concept_models_is_matched_from_its_cited_evidence(
-    ai_services, fake_openai
-) -> None:
-    """The closed-vocabulary collapse, closed.
-
-    Sales team leadership is a real requirement that no concept in
-    `config/requirements.json` models. Coverage used to be decided by matching
-    the quote against those six concepts, so this requirement came back
-    `undetermined` however well the provider read it - zero credit in
-    `fit_score`, a `coverage-undetermined` blocker on the way to approval, and
-    the same answer for every posting outside one sales vocabulary. The
-    provider's reading, evidenced by a canonical fact, now decides it.
-    """
-    job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
-    quote = "Must have led a sales team"
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        _single(
-            job_text,
-            quote,
-            coverage="matched",
-            evidence=[
-                ProposedEvidence(
-                    fact_id="sales.summary.leadership",
-                    rationale="the candidate led a sales team",
-                )
-            ],
-        ),
-    )
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(completed, ai_services)
-    requirement = next(item for item in analysis.requirements if item.attestation is not None)
-    assert requirement.coverage == "matched"
-    assert requirement.supporting_fact_ids == ["sales.summary.leadership"]
-    assert "coverage-undetermined" not in analysis.approval_reasons
-
-
-def test_a_complete_extraction_records_the_confidence_of_the_run_that_produced_it(
-    ai_services, fake_openai
-) -> None:
-    """The stored confidence describes the extraction that is on record.
-
-    There used to be a second, rules-based extraction underneath this one: it
-    scored its own concept-vocabulary reading, and on a posting those six
-    concepts do not model that score was zero. The AI path replaced the
-    requirement list and left the number, so a complete, verified extraction
-    inherited a failing confidence and a blocker only an acceptance could
-    clear. That shadow analysis is gone - `build_analysis` states the
-    confidence of the one run that happened - and this pins that there is no
-    second number left to inherit.
-    """
-    job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        _single(
-            job_text,
-            "Must have led a sales team",
-            coverage="matched",
-            evidence=[ProposedEvidence(fact_id="sales.summary.leadership", rationale="led a team")],
-        ),
-    )
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(completed, ai_services)
-    assert analysis.confidence == CLASSIFICATION.confidence
-    # Nothing downstream of a verified extraction is left asking for review.
-    assert analysis.approval_reasons == []
-
-
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        pytest.param(
-            {
-                "coverage": "matched",
-                "evidence": [
-                    ProposedEvidence(fact_id="sales.summary.invented", rationale="made up")
-                ],
-            },
-            id="fabricated-fact-id",
-        ),
-        pytest.param(
-            {"coverage": "matched", "evidence": []},
-            id="positive-coverage-with-nothing-behind-it",
-        ),
-    ],
-)
-def test_unverifiable_evidence_rejects_the_whole_proposal(
-    ai_services, fake_openai, overrides
-) -> None:
-    """A citation is not proof, and a verdict with no citation is not evidence.
-
-    Both are invalid output rather than a weaker reading: a provider that
-    names a fact the store does not have, or claims coverage it can show
-    nothing for, has not answered the task. One failing requirement voids the
-    proposal, as it does at the source and interpretation gates.
-    """
-    job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        _single(job_text, "Must have led a sales team", **overrides),
-    )
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
-    # Nothing was written: a rejected proposal leaves no analysis behind.
-    assert not [output for output in completed.outputs if output.output_type == "job_analysis"]
-
-
-def test_a_threshold_is_recomputed_from_the_cited_fact_not_from_the_report(
-    ai_services, fake_openai
-) -> None:
-    """Arithmetic the provider performed on its own answer proves nothing.
-
-    The candidate's canonical tenure fact spans 2019-03/2025-01 - under six
-    years - so a demand for twenty is not met however confidently it is
-    reported met. The comparison is the engine's, run against the fact's own
-    structured dates, and a demand it cannot trace stays `undetermined`
-    rather than becoming either verdict.
-    """
-    job_text = "Account Manager.\nRequirements:\n- Must have 20 years of sales experience."
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        _single(
-            job_text,
-            "Must have 20 years of sales experience",
-            kind="threshold",
-            demanded="20",
-            coverage="matched",
-            evidence=[
-                ProposedEvidence(fact_id="sales.summary.tenure", rationale="long sales career")
-            ],
-        ),
-    )
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(completed, ai_services)
-    requirement = next(item for item in analysis.requirements if item.attestation is not None)
-    assert requirement.coverage == "unsupported"
-
-
-def test_a_boundary_fact_still_caps_coverage_with_no_concept_verdict(
-    ai_services, fake_openai
-) -> None:
-    """The one thing the concept vocabulary still decides.
-
-    Coverage is the provider's reading now, but a canonical boundary fact
-    states what is *not* verified, and its applicability is a deterministic
-    pattern match on the requirement's own quote - never a provider relation
-    or tag. A provider reading tech-company sales as fully matched is capped
-    to `partial` by the boundary the candidate's Knowledge carries, and the
-    limit is reported with the requirement.
-    """
-    quote = "Must have sales experience at a technology company"
-    job_text = f"Account Manager.\nRequirements:\n- {quote}."
-    completed = _extraction_operation(
-        ai_services,
-        fake_openai,
-        job_text,
-        _single(
-            job_text,
-            quote,
-            coverage="matched",
-            evidence=[ProposedEvidence(fact_id="sales.summary.tech", rationale="tech sales")],
-        ),
-    )
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(completed, ai_services)
-    requirement = next(item for item in analysis.requirements if item.attestation is not None)
-    assert requirement.coverage == "partial"
-    assert "sales.tech_sales.boundary" in requirement.boundary_fact_ids
-
-
-def test_an_any_of_group_adds_up_deterministically_not_from_the_top_level_claim(
-    ai_services, fake_openai
-) -> None:
-    """The composition arithmetic is the engine's.
-
-    A provider may read each member; whether the group is met follows from the
-    members it evidenced, not from the verdict it wrote at the top. Here one
-    member is evidenced and the other is not, and `any-of` is satisfied by the
-    one - although the provider itself wrote `unsupported`.
-    """
-    quote = "Must have led a sales team or managed key accounts"
-    job_text = f"Account Manager.\nRequirements:\n- {quote}."
-    start = job_text.index(quote)
-    leading = "led a sales team"
-    proposal = RequirementExtractionProposal(
-        requirements=[
-            ProposedRequirement(
-                attestation=RequirementAttestation(
-                    quote=quote, start=start, end=start + len(quote)
-                ),
-                interpretation=RequirementInterpretation(
-                    source_role="requirement",
-                    obligation="mandatory",
-                    composition="any-of",
-                    members=[
-                        RequirementMember(
-                            member_id="leadership",
-                            label="sales team leadership",
-                            attestation=RequirementAttestation(
-                                quote=leading,
-                                start=job_text.index(leading),
-                                end=job_text.index(leading) + len(leading),
-                            ),
-                        ),
-                        RequirementMember(member_id="accounts", label="key account management"),
-                    ],
-                    negation=False,
-                ),
-                kind="compositional",
-                label=quote,
-                coverage="unsupported",
-                members_coverage=[
-                    ProposedMemberCoverage(
-                        member_id="leadership",
-                        coverage="matched",
-                        evidence=[
-                            ProposedEvidence(
-                                fact_id="sales.summary.leadership", rationale="led a team"
-                            )
-                        ],
-                    )
-                ],
-            )
-        ],
-        unmapped_statements=[],
-    )
-    completed = _extraction_operation(ai_services, fake_openai, job_text, proposal)
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(completed, ai_services)
-    requirement = next(item for item in analysis.requirements if item.attestation is not None)
-    # `any-of` is met by the evidenced member, whatever the top-level claim said.
-    assert requirement.coverage == "matched"
-    assert requirement.supporting_fact_ids == ["sales.summary.leadership"]
 
 
 def test_a_requirement_proposed_twice_is_one_requirement(ai_services, fake_openai) -> None:
     """One demand stated twice is one requirement, carrying one id.
 
-    `requirement_id` folds in the quote, the interpretation, the kind and the
-    demanded value and nothing else, so two proposals reading one statement the
-    same way produced two entries under a single id: `fit_score` counted the
-    demand twice, and nothing holding that id - an acceptance, a correction -
-    could say which of the two entries it named.
+    Two entries under a single id counted the demand twice in `fit_score`, and
+    nothing holding that id - an acceptance, a correction - could say which of
+    the two it named.
     """
     job_text = (
         "Account Manager.\n"
@@ -2044,102 +1038,49 @@ def test_a_requirement_proposed_twice_is_one_requirement(ai_services, fake_opena
         "About the team:\n"
         "- Must have enterprise sales experience."
     )
-    quote = "Must have enterprise sales experience"
-    first = job_text.index(quote)
-    second = job_text.index(quote, first + 1)
-
-    def proposed(start: int) -> ProposedRequirement:
-        return ProposedRequirement(
-            attestation=RequirementAttestation(quote=quote, start=start, end=start + len(quote)),
-            interpretation=RequirementInterpretation(
-                source_role="requirement",
-                obligation="mandatory",
-                composition="single",
-                negation=False,
-            ),
-            kind="presence",
-            label=quote,
-        )
-
-    completed = _extraction_operation(
+    quote = "Must have enterprise sales experience."
+    completed = _analysis_run(
         ai_services,
         fake_openai,
         job_text,
-        RequirementExtractionProposal(
-            requirements=[proposed(first), proposed(second)], unmapped_statements=[]
+        analysis_proposal(
+            requirements=[
+                ProposedRequirement(text=quote, importance="mandatory"),
+                ProposedRequirement(text=quote, importance="mandatory"),
+            ],
         ),
     )
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
 
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
     identifiers = [requirement.requirement_id for requirement in analysis.requirements]
-    assert len(identifiers) == len(set(identifiers))
     assert len(analysis.requirements) == 1
-    # Collapsing the duplicate does not un-read the statement it attested: both
-    # offsets still count as covered, so the second statement is not left over
-    # for the `undetermined` splice. The 2 here is the two requirement-bearing
-    # statements this posting makes, not the two proposals - see the
-    # same-offsets case below, where one statement proposed twice still counts
-    # once.
-    assert analysis.understanding.by_ai == 2
-    assert "requirements-unmapped" not in analysis.approval_reasons
+    assert len(identifiers) == len(set(identifiers))
+    assert "duplicate_requirement" in {issue.code for issue in analysis.issues}
 
 
-def test_one_statement_proposed_twice_is_read_once(ai_services, fake_openai) -> None:
-    """`by_ai` counts statements read, never proposals made.
+def test_an_override_reaches_the_provider_and_is_applied_to_the_result(
+    ai_services, fake_openai
+) -> None:
+    """A user's explicit choice is both sent and enforced.
 
-    The companion to the test above, and the reason collecting every verified
-    proposal's span is safe: `by_ai` asks of each requirement-bearing statement
-    whether *any* span touches it, so repeating one span cannot inflate the
-    numerator of the completeness measure built on it. The posting is the same;
-    only the duplicate's offsets move onto the statement already proposed.
+    Sent, so the provider is not left proposing against a classification the
+    user already overrode; enforced, because the result is the engine's to
+    decide and a provider that ignored the override cannot overturn it.
     """
-    job_text = (
-        "Account Manager.\n"
-        "Requirements:\n"
-        "- Must have enterprise sales experience.\n"
-        "About the team:\n"
-        "- Must have enterprise sales experience."
-    )
-    quote = "Must have enterprise sales experience"
-    first = job_text.index(quote)
-
-    def proposed() -> ProposedRequirement:
-        return ProposedRequirement(
-            attestation=RequirementAttestation(quote=quote, start=first, end=first + len(quote)),
-            interpretation=RequirementInterpretation(
-                source_role="requirement",
-                obligation="mandatory",
-                composition="single",
-                negation=False,
-            ),
-            kind="presence",
-            label=quote,
-        )
-
-    completed = _extraction_operation(
+    ingested = _ingested(ai_services, f"Override {new_id()[:8]}", ACCOUNT_MANAGER_JOB)
+    fake_openai.scripts.pop("propose_analysis", None)
+    fake_openai.script("propose_analysis", analysis_proposal(emphasis="new-business"))
+    completed = _run(
         ai_services,
-        fake_openai,
-        job_text,
-        RequirementExtractionProposal(
-            requirements=[proposed(), proposed()], unmapped_statements=[]
+        _analysis_operation(
+            ai_services, ingested, fake_openai=None, emphasis_override="account-growth"
         ),
     )
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis_id = next(
-        output.output_id for output in completed.outputs if output.output_type == "job_analysis"
-    )
-    analysis = ai_services.repository.get_analysis(analysis_id)["analysis"]
 
-    assert analysis.understanding.by_ai == 1
-    # The second statement was never proposed, so it is still left over for the
-    # splice - one verified requirement plus one synthetic entry.
-    assert len(analysis.requirements) == 2
-    synthetic = [
-        requirement for requirement in analysis.requirements if requirement.attestation is None
-    ]
-    assert len(synthetic) == 1
-    assert "requirements-unmapped" in analysis.approval_reasons
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    analysis = _analysis_of(completed, ai_services)
+    payload = fake_openai.calls_for("propose_analysis")[-1].payload
+    assert payload["overrides"] == {"emphasis": "account-growth"}
+    assert analysis.emphasis.value == "account-growth"
+    assert analysis.user_override["emphasis"] == "account-growth"

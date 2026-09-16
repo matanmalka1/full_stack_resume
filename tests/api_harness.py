@@ -22,12 +22,11 @@ from typing import Any
 
 from fake_provider import FakeOpenAI
 from fastapi.testclient import TestClient
-from helpers import trivial_requirement_extraction
+from helpers import analysis_proposal
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
 from cv_engine.api.schemas.operations import OperationResponse
 from cv_engine.application.operations import TERMINAL_OPERATION_STATUSES
-from cv_engine.domain.models import JobClassificationProposal
 from cv_engine.runtime.composition import Services, build_api_services
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
@@ -51,17 +50,9 @@ OPERATION_RESPONSE_FIELDS = frozenset(OperationResponse.model_fields) | frozense
 WORKER_STOP_TIMEOUT_SECONDS = 5.0
 OPERATION_TIMEOUT_SECONDS = 20.0
 
-#: A generic, always-accepted classification for tests whose subject is not
-#: analysis semantics - only that some analysis exists to build on.
-_OFFLINE_CLASSIFICATION = JobClassificationProposal(
-    track="sales",
-    profile="account-manager",
-    emphasis="account-growth",
-    language="en",
-    confidence=0.99,
-    rationale="fixture",
-    keywords=[],
-)
+#: A generic, always-accepted reading for tests whose subject is not analysis
+#: semantics - only that some analysis exists to build on.
+_OFFLINE_ANALYSIS = analysis_proposal()
 
 
 @dataclass(frozen=True)
@@ -128,12 +119,7 @@ def analyze_offline(harness, application_id: str, job_text: str) -> dict[str, st
     to reach a draftable analysis without asserting what is in it.
     """
     assert harness.fake_openai is not None, "analyze_offline needs a provider-backed harness"
-    concepts = harness.services.analysis.load_knowledge().requirement_concepts
-    harness.fake_openai.script(
-        "propose_requirement_extraction",
-        trivial_requirement_extraction(job_text, concepts),
-    )
-    harness.fake_openai.script("propose_job_analysis", _OFFLINE_CLASSIFICATION)
+    harness.fake_openai.script("propose_analysis", _OFFLINE_ANALYSIS)
     detail = harness.client.get(f"{API_PREFIX}/applications/{application_id}")
     assert detail.status_code == 200, detail.text
     response = harness.client.post(

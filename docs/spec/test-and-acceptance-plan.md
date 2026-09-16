@@ -353,7 +353,7 @@ approval, or schema.
 Release requires a manual live OpenAI smoke checklist, not an automated CI gate. This
 list is that checklist; there is no separate smoke-run document:
 
-- one `propose_job_analysis` call
+- one `propose_analysis` call
 - one `draft_resume` call
 - valid structured outputs
 - provider/model/usage metadata persisted

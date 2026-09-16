@@ -36,6 +36,15 @@ IMMATERIAL_ANALYSIS_FIELDS = frozenset(
         # `gaps` does not already carry. `fit` itself stays material - it is the
         # field a draft's staleness is actually reported against.
         "fit_score",
+        # An account of where the reading was narrowed, and a measurement of how
+        # much of it the engine anchored in the posting. Neither changes what
+        # the document selects or says: a re-run that reads the same
+        # requirements the same way, and happens to record one more dropped
+        # citation, has not superseded a draft built from the first one. What
+        # those issues were *about* - a coverage lowered, a fact removed - is
+        # already in `requirements`, which stays material.
+        "issues",
+        "source_coverage",
     }
 )
 

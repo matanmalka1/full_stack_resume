@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Generic, Protocol, TypeVar
 
-from ...domain.contracts.analysis import JobClassificationProposal
+from ...domain.contracts.analysis_proposal import AnalysisProposal
 from ...domain.contracts.base import StrictModel
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.knowledge import (
@@ -22,7 +22,6 @@ from ...domain.contracts.providers import (
     ClaimProposal,
     DraftProposal,
     ProviderTaskResult,
-    RequirementExtractionProposal,
     SectionProposal,
     SelectionProposal,
 )
@@ -275,31 +274,28 @@ class AIProposal(Generic[ProposalT]):
     provenance: ProviderTaskResult
 
 
-class RequirementExtractionContext(StrictModel):
-    """`propose_requirement_extraction`: this snapshot's text and its own statement lines.
+class AnalysisContext(StrictModel):
+    """`propose_analysis`: the snapshot, the facts it may cite, and the user's choices.
 
-    `requirement_lines` is the engine's own segmentation
-    (`requirements/segmentation.py::requirement_lines`), supplied so
-    completeness is judged against an independently derived denominator - a
-    provider is not asked to re-derive it,
-    and cannot inflate completeness by choosing a friendlier one.
+    One context because there is one call. Classification used to run as a
+    second task over the first task's output, which cost a second prompt
+    version and gave the two halves a way to disagree about the posting they
+    had both just read.
+
+    No statement segmentation is supplied. It was sent so completeness could be
+    judged against an independently derived denominator, and it became a way
+    for a pattern match over bullets and headings to declare that a model which
+    had read the language missed something. The engine still counts statements,
+    and now discloses a shortfall as a warning instead of a verdict.
     """
 
     job_text: str
-    requirement_lines: list[dict[str, Any]]
-    #: Every canonical fact the extraction may cite as evidence (D5). Supplied
-    #: here because coverage is now part of what this task proposes: a provider
-    #: asked which requirements the candidate meets, and given no facts, could
-    #: only answer from the posting - which is how a reading of the employer's
-    #: wording became a claim about the candidate.
+    #: Every canonical fact the reading may cite. Supplied because coverage is
+    #: part of what this task proposes: a provider asked which requirements the
+    #: candidate meets, and given no facts, could only answer from the posting -
+    #: which is how a reading of the employer's wording became a claim about
+    #: the candidate.
     candidate_facts: list[dict[str, Any]] = []
-
-
-class JobAnalysisContext(StrictModel):
-    """`propose_job_analysis`: the snapshot and its verified requirements."""
-
-    job_text: str
-    requirements: list[dict[str, Any]]
     overrides: dict[str, str] = {}
 
 
@@ -349,7 +345,7 @@ class RegenerateClaimContext(StrictModel):
 
 
 class AIProvider(Protocol):
-    """The seven contracted AI tasks, as the application declares them.
+    """The five contracted AI tasks, as the application declares them.
 
     One method per task rather than one `run(task, payload)`, because the
     tasks take different inputs and return different Proposal types, and a
@@ -367,21 +363,13 @@ class AIProvider(Protocol):
     or anything that would make a second call depend on a first.
     """
 
-    def propose_requirement_extraction(
+    def propose_analysis(
         self,
-        context: RequirementExtractionContext,
+        context: AnalysisContext,
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> AIProposal[RequirementExtractionProposal]: ...
-
-    def propose_job_analysis(
-        self,
-        context: JobAnalysisContext,
-        *,
-        model: str | None = None,
-        reasoning_effort: str | None = None,
-    ) -> AIProposal[JobClassificationProposal]: ...
+    ) -> AIProposal[AnalysisProposal]: ...
 
     def propose_selection_plan(
         self,

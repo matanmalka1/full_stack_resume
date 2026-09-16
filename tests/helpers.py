@@ -5,10 +5,8 @@ from pathlib import Path
 from cv_engine.application.commands import AnalyzeCommand, ApproveDraftCommand, ValidateDraftCommand
 from cv_engine.application.services.analysis import PreparedAnalysis
 from cv_engine.application.services.analysis_selection import AnalysisSelection
-from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
-from cv_engine.domain.analysis.requirements.segmentation import requirement_lines
-from cv_engine.domain.contracts.analysis import JobAnalysis, UnmappedStatement
-from cv_engine.domain.contracts.providers import RequirementExtractionProposal
+from cv_engine.domain.contracts.analysis import JobAnalysis
+from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
@@ -143,40 +141,38 @@ PAYME_TECH_SALES_JOB = (
 )
 
 
-def trivial_requirement_extraction(
-    job_text: str, concepts: RequirementConceptStore
-) -> RequirementExtractionProposal:
-    """A `propose_requirement_extraction` answer that passes both gates and never
-    reports a failed extraction, for tests whose subject is something else -
-    classification merge behaviour, retry policy, provenance - and that only
-    need the AI analysis pipeline (stage-1 plan §3.7) to get past the
-    extraction step without asserting anything about what it extracted.
+def analysis_proposal(**overrides) -> AnalysisProposal:
+    """One `propose_analysis` answer, for tests whose subject is something else.
 
-    Every requirement-bearing statement in `job_text` is declared as an
-    `unmapped_statements` entry rather than left silently uncovered, so the
-    stub discloses what it did not read instead of hiding it. That is all it
-    does: declaring a statement unmapped explains an omission and does not
-    read it, so an analysis built on this carries `extraction-failed` and a
-    zero extraction confidence, exactly as a posting nothing read should. No
-    requirement is proposed, so it never asserts a false `matched` either.
+    The default proposes no requirements at all: a stub for "the analysis step
+    ran and returned something valid", not a stand-in for a content-bearing
+    reading. An analysis built on it carries no coverage and no Fit, which is
+    what a posting nothing read should produce, and it asserts no false
+    `matched` on the way.
 
-    It is a stub for "the extraction step ran and returned something valid" -
-    not a stand-in for a content-bearing extraction. A test asserting on
-    requirements, coverage, confidence, or Fit must script its own proposal.
+    A test asserting on requirements, coverage, or Fit passes its own
+    `requirements=[...]`. One factory rather than one per call site, because
+    there is one call to script.
     """
-    return RequirementExtractionProposal(
-        requirements=[],
-        unmapped_statements=[
-            UnmappedStatement(
-                start=line.start,
-                end=line.end,
-                text=line.text,
-                source_role="other",
-                reason="test fixture: not extracted, declared to keep completeness honest",
-            )
-            for line in requirement_lines(job_text, concepts)
-        ],
+    return AnalysisProposal(
+        **{
+            "track": Track.SALES,
+            "profile": ProfileName.ACCOUNT_MANAGER,
+            "emphasis": Emphasis.ACCOUNT_GROWTH,
+            "language": "en",
+            "summary": "test fixture reading",
+            "requirements": [],
+            "keywords": [],
+            **overrides,
+        }
     )
+
+
+def script_analysis(fake_openai, **overrides) -> AnalysisProposal:
+    """Script the single analysis call and return what was scripted."""
+    proposal = analysis_proposal(**overrides)
+    fake_openai.script("propose_analysis", proposal)
+    return proposal
 
 
 def validate_active_draft(services: Services, application_id: str):

@@ -57,7 +57,11 @@ class ProposedMemberCoverage(StrictModel):
 
 
 class ProposedRequirement(StrictModel):
-    """`propose_requirement_extraction`: one requirement, as the provider read it.
+    """One requirement as the old two-call extraction read it.
+
+    Superseded by `analysis_proposal.ProposedRequirement`. Nothing calls the
+    task that produced it; the model survives only until the extraction modules
+    that still type against it are removed.
 
     Deliberately separate from `JobClassificationProposal` (stage-1 plan
     §2.3): mixing extraction into the classification task in one call would
@@ -108,7 +112,10 @@ class ProposedRequirement(StrictModel):
 
 
 class RequirementExtractionProposal(StrictModel):
-    """`propose_requirement_extraction`: every requirement, and what was left over."""
+    """Every requirement the old extraction read, and what it left over.
+
+    Superseded by `analysis_proposal.AnalysisProposal`.
+    """
 
     requirements: list[ProposedRequirement]
     unmapped_statements: list[UnmappedStatement] = []

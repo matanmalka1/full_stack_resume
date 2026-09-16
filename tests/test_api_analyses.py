@@ -14,15 +14,14 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
     REVIEW_DECISION_JOB,
+    analysis_proposal,
     seed_existing_analysis,
-    trivial_requirement_extraction,
 )
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
 from cv_engine.domain.contracts.analysis import (
     Gap,
-    JobClassificationProposal,
     Requirement,
     RequirementAttestation,
     RequirementInterpretation,
@@ -105,20 +104,8 @@ def test_post_analysis_uses_ai_operation_and_commits_both_records(
     ai_api_worker, fake_openai, requirement_concepts
 ) -> None:
     fake_openai.script(
-        "propose_requirement_extraction",
-        trivial_requirement_extraction(ACCOUNT_MANAGER_JOB, requirement_concepts),
-    )
-    fake_openai.script(
-        "propose_job_analysis",
-        JobClassificationProposal(
-            track="sales",
-            profile="account-manager",
-            emphasis="account-growth",
-            language="en",
-            confidence=0.92,
-            rationale="account management role",
-            keywords=["retention"],
-        ),
+        "propose_analysis",
+        analysis_proposal(summary="account management role", keywords=["retention"]),
     )
     application_id = _application(ai_api_worker.services, "AI Operation Co")
     snapshot_id = ai_api_worker.services.repository.latest_snapshot(application_id)["id"]
