@@ -110,7 +110,7 @@ export const PreparationView = ({
       {classification === null ? null : (
         <Disclosure summary="פרטי הניתוח והאבחון">
           <div className="pt-2">
-            <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} showGaps />
+            <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
           </div>
         </Disclosure>
       )}

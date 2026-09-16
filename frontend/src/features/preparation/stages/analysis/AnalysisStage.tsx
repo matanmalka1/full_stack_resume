@@ -12,13 +12,11 @@ export const AnalysisStage = ({
   detail,
   onQueued,
   plan,
-  showGaps,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
   plan: WorkflowActionPlan;
-  showGaps: boolean;
 }) => (
   <AnalysisPanel
     classification={classification}
@@ -29,6 +27,5 @@ export const AnalysisStage = ({
     footer={
       plan.analyze?.reanalysis === true ? <ReanalyzeCard detail={detail} onQueued={onQueued} plan={plan} /> : undefined
     }
-    showGaps={showGaps}
   />
 );

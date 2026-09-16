@@ -130,13 +130,6 @@ export const analysisIssueLabel = (code: string): string => analysisIssueLabels[
    reading "%58". */
 export const confidenceText = (confidence: number): string => `${Math.round(confidence * 100)}%`;
 
-export const gapSeverityLabels: Record<"hard" | "warning", string> = {
-  // Named for what it is, not for what it used to do: a hard gap is a demanded
-  // requirement the facts do not support, and it blocks nothing.
-  hard: "פער בדרישת חובה",
-  warning: "פער לתשומת לב",
-};
-
 /* The coverage a Requirement carries independently of its gap projection: `matched` and
    `partial` have no gap at all, so this is the only place either is named for the
    reader. Ordered as a scale, like Fit's tones above - `matched` reads as the safe end

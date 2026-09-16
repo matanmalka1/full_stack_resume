@@ -6,7 +6,6 @@ import { Disclosure } from "@/ui/Disclosure";
 import { surfaceClasses } from "@/ui/surface";
 import { AnalysisHeader } from "./AnalysisHeader";
 import { ClassificationSummary } from "./ClassificationSummary";
-import { GapsSection } from "./GapsSection";
 import { IssuesSection } from "./IssuesSection";
 import { RationaleSection } from "./RationaleSection";
 import { RequirementCoverageSection, RequirementCoverageSummary } from "./RequirementCoverageSection";
@@ -22,7 +21,7 @@ import { RequirementsSection } from "./RequirementsSection";
    gaps and issues are information, and nothing here asks the reader to accept them.
 
    The panel itself only composes: the masthead and the findings below it each live in
-   their own file under this folder, so a change to one - a new gap presentation, a
+   their own file under this folder, so a change to one - a new coverage presentation, a
    reworded rationale note - never touches the others. The posting text itself is not
    drawn here: `JobSnapshotPanel` owns the snapshot on this same screen, and this panel
    reads from that same `latest_snapshot`, so a copy here was the one source shown twice.
@@ -36,7 +35,6 @@ export const AnalysisPanel = ({
   classification,
   detail,
   footer,
-  showGaps,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
@@ -45,11 +43,6 @@ export const AnalysisPanel = ({
      the panel it carried a rule of its own, which landed just under the card's border and
      read as a second, misaligned edge outside the surface it belonged to. */
   footer?: ReactNode;
-  /* False while the projection is asking for a gap decision. The gaps are then shown
-     with their acceptance controls beside the decision they answer, and drawing them
-     here as well would be the same finding in two places - one of them read-only and
-     one of them a control, which is worse than either alone. */
-  showGaps: boolean;
 }) => (
   <section aria-labelledby="analysis-heading" className={surfaceClasses("bg-cv-surface p-5")}>
     <AnalysisHeader classification={classification} record={detail.latest_analysis ?? null} />
@@ -63,8 +56,6 @@ export const AnalysisPanel = ({
           unreadableRequirementCount={classification.unreadableRequirementCount}
         />
       )}
-
-      {showGaps ? <GapsSection gaps={classification.gaps} /> : null}
 
       <IssuesSection issues={classification.issues} />
 
