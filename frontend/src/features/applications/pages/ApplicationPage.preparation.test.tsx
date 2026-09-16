@@ -113,6 +113,9 @@ const acceptedResponse = (operation: Operation): Response =>
     },
   });
 
+/* No AI provider configured. Named for the draft lane, which still has a deterministic
+   path; analysis does not - these settings are simply the state in which analysis cannot
+   run at all. */
 const deterministicSettings: Settings = {
   edit_version: 0,
   auto_generate_when_review_not_required: false,
@@ -129,6 +132,10 @@ const deterministicSettings: Settings = {
   ui_theme: "system",
   updated_at: null,
 };
+
+/* The only state analysis can be commanded from. Analysis is an AI-only lane, so the
+   analyze button reads `provider_configured && ai_enabled` and is inert without both. */
+const aiSettings: Settings = { ...deterministicSettings, ai_enabled: true, provider_configured: true };
 
 /* Retries are off. Query-specific polling options override the client's default,
    so tests that require a completion tick explicitly refresh the watched Operation. */
@@ -418,11 +425,14 @@ describe("ApplicationPage at the preparation route", () => {
       if (String(input).includes("/operations/")) {
         return Promise.resolve(jsonResponse(queued()));
       }
+      if (String(input).includes("/settings")) {
+        return Promise.resolve(jsonResponse(aiSettings));
+      }
       return Promise.resolve(jsonResponse(detail()));
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderPage();
+    renderPage(aiSettings);
     await clickEnabledButton("ניתוח המשרה");
 
     /* The accepted `202` is seeded as the panel's first state, so the queued Operation is
@@ -436,9 +446,30 @@ describe("ApplicationPage at the preparation route", () => {
     expect(request?.[0]).toBe(ANALYSES_PATH);
     expect(request?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
     /* The source is explicit: an analyze command that picked its own snapshot could
-       classify something other than what the screen was showing. */
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1" });
+       classify something other than what the screen was showing. The provider is explicit
+       for the same reason - analysis runs one AI lane and names it. */
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
     expect((request?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).not.toBeNull();
+  });
+
+  /* The D5 gate, from the screen's side: analysis is an AI-only lane, so with no provider
+     configured there is no way to command it at all. The button stays on screen rather
+     than vanishing - the projection still names the action - and the sentence above it
+     says what is missing, because an inert control with no reason reads as a broken one. */
+  it("refuses to command an analysis with no AI provider configured", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input).includes("/settings") ? jsonResponse(deterministicSettings) : jsonResponse(detail()),
+        ),
+      ),
+    );
+
+    renderPage(deterministicSettings);
+
+    expect(await screen.findByRole("button", { name: "ניתוח המשרה" })).toBeDisabled();
+    expect(screen.getByText("כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.")).toBeInTheDocument();
   });
 
   it("shows the frozen AI execution and its calculated cost", async () => {
@@ -708,12 +739,16 @@ describe("ApplicationPage at the preparation route", () => {
   /* QA report finding 2: `available_actions`/`recommended_action` still name a plain
      "analyze" after a terminal failure - the projection never withdrew it - but the
      screen used to show only the Operation panel's own "retry", which can only ever
-     resend the failed run's own provider/model. A reader who switched Settings to
-     deterministic after an AI failure had no control on this screen that read that
-     switch. The fix renders this step's own action panel beside the failure, so its
-     analyze button - already wired to current Settings via `useAnalyzeCommand` - is
-     reachable without leaving the screen or predicting the projection in a new way. */
-  it("offers a fresh analysis against current Settings beside retry after a terminal analysis failure", async () => {
+     resend the failed run's own frozen execution. The fix renders this step's own action
+     panel beside the failure, so its analyze button - wired to current Settings via
+     `useAnalyzeCommand` - is reachable without leaving the screen or predicting the
+     projection in a new way.
+
+     The finding was originally about a reader who switched Settings to deterministic
+     after an AI failure. That switch no longer exists: analysis is one AI lane. What the
+     test still holds is the part that survives it - a fresh analyze is offered beside
+     retry, and it queues a new Operation rather than resending the failed one. */
+  it("offers a fresh analysis beside retry after a terminal analysis failure", async () => {
     const failed = queued({
       status: "failed",
       is_terminal: true,
@@ -725,31 +760,33 @@ describe("ApplicationPage at the preparation route", () => {
       const url = String(input);
       if (url === ANALYSES_PATH && init?.method === "POST") return Promise.resolve(acceptedResponse(fresh));
       if (url.endsWith("/operations/op-1")) return Promise.resolve(jsonResponse(failed));
+      if (url.includes("/settings")) return Promise.resolve(jsonResponse(aiSettings));
       return Promise.resolve(jsonResponse(detail({ latest_operation: failed, active_operation: null })));
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderPage(deterministicSettings);
+    renderPage(aiSettings);
 
-    /* Both ways forward are on screen at once: retry (same provider) and a fresh
-       analyze (current Settings - deterministic here). Neither is offered instead of
-       the other; the projection permits both and the reader chooses. */
+    /* Both ways forward are on screen at once. Neither is offered instead of the other;
+       the projection permits both and the reader chooses. */
     expect(await screen.findByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
     await clickEnabledButton("ניתוח המשרה");
 
     const request = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    /* A fresh analyze command against the snapshot, not a resend of the failed run: it
+       posts to the analyses collection rather than to that Operation's retry route. */
     expect(request?.[0]).toBe(ANALYSES_PATH);
-    /* Deterministic Settings omit `provider` entirely rather than sending the AI
-       provider the failed run used - a fresh command, not the same one retried. */
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1" });
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
   });
 
   it("offers analysis after creation scheduling failed and does not retain creation news over later server work", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(detail()))),
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(String(input).includes("/settings") ? jsonResponse(aiSettings) : jsonResponse(detail())),
+      ),
     );
-    const { client } = renderPage(deterministicSettings, { createdApplication: { analysisQueued: false } });
+    const { client } = renderPage(aiSettings, { createdApplication: { analysisQueued: false } });
     expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeEnabled();
     act(() =>
@@ -850,6 +887,7 @@ describe("ApplicationPage at the preparation route", () => {
         return new Promise<Response>((resolve) => {
           resolveOld = resolve;
         });
+      if (url.includes("/settings")) return Promise.resolve(jsonResponse(aiSettings));
       return Promise.resolve(
         jsonResponse(
           url.endsWith("/app-2")
@@ -859,7 +897,7 @@ describe("ApplicationPage at the preparation route", () => {
       );
     });
     vi.stubGlobal("fetch", fetchMock);
-    renderPage();
+    renderPage(aiSettings);
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/operations/"))).toBe(true),
     );
