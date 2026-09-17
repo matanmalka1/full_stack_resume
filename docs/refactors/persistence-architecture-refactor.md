@@ -328,10 +328,9 @@ The new scope is context-managed, auto-commits on successful write exit, rolls b
 rejects nesting/foreign managers/closed tokens, and exposes the external-I/O guard. Cross-manager
 rejection is a `TypeError`, representing an invalid adapter token without entering the application
 error taxonomy. Final user-run gates: 42 focused tests passed, Pyright reported zero errors, Ruff
-lint passed, changed-file formatting passed, and all 14 architecture tests passed. The last
-architecture failure was a stale `preparation.py` exemption after removal of its old `bind()`; the
-exemption was deleted. Do not migrate a repository by adding another `bind()` variant; new
-repository methods accept transaction tokens directly.
+lint passed, changed-file formatting passed, and all 14 architecture tests passed. Do not migrate a
+repository by adding another `bind()` variant; new repository methods accept transaction tokens
+directly.
 
 ## Phase 2 — Application Intake vertical slice
 
@@ -389,13 +388,9 @@ leave an immutable orphan but must never leave a row naming a missing payload. F
 rollback coverage was added and passes. The old preparation intake methods,
 `ApplicationStore.create_application`, and nested `self.applications` adapter were deleted; persistence
 test setup now creates intake records through the transaction-token stores. The root repository still
-exists only for unmigrated slices and no longer exposes application creation. The first user-run
-gate found one rollback test still monkeypatching the old audit adapter; it now injects the failure
-through `SqlAlchemyAuditLog`. A removed `Connection` import still needed by unmigrated analysis
-methods was restored. Final user-run gates: 42 focused tests passed, Pyright reported zero errors,
-Ruff lint passed, changed-file formatting passed, and all 14 architecture tests passed. The existing
-formatting issue in `domain/facts.py` is baseline, is outside this diff, and is not part of this
-refactor.
+exists only for unmigrated slices and no longer exposes application creation. Final user-run gates:
+42 focused tests passed, Pyright reported zero errors, Ruff lint passed, changed-file formatting
+passed, and all 14 architecture tests passed.
 
 ## Phase 3 — Analysis and selection lifecycle
 
@@ -443,21 +438,6 @@ Phase 3 verification, including the requested closeout cleanup, has passed. Prod
 Ruff gates were run by the agent only after the user explicitly requested them.
 Phase 3 and cleanup are committed as `247dd6f20c5512f312e4da918464c3c7df9f813c`.
 
-User-reported verification checkpoint:
-
-- Main focused command: 137 passed, 1 failed. The rollback test still patched the deleted root
-  `_insert_selection_plan`; updated to patch the actual private SQL insertion primitive.
-- Pyright: 1 error, missing `lock_application` on the legacy composed repository capability.
-  Restored that declaration on the existing OperationRepository Port, where the legacy lock
-  implementation now lives. No new root Port or persistence cast was introduced.
-- Persistence subset: 8 passed; working-draft selection subset: 3 passed; knowledge subset: 3 passed.
-- Architecture: 17 passed. Fresh PostgreSQL pipeline with OPENAI_API_KEY unset: 3 passed.
-- User subsequently reported the corrected rollback test, Pyright and architecture rerun passed.
-  Previously passing product subsets and pipeline remain applicable to these test/Port-only corrections.
-- Ruff check: passed. Ruff format check: passed, 38 changed/new Python files already formatted.
-  Both were run by the agent under the user's explicit instruction.
-- All scoped gates now have passing evidence; Phase 3 is DONE. Phase 4 remains NOT STARTED.
-
 - Added independent token adapters for analysis/plans, minimal analysis/selection sources, provider
   evidence, operation activation, and the atomic selection-plan/working-draft update.
 - `AnalysisService` has explicit narrow dependencies, without ServiceBase, preparation aggregate,
@@ -472,24 +452,13 @@ User-reported verification checkpoint:
   (draft/readiness/query/knowledge), plus `knowledge/mutations.py` selection-plan writes with fact events
   and recovery journal semantics (Phase 9). Shared private SQL primitives serve these consumers without
   repositories calling repositories or wrapping the new token API. Root Repository, legacy UoW, composed
-  Ports and unrelated handlers remain intentionally. Phase 4 has not started.
+  Ports and unrelated handlers remained intentionally for later phases.
 - Activation probes knowledge recovery state through its token and loads canonical files through a
   file-only collaborator, avoiding the legacy FileKnowledge callback opening a nested DB scope.
   Composition permits explicit `activation_knowledge` injection.
 - Added rollback, shared-token activation, external-I/O exclusion, cancellation, retry/deduplication,
   plan/draft atomicity, token rejection and derived architecture coverage. Schema, immutable historical
   records, artifact paths, rendering output and `domain/facts.py` were not changed.
-
-### User-run gates (ordered)
-
-All gates passed, including the focused cleanup reruns recorded below.
-
-1. Focused analysis/selection, AI evidence, operation/API and transaction tests.
-2. Persistence subset (tokens, lineage, immutable plans, CAS, locking); working-draft selection changes;
-   knowledge `confirm_and_use` / selection-plan rollback subset.
-3. `./.venv/bin/pyright cv_engine` and `tests/test_architecture.py` (including old-consumer guards).
-4. Ruff check and format check on changed/new Python files; unrelated baseline files excluded.
-5. `tests/test_pipeline_end_to_end.py` against fresh PostgreSQL with `OPENAI_API_KEY` unset.
 
 ### Closeout cleanup — verified
 
@@ -512,28 +481,13 @@ imports, Ports, helper references and migrated transaction paths. No architectur
   entry point and token plan entry point intentionally coexist and share SQL; future-phase historical readers
   also coexist with minimal token projections. No duplicate migrated write implementation remains for the
   removed capabilities. Legacy operation lifecycle and token activation methods coexist until Phase 6.
-- Cleanup was initially left unstaged. At user-authorized closeout, it was staged with the rest of Phase 3
-  and included in the single implementation commit above. No Phase 4 work was performed.
+- Cleanup was included in the Phase 3 implementation commit above.
 
-User-reported cleanup results: focused tests **100 passed**; Pyright **0 errors, 0 warnings**;
-architecture **17 passed**; Ruff check **passed**; format check **7 files already formatted**.
-All cleanup gates passed. The verified code and cleanup are in the Phase 3 implementation commit above;
-Phase 4 remains NOT STARTED. A documentation-only follow-up records its hash without amending that commit.
-
-Focused cleanup gates (user-run, completed):
-
-```sh
-./.venv/bin/python -m pytest -q tests/test_application_contracts.py tests/test_api_applications.py tests/test_analysis.py tests/test_selection.py tests/test_ai_tasks.py tests/test_api_analyses.py
-./.venv/bin/pyright cv_engine
-./.venv/bin/python -m pytest -q tests/test_architecture.py
-./.venv/bin/ruff check cv_engine/application/ports/repositories.py cv_engine/infrastructure/persistence/applications.py cv_engine/infrastructure/persistence/preparation.py cv_engine/infrastructure/persistence/analysis_sql.py cv_engine/infrastructure/persistence/operation_activation.py cv_engine/infrastructure/persistence/provider_evidence.py tests/helpers.py
-./.venv/bin/ruff format --check cv_engine/application/ports/repositories.py cv_engine/infrastructure/persistence/applications.py cv_engine/infrastructure/persistence/preparation.py cv_engine/infrastructure/persistence/analysis_sql.py cv_engine/infrastructure/persistence/operation_activation.py cv_engine/infrastructure/persistence/provider_evidence.py tests/helpers.py
-```
-
-AI tests cover activation lock ordering, evidence registration/retry/cancellation, atomic rollback and external
-I/O exclusion; application contracts cover the migrated helper's ownership validation. No observable signature,
-stored-value meaning, projection field, schema, render or artifact path changed in cleanup, so the prior fresh
-PostgreSQL pipeline evidence remains applicable without another pipeline rerun.
+Final user-run verification: focused product/cleanup tests passed, including the final 100-test
+cleanup subset; Pyright passed with zero errors and warnings; 17 architecture tests passed; Ruff
+check and format check passed; and the fresh PostgreSQL pipeline with `OPENAI_API_KEY` unset passed
+three tests. AI coverage includes activation lock ordering, evidence retry/cancellation, atomic
+rollback, and external-I/O exclusion.
 
 ## Phase 4 — Draft lifecycle and evidence
 
@@ -578,7 +532,7 @@ validation, and decision ownership.
 ### Handoff notes
 
 Phase 4 implementation is complete and all user-run boundary gates passed; the phase is **DONE**
-in commit `08f69ee2cc13c3e329b0b47d2c40e2e031e4deed`. Phase 5 has not started. Recovery began from
+in commit `08f69ee2cc13c3e329b0b47d2c40e2e031e4deed`. Recovery began from
 `67b36e6d0f9f041585b76857618732846e532421`; the verified Phase 3 implementation and its
 evidence remain unchanged.
 
@@ -601,9 +555,8 @@ approval and archive payloads are still written and verified before their databa
 ApprovedRevision/deactivation, both artifact registrations, decision, audit/lifecycle event, and
 receipt completion in one caller-owned transaction. Reservation remains a preceding durable short
 transaction, and an identical retry can reuse immutable payloads and the reserved revision. The
-approval implementation has changed since the previously reported 12-test result: the commit and
-receipt completion are now one transaction, and recovery coverage now distinguishes rollback
-before commit from a lost response after commit. The approval gate must therefore be rerun.
+commit and receipt completion are one transaction, and recovery coverage distinguishes rollback
+before commit from a lost response after commit.
 
 Validation evaluates in memory outside a database scope, then locks and rechecks the exact working
 draft version/hash before recording immutable evidence. Approval locks the WorkingDraft row while
@@ -626,100 +579,21 @@ immutable payload publication, receipt reservation, and the approved atomic comm
 either set would create the forbidden generic dependency container; the committer is retained only
 for its atomic fan-in, not to shorten the approval constructor.
 
-The agent ran no tests or gates. Formatting was applied as an edit and changed Python files were
-parsed for syntax only. All passing verification evidence below was reported by the user.
-
-First boundary attempt (user-run) stopped during pytest collection because the new draft history
-and approval committer imported the existing `AuditLogWriter` Port under the wrong name
-(`AuditLog`). Pyright independently reported that import plus two intentionally retained module
-validation hooks that had been removed as unused imports; Ruff reported five mechanical findings.
-The imports/hooks and Ruff findings were corrected. The pytest commands produced no test results,
-Pyright reported four errors, Ruff reported five errors, and the format check reported 58 files
-already formatted. None of those failed/stopped commands counts as passing evidence; rerun the
-boundary gates below.
-
-Second boundary attempt (user-run) produced the following evidence:
-
-- authoring/API/AI/operation group: 113 passed, one failed. The sole failure was the new
-  lost-response test asserting `pending` after its injected failure ran *after* the atomic approval
-  and receipt commit. The assertion now expects `completed` for that case; rollback-before-commit
-  cases continue to require `pending`.
-- validation/application contracts: 14 passed.
-- chain/history/Ready integrity: 26 passed, one deselected by the repository's browser marker.
-- persistence/transactions: 27 passed.
-- API operations: five passed.
-- architecture: 18 passed.
-- Ruff check passed; Ruff format check reported 58 files already formatted.
-- Pyright reported one structural Protocol error because the draft handler implementation named
-  its `after_activation` argument `_operation` while the Protocol names it `operation`. The
-  implementation now keeps the Protocol parameter name and discards it explicitly.
-- fresh PostgreSQL pipeline with `OPENAI_API_KEY` unset: three passed in 1.09 seconds after an
-  empty database upgrade through migrations `0001` and `0002`.
-
-The passing groups and fresh pipeline are unaffected by the assertion-only and parameter-name
-corrections. Pending evidence is the corrected approval recovery test, Pyright, and Ruff
-check/format over the final diff.
-
-Third focused attempt (user-run): the two rollback variants passed and the lost-response variant
-still failed because the preceding assertion edit matched an earlier identical `receipt["status"]`
-line in the legacy recovery test. Ruff identified the resulting undefined `failure_stage` at that
-earlier location. The legacy recovery assertion is restored to `pending`, while only the
-parameterized retry assertion branches to `completed` for `after_commit`. Pyright passed with zero
-errors/warnings and the format check again reported 58 files formatted. Pending evidence is now
-the three-case approval retry test and Ruff check; the parameter-name correction is already
-verified by Pyright.
-
-Fourth focused attempt (user-run): all three approval retry/recovery cases passed in 1.32 seconds
-and Ruff check passed. The format check found only the corrected conditional assertion's wrapping;
-`ruff format` was applied to that test file. The sole remaining boundary evidence is the final
-Ruff format check over the diff.
-
-Final boundary result (user-run): Ruff format check passed with 58 files already formatted. All
-Phase 4 gates are green, and the implementation was committed as `08f69ee`. Phase 5 remains
-NOT STARTED.
-
 The final implementation commit spans 62 paths: 4,711 insertions and 2,481 deletions. Its pre-commit
 index and worktree checks were clean. The follow-up status update records the implementation hash
 without amending that commit.
 
-User-reported focused iteration result: **12 passed in 23.51s**. This evidence covers
-the approval contract correction at this iteration, not the unfinished Phase 4 migration.
-The command below is completed; do not repeat it without a relevant code/test change.
-
-Focused iteration command (user-run, completed):
-
-```sh
-./.venv/bin/python -m pytest -q tests/test_api_working_drafts.py::test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse tests/test_operations.py::test_pending_approval_receipt_recovers_a_committed_revision tests/test_operations.py::test_approval_recovery_refuses_changed_inputs tests/test_operations.py::test_approval_identical_retry_reuses_reservation_after_failure
-```
-
 The schema, artifact paths, rendered output, immutable historical records, and other idempotency
 paths are unchanged. No migration file or frontend file changed.
 
-### Phase 4 boundary gates (user-run, passed)
-
-Run in order and report every result before changing the phase status:
-
-```sh
-./.venv/bin/python -m pytest -q tests/test_api_working_drafts.py tests/test_ai_tasks.py tests/test_operations.py
-./.venv/bin/python -m pytest -q tests/test_drafts_validation.py tests/test_application_contracts.py
-./.venv/bin/python -m pytest -q tests/test_chain_integrity.py tests/test_ready_integrity.py
-./.venv/bin/python -m pytest -q tests/test_persistence.py tests/test_transactions.py
-./.venv/bin/python -m pytest -q tests/test_api_operations.py
-./.venv/bin/python -m pytest -q tests/test_architecture.py
-./.venv/bin/pyright cv_engine
-git diff HEAD --name-only --diff-filter=ACMR | awk '/\.py$/' | sort -u | xargs ./.venv/bin/ruff check
-git diff HEAD --name-only --diff-filter=ACMR | awk '/\.py$/' | sort -u | xargs ./.venv/bin/ruff format --check
-docker compose exec postgres dropdb -U cv --if-exists cv_phase4_test
-docker compose exec postgres createdb -U cv cv_phase4_test
-CV_DATABASE_URL=postgresql+psycopg://cv:cv@127.0.0.1:5433/cv_phase4_test ./.venv/bin/alembic upgrade head
-env -u OPENAI_API_KEY CV_TEST_DATABASE_URL=postgresql+psycopg://cv:cv@127.0.0.1:5433/cv_phase4_test ./.venv/bin/python -m pytest -q tests/test_pipeline_end_to_end.py
-```
-
-The approval command is intentionally rerun through `tests/test_api_working_drafts.py` and
-`tests/test_operations.py` because Phase 4 changed the approval gateway, transaction boundary,
-and crash-recovery tests after the earlier 12-test result. Browser and golden gates are not owed:
-no renderer, rendered output, golden fixture/hash, or artifact path changed. Migration topology
-gates are not owed because `alembic/` is unchanged.
+Final user-run verification: authoring/API/AI/operation tests passed; validation/application
+contract tests passed; chain/history/Ready integrity tests passed with one browser-marked case
+deselected; persistence/transaction and API-operation tests passed; 18 architecture tests passed;
+approval rollback, retry, and lost-response recovery tests passed; Pyright passed with zero errors
+and warnings; Ruff check and format check passed; and the fresh PostgreSQL pipeline at migrations
+`0001`–`0002`, with `OPENAI_API_KEY` unset, passed three tests. Browser/golden and migration topology
+gates were not required because renderer output, artifact paths, golden hashes, and `alembic/` were
+unchanged.
 
 ## Phase 5 — Rendering, Ready, recruitment, and submission
 
@@ -782,8 +656,8 @@ on the transactional-handler path and its database source check uses `RenderCont
 than a persistence cast. Maintenance now snapshots integrity findings and artifact inventory
 through a read-only token Port, closes the scope, and only then verifies object-store payloads.
 
-Implementation and zero-consumer cleanup are complete; Phase 5 remains **IN PROGRESS** pending
-user-run gates. `ReadyEvidenceReader` loads only the persisted revision-bound evidence consumed by
+Implementation, zero-consumer cleanup, and verification are complete. `ReadyEvidenceReader` loads
+only the persisted revision-bound evidence consumed by
 qualification. The transaction closes before immutable payload presence/hash checks. Ready remains
 a projection: no Ready row, flag, or status write was added. Application list/detail and revision
 detail obtain Ready through this same re-derivation path rather than a persistence cast.
@@ -810,8 +684,7 @@ Architecture guards now include Phase 5 transaction owners and reject root repos
 persistence casts, bound UoW calls, or handler-owned scopes in the migrated services. Tests were
 rewired from deleted tracking writes to the token store. No schema, public DTO, artifact path,
 renderer output, golden fixture, immutable historical record, Phase 4 semantics, or Phase 6
-lifecycle behavior was changed. Verification remains incomplete and the boxes stay unchecked until
-the complete user-run boundary passes.
+lifecycle behavior was changed.
 
 Constructor review: `RenderingService` has nine explicit collaborators because it spans the
 specified render boundary: transaction ownership, render/Ready source projections, draft and
@@ -820,77 +693,15 @@ Combining them would create the forbidden broad workflow container. `SubmissionS
 collaborators because it owns the demonstrated submission/status/audit fan-in; that fan-in remains
 clear at the service call site, so no `SubmissionCommitter` was introduced.
 
-First user-run boundary attempt was not passing evidence. The recruitment/API/database group
-reported 15 failures and two errors; the architecture group reported one failure and two errors;
-the persistence/transaction/API-operation group reported five failures and nine errors. One real
-implementation defect was identified: `insert_next_action` retained an undefined mechanical
-rewrite variable (`values`), and was corrected to use its explicit `occurred_at` argument. The
-architecture knowledge-scope guard also found that render submission froze the same value through
-an inline call rather than the named `document_knowledge_context_hash` helper used by activation;
-the freeze path now uses that helper.
+Final user-run verification:
 
-The remaining reported deadlocks, missing rows, absent constraint failures and unrelated
-Knowledge/plan failures are consistent with multiple pytest processes sharing the suite's one
-TRUNCATE-per-test database: one process can truncate or lock tables while another test is running.
-They do not count as evidence and must be rerun sequentially against a freshly reset test database.
-No gate has passed from this attempt.
-
-The sequential rerun against fresh `cv_phase5_retry` confirmed that diagnosis: **69 passed, four
-failed, no errors**. Three focused implementation issues remained and were corrected. Synchronous
-`RenderingService.render` now performs its active-Application check through `RenderContextReader`
-after removal of `ServiceBase`; maintenance inventory orders by the artifact table's real
-`created_at, id` columns rather than a nonexistent `seq`; and `submit_render` now visibly freezes
-`document_knowledge_context_hash` before passing it to render source construction, matching the
-activation check and the derived architecture guard. These corrections have not yet been rerun.
-
-The four-test focused rerun then passed the maintenance inventory and architecture guard cases;
-the two render-backed submission cases still failed at the same reuse lookup. The lookup had used
-projection field `artifact_type` and nonexistent ordering field `seq` as though both belonged to
-`artifact_versions`. It now joins the owning `artifacts` table for `artifact_type` and orders by
-the real immutable-version fields `created_at, version_number`, matching the existing shared
-artifact SQL. This final correction has not yet been rerun.
-
-The next sequential user-run groups established **22 passed** for recruitment/application/database,
-**32 passed** for persistence/transactions/API operations, and **19 passed** for architecture. A
-render/Ready/journey group then reported **39 passed, three failed, one deselected**. Two journey
-failures shared a single pre-execution defect: `RenderOperationHandler.verify_external_sources`
-referenced its frozen `sources` before assigning it from the Operation. The third failure was an
-error-message compatibility regression: submission correctly rejected tampered Ready evidence,
-but the established contiguous `tampered Ready evidence` phrase had been split. Both are corrected.
-Pyright's four findings were the same undefined render variable plus an unannotated
-`ReadyProjection` Protocol return; the Protocol now explicitly returns `ReadyQualification`.
-Ruff reported 17 changed files requiring mechanical formatting, and those files have been
-formatted. These latest corrections still require focused user-run verification.
-
-A subsequent full user-run suite reported **490 passed, three failed, two deselected**. All three
-failures were render-retry boundary cases. The source-change case exposed a real gap: immutable
-render inputs were verified before execution but not again after execution and before activation.
-`RenderingService` now snapshots the two source references in a read scope, closes it, and verifies
-their payloads outside the transaction; the runner invokes that check again before opening the
-activation transaction. The other two failures encoded pre-reuse assumptions: an identical retry
-now intentionally reuses the existing HTML/PDF identities and validation evidence. Their tests now
-assert that cancellation adds no validation and explicitly disable reuse only when exercising
-atomic two-row registration rollback. These corrections have not yet been rerun.
-
-The subsequent full user-run suite passed: **493 passed, two deselected in 128.40 seconds**. This
-verifies the complete backend test collection, including the corrected render interruption,
-source-change, reuse, and atomic-registration cases. Phase 5 remains **IN PROGRESS** pending the
-final static-analysis/format evidence and fresh-PostgreSQL pipeline required at this boundary.
-
-Pyright then passed with **zero errors and zero warnings**, and Ruff format check passed with **36
-files already formatted**. Ruff check found one import-order issue in `tests/test_operations.py`; it
-was fixed mechanically and the fixing invocation reported zero remaining findings. The first fresh
-PostgreSQL pipeline attempt did not collect tests: all three setup cases refused the newly created
-database because it had not been upgraded to Alembic head `0002`. This is a gate-command setup
-omission, not product evidence; the migrated fresh-database pipeline must be rerun.
-
-The database was then upgraded transactionally through `0001` and `0002`, and the user-run fresh
-PostgreSQL pipeline with `OPENAI_API_KEY` unset passed: **three passed in 2.63 seconds**. The final
-two render interruption regressions (cancellation and source change) also passed after their
-test-only correction. Final Phase 5 evidence is: backend suite **493 passed, two deselected**;
-Pyright zero errors/warnings; Ruff check passed; Ruff format passed with 36 files formatted; fresh
-PostgreSQL pipeline **three passed**; focused interruption regressions passed; and both staged and
-unstaged diff checks were clean.
+- backend suite: **493 passed, two deselected**.
+- focused render cancellation and source-change regressions: passed.
+- Pyright: **zero errors and zero warnings**.
+- Ruff check: passed.
+- Ruff format check: **36 files already formatted**.
+- fresh PostgreSQL pipeline at Alembic head `0002`, with `OPENAI_API_KEY` unset: **three passed**.
+- staged and unstaged diff checks: clean.
 
 Final zero-consumer cleanup found no further production deletion that belonged to Phase 5. The
 remaining root `Repository`, legacy UoW/bind path, Operation repository/casts, generic Operation
