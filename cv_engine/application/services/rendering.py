@@ -13,8 +13,9 @@ from ...domain.contracts.validation import (
 from ...domain.draft_markdown import parse_draft
 from ...domain.knowledge import Knowledge
 from ...domain.validation import validate_draft
-from ...util import new_id
+from ...util import canonical_json, new_id, sha256_text
 from ..artifacts import ArtifactDelivery, deliver_artifact
+from ..chain import ChainError, DraftChainSources, check_loaded_draft_chain
 from ..commands import (
     RenderCommand,
     RenderResult,
@@ -29,13 +30,21 @@ from ..errors import (
     UnknownRecord,
     ValidationBlocked,
 )
+from ..operations import OperationSources
 from ..ports import (
-    ReadinessRepository,
+    KnowledgeStore,
+    Renderer,
     RenderTargets,
+    RevisionPayloadStore,
 )
+from ..ports.artifact_catalog import ArtifactCatalog
+from ..ports.draft_lifecycle import DraftLifecycleStore
+from ..ports.ready import ReadyEvidenceReader
+from ..ports.rendering import RenderContextReader
+from ..ports.transactions import TransactionManager, WriteTransaction
+from ..ports.validation_store import ValidationStore
 from ..queries import artifact_version_view
 from ..ready import qualify_ready_revision
-from .base import ServiceBase, bound_analysis
 
 
 @dataclass(frozen=True)
@@ -55,10 +64,41 @@ class PreparedRender:
 class ExecutedRender:
     prepared: PreparedRender
     report: ValidationReport
+    artifact_ids: tuple[str, str]
 
 
-class RenderingService(ServiceBase[ReadinessRepository]):
+class RenderingService:
     """Rendering an approved revision and reporting ready state."""
+
+    def __init__(
+        self,
+        *,
+        transactions: TransactionManager,
+        catalog: ArtifactCatalog,
+        validations: ValidationStore,
+        ready_evidence: ReadyEvidenceReader,
+        contexts: RenderContextReader,
+        drafts: DraftLifecycleStore,
+        knowledge: KnowledgeStore,
+        renderer: Renderer,
+        payloads: RevisionPayloadStore,
+    ):
+        self._transactions = transactions
+        self._catalog = catalog
+        self._validations = validations
+        self._ready_evidence = ready_evidence
+        self._contexts = contexts
+        self._drafts = drafts
+        self._knowledge = knowledge
+        self.renderer = renderer
+        self.revision_payloads = payloads
+        self.snapshot_payloads = payloads
+
+    def load_knowledge(self) -> Knowledge:
+        try:
+            return self._knowledge.load()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
 
     def _registered_draft(self, reference: str) -> DraftDocument:
         """Load one approved claim manifest through immutable payload storage."""
@@ -85,9 +125,16 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         return f"{head}/resume.md"
 
     def render(self, application_id: str) -> RenderResult:
-        self.load_active_application(application_id)
         try:
-            revision_id = self.repo.latest_approved_revision(application_id).id
+            with self._transactions.read() as tx:
+                deleted_at = self._contexts.application_deleted_at(tx, application_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown application: {application_id}") from exc
+        if deleted_at is not None:
+            raise StateConflict(f"application is deleted: {application_id}")
+        try:
+            with self._transactions.read() as tx:
+                revision_id = self._drafts.latest_approved_revision(tx, application_id).id
         except UnknownRecord as exc:
             raise UnknownRecord(f"no approved revision for application: {application_id}") from exc
         command = RenderCommand(
@@ -96,16 +143,53 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         )
         prepared = self.prepare(command)
         executed = self.execute(prepared)
-        return self.activate(executed)
+        with self._transactions.write() as tx:
+            result = self.activate(tx, executed)
+        self.verify_activation(executed)
+        return result
+
+    def freeze_operation_sources(
+        self, command: RenderCommand, knowledge_context_hash: str
+    ) -> OperationSources:
+        with self._transactions.read() as tx:
+            context = self._contexts.operation_sources(tx, command.approved_revision_id)
+        revision = context.revision
+        if revision.application_id != command.application_id:
+            raise LineageBroken("approved revision does not belong to the named Application")
+        return OperationSources(
+            job_snapshot_id=revision.job_snapshot_id,
+            job_snapshot_hash=context.snapshot["source_hash"],
+            job_analysis_id=revision.job_analysis_id,
+            selection_plan_id=revision.selection_plan_id,
+            approved_revision_id=revision.id,
+            knowledge_context_hash=knowledge_context_hash,
+            dependency_hashes={
+                "approved_revision": sha256_text(canonical_json(revision.model_dump(mode="json"))),
+                "claim_manifest": context.manifest["content_hash"],
+            },
+        )
+
+    def operation_source_payloads_match(self, revision_id: str) -> bool:
+        """Verify immutable render inputs without holding a database transaction."""
+        with self._transactions.read() as tx:
+            context = self._contexts.operation_sources(tx, revision_id)
+        expected = (
+            (context.manifest["path"], context.manifest["content_hash"]),
+            (context.revision.resume_markdown_reference, context.revision.resume_markdown_hash),
+        )
+        return all(
+            self.revision_payloads.verify_payload(reference, content_hash) == "ok"
+            for reference, content_hash in expected
+        )
 
     def prepare(self, command: RenderCommand) -> PreparedRender:
         knowledge = self.load_knowledge()
         facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
         try:
-            revision = self.repo.approved_revision(command.approved_revision_id)
-            manifest_record = self.repo.artifact_version_for_revision(
-                command.approved_revision_id, "claim_manifest", "approved"
-            )
+            with self._transactions.read() as tx:
+                context = self._contexts.operation_sources(tx, command.approved_revision_id)
+            revision = context.revision
+            manifest_record = context.manifest
         except UnknownRecord as exc:
             raise UnknownRecord(
                 f"unknown approved revision: {command.approved_revision_id}"
@@ -119,31 +203,34 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         manifest_reference = manifest_record["path"]
         draft = self._registered_draft(manifest_reference)
         profile = profiles.get(draft.profile)
-        _, analysis = bound_analysis(
-            self.repo,
+        chain = check_loaded_draft_chain(
+            DraftChainSources(
+                context.analysis, context.snapshot, context.latest_snapshot_id, context.analyses
+            ),
             command.application_id,
             draft,
             profiles,
             facts,
-            recorded_analysis_id=self.repo.decision_for_revision(command.approved_revision_id)[
-                "job_analysis_id"
-            ],
+            recorded_analysis_id=context.decision["job_analysis_id"],
         )
+        try:
+            _, analysis = chain.bound()
+        except ChainError as exc:
+            raise LineageBroken(f"draft chain rejected: {exc}") from exc
         source_report = validate_draft(
             draft,
             self._registered_text(self._markdown_reference_beside(manifest_reference)),
             facts,
             profile,
             analysis,
-            plan=self.repo.selection_plan(
-                self.repo.approved_revision(command.approved_revision_id).selection_plan_id
-            ),
+            plan=context.plan,
             policies=policies,
             presentations=knowledge.presentations,
         )
-        self.repo.record_validation(
-            command.application_id, "approved-source-pre-render", source_report
-        )
+        with self._transactions.write() as tx:
+            self._validations.record_validation(
+                tx, command.application_id, "approved-source-pre-render", source_report
+            )
         if not source_report.passed:
             raise ValidationBlocked(
                 "render blocked because the approved Markdown no longer matches its validated claims",
@@ -194,10 +281,12 @@ class RenderingService(ServiceBase[ReadinessRepository]):
             raise
         except (OSError, RuntimeError) as exc:
             raise InfrastructureFailure(f"rendering failed: {exc}") from exc
-        self._register_outputs(prepared, report)
-        return ExecutedRender(prepared=prepared, report=report)
+        artifact_ids = self._register_outputs(prepared, report)
+        return ExecutedRender(prepared=prepared, report=report, artifact_ids=artifact_ids)
 
-    def _register_outputs(self, prepared: PreparedRender, report: ValidationReport) -> None:
+    def _register_outputs(
+        self, prepared: PreparedRender, report: ValidationReport
+    ) -> tuple[str, str]:
         """Register the two rendered artifacts, in the execute phase.
 
         **Not at activation.** The Operation runner records this render's two
@@ -222,7 +311,7 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         image: there a payload existed with no row naming it, here a row named
         something that did not exist.
 
-        Written outside the *activation* transaction, in its own UnitOfWork.
+        Written outside the *activation* transaction, in its own short token-owned write scope.
         Both halves of that matter and they pull in opposite directions:
 
         - Not the activation transaction, because a row committed only alongside
@@ -242,12 +331,27 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         draft = prepared.draft
         targets = prepared.targets
         lifecycle = "rendered" if report.passed else "rendered-invalid"
-        with self.repo.unit_of_work() as uow:
-            repository = self.repo.bind(uow)
-            for artifact_version_id, artifact_type, path in [
-                (prepared.artifact_ids[0], "resume_html", targets.html),
-                (prepared.artifact_ids[1], "resume_pdf", targets.pdf),
-            ]:
+        stored_outputs = []
+        for artifact_version_id, artifact_type, path in [
+            (prepared.artifact_ids[0], "resume_html", targets.html),
+            (prepared.artifact_ids[1], "resume_pdf", targets.pdf),
+        ]:
+            stored_outputs.append(
+                (
+                    artifact_version_id,
+                    artifact_type,
+                    self.revision_payloads.ingest_render_output(path),
+                )
+            )
+        with self._transactions.write() as tx:
+            final_ids = []
+            for artifact_version_id, artifact_type, stored in stored_outputs:
+                existing = self._contexts.matching_render_artifact(
+                    tx, command.approved_revision_id, artifact_type, stored.sha256, lifecycle
+                )
+                if existing is not None:
+                    final_ids.append(existing["id"])
+                    continue
                 metadata: dict[str, Any] = {"validation_passed": report.passed}
                 if artifact_type == "resume_pdf":
                     metadata["recruiter_filename"] = targets.recruiter_pdf_filename
@@ -255,8 +359,8 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                 # what storage returned. Deriving the reference from the path
                 # and hashing the file separately described two different
                 # reads of the same location; one ingest describes one.
-                stored = self.revision_payloads.ingest_render_output(path)
-                registered_id = repository.register_artifact_version(
+                registered_id = self._catalog.register_artifact_version(
+                    tx,
                     command.application_id,
                     artifact_type,
                     "resume",
@@ -277,42 +381,46 @@ class RenderingService(ServiceBase[ReadinessRepository]):
                     raise InfrastructureFailure(
                         "artifact registry did not preserve the reserved output identity"
                     )
-            uow.commit()
+                final_ids.append(registered_id)
+        return final_ids[0], final_ids[1]
 
     def activate(
         self,
+        tx: WriteTransaction,
         executed: ExecutedRender,
-        repository: ReadinessRepository | None = None,
     ) -> RenderResult:
-        repo = repository or self.repo
         prepared = executed.prepared
         command = prepared.command
         report = executed.report
-        artifact_ids = prepared.artifact_ids
+        artifact_ids = executed.artifact_ids
         # Both artifact versions already exist: `execute` registered them
         # beside the files they point at, so a cancellation between the phases
         # leaves inactive evidence rather than dangling references. What belongs
         # here is only what activation means - the post-render ValidationRun that
         # binds this report to the exact PDF, and the Ready qualification.
-        repo.record_validation(command.application_id, "post-render", report, artifact_ids[1])
-        if report.passed:
-            qualification = qualify_ready_revision(
-                self.revision_payloads,
-                repo,
-                command.application_id,
-                command.approved_revision_id,
-                artifact_ids[1],
-            )
-            if not qualification.ready_qualified:
-                raise ValidationBlocked(
-                    "render succeeded but fresh ready integrity verification failed: "
-                    f"{[issue.code for issue in qualification.validation.issues]}"
-                )
+        self._validations.record_validation(
+            tx, command.application_id, "post-render", report, artifact_ids[1]
+        )
         return RenderResult(
             application_id=command.application_id,
             pdf_artifact_version_id=artifact_ids[1],
             validation=report,
         )
+
+    def verify_activation(self, executed: ExecutedRender) -> None:
+        if not executed.report.passed:
+            return
+        prepared = executed.prepared
+        qualification = self.ready_qualification(
+            prepared.command.application_id,
+            prepared.command.approved_revision_id,
+            executed.artifact_ids[1],
+        )
+        if not qualification.ready_qualified:
+            raise ValidationBlocked(
+                "render succeeded but fresh ready integrity verification failed: "
+                f"{[issue.code for issue in qualification.validation.issues]}"
+            )
 
     def download_artifact(self, artifact_version_id: str) -> ArtifactDelivery:
         """§20/§12: one registered artifact, addressed by ID and nothing else.
@@ -358,19 +466,16 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         """
         record = self._artifact_record(pdf_artifact_version_id)
         try:
-            revision = self.repo.approved_revision(approved_revision_id)
+            with self._transactions.read() as tx:
+                revision = self._drafts.approved_revision(tx, approved_revision_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
         if record["artifact_type"] != "resume_pdf":
             raise LineageBroken(f"artifact {pdf_artifact_version_id} is not a rendered PDF")
         if record["revision_id"] != revision.id:
             raise LineageBroken("the named PDF does not belong to the named approved revision")
-        qualification = qualify_ready_revision(
-            self.revision_payloads,
-            self.repo,
-            revision.application_id,
-            revision.id,
-            pdf_artifact_version_id,
+        qualification = self.ready_qualification(
+            revision.application_id, revision.id, pdf_artifact_version_id
         )
         if not qualification.ready_qualified:
             raise ValidationBlocked(
@@ -395,7 +500,8 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         """
         record = self._artifact_record(html_artifact_version_id)
         try:
-            revision = self.repo.approved_revision(approved_revision_id)
+            with self._transactions.read() as tx:
+                revision = self._drafts.approved_revision(tx, approved_revision_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
         if record["artifact_type"] != "resume_html" or record["lifecycle_status"] != "rendered":
@@ -408,7 +514,8 @@ class RenderingService(ServiceBase[ReadinessRepository]):
 
     def _artifact_record(self, artifact_version_id: str) -> dict[str, Any]:
         try:
-            return self.repo.artifact_version(artifact_version_id)
+            with self._transactions.read() as tx:
+                return self._catalog.artifact_version(tx, artifact_version_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown artifact version: {artifact_version_id}") from exc
 
@@ -419,13 +526,14 @@ class RenderingService(ServiceBase[ReadinessRepository]):
         pdf_artifact_version_id: str | None = None,
     ) -> ReadyQualification:
         try:
-            self.repo.get_application(application_id)
+            with self._transactions.read() as tx:
+                evidence = self._ready_evidence.load(
+                    tx, application_id, approved_revision_id, pdf_artifact_version_id
+                )
             return qualify_ready_revision(
                 self.revision_payloads,
-                self.repo,
+                evidence,
                 application_id,
-                approved_revision_id,
-                pdf_artifact_version_id,
             )
         except UnknownRecord as exc:
             raise UnknownRecord(f"no approved revision for application: {application_id}") from exc

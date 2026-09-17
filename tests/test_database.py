@@ -14,6 +14,8 @@ from cv_engine.infrastructure.persistence import (
 )
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from cv_engine.infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
+from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from cv_engine.infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
@@ -64,6 +66,11 @@ def _create(repo, *, company: str, target_role: str, text: str):
             occurred_at=created_at,
         )
     return application_id, snapshot_id
+
+
+def _recruitment(repo):
+    transactions = SqlAlchemyTransactionManager(repo.engine)
+    return transactions, SqlAlchemyRecruitmentRepository(transactions)
 
 
 def test_recruitment_event_and_transition_contract(application_repo) -> None:
@@ -130,14 +137,17 @@ def test_removed_cli_client_is_refused_at_the_command_and_database_boundaries(
         text="Python role",
     )
     with pytest.raises(IntegrityError, match="ck_recruitment_events_client"):
-        application_repo.insert_next_action_event(
-            application_id=app_id,
-            next_action="Follow up",
-            next_action_date="2026-09-01",
-            actor_type="user",
-            client="cli",
-            occurred_at="2026-08-30T12:00:00+00:00",
-        )
+        transactions, recruitment = _recruitment(application_repo)
+        with transactions.write() as tx:
+            recruitment.insert_next_action(
+                tx,
+                application_id=app_id,
+                next_action="Follow up",
+                next_action_date="2026-09-01",
+                actor_type="user",
+                client="cli",
+                occurred_at="2026-08-30T12:00:00+00:00",
+            )
 
     assert application_repo.get_application(app_id)["next_action"] is None
 
@@ -159,18 +169,22 @@ def test_immutable_job_snapshot_trigger(application_repo) -> None:
 def test_next_action_is_not_a_status(application_repo) -> None:
     repo = application_repo
     app_id, _ = _create(repo, company="Acme", target_role="Sales", text="Sales role")
-    event_id = repo.insert_next_action_event(
-        application_id=app_id,
-        next_action="Follow up",
-        next_action_date="2026-08-20",
-        actor_type="user",
-        client="web",
-        occurred_at="2026-08-19T10:00:00+00:00",
-    )
+    transactions, recruitment = _recruitment(repo)
+    with transactions.write() as tx:
+        event_id = recruitment.insert_next_action(
+            tx,
+            application_id=app_id,
+            next_action="Follow up",
+            next_action_date="2026-08-20",
+            actor_type="user",
+            client="web",
+            occurred_at="2026-08-19T10:00:00+00:00",
+        )
     row = repo.get_application(app_id)
     assert row["current_status"] == "saved"
     assert row["next_action"] == "Follow up"
-    assert repo.recruitment_event(event_id)["event_type"] == "next_action"
+    with transactions.read() as tx:
+        assert recruitment.event(tx, event_id)["event_type"] == "next_action"
 
 
 def test_database_is_at_registered_head_schema(application_repo) -> None:
@@ -200,9 +214,10 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
     assert not hasattr(repo, "_set_ready")
     assert not hasattr(repo, "record_submission")
     assert not hasattr(repo, "_record_submission")
-    with repo.unit_of_work() as uow:
-        transaction = repo.bind(uow)
-        transaction.insert_submission(
+    transactions, recruitment = _recruitment(repo)
+    with transactions.write() as tx:
+        recruitment.insert_submission(
+            tx,
             "submission-1",
             app_id,
             "external",
@@ -211,7 +226,8 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
             "2026-08-18T10:00:00+00:00",
             {"reason": "application service verified exact Ready proof"},
         )
-        transaction.insert_recruitment_event(
+        recruitment.insert_event(
+            tx,
             application_id=app_id,
             expected_current_status="saved",
             target_status="applied",
@@ -222,7 +238,6 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
             occurred_at="2026-08-18T10:00:00+00:00",
             terminal_outcome=None,
         )
-        uow.commit()
     assert repo.get_application(app_id)["current_status"] == "applied"
 
     second_id = repo.register_artifact_version(
@@ -240,50 +255,59 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
         (second_id, 2),
     ]
     assert all(row["revision_id"] is None for row in versions)
-    inventory = repo.artifact_inventory()
+    inspection = SqlAlchemyMaintenanceInspection(transactions)
+    with transactions.read() as tx:
+        inventory = inspection.artifact_inventory(tx)
+        problems = inspection.integrity_problems(tx)
     assert len(inventory) == 2
     assert {(row["path"], row["content_hash"]) for row in versions}.issubset(
         {(row["path"], row["content_hash"]) for row in inventory}
     )
-    assert repo.integrity_check() == []
+    assert problems == []
 
     with pytest.raises(IntegrityError):
-        repo.insert_submission(
-            "fake-internal",
-            app_id,
-            "internal",
-            None,
-            pdf_id,
-            "2026-08-18T11:00:00+00:00",
-            {},
-        )
+        with transactions.write() as tx:
+            recruitment.insert_submission(
+                tx,
+                "fake-internal",
+                app_id,
+                "internal",
+                None,
+                pdf_id,
+                "2026-08-18T11:00:00+00:00",
+                {},
+            )
 
     # One artifact, one submission. The table is immutable, so a duplicate cannot
     # be corrected afterwards: the history would permanently say a CV was sent
     # twice when it was sent once.
     with pytest.raises(IntegrityError):
-        repo.insert_submission(
-            "submission-duplicate",
-            app_id,
-            "external",
-            None,
-            pdf_id,
-            "2026-08-18T12:00:00+00:00",
-            {},
-        )
+        with transactions.write() as tx:
+            recruitment.insert_submission(
+                tx,
+                "submission-duplicate",
+                app_id,
+                "external",
+                None,
+                pdf_id,
+                "2026-08-18T12:00:00+00:00",
+                {},
+            )
 
     # An external submission may carry no artifact at all — applied through the
     # company's own form. Repeated NULLs stay legal under the same constraint.
     for index in (1, 2):
-        repo.insert_submission(
-            f"submission-no-artifact-{index}",
-            app_id,
-            "external",
-            None,
-            None,
-            f"2026-08-18T1{index}:30:00+00:00",
-            {},
-        )
+        with transactions.write() as tx:
+            recruitment.insert_submission(
+                tx,
+                f"submission-no-artifact-{index}",
+                app_id,
+                "external",
+                None,
+                None,
+                f"2026-08-18T1{index}:30:00+00:00",
+                {},
+            )
     assert len(repo.submissions(app_id)) == 3
 
 
@@ -293,7 +317,7 @@ def test_tracking_service_sets_next_action_without_changing_status(services) -> 
             company="Service Action", target_role="Sales", job_text="Sales role", client="web"
         )
     )
-    result = services.tracking.set_next_action(
+    result = services.recruitment.set_next_action(
         NextActionCommand(
             application_id=ingested.application_id,
             next_action="Follow up",

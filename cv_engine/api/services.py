@@ -24,8 +24,9 @@ from ..application.services.knowledge import KnowledgeService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import OperationService
 from ..application.services.projections import ApplicationQueryService
+from ..application.services.recruitment import RecruitmentService
 from ..application.services.rendering import RenderingService
-from ..application.services.tracking import TrackingService
+from ..application.services.submission import SubmissionService
 from ..application.settings import SettingsService
 
 
@@ -61,7 +62,8 @@ class ApiServices:
     draft_history: DraftHistoryService
     draft_approval: DraftApprovalService
     rendering: RenderingService
-    tracking: TrackingService
+    recruitment: RecruitmentService
+    submission: SubmissionService
     knowledge: KnowledgeService
     maintenance: MaintenanceService
     operations: OperationService

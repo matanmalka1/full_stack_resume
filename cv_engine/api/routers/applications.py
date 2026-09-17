@@ -318,7 +318,7 @@ def replace_working_draft(
     summary="Close an application without deleting its history",
 )
 def close_application(application_id: str, services: Services) -> CloseApplicationResponse:
-    result = services.tracking.close_application(
+    result = services.recruitment.close_application(
         CloseApplicationCommand(
             application_id=application_id,
             actor_type="user",
@@ -342,7 +342,7 @@ def delete_application(application_id: str, services: Services) -> DeleteApplica
     only default list/Dashboard projections and duplicate detection stop
     surfacing it. The detail endpoint still returns it by ID.
     """
-    result = services.tracking.delete_application(
+    result = services.recruitment.delete_application(
         DeleteApplicationCommand(
             application_id=application_id,
             actor_type="user",

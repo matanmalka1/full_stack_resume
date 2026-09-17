@@ -15,40 +15,10 @@ from typing import Any
 
 from ..util import utc_now
 from .commands import BoundaryDTO
-from .ports import ApplicationStore, ReadinessRepository, SnapshotPayloadStore
+from .ports import ApplicationStore
 from .queries import ApplicationListView
 
 EXPORT_SCHEMA_VERSION = "2.0"
-
-
-def reconcile_artifacts(
-    payloads: SnapshotPayloadStore,
-    repo: ReadinessRepository,
-) -> dict[str, Any]:
-    """Check database references and artifact hashes against stored evidence.
-
-    Verification goes through the payload store rather than resolving each row
-    to a local path and hashing the file. That path verified the local disk no
-    matter which backend was configured, so it reported every artifact missing
-    once storage moved off it - the same defect `verify_payload` was introduced
-    to fix for Ready qualification, and a worse one here, because reconcile is
-    the command that exists to report the truth about stored evidence.
-    """
-    problems = repo.integrity_check()
-    checked = 0
-    for row in repo.artifact_inventory():
-        checked += 1
-        verification = payloads.verify_payload(row["path"], row["content_hash"])
-        if verification == "missing":
-            problems.append(f"missing artifact: {row['path']}")
-        elif verification == "tampered":
-            problems.append(f"artifact hash mismatch: {row['path']}")
-        elif verification == "unresolvable":
-            # Distinct from absent: the reference itself does not name an
-            # approved payload, which is a malformed row rather than a lost
-            # file. Collapsing the two would hide which one happened.
-            problems.append(f"unresolvable artifact reference: {row['path']}")
-    return {"passed": not problems, "artifact_versions_checked": checked, "problems": problems}
 
 
 EXPORT_FIELDS = [

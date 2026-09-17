@@ -30,7 +30,6 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import ValidationBlocked
 from cv_engine.application.maintenance import (
     build_application_export,
-    reconcile_artifacts,
 )
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.runtime.composition import Services
@@ -108,7 +107,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     assert services.rendering.ready_qualification(application_id).ready_qualified
 
     # reconcile: every registered artifact verifies through the payload store
-    report = reconcile_artifacts(services.payloads, services.repository)
+    report = services.maintenance.reconcile().model_dump(mode="python")
     assert report["passed"], report["problems"]
     assert report["artifact_versions_checked"] > 0
     assert services.knowledge_lifecycle.reconcile_facts().passed
@@ -133,14 +132,14 @@ def test_reconcile_reports_a_tampered_artifact(
     particular file on disk changed.
     """
     setup = ready_application("Tamper Co")
-    assert reconcile_artifacts(services.payloads, services.repository)["passed"]
+    assert services.maintenance.reconcile().passed
 
     pdf_record = services.repository.latest_artifact_version(setup.application_id, "resume_pdf")
     services.artifacts.resolve(pdf_record["path"]).write_bytes(
         b"%PDF-1.4\n% not the approved bytes\n"
     )
 
-    report = reconcile_artifacts(services.payloads, services.repository)
+    report = services.maintenance.reconcile().model_dump(mode="python")
     assert not report["passed"]
     assert any("hash mismatch" in problem for problem in report["problems"]), report["problems"]
 

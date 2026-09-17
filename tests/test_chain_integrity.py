@@ -40,7 +40,6 @@ from cv_engine.application.errors import (
     UnknownRecord,
     WorkflowError,
 )
-from cv_engine.application.ready import qualify_ready_revision
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.models import DecisionRecord
 from cv_engine.infrastructure.persistence.decision_store import SqlAlchemyDecisionRepository
@@ -575,13 +574,11 @@ def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
 ) -> None:
     services, app_id = ready_application("Chain Recheck")
     revision_id = services.repository.latest_approved_revision(app_id).id
-    assert qualify_ready_revision(services.payloads, services.repository, app_id).ready_qualified
+    assert services.rendering.ready_qualification(app_id).ready_qualified
 
     _analyze(services, app_id, emphasis="balanced-sales")
 
-    qualification = qualify_ready_revision(
-        services.payloads, services.repository, app_id, revision_id
-    )
+    qualification = services.rendering.ready_qualification(app_id, revision_id)
     assert qualification.ready_qualified, qualification.validation.model_dump()
 
 
@@ -591,7 +588,7 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
     """A re-run that changes nothing material is not a reason to fail integrity."""
     services, app_id = ready_application("Immaterial Rerun")
     _analyze(services, app_id)
-    qualification = qualify_ready_revision(services.payloads, services.repository, app_id)
+    qualification = services.rendering.ready_qualification(app_id)
     assert qualification.ready_qualified, qualification.validation.model_dump()
     revision_id = services.repository.latest_approved_revision(app_id).id
     assert {

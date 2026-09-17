@@ -13,8 +13,9 @@ no repositories or stores, and reconciliation needs both.
 from __future__ import annotations
 
 from ..commands import ReconciliationResult
-from ..maintenance import reconcile_artifacts
-from ..ports import ReadinessRepository, RevisionPayloadStore
+from ..ports import RevisionPayloadStore
+from ..ports.maintenance import MaintenanceInspection
+from ..ports.transactions import TransactionManager
 from .knowledge import KnowledgeService
 
 __all__ = ["MaintenanceService"]
@@ -27,11 +28,13 @@ class MaintenanceService:
         self,
         *,
         payloads: RevisionPayloadStore,
-        repository: ReadinessRepository,
+        transactions: TransactionManager,
+        inspection: MaintenanceInspection,
         knowledge: KnowledgeService,
     ) -> None:
         self.payloads = payloads
-        self.repository = repository
+        self.transactions = transactions
+        self.inspection = inspection
         self.knowledge = knowledge
 
     def reconcile(self) -> ReconciliationResult:
@@ -41,11 +44,23 @@ class MaintenanceService:
         hide a broken lifecycle, because the report exists to say what is
         actually wrong rather than to stop at the first problem.
         """
-        report = reconcile_artifacts(self.payloads, self.repository)
+        with self.transactions.read() as tx:
+            problems = self.inspection.integrity_problems(tx)
+            inventory = self.inspection.artifact_inventory(tx)
+        checked = 0
+        for row in inventory:
+            checked += 1
+            verification = self.payloads.verify_payload(row["path"], row["content_hash"])
+            if verification == "missing":
+                problems.append(f"missing artifact: {row['path']}")
+            elif verification == "tampered":
+                problems.append(f"artifact hash mismatch: {row['path']}")
+            elif verification == "unresolvable":
+                problems.append(f"unresolvable artifact reference: {row['path']}")
         fact_lifecycle = self.knowledge.reconcile_facts()
         return ReconciliationResult(
-            passed=report["passed"] and fact_lifecycle.passed,
-            artifact_versions_checked=report["artifact_versions_checked"],
-            problems=report["problems"],
+            passed=not problems and fact_lifecycle.passed,
+            artifact_versions_checked=checked,
+            problems=problems,
             fact_lifecycle=fact_lifecycle,
         )

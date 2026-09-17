@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, func, select
-
 from ...domain.contracts.records import ValidationRunLineage
 from ...domain.contracts.validation import ValidationReport
 from .artifacts_sql import (
@@ -23,18 +21,9 @@ from .artifacts_sql import (
     _validation_run,
 )
 from .base import SqlAlchemyRepositoryBase
-from .tables import artifact_versions
 
 
 class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
-    def artifact_inventory(self) -> list[dict[str, Any]]:
-        """Every recorded artifact version's path and hash, for reconciliation."""
-        with self.read_connection() as connection:
-            rows = connection.execute(
-                select(artifact_versions.c.path, artifact_versions.c.content_hash)
-            ).mappings()
-            return [dict(row) for row in rows]
-
     def register_artifact_version(
         self,
         application_id: str | None,
@@ -147,38 +136,3 @@ class SqlAlchemyArtifactRepository(SqlAlchemyRepositoryBase):
     def validation_run(self, validation_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             return _validation_run(connection, validation_id)
-
-    def integrity_check(self) -> list[str]:
-        catalog = MetaData()
-        pg_constraint = Table(
-            "pg_constraint",
-            catalog,
-            Column("conname", String),
-            Column("connamespace", Integer),
-            Column("contype", String),
-            Column("convalidated", Boolean),
-            schema="pg_catalog",
-        )
-        pg_namespace = Table(
-            "pg_namespace",
-            catalog,
-            Column("oid", Integer),
-            Column("nspname", String),
-            schema="pg_catalog",
-        )
-        with self.read_connection() as connection:
-            names = connection.execute(
-                select(pg_constraint.c.conname)
-                .select_from(
-                    pg_constraint.join(
-                        pg_namespace, pg_namespace.c.oid == pg_constraint.c.connamespace
-                    )
-                )
-                .where(
-                    pg_constraint.c.contype == "f",
-                    pg_constraint.c.convalidated.is_(False),
-                    pg_namespace.c.nspname == func.current_schema(),
-                )
-                .order_by(pg_constraint.c.conname)
-            ).scalars()
-            return [f"foreign key constraint not validated: {name}" for name in names]

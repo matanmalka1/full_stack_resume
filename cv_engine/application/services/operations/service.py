@@ -41,7 +41,7 @@ from ...operations import (
     as_operation_view,
     is_terminal_operation,
 )
-from ...ports import OperationRepository, ReadinessRepository
+from ...ports import OperationRepository
 from ...settings import SettingsRepository
 from ..analysis import AnalysisService
 from ..base import ServiceBase
@@ -439,36 +439,20 @@ class OperationService(ServiceBase[OperationRepository]):
         rendering_service: RenderingService,
     ) -> OperationView:
         self.load_active_application(command.application_id)
-        readiness = cast(ReadinessRepository, self.repo)
         try:
-            revision = readiness.approved_revision(command.approved_revision_id)
-            manifest = readiness.artifact_version_for_revision(
-                command.approved_revision_id, "claim_manifest", "approved"
+            sources = rendering_service.freeze_operation_sources(
+                command, document_knowledge_context_hash(rendering_service)
             )
-            snapshot = readiness.get_snapshot(revision.job_snapshot_id)
         except UnknownRecord as exc:
             raise UnknownRecord(
                 f"unknown approved revision: {command.approved_revision_id}"
             ) from exc
-        if revision.application_id != command.application_id:
-            raise LineageBroken("approved revision does not belong to the named Application")
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.RENDER_REVISION,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
-            sources=OperationSources(
-                job_snapshot_id=revision.job_snapshot_id,
-                job_snapshot_hash=snapshot["source_hash"],
-                job_analysis_id=revision.job_analysis_id,
-                selection_plan_id=revision.selection_plan_id,
-                approved_revision_id=revision.id,
-                knowledge_context_hash=document_knowledge_context_hash(rendering_service),
-                dependency_hashes={
-                    "approved_revision": _model_hash(revision),
-                    "claim_manifest": manifest["content_hash"],
-                },
-            ),
+            sources=sources,
             provider="deterministic",
             model="playwright",
         )

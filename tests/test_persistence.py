@@ -27,6 +27,7 @@ from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalys
 from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from cv_engine.infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
@@ -556,15 +557,19 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
         text="immutable application source",
     )
     application_id = repository.list_applications()[0]["id"]
-    repository.insert_submission(
-        "external-submission",
-        application_id,
-        "external",
-        None,
-        None,
-        "2026-08-19T10:00:00+00:00",
-        {},
-    )
+    transactions = SqlAlchemyTransactionManager(repository.engine)
+    recruitment = SqlAlchemyRecruitmentRepository(transactions)
+    with transactions.write() as tx:
+        recruitment.insert_submission(
+            tx,
+            "external-submission",
+            application_id,
+            "external",
+            None,
+            None,
+            "2026-08-19T10:00:00+00:00",
+            {},
+        )
     repository.insert_audit(
         AuditRecord(
             id="audit-record",

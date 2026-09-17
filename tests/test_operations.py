@@ -55,13 +55,16 @@ from cv_engine.application.operations import (
 )
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
+from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.render_context import SqlAlchemyRenderContextReader
 from cv_engine.infrastructure.persistence.tables import (
     OPERATION_FAILURE_CODES,
     operation_resource_leases,
     operations,
 )
+from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
 
@@ -1001,6 +1004,15 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
             == "rendered-invalid"
         )
 
+    retried = setup.services.operations.retry(
+        failed.id, idempotency_key="invalid-render-operation-retry"
+    )
+    failed_again = foreground_executor(setup.services).execute(retried.id)
+    assert failed_again.status is OperationStatus.FAILED
+    assert {(output.output_type, output.output_id) for output in failed_again.outputs} == {
+        (output.output_type, output.output_id) for output in failed.outputs
+    }
+
 
 def _render_operation(setup, key: str):
     return setup.services.operations.submit_render(
@@ -1068,6 +1080,29 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
     nowhere, so resolving both *is* the assertion.
     """
     setup = ready_application(f"Stopped Render {expected_status.value}")
+    existing_pdf = setup.services.repository.latest_artifact_version(
+        setup.application_id, "resume_pdf", "rendered"
+    )
+    original_record_validation = SqlAlchemyValidationRepository.record_validation
+    post_render_writes = 0
+
+    def record_validation(
+        self, tx, application_id, phase, report, artifact_version_id=None, **kwargs
+    ):
+        nonlocal post_render_writes
+        if phase == "post-render":
+            post_render_writes += 1
+        return original_record_validation(
+            self,
+            tx,
+            application_id,
+            phase,
+            report,
+            artifact_version_id,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(SqlAlchemyValidationRepository, "record_validation", record_validation)
     operation = _render_operation(setup, f"stopped-render-{expected_status.value}")
     original = setup.services.rendering.execute
     interfere = interference(setup, operation.id)
@@ -1092,14 +1127,11 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
         assert registered["revision_id"] == setup.approved.revision_id
         assert registered["lifecycle_status"] == "rendered"
 
-    # The post-render ValidationRun belongs to activation and did not happen, so
-    # nothing claims these artifacts were checked into Ready. Asserted on the
-    # PDF, which is the one an approval or a download would reach for.
+    # An identical retry reuses the immutable artifacts and their existing
+    # evidence. Stopping before activation must not add a fresh ValidationRun.
     pdf = next(output for output in outputs if output.output_type == "resume_pdf")
-    with pytest.raises(UnknownRecord):
-        setup.services.repository.validation_for_artifact(
-            setup.application_id, "post-render", pdf.output_id
-        )
+    assert pdf.output_id == existing_pdf["id"]
+    assert post_render_writes == 0
 
 
 def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
@@ -1116,18 +1148,14 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
     reachable through cancellation or `SOURCE_CHANGED`, which is why neither of
     those tests would have found it.
 
-    The third registration is failed deliberately. What is asserted is that the
+    The second registration is failed deliberately. What is asserted is that the
     first two did not survive it.
     """
     setup = ready_application("Partial Registration Co")
     repository = setup.services.repository
     before = {row["id"] for row in repository.artifact_versions(setup.application_id)}
     operation = _render_operation(setup, "partial-registration")
-    # Patched on the class, not on this instance. `bind` returns a *new*
-    # repository object wrapping the UnitOfWork's connection, so an
-    # instance-level patch is invisible to exactly the code under test - the
-    # registrations run on the bound copy.
-    original = type(repository).register_artifact_version
+    original = SqlAlchemyArtifactCatalog.register_artifact_version
     calls = 0
 
     def fail_on_the_second(self, *args, **kwargs):
@@ -1137,7 +1165,12 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
             raise InfrastructureFailure("injected registry failure")
         return original(self, *args, **kwargs)
 
-    monkeypatch.setattr(type(repository), "register_artifact_version", fail_on_the_second)
+    monkeypatch.setattr(SqlAlchemyArtifactCatalog, "register_artifact_version", fail_on_the_second)
+    monkeypatch.setattr(
+        SqlAlchemyRenderContextReader,
+        "matching_render_artifact",
+        lambda *_args, **_kwargs: None,
+    )
     failed = foreground_executor(setup.services).execute(operation.id)
 
     assert failed.status is OperationStatus.FAILED
@@ -1147,6 +1180,32 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
     assert not [
         output for output in failed.outputs if output.output_type in {"resume_html", "resume_pdf"}
     ]
+
+
+def test_a_failure_ingesting_the_second_render_payload_registers_neither(
+    ready_application, monkeypatch
+) -> None:
+    setup = ready_application("Partial Render Ingest Co")
+    before = {
+        row["id"] for row in setup.services.repository.artifact_versions(setup.application_id)
+    }
+    original = PayloadStore.ingest_render_output
+    calls = 0
+
+    def fail_second(self, path):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected second ingest failure")
+        return original(self, path)
+
+    monkeypatch.setattr(PayloadStore, "ingest_render_output", fail_second)
+    failed = foreground_executor(setup.services).execute(
+        _render_operation(setup, "partial-render-ingest").id
+    )
+    assert failed.status is OperationStatus.FAILED
+    after = {row["id"] for row in setup.services.repository.artifact_versions(setup.application_id)}
+    assert after == before
 
 
 def _approve_command(services, application_id) -> ApproveDraftCommand:

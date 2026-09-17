@@ -855,7 +855,6 @@ LEGACY_PERSISTENCE_ADAPTERS = {
     "SqlAlchemyOperationRepository",
     "SqlAlchemyPreparationRepository",
     "SqlAlchemySettingsRepository",
-    "SqlAlchemyTrackingRepository",
 }
 
 
@@ -964,6 +963,10 @@ def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
         "DraftHistoryService",
         "DraftApprovalService",
         "DraftAuthoringService",
+        "RenderingService",
+        "RecruitmentService",
+        "SubmissionService",
+        "MaintenanceService",
     }
     owners = set()
     paths = [
@@ -1011,6 +1014,33 @@ def test_migrated_draft_services_have_no_legacy_persistence_or_hidden_scopes() -
             for node in ast.walk(tree)
         ), path
 
+
+def test_phase5_services_have_no_root_repository_casts_or_legacy_scopes() -> None:
+    services = ENGINE / "application" / "services"
+    for name in ("rendering.py", "recruitment.py", "submission.py", "maintenance.py"):
+        path = services / name
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        assert "ReadinessRepository" not in source and "TrackingRepository" not in source
+        assert "ServiceBase" not in source and "cast(" not in source
+        assert not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"bind", "unit_of_work"}
+            for node in ast.walk(tree)
+        ), path
+
+    handler_source = (services / "operations" / "handlers.py").read_text(encoding="utf-8")
+    handler = next(
+        node
+        for node in ast.walk(ast.parse(handler_source))
+        if isinstance(node, ast.ClassDef) and node.name == "RenderOperationHandler"
+    )
+    assert "TransactionManager" not in ast.unparse(handler)
+    assert ".read(" not in ast.unparse(handler) and ".write(" not in ast.unparse(handler)
+
+    drafts = services / "drafts"
+    migrated = {"activation.py", "approval.py", "approval_commit.py", "authoring.py"}
     for gateway_name in {"ApprovalCommitter", "DraftActivation"}:
         gateway = next(
             node

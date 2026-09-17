@@ -78,7 +78,7 @@ def test_repository_cannot_manually_set_ready(analyzed_application) -> None:
     services, app_id = analyzed_application("Repo Ready")
     assert not hasattr(services.repository, "transition_status")
     with pytest.raises(WorkflowError):
-        services.tracking.transition_status(
+        services.recruitment.transition_status(
             RecruitmentStatusCommand(application_id=app_id, target_status="ready", client="web")
         )
     assert services.repository.get_application(app_id)["current_status"] == "saved"
@@ -150,7 +150,7 @@ def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
     assert services.repository.get_application(app_id)["current_status"] == "saved"
     assert not services.rendering.ready_qualification(app_id).ready_qualified
     with pytest.raises(WorkflowError, match="tampered Ready evidence"):
-        services.tracking.submit_application(_submission_command(services, app_id))
+        services.submission.submit_application(_submission_command(services, app_id))
     # A new revision and render create new immutable evidence; the old PDF is
     # never reused or relinked.
     _start_new_draft(services, app_id)
@@ -225,7 +225,7 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
         app_id, old_revision.id, old_pdf["id"]
     ).ready_qualified
     assert services.repository.latest_approved_revision(app_id).id == new_revision.revision_id
-    submitted = services.tracking.submit_application(
+    submitted = services.submission.submit_application(
         SubmissionCommand(
             application_id=app_id,
             approved_revision_id=old_revision.id,
@@ -257,7 +257,7 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     second_pdf = services.repository.latest_artifact_version(app_id, "resume_pdf", "rendered")
     assert second_pdf["id"] != first_pdf["id"]
     revision = services.repository.latest_approved_revision(app_id)
-    result = services.tracking.submit_application(
+    result = services.submission.submit_application(
         SubmissionCommand(
             application_id=app_id,
             approved_revision_id=revision.id,
@@ -299,16 +299,16 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
 def test_submission_and_applied_transition_roll_back_together(
     ready_application, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cv_engine.infrastructure.persistence.tracking import SqlAlchemyTrackingRepository
+    from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 
     services, app_id = ready_application("Atomic Submission")
 
     def fail_status_write(*_args, **_kwargs) -> None:
         raise RuntimeError("injected status failure")
 
-    monkeypatch.setattr(SqlAlchemyTrackingRepository, "insert_recruitment_event", fail_status_write)
+    monkeypatch.setattr(SqlAlchemyRecruitmentRepository, "insert_event", fail_status_write)
     with pytest.raises(RuntimeError, match="injected status failure"):
-        services.tracking.submit_application(_submission_command(services, app_id))
+        services.submission.submit_application(_submission_command(services, app_id))
 
     with services.repository.read_connection() as connection:
         count = connection.execute(
@@ -324,11 +324,11 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
     """The generic transition rejects applied unconditionally -- even supplying
     a real, currently-valid rendered PDF artifact version id must not work,
     because the generic transition has no way to perform the fresh integrity
-    verification that TrackingService.submit() does. There is no parameter that can
+    verification that SubmissionService performs. There is no parameter that can
     talk it into treating a caller-supplied id as trustworthy."""
     services, app_id = ready_application("Direct Applied With PDF")
     with pytest.raises(WorkflowError, match="submission-owned"):
-        services.tracking.transition_status(
+        services.recruitment.transition_status(
             RecruitmentStatusCommand(
                 application_id=app_id,
                 target_status="applied",
@@ -341,7 +341,7 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
 
 def test_external_submission_never_fabricates_revision_or_artifact(analyzed_application) -> None:
     services, app_id = analyzed_application("External Submission")
-    first = services.tracking.record_external_submission(
+    first = services.submission.record_external_submission(
         ExternalSubmissionCommand(
             application_id=app_id,
             submitted_at="2026-08-19T10:00:00+00:00",
@@ -349,7 +349,7 @@ def test_external_submission_never_fabricates_revision_or_artifact(analyzed_appl
             client="web",
         )
     )
-    second = services.tracking.record_external_submission(
+    second = services.submission.record_external_submission(
         ExternalSubmissionCommand(
             application_id=app_id,
             submitted_at="2026-08-19T11:00:00+00:00",
@@ -374,7 +374,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
     analyzed_application,
 ) -> None:
     services, app_id = analyzed_application("Correction History")
-    withdrawn = services.tracking.transition_status(
+    withdrawn = services.recruitment.transition_status(
         RecruitmentStatusCommand(
             application_id=app_id,
             target_status="withdrawn",
@@ -385,7 +385,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
     )
     assert withdrawn.terminal_outcome == "withdrawn"
     with pytest.raises(WorkflowError, match="reason is required"):
-        services.tracking.correct_recruitment_status(
+        services.recruitment.correct_recruitment_status(
             RecruitmentCorrectionCommand(
                 application_id=app_id,
                 target_status="interview",
@@ -394,7 +394,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
                 client="web",
             )
         )
-    corrected = services.tracking.correct_recruitment_status(
+    corrected = services.recruitment.correct_recruitment_status(
         RecruitmentCorrectionCommand(
             application_id=app_id,
             target_status="interview",
@@ -414,7 +414,7 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
     assert correction["reason"] == "status was entered on the wrong application"
 
     for target in ("offer", "accepted", "closed"):
-        closed = services.tracking.transition_status(
+        closed = services.recruitment.transition_status(
             RecruitmentStatusCommand(application_id=app_id, target_status=target, client="web")
         )
     assert closed.current_status == "closed"

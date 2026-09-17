@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import cast
+from typing import Protocol
 
 from ...domain.contracts.drafts import WorkingDraft
 from ...domain.contracts.recruitment import ApplicationStatus
+from ...domain.contracts.validation import ReadyQualification
 from ...domain.recruitment import user_transition_targets
 from ..artifacts import verify_artifact
 from ..errors import (
@@ -15,7 +16,6 @@ from ..errors import (
 )
 from ..ports import (
     QueryRepository,
-    ReadinessRepository,
 )
 from ..queries import (
     ApplicationDetailView,
@@ -44,15 +44,27 @@ from ..queries import (
     snapshot_view,
 )
 from ..queries.views_prep import JobSnapshotHistoryItem, JobSnapshotHistoryView
-from ..ready import qualify_ready_revision
 from ..state import ProjectionContext, project_application_state
 from .base import ServiceBase
+
+
+class ReadyProjection(Protocol):
+    def ready_qualification(
+        self,
+        application_id: str,
+        approved_revision_id: str | None = None,
+        pdf_artifact_version_id: str | None = None,
+    ) -> ReadyQualification: ...
 
 
 class ApplicationQueryService(ServiceBase[QueryRepository]):
     """Storage-neutral read projections for the API and its clients."""
 
-    def _state_inputs(self, transaction, application_record, knowledge):
+    def __init__(self, *, ready: ReadyProjection, **dependencies):
+        super().__init__(**dependencies)
+        self._ready = ready
+
+    def _state_inputs(self, transaction, application_record, knowledge, ready_ids):
         application_id = application_record["id"]
         snapshot_record = transaction.latest_snapshot(application_id)
         analyses = transaction.analyses(application_id)
@@ -89,16 +101,6 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             else None
         )
         revisions = tuple(transaction.approved_revisions(application_id))
-        ready_ids = frozenset(
-            revision.id
-            for revision in revisions
-            if qualify_ready_revision(
-                self.snapshot_payloads,
-                transaction,
-                application_id,
-                approved_revision_id=revision.id,
-            ).ready_qualified
-        )
         active_operation = transaction.active_operation(application_id)
         latest_operation = transaction.latest_operation(application_id)
         matching_context_operation_active = transaction.has_active_matching_context_operation(
@@ -142,23 +144,39 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         """
         knowledge = self.load_knowledge()
         try:
-            with self.repo.read_transaction() as transaction:
-                items = []
-                for row in transaction.list_applications():
-                    state, _, analyses = self._state_inputs(transaction, row, knowledge)
+            rows = self.repo.list_applications()
+            ready_by_application = {
+                row["id"]: frozenset(
+                    revision.id
+                    for revision in self.repo.approved_revisions(row["id"])
+                    if self._ready.ready_qualification(row["id"], revision.id).ready_qualified
+                )
+                for row in rows
+            }
+            items = []
+            for row in rows:
+                with self.repo.read_transaction() as transaction:
+                    state, _, analyses = self._state_inputs(
+                        transaction, row, knowledge, ready_by_application[row["id"]]
+                    )
                     latest = analyses[-1]["analysis"] if analyses else None
                     items.append(application_list_item_view(row, state, latest))
-                return narrow_application_list(items, query or ApplicationListQuery())
+            return narrow_application_list(items, query or ApplicationListQuery())
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application projection is invalid: {exc}") from exc
 
     def application_detail(self, application_id: str) -> ApplicationDetailView:
         knowledge = self.load_knowledge()
         try:
+            ready_ids = frozenset(
+                revision.id
+                for revision in self.repo.approved_revisions(application_id)
+                if self._ready.ready_qualification(application_id, revision.id).ready_qualified
+            )
             with self.repo.read_transaction() as transaction:
                 application_record = transaction.get_application(application_id)
                 state, snapshot_record, analyses = self._state_inputs(
-                    transaction, application_record, knowledge
+                    transaction, application_record, knowledge, ready_ids
                 )
                 application = application_view(
                     application_record, analyses[-1]["analysis"] if analyses else None
@@ -266,17 +284,7 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             revision = self.repo.approved_revision(approved_revision_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
-        # The same cast `submit_render` and `RenderOperationHandler` make.
-        # Qualification reads draft lineage that `QueryRepository` does not
-        # declare, and the concrete adapter satisfies `ApplicationRepository`,
-        # which extends `ReadinessRepository`. Widening `QueryRepository`
-        # instead would give every read projection write access to drafts.
-        qualification = qualify_ready_revision(
-            self.snapshot_payloads,
-            cast(ReadinessRepository, self.repo),
-            revision.application_id,
-            revision.id,
-        )
+        qualification = self._ready.ready_qualification(revision.application_id, revision.id)
         return approved_revision_view(revision, qualification)
 
     def working_draft(self, working_draft_id: str) -> WorkingDraftView:

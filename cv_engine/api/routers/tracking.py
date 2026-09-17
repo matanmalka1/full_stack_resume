@@ -49,7 +49,7 @@ def transition_status(
     appending a second identical event, so a client that retries a transition
     it already made does not write a duplicate into the trail.
     """
-    result = services.tracking.transition_status(
+    result = services.recruitment.transition_status(
         RecruitmentStatusCommand(
             application_id=application_id,
             target_status=request.target_status,
@@ -74,7 +74,7 @@ def correct_status(
     services: Services,
 ) -> ApplicationMutationResponse:
     """`201`: a correction appends an event; it never edits the one it corrects."""
-    result = services.tracking.correct_recruitment_status(
+    result = services.recruitment.correct_recruitment_status(
         RecruitmentCorrectionCommand(
             application_id=application_id,
             target_status=request.target_status,
@@ -105,7 +105,7 @@ def submit_application(
     so a revision whose PDF was replaced or whose hashes no longer match is a
     `412` rather than a recorded claim that something was sent.
     """
-    result = services.tracking.submit_application(
+    result = services.submission.submit_application(
         SubmissionCommand(
             application_id=application_id,
             approved_revision_id=request.approved_revision_id,
@@ -131,7 +131,7 @@ def record_external_submission(
     services: Services,
 ) -> SubmissionResponse:
     """`201`: recorded without inventing a revision or an artifact that never was."""
-    result = services.tracking.record_external_submission(
+    result = services.submission.record_external_submission(
         ExternalSubmissionCommand(
             application_id=application_id,
             submitted_at=request.submitted_at,
@@ -162,7 +162,7 @@ def set_next_action(
     because `PUT` is outside this API's allowed methods, and widening transport
     policy for one route's verb would be the wrong trade.
     """
-    result = services.tracking.set_next_action(
+    result = services.recruitment.set_next_action(
         NextActionCommand(
             application_id=application_id,
             next_action=request.next_action,

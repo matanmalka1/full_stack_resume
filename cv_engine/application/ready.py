@@ -8,28 +8,22 @@ from ..domain.contracts.validation import (
     ValidationReport,
 )
 from ..domain.draft_markdown import parse_draft
-from .errors import UnknownRecord
-from .ports import ReadinessRepository, SnapshotPayloadStore
+from .ports import SnapshotPayloadStore
+from .ports.ready import ReadyEvidence
 
 
 def qualify_ready_revision(
     payloads: SnapshotPayloadStore,
-    repo: ReadinessRepository,
+    stored: ReadyEvidence,
     application_id: str,
-    approved_revision_id: str | None = None,
-    pdf_artifact_version_id: str | None = None,
 ) -> ReadyQualification:
     """Re-derive Ready qualification from one revision's stored immutable evidence.
 
     Qualification belongs to the revision, not to the application's active context or
-    recruitment status. The optional IDs are convenience inputs for callers that
-    name only the application; once resolved, every check is exact and revision-bound.
+    recruitment status. The reader has already resolved any caller-supplied identities
+    into `stored`; every check here is exact and revision-bound.
     """
-    revision = (
-        repo.approved_revision(approved_revision_id)
-        if approved_revision_id is not None
-        else repo.latest_approved_revision(application_id)
-    )
+    revision = stored.revision
     groups = {
         "approved_source": True,
         "chain": True,
@@ -58,8 +52,8 @@ def qualify_ready_revision(
         ("resume_markdown", "markdown"),
     ):
         try:
-            version = repo.artifact_version_for_revision(revision.id, artifact_type, "approved")
-        except UnknownRecord:
+            version = stored.source_artifacts[artifact_type]
+        except KeyError:
             fail(
                 "approved_source",
                 f"no-approved-{label}",
@@ -138,8 +132,10 @@ def qualify_ready_revision(
                 )
 
     try:
-        analysis_record = repo.get_analysis(revision.job_analysis_id)
-    except UnknownRecord:
+        analysis_record = stored.analysis
+        if analysis_record is None:
+            raise KeyError
+    except KeyError:
         fail("chain", "unknown-job-analysis", "the revision's job analysis is unavailable")
     else:
         if analysis_record["application_id"] != revision.application_id:
@@ -148,8 +144,10 @@ def qualify_ready_revision(
             fail("chain", "analysis-snapshot-mismatch", "job analysis snapshot differs")
 
     try:
-        plan = repo.selection_plan(revision.selection_plan_id)
-    except UnknownRecord:
+        plan = stored.plan
+        if plan is None:
+            raise KeyError
+    except KeyError:
         fail("chain", "unknown-selection-plan", "the revision's selection plan is unavailable")
     else:
         if plan.application_id != revision.application_id:
@@ -173,8 +171,10 @@ def qualify_ready_revision(
 
     if markdown_version is not None:
         try:
-            decision = repo.decision_for_artifact_version(markdown_version["id"])
-        except UnknownRecord:
+            decision = stored.decision
+            if decision is None:
+                raise KeyError
+        except KeyError:
             fail(
                 "revision_binding",
                 "no-decision-record",
@@ -194,9 +194,11 @@ def qualify_ready_revision(
                     )
 
     try:
-        approval_validation = repo.validation_report(revision.validation_run_id)
-        lineage = repo.validation_lineage(revision.validation_run_id)
-    except UnknownRecord:
+        approval_validation = stored.approval_validation
+        lineage = stored.approval_lineage
+        if approval_validation is None or lineage is None:
+            raise KeyError
+    except KeyError:
         fail(
             "validation_linkage",
             "no-approval-validation",
@@ -230,12 +232,10 @@ def qualify_ready_revision(
 
     pdf_version: dict[str, Any] | None = None
     try:
-        pdf_version = (
-            repo.artifact_version(pdf_artifact_version_id)
-            if pdf_artifact_version_id is not None
-            else repo.artifact_version_for_revision(revision.id, "resume_pdf", "rendered")
-        )
-    except UnknownRecord:
+        pdf_version = stored.selected_pdf
+        if pdf_version is None:
+            raise KeyError
+    except KeyError:
         fail(
             "rendered_artifacts",
             "no-rendered-pdf",
@@ -262,8 +262,8 @@ def qualify_ready_revision(
     html_version: dict[str, Any] | None = None
     for artifact_type, label in (("resume_html", "html"),):
         try:
-            version = repo.artifact_version_for_revision(revision.id, artifact_type, "rendered")
-        except UnknownRecord:
+            version = stored.rendered_artifacts[artifact_type]
+        except KeyError:
             fail(
                 "rendered_artifacts",
                 f"no-{label}",
@@ -290,10 +290,10 @@ def qualify_ready_revision(
 
     if pdf_version is not None and groups["revision_binding"]:
         try:
-            post_render = repo.validation_for_artifact(
-                application_id, "post-render", pdf_version["id"]
-            )
-        except UnknownRecord:
+            post_render = stored.post_render_validation
+            if post_render is None:
+                raise KeyError
+        except KeyError:
             fail(
                 "validation_linkage",
                 "no-post-render-validation",
@@ -308,7 +308,7 @@ def qualify_ready_revision(
                     "the exact PDF's post-render validation did not pass",
                 )
 
-    problems = repo.integrity_check()
+    problems = list(stored.integrity_problems)
     if problems:
         fail("database_integrity", "db-integrity", "; ".join(problems))
 

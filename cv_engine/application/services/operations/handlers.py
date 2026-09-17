@@ -8,7 +8,7 @@ root's handler table, and to nothing else.
 from __future__ import annotations
 
 from dataclasses import fields
-from typing import Any, cast
+from typing import Any
 
 from ...chain import draft_source_mismatch
 from ...commands import (
@@ -36,12 +36,9 @@ from ...operations import (
     OperationOutputReference,
     PersistedOperation,
 )
-from ...ports import (
-    OperationRepository,
-    ReadinessRepository,
-)
 from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
 from ...ports.draft_operations import DraftOperationSourceReader
+from ...ports.rendering import RenderContextReader
 from ...ports.transactions import ReadTransaction, WriteTransaction
 from ..analysis import (
     AnalysisService,
@@ -567,26 +564,22 @@ class RegenerationOperationHandler(DraftTaskHandler):
 
 
 class RenderOperationHandler:
-    def __init__(self, service: RenderingService):
+    def __init__(self, service: RenderingService, sources: RenderContextReader):
         self.service = service
+        self.sources = sources
 
     @staticmethod
     def _command(operation: PersistedOperation) -> RenderCommand:
         return RenderCommand.model_validate(operation.payload)
 
-    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
         sources = operation.sources
         if sources.approved_revision_id is None:
             raise SourceChanged("Render Operation has no frozen ApprovedRevision identity.")
-        readiness = cast(ReadinessRepository, repository)
         try:
-            revision = readiness.approved_revision(sources.approved_revision_id)
-            manifest = readiness.artifact_version_for_revision(
-                sources.approved_revision_id, "claim_manifest", "approved"
-            )
-            snapshot = readiness.get_snapshot(revision.job_snapshot_id)
-            analysis = readiness.get_analysis(revision.job_analysis_id)
-            plan = readiness.selection_plan(revision.selection_plan_id)
+            context = self.sources.operation_sources(tx, sources.approved_revision_id)
+            revision, manifest = context.revision, context.manifest
+            snapshot, analysis, plan = context.snapshot, context.analysis, context.plan
         except (UnknownRecord, OSError, ValueError) as exc:
             raise SourceChanged("An approved render source is missing or unreadable.") from exc
         dependencies = sources.dependency_hashes
@@ -596,20 +589,18 @@ class RenderOperationHandler:
             or snapshot["source_hash"] != sources.job_snapshot_hash
             or analysis["application_id"] != operation.application_id
             or plan.application_id != operation.application_id
-            # The manifest is a registered immutable payload: verifying it
-            # through the store checks the bytes storage holds, where hashing a
-            # resolved local path checked the filesystem no matter where the
-            # payload actually lives.
-            or self.service.snapshot_payloads.verify_payload(
-                manifest["path"], manifest["content_hash"]
-            )
-            != "ok"
             or manifest["content_hash"] != dependencies.get("claim_manifest")
         ):
             raise SourceChanged("Approved render inputs changed before activation.")
+
+    def verify_external_sources(self, operation: PersistedOperation) -> None:
+        sources = operation.sources
         current_knowledge = document_knowledge_context_hash(self.service)
         if sources.knowledge_context_hash != current_knowledge:
             raise SourceChanged("Knowledge changed before render activation.")
+        revision_id = sources.approved_revision_id
+        if revision_id is None or not self.service.operation_source_payloads_match(revision_id):
+            raise SourceChanged("An approved render payload changed before activation.")
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
@@ -629,7 +620,7 @@ class RenderOperationHandler:
             OperationOutputReference(output_type=output_type, output_id=output_id, active=False)
             for output_type, output_id in zip(
                 ("resume_html", "resume_pdf"),
-                prepared.artifact_ids,
+                executed.artifact_ids,
                 strict=True,
             )
         )
@@ -648,12 +639,14 @@ class RenderOperationHandler:
             terminal_failure=failure,
         )
 
-    def activate(self, operation, prepared, repository):
+    def activate(self, tx: WriteTransaction, operation, prepared):
         del operation
         if not isinstance(prepared.value, ExecutedRender):
             raise TypeError("render handler received an invalid executed value")
-        self.service.activate(
-            prepared.value,
-            cast(ReadinessRepository, repository),
-        )
+        self.service.activate(tx, prepared.value)
         return ()
+
+    def after_activation(self, operation, prepared):
+        del operation
+        if isinstance(prepared.value, ExecutedRender):
+            self.service.verify_activation(prepared.value)

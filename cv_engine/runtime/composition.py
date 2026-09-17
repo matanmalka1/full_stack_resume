@@ -39,8 +39,9 @@ from ..application.services.operations import (
     SelectionPlanOperationHandler,
 )
 from ..application.services.projections import ApplicationQueryService
+from ..application.services.recruitment import RecruitmentService
 from ..application.services.rendering import RenderingService
-from ..application.services.tracking import TrackingService
+from ..application.services.submission import SubmissionService
 from ..application.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.knowledge import FileKnowledge
@@ -75,12 +76,17 @@ from ..infrastructure.persistence.draft_validation_sources import (
 )
 from ..infrastructure.persistence.idempotency import SqlAlchemyIdempotencyRepository
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from ..infrastructure.persistence.operation_activation import SqlAlchemyOperationActivationStore
 from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
+from ..infrastructure.persistence.ready_evidence import SqlAlchemyReadyEvidenceReader
+from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from ..infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
+from ..infrastructure.persistence.render_context import SqlAlchemyRenderContextReader
 from ..infrastructure.persistence.selection_drafts import SqlAlchemySelectionDraftStore
+from ..infrastructure.persistence.submission_context import SqlAlchemySubmissionContextReader
 from ..infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
@@ -121,7 +127,9 @@ class Services:
     draft_history: DraftHistoryService
     draft_approval: DraftApprovalService
     rendering: RenderingService
-    tracking: TrackingService
+    recruitment: RecruitmentService
+    submission: SubmissionService
+    maintenance: MaintenanceService
     knowledge_lifecycle: KnowledgeService
     operations: OperationService
     operation_runner: OperationRunner
@@ -309,15 +317,36 @@ def build_services(
             draft_lifecycle, draft_catalog, draft_decisions, intake_audit, draft_receipts
         ),
     )
-    rendering_service = RenderingService(**shared)
+    rendering_service = RenderingService(
+        transactions=transactions,
+        catalog=draft_catalog,
+        validations=draft_validations,
+        ready_evidence=SqlAlchemyReadyEvidenceReader(transactions),
+        contexts=SqlAlchemyRenderContextReader(transactions),
+        drafts=draft_lifecycle,
+        knowledge=resolved_knowledge,
+        renderer=resolved_renderer,
+        payloads=resolved_payloads,
+    )
+    recruitment_store = SqlAlchemyRecruitmentRepository(transactions)
+    recruitment_service = RecruitmentService(transactions, recruitment_store, intake_audit)
+    submission_service = SubmissionService(
+        transactions=transactions,
+        contexts=SqlAlchemySubmissionContextReader(transactions),
+        recruitment=recruitment_store,
+        artifacts=draft_catalog,
+        audit=intake_audit,
+        ready=rendering_service,
+    )
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
     draft_operation_sources = SqlAlchemyDraftOperationSourceReader(transactions)
     runner = OperationRunner(
         resolved_repository,
-        {
-            OperationType.RENDER_REVISION: RenderOperationHandler(rendering_service),
-        },
+        {},
         transaction_handlers={
+            OperationType.RENDER_REVISION: RenderOperationHandler(
+                rendering_service, SqlAlchemyRenderContextReader(transactions)
+            ),
             OperationType.CREATE_DRAFT: DraftOperationHandler(
                 draft_service,
                 draft_operation_sources,
@@ -361,6 +390,12 @@ def build_services(
     worker = OperationWorker(resolved_repository, runner)
     knowledge_service = KnowledgeService(**shared)
     knowledge_service.recover_knowledge_mutations()
+    maintenance_service = MaintenanceService(
+        payloads=resolved_payloads,
+        transactions=transactions,
+        inspection=SqlAlchemyMaintenanceInspection(transactions),
+        knowledge=knowledge_service,
+    )
     settings_service = SettingsService(
         resolved_repository,
         provider_configured=resolved_provider is not None,
@@ -383,14 +418,16 @@ def build_services(
             audit=intake_audit,
             payloads=resolved_payloads,
         ),
-        queries=ApplicationQueryService(**shared),
+        queries=ApplicationQueryService(ready=rendering_service, **shared),
         analysis=analysis_service,
         drafts=draft_service,
         draft_validation=draft_validation,
         draft_history=draft_history,
         draft_approval=draft_approval,
         rendering=rendering_service,
-        tracking=TrackingService(**shared),
+        recruitment=recruitment_service,
+        submission=submission_service,
+        maintenance=maintenance_service,
         knowledge_lifecycle=knowledge_service,
         operations=operation_service,
         operation_runner=runner,
@@ -428,13 +465,10 @@ def build_api_services(
         draft_history=services.draft_history,
         draft_approval=services.draft_approval,
         rendering=services.rendering,
-        tracking=services.tracking,
+        recruitment=services.recruitment,
+        submission=services.submission,
         knowledge=services.knowledge_lifecycle,
-        maintenance=MaintenanceService(
-            payloads=services.payloads,
-            repository=services.repository,
-            knowledge=services.knowledge_lifecycle,
-        ),
+        maintenance=services.maintenance,
         operations=services.operations,
         settings=services.settings,
         identity=InstanceIdentity(

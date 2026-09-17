@@ -11,7 +11,7 @@ from .knowledge import SqlAlchemyKnowledgeMutationRepository
 from .operations import SqlAlchemyOperationRepository
 from .preparation import SqlAlchemyPreparationRepository
 from .settings import SqlAlchemySettingsRepository
-from .tracking import SqlAlchemyTrackingRepository
+from .tracking import SqlAlchemyTrackingProjection
 
 
 class Repository(
@@ -19,7 +19,7 @@ class Repository(
     SqlAlchemyApplicationRepository,
     SqlAlchemyArtifactRepository,
     SqlAlchemyDraftRepository,
-    SqlAlchemyTrackingRepository,
+    SqlAlchemyTrackingProjection,
     SqlAlchemyAuditRepository,
     SqlAlchemyOperationRepository,
     SqlAlchemyKnowledgeMutationRepository,

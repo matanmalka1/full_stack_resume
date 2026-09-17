@@ -5,11 +5,11 @@
 ## Current status
 
 ```text
-Current phase: Phase 5 — Rendering, Ready, recruitment, and submission (NOT STARTED)
-Last completed phase: Phase 4 — Draft lifecycle and evidence
-Next action: begin Phase 5 in a fresh session from the verified Phase 4 commit
+Current phase: Phase 6 — Operation submission, lifecycle, and replacement (NOT STARTED)
+Last completed phase: Phase 5 — Rendering, Ready, recruitment, and submission
+Next action: start Phase 6 in a new session from the Phase 5 implementation commit
 Known blockers: None; approval replay correction authorized (Decision Log below)
-Last verified commit: 08f69ee2cc13c3e329b0b47d2c40e2e031e4deed — refactor(persistence): migrate draft lifecycle and evidence
+Last verified boundary: Phase 5 — all required gates passed; implementation commit is the current history tip
 ```
 
 ## 1. Final goal
@@ -723,7 +723,7 @@ gates are not owed because `alembic/` is unchanged.
 
 ## Phase 5 — Rendering, Ready, recruitment, and submission
 
-Status: NOT STARTED
+Status: DONE
 
 ### Goal
 
@@ -754,17 +754,153 @@ transactions.
 
 ### Verification
 
-- [ ] focused tests
-- [ ] typecheck
-- [ ] architecture checks
-- [ ] no forbidden imports
-- [ ] no old consumers remain
-- [ ] no browser/object-store I/O in transaction
-- [ ] partial render upload and DB rollback coverage
+- [x] focused tests
+- [x] typecheck
+- [x] architecture checks
+- [x] no forbidden imports
+- [x] no old consumers remain
+- [x] no browser/object-store I/O in transaction
+- [x] partial render upload and DB rollback coverage
 
 ### Handoff notes
 
-None yet.
+Work began from clean documentation HEAD `4ec331a1aa6def023485ca575c57b7a32ab3a923`,
+directly above verified Phase 4 implementation `08f69ee2cc13c3e329b0b47d2c40e2e031e4deed`.
+
+The recruitment and submission application surfaces are now split. `RecruitmentService`
+owns status transitions, corrections, close/delete and next-action commands;
+`SubmissionService` owns internal/external submission and the optional `saved -> applied`
+transition. Both use caller-owned token scopes. `SqlAlchemyRecruitmentRepository` is stateless,
+and `SqlAlchemySubmissionContextReader` supplies the submission-specific source projection.
+Submission, its optional status event, and audit remain one atomic write scope without adding a
+committer. API DTOs and routes are unchanged; composition now exposes the two cohesive services.
+
+Rendering registration now ingests both payloads outside a database scope before opening one
+short token write scope for both artifact rows. Post-render validation activation uses the
+runner-owned token; Ready verification runs only after that scope closes. The render handler is
+on the transactional-handler path and its database source check uses `RenderContextReader` rather
+than a persistence cast. Maintenance now snapshots integrity findings and artifact inventory
+through a read-only token Port, closes the scope, and only then verifies object-store payloads.
+
+Implementation and zero-consumer cleanup are complete; Phase 5 remains **IN PROGRESS** pending
+user-run gates. `ReadyEvidenceReader` loads only the persisted revision-bound evidence consumed by
+qualification. The transaction closes before immutable payload presence/hash checks. Ready remains
+a projection: no Ready row, flag, or status write was added. Application list/detail and revision
+detail obtain Ready through this same re-derivation path rather than a persistence cast.
+
+Render preparation now reads its revision, manifest, decision, snapshot, analysis history and plan
+through `RenderContextReader`, closes the read scope, then reads immutable payloads and runs the
+renderer. Both outputs are ingested before one short artifact-registration transaction. Matching
+revision/type/lifecycle/content hashes reuse the existing artifact identity; newly ingested unused
+payloads are reconcilable orphans. A second ingest failure or registration rollback leaves no
+partial database registration. The runner owns post-render validation activation, and Ready is
+rechecked only after that transaction closes. Render Operation source freezing also uses the
+render service projection, removing its former readiness cast.
+
+Maintenance now snapshots integrity findings and inventory in one token read and verifies payloads
+after it closes. Recruitment/submission writes use only `RecruitmentStore`; the obsolete
+`TrackingService`, `TrackingRepository`, composed tracking Port and legacy tracking writes were
+deleted. The root tracking mixin remains read-only and is named `SqlAlchemyTrackingProjection`:
+`ApplicationQueryService` still consumes recruitment events/submissions until the general query
+projection migration in Phase 8. Root `Repository`, generic Operation lifecycle/idempotency and its
+legacy UoW remain for Phase 6. Draft/chain legacy readers remain for Knowledge and other Phase 8/9
+consumers; none is used by the migrated Phase 5 services or render handler.
+
+Architecture guards now include Phase 5 transaction owners and reject root repositories,
+persistence casts, bound UoW calls, or handler-owned scopes in the migrated services. Tests were
+rewired from deleted tracking writes to the token store. No schema, public DTO, artifact path,
+renderer output, golden fixture, immutable historical record, Phase 4 semantics, or Phase 6
+lifecycle behavior was changed. Verification remains incomplete and the boxes stay unchecked until
+the complete user-run boundary passes.
+
+Constructor review: `RenderingService` has nine explicit collaborators because it spans the
+specified render boundary: transaction ownership, render/Ready source projections, draft and
+artifact/validation persistence, Knowledge, renderer execution, and immutable payload storage.
+Combining them would create the forbidden broad workflow container. `SubmissionService` has six
+collaborators because it owns the demonstrated submission/status/audit fan-in; that fan-in remains
+clear at the service call site, so no `SubmissionCommitter` was introduced.
+
+First user-run boundary attempt was not passing evidence. The recruitment/API/database group
+reported 15 failures and two errors; the architecture group reported one failure and two errors;
+the persistence/transaction/API-operation group reported five failures and nine errors. One real
+implementation defect was identified: `insert_next_action` retained an undefined mechanical
+rewrite variable (`values`), and was corrected to use its explicit `occurred_at` argument. The
+architecture knowledge-scope guard also found that render submission froze the same value through
+an inline call rather than the named `document_knowledge_context_hash` helper used by activation;
+the freeze path now uses that helper.
+
+The remaining reported deadlocks, missing rows, absent constraint failures and unrelated
+Knowledge/plan failures are consistent with multiple pytest processes sharing the suite's one
+TRUNCATE-per-test database: one process can truncate or lock tables while another test is running.
+They do not count as evidence and must be rerun sequentially against a freshly reset test database.
+No gate has passed from this attempt.
+
+The sequential rerun against fresh `cv_phase5_retry` confirmed that diagnosis: **69 passed, four
+failed, no errors**. Three focused implementation issues remained and were corrected. Synchronous
+`RenderingService.render` now performs its active-Application check through `RenderContextReader`
+after removal of `ServiceBase`; maintenance inventory orders by the artifact table's real
+`created_at, id` columns rather than a nonexistent `seq`; and `submit_render` now visibly freezes
+`document_knowledge_context_hash` before passing it to render source construction, matching the
+activation check and the derived architecture guard. These corrections have not yet been rerun.
+
+The four-test focused rerun then passed the maintenance inventory and architecture guard cases;
+the two render-backed submission cases still failed at the same reuse lookup. The lookup had used
+projection field `artifact_type` and nonexistent ordering field `seq` as though both belonged to
+`artifact_versions`. It now joins the owning `artifacts` table for `artifact_type` and orders by
+the real immutable-version fields `created_at, version_number`, matching the existing shared
+artifact SQL. This final correction has not yet been rerun.
+
+The next sequential user-run groups established **22 passed** for recruitment/application/database,
+**32 passed** for persistence/transactions/API operations, and **19 passed** for architecture. A
+render/Ready/journey group then reported **39 passed, three failed, one deselected**. Two journey
+failures shared a single pre-execution defect: `RenderOperationHandler.verify_external_sources`
+referenced its frozen `sources` before assigning it from the Operation. The third failure was an
+error-message compatibility regression: submission correctly rejected tampered Ready evidence,
+but the established contiguous `tampered Ready evidence` phrase had been split. Both are corrected.
+Pyright's four findings were the same undefined render variable plus an unannotated
+`ReadyProjection` Protocol return; the Protocol now explicitly returns `ReadyQualification`.
+Ruff reported 17 changed files requiring mechanical formatting, and those files have been
+formatted. These latest corrections still require focused user-run verification.
+
+A subsequent full user-run suite reported **490 passed, three failed, two deselected**. All three
+failures were render-retry boundary cases. The source-change case exposed a real gap: immutable
+render inputs were verified before execution but not again after execution and before activation.
+`RenderingService` now snapshots the two source references in a read scope, closes it, and verifies
+their payloads outside the transaction; the runner invokes that check again before opening the
+activation transaction. The other two failures encoded pre-reuse assumptions: an identical retry
+now intentionally reuses the existing HTML/PDF identities and validation evidence. Their tests now
+assert that cancellation adds no validation and explicitly disable reuse only when exercising
+atomic two-row registration rollback. These corrections have not yet been rerun.
+
+The subsequent full user-run suite passed: **493 passed, two deselected in 128.40 seconds**. This
+verifies the complete backend test collection, including the corrected render interruption,
+source-change, reuse, and atomic-registration cases. Phase 5 remains **IN PROGRESS** pending the
+final static-analysis/format evidence and fresh-PostgreSQL pipeline required at this boundary.
+
+Pyright then passed with **zero errors and zero warnings**, and Ruff format check passed with **36
+files already formatted**. Ruff check found one import-order issue in `tests/test_operations.py`; it
+was fixed mechanically and the fixing invocation reported zero remaining findings. The first fresh
+PostgreSQL pipeline attempt did not collect tests: all three setup cases refused the newly created
+database because it had not been upgraded to Alembic head `0002`. This is a gate-command setup
+omission, not product evidence; the migrated fresh-database pipeline must be rerun.
+
+The database was then upgraded transactionally through `0001` and `0002`, and the user-run fresh
+PostgreSQL pipeline with `OPENAI_API_KEY` unset passed: **three passed in 2.63 seconds**. The final
+two render interruption regressions (cancellation and source change) also passed after their
+test-only correction. Final Phase 5 evidence is: backend suite **493 passed, two deselected**;
+Pyright zero errors/warnings; Ruff check passed; Ruff format passed with 36 files formatted; fresh
+PostgreSQL pipeline **three passed**; focused interruption regressions passed; and both staged and
+unstaged diff checks were clean.
+
+Final zero-consumer cleanup found no further production deletion that belonged to Phase 5. The
+remaining root `Repository`, legacy UoW/bind path, Operation repository/casts, generic Operation
+submission/lifecycle/retry/replacement ownership and its idempotency wiring are Phase 6 scope.
+Runner-wide legacy activation infrastructure remains for Phase 7. The read-only
+`SqlAlchemyTrackingProjection` and query-side recruitment/submission readers remain consumers of
+`ApplicationQueryService` until Phase 8 projection migration. Draft/chain readers and the
+Knowledge mutation UoW remain for Phase 8/9 consumers. Two stale comments were corrected; no
+compatibility wrapper, duplicate Phase 5 SQL write path, obsolete Phase 5 Port member, or dead
+Phase 5 helper/import remains.
 
 ## Phase 6 — Operation submission, lifecycle, and replacement
 
