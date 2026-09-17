@@ -95,9 +95,7 @@ export const RequirementCoverageSummary = ({
         tone={uncoveredMandatory === 0 ? "success" : "blocker"}
       />
       {unreadableRequirementCount === 0 ? null : (
-        <p className="mt-2 text-support text-cv-text-muted">
-          לא ניתנות להצגה: {unreadableRequirementCount}
-        </p>
+        <p className="mt-2 text-support text-cv-text-muted">לא ניתנות להצגה: {unreadableRequirementCount}</p>
       )}
     </AnalysisSection>
   );
@@ -163,9 +161,7 @@ export const RequirementCoverageSection = ({
             <h4 className="text-body font-bold text-cv-text" dir="auto">
               {requirement.text}
             </h4>
-            <StatusBadge tone={coverageTones[requirement.coverage]}>
-              {coverageLabels[requirement.coverage]}
-            </StatusBadge>
+            <StatusBadge tone={coverageTones[requirement.coverage]}>{coverageLabels[requirement.coverage]}</StatusBadge>
           </div>
           <p className="mt-0.5 text-caption font-semibold text-cv-text-muted">
             {importanceLabels[requirement.importance]}

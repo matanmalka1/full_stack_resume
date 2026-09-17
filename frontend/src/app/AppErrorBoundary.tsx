@@ -65,9 +65,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
             {import.meta.env.DEV ? (
               <details className="mt-section-gap">
-                <summary className="cursor-pointer font-semibold">
-                  פרטי שגיאה לפיתוח
-                </summary>
+                <summary className="cursor-pointer font-semibold">פרטי שגיאה לפיתוח</summary>
                 <pre className="mono-code mt-field-gap overflow-auto whitespace-pre-wrap text-support">
                   {`${error.toString()}${error.stack ? `\n\n${error.stack}` : ""}`}
                 </pre>

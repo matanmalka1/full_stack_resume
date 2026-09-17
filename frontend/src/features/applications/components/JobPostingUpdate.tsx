@@ -179,8 +179,7 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
                   validate: (value) => {
                     if (value.trim() === "") return "יש להזין את טקסט המשרה.";
                     const unchanged =
-                      value === originalJobText &&
-                      normalizedSourceUrl(getValues("source_url")) === originalSourceUrl;
+                      value === originalJobText && normalizedSourceUrl(getValues("source_url")) === originalSourceUrl;
                     return !unchanged || "הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה.";
                   },
                 })}

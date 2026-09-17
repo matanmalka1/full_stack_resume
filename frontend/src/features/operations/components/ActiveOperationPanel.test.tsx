@@ -172,9 +172,7 @@ describe("ActiveOperationPanel progress", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent("יש להשלים ניסוח לעובדה בשפת היעד");
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "לעובדה development.phdigital.nextjs חסר ניסוח בשפה he.",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("לעובדה development.phdigital.nextjs חסר ניסוח בשפה he.");
     expect(screen.queryByText("Fact development.phdigital.nextjs has no 'he' rendering.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
   });

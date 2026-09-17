@@ -215,11 +215,7 @@ export const ActiveOperationPanel = ({
 
         {terminal ? null : (
           <>
-            <progress
-              aria-label={`התקדמות: ${progressLabel}`}
-              aria-valuetext={progressLabel}
-              className="sr-only"
-            />
+            <progress aria-label={`התקדמות: ${progressLabel}`} aria-valuetext={progressLabel} className="sr-only" />
             <div aria-hidden="true" className="mt-3 h-1.5 overflow-hidden rounded-pill bg-cv-border">
               <div className="cv-operation-progress h-full w-2/5 rounded-pill bg-cv-accent" />
             </div>

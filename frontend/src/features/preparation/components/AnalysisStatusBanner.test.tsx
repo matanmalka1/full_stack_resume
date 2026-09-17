@@ -22,13 +22,10 @@ const classification = (fit: Classification["fit"]): Classification => ({
 });
 
 describe("AnalysisStatusBanner", () => {
-  it.each(["low", "unknown"] as const)(
-    "presents %s Fit as diagnostic rather than an approval gate",
-    (fit) => {
-      render(<AnalysisStatusBanner classification={classification(fit)} supersededAnalysis={false} />);
+  it.each(["low", "unknown"] as const)("presents %s Fit as diagnostic rather than an approval gate", (fit) => {
+    render(<AnalysisStatusBanner classification={classification(fit)} supersededAnalysis={false} />);
 
-      expect(screen.getByText(/אפשר להמשיך ליצירת טיוטה/)).toBeInTheDocument();
-      expect(screen.queryByText(/אישור|הכרעה/)).not.toBeInTheDocument();
-    },
-  );
+    expect(screen.getByText(/אפשר להמשיך ליצירת טיוטה/)).toBeInTheDocument();
+    expect(screen.queryByText(/אישור|הכרעה/)).not.toBeInTheDocument();
+  });
 });

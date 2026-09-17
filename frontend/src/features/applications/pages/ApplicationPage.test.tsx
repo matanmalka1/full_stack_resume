@@ -313,7 +313,9 @@ describe("ApplicationPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
     fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
 
-    expect(await screen.findByText("הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה."),
+    ).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
   });
 

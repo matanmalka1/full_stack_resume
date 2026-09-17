@@ -39,9 +39,9 @@ describe("filterFactEntries", () => {
   it("combines text, status, source, and tag filters", () => {
     expect(filterFactEntries(entries, { ...emptyFactFilters, query: "API" })).toHaveLength(1);
     expect(filterFactEntries(entries, { ...emptyFactFilters, status: "pending" })[0]?.fact.fact_id).toBe("fact.sales");
-    expect(filterFactEntries(entries, { ...emptyFactFilters, source: "development.json", tag: "backend" })).toHaveLength(
-      1,
-    );
+    expect(
+      filterFactEntries(entries, { ...emptyFactFilters, source: "development.json", tag: "backend" }),
+    ).toHaveLength(1);
     expect(filterFactEntries(entries, { ...emptyFactFilters, source: "sales.json", status: "canonical" })).toEqual([]);
   });
 });

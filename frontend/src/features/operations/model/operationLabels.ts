@@ -124,8 +124,7 @@ const providerOutputGuidance =
 export const failurePresentations: Record<OperationFailureCode, FailurePresentation> = {
   SOURCE_CHANGED: {
     title: "המקור השתנה בזמן הפעולה",
-    guidance:
-      "התוצאה לא הופעלה והמצב הקיים נשמר. יש ליצור פעולה חדשה מהאפשרות המוצגת במסך כדי להשתמש במקור העדכני.",
+    guidance: "התוצאה לא הופעלה והמצב הקיים נשמר. יש ליצור פעולה חדשה מהאפשרות המוצגת במסך כדי להשתמש במקור העדכני.",
   },
   PROVIDER_TIMEOUT: {
     title: "ספק הבינה המלאכותית לא השיב בזמן",
