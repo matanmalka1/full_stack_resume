@@ -619,7 +619,7 @@ class OperationService(ServiceBase[OperationRepository]):
         if not is_terminal_operation(original.status):
             raise StateConflict("only a terminal Operation can be retried")
         failure_code = original.failure_code
-        if failure_code in {
+        if failure_code is not None and failure_code in {
             OperationFailureCode.MISSING_FACT_RENDERING,
             OperationFailureCode.SOURCE_CHANGED,
         }:
