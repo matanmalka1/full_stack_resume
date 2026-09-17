@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -41,7 +42,12 @@ const classification: Classification = {
 
 describe("AnalysisPanel", () => {
   it("shows each unmet requirement once in the complete coverage view", () => {
-    render(<AnalysisPanel classification={classification} detail={detail()} />);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <AnalysisPanel classification={classification} detail={detail()} />
+      </QueryClientProvider>,
+    );
 
     expect(screen.queryByText("פערים מול העובדות")).not.toBeInTheDocument();
     expect(screen.getByText("דרישות המשרה וכיסויין")).toBeInTheDocument();

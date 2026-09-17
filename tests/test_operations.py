@@ -1573,7 +1573,9 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
     ] == published
 
 
-def test_worker_shutdown_requests_cancellation_and_prevents_activation(services, monkeypatch) -> None:
+def test_worker_shutdown_requests_cancellation_and_prevents_activation(
+    services, monkeypatch
+) -> None:
     operation = _operation_for_runner(services, "Worker Shutdown Co")
     started = Event()
     original_cancel = services.operation_lifecycle.operations.request_cancellation

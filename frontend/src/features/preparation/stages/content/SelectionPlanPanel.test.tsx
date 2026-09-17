@@ -200,7 +200,12 @@ describe("SelectionPlanPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel(detail("plan-1"), false);
 
-    const row = (await screen.findByText("עובדה שהושמטה")).closest("li");
+    const sectionToggle = await screen.findByRole("button", { name: /^מיומנויות/ });
+    expect(sectionToggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(sectionToggle);
+    expect(sectionToggle).toHaveAttribute("aria-expanded", "true");
+
+    const row = screen.getByText("עובדה שהושמטה").closest("li");
     if (row === null) throw new Error("candidate row was not rendered");
     fireEvent.click(within(row).getByRole("checkbox", { name: "קיבוע העובדה" }));
     const saveButton = screen.getByRole("button", { name: "שמירת בחירת העובדות" });
