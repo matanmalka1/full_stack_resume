@@ -183,7 +183,6 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                       "group flex min-h-12 w-full items-center rounded-control border border-transparent",
                       "transition-[background-color,border-color,box-shadow] duration-200",
                       "hover:border-cv-border hover:bg-cv-surface-muted",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cv-accent focus-visible:ring-offset-2 focus-visible:ring-offset-cv-surface",
                       step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
                     )}
                     to={step.href}
