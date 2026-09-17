@@ -73,7 +73,38 @@ describe("ActiveOperationPanel progress", () => {
     fireEvent.click(screen.getByText("פרטי ביצוע"));
     expect(details).toHaveAttribute("open");
     expect(screen.getByText("gpt-test")).toBeVisible();
-    expect(screen.getByText(/מאמץ גבוה/)).toBeVisible();
+    expect(screen.getByText("גבוה")).toBeVisible();
+  });
+
+  it("keeps timing and reported usage accessible after success", () => {
+    renderPanel(
+      operation({
+        status: "succeeded",
+        is_terminal: true,
+        phase: "completed",
+        started_at: "2026-09-09T08:00:05Z",
+        finished_at: "2026-09-09T08:01:10Z",
+        input_tokens: 1200,
+        cached_input_tokens: 0,
+        output_tokens: 100,
+      }),
+    );
+
+    const details = screen.getByText("פרטי ביצוע").closest("details");
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("פרטי ביצוע"));
+    expect(screen.getByText("5 שניות")).toBeVisible();
+    expect(screen.getByText("1 דקות ו־5 שניות")).toBeVisible();
+    expect(screen.getByText("0")).toBeVisible();
+    expect(screen.queryByText("סך הטוקנים")).not.toBeInTheDocument();
+    expect(screen.queryByText("עלות")).not.toBeInTheDocument();
+  });
+
+  it("does not invent a duration for terminal work without a finish timestamp", () => {
+    renderPanel(operation({ status: "failed", is_terminal: true, started_at: "2026-09-09T08:00:05Z" }));
+    fireEvent.click(screen.getByText("פרטי ביצוע"));
+    expect(screen.queryByText("משך הריצה")).not.toBeInTheDocument();
+    expect(screen.queryByText("זמן שחלף")).not.toBeInTheDocument();
   });
 
   it("does not expose safe English detail for a known failure code", () => {

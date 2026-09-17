@@ -10,8 +10,8 @@ import { fitLabels, fitTones } from "../../model/analysisLabels";
    now, so the model id is what distinguishes one from another and is always shown. */
 const Provenance = ({ record }: { record: JobAnalysisRecord | null }) =>
   record === null ? null : (
-    <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-      נותח על ידי AI (<LtrText>{record.model}</LtrText>) · {formatDateTime(record.created_at)}
+    <p className="mt-1 text-support text-cv-text-muted" dir="rtl">
+      נותחה באמצעות מודל <LtrText>{record.model}</LtrText> · <bdi>{formatDateTime(record.created_at)}</bdi>
       {record.version_number <= 1 ? null : ` · ניתוח מס' ${record.version_number}`}
     </p>
   );

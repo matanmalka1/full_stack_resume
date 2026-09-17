@@ -5,11 +5,10 @@ import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
-import { Disclosure } from "@/ui/Disclosure";
 import { LiveRegion } from "@/ui/LiveRegion";
-import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
+import { OperationExecutionDetails } from "./OperationExecutionDetails";
 import {
   actionableFailureDetail,
   activeOutputLabels,
@@ -22,12 +21,6 @@ import {
 } from "../model/operationLabels";
 import { operationProgressLabel } from "../model/operationProgress";
 import { WorkCardFrame } from "./WorkCard";
-
-const reasoningEffortLabels: Record<NonNullable<Operation["reasoning_effort"]>, string> = {
-  low: "נמוך",
-  medium: "בינוני",
-  high: "גבוה",
-};
 
 const CANCEL_REVEAL_DELAY_MS = 4_000;
 
@@ -103,7 +96,6 @@ export const ActiveOperationPanel = ({
   const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
   const actionableDetail = actionableFailureDetail(operation.failure_code, operation.safe_failure_detail);
   const produced = activeOutputLabels(operation);
-  const aiExecution = operation.provider === "openai" && operation.model != null;
   const summary =
     continuation ??
     (terminal
@@ -111,19 +103,6 @@ export const ActiveOperationPanel = ({
         ? "הפעולה הסתיימה."
         : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`
       : "העמוד מתעדכן מעצמו עד לסיום הפעולה.");
-  const executionDetail = aiExecution ? (
-    <span className="text-support text-cv-text-muted">
-      <LtrText>{operation.model}</LtrText>
-      {operation.reasoning_effort == null ? null : <> · מאמץ {reasoningEffortLabels[operation.reasoning_effort]}</>}
-      {operation.cost_usd == null ? null : (
-        <>
-          {" "}
-          · עלות <LtrText>${operation.cost_usd}</LtrText>
-        </>
-      )}
-    </span>
-  ) : null;
-
   /* A run that succeeded has nothing left to watch. Reported at full panel weight it
      took the top of the screen - heading, badge, progress sentence, actions, link - to
      say that finished work had finished, and pushed the thing it produced below the
@@ -156,8 +135,8 @@ export const ActiveOperationPanel = ({
                 ? statusLabels[operation.status]
                 : `${statusLabels[operation.status]} · יצרה ${joinHebrewList(produced)}`}
             </p>
-            {executionDetail}
           </div>
+          <OperationExecutionDetails operation={operation} />
         </div>
 
         {/* A.5: the row a watched run collapses into is the moment worth announcing, so
@@ -223,11 +202,7 @@ export const ActiveOperationPanel = ({
         )}
       </div>
 
-      {executionDetail === null ? null : (
-        <Disclosure className="rounded-control border border-cv-border px-3.5 py-3" summary="פרטי ביצוע">
-          {executionDetail}
-        </Disclosure>
-      )}
+      <OperationExecutionDetails operation={operation} />
 
       {failure === null && operation.safe_failure_detail == null ? null : (
         <Callout
