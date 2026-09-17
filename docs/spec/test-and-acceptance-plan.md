@@ -65,13 +65,27 @@ contract coverage. Cover:
 
 - numbered migrations
 - foreign keys and constraints
-- transaction-scope commit/rollback
+- write-scope commit exactly once, exception rollback, closure, and token lifetime
+- closed/foreign-manager/foreign-engine token and read-token write rejection
+- nested-scope refusal and outbound I/O guards under both read and write scopes
 - immutable row protections
 - status/audit projection consistency
 - artifact identity/hash/path registration
 - fixed project-path containment
 - transaction isolation, row locking, and claiming behavior relevant to API/worker concurrency
-- query projections and one-snapshot consistency
+- query/Ready metadata captured in one snapshot, with payload verification after closure
+- backend-neutral read-only orphan inventory, snapshot/revision/artifact reference
+  exclusion (including historical/inactive evidence), working-projection exclusion,
+  symlink containment, S3 prefix isolation/pagination, and explicit listing failure
+- inspection candidates remain unchanged and readable; listing does not imply safe
+  deletion or change the reconciliation verdict
+
+Tests request individual capability adapters and a transaction-manager fixture.
+Scenario fixtures carry service surfaces and source/result IDs, never a root repository.
+Deliberate corruption uses explicit raw database access limited to integrity evidence.
+Derived architecture guards discover all modules/adapters and enforce independence,
+token-explicit access, removed-surface absence, inward dependencies, no capability
+casts, and allowlisted transaction ownership. Exception sets must reject stale entries.
 
 ### 2.4 API contract tests
 
@@ -395,16 +409,19 @@ double revision, double activation, or silent partial state.
 ## 8. Knowledge journal failure injection
 
 Inject and verify the following crash windows. They may share one failure-injection
-matrix rather than eight independent test items:
+matrix rather than independent test items:
 
 1. crash before filesystem replace
 2. crash after replace and before PostgreSQL commit
-3. PostgreSQL mutation committed but journal not marked COMMITTED
+3. failure marking the journal COMMITTED rolls back fact events and any SelectionPlan
+   in the same write scope; no separately committed mutation/unmarked journal window
+   is permitted
 4. staged file missing or corrupted
 5. old hash mismatch
 6. new hash mismatch
 7. audit insertion failure
 8. attachment or SelectionPlan constraint failure
+9. post-commit staging cleanup failure leaves committed state intact and recoverable
 
 Every case must end in deterministic recovery or explicit focused quarantine. No silent
 partial Knowledge state is acceptable. Read-only history/export/tracking remains

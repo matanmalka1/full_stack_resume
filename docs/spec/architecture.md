@@ -129,6 +129,12 @@ may share statements and record conversion without becoming repository wrappers.
 Services depend on application Ports, never concrete persistence implementations or
 casts between capabilities.
 
+There is no root repository, repository bundle, generic dependency dictionary, bind(),
+or repository-exposing UnitOfWork. A new Port must have a real consumer, lifecycle, or
+trust boundary; a one-method Port must represent an atomic persistence or external
+system boundary. A service with more than seven constructor dependencies requires an
+explicit architecture review, not a gateway introduced solely to shorten its constructor.
+
 ### 3.4 API
 
 FastAPI routers map HTTP DTOs, headers, and application errors to use-cases and
@@ -137,8 +143,8 @@ calculate fit, or write history directly.
 
 Maintenance is an API concern like any other. Reconciliation is
 `POST /api/v1/maintenance/reconciliations` behind a `MaintenanceService`, which holds
-the payload store and repository directly - `ApiServices` carries neither, so this
-cannot be a router helper. CSV export is a function of the application layer with no
+the payload store, transaction manager, and MaintenanceInspection Port directly —
+`ApiServices` carries none of those, so this cannot be a router helper. CSV export is a function of the application layer with no
 route, because writing the file is not yet a product use-case.
 
 Every product use-case belongs to the API and the Web UI. A second surface for a
@@ -365,8 +371,10 @@ use a narrow durable journal:
 3. Persist a `PREPARED` journal entry with old/new hashes and paths, staged path, DB
    mutation identity, and recovery strategy.
 4. Atomically replace the Knowledge file.
-5. Commit audit, attachment, SelectionPlan, and related PostgreSQL state.
-6. Mark the journal entry `COMMITTED`.
+5. In one write scope, apply fact events, any related SelectionPlan, and the journal
+   transition to `COMMITTED`; all commit or roll back together.
+6. Clean up staged/backup files outside the database scope. A cleanup failure may leave
+   temporary files but does not undo the committed source or metadata.
 
 Startup recovery must decide from durable hashes and identities whether to finish or
 restore. It never guesses. An unrecoverable state is explicitly quarantined.
@@ -418,7 +426,9 @@ return database rows or paths.
 The action-policy projector computes PreparationState, WorkingDraftState, warnings,
 review reasons, stale reasons and primary reason, active Operation, available actions,
 blocked actions and reason codes, nullable recommended action, active-context IDs,
-milestone IDs, and `newer_draft_in_progress` in one consistent read transaction.
+milestone IDs, and `newer_draft_in_progress` from inputs captured in one consistent
+read transaction. Ready payload verification runs after that scope closes, and the
+final policy is computed from the captured metadata and verified evidence.
 
 The API consumes this policy. React does not duplicate it.
 
@@ -461,6 +471,15 @@ waits briefly, stops heartbeat, and leaves durable state for recovery.
 Commit checks run before execution and before activation. `SOURCE_CHANGED` preserves
 any immutable output as inactive evidence and fails the Operation without replacing the
 WorkingDraft.
+
+Provider execution and immutable payload preservation/verification happen outside
+scopes. Prepared evidence is registered durably as inactive before activation in short
+database scopes; cancellation or activation rollback must not erase it. Re-registering
+the same provider output must not duplicate evidence. Activation first locks the
+Application, reloads Operation/lease state, rechecks persisted sources and cancellation,
+then atomically activates use-case state, eligible outputs, and Operation completion.
+Handlers own no scope. Post-commit working projections and filesystem logging happen
+after closure.
 
 Queued cancellation is immediate. Running cancellation is best effort and cancels
 activation. Retry creates another immutable Operation. One automatic retry with a small

@@ -84,8 +84,9 @@ approved
 ready
 ```
 
-Projection rules use the following exact precedence and are evaluated within one
-consistent read transaction. The first matching rule wins:
+Projection rules use the following exact precedence, using inputs captured in one
+consistent database snapshot and payload evidence verified after the read scope closes
+(§9). The first matching rule wins:
 
 1. No compatible JobAnalysis for the active JobSnapshot -> `needs_analysis`.
 2. A compatible `ready_qualified` ApprovedRevision exists -> `ready`.
@@ -246,9 +247,11 @@ Application Detail and relevant list projections return:
 }
 ```
 
-The complete projection is computed in one read transaction. `recommended_action` is
-deterministic and nullable. Action identifiers are stable application commands, not UI
-labels.
+All database inputs, including Ready evidence metadata, are captured in one read
+transaction. That scope closes before payload verification; the complete projection
+is then derived from the captured inputs and verified evidence. This is not an atomic
+snapshot across PostgreSQL and object storage. `recommended_action` is deterministic
+and nullable. Action identifiers are stable application commands, not UI labels.
 
 `edit_matching_configuration` means voluntarily editing the matching context. It is
 committed through the `apply_analysis_decisions` backend endpoint; the latter is an
@@ -629,13 +632,16 @@ all required claim proof/review evidence is eligible for the exact content and c
 no unresolved blocker or review reason exists
 ```
 
-It writes immutable revision JSON/Markdown, registers one ApprovedRevision, records the
-decision/provenance, deactivates the WorkingDraft, and sets
-`active_working_draft_id=null` in the same transaction. The mutable draft is closed;
-the ApprovedRevision is its immutable content/lineage record. A later edit or New Draft
+It writes and verifies immutable revision JSON/Markdown outside database scopes before
+registration. One approval transaction rechecks the exact sources, registers the
+ApprovedRevision and its artifacts, records decision/audit provenance, deactivates the
+WorkingDraft, completes the reserved idempotency receipt when present, and sets
+`active_working_draft_id=null`. The mutable draft is closed; the ApprovedRevision is its immutable content/lineage record. A later edit or New Draft
 action explicitly creates another WorkingDraft with `parent_revision_id`, analysis ID,
 and SelectionPlan ID. The same idempotency key/payload returns the same revision. A
-reused key with another payload fails.
+reused key with another payload fails. Frozen logical payload equality is checked
+before returning a committed revision or completing a pending receipt, including
+changes to the expected edit version or validation run for the same draft.
 
 A no-pause flow (product-spec.md §11) is an explicit user approval action here too: it
 may orchestrate validate -> approve -> render -> Ready checks with `actor_type=user` and
@@ -649,10 +655,16 @@ specific resolution may reach this command as a warning.
 
 ### `render_revision(approved_revision_id)`
 
-Asynchronous and idempotent. It validates the exact approved source, writes temp HTML,
-renders with Playwright Chromium, generates a PDF, validates render geometry,
-page count, PDF/ATS text, links, direction, filename metadata and integrity, then
-registers immutable artifacts.
+Asynchronous and idempotent. It validates the exact approved source, writes HTML and
+renders PDF with Playwright Chromium at store-owned render targets, and validates
+geometry, page count, PDF/ATS text, links, direction, filename metadata, and integrity.
+All rendering, ingestion, and payload verification occur outside database scopes.
+Local targets are the stored payloads; remote targets are scratch files uploaded before
+cleanup. Render metadata is registered only after all required payloads exist.
+Both render artifacts are registered atomically before activation so cancellation or
+failed activation preserves inactive evidence. Activation rechecks the frozen sources,
+records the post-render ValidationRun bound to the exact PDF, and activates eligible
+outputs in the runner-owned transaction.
 
 Render failure leaves ApprovedRevision approved and returns a failed Operation/report.
 Retry creates a new Operation. A successful result records the exact passing evidence

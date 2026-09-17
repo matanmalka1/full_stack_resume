@@ -519,7 +519,9 @@ Every Application projection includes current preparation and draft states, acti
 context IDs, latest approved/ready references, review and stale reasons, active
 Operation, warnings, available actions, blocked actions with reason codes, a nullable
 recommended action, and the `newer_draft_in_progress` flag. These values are computed
-within one consistent read transaction.
+from one consistent database snapshot. Payload integrity is verified after the
+database read scope closes; the final policy is derived from the captured metadata
+and that verification without holding a transaction across storage I/O.
 
 The backend owns action policy. React does not implement a second state machine.
 
@@ -600,15 +602,25 @@ policy version, and every Track/Emphasis dependency. These immutable contexts de
 staleness without rewriting past plans.
 
 Approved, submitted, historical, and inactive Operation outputs are not automatically
-deleted. Temporary orphan files may be cleaned after a configured TTL. Replacing a
-WorkingDraft may discard the old working copy after success; an explicit `Keep` archives
+deleted. Read-only orphan inspection reports reconciliation candidates; a candidate
+may still belong to an active writer awaiting database registration. Automatic orphan
+deletion is outside the current scope. A future deletion contract must coordinate with
+writers and prove the payload is not awaiting registration; TTL alone is insufficient.
+Replacing a WorkingDraft may discard the old working copy after success; an explicit `Keep` archives
 it as a historical draft snapshot while preserving only one active WorkingDraft.
 
 ## 17. Knowledge lifecycle
 
 Knowledge stays file-based and version-controlled. UI writes follow:
 
-`UI -> KnowledgeRepository -> validate -> atomic file write -> audit event`
+```text
+React -> FastAPI -> FactLifecycleService -> validate/stage -> PREPARED journal
+      -> activate files -> atomic fact events/plan + COMMITTED journal
+```
+
+File staging, activation, restoration, and cleanup run outside database scopes. The
+application owns the short database scopes through KnowledgeLifecycleStore; audit and
+the journal do not replace canonical file-backed Knowledge.
 
 The application never performs an automatic Git commit.
 
