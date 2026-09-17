@@ -10,17 +10,13 @@ from ...commands import (
 )
 from ...errors import InfrastructureFailure, PreconditionFailed, StateConflict
 from ...ports import (
-    AIProvider,
     ArtifactStore,
-    DraftRepository,
     KnowledgeStore,
-    Renderer,
-    RevisionPayloadStore,
     TransactionManager,
 )
 from ...ports.selection_drafts import SelectionDraftStore
 from ..analysis import AnalysisService, load_analysis_knowledge
-from .common import DraftServiceBase
+from .inputs import compose
 
 
 class SelectionChangeService:
@@ -39,10 +35,7 @@ class SelectionChangeService:
         self.artifacts = artifacts
 
     def apply(
-        self,
-        command: ApplySelectionChangeCommand,
-        *,
-        analysis_service: AnalysisService,
+        self, command: ApplySelectionChangeCommand, *, analysis_service: AnalysisService
     ) -> SelectionChangeResult:
         with self.transactions.read() as tx:
             working = self.drafts.working_draft(tx, command.working_draft_id)
@@ -50,15 +43,13 @@ class SelectionChangeService:
             raise PreconditionFailed(f"working draft {working.id} is no longer the active draft")
         if working.edit_version != command.expected_edit_version:
             raise StateConflict(
-                f"working draft {working.id} is at edit version {working.edit_version}, "
-                f"not {command.expected_edit_version}"
+                f"working draft {working.id} is at edit version {working.edit_version}, not {command.expected_edit_version}"
             )
         source = analysis_service.selection_source(working.application_id, working.job_analysis_id)
         analysis_service.refuse_deleted(source.application_id, source.deleted_at)
         if manually_edited(working.source):
             raise PreconditionFailed(
-                "this draft carries manual wording that a deterministic rebuild would "
-                "discard; use regenerate_section or regenerate_claim to change its selection"
+                "this draft carries manual wording that a deterministic rebuild would discard; use regenerate_section or regenerate_claim to change its selection"
             )
         knowledge = load_analysis_knowledge(self.knowledge)
         prepared = analysis_service.prepare_selection_plan(
@@ -71,7 +62,7 @@ class SelectionChangeService:
         )
         with self.transactions.write() as tx:
             created = analysis_service.activation.activate_selection_plan(tx, prepared)
-            document = DraftServiceBase._compose(
+            document = compose(
                 application_id=working.application_id,
                 job_snapshot_id=source.job_snapshot_id,
                 job_analysis_id=working.job_analysis_id,
@@ -80,11 +71,7 @@ class SelectionChangeService:
                 knowledge=knowledge,
             )
             changed = self.drafts.update_selection(
-                tx,
-                working.id,
-                working.edit_version,
-                document,
-                created.selection_plan_id,
+                tx, working.id, working.edit_version, document, created.selection_plan_id
             )
         try:
             self.artifacts.write_working_draft(changed.source)
@@ -98,34 +85,3 @@ class SelectionChangeService:
             selection_plan_id=changed.selection_plan_id,
             plan=created.plan,
         )
-
-
-class DraftSelectionChange(DraftServiceBase):
-    def __init__(
-        self,
-        *,
-        selection_changes: SelectionChangeService,
-        repository: DraftRepository,
-        knowledge: KnowledgeStore,
-        artifacts: ArtifactStore,
-        renderer: Renderer | None = None,
-        provider: AIProvider | None = None,
-        snapshots: RevisionPayloadStore | None = None,
-    ):
-        super().__init__(
-            repository=repository,
-            knowledge=knowledge,
-            artifacts=artifacts,
-            renderer=renderer,
-            provider=provider,
-            snapshots=snapshots,
-        )
-        self.selection_changes = selection_changes
-
-    def apply_selection_change(
-        self,
-        command: ApplySelectionChangeCommand,
-        *,
-        analysis_service: AnalysisService,
-    ) -> SelectionChangeResult:
-        return self.selection_changes.apply(command, analysis_service=analysis_service)

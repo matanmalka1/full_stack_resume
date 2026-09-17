@@ -6,8 +6,44 @@ import pytest
 from helpers import ACCOUNT_MANAGER_JOB, seed_analysis_for_command
 
 from cv_engine.application import errors
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    DraftCommand,
+    IngestCommand,
+    ValidateDraftCommand,
+)
 from cv_engine.util import sha256_file, sha256_text
+
+
+def test_validation_refuses_to_record_after_the_draft_changes(
+    drafted_application, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    setup = drafted_application("Validation Race Co")
+    working = setup.services.repository.active_working_draft(setup.application_id)
+    before = setup.services.repository.latest_validation_for_working_draft(working.id)
+
+    from cv_engine.application.services.drafts import validation as validation_module
+
+    original = validation_module.run_draft_validation
+
+    def edit_while_validation_runs(*args, **kwargs):
+        report = original(*args, **kwargs)
+        setup.services.drafts._commit_edit(working, working.source)
+        return report
+
+    monkeypatch.setattr(validation_module, "run_draft_validation", edit_while_validation_runs)
+
+    with pytest.raises(errors.StateConflict):
+        setup.services.draft_validation.validate_draft(
+            ValidateDraftCommand(
+                working_draft_id=working.id,
+                expected_edit_version=working.edit_version,
+            )
+        )
+
+    after = setup.services.repository.latest_validation_for_working_draft(working.id)
+    assert after is not None and before is not None
+    assert after["id"] == before["id"]
 
 
 def test_ingest_commits_exact_snapshot_payload_before_registration(

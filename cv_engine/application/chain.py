@@ -95,8 +95,59 @@ class DraftChain:
         return "; ".join(f"{code}: {message}" for code, message in self.problems)
 
 
+@dataclass(frozen=True)
+class DraftChainSources:
+    """Only the persisted links and recency evidence the draft chain consumes."""
+
+    analysis_record: dict | None
+    snapshot_record: dict | None
+    latest_snapshot_id: str | None
+    analyses: tuple[dict, ...]
+
+
 def check_draft_chain(
     repo: DraftRepository,
+    application_id: str,
+    draft: DraftDocument,
+    profiles: ProfileStore,
+    facts: FactStore,
+    *,
+    recorded_analysis_id: str | None = None,
+) -> DraftChain:
+    """Legacy consumers load the same inputs used by token-scoped draft consumers."""
+    record = None
+    snapshot = None
+    latest_snapshot_id = None
+    history = ()
+    analysis_id = draft.job_analysis_id or recorded_analysis_id
+    if draft.application_id == application_id and analysis_id is not None:
+        try:
+            record = repo.get_analysis(analysis_id)
+        except UnknownRecord:
+            pass
+        if record is not None:
+            try:
+                snapshot = repo.get_snapshot(draft.job_snapshot_id)
+            except UnknownRecord:
+                pass
+            if record["application_id"] == application_id:
+                try:
+                    latest_snapshot_id = repo.latest_snapshot(application_id)["id"]
+                except UnknownRecord:
+                    pass
+                history = tuple(repo.analyses(application_id))
+    return check_loaded_draft_chain(
+        DraftChainSources(record, snapshot, latest_snapshot_id, history),
+        application_id,
+        draft,
+        profiles,
+        facts,
+        recorded_analysis_id=recorded_analysis_id,
+    )
+
+
+def check_loaded_draft_chain(
+    sources: DraftChainSources,
     application_id: str,
     draft: DraftDocument,
     profiles: ProfileStore,
@@ -140,7 +191,9 @@ def check_draft_chain(
         return unresolved()
 
     try:
-        record = repo.get_analysis(analysis_id)
+        record = sources.analysis_record
+        if record is None:
+            raise UnknownRecord(analysis_id)
     except UnknownRecord:
         problems.append(("unknown-job-analysis", f"no job analysis {analysis_id} exists"))
         return unresolved(analysis_id=analysis_id)
@@ -164,7 +217,9 @@ def check_draft_chain(
         )
 
     try:
-        snapshot = repo.get_snapshot(draft.job_snapshot_id)
+        snapshot = sources.snapshot_record
+        if snapshot is None:
+            raise UnknownRecord(draft.job_snapshot_id)
     except UnknownRecord:
         problems.append(("unknown-job-snapshot", f"no job snapshot {draft.job_snapshot_id} exists"))
     else:
@@ -218,13 +273,12 @@ def check_draft_chain(
         )
 
     if owned:
-        problems.extend(_staleness(repo, application_id, record, analysis))
+        problems.extend(_loaded_staleness(sources, record, analysis))
     return DraftChain(application_id, draft.job_snapshot_id, analysis_id, analysis, problems)
 
 
-def _staleness(
-    repo: DraftRepository,
-    application_id: str,
+def _loaded_staleness(
+    sources: DraftChainSources,
     record: dict,
     analysis: JobAnalysis,
 ) -> list[tuple[str, str]]:
@@ -236,7 +290,9 @@ def _staleness(
     re-running the classifier and getting the same answer is not a change.
     """
     problems: list[tuple[str, str]] = []
-    if repo.latest_snapshot(application_id)["id"] != record["job_snapshot_id"]:
+    if sources.latest_snapshot_id is None:
+        raise UnknownRecord(f"no snapshot for application {record['application_id']}")
+    if sources.latest_snapshot_id != record["job_snapshot_id"]:
         problems.append(
             (
                 "new-snapshot-requires-analysis",
@@ -246,7 +302,7 @@ def _staleness(
     bound_key = material_analysis_key(analysis)
     superseding = [
         row
-        for row in repo.analyses(application_id)
+        for row in sources.analyses
         if row["version_number"] > record["version_number"]
         and material_analysis_key(row["analysis"]) != bound_key
     ]

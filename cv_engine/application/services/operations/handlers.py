@@ -37,11 +37,11 @@ from ...operations import (
     PersistedOperation,
 )
 from ...ports import (
-    DraftRepository,
     OperationRepository,
     ReadinessRepository,
 )
 from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.draft_operations import DraftOperationSourceReader
 from ...ports.transactions import ReadTransaction, WriteTransaction
 from ..analysis import (
     AnalysisService,
@@ -50,7 +50,8 @@ from ..analysis import (
     load_analysis_knowledge,
 )
 from ..analysis_activation import AnalysisActivation
-from ..drafts import DraftService, PreparedDraft, PreparedRegeneration
+from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
+from ..drafts.activation import DraftActivation
 from ..proposals import ProviderEvidence
 from ..rendering import ExecutedRender, RenderingService
 from .common import (
@@ -71,6 +72,12 @@ class AITaskHandler:
 
     service: Any
     task: str
+
+    def after_activation(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
+        pass
+
+    def verify_external_sources(self, operation: PersistedOperation) -> None:
+        del operation
 
     @classmethod
     def evidence_outputs(cls, prepared_value: Any) -> tuple[OperationOutputReference, ...]:
@@ -153,10 +160,11 @@ class AITaskHandler:
         return OperationExecutionError(code, safe_failure_detail_for(error))
 
 
-class AnalysisTaskHandler(AITaskHandler):
-    service: AnalysisService
+class RegisteredEvidenceTaskHandler(AITaskHandler):
+    """AI task whose service registers provider evidence before activation."""
+
+    service: Any
     knowledge: AnalysisKnowledgeSource
-    sources: AnalysisSelectionSourceReader
 
     def load_knowledge(self):
         return load_analysis_knowledge(self.knowledge)
@@ -173,6 +181,11 @@ class AnalysisTaskHandler(AITaskHandler):
                 )
             except ApplicationError:
                 return
+
+
+class AnalysisTaskHandler(RegisteredEvidenceTaskHandler):
+    service: AnalysisService
+    sources: AnalysisSelectionSourceReader
 
 
 class AnalysisOperationHandler(AnalysisTaskHandler):
@@ -250,17 +263,46 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
         )
 
 
-class DraftOperationHandler(AITaskHandler):
+class DraftTaskHandler(RegisteredEvidenceTaskHandler):
+    service: DraftAuthoringService
+    knowledge: AnalysisKnowledgeSource
+
+    sources: DraftOperationSourceReader
+
+    def verify_knowledge(self, tx: ReadTransaction, _operation: PersistedOperation) -> None:
+        if self.sources.knowledge_is_prepared(tx):
+            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
+
+    def verify_external_sources(self, operation: PersistedOperation) -> None:
+        if operation.sources.knowledge_context_hash != document_knowledge_context_hash(self):
+            raise SourceChanged("Knowledge changed before draft activation.")
+
+    def after_activation(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
+        del operation
+        if isinstance(prepared.value, (PreparedDraft, PreparedRegeneration)):
+            self.service.store_working_draft(prepared.value.source)
+
+
+class DraftOperationHandler(DraftTaskHandler):
     task = "draft_resume"
 
-    def __init__(self, service: DraftService):
+    def __init__(
+        self,
+        service: DraftAuthoringService,
+        sources: DraftOperationSourceReader,
+        activation: DraftActivation,
+        knowledge: AnalysisKnowledgeSource,
+    ):
         self.service = service
+        self.sources = sources
+        self.activation = activation
+        self.knowledge = knowledge
 
     @staticmethod
     def _command(operation: PersistedOperation) -> DraftCommand:
         return DraftCommand.model_validate(operation.payload)
 
-    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
         sources = operation.sources
         if (
             sources.job_snapshot_id is None
@@ -269,14 +311,13 @@ class DraftOperationHandler(AITaskHandler):
             or sources.selection_plan_id is None
         ):
             raise SourceChanged("Draft Operation has incomplete frozen source identity.")
-        drafts = cast(DraftRepository, repository)
         try:
-            snapshot = drafts.get_snapshot(sources.job_snapshot_id)
-            analysis = drafts.get_analysis(sources.job_analysis_id)
-            plan = drafts.selection_plan(sources.selection_plan_id)
-            active_snapshot = drafts.latest_snapshot(operation.application_id)
-            active_analysis_id, _ = drafts.latest_analysis(operation.application_id)
-            active_plan = drafts.latest_selection_plan(operation.application_id)
+            current = self.sources.generation_sources(tx, operation)
+            snapshot = current.snapshot
+            analysis = current.analysis
+            plan = current.plan
+            active_snapshot = {"id": current.active_snapshot_id}
+            active_analysis_id = current.active_analysis_id
         except UnknownRecord as exc:
             raise SourceChanged("A draft source no longer exists.") from exc
         dependencies = sources.dependency_hashes
@@ -291,7 +332,7 @@ class DraftOperationHandler(AITaskHandler):
             or analysis["job_snapshot_id"] != sources.job_snapshot_id
             or active_analysis_id != sources.job_analysis_id
             or _model_hash(analysis["analysis"]) != dependencies.get("job_analysis")
-            or active_plan.id != sources.selection_plan_id
+            or current.active_plan_id != sources.selection_plan_id
             or _model_hash(plan) != dependencies.get("selection_plan")
         ):
             raise SourceChanged("Analysis or SelectionPlan changed before draft activation.")
@@ -303,7 +344,9 @@ class DraftOperationHandler(AITaskHandler):
         # new draft with a new id.
         if sources.working_draft_id is not None:
             try:
-                replaced = drafts.working_draft(sources.working_draft_id)
+                replaced = current.replaced
+                if replaced is None:
+                    raise UnknownRecord(sources.working_draft_id)
             except UnknownRecord as exc:
                 raise SourceChanged("The working draft being replaced no longer exists.") from exc
             if (
@@ -313,8 +356,7 @@ class DraftOperationHandler(AITaskHandler):
                 or replaced.content_hash != sources.working_draft_content_hash
             ):
                 raise SourceChanged("The working draft changed before the replacement activated.")
-        if sources.knowledge_context_hash != document_knowledge_context_hash(self.service):
-            raise SourceChanged("Knowledge changed before draft activation.")
+        self.verify_knowledge(tx, operation)
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
@@ -331,13 +373,13 @@ class DraftOperationHandler(AITaskHandler):
         ) as exc:
             raise self._classified(operation, exc) from exc
 
-    def activate(self, operation, prepared, repository):
+    def activate(self, tx: WriteTransaction, operation, prepared):
         if not isinstance(prepared.value, PreparedDraft):
             raise TypeError("draft handler received an invalid prepared value")
-        result = self.service.activate(
+        result = self.activation.activate_generation(
+            tx,
             self._command(operation),
             prepared.value,
-            cast(DraftRepository, repository),
         )
         return (
             OperationOutputReference(
@@ -428,7 +470,7 @@ class SelectionPlanOperationHandler(AnalysisTaskHandler):
         )
 
 
-class RegenerationOperationHandler(AITaskHandler):
+class RegenerationOperationHandler(DraftTaskHandler):
     """`regenerate_section` and `regenerate_claim`, which differ only in the command.
 
     One class for both because their contract is identical: the same frozen
@@ -438,8 +480,19 @@ class RegenerationOperationHandler(AITaskHandler):
     edited while it ran.
     """
 
-    def __init__(self, service: DraftService, *, task: str):
+    def __init__(
+        self,
+        service: DraftAuthoringService,
+        sources: DraftOperationSourceReader,
+        activation: DraftActivation,
+        knowledge: AnalysisKnowledgeSource,
+        *,
+        task: str,
+    ):
         self.service = service
+        self.sources = sources
+        self.activation = activation
+        self.knowledge = knowledge
         self.task = task
         self._command_type = (
             RegenerateSectionCommand if task == "regenerate_section" else RegenerateClaimCommand
@@ -448,7 +501,7 @@ class RegenerationOperationHandler(AITaskHandler):
     def _command(self, operation: PersistedOperation):
         return self._command_type.model_validate(operation.payload)
 
-    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
         sources = operation.sources
         if (
             sources.working_draft_id is None
@@ -456,9 +509,8 @@ class RegenerationOperationHandler(AITaskHandler):
             or sources.working_draft_content_hash is None
         ):
             raise SourceChanged("Regeneration Operation has no frozen draft identity.")
-        drafts = cast(DraftRepository, repository)
         try:
-            working = drafts.working_draft(sources.working_draft_id)
+            working = self.sources.regeneration_source(tx, sources.working_draft_id)
         except UnknownRecord as exc:
             raise SourceChanged("The working draft no longer exists.") from exc
         if (
@@ -470,8 +522,7 @@ class RegenerationOperationHandler(AITaskHandler):
             or working.selection_plan_id != sources.selection_plan_id
         ):
             raise SourceChanged("The working draft changed before regeneration activated.")
-        if sources.knowledge_context_hash != document_knowledge_context_hash(self.service):
-            raise SourceChanged("Knowledge changed before regeneration activated.")
+        self.verify_knowledge(tx, operation)
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
@@ -498,13 +549,13 @@ class RegenerationOperationHandler(AITaskHandler):
         ) as exc:
             raise self._classified(operation, exc) from exc
 
-    def activate(self, operation, prepared, repository):
+    def activate(self, tx: WriteTransaction, operation, prepared):
         del operation
         if not isinstance(prepared.value, PreparedRegeneration):
             raise TypeError("regeneration handler received an invalid prepared value")
-        result = self.service.activate_regeneration(
+        result = self.activation.activate_regeneration(
+            tx,
             prepared.value,
-            cast(DraftRepository, repository),
         )
         return (
             OperationOutputReference(

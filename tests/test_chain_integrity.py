@@ -43,8 +43,10 @@ from cv_engine.application.errors import (
 from cv_engine.application.ready import qualify_ready_revision
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.models import DecisionRecord
-from cv_engine.infrastructure.persistence.artifacts import SqlAlchemyArtifactRepository
-from cv_engine.infrastructure.persistence.drafts import SqlAlchemyDraftRepository
+from cv_engine.infrastructure.persistence.decision_store import SqlAlchemyDecisionRepository
+from cv_engine.infrastructure.persistence.draft_lifecycle import (
+    SqlAlchemyDraftLifecycleRepository,
+)
 from cv_engine.infrastructure.persistence.repository import Repository
 from cv_engine.infrastructure.persistence.tables import (
     approved_revisions,
@@ -252,11 +254,11 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         job_snapshot_id=working.source.job_snapshot_id,
     )
 
-    original_create = SqlAlchemyDraftRepository.create_approved_revision
+    original_create = SqlAlchemyDraftLifecycleRepository.create_approved_revision
     observed: dict[str, bool] = {}
 
     def require_payloads_first(repository, *args, **kwargs):
-        for reference, expected_hash in ((args[4], args[5]), (args[6], args[7])):
+        for reference, expected_hash in ((args[5], args[6]), (args[7], args[8])):
             path = project_root / reference
             assert path.is_file()
             assert sha256_file(path) == expected_hash
@@ -264,7 +266,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         return original_create(repository, *args, **kwargs)
 
     monkeypatch.setattr(
-        SqlAlchemyDraftRepository, "create_approved_revision", require_payloads_first
+        SqlAlchemyDraftLifecycleRepository, "create_approved_revision", require_payloads_first
     )
 
     approved = approve_active_draft(services, app_id)
@@ -371,7 +373,9 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
     first = approve_active_draft(services, app_id)
 
     assert language_of(first.revision_id) == english.language
-    first_export = services.drafts.export_decision_markdown(app_id, first.revision_id).content
+    first_export = services.draft_history.export_decision_markdown(
+        app_id, first.revision_id
+    ).content
     assert "- Language: en" in first_export
 
     hebrew_analysis = _analyze(services, app_id, language="he")
@@ -381,7 +385,9 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
     second = approve_active_draft(services, app_id)
 
     assert language_of(second.revision_id) == hebrew.language == "he"
-    second_export = services.drafts.export_decision_markdown(app_id, second.revision_id).content
+    second_export = services.draft_history.export_decision_markdown(
+        app_id, second.revision_id
+    ).content
     assert "- Language: he" in second_export
 
     first_record = services.repository.decision_for_revision(first.revision_id)
@@ -399,7 +405,7 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
     # both in Hebrew: the export renders what was stored, not what is current.
     assert services.repository.latest_analysis(app_id)[1].language == "he"
     assert language_of(first.revision_id) == "en"
-    reread = services.drafts.export_decision_markdown(app_id, first.revision_id).content
+    reread = services.draft_history.export_decision_markdown(app_id, first.revision_id).content
     assert reread == first_export
     assert "- Language: en" in reread
     assert "- Language: he" not in reread
@@ -431,7 +437,7 @@ def test_foreign_working_projection_cannot_replace_the_database_source(
     # the projection disagrees with the stored draft, so a corrupted or
     # hand-copied working file cannot reach a revision at all.
     with pytest.raises(StateConflict, match="differs from the stored draft"):
-        services.drafts.approve_draft(
+        services.draft_approval.approve_draft(
             ApproveDraftCommand(
                 working_draft_id=validated.working_draft_id,
                 expected_edit_version=validated.edit_version,
@@ -463,14 +469,14 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
     stranger = drafted_application("Stranger Co", role="Key Account Manager")
     services = owner.services
     inserted: list[DecisionRecord] = []
-    original_insert = SqlAlchemyArtifactRepository.insert_decision
+    original_insert = SqlAlchemyDecisionRepository.insert_decision
 
-    def capture_insert(repository, record: DecisionRecord) -> None:
+    def capture_insert(repository, tx, record: DecisionRecord) -> None:
         assert isinstance(record, DecisionRecord)
         inserted.append(record)
-        original_insert(repository, record)
+        original_insert(repository, tx, record)
 
-    monkeypatch.setattr(SqlAlchemyArtifactRepository, "insert_decision", capture_insert)
+    monkeypatch.setattr(SqlAlchemyDecisionRepository, "insert_decision", capture_insert)
     approved = approve_active_draft(services, owner.application_id)
     owner_markdown = services.repository.latest_artifact_version(
         owner.application_id, "resume_markdown", "approved"

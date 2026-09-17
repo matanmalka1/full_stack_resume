@@ -10,32 +10,87 @@ from ....domain.contracts.drafts import (
     DraftDocument,
     WorkingDraft,
 )
-from ....domain.contracts.records import (
-    AuditRecord,
-    DecisionRecord,
-)
 from ....domain.draft_markdown import serialize_markdown
 from ....domain.drafts import seal_draft
 from ....domain.knowledge import Knowledge
-from ....util import new_id, sha256_text, utc_now
+from ....util import canonical_json, new_id, sha256_text, utc_now
+from ...chain import ChainError, check_loaded_draft_chain
 from ...commands import ApprovalResult, ApproveDraftCommand
 from ...errors import (
+    IDEMPOTENCY_KEY_REUSED,
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     VALIDATION_STALE,
     WORKING_PROJECTION_DIVERGED,
+    ApplicationError,
     InfrastructureFailure,
+    LineageBroken,
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
     ValidationBlocked,
 )
-from ..base import bound_analysis
-from .common import DraftServiceBase
+from ...ports import (
+    ArtifactStore,
+    KnowledgeStore,
+    Renderer,
+    RevisionPayloadStore,
+    TransactionManager,
+)
+from ...ports.draft_approval import DraftApprovalContext, DraftApprovalSourceReader
+from ...ports.draft_lifecycle import DraftLifecycleStore
+from ...ports.idempotency import IdempotencyStore
+from ..analysis import load_analysis_knowledge
+from .approval_commit import ApprovalCommitter, PreparedApproval
+from .inputs import require_working_version
 
 
-class DraftApproval(DraftServiceBase):
+class DraftApprovalService:
     """The trust boundary: immutable payloads, then the records that name them."""
+
+    def __init__(
+        self,
+        *,
+        transactions: TransactionManager,
+        drafts: DraftLifecycleStore,
+        sources: DraftApprovalSourceReader,
+        receipts: IdempotencyStore,
+        knowledge: KnowledgeStore,
+        artifacts: ArtifactStore,
+        renderer: Renderer,
+        payloads: RevisionPayloadStore,
+        committer: ApprovalCommitter,
+    ):
+        self.transactions = transactions
+        self.drafts = drafts
+        self.sources = sources
+        self.receipts = receipts
+        self._knowledge = knowledge
+        self.artifacts = artifacts
+        self.renderer = renderer
+        self.revision_payloads = payloads
+        self.committer = committer
+
+    def load_knowledge(self) -> Knowledge:
+        return load_analysis_knowledge(self._knowledge)
+
+    def candidate(self):
+        return self.load_knowledge().candidate
+
+    def working_markdown(self, application_id: str) -> str:
+        try:
+            return self.artifacts.working_markdown(application_id)
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read working Markdown: {exc}") from exc
+
+    def _working(self, working_draft_id: str, expected_version: int) -> WorkingDraft:
+        with self.transactions.read() as tx:
+            try:
+                working = self.drafts.working_draft(tx, working_draft_id)
+            except UnknownRecord as exc:
+                raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
+        require_working_version(working, expected_version)
+        return working
 
     def _require_synced_projection(self, application_id: str, draft: DraftDocument) -> None:
         """Refuse to approve while the projection holds edits storage has not imported.
@@ -64,7 +119,11 @@ class DraftApproval(DraftServiceBase):
             )
 
     def _require_binding_validation(
-        self, working: WorkingDraft, validation_run_id: str, knowledge: Knowledge
+        self,
+        working: WorkingDraft,
+        validation_run_id: str,
+        knowledge: Knowledge,
+        context: DraftApprovalContext,
     ) -> None:
         """§15's four binding conditions, checked against a run approval did not create.
 
@@ -75,11 +134,10 @@ class DraftApproval(DraftServiceBase):
         after validation moves the version, a re-seal moves the hash, and a run
         from another draft names another draft.
         """
-        try:
-            lineage = self.repo.validation_lineage(validation_run_id)
-            report = self.repo.validation_report(validation_run_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown validation run: {validation_run_id}") from exc
+        lineage = context.validation_lineage
+        report = context.validation_report
+        if lineage is None or report is None:
+            raise UnknownRecord(f"unknown validation run: {validation_run_id}")
         mismatched = [
             name
             for name, recorded, current in (
@@ -103,9 +161,9 @@ class DraftApproval(DraftServiceBase):
         if not report.passed:
             raise ValidationBlocked("approval blocked by pre-render validation", report)
 
-    def approve_draft(
+    def _prepare_approval(
         self, command: ApproveDraftCommand, *, revision_id: str | None = None
-    ) -> ApprovalResult:
+    ) -> PreparedApproval:
         """§15: approve exactly the content one named ValidationRun passed.
 
         No validation runs here. Approval consumes evidence; it does not
@@ -113,15 +171,17 @@ class DraftApproval(DraftServiceBase):
         """
         working = self._working(command.working_draft_id, command.expected_edit_version)
         application_id = working.application_id
-        application = self.load_active_application(application_id)
-        quarantined = self.repo.quarantined_knowledge_mutations()
-        if quarantined:
+        with self.transactions.read() as tx:
+            context = self.sources.approval_context(tx, working, command.validation_run_id)
+        if context.deleted_at is not None:
+            raise StateConflict(f"application is deleted: {application_id}")
+        if context.quarantined_mutation_id is not None:
             raise PreconditionFailed(
-                f"approval blocked by quarantined Knowledge mutation {quarantined[0].id}"
+                f"approval blocked by quarantined Knowledge mutation {context.quarantined_mutation_id}"
             )
         self._require_synced_projection(application_id, working.source)
         knowledge = self.load_knowledge()
-        self._require_binding_validation(working, command.validation_run_id, knowledge)
+        self._require_binding_validation(working, command.validation_run_id, knowledge, context)
         validation_id = command.validation_run_id
         facts, profiles = knowledge.facts, knowledge.profiles
         draft = working.source
@@ -133,8 +193,14 @@ class DraftApproval(DraftServiceBase):
         # The decision record explains the draft being approved, so it is bound to
         # that draft's own analysis. A newer analysis does not get to describe an
         # older document.
-        analysis_id, analysis = bound_analysis(self.repo, application_id, draft, profiles, facts)
-        selection_plan = self.repo.selection_plan(working.selection_plan_id)
+        chain = check_loaded_draft_chain(context.chain, application_id, draft, profiles, facts)
+        try:
+            analysis_id, analysis = chain.bound()
+        except ChainError as exc:
+            raise LineageBroken(f"draft chain rejected: {exc}") from exc
+        selection_plan = context.plan
+        if selection_plan is None:
+            raise UnknownRecord(f"no selection plan {working.selection_plan_id}")
         decision_overrides = dict(analysis.user_override)
         if selection_plan.plan.emphasis_override is not None:
             decision_overrides["emphasis"] = selection_plan.plan.emphasis_override.value
@@ -160,8 +226,8 @@ class DraftApproval(DraftServiceBase):
             profiles.get(draft.profile).normalized_role, self.candidate()
         )
         structured = {
-            "company": application["company"],
-            "target_job": application["target_role"],
+            "company": context.company,
+            "target_job": context.target_role,
             "track": draft.track.value,
             "profile": draft.profile.value,
             "emphasis": draft.emphasis.value,
@@ -196,102 +262,103 @@ class DraftApproval(DraftServiceBase):
             "recruiter_pdf_filename": recruiter_pdf_filename,
         }
         decision_summary = (
-            f"Approved {draft.profile.value} / {draft.emphasis.value} CV for "
-            f"{application['company']}."
+            f"Approved {draft.profile.value} / {draft.emphasis.value} CV for {context.company}."
         )
-        decision_provenance = {
-            "actor_type": command.actor_type,
-            "client": command.client,
-            "command": "approve_draft",
-        }
-        with self.repo.unit_of_work() as uow:
-            transaction = self.repo.bind(uow)
-            revision = transaction.create_approved_revision(
-                application_id,
-                revision_id,
-                working.id,
-                validation_id,
-                published.structured.reference,
-                published.structured.sha256,
-                published.markdown.reference,
-                published.markdown.sha256,
-                decision_provenance,
-                approved_at=now,
-            )
-            markdown_version_id = transaction.register_artifact_version(
-                application_id,
-                "resume_markdown",
-                "resume",
-                published.markdown.reference,
-                published.markdown.sha256,
-                "approved",
-                revision_id=revision.id,
-                job_snapshot_id=draft.job_snapshot_id,
-                track=draft.track.value,
-                profile=draft.profile.value,
-                emphasis=draft.emphasis.value,
-                facts_version=facts.version,
-                approved_at=now,
-            )
-            # resume.json is one physical payload with two roles: revision-owned
-            # structured content and the separately registered claim manifest.
-            manifest_version_id = transaction.register_artifact_version(
-                application_id,
-                "claim_manifest",
-                "resume-claims",
-                published.structured.reference,
-                published.structured.sha256,
-                "approved",
-                revision_id=revision.id,
-                job_snapshot_id=draft.job_snapshot_id,
-                track=draft.track.value,
-                profile=draft.profile.value,
-                emphasis=draft.emphasis.value,
-                facts_version=facts.version,
-                approved_at=now,
-            )
-            decision = DecisionRecord(
-                id=new_id(),
-                application_id=application_id,
-                artifact_version_id=markdown_version_id,
-                job_snapshot_id=draft.job_snapshot_id,
-                job_analysis_id=analysis_id,
-                structured=structured,
-                summary=decision_summary,
-                created_at=now,
-            )
-            transaction.insert_decision(decision)
-            transaction.insert_audit(
-                AuditRecord(
-                    id=new_id(),
-                    application_id=application_id,
-                    action="approve_draft",
-                    entity_type="approved_revision",
-                    entity_id=revision.id,
-                    actor_type=command.actor_type,
-                    client=command.client,
-                    occurred_at=now,
-                    details={
-                        "decision_record_id": decision.id,
-                        "validation_run_id": validation_id,
-                    },
+        return PreparedApproval(
+            application_id,
+            revision_id,
+            working.id,
+            validation_id,
+            draft.job_snapshot_id,
+            analysis_id,
+            published.structured.reference,
+            published.structured.sha256,
+            published.markdown.reference,
+            published.markdown.sha256,
+            draft.track.value,
+            draft.profile.value,
+            draft.emphasis.value,
+            facts.version,
+            new_id(),
+            canonical_json(structured),
+            decision_summary,
+            new_id(),
+            command.actor_type,
+            command.client,
+            now,
+        )
+
+    def _approve(
+        self,
+        command: ApproveDraftCommand,
+        revision_id: str | None,
+        receipt_id: str | None,
+    ) -> ApprovalResult:
+        prepared = self._prepare_approval(command, revision_id=revision_id)
+        with self.transactions.write() as tx:
+            self.drafts.lock_application(tx, prepared.application_id)
+            return self.committer.commit(tx, prepared, receipt_id)
+
+    def approve_draft(
+        self, command: ApproveDraftCommand, *, revision_id: str | None = None
+    ) -> ApprovalResult:
+        return self._approve(command, revision_id, None)
+
+    def _approval_payload(self, command: ApproveDraftCommand) -> dict[str, object]:
+        with self.transactions.read() as tx:
+            try:
+                working = self.drafts.working_draft(tx, command.working_draft_id)
+            except UnknownRecord as exc:
+                raise UnknownRecord(f"unknown working draft: {command.working_draft_id}") from exc
+        return {**command.model_dump(mode="json"), "content_hash": working.content_hash}
+
+    def approve_idempotent(
+        self, command: ApproveDraftCommand, *, idempotency_key: str
+    ) -> ApprovalResult:
+        with self.transactions.read() as tx:
+            existing = self.receipts.idempotency_receipt(tx, "approve_draft", idempotency_key)
+        if existing is not None:
+            if existing["payload"].get("working_draft_id") != command.working_draft_id:
+                raise StateConflict(
+                    "idempotency key already used for another working draft",
+                    code=IDEMPOTENCY_KEY_REUSED,
                 )
-            )
-            transaction.record_event(
-                application_id,
-                "draft_approved",
-                {
-                    "approved_revision_id": revision.id,
-                    "decision_record_id": decision.id,
-                    "version": revision.version_number,
-                },
-            )
-            uow.commit()
-        return ApprovalResult(
-            application_id=application_id,
-            revision_id=revision.id,
-            version=revision.version_number,
-            markdown_artifact_version_id=markdown_version_id,
-            manifest_artifact_version_id=manifest_version_id,
-            decision_record_id=decision.id,
-        )
+            payload = self._approval_payload(command)
+            recorded_payload = dict(existing["payload"])
+            with self.transactions.read() as tx:
+                replay = self.sources.approval_replay(tx, existing["reserved_entity_id"])
+            if replay.provenance is not None:
+                for name in ("actor_type", "client"):
+                    if name not in recorded_payload and name in replay.provenance:
+                        recorded_payload[name] = replay.provenance[name]
+            if recorded_payload != payload:
+                raise StateConflict(
+                    "idempotency key already used with a different approval payload",
+                    code=IDEMPOTENCY_KEY_REUSED,
+                )
+            if replay.result is not None:
+                if existing["status"] == "pending":
+                    with self.transactions.write() as tx:
+                        self.receipts.complete_idempotency_receipt(
+                            tx, existing["id"], replay.result.model_dump(mode="json")
+                        )
+                return replay.result
+            receipt = existing
+        else:
+            payload = self._approval_payload(command)
+            with self.transactions.write() as tx:
+                receipt = self.receipts.claim_idempotency_receipt(
+                    tx, "approve_draft", idempotency_key, payload, reserved_entity_id=new_id()
+                )
+        try:
+            return self._approve(command, receipt["reserved_entity_id"], receipt["id"])
+        except ApplicationError:
+            with self.transactions.read() as tx:
+                recovered = self.sources.approval_replay(tx, receipt["reserved_entity_id"]).result
+            if recovered is None:
+                raise
+            with self.transactions.write() as tx:
+                self.receipts.complete_idempotency_receipt(
+                    tx, receipt["id"], recovered.model_dump(mode="json")
+                )
+            return recovered

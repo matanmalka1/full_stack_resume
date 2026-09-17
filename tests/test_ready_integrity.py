@@ -424,7 +424,9 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
 def test_approval_audit_and_decision_markdown_are_exact(approved_application) -> None:
     setup = approved_application("Decision Export")
     revision_id = setup.approved.revision_id
-    exported = setup.services.drafts.export_decision_markdown(setup.application_id, revision_id)
+    exported = setup.services.draft_history.export_decision_markdown(
+        setup.application_id, revision_id
+    )
     assert exported.approved_revision_id == revision_id
     assert f"`{revision_id}`" in exported.content
     assert "## Exact lineage" in exported.content

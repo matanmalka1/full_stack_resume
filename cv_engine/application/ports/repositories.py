@@ -11,7 +11,6 @@ from typing import Any, Protocol, Self, runtime_checkable
 
 from ...domain.contracts.drafts import WorkingDraft
 from ...domain.contracts.records import (
-    DecisionRecord,
     ValidationRunLineage,
 )
 from ...domain.contracts.selection import (
@@ -58,10 +57,6 @@ class ApplicationStore(Protocol):
     def list_applications(self, *, include_deleted: bool = False) -> list[dict[str, Any]]: ...
 
     def set_application_deleted(self, application_id: str, deleted_at: str) -> None: ...
-
-    def record_event(
-        self, application_id: str, event_type: str, payload: dict[str, Any]
-    ) -> str: ...
 
 
 class JobStore(Protocol):
@@ -138,13 +133,9 @@ class ArtifactRegistry(Protocol):
         lifecycle_status: str | None = None,
     ) -> dict[str, Any]: ...
 
-    def insert_decision(self, record: DecisionRecord) -> None: ...
-
     def latest_decision(self, application_id: str) -> dict[str, Any]: ...
 
     def decision_for_artifact_version(self, artifact_version_id: str) -> dict[str, Any]: ...
-
-    def record_generation_run(self, values: dict[str, Any]) -> str: ...
 
     def record_validation(
         self,

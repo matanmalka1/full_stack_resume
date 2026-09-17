@@ -751,18 +751,25 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
     registered = dict(re.findall(r"OperationType\.([A-Z_]+):\s*([A-Za-z]+)\(", composition))
     assert registered, "the operation registry was not found; fix this guard"
 
-    handler_scopes: dict[str, str] = {}
-    for node in ast.walk(ast.parse(handlers_source)):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        for method in node.body:
-            if isinstance(method, ast.FunctionDef) and method.name in {
-                "check_sources",
-                "verify_sources",
-            }:
-                handler_scopes[node.name] = scope(
-                    ast.get_source_segment(handlers_source, method) or ""
-                )
+    handler_classes = {
+        node.name: node
+        for node in ast.walk(ast.parse(handlers_source))
+        if isinstance(node, ast.ClassDef)
+    }
+
+    def handler_scope(name: str) -> str:
+        node = handler_classes[name]
+        own = scope(ast.get_source_segment(handlers_source, node) or "")
+        if own != "none":
+            return own
+        for base in node.bases:
+            if isinstance(base, ast.Name) and base.id in handler_classes:
+                inherited = handler_scope(base.id)
+                if inherited != "none":
+                    return inherited
+        return "none"
+
+    handler_scopes = {name: handler_scope(name) for name in handler_classes}
 
     # Which submitter freezes which scope, matched to a type by the constant it names.
     submitter_scopes: dict[str, str] = {}
@@ -863,7 +870,9 @@ def test_transaction_token_adapters_have_no_legacy_repository_capabilities() -> 
                 continue
             if not (
                 node.name == "Repository"
-                or re.fullmatch(r"SqlAlchemy.*(?:Repository|Store|Reader|Writer|Log)", node.name)
+                or re.fullmatch(
+                    r"SqlAlchemy.*(?:Repository|Store|Reader|Writer|Log|Catalog)", node.name
+                )
             ):
                 continue
             if node.name in LEGACY_PERSISTENCE_ADAPTERS:
@@ -946,7 +955,16 @@ def test_migrated_analysis_consumers_have_no_old_persistence_dependencies() -> N
 
 
 def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
-    allowed = {"ApplicationService", "AnalysisService", "SelectionChangeService", "OperationRunner"}
+    allowed = {
+        "ApplicationService",
+        "AnalysisService",
+        "SelectionChangeService",
+        "OperationRunner",
+        "DraftValidationService",
+        "DraftHistoryService",
+        "DraftApprovalService",
+        "DraftAuthoringService",
+    }
     owners = set()
     paths = [
         *(ENGINE / "application" / "services").rglob("*.py"),
@@ -963,3 +981,48 @@ def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
                     owners.add(node.name)
                     assert node.name in allowed, f"{node.name} cannot own transaction scopes"
     assert owners == allowed, "remove stale transaction-owner exceptions"
+
+
+def test_migrated_draft_services_have_no_legacy_persistence_or_hidden_scopes() -> None:
+    drafts = ENGINE / "application" / "services" / "drafts"
+    migrated = {
+        "activation.py",
+        "approval.py",
+        "approval_commit.py",
+        "authoring.py",
+        "history.py",
+        "inputs.py",
+        "validation.py",
+    }
+    for name in migrated:
+        path = drafts / name
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        assert "DraftRepository" not in source and "ReadinessRepository" not in source, path
+        assert "ServiceBase" not in source and "DraftService" not in source, path
+        assert not any(
+            isinstance(node, ast.Call)
+            and (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "cast"
+                or isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"bind", "unit_of_work"}
+            )
+            for node in ast.walk(tree)
+        ), path
+
+    for gateway_name in {"ApprovalCommitter", "DraftActivation"}:
+        gateway = next(
+            node
+            for name in migrated
+            for node in ast.walk(ast.parse((drafts / name).read_text(encoding="utf-8")))
+            if isinstance(node, ast.ClassDef) and node.name == gateway_name
+        )
+        body = ast.unparse(gateway)
+        assert "TransactionManager" not in body
+        assert not any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"read", "write", "bind", "unit_of_work"}
+            for node in ast.walk(gateway)
+        )

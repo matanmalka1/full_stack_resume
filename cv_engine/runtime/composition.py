@@ -22,8 +22,12 @@ from ..application.ports import (
 from ..application.ports.analysis_plans import AnalysisKnowledgeSource
 from ..application.services.analysis import AnalysisService
 from ..application.services.applications import ApplicationService
-from ..application.services.drafts import DraftService
+from ..application.services.drafts import DraftAuthoringService
+from ..application.services.drafts.approval import DraftApprovalService
+from ..application.services.drafts.approval_commit import ApprovalCommitter
+from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.selection import SelectionChangeService
+from ..application.services.drafts.validation import DraftValidationService
 from ..application.services.knowledge import KnowledgeService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
@@ -52,7 +56,24 @@ from ..infrastructure.persistence import (
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisSelectionSourceReader
 from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from ..infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
+from ..infrastructure.persistence.decision_store import SqlAlchemyDecisionRepository
+from ..infrastructure.persistence.draft_approval_sources import SqlAlchemyDraftApprovalSourceReader
+from ..infrastructure.persistence.draft_authoring_sources import (
+    SqlAlchemyDraftAuthoringSourceReader,
+)
+from ..infrastructure.persistence.draft_history_sources import (
+    SqlAlchemyDraftHistoryApplicationReader,
+)
+from ..infrastructure.persistence.draft_lifecycle import SqlAlchemyDraftLifecycleRepository
+from ..infrastructure.persistence.draft_operation_sources import (
+    SqlAlchemyDraftOperationSourceReader,
+)
+from ..infrastructure.persistence.draft_validation_sources import (
+    SqlAlchemyDraftValidationSourceReader,
+)
+from ..infrastructure.persistence.idempotency import SqlAlchemyIdempotencyRepository
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from ..infrastructure.persistence.operation_activation import SqlAlchemyOperationActivationStore
 from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
@@ -60,6 +81,7 @@ from ..infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
 from ..infrastructure.persistence.selection_drafts import SqlAlchemySelectionDraftStore
+from ..infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
@@ -94,7 +116,10 @@ class Services:
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
-    drafts: DraftService
+    drafts: DraftAuthoringService
+    draft_validation: DraftValidationService
+    draft_history: DraftHistoryService
+    draft_approval: DraftApprovalService
     rendering: RenderingService
     tracking: TrackingService
     knowledge_lifecycle: KnowledgeService
@@ -228,12 +253,35 @@ def build_services(
         payloads=resolved_payloads,
         provider=resolved_provider,
     )
+    draft_lifecycle = SqlAlchemyDraftLifecycleRepository(transactions)
+    draft_catalog = SqlAlchemyArtifactCatalog(transactions)
+    draft_decisions = SqlAlchemyDecisionRepository(transactions)
+    draft_history = DraftHistoryService(
+        transactions=transactions,
+        drafts=draft_lifecycle,
+        catalog=draft_catalog,
+        decisions=draft_decisions,
+        audit=intake_audit,
+        payloads=resolved_payloads,
+        applications=SqlAlchemyDraftHistoryApplicationReader(transactions),
+    )
     operation_service = OperationService(
+        draft_history=draft_history,
         **shared,
         default_ai_model=str(resolved_config.get("model")),
     )
-    draft_service = DraftService(
-        **shared,
+    draft_validations = SqlAlchemyValidationRepository(transactions)
+    draft_receipts = SqlAlchemyIdempotencyRepository(transactions)
+    draft_service = DraftAuthoringService(
+        transactions=transactions,
+        drafts=draft_lifecycle,
+        plans=analysis_plans,
+        validations=draft_validations,
+        sources=SqlAlchemyDraftAuthoringSourceReader(transactions),
+        knowledge=resolved_knowledge,
+        artifacts=resolved_artifacts,
+        provider=resolved_provider,
+        evidence=analysis_service,
         selection_changes=SelectionChangeService(
             transactions,
             SqlAlchemySelectionDraftStore(transactions),
@@ -241,21 +289,55 @@ def build_services(
             resolved_artifacts,
         ),
     )
+    draft_validation = DraftValidationService(
+        transactions=transactions,
+        drafts=draft_lifecycle,
+        sources=SqlAlchemyDraftValidationSourceReader(transactions),
+        validations=draft_validations,
+        knowledge=resolved_knowledge,
+    )
+    draft_approval = DraftApprovalService(
+        transactions=transactions,
+        drafts=draft_lifecycle,
+        sources=SqlAlchemyDraftApprovalSourceReader(transactions),
+        receipts=draft_receipts,
+        knowledge=resolved_knowledge,
+        artifacts=resolved_artifacts,
+        renderer=resolved_renderer,
+        payloads=resolved_payloads,
+        committer=ApprovalCommitter(
+            draft_lifecycle, draft_catalog, draft_decisions, intake_audit, draft_receipts
+        ),
+    )
     rendering_service = RenderingService(**shared)
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
+    draft_operation_sources = SqlAlchemyDraftOperationSourceReader(transactions)
     runner = OperationRunner(
         resolved_repository,
         {
-            OperationType.CREATE_DRAFT: DraftOperationHandler(draft_service),
-            OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
-                draft_service, task="regenerate_section"
-            ),
-            OperationType.REGENERATE_CLAIM: RegenerationOperationHandler(
-                draft_service, task="regenerate_claim"
-            ),
             OperationType.RENDER_REVISION: RenderOperationHandler(rendering_service),
         },
         transaction_handlers={
+            OperationType.CREATE_DRAFT: DraftOperationHandler(
+                draft_service,
+                draft_operation_sources,
+                draft_service.activation,
+                resolved_activation_knowledge,
+            ),
+            OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
+                draft_service,
+                draft_operation_sources,
+                draft_service.activation,
+                resolved_activation_knowledge,
+                task="regenerate_section",
+            ),
+            OperationType.REGENERATE_CLAIM: RegenerationOperationHandler(
+                draft_service,
+                draft_operation_sources,
+                draft_service.activation,
+                resolved_activation_knowledge,
+                task="regenerate_claim",
+            ),
             OperationType.ANALYZE_JOB: AnalysisOperationHandler(
                 analysis_service,
                 analysis_sources,
@@ -304,6 +386,9 @@ def build_services(
         queries=ApplicationQueryService(**shared),
         analysis=analysis_service,
         drafts=draft_service,
+        draft_validation=draft_validation,
+        draft_history=draft_history,
+        draft_approval=draft_approval,
         rendering=rendering_service,
         tracking=TrackingService(**shared),
         knowledge_lifecycle=knowledge_service,
@@ -339,6 +424,9 @@ def build_api_services(
         queries=services.queries,
         analysis=services.analysis,
         drafts=services.drafts,
+        draft_validation=services.draft_validation,
+        draft_history=services.draft_history,
+        draft_approval=services.draft_approval,
         rendering=services.rendering,
         tracking=services.tracking,
         knowledge=services.knowledge_lifecycle,

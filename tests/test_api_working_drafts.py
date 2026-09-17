@@ -29,6 +29,7 @@ from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import ApplySelectionChangeCommand, IngestCommand
 from cv_engine.application.errors import InfrastructureFailure
 from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.util import new_id
 
 UNSUPPORTED_WORDING = "Delivered 30% improvement in direct SaaS Sales."
 
@@ -1336,6 +1337,20 @@ def test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse(
 
     assert first.status_code == 201, first.text
     assert repeated.json() == first.json()
+    assert len(ai_api_worker.services.repository.approved_revisions(application_id)) == 1
+
+    for changed in (
+        {**body, "expected_edit_version": body["expected_edit_version"] + 1},
+        {**body, "validation_run_id": new_id()},
+    ):
+        refused = _post(
+            ai_api_worker,
+            f"/working-drafts/{working_draft_id}/approve",
+            changed,
+            **{"Idempotency-Key": "approve-once"},
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
     assert len(ai_api_worker.services.repository.approved_revisions(application_id)) == 1
 
     _other_app, other_draft_id, _other = _drafted(ai_api_worker, "Approval Key Other Co")

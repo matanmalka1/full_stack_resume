@@ -81,7 +81,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     # validate the exact draft version in front of us
     working = services.repository.active_working_draft(application_id)
     assert working.id == drafted.working_draft_id
-    validated = services.drafts.validate_draft(
+    validated = services.draft_validation.validate_draft(
         ValidateDraftCommand(
             working_draft_id=working.id,
             expected_edit_version=working.edit_version,
@@ -90,7 +90,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     assert validated.passed, validated.report.model_dump(mode="json")
 
     # approve exactly what that run passed
-    approved = services.drafts.approve_draft(
+    approved = services.draft_approval.approve_draft(
         ApproveDraftCommand(
             working_draft_id=validated.working_draft_id,
             expected_edit_version=validated.edit_version,
@@ -200,7 +200,7 @@ def test_failed_pre_render_validation_blocks_approval(
     )
 
     working = services.repository.active_working_draft(ingested.application_id)
-    validated = services.drafts.validate_draft(
+    validated = services.draft_validation.validate_draft(
         ValidateDraftCommand(
             working_draft_id=working.id,
             expected_edit_version=working.edit_version,
@@ -209,7 +209,7 @@ def test_failed_pre_render_validation_blocks_approval(
 
     assert not validated.passed
     with pytest.raises(ValidationBlocked):
-        services.drafts.approve_draft(
+        services.draft_approval.approve_draft(
             ApproveDraftCommand(
                 working_draft_id=validated.working_draft_id,
                 expected_edit_version=validated.edit_version,

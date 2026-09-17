@@ -20,8 +20,6 @@ from ...ai_configuration import (
 from ...chain import draft_source_mismatch
 from ...commands import (
     AnalyzeCommand,
-    ApprovalResult,
-    ApproveDraftCommand,
     DraftCommand,
     ProposeSelectionPlanCommand,
     RegenerateClaimCommand,
@@ -30,8 +28,6 @@ from ...commands import (
     ReplaceWorkingDraftCommand,
 )
 from ...errors import (
-    IDEMPOTENCY_KEY_REUSED,
-    ApplicationError,
     LineageBroken,
     StateConflict,
     UnknownRecord,
@@ -45,15 +41,12 @@ from ...operations import (
     as_operation_view,
     is_terminal_operation,
 )
-from ...ports import (
-    DraftRepository,
-    OperationRepository,
-    ReadinessRepository,
-)
+from ...ports import OperationRepository, ReadinessRepository
 from ...settings import SettingsRepository
 from ..analysis import AnalysisService
 from ..base import ServiceBase
-from ..drafts import DraftService
+from ..drafts import DraftAuthoringService
+from ..drafts.history import DraftHistoryService
 from ..rendering import RenderingService
 from .common import (
     _model_hash,
@@ -78,9 +71,11 @@ class OperationService(ServiceBase[OperationRepository]):
         *,
         default_ai_model: str = DEFAULT_AI_MODEL,
         default_reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+        draft_history: DraftHistoryService,
         **dependencies: Any,
     ):
         super().__init__(**dependencies)
+        self.draft_history = draft_history
         self._default_ai_model = normalize_ai_model(default_ai_model)
         self._default_reasoning_effort = normalize_reasoning_effort(default_reasoning_effort)
 
@@ -136,7 +131,7 @@ class OperationService(ServiceBase[OperationRepository]):
         command: DraftCommand,
         *,
         idempotency_key: str,
-        draft_service: DraftService,
+        draft_service: DraftAuthoringService,
         operation_id: str | None = None,
     ) -> OperationView:
         self.load_active_application(command.application_id)
@@ -145,11 +140,10 @@ class OperationService(ServiceBase[OperationRepository]):
             if command.provider == "openai"
             else command.model_copy(update={"model": "rules-v1", "reasoning_effort": None})
         )
-        drafts = cast(DraftRepository, self.repo)
         try:
-            analysis = drafts.get_analysis(command.job_analysis_id)
-            plan = drafts.selection_plan(command.selection_plan_id)
-            snapshot = drafts.get_snapshot(analysis["job_snapshot_id"])
+            analysis = draft_service.analysis_record(command.job_analysis_id)
+            plan = draft_service.selection_plan(command.selection_plan_id)
+            snapshot = draft_service.snapshot_source(analysis["job_snapshot_id"])
         except UnknownRecord as exc:
             raise UnknownRecord("unknown source for draft generation") from exc
         if (
@@ -158,9 +152,8 @@ class OperationService(ServiceBase[OperationRepository]):
         ):
             raise LineageBroken("draft sources do not belong to the named Application")
         if command.parent_revision_id is not None:
-            readiness = cast(ReadinessRepository, self.repo)
             try:
-                parent = readiness.approved_revision(command.parent_revision_id)
+                parent = draft_service.approved_revision(command.parent_revision_id)
             except UnknownRecord as exc:
                 raise UnknownRecord(
                     f"unknown parent approved revision: {command.parent_revision_id}"
@@ -179,7 +172,7 @@ class OperationService(ServiceBase[OperationRepository]):
         replaced_version: int | None = None
         replaced_hash: str | None = None
         if command.replaces_working_draft_id is not None:
-            existing = drafts.working_draft(command.replaces_working_draft_id)
+            existing = draft_service.working_draft(command.replaces_working_draft_id)
             if existing.application_id != command.application_id:
                 raise LineageBroken(
                     f"working draft {existing.id} does not belong to application "
@@ -277,7 +270,7 @@ class OperationService(ServiceBase[OperationRepository]):
         command: RegenerateSectionCommand | RegenerateClaimCommand,
         *,
         idempotency_key: str,
-        draft_service: DraftService,
+        draft_service: DraftAuthoringService,
     ) -> OperationView:
         """§14: queue one section or claim regeneration against an exact draft.
 
@@ -289,11 +282,10 @@ class OperationService(ServiceBase[OperationRepository]):
         """
         self.load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
-        drafts = cast(DraftRepository, self.repo)
         try:
-            working = drafts.working_draft(command.working_draft_id)
-            analysis = drafts.get_analysis(command.job_analysis_id)
-            plan = drafts.selection_plan(command.selection_plan_id)
+            working = draft_service.working_draft(command.working_draft_id)
+            analysis = draft_service.analysis_record(command.job_analysis_id)
+            plan = draft_service.selection_plan(command.selection_plan_id)
         except UnknownRecord as exc:
             raise UnknownRecord("unknown source for regeneration") from exc
         if (
@@ -347,7 +339,7 @@ class OperationService(ServiceBase[OperationRepository]):
         command: ReplaceWorkingDraftCommand,
         *,
         idempotency_key: str,
-        draft_service: DraftService,
+        draft_service: DraftAuthoringService,
     ) -> OperationView:
         """§14 replace: the Keep decision, then the same draft Operation.
 
@@ -429,7 +421,7 @@ class OperationService(ServiceBase[OperationRepository]):
         if existing is not None:
             self.repo.complete_idempotency_receipt(receipt["id"], {"operation_id": existing.id})
             return as_operation_view(existing)
-        draft_service.prepare_replacement(command)
+        self.draft_history.prepare_replacement(command)
         queued = self.submit_draft(
             draft_command,
             idempotency_key=idempotency_key,
@@ -490,99 +482,6 @@ class OperationService(ServiceBase[OperationRepository]):
         reads it from the repository rather than from here.
         """
         return as_operation_view(self.repo.request_operation_cancellation(operation_id))
-
-    def _approval_result(self, revision_id: str) -> ApprovalResult | None:
-        drafts = cast(DraftRepository, self.repo)
-        try:
-            revision = drafts.approved_revision(revision_id)
-            markdown = drafts.artifact_version_for_revision(
-                revision_id, "resume_markdown", "approved"
-            )
-            manifest = drafts.artifact_version_for_revision(
-                revision_id, "claim_manifest", "approved"
-            )
-            decision = drafts.decision_for_revision(revision_id)
-        except UnknownRecord:
-            return None
-        return ApprovalResult(
-            application_id=revision.application_id,
-            revision_id=revision.id,
-            version=revision.version_number,
-            markdown_artifact_version_id=markdown["id"],
-            manifest_artifact_version_id=manifest["id"],
-            decision_record_id=decision["id"],
-        )
-
-    def _approval_payload(self, command: ApproveDraftCommand) -> dict[str, object]:
-        """What the idempotency key is a key *for* (§15).
-
-        All three command arguments plus the draft's content hash. The hash is
-        not derivable from the other three - it is what the draft actually says
-        right now - so without it a key replayed after an edit would look like
-        the same request and return a revision of different content.
-        """
-        drafts = cast(DraftRepository, self.repo)
-        try:
-            working = drafts.working_draft(command.working_draft_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown working draft: {command.working_draft_id}") from exc
-        return {
-            "working_draft_id": command.working_draft_id,
-            "expected_edit_version": command.expected_edit_version,
-            "validation_run_id": command.validation_run_id,
-            "content_hash": working.content_hash,
-        }
-
-    def approve_idempotent(
-        self,
-        command: ApproveDraftCommand,
-        *,
-        idempotency_key: str,
-        draft_service: DraftService,
-    ) -> ApprovalResult:
-        command_type = "approve_draft"
-        existing = self.repo.idempotency_receipt(
-            command_type,
-            idempotency_key,
-        )
-        if existing is not None:
-            if existing["payload"].get("working_draft_id") != command.working_draft_id:
-                raise StateConflict(
-                    "idempotency key already used for another working draft",
-                    code=IDEMPOTENCY_KEY_REUSED,
-                )
-            completed = self._approval_result(existing["reserved_entity_id"])
-            if completed is not None:
-                if existing["status"] == "pending":
-                    self.repo.complete_idempotency_receipt(
-                        existing["id"], completed.model_dump(mode="json")
-                    )
-                return completed
-            if existing["payload"] != self._approval_payload(command):
-                raise StateConflict(
-                    "idempotency key already used for a different draft version",
-                    code=IDEMPOTENCY_KEY_REUSED,
-                )
-            receipt = existing
-        else:
-            receipt = self.repo.claim_idempotency_receipt(
-                command_type,
-                idempotency_key,
-                self._approval_payload(command),
-                reserved_entity_id=new_id(),
-            )
-        try:
-            result = draft_service.approve_draft(
-                command,
-                revision_id=receipt["reserved_entity_id"],
-            )
-        except ApplicationError:
-            recovered = self._approval_result(receipt["reserved_entity_id"])
-            if recovered is None:
-                raise
-            result = recovered
-        self.repo.complete_idempotency_receipt(receipt["id"], result.model_dump(mode="json"))
-        return result
 
     def retry(self, operation_id: str, *, idempotency_key: str) -> OperationView:
         """Queue a new Operation carrying `retry_of_operation_id` (§19).

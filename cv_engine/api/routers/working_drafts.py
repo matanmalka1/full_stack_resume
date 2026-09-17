@@ -281,7 +281,7 @@ def archive_working_draft(
     services: Services,
 ) -> ArchivedWorkingDraftResponse:
     """`200`: the snapshot is registered before the active pointer is cleared."""
-    result = services.drafts.archive_working_draft(
+    result = services.draft_history.archive_working_draft(
         ArchiveWorkingDraftCommand(
             working_draft_id=working_draft_id,
             **request.model_dump(mode="python"),
@@ -308,7 +308,7 @@ def validate_working_draft(
     `500`/`503` from the application taxonomy rather than as a report nobody
     produced.
     """
-    result = services.drafts.validate_draft(
+    result = services.draft_validation.validate_draft(
         ValidateDraftCommand(
             working_draft_id=working_draft_id,
             **request.model_dump(mode="python"),
@@ -335,7 +335,7 @@ def approve_working_draft(
     with a different draft, version, run, or content hash is
     `409 IDEMPOTENCY_KEY_REUSED`.
     """
-    result = services.operations.approve_idempotent(
+    result = services.draft_approval.approve_idempotent(
         ApproveDraftCommand(
             working_draft_id=working_draft_id,
             **request.model_dump(mode="python"),
@@ -343,6 +343,5 @@ def approve_working_draft(
             client="web",
         ),
         idempotency_key=idempotency_key or new_id(),
-        draft_service=services.drafts,
     )
     return ApprovalResponse.model_validate(result.model_dump(mode="json"))

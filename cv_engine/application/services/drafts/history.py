@@ -1,5 +1,3 @@
-"""Archiving a working-draft version as an immutable historical payload."""
-
 from __future__ import annotations
 
 import json
@@ -8,25 +6,59 @@ from typing import Any
 from ....domain.contracts.drafts import WorkingDraft
 from ....domain.contracts.records import AuditRecord
 from ....domain.drafts import seal_draft
-from ....util import new_id, utc_now
+from ....util import new_id, sha256_text, utc_now
 from ...commands import (
     ArchivedWorkingDraftResult,
     ArchiveWorkingDraftCommand,
+    DecisionMarkdownExport,
     ReplaceWorkingDraftCommand,
 )
-from ...errors import (
-    # Re-exported: the API and test suite catch WorkflowError from here, and
-    # it is bound to the taxonomy's base class, so every refusal below is caught.
-    InfrastructureFailure,
-    LineageBroken,
-    StateConflict,
-)
-from ...ports import DraftRepository, SnapshotPayload
-from .common import DraftServiceBase
+from ...errors import InfrastructureFailure, LineageBroken, StateConflict, UnknownRecord
+from ...ports import RevisionPayloadStore, SnapshotPayload, TransactionManager
+from ...ports.application_intake import AuditLogWriter
+from ...ports.artifact_catalog import ArtifactCatalog
+from ...ports.decision_store import DecisionStore
+from ...ports.draft_history import DraftHistoryApplicationReader
+from ...ports.draft_lifecycle import DraftLifecycleStore
+from ...ports.transactions import WriteTransaction
+from .inputs import require_working_version
 
 
-class DraftArchival(DraftServiceBase):
-    """§14: Keep, then clear - the snapshot is registered before the pointer moves."""
+class DraftHistoryService:
+    def __init__(
+        self,
+        *,
+        transactions: TransactionManager,
+        drafts: DraftLifecycleStore,
+        catalog: ArtifactCatalog,
+        decisions: DecisionStore,
+        audit: AuditLogWriter,
+        payloads: RevisionPayloadStore,
+        applications: DraftHistoryApplicationReader,
+    ):
+        self.transactions = transactions
+        self.drafts = drafts
+        self.catalog = catalog
+        self.decisions = decisions
+        self.audit = audit
+        self.revision_payloads = payloads
+        self.applications = applications
+
+    def _working(self, working_draft_id: str, expected_version: int) -> WorkingDraft:
+        with self.transactions.read() as tx:
+            try:
+                working = self.drafts.working_draft(tx, working_draft_id)
+            except UnknownRecord as exc:
+                raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
+        require_working_version(working, expected_version)
+        return working
+
+    def load_active_application(self, application_id: str):
+        with self.transactions.read() as tx:
+            application = self.applications.history_application(tx, application_id)
+        if application.deleted_at is not None:
+            raise StateConflict(f"application is deleted: {application_id}")
+        return application
 
     def materialize_draft_snapshot(self, working: WorkingDraft) -> SnapshotPayload:
         """Write one WorkingDraft version as an immutable historical payload.
@@ -39,28 +71,22 @@ class DraftArchival(DraftServiceBase):
         _sealed, _markdown, structured_json = seal_draft(working.source)
         try:
             return self.revision_payloads.commit_draft_snapshot(
-                working.application_id,
-                working.id,
-                working.edit_version,
-                structured_json,
+                working.application_id, working.id, working.edit_version, structured_json
             )
         except FileExistsError as exc:
             raise StateConflict(
-                f"working draft {working.id} version {working.edit_version} "
-                f"is already archived: {exc}"
+                f"working draft {working.id} version {working.edit_version} is already archived: {exc}"
             ) from exc
         except (OSError, ValueError) as exc:
             raise InfrastructureFailure(f"could not archive the working draft: {exc}") from exc
 
     def register_draft_snapshot(
-        self,
-        working: WorkingDraft,
-        payload: SnapshotPayload,
-        repository: DraftRepository,
+        self, working: WorkingDraft, payload: SnapshotPayload, tx: WriteTransaction
     ) -> str:
         """Register one archived draft payload as an immutable artifact version."""
         draft = working.source
-        return repository.register_artifact_version(
+        return self.catalog.register_artifact_version(
+            tx,
             working.application_id,
             "working_draft_snapshot",
             "working-draft",
@@ -94,11 +120,11 @@ class DraftArchival(DraftServiceBase):
         self.load_active_application(working.application_id)
         payload = self.materialize_draft_snapshot(working)
         now = utc_now()
-        with self.repo.unit_of_work() as uow:
-            transaction = self.repo.bind(uow)
-            artifact_version_id = self.register_draft_snapshot(working, payload, transaction)
-            transaction.deactivate_working_draft(working.id, working.edit_version)
-            transaction.insert_audit(
+        with self.transactions.write() as tx:
+            artifact_version_id = self.register_draft_snapshot(working, payload, tx)
+            self.drafts.deactivate_working_draft(tx, working.id, working.edit_version)
+            self.audit.insert_audit(
+                tx,
                 AuditRecord(
                     id=new_id(),
                     application_id=working.application_id,
@@ -112,9 +138,10 @@ class DraftArchival(DraftServiceBase):
                         "artifact_version_id": artifact_version_id,
                         "edit_version": working.edit_version,
                     },
-                )
+                ),
             )
-            transaction.record_event(
+            self.drafts.record_event(
+                tx,
                 working.application_id,
                 "working_draft_archived",
                 {
@@ -123,7 +150,6 @@ class DraftArchival(DraftServiceBase):
                     "artifact_version_id": artifact_version_id,
                 },
             )
-            uow.commit()
         return ArchivedWorkingDraftResult(
             application_id=working.application_id,
             working_draft_id=working.id,
@@ -149,23 +175,23 @@ class DraftArchival(DraftServiceBase):
         it re-derives itself from stored evidence, and a replacement is exactly the moment
         that distinction is load-bearing.
         """
-        for record in self.repo.artifact_versions(working.application_id):
+        with self.transactions.read() as tx:
+            records = self.catalog.artifact_versions(tx, working.application_id)
+        for record in records:
             if record["artifact_type"] != "working_draft_snapshot":
                 continue
             metadata = json.loads(record["metadata_json"] or "{}")
             if not (
                 metadata.get("working_draft_id") == working.id
                 and metadata.get("edit_version") == working.edit_version
-                and metadata.get("content_hash") == working.content_hash
+                and (metadata.get("content_hash") == working.content_hash)
             ):
                 continue
             state = self.revision_payloads.verify_payload(record["path"], record["content_hash"])
             if state == "ok":
                 return record
             raise StateConflict(
-                f"the historical snapshot of working draft {working.id} version "
-                f"{working.edit_version} is {state}; the replacement is refused rather "
-                "than run against a copy that cannot be trusted"
+                f"the historical snapshot of working draft {working.id} version {working.edit_version} is {state}; the replacement is refused rather than run against a copy that cannot be trusted"
             )
         return None
 
@@ -191,18 +217,17 @@ class DraftArchival(DraftServiceBase):
         working = self._working(command.working_draft_id, command.expected_edit_version)
         if working.application_id != command.application_id:
             raise LineageBroken(
-                f"working draft {working.id} does not belong to application "
-                f"{command.application_id}"
+                f"working draft {working.id} does not belong to application {command.application_id}"
             )
         if not command.keep_previous:
             return working
         if self._kept_snapshot(working) is not None:
             return working
         payload = self.materialize_draft_snapshot(working)
-        with self.repo.unit_of_work() as uow:
-            transaction = self.repo.bind(uow)
-            artifact_version_id = self.register_draft_snapshot(working, payload, transaction)
-            transaction.insert_audit(
+        with self.transactions.write() as tx:
+            artifact_version_id = self.register_draft_snapshot(working, payload, tx)
+            self.audit.insert_audit(
+                tx,
                 AuditRecord(
                     id=new_id(),
                     application_id=working.application_id,
@@ -217,7 +242,96 @@ class DraftArchival(DraftServiceBase):
                         "edit_version": working.edit_version,
                         "kept": True,
                     },
-                )
+                ),
             )
-            uow.commit()
         return working
+
+    def export_decision_markdown(
+        self, application_id: str, approved_revision_id: str
+    ) -> DecisionMarkdownExport:
+        """Render human-readable provenance for one explicitly named revision."""
+        try:
+            with self.transactions.read() as tx:
+                application = self.applications.history_application(tx, application_id)
+                revision = self.drafts.approved_revision(tx, approved_revision_id)
+                decision = self.decisions.decision_for_revision(tx, approved_revision_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown decision export source: {exc.args[0]}") from exc
+        if (
+            revision.application_id != application_id
+            or decision["application_id"] != application_id
+        ):
+            raise StateConflict("approved revision belongs to another application")
+        import json
+
+        structured = json.loads(decision["structured_json"])
+        selected = structured.get("selected_fact_ids") or []
+        overrides = structured.get("user_overrides") or {}
+
+        def value(item: object) -> str:
+            if isinstance(item, (dict, list)):
+                return json.dumps(item, ensure_ascii=False, sort_keys=True)
+            return str(item)
+
+        lines = [
+            "# CV Decision and Provenance",
+            "",
+            f"- Application: {application.company} — {application.target_role}",
+            f"- Application ID: `{application_id}`",
+            f"- Approved revision ID: `{revision.id}`",
+            f"- Approved at: {revision.approved_at}",
+            f"- Decision record ID: `{decision['id']}`",
+            "",
+            "## Decision",
+            "",
+            decision["summary"],
+            "",
+            "## Classification",
+            "",
+        ]
+        for label, key in (
+            ("Track", "track"),
+            ("Profile", "profile"),
+            ("Emphasis", "emphasis"),
+            ("Language", "language"),
+            ("Fit", "fit"),
+        ):
+            lines.append(f"- {label}: {value(structured.get(key, ''))}")
+        lines.extend(["", "## Selected facts", ""])
+        lines.extend(f"- `{fact_id}`" for fact_id in selected)
+        if not selected:
+            lines.append("- None recorded")
+        lines.extend(
+            [
+                "",
+                "## Overrides",
+                "",
+                f"- User overrides: {value(overrides)}",
+                "",
+                "## Exact lineage",
+                "",
+                f"- Job snapshot ID: `{revision.job_snapshot_id}`",
+                f"- Job analysis ID: `{revision.job_analysis_id}`",
+                f"- Selection plan ID: `{revision.selection_plan_id}`",
+                f"- Working draft ID: `{revision.working_draft_id}`",
+                f"- Validation run ID: `{revision.validation_run_id}`",
+                f"- Draft content SHA-256: `{revision.draft_content_hash}`",
+                f"- Knowledge context SHA-256: `{revision.knowledge_context_hash}`",
+                f"- Candidate context SHA-256: `{revision.candidate_context_hash}`",
+                f"- Resume JSON SHA-256: `{revision.resume_json_hash}`",
+                f"- Resume Markdown SHA-256: `{revision.resume_markdown_hash}`",
+                "",
+                "## Approval actor",
+                "",
+            ]
+        )
+        for key in ("actor_type", "client", "command"):
+            lines.append(f"- {key}: {revision.decision_provenance.get(key, '')}")
+        content = "\n".join(lines) + "\n"
+        return DecisionMarkdownExport(
+            application_id=application_id,
+            approved_revision_id=approved_revision_id,
+            filename=f"decision-{approved_revision_id}.md",
+            content=content,
+            content_hash=sha256_text(content),
+        )

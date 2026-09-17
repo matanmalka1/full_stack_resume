@@ -19,12 +19,16 @@ from ...application.operations import (
     as_operation_view,
     required_operation_resources,
 )
-from ...util import canonical_json, new_id, sha256_text, utc_now
+from ...util import new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
+from .idempotency_sql import (
+    _claim_idempotency_receipt,
+    _complete_idempotency_receipt,
+    _idempotency_receipt,
+)
 from .operation_sql import _operation_record, _outputs, _release
 from .tables import (
     applications,
-    idempotency_receipts,
     operation_outputs,
     operation_resource_leases,
     operations,
@@ -708,98 +712,24 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         reserved_entity_id: str,
         created_at: str | None = None,
     ) -> dict[str, Any]:
-        payload_json = canonical_json(payload)
-        payload_hash = sha256_text(payload_json)
-        timestamp = created_at or utc_now()
         with self.transaction() as connection:
-            existing = (
-                connection.execute(
-                    select(idempotency_receipts).where(
-                        idempotency_receipts.c.command_type == command_type,
-                        idempotency_receipts.c.idempotency_key == idempotency_key,
-                    )
-                )
-                .mappings()
-                .one_or_none()
+            return _claim_idempotency_receipt(
+                connection,
+                command_type,
+                idempotency_key,
+                payload,
+                reserved_entity_id=reserved_entity_id,
+                created_at=created_at,
             )
-            if existing is not None:
-                if existing["payload_hash"] != payload_hash:
-                    raise StateConflict(
-                        "idempotency key already used with a different command payload",
-                        code=IDEMPOTENCY_KEY_REUSED,
-                    )
-                record = dict(existing)
-                record["payload"] = record.pop("payload_json")
-                record["result"] = record.pop("result_json")
-                return record
-            identifier = new_id()
-            connection.execute(
-                insert(idempotency_receipts).values(
-                    id=identifier,
-                    command_type=command_type,
-                    idempotency_key=idempotency_key,
-                    payload_json=payload,
-                    payload_hash=payload_hash,
-                    reserved_entity_id=reserved_entity_id,
-                    status="pending",
-                    created_at=timestamp,
-                )
-            )
-            return {
-                "id": identifier,
-                "command_type": command_type,
-                "idempotency_key": idempotency_key,
-                "payload": payload,
-                "payload_hash": payload_hash,
-                "reserved_entity_id": reserved_entity_id,
-                "status": "pending",
-                "result": None,
-                "created_at": timestamp,
-                "completed_at": None,
-            }
 
     def idempotency_receipt(self, command_type: str, idempotency_key: str) -> dict[str, Any] | None:
         with self.read_connection() as connection:
-            row = (
-                connection.execute(
-                    select(idempotency_receipts).where(
-                        idempotency_receipts.c.command_type == command_type,
-                        idempotency_receipts.c.idempotency_key == idempotency_key,
-                    )
-                )
-                .mappings()
-                .one_or_none()
-            )
-        if row is None:
-            return None
-        record = dict(row)
-        record["payload"] = record.pop("payload_json")
-        record["result"] = record.pop("result_json")
-        return record
+            return _idempotency_receipt(connection, command_type, idempotency_key)
 
     def complete_idempotency_receipt(
         self, receipt_id: str, result: dict[str, Any], *, completed_at: str | None = None
     ) -> None:
-        timestamp = completed_at or utc_now()
         with self.transaction() as connection:
-            changed = connection.execute(
-                update(idempotency_receipts)
-                .where(
-                    idempotency_receipts.c.id == receipt_id,
-                    idempotency_receipts.c.status == "pending",
-                )
-                .values(status="completed", result_json=result, completed_at=timestamp)
-            ).rowcount
-            if changed != 1:
-                row = (
-                    connection.execute(
-                        select(idempotency_receipts.c.result_json).where(
-                            idempotency_receipts.c.id == receipt_id,
-                            idempotency_receipts.c.status == "completed",
-                        )
-                    )
-                    .mappings()
-                    .one_or_none()
-                )
-                if row is None or row["result_json"] != result:
-                    raise StateConflict("idempotency receipt cannot be completed")
+            return _complete_idempotency_receipt(
+                connection, receipt_id, result, completed_at=completed_at
+            )

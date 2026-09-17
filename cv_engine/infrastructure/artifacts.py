@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ..application.ports import DraftPaths, StoredDraft
+from ..application.transactions import assert_external_io_allowed
 from ..domain.contracts.drafts import DraftDocument
 from ..domain.draft_markdown import parse_draft
 from ..domain.drafts import seal_draft
@@ -52,6 +53,7 @@ class FilesystemArtifactStore:
         return self._pair(self._root / "working" / application_id)
 
     def write_working_draft(self, draft: DraftDocument) -> StoredDraft:
+        assert_external_io_allowed("working projection write")
         sealed, markdown, manifest = seal_draft(draft)
         paths = self.working_paths(sealed.application_id)
         paths.markdown.parent.mkdir(parents=True, exist_ok=True)

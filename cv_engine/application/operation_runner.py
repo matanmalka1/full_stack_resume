@@ -87,6 +87,8 @@ class TransactionalOperationHandler(Protocol):
 
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None: ...
 
+    def verify_external_sources(self, operation: PersistedOperation) -> None: ...
+
     def execute(
         self, operation: PersistedOperation, cancellation_requested: Callable[[], bool]
     ) -> PreparedOperation: ...
@@ -94,6 +96,10 @@ class TransactionalOperationHandler(Protocol):
     def activate(
         self, tx: WriteTransaction, operation: PersistedOperation, prepared: PreparedOperation
     ) -> Sequence[OperationOutputReference]: ...
+
+    def after_activation(
+        self, operation: PersistedOperation, prepared: PreparedOperation
+    ) -> None: ...
 
 
 class OperationRunner:
@@ -282,6 +288,7 @@ class OperationRunner:
                     transactions = self.transactions
                     if transactions is None:
                         raise TypeError("transaction handler has no transaction manager")
+                    transaction_handler.verify_external_sources(operation)
                     with transactions.read() as tx:
                         transaction_handler.verify_sources(tx, operation)
                 elif handler is not None:
@@ -480,6 +487,7 @@ class OperationRunner:
         if transactions is None or store is None:
             raise TypeError("transaction handler has no activation persistence")
         phase_events: list[PersistedOperation] = []
+        handler.verify_external_sources(operation)
         with transactions.write() as tx:
             store.lock_application(tx, operation.application_id)
             operation = store.operation(tx, operation.id)
@@ -510,6 +518,22 @@ class OperationRunner:
                 if prepared.terminal_failure is not None:
                     raise prepared.terminal_failure
                 result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
+        if result.status is OperationStatus.SUCCEEDED:
+            try:
+                handler.after_activation(operation, prepared)
+            except Exception as error:
+                # The authoritative activation is already committed. A failed
+                # working projection is diagnostic only and must not rewrite
+                # the completed Operation or reuse a domain failure code.
+                try:
+                    self.technical_logger(error)
+                except Exception as logging_error:
+                    logger.warning(
+                        "post-activation projection log unavailable operation_id=%s "
+                        "exception_type=%s",
+                        operation.id,
+                        type(logging_error).__name__,
+                    )
         # Logging writes files; it cannot run inside the database scope.
         for phase_operation in phase_events:
             self.record_event(

@@ -16,7 +16,10 @@ from dataclasses import dataclass
 
 from ..application.services.analysis import AnalysisService
 from ..application.services.applications import ApplicationService
-from ..application.services.drafts import DraftService
+from ..application.services.drafts import DraftAuthoringService
+from ..application.services.drafts.approval import DraftApprovalService
+from ..application.services.drafts.history import DraftHistoryService
+from ..application.services.drafts.validation import DraftValidationService
 from ..application.services.knowledge import KnowledgeService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import OperationService
@@ -53,7 +56,10 @@ class ApiServices:
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
-    drafts: DraftService
+    drafts: DraftAuthoringService
+    draft_validation: DraftValidationService
+    draft_history: DraftHistoryService
+    draft_approval: DraftApprovalService
     rendering: RenderingService
     tracking: TrackingService
     knowledge: KnowledgeService

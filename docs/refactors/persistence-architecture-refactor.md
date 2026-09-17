@@ -5,10 +5,10 @@
 ## Current status
 
 ```text
-Current phase: Phase 3 — Analysis and selection lifecycle (DONE)
-Last completed phase: Phase 3 — Analysis and selection lifecycle
-Next action: new session for Phases 4–5; neither phase started
-Known blockers: None
+Current phase: Phase 4 — Draft lifecycle and evidence (DONE; implementation not yet committed)
+Last completed phase: Phase 4 — Draft lifecycle and evidence
+Next action: review and approve the Phase 4 implementation commit; Phase 5 remains unstarted
+Known blockers: None; approval replay correction authorized (Decision Log below)
 Last verified commit: 247dd6f20c5512f312e4da918464c3c7df9f813c — refactor(persistence): migrate analysis and selection lifecycle
 ```
 
@@ -537,7 +537,7 @@ PostgreSQL pipeline evidence remains applicable without another pipeline rerun.
 
 ## Phase 4 — Draft lifecycle and evidence
 
-Status: NOT STARTED
+Status: DONE
 
 ### Goal
 
@@ -568,16 +568,159 @@ validation, and decision ownership.
 
 ### Verification
 
-- [ ] focused tests
-- [ ] typecheck
-- [ ] architecture checks
-- [ ] no forbidden imports
-- [ ] no old consumers remain
-- [ ] approval crash/orphan/idempotent-retry coverage
+- [x] focused tests
+- [x] typecheck
+- [x] architecture checks
+- [x] no forbidden imports
+- [x] no old consumers remain
+- [x] approval crash/orphan/idempotent-retry coverage
 
 ### Handoff notes
 
-None yet.
+Phase 4 implementation is complete in the worktree and all user-run boundary gates passed;
+the phase is **DONE** but not yet committed. Phase 5 has not started. Recovery began from
+`67b36e6d0f9f041585b76857618732846e532421`; the verified Phase 3 implementation and its
+evidence remain unchanged.
+
+The persistence split now has independent stateless token adapters for `DraftLifecycleStore`,
+`ArtifactCatalog`, `ValidationStore`, `DecisionStore`, and the approval-owned
+`IdempotencyStore`. Legacy adapters and token adapters share private connection-level SQL;
+one adapter never calls another and no adapter opens a scope. Consumer-specific readers load
+authoring, validation, approval, history, and Operation activation inputs without a generic
+workflow DTO.
+
+The multiple-inheritance `DraftService` façade and its base/mixin files are gone. API and runtime
+composition expose `DraftAuthoringService`, `DraftValidationService`, `DraftApprovalService`,
+and `DraftHistoryService`. Generation, editing, regeneration, validation, approval, archive/keep,
+and decision export use those surfaces. Draft and regeneration handlers now use runner-owned
+transaction-token activation. Working Markdown is written only after activation commits; a
+projection failure is logged without rewriting the already-completed Operation. Immutable
+approval and archive payloads are still written and verified before their database metadata.
+
+`ApprovalCommitter` accepts one frozen `PreparedApproval` and performs the demonstrated fan-in:
+ApprovedRevision/deactivation, both artifact registrations, decision, audit/lifecycle event, and
+receipt completion in one caller-owned transaction. Reservation remains a preceding durable short
+transaction, and an identical retry can reuse immutable payloads and the reserved revision. The
+approval implementation has changed since the previously reported 12-test result: the commit and
+receipt completion are now one transaction, and recovery coverage now distinguishes rollback
+before commit from a lost response after commit. The approval gate must therefore be rerun.
+
+Validation evaluates in memory outside a database scope, then locks and rechecks the exact working
+draft version/hash before recording immutable evidence. Approval locks the WorkingDraft row while
+rechecking its stored validation binding. These checks preserve optimistic editing and prevent a
+run or revision from being recorded for content that changed during preparation.
+
+Zero-consumer cleanup removed the façade, archival/decision mixins, draft base helpers, legacy
+approval/replacement/deactivation writes, and legacy decision/generation/lifecycle-event writes.
+Legacy `DraftRepository`/`ReadinessRepository` reads, direct persistence-test draft create/edit
+methods, validation/artifact reads and render-owned writes remain because Phase 5 rendering,
+Ready, tracking, projections, maintenance, and their integrity tests still consume them. The
+remaining render casts and root-bound handler are Phase 5 scope; generic Operation lifecycle,
+replacement reservation/enqueue, and its root repository remain Phase 6 scope.
+
+Constructor review: `DraftAuthoringService` has ten explicit collaborators because authoring owns
+one optimistic lifecycle across persistence, source projection, Knowledge/provider/evidence,
+working projection, and the already-approved selection-change component. `DraftApprovalService`
+has nine because preparation crosses stored source evidence, Knowledge, projection/render naming,
+immutable payload publication, receipt reservation, and the approved atomic committer. Bundling
+either set would create the forbidden generic dependency container; the committer is retained only
+for its atomic fan-in, not to shorten the approval constructor.
+
+The agent ran no tests or gates. Formatting was applied as an edit and changed Python files were
+parsed for syntax only. All passing verification evidence below was reported by the user.
+
+First boundary attempt (user-run) stopped during pytest collection because the new draft history
+and approval committer imported the existing `AuditLogWriter` Port under the wrong name
+(`AuditLog`). Pyright independently reported that import plus two intentionally retained module
+validation hooks that had been removed as unused imports; Ruff reported five mechanical findings.
+The imports/hooks and Ruff findings were corrected. The pytest commands produced no test results,
+Pyright reported four errors, Ruff reported five errors, and the format check reported 58 files
+already formatted. None of those failed/stopped commands counts as passing evidence; rerun the
+boundary gates below.
+
+Second boundary attempt (user-run) produced the following evidence:
+
+- authoring/API/AI/operation group: 113 passed, one failed. The sole failure was the new
+  lost-response test asserting `pending` after its injected failure ran *after* the atomic approval
+  and receipt commit. The assertion now expects `completed` for that case; rollback-before-commit
+  cases continue to require `pending`.
+- validation/application contracts: 14 passed.
+- chain/history/Ready integrity: 26 passed, one deselected by the repository's browser marker.
+- persistence/transactions: 27 passed.
+- API operations: five passed.
+- architecture: 18 passed.
+- Ruff check passed; Ruff format check reported 58 files already formatted.
+- Pyright reported one structural Protocol error because the draft handler implementation named
+  its `after_activation` argument `_operation` while the Protocol names it `operation`. The
+  implementation now keeps the Protocol parameter name and discards it explicitly.
+- fresh PostgreSQL pipeline with `OPENAI_API_KEY` unset: three passed in 1.09 seconds after an
+  empty database upgrade through migrations `0001` and `0002`.
+
+The passing groups and fresh pipeline are unaffected by the assertion-only and parameter-name
+corrections. Pending evidence is the corrected approval recovery test, Pyright, and Ruff
+check/format over the final diff.
+
+Third focused attempt (user-run): the two rollback variants passed and the lost-response variant
+still failed because the preceding assertion edit matched an earlier identical `receipt["status"]`
+line in the legacy recovery test. Ruff identified the resulting undefined `failure_stage` at that
+earlier location. The legacy recovery assertion is restored to `pending`, while only the
+parameterized retry assertion branches to `completed` for `after_commit`. Pyright passed with zero
+errors/warnings and the format check again reported 58 files formatted. Pending evidence is now
+the three-case approval retry test and Ruff check; the parameter-name correction is already
+verified by Pyright.
+
+Fourth focused attempt (user-run): all three approval retry/recovery cases passed in 1.32 seconds
+and Ruff check passed. The format check found only the corrected conditional assertion's wrapping;
+`ruff format` was applied to that test file. The sole remaining boundary evidence is the final
+Ruff format check over the diff.
+
+Final boundary result (user-run): Ruff format check passed with 58 files already formatted. All
+Phase 4 gates are now green, so Phase 4 is DONE. No implementation commit has been created; Phase 5
+remains NOT STARTED.
+
+The final implementation spans 62 paths (`git diff HEAD --stat`: 4,711 insertions and 2,481
+deletions). The implementation paths are staged and this final status-document update is unstaged;
+no commit was created. Use `git diff HEAD` for boundary-file derivation so both index and worktree
+changes are included. `git diff --check` is clean; HEAD remains `67b36e6`.
+
+User-reported focused iteration result: **12 passed in 23.51s**. This evidence covers
+the approval contract correction at this iteration, not the unfinished Phase 4 migration.
+The command below is completed; do not repeat it without a relevant code/test change.
+
+Focused iteration command (user-run, completed):
+
+```sh
+./.venv/bin/python -m pytest -q tests/test_api_working_drafts.py::test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse tests/test_operations.py::test_pending_approval_receipt_recovers_a_committed_revision tests/test_operations.py::test_approval_recovery_refuses_changed_inputs tests/test_operations.py::test_approval_identical_retry_reuses_reservation_after_failure
+```
+
+The schema, artifact paths, rendered output, immutable historical records, and other idempotency
+paths are unchanged. No migration file or frontend file changed.
+
+### Phase 4 boundary gates (user-run, passed)
+
+Run in order and report every result before changing the phase status:
+
+```sh
+./.venv/bin/python -m pytest -q tests/test_api_working_drafts.py tests/test_ai_tasks.py tests/test_operations.py
+./.venv/bin/python -m pytest -q tests/test_drafts_validation.py tests/test_application_contracts.py
+./.venv/bin/python -m pytest -q tests/test_chain_integrity.py tests/test_ready_integrity.py
+./.venv/bin/python -m pytest -q tests/test_persistence.py tests/test_transactions.py
+./.venv/bin/python -m pytest -q tests/test_api_operations.py
+./.venv/bin/python -m pytest -q tests/test_architecture.py
+./.venv/bin/pyright cv_engine
+git diff HEAD --name-only --diff-filter=ACMR | awk '/\.py$/' | sort -u | xargs ./.venv/bin/ruff check
+git diff HEAD --name-only --diff-filter=ACMR | awk '/\.py$/' | sort -u | xargs ./.venv/bin/ruff format --check
+docker compose exec postgres dropdb -U cv --if-exists cv_phase4_test
+docker compose exec postgres createdb -U cv cv_phase4_test
+CV_DATABASE_URL=postgresql+psycopg://cv:cv@127.0.0.1:5433/cv_phase4_test ./.venv/bin/alembic upgrade head
+env -u OPENAI_API_KEY CV_TEST_DATABASE_URL=postgresql+psycopg://cv:cv@127.0.0.1:5433/cv_phase4_test ./.venv/bin/python -m pytest -q tests/test_pipeline_end_to_end.py
+```
+
+The approval command is intentionally rerun through `tests/test_api_working_drafts.py` and
+`tests/test_operations.py` because Phase 4 changed the approval gateway, transaction boundary,
+and crash-recovery tests after the earlier 12-test result. Browser and golden gates are not owed:
+no renderer, rendered output, golden fixture/hash, or artifact path changed. Migration topology
+gates are not owed because `alembic/` is unchanged.
 
 ## Phase 5 — Rendering, Ready, recruitment, and submission
 
@@ -874,6 +1017,41 @@ For each contradiction:
 
 ### Deviations
 
+#### 2026-09-17 — Approval replay payload contract correction (approved)
+
+- Code evidence: `application/services/operations/service.py:approve_idempotent`
+  checks only `working_draft_id` before `_approval_result`. When the reserved revision
+  exists, it returns that result (and may complete a pending receipt) before comparing
+  the receipt payload with `_approval_payload(command)`. Changing only
+  `expected_edit_version` or `validation_run_id` therefore returns the original approval
+  instead of rejecting key reuse. This conclusion is from code inspection; no test was run.
+- Binding evidence: `spec/state-and-use-cases.md` §15 requires the same key/payload to
+  return the same revision and another payload to fail. The owning API route,
+  `api/routers/working_drafts.py:approve_working_draft`, explicitly documents
+  `409 IDEMPOTENCY_KEY_REUSED` for a changed draft, version, run, or content hash.
+- Coverage evidence: `tests/test_api_working_drafts.py`'s
+  `test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse` covers
+  an identical replay and a different draft, but does not change the version/run on
+  the same already-approved draft. `tests/test_operations.py`'s
+  `test_pending_approval_receipt_recovers_a_committed_revision` requires same-payload
+  recovery and must remain valid.
+- Scope conflict: Phase 4 must preserve approval/idempotent recovery while this session
+  prohibits observable API changes beyond internal wiring. Copying the early return
+  into `DraftApprovalService` preserves behavior contrary to the specification;
+  rejecting those requests corrects the specification mismatch but changes observable
+  refusal behavior. The user has authorized the focused contract correction described below.
+- Minimal proposed resolution: authorize this focused regression correction as part of
+  Phase 4. Compare the existing receipt's frozen payload before returning a committed
+  revision or completing its receipt, for both pending and completed receipts. Keep
+  identical replay/recovery, immutable records, payload paths, and revision identity
+  unchanged. Extend the closest API test to vary version/run on the same approved
+  draft and retain pending-receipt recovery coverage. No architecture redesign, schema
+  change, or Phase 6 lifecycle migration is proposed. Approved by the user: compare the exact logical payload before replay/recovery;
+  cover identical replay, changed draft/version/run and other outcome-affecting inputs,
+  reservation recovery, and identical retry after failure. This is a specification-required
+  contract correction within Phase 4, not a Phase 4 redesign or authorization to change
+  other idempotency paths.
+
 #### 2026-09-17 — Provider-evidence registration boundary (approved)
 
 - Code evidence: `application/services/base.py:ServiceBase.preserve()` registers the
@@ -938,3 +1116,26 @@ repository or wrapping the new transaction-token API.
 - Initial registration owns a separate short service transaction. Handlers and activators own no scope.
   The runner locks the Application as its first activation statement and emits filesystem-backed phase
   events after the transaction closes.
+
+### Phase 4 initial consumer map (before implementation)
+
+| Consumer | Existing persistence/external boundaries and migration ownership |
+| --- | --- |
+| `drafts/generation.py` | analysis/plan/latest snapshot/optional parent reads; provider + response preservation; activation replaces draft, validates, records generation; currently writes working projection during runner-bound activation |
+| `drafts/regeneration.py` | exact draft/version/hash/analysis/plan reads; provider + evidence; optimistic activation update currently writes working projection under activation |
+| `drafts/editing.py` | exact source/chain/Knowledge checks and optimistic edit; projection after edit; legacy `edit_claim` also records validation |
+| `drafts/validation.py` | exact working version + bound chain + plan; in-memory Markdown already used; immutable validation report/lineage recording |
+| `drafts/approval.py` | active/deleted/quarantine/projection/binding/chain checks; immutable JSON/Markdown publication before DB; revision + two artifacts + decision + audit + lifecycle event/deactivation fan-in |
+| `operations/service.py` approval methods | receipt reservation, committed-revision recovery, approval delegation, then separate receipt completion; move approval ownership in Phase 4, leave unrelated operation lifecycle for Phase 6 |
+| `drafts/archival.py` | payload before artifact + deactivation/audit/event transaction; Keep verifies an existing exact snapshot before reuse; replacement reservation/enqueue protocol remains Phase 6 |
+| `drafts/decisions.py` | application + explicit revision + stored decision reads; historical Markdown export without live facts |
+| `drafts/selection.py` | Phase 3 token plan + draft CAS already atomic; `_compose` still lives on `DraftServiceBase`; preserve token boundary while removing façade coupling |
+| draft/regen handlers + runner | persistence casts and root-bound activation; runner owns Application lock and final activation/completion; migrate these handlers to tokens and move working projection writes after scope exit |
+| `base.py` + `chain.py` | inherited provider/artifact/application helpers and broad chain reader; replace draft consumers with explicit collaborators/minimal chain inputs; retain only helpers with real future-phase consumers |
+| API services/routes + runtime composition | single `drafts: DraftService` surface and `shared` wiring; migrate actual call sites to four service surfaces, retaining HTTP DTOs/routes |
+| `persistence/drafts.py` + `artifacts.py` | bound-base WorkingDraft/ApprovedRevision SQL and combined artifact/validation/decision/generation SQL; extract private SQL for independent token adapters and still-required future-phase readers |
+| Ready/render/tracking/query/maintenance | real `ReadinessRepository`/`DraftRepository` readers, including shared chain checks; prevent premature deletion; document the minimal Phase 4 wiring needed while leaving Phase 5 behavior migration unstarted |
+
+The map does not authorize deleting legacy SQL or Ports. Production and test consumers
+must be searched again after migration, before each deletion. No knowledge mutation,
+operation claiming/retry/replacement protocol, or Phase 6+ work was performed.

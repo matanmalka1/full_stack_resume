@@ -37,19 +37,6 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
 
     def working_draft(self, working_draft_id: str) -> WorkingDraft: ...
 
-    def replace_active_working_draft(
-        self,
-        application_id: str,
-        job_analysis_id: str,
-        selection_plan_id: str,
-        source: DraftDocument,
-        *,
-        parent_revision_id: str | None = None,
-        updated_at: str | None = None,
-        expected_working_draft_id: str | None = None,
-        expected_edit_version: int | None = None,
-    ) -> WorkingDraft: ...
-
     def update_working_draft(
         self,
         working_draft_id: str,
@@ -59,29 +46,6 @@ class DraftRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraft
         selection_plan_id: str | None = None,
         updated_at: str | None = None,
     ) -> WorkingDraft: ...
-
-    def deactivate_working_draft(
-        self,
-        working_draft_id: str,
-        expected_version: int,
-        *,
-        updated_at: str | None = None,
-    ) -> WorkingDraft: ...
-
-    def create_approved_revision(
-        self,
-        application_id: str,
-        revision_id: str,
-        working_draft_id: str,
-        validation_run_id: str,
-        resume_json_reference: str,
-        resume_json_hash: str,
-        resume_markdown_reference: str,
-        resume_markdown_hash: str,
-        decision_provenance: dict[str, str],
-        *,
-        approved_at: str,
-    ) -> ApprovedRevision: ...
 
     def approved_revision(self, revision_id: str) -> ApprovedRevision: ...
 

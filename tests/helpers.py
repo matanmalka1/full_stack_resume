@@ -168,7 +168,7 @@ def validate_active_draft(services: Services, application_id: str):
     rather than each writing its own two lines.
     """
     working = services.repository.active_working_draft(application_id)
-    return services.drafts.validate_draft(
+    return services.draft_validation.validate_draft(
         ValidateDraftCommand(
             working_draft_id=working.id,
             expected_edit_version=working.edit_version,
@@ -184,7 +184,7 @@ def approve_active_draft(services: Services, application_id: str, *, revision_id
     bypassing the binding the product requires.
     """
     validated = validate_active_draft(services, application_id)
-    return services.drafts.approve_draft(
+    return services.draft_approval.approve_draft(
         ApproveDraftCommand(
             working_draft_id=validated.working_draft_id,
             expected_edit_version=validated.edit_version,

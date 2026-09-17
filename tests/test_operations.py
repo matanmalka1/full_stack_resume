@@ -56,6 +56,7 @@ from cv_engine.application.operations import (
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence import Repository
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.tables import (
     OPERATION_FAILURE_CODES,
     operation_resource_leases,
@@ -1175,13 +1176,28 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
         },
         reserved_entity_id=reserved_revision,
     )
-    committed = setup.services.drafts.approve_draft(command, revision_id=reserved_revision)
+    committed = setup.services.draft_approval.approve_draft(command, revision_id=reserved_revision)
     assert receipt["status"] == "pending"
 
-    recovered = setup.services.operations.approve_idempotent(
+    for changed in (
+        command.model_copy(update={"actor_type": "system"}),
+        command.model_copy(update={"client": "worker"}),
+    ):
+        with pytest.raises(StateConflict) as refused:
+            setup.services.draft_approval.approve_idempotent(
+                changed,
+                idempotency_key="approval-recovery",
+            )
+        assert refused.value.code == IDEMPOTENCY_KEY_REUSED
+        unchanged = setup.services.repository.idempotency_receipt(
+            "approve_draft", "approval-recovery"
+        )
+        assert unchanged["status"] == "pending"
+        assert unchanged["payload"] == receipt["payload"]
+
+    recovered = setup.services.draft_approval.approve_idempotent(
         command,
         idempotency_key="approval-recovery",
-        draft_service=setup.services.drafts,
     )
 
     assert recovered == committed
@@ -1190,6 +1206,156 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
         "approval-recovery",
     )
     assert completed["status"] == "completed"
+    assert len(setup.services.repository.approved_revisions(setup.application_id)) == 1
+
+
+@pytest.mark.parametrize("receipt_status", ["pending", "completed"])
+@pytest.mark.parametrize(
+    "changed_input", ["expected_edit_version", "validation_run_id", "actor_type", "client"]
+)
+def test_approval_recovery_refuses_changed_inputs(
+    drafted_application, receipt_status, changed_input
+) -> None:
+    setup = drafted_application("Approval Frozen Inputs Co")
+    command = _approve_command(setup.services, setup.application_id)
+    repository = setup.services.repository
+    working = repository.working_draft(command.working_draft_id)
+    receipt = repository.claim_idempotency_receipt(
+        "approve_draft",
+        "approval-frozen-inputs",
+        {**command.model_dump(mode="json"), "content_hash": working.content_hash},
+        reserved_entity_id=new_id(),
+    )
+    committed = setup.services.draft_approval.approve_draft(
+        command, revision_id=receipt["reserved_entity_id"]
+    )
+    if receipt_status == "completed":
+        repository.complete_idempotency_receipt(receipt["id"], committed.model_dump(mode="json"))
+    changed_values = {
+        "expected_edit_version": command.expected_edit_version + 1,
+        "validation_run_id": new_id(),
+        "actor_type": "system",
+        "client": "worker",
+    }
+    changed = command.model_copy(update={changed_input: changed_values[changed_input]})
+    with pytest.raises(StateConflict) as refused:
+        setup.services.draft_approval.approve_idempotent(
+            changed,
+            idempotency_key="approval-frozen-inputs",
+        )
+    assert refused.value.code == IDEMPOTENCY_KEY_REUSED
+    after = repository.idempotency_receipt("approve_draft", "approval-frozen-inputs")
+    assert after["status"] == receipt_status
+    assert after["payload"] == receipt["payload"]
+    assert repository.approved_revisions(setup.application_id) == [
+        repository.approved_revision(committed.revision_id)
+    ]
+    replayed = setup.services.draft_approval.approve_idempotent(
+        command,
+        idempotency_key="approval-frozen-inputs",
+    )
+    assert replayed == committed
+
+
+@pytest.mark.parametrize(
+    "failure_stage", ["artifact_registration", "receipt_completion", "after_commit"]
+)
+def test_approval_identical_retry_reuses_reservation_after_failure(
+    drafted_application, monkeypatch, failure_stage
+) -> None:
+    setup = drafted_application("Approval Retry Co")
+    command = _approve_command(setup.services, setup.application_id)
+    repository = setup.services.repository
+    before_artifacts = repository.artifact_versions(setup.application_id)
+    calls = 0
+    if failure_stage == "artifact_registration":
+        original = SqlAlchemyArtifactCatalog.register_artifact_version
+
+        def fail_registration(self, *args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise InfrastructureFailure("injected second approval artifact failure")
+            return original(self, *args, **kwargs)
+
+        monkeypatch.setattr(
+            SqlAlchemyArtifactCatalog, "register_artifact_version", fail_registration
+        )
+    elif failure_stage == "receipt_completion":
+        original = setup.services.draft_approval.receipts.complete_idempotency_receipt
+
+        def fail_completion(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            raise InfrastructureFailure("injected approval receipt completion failure")
+
+        monkeypatch.setattr(
+            setup.services.draft_approval.receipts,
+            "complete_idempotency_receipt",
+            fail_completion,
+        )
+    else:
+        original = setup.services.draft_approval._approve
+
+        def fail_after_commit(*args, **kwargs):
+            nonlocal calls
+            original(*args, **kwargs)
+            calls += 1
+            raise RuntimeError("injected lost response after approval commit")
+
+        monkeypatch.setattr(setup.services.draft_approval, "_approve", fail_after_commit)
+
+    expected_error = RuntimeError if failure_stage == "after_commit" else InfrastructureFailure
+    with pytest.raises(expected_error):
+        setup.services.draft_approval.approve_idempotent(
+            command,
+            idempotency_key="approval-retry",
+        )
+    assert calls == (2 if failure_stage == "artifact_registration" else 1)
+    receipt = repository.idempotency_receipt("approve_draft", "approval-retry")
+    assert receipt["status"] == ("completed" if failure_stage == "after_commit" else "pending")
+    references = [
+        f"artifacts/revisions/{setup.application_id}/{receipt['reserved_entity_id']}/resume.json",
+        f"artifacts/revisions/{setup.application_id}/{receipt['reserved_entity_id']}/resume.md",
+    ]
+    published = [setup.services.payloads.read_payload_text(reference) for reference in references]
+    revisions = repository.approved_revisions(setup.application_id)
+    if failure_stage in {"artifact_registration", "receipt_completion"}:
+        assert revisions == []
+        assert repository.artifact_versions(setup.application_id) == before_artifacts
+        assert repository.working_draft(command.working_draft_id).active
+        if failure_stage == "artifact_registration":
+            monkeypatch.setattr(SqlAlchemyArtifactCatalog, "register_artifact_version", original)
+        else:
+            monkeypatch.setattr(
+                setup.services.draft_approval.receipts,
+                "complete_idempotency_receipt",
+                original,
+            )
+    else:
+        assert len(revisions) == 1
+        assert revisions[0].id == receipt["reserved_entity_id"]
+        assert receipt["status"] == "completed"
+        monkeypatch.setattr(setup.services.draft_approval, "_approve", original)
+
+    recovered = setup.services.draft_approval.approve_idempotent(
+        command,
+        idempotency_key="approval-retry",
+    )
+    repeated = setup.services.draft_approval.approve_idempotent(
+        command,
+        idempotency_key="approval-retry",
+    )
+    assert recovered == repeated
+    assert recovered.revision_id == receipt["reserved_entity_id"]
+    assert len(repository.approved_revisions(setup.application_id)) == 1
+    completed = repository.idempotency_receipt("approve_draft", "approval-retry")
+    assert completed["id"] == receipt["id"]
+    assert completed["payload"] == receipt["payload"]
+    assert completed["status"] == "completed"
+    assert [
+        setup.services.payloads.read_payload_text(reference) for reference in references
+    ] == published
 
 
 def test_worker_shutdown_requests_cancellation_and_prevents_activation(services) -> None:

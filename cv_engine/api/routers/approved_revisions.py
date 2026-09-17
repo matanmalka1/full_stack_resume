@@ -179,7 +179,7 @@ def export_decision_markdown(
     travels in `Content-Disposition`, and `content_hash` names exactly what was
     produced, so a caller that saves it can prove later which export it holds.
     """
-    export = services.drafts.export_decision_markdown(application_id, approved_revision_id)
+    export = services.draft_history.export_decision_markdown(application_id, approved_revision_id)
     response.headers["Content-Disposition"] = content_disposition(export.filename)
     return DecisionMarkdownResponse.model_validate(
         export.model_dump(mode="json", exclude={"filename"})

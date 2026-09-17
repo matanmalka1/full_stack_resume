@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import select, update
 
 from ...application.errors import UnknownRecord
-from ...util import new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
-from .tables import applications, draft_lifecycle_events
+from .tables import applications
 
 
 class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
@@ -39,17 +38,3 @@ class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
             )
             if result.rowcount != 1:
                 raise UnknownRecord(application_id)
-
-    def record_event(self, application_id: str, event_type: str, payload: dict[str, Any]) -> str:
-        event_id = new_id()
-        with self.transaction() as connection:
-            connection.execute(
-                insert(draft_lifecycle_events).values(
-                    id=event_id,
-                    application_id=application_id,
-                    event_type=event_type,
-                    payload_json=payload,
-                    created_at=utc_now(),
-                )
-            )
-        return event_id
