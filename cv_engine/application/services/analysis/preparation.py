@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...domain.analysis.normalize import normalize_analysis_proposal
-from ...domain.contracts.analysis import JobAnalysis, OverrideKey
-from ...domain.contracts.selection import SelectionManifest
-from ..commands import AnalyzeCommand
-from ..errors import (
+from ....domain.analysis.normalize import normalize_analysis_proposal
+from ....domain.contracts.analysis import JobAnalysis, OverrideKey
+from ....domain.contracts.selection import SelectionManifest
+from ...commands import AnalyzeCommand
+from ...errors import (
     ApplicationError,
     InfrastructureFailure,
     PreconditionFailed,
     ProviderInvalidOutput,
 )
-from ..ports import AnalysisContext
-from .analysis_selection import AnalysisSelection
-from .proposals import ProviderEvidence, analysis_fact_context
+from ...ports import AnalysisContext
+from ..proposals import ProviderEvidence, analysis_fact_context
+from .selection import AnalysisSelection
 
 
 @dataclass(frozen=True)

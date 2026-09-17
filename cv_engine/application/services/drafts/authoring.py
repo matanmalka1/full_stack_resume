@@ -38,10 +38,9 @@ from ...ports import (
     TransactionManager,
 )
 from ...ports.analysis_plans import AnalysisPlanStore
-from ...ports.draft_authoring import DraftAuthoringSourceReader, DraftEvidencePreserver
-from ...ports.draft_lifecycle import DraftLifecycleStore
+from ...ports.drafts import DraftAuthoringSourceReader, DraftEvidencePreserver, DraftLifecycleStore
 from ...ports.validation_store import ValidationStore
-from ..analysis import load_analysis_knowledge
+from ..analysis.service import load_analysis_knowledge
 from ..proposals import ProviderEvidence, apply_proposed_claims, evidence_attached, fact_context
 from . import editing as editing_checks
 from .activation import DraftActivation

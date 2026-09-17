@@ -11,7 +11,7 @@ from ...commands import ApprovalResult
 from ...ports.application_intake import AuditLogWriter
 from ...ports.artifact_catalog import ArtifactCatalog
 from ...ports.decision_store import DecisionStore
-from ...ports.draft_lifecycle import DraftLifecycleStore
+from ...ports.drafts import DraftLifecycleStore
 from ...ports.idempotency import IdempotencyStore
 from ...ports.transactions import WriteTransaction
 

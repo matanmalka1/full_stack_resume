@@ -3,9 +3,9 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from ...domain.contracts.records import AuditRecord
-from ...util import new_id, normalized_text, sha256_text, utc_now
-from ..commands import (
+from ....domain.contracts.records import AuditRecord
+from ....util import new_id, normalized_text, sha256_text, utc_now
+from ...commands import (
     CreatedJobSnapshot,
     CreateJobSnapshotCommand,
     DuplicateCheckCommand,
@@ -17,8 +17,8 @@ from ..commands import (
     UpdateApplicationNotesCommand,
     UpdatedApplicationNotes,
 )
-from ..commands.prep import SOURCE_URL_MAX_CHARACTERS
-from ..errors import (
+from ...commands.prep import SOURCE_URL_MAX_CHARACTERS
+from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     ApplicationIntakeInvalid,
@@ -28,14 +28,14 @@ from ..errors import (
     StateConflict,
     UnknownRecord,
 )
-from ..ports import SnapshotPayloadStore
-from ..ports.application_intake import (
+from ...ports import SnapshotPayloadStore
+from ...ports.application_intake import (
     AuditLogWriter,
     InitialRecruitmentEventWriter,
     IntakeApplicationStore,
     JobSnapshotStore,
 )
-from ..ports.transactions import TransactionManager
+from ...ports.transactions import TransactionManager
 
 JOB_TEXT_MAX_BYTES = 1024 * 1024
 _LABEL_MAX_CHARACTERS = 500

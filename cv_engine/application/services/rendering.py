@@ -38,7 +38,7 @@ from ..ports import (
     RevisionPayloadStore,
 )
 from ..ports.artifact_catalog import ArtifactCatalog
-from ..ports.draft_lifecycle import DraftLifecycleStore
+from ..ports.drafts import DraftLifecycleStore
 from ..ports.ready import ReadyEvidenceReader
 from ..ports.rendering import RenderContextReader
 from ..ports.transactions import TransactionManager, WriteTransaction

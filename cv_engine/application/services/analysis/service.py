@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from ...domain.contracts.providers import ProviderTaskResult
-from ...domain.contracts.selection import SelectionPlan
-from ...domain.knowledge import Knowledge
-from ...util import new_id
-from ..commands import (
+from ....domain.contracts.providers import ProviderTaskResult
+from ....domain.contracts.selection import SelectionPlan
+from ....domain.knowledge import Knowledge
+from ....util import new_id
+from ...commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
     AnalyzeCommand,
@@ -13,15 +13,15 @@ from ..commands import (
     ProposeSelectionPlanCommand,
     SelectionPlanResult,
 )
-from ..errors import (
+from ...errors import (
     DependencyUnavailable,
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
     StateConflict,
 )
-from ..ports import AIProvider, TransactionManager
-from ..ports.analysis_plans import (
+from ...ports import AIProvider, TransactionManager
+from ...ports.analysis_plans import (
     AnalysisKnowledgeSource,
     AnalysisPayloadStore,
     AnalysisPlanStore,
@@ -29,14 +29,14 @@ from ..ports.analysis_plans import (
     AnalysisSnapshotSource,
     SelectionSource,
 )
-from ..ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
-from ..transactions import assert_external_io_allowed
-from .analysis_activation import AnalysisActivation
-from .analysis_correction import AnalysisCorrection
-from .analysis_preparation import AnalysisPreparation, PreparedAnalysis
-from .analysis_selection import PreparedSelectionPlan, PreparedSelectionProposal
-from .analysis_selection_service import AnalysisSelectionService
-from .proposals import ProviderEvidence
+from ...ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
+from ...transactions import assert_external_io_allowed
+from ..proposals import ProviderEvidence
+from .activation import AnalysisActivation
+from .correction import AnalysisCorrection
+from .preparation import AnalysisPreparation, PreparedAnalysis
+from .selection import PreparedSelectionPlan, PreparedSelectionProposal
+from .selection_service import AnalysisSelectionService
 
 
 def load_analysis_knowledge(source: AnalysisKnowledgeSource) -> Knowledge:

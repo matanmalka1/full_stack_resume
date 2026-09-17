@@ -11,10 +11,9 @@ from ...chain import ChainError, check_loaded_draft_chain
 from ...commands import ValidateDraftCommand, ValidationRunResult
 from ...errors import LineageBroken, StateConflict, UnknownRecord
 from ...ports import KnowledgeStore, TransactionManager
-from ...ports.draft_lifecycle import DraftLifecycleStore
-from ...ports.draft_validation import DraftValidationContext, DraftValidationSourceReader
+from ...ports.drafts import DraftLifecycleStore, DraftValidationContext, DraftValidationSourceReader
 from ...ports.validation_store import ValidationStore
-from ..analysis import load_analysis_knowledge
+from ..analysis.service import load_analysis_knowledge
 from .inputs import require_content_hash, require_working_version, validation_lineage
 
 

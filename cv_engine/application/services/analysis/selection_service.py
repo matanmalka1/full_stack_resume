@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from ...domain.analysis.projection import gaps as project_gaps
-from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.taxonomy import Emphasis
-from ...domain.knowledge import Knowledge
-from ...domain.profiles import allowed_fact_pool
-from ..commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand
-from ..errors import PreconditionFailed
-from ..ports import SelectionPlanContext
-from ..ports.analysis_plans import SelectionSource
-from .analysis_selection import AnalysisSelection, PreparedSelectionPlan, PreparedSelectionProposal
-from .proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
+from ....domain.analysis.projection import gaps as project_gaps
+from ....domain.contracts.analysis import JobAnalysis
+from ....domain.contracts.taxonomy import Emphasis
+from ....domain.knowledge import Knowledge
+from ....domain.profiles import allowed_fact_pool
+from ...commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand
+from ...errors import PreconditionFailed
+from ...ports import SelectionPlanContext
+from ...ports.analysis_plans import SelectionSource
+from ..proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
+from .selection import AnalysisSelection, PreparedSelectionPlan, PreparedSelectionProposal
 
 
 class AnalysisSelectionService:

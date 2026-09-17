@@ -17,8 +17,9 @@ from ..application.ports import (
     RevisionPayloadStore,
 )
 from ..application.ports.analysis_plans import AnalysisKnowledgeSource
-from ..application.services.analysis import AnalysisService
-from ..application.services.applications import ApplicationService
+from ..application.services.analysis.service import AnalysisService
+from ..application.services.applications.intake import ApplicationService
+from ..application.services.applications.queries import ApplicationQueryService
 from ..application.services.drafts import DraftAuthoringService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.approval_commit import ApprovalCommitter
@@ -41,10 +42,9 @@ from ..application.services.operations import (
     RenderOperationHandler,
     SelectionPlanOperationHandler,
 )
-from ..application.services.projections import ApplicationQueryService
-from ..application.services.recruitment import RecruitmentService
+from ..application.services.recruitment.lifecycle import RecruitmentService
+from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
-from ..application.services.submission import SubmissionService
 from ..application.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.knowledge import FileKnowledge

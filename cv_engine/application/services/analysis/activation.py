@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from ..commands import AnalysisResult, AnalyzeCommand, SelectionPlanResult
-from ..errors import LineageBroken, StateConflict
-from ..ports.analysis_plans import AnalysisPlanStore, AnalysisSelectionSourceReader
-from ..ports.transactions import WriteTransaction
-from .analysis_preparation import PreparedAnalysis
-from .analysis_selection import PreparedSelectionPlan
-from .analysis_selection_service import AnalysisSelectionService
+from ...commands import AnalysisResult, AnalyzeCommand, SelectionPlanResult
+from ...errors import LineageBroken, StateConflict
+from ...ports.analysis_plans import AnalysisPlanStore, AnalysisSelectionSourceReader
+from ...ports.transactions import WriteTransaction
+from .preparation import PreparedAnalysis
+from .selection import PreparedSelectionPlan
+from .selection_service import AnalysisSelectionService
 
 
 class AnalysisActivation:

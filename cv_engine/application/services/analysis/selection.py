@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.knowledge import Profile
-from ...domain.contracts.providers import SelectionProposal
-from ...domain.contracts.selection import SelectionManifest
-from ...domain.knowledge import Knowledge
-from ...domain.profiles import ProfileStore, classification_mismatch
-from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
-from ...domain.selection import build_selection
-from ..commands import CreateSelectionPlanCommand
-from ..errors import MissingFactRendering, PreconditionFailed, StateConflict
-from .proposals import ProviderEvidence
+from ....domain.contracts.analysis import JobAnalysis
+from ....domain.contracts.knowledge import Profile
+from ....domain.contracts.providers import SelectionProposal
+from ....domain.contracts.selection import SelectionManifest
+from ....domain.knowledge import Knowledge
+from ....domain.profiles import ProfileStore, classification_mismatch
+from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
+from ....domain.selection import build_selection
+from ...commands import CreateSelectionPlanCommand
+from ...errors import MissingFactRendering, PreconditionFailed, StateConflict
+from ..proposals import ProviderEvidence
 
 
 @dataclass(frozen=True)

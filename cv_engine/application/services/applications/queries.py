@@ -3,22 +3,22 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date
 
-from ...domain.contracts.drafts import WorkingDraft
-from ...domain.contracts.recruitment import ApplicationStatus
-from ...domain.recruitment import user_transition_targets
-from ..artifacts import verify_artifact
-from ..errors import (
+from ....domain.contracts.drafts import WorkingDraft
+from ....domain.contracts.recruitment import ApplicationStatus
+from ....domain.recruitment import user_transition_targets
+from ...artifacts import verify_artifact
+from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
     KnowledgeRejected,
     UnknownRecord,
 )
-from ..ports.application_projections import ApplicationProjectionReader
-from ..ports.outbound import KnowledgeStore, Renderer, RevisionPayloadStore
-from ..ports.ready import ReadyEvidence, ReadyEvidenceReader
-from ..ports.transactions import ReadTransaction, TransactionManager
-from ..queries import (
+from ...ports.application_projections import ApplicationProjectionReader
+from ...ports.outbound import KnowledgeStore, Renderer, RevisionPayloadStore
+from ...ports.ready import ReadyEvidence, ReadyEvidenceReader
+from ...ports.transactions import ReadTransaction, TransactionManager
+from ...queries import (
     ApplicationDetailView,
     ApplicationListQuery,
     ApplicationListView,
@@ -44,9 +44,9 @@ from ..queries import (
     selection_plan_detail_view,
     snapshot_view,
 )
-from ..queries.views_prep import JobSnapshotHistoryItem, JobSnapshotHistoryView
-from ..ready import qualify_ready_revision
-from ..state import ProjectionContext, project_application_state
+from ...queries.views_prep import JobSnapshotHistoryItem, JobSnapshotHistoryView
+from ...ready import qualify_ready_revision
+from ...state import ProjectionContext, project_application_state
 
 
 class ApplicationQueryService:

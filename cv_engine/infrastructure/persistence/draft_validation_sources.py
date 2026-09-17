@@ -7,7 +7,7 @@ from sqlalchemy.engine import Connection
 
 from ...application.chain import DraftChainSources
 from ...application.errors import UnknownRecord
-from ...application.ports.draft_validation import DraftValidationContext
+from ...application.ports.drafts import DraftValidationContext
 from ...application.ports.transactions import ReadTransaction
 from ...domain.contracts.drafts import DraftDocument, WorkingDraft
 from .analysis_sql import _analysis_record, _selection_plan_record

@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from ...application.errors import UnknownRecord
-from ...application.ports.draft_history import DraftHistoryApplication
+from ...application.ports.drafts import DraftHistoryApplication
 from ...application.ports.transactions import ReadTransaction
 from .connection import SqlAlchemyTransactionManager
 from .tables import applications

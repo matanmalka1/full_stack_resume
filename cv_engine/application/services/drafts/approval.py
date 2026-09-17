@@ -37,10 +37,9 @@ from ...ports import (
     RevisionPayloadStore,
     TransactionManager,
 )
-from ...ports.draft_approval import DraftApprovalContext, DraftApprovalSourceReader
-from ...ports.draft_lifecycle import DraftLifecycleStore
+from ...ports.drafts import DraftApprovalContext, DraftApprovalSourceReader, DraftLifecycleStore
 from ...ports.idempotency import IdempotencyStore
-from ..analysis import load_analysis_knowledge
+from ..analysis.service import load_analysis_knowledge
 from .approval_commit import ApprovalCommitter, PreparedApproval
 from .inputs import require_working_version
 

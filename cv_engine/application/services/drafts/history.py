@@ -18,8 +18,7 @@ from ...ports import RevisionPayloadStore, SnapshotPayload, TransactionManager
 from ...ports.application_intake import AuditLogWriter
 from ...ports.artifact_catalog import ArtifactCatalog
 from ...ports.decision_store import DecisionStore
-from ...ports.draft_history import DraftHistoryApplicationReader
-from ...ports.draft_lifecycle import DraftLifecycleStore
+from ...ports.drafts import DraftHistoryApplicationReader, DraftLifecycleStore
 from ...ports.transactions import WriteTransaction
 from .inputs import require_working_version
 

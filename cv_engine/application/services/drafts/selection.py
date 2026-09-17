@@ -15,7 +15,7 @@ from ...ports import (
     TransactionManager,
 )
 from ...ports.selection_drafts import SelectionDraftStore
-from ..analysis import AnalysisService, load_analysis_knowledge
+from ..analysis.service import AnalysisService, load_analysis_knowledge
 from .inputs import compose
 
 

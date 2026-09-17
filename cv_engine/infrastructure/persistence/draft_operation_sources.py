@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from ...application.errors import UnknownRecord
 from ...application.operations import PersistedOperation
-from ...application.ports.draft_operations import DraftGenerationSources
+from ...application.ports.drafts import DraftGenerationSources
 from ...application.ports.transactions import ReadTransaction
 from ...domain.contracts.drafts import WorkingDraft
 from .analysis_sql import _analysis_record, _selection_plan_record

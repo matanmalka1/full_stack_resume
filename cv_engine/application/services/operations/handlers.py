@@ -37,16 +37,13 @@ from ...operations import (
     PersistedOperation,
 )
 from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
-from ...ports.draft_operations import DraftOperationSourceReader
+from ...ports.drafts import DraftOperationSourceReader
 from ...ports.rendering import RenderContextReader
 from ...ports.transactions import ReadTransaction, WriteTransaction
-from ..analysis import (
-    AnalysisService,
-    PreparedAnalysis,
-    PreparedSelectionProposal,
-    load_analysis_knowledge,
-)
-from ..analysis_activation import AnalysisActivation
+from ..analysis.activation import AnalysisActivation
+from ..analysis.preparation import PreparedAnalysis
+from ..analysis.selection import PreparedSelectionProposal
+from ..analysis.service import AnalysisService, load_analysis_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
 from ..proposals import ProviderEvidence

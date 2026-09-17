@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from ...application.commands import ApprovalResult
 from ...application.errors import UnknownRecord
-from ...application.ports.draft_approval import ApprovalReplay, DraftApprovalContext
+from ...application.ports.drafts import ApprovalReplay, DraftApprovalContext
 from ...application.ports.transactions import ReadTransaction
 from ...domain.contracts.drafts import WorkingDraft
 from .analysis_sql import _selection_plan_record

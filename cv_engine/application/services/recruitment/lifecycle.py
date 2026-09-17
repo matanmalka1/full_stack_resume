@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing import Literal
 
-from ...domain.contracts.records import AuditRecord
-from ...domain.contracts.recruitment import ApplicationStatus
-from ...domain.recruitment import (
+from ....domain.contracts.records import AuditRecord
+from ....domain.contracts.recruitment import ApplicationStatus
+from ....domain.recruitment import (
     submission_owns_transition,
     terminal_outcome_after,
     user_transition_allowed,
 )
-from ...util import new_id, utc_now
-from ..commands import (
+from ....util import new_id, utc_now
+from ...commands import (
     ApplicationMutationResult,
     CloseApplicationCommand,
     DeleteApplicationCommand,
@@ -19,10 +19,10 @@ from ..commands import (
     RecruitmentStatusCommand,
     WriteClient,
 )
-from ..errors import StateConflict, UnknownRecord
-from ..ports.application_intake import AuditLogWriter
-from ..ports.recruitment import RecruitmentStore
-from ..ports.transactions import TransactionManager
+from ...errors import StateConflict, UnknownRecord
+from ...ports.application_intake import AuditLogWriter
+from ...ports.recruitment import RecruitmentStore
+from ...ports.transactions import TransactionManager
 
 
 class RecruitmentService:

@@ -39,7 +39,7 @@ from ...operations import (
 from ...ports.operation_client import OperationClientStore
 from ...ports.settings import SettingsStore
 from ...ports.transactions import TransactionManager
-from ..analysis import AnalysisService
+from ..analysis.service import AnalysisService
 from ..drafts import DraftAuthoringService
 from ..rendering import RenderingService
 from .common import (

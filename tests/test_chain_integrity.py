@@ -797,8 +797,8 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
         Path("cv_engine/api/schemas/health.py"),
         Path("cv_engine/application/commands/knowledge.py"),
         # Preparation and interpretation correction consume it.
-        Path("cv_engine/application/services/analysis_preparation.py"),
-        Path("cv_engine/application/services/analysis_correction.py"),
+        Path("cv_engine/application/services/analysis/preparation.py"),
+        Path("cv_engine/application/services/analysis/correction.py"),
     }
     root = Path(__file__).resolve().parents[1]
     readers = {

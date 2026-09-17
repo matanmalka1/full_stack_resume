@@ -4,7 +4,7 @@ from .... import __version__
 from ....domain.draft_markdown import serialize_markdown
 from ...commands import DraftCommand, DraftResult, RegenerationResult
 from ...ports.analysis_plans import AnalysisPlanStore
-from ...ports.draft_lifecycle import DraftLifecycleStore
+from ...ports.drafts import DraftLifecycleStore
 from ...ports.transactions import WriteTransaction
 from ...ports.validation_store import ValidationStore
 from . import generation as generation_checks

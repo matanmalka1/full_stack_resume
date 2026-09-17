@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-from ...domain.contracts.analysis import JobAnalysis, OverrideKey
-from ...domain.contracts.selection import SelectionPlan
-from ...domain.contracts.taxonomy import Emphasis
-from ...domain.profiles import classification_mismatch
-from ..commands import (
+from ....domain.contracts.analysis import JobAnalysis, OverrideKey
+from ....domain.contracts.selection import SelectionPlan
+from ....domain.contracts.taxonomy import Emphasis
+from ....domain.profiles import classification_mismatch
+from ...commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
     CreateSelectionPlanCommand,
 )
-from ..errors import (
+from ...errors import (
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
 )
-from .analysis_preparation import PreparedAnalysis
-from .analysis_selection import AnalysisSelection
+from .preparation import PreparedAnalysis
+from .selection import AnalysisSelection
 
 
 def revise_classification(
