@@ -9,7 +9,7 @@ Current phase: Phase 8 — Projections and test migration (NOT STARTED)
 Last completed phase: Phase 7 — Worker and handlers
 Next action: start Phase 8 in a new session
 Known blockers: None; approval replay correction authorized (Decision Log below)
-Last verified boundary: combined Phase 6+7 — all required gates passed; implementation commit pending
+Last verified boundary: combined Phase 6+7 — all required gates passed at implementation commit 4de239b5006cfff0d786d2e7c2f2c3ecea639cf1
 ```
 
 ## 1. Final goal
