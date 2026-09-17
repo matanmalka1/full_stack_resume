@@ -9,7 +9,7 @@ Current phase: Phase 10 — Final deletion and baseline reset (NOT STARTED)
 Last completed phase: Phase 9 — Knowledge lifecycle (combined Phase 8+9 boundary)
 Next action: Phase 10, not started; await a separate execution request
 Known blockers: None
-Last verified boundary: combined Phase 8+9 — all required gates confirmed passing by the user on 2026-09-17; implementation commit recorded after closeout
+Last verified boundary: combined Phase 8+9 — all required gates confirmed passing by the user on 2026-09-17 at implementation commit b9fe7a6767f69b6c4a0eee2ad66948e8749eb3c1
 ```
 
 ## 1. Final goal
