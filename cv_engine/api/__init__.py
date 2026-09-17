@@ -7,7 +7,7 @@ root in `runtime/` builds the services and hands them in, which is why
 """
 
 from .app import create_app
-from .frontend import FrontendBuildError
+from .middleware.frontend import FrontendBuildError
 from .services import ApiLimits, ApiServices, InstanceIdentity
 
 __all__ = [

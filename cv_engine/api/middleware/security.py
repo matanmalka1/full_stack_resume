@@ -21,7 +21,7 @@ from __future__ import annotations
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .problems import problem
+from ..problems import problem
 
 #: Requests that cannot change state. Everything else must carry a known Origin.
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})

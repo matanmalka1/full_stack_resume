@@ -22,7 +22,13 @@ from starlette.exceptions import HTTPException
 
 from ..application.errors import ApplicationError
 from .dependencies import install_services
-from .frontend import FrontendAssetsMiddleware, validate_frontend_build
+from .middleware.frontend import FrontendAssetsMiddleware, validate_frontend_build
+from .middleware.request_logging import (
+    RequestLoggingMiddleware,
+    RuntimeEventSink,
+    record_runtime_event,
+)
+from .middleware.security import BodySizeLimitMiddleware, OriginPolicyMiddleware, allowed_origins
 from .problems import (
     REQUEST_VALIDATION_OPENAPI_RESPONSE,
     application_error_handler,
@@ -31,7 +37,6 @@ from .problems import (
     request_validation_error_handler,
     unexpected_error_handler,
 )
-from .request_logging import RequestLoggingMiddleware, RuntimeEventSink, record_runtime_event
 from .routers import (
     analyses,
     applications,
@@ -47,7 +52,6 @@ from .routers import (
     validation_runs,
     working_drafts,
 )
-from .security import BodySizeLimitMiddleware, OriginPolicyMiddleware, allowed_origins
 from .services import ApiServices
 from .versioning import API_PREFIX, API_VERSION
 

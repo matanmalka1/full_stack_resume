@@ -21,8 +21,8 @@ from fastapi.testclient import TestClient
 
 from cv_engine.api import FrontendBuildError
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
+from cv_engine.api.middleware.security import BodySizeLimitMiddleware
 from cv_engine.api.problems import PROBLEM_CONTENT_TYPE, status_for
-from cv_engine.api.security import BodySizeLimitMiddleware
 from cv_engine.application.errors import (
     ApplicationIntakeInvalid,
     DependencyUnavailable,

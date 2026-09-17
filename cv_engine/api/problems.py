@@ -33,7 +33,7 @@ from ..application.errors import (
     UnknownRecord,
     ValidationBlocked,
 )
-from .request_logging import RuntimeEventSink, record_runtime_event
+from .middleware.request_logging import RuntimeEventSink, record_runtime_event
 
 PROBLEM_CONTENT_TYPE = "application/problem+json"
 

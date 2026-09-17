@@ -21,7 +21,11 @@ import logging
 from fastapi import FastAPI
 
 from ..api.app import create_app
-from ..api.frontend import FrontendBuildError, source_frontend_dist, validate_frontend_build
+from ..api.middleware.frontend import (
+    FrontendBuildError,
+    source_frontend_dist,
+    validate_frontend_build,
+)
 from ..infrastructure.runtime_logging import (
     StructuredRuntimeLogger,
     keep_uvicorn_console_concise,
