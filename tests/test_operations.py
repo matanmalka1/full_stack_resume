@@ -1573,9 +1573,31 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
     ] == published
 
 
-def test_worker_shutdown_requests_cancellation_and_prevents_activation(services) -> None:
+def test_worker_shutdown_requests_cancellation_and_prevents_activation(services, monkeypatch) -> None:
     operation = _operation_for_runner(services, "Worker Shutdown Co")
     started = Event()
+    original_cancel = services.operation_lifecycle.operations.request_cancellation
+    cancellation_attempts = []
+
+    def cancel_after_heartbeat(tx, operation_id):
+        cancellation_attempts.append(operation_id)
+        if len(cancellation_attempts) == 1:
+            # Establish the cancellation snapshot, then commit a heartbeat on
+            # another connection. Its update must force cancellation to retry.
+            services.operation_runner.execution_store.operation(tx, operation_id)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(
+                    _execution_write,
+                    services,
+                    "heartbeat_operation",
+                    operation_id,
+                    runner_id="shutdown-worker",
+                ).result(timeout=2)
+        return original_cancel(tx, operation_id)
+
+    monkeypatch.setattr(
+        services.operation_lifecycle.operations, "request_cancellation", cancel_after_heartbeat
+    )
 
     def execute(_operation, cancellation_requested):
         started.set()
@@ -1587,7 +1609,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
         services,
         {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
         runner_id="shutdown-worker",
-        heartbeat_interval_seconds=0.02,
+        heartbeat_interval_seconds=10,
     )
     worker = OperationWorker(
         runner,
@@ -1605,6 +1627,33 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
 
     assert not thread.is_alive()
     assert _operation(services, operation.id).status is OperationStatus.CANCELLED
+    assert len(cancellation_attempts) == 2
+
+
+def test_heartbeat_skips_inflight_cancellation_without_failing_operation(services) -> None:
+    operation = _operation_for_runner(services, "Heartbeat Cancellation Co")
+    claimed = _claim_operation(services, operation.id, runner_id="owner")
+    assert claimed is not None
+    transactions = services.operation_runner.transactions
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with transactions.write() as tx:
+            services.operation_lifecycle.operations.request_cancellation(tx, operation.id)
+            # The cancellation update holds the row lock until this scope commits.
+            # A heartbeat on another connection must skip it rather than wait and
+            # raise a REPEATABLE READ serialization error after that commit.
+            future = pool.submit(
+                _execution_write,
+                services,
+                "heartbeat_operation",
+                operation.id,
+                runner_id="owner",
+            )
+            future.result(timeout=2)
+
+    result = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
+    assert result.status is OperationStatus.CANCELLED
+    assert result.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
 
 
 # --- execution-store methods against real PostgreSQL -------------------------

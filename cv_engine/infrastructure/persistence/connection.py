@@ -8,8 +8,9 @@ from typing import Any, Literal, cast
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 
-from ...application.ports.transactions import ReadTransaction, WriteTransaction
+from ...application.ports.transactions import ReadTransaction, TransactionConflict, WriteTransaction
 from ...application.transactions import (
     begin_transaction_scope,
     end_transaction_scope,
@@ -98,9 +99,11 @@ class _SqlAlchemyTransactionScope(AbstractContextManager[SqlAlchemyTransaction])
                 connection.commit()
             else:
                 connection.rollback()
-        except BaseException:
+        except BaseException as error:
             if connection.in_transaction():
                 connection.rollback()
+            if isinstance(error, DBAPIError) and getattr(error.orig, "sqlstate", None) == "40001":
+                raise TransactionConflict("concurrent database update") from error
             raise
         finally:
             transaction._close()
@@ -108,6 +111,8 @@ class _SqlAlchemyTransactionScope(AbstractContextManager[SqlAlchemyTransaction])
             end_transaction_scope(scope_token)
             self._transaction = None
             self._scope_token = None
+        if isinstance(exc, DBAPIError) and getattr(exc.orig, "sqlstate", None) == "40001":
+            raise TransactionConflict("concurrent database update") from exc
         return None
 
 

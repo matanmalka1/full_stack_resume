@@ -194,6 +194,25 @@ class SqlAlchemyOperationExecutionStore:
         timestamp = now or utc_now()
         expires_at = _expiry(timestamp, lease_seconds)
         connection = self._transactions.connection_for(tx, access="write")
+        locked = connection.execute(
+            select(operations.c.id)
+            .where(operations.c.id == operation_id)
+            .with_for_update(skip_locked=True)
+        ).scalar_one_or_none()
+        if locked is None:
+            owned = connection.execute(
+                select(operations.c.id).where(
+                    operations.c.id == operation_id,
+                    operations.c.status == "running",
+                    operations.c.lease_owner == runner_id,
+                )
+            ).scalar_one_or_none()
+            if owned is not None:
+                # Cancellation can hold this row. Waiting at REPEATABLE READ
+                # would turn that normal overlap into a serialization failure.
+                # Keep the existing lease and let the next heartbeat refresh it.
+                return
+            raise StateConflict("operation lease is not owned by this runner")
         changed = connection.execute(
             update(operations)
             .where(

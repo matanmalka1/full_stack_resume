@@ -12,7 +12,7 @@ from ...operations import (
     is_terminal_operation,
 )
 from ...ports.operation_client import OperationClientStore
-from ...ports.transactions import TransactionManager
+from ...ports.transactions import TransactionConflict, TransactionManager
 
 
 class OperationLifecycleService:
@@ -25,9 +25,15 @@ class OperationLifecycleService:
             return as_operation_view(self.operations.operation(tx, operation_id))
 
     def cancel(self, operation_id: str) -> OperationView:
-        with self.transactions.write() as tx:
-            operation = self.operations.request_cancellation(tx, operation_id)
-        return as_operation_view(operation)
+        for attempt in range(3):
+            try:
+                with self.transactions.write() as tx:
+                    operation = self.operations.request_cancellation(tx, operation_id)
+                return as_operation_view(operation)
+            except TransactionConflict:
+                if attempt == 2:
+                    raise
+        raise AssertionError("unreachable")
 
     def retry(self, operation_id: str, *, idempotency_key: str) -> OperationView:
         with self.transactions.read() as tx:
