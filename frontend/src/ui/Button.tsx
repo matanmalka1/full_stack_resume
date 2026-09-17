@@ -17,17 +17,6 @@ const sizeButtonClasses = {
   flush: "min-h-11 px-0",
 } as const;
 
-/* Lift is reserved for the one emphasized action on a screen (A.1). A secondary or
-   ghost control that rises on hover competes with it for the eye and makes a row of
-   equal-weight buttons twitch under the pointer, so those two change color only.
-
-   Disabled is a flat neutral fill, the same idiom every text control on this design
-   system already disables with (`Input`, `Select`: `disabled:bg-cv-surface-muted
-   disabled:text-cv-text-muted`) - not the accent colour dimmed by opacity. Dimming
-   `cv-accent` with opacity keeps its hue: at 60% over a white surface the brand colour
-   still reads as a faded version of the same button and can be mistaken for something
-   pressable. Flattening to the surface-muted/text-muted pair reads as "not this one"
-   regardless of which variant it disables. */
 const variantButtonClasses: Record<ButtonVariant, string> = {
   primary:
     "bg-cv-accent text-cv-on-accent shadow-surface hover:-translate-y-0.5 hover:bg-cv-accent-hover hover:shadow-floating disabled:bg-cv-surface-muted disabled:text-cv-text-muted",
@@ -59,7 +48,7 @@ export const Button = ({
   disabled,
   pending = false,
   pendingLabel,
-  size = "default",
+  size = "compact",
   type,
   variant = "primary",
   ...rest

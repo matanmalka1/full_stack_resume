@@ -19,7 +19,7 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
     expect(screen.getByText("הגדרות")).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("לא הוגדר ספק AI בסביבת הריצה.")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "AI" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "יצירת טיוטה עם AI כברירת מחדל" })).toBeDisabled();
   });
 
   it("owns policy and display only: the fact store and its check live on the facts screen", async () => {
@@ -53,12 +53,8 @@ describe("SettingsPage", () => {
     expect(saveButton).toBeDisabled();
     fireEvent.click(autoGenerate);
     expect(saveButton).toBeEnabled();
-    fireEvent.change(screen.getByLabelText("צפיפות תצוגה"), {
-      target: { value: "compact" },
-    });
-    fireEvent.change(screen.getByLabelText("גודל טקסט"), {
-      target: { value: "large" },
-    });
+    fireEvent.click(screen.getByRole("switch", { name: "תצוגה צפופה" }));
+    fireEvent.click(screen.getByRole("switch", { name: "טקסט גדול" }));
     fireEvent.change(screen.getByLabelText("מודל AI"), {
       target: { value: "gpt-5.6-luna" },
     });
@@ -122,20 +118,21 @@ it("preserves edits through refresh failure and repeated conflict, and merges on
   });
   vi.stubGlobal("fetch", fetch);
   renderRoute("/settings", "/settings", <SettingsPage />);
-  await screen.findByLabelText("ערכת נושא");
-  fireEvent.change(screen.getByLabelText("ערכת נושא"), { target: { value: "dark" } });
+  await screen.findByRole("switch", { name: "ערכת נושא לפי המערכת" });
+  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא לפי המערכת" }));
+  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא כהה" }));
   fireEvent.change(screen.getByLabelText("מאמץ חשיבה"), { target: { value: "low" } });
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   await screen.findByText("ההגדרות השתנו מאז שפתחת את הטופס");
   expect(screen.getByRole("button", { name: "שמירת הגדרות" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
   await screen.findByRole("alert");
-  expect(screen.getByLabelText("ערכת נושא")).toHaveValue("dark");
+  expect(screen.getByRole("switch", { name: "ערכת נושא כהה" })).toBeChecked();
   fireEvent.click(screen.getByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
   fireEvent.click(await screen.findByRole("checkbox", { name: "החלת העריכה: ערכת נושא" }));
   fireEvent.click(screen.getByRole("button", { name: "החלת הבחירה על הגרסה העדכנית" }));
   expect(screen.getByLabelText("מאמץ חשיבה")).toHaveValue("high");
-  expect(screen.getByLabelText("צפיפות תצוגה")).toHaveValue("compact");
+  expect(screen.getByRole("switch", { name: "תצוגה צפופה" })).toBeChecked();
   expect(writes).toBe(1);
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   await screen.findByText("ההגדרות השתנו מאז שפתחת את הטופס");
@@ -170,11 +167,12 @@ it("discards local edits only by explicit choice and adopts the current server v
     }),
   );
   renderRoute("/settings", "/settings", <SettingsPage />);
-  fireEvent.change(await screen.findByLabelText("ערכת נושא"), { target: { value: "dark" } });
+  fireEvent.click(await screen.findByRole("switch", { name: "ערכת נושא לפי המערכת" }));
+  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא כהה" }));
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   fireEvent.click(await screen.findByRole("button", { name: "טעינת הגרסה העדכנית להשוואה" }));
   fireEvent.click(await screen.findByRole("button", { name: "טעינת ערכי השרת והשלכת העריכות שלי" }));
-  expect(screen.getByLabelText("ערכת נושא")).toHaveValue("light");
+  expect(screen.getByRole("switch", { name: "ערכת נושא כהה" })).not.toBeChecked();
   expect(screen.getByRole("button", { name: "שמירת הגדרות" })).toBeDisabled();
 });
 
@@ -199,9 +197,10 @@ it("keeps a non-conflict 412 as a validation failure and retains unsaved edits",
     ),
   );
   renderRoute("/settings", "/settings", <SettingsPage />);
-  fireEvent.change(await screen.findByLabelText("ערכת נושא"), { target: { value: "dark" } });
+  fireEvent.click(await screen.findByRole("switch", { name: "ערכת נושא לפי המערכת" }));
+  fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא כהה" }));
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
   await screen.findByText("לא ניתן לבצע את הפעולה כעת");
   expect(screen.queryByText("ההגדרות השתנו מאז שפתחת את הטופס")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("ערכת נושא")).toHaveValue("dark");
+  expect(screen.getByRole("switch", { name: "ערכת נושא כהה" })).toBeChecked();
 });

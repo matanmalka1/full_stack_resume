@@ -151,19 +151,16 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                 </Switch>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field
-                    hint="קובע את מסלול יצירת הטיוטה: דטרמיניסטי משתמש בחוקים ובשומרי הסף בלבד, ללא קריאת AI. ניתוח משרה רץ תמיד עם AI."
-                    label="מצב ביצוע ברירת מחדל"
+                  <Switch
+                    checked={form.default_execution_mode === "ai"}
+                    disabled={!aiAvailable}
+                    description="כשהמתג כבוי, הטיוטה נוצרת במסלול דטרמיניסטי ללא קריאת AI. ניתוח משרה רץ תמיד עם AI."
+                    onChange={(checked) =>
+                      setValue("default_execution_mode", checked ? "ai" : "deterministic", { shouldDirty: true })
+                    }
                   >
-                    {(control) => (
-                      <Select {...control} {...register("default_execution_mode")}>
-                        <option value="deterministic">דטרמיניסטי</option>
-                        <option disabled={!aiAvailable} value="ai">
-                          AI
-                        </option>
-                      </Select>
-                    )}
-                  </Field>
+                    יצירת טיוטה עם AI כברירת מחדל
+                  </Switch>
                   <Field hint="הבחירה נשמרת לכל פעולת AI חדשה; פעולה שכבר נשלחה שומרת את המודל שלה." label="מודל AI">
                     {(control) => (
                       <Select {...control} {...register("default_ai_model")}>
@@ -211,33 +208,43 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
             <div className="grid gap-4 sm:grid-cols-2">
               {!themeOnly && (
                 <>
-                  <Field label="צפיפות תצוגה">
-                    {(control) => (
-                      <Select {...control} {...register("ui_density")}>
-                        <option value="comfortable">נוחה</option>
-                        <option value="compact">צפופה</option>
-                      </Select>
-                    )}
-                  </Field>
-                  <Field label="גודל טקסט">
-                    {(control) => (
-                      <Select {...control} {...register("ui_text_size")}>
-                        <option value="normal">רגיל</option>
-                        <option value="large">גדול</option>
-                      </Select>
-                    )}
-                  </Field>
+                  <Switch
+                    checked={form.ui_density === "compact"}
+                    description="כשהמתג כבוי, צפיפות התצוגה נוחה."
+                    onChange={(checked) =>
+                      setValue("ui_density", checked ? "compact" : "comfortable", { shouldDirty: true })
+                    }
+                  >
+                    תצוגה צפופה
+                  </Switch>
+                  <Switch
+                    checked={form.ui_text_size === "large"}
+                    description="כשהמתג כבוי, גודל הטקסט רגיל."
+                    onChange={(checked) =>
+                      setValue("ui_text_size", checked ? "large" : "normal", { shouldDirty: true })
+                    }
+                  >
+                    טקסט גדול
+                  </Switch>
                 </>
               )}
-              <Field label="ערכת נושא">
-                {(control) => (
-                  <Select {...control} {...register("ui_theme")}>
-                    <option value="system">לפי המערכת</option>
-                    <option value="light">בהירה</option>
-                    <option value="dark">כהה</option>
-                  </Select>
-                )}
-              </Field>
+              <div className="flex flex-col gap-4 sm:col-span-2">
+                <Switch
+                  checked={form.ui_theme === "system"}
+                  description="מתאים את ערכת הנושא להעדפת מערכת ההפעלה."
+                  onChange={(checked) => setValue("ui_theme", checked ? "system" : "light", { shouldDirty: true })}
+                >
+                  ערכת נושא לפי המערכת
+                </Switch>
+                <Switch
+                  checked={form.ui_theme === "dark"}
+                  disabled={form.ui_theme === "system"}
+                  description="כשהמתג כבוי, ערכת הנושא בהירה. לבחירה ידנית יש לכבות את ההתאמה למערכת."
+                  onChange={(checked) => setValue("ui_theme", checked ? "dark" : "light", { shouldDirty: true })}
+                >
+                  ערכת נושא כהה
+                </Switch>
+              </div>
             </div>
           </FormSection>
         </fieldset>
