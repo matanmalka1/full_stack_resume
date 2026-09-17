@@ -394,9 +394,9 @@ missing or corrupt. `PreparationState=ready` additionally requires compatibility
 the active JobSnapshot + JobAnalysis, and
 `latest_ready_revision_id` is an ApprovedRevision ID.
 
-Ready remains compatible across a new SelectionPlan/WorkingDraft under the same
-JobSnapshot + JobAnalysis. A new snapshot or analysis demotes it only for the active
-context; the immutable revision remains historical and downloadable.
+Ready compatibility follows the rule in state-and-use-cases.md §3 (JobSnapshot ID +
+JobAnalysis ID): a new snapshot or analysis demotes it only for the active context, and
+the immutable revision remains historical and downloadable regardless.
 
 ## 9. Application services and action policy
 
