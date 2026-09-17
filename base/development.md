@@ -127,7 +127,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "fact_id": "development.phdigital.nextjs",
       "meaning": "Built a customer marketing site with Next.js App Router, React Server Components, TypeScript, Tailwind CSS, RTL Hebrew, Sentry, and Vitest.",
       "renderings": {
-        "en": "Built a customer-facing site with Next.js App Router, React Server Components, TypeScript, Tailwind CSS, RTL Hebrew, Sentry, and Vitest."
+        "en": "Built a customer-facing site with Next.js App Router, React Server Components, TypeScript, Tailwind CSS, RTL Hebrew, Sentry, and Vitest.",
+        "he": "בניית אתר שיווקי ללקוחות באמצעות Next.js App Router, React Server Components, TypeScript, Tailwind CSS, תמיכה בעברית RTL, Sentry ו-Vitest."
       },
       "tags": [
         "development",

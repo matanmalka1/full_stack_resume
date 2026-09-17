@@ -805,6 +805,34 @@ describe("ApplicationPage at the preparation route", () => {
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
   });
 
+  it("keeps the stored posting and its update action reachable after analysis fails", async () => {
+    const failed = queued({
+      status: "failed",
+      is_terminal: true,
+      failure_code: "MISSING_FACT_RENDERING",
+      safe_failure_detail: "Fact development.phdigital.nextjs has no 'he' rendering.",
+      available_actions: [],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input).includes("/settings")
+            ? jsonResponse(aiSettings)
+            : jsonResponse(detail({ latest_operation: failed, active_operation: null })),
+        ),
+      ),
+    );
+
+    renderPage(aiSettings);
+
+    expect(await screen.findByText("לעובדה development.phdigital.nextjs חסר ניסוח בשפה he.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "עדכון נוסח המשרה" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "עדכון נוסח המשרה" }));
+    expect(screen.getByRole("dialog", { name: "יצירת תצלום משרה חדש" })).toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("Senior Backend Engineer");
+  });
+
   it("offers analysis after creation scheduling failed and does not retain creation news over later server work", async () => {
     vi.stubGlobal(
       "fetch",

@@ -188,15 +188,25 @@ export const ApplicationPage = () => {
                 column at the same weight as the step reads as another panel of it - which
                 is how a step turns back into a record with sections. The line says where
                 the step ends and the material about it begins. */}
-            {viewState === "content" ? (
+            {/* A failed analysis can be repaired only from its source context. In
+                particular, updating a malformed posting lives in JobSnapshotPanel, so
+                hiding reference material on failure also hid the way out. */}
+            {viewState === "content" || viewState === "analysis_failed" ? (
               <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
                 <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
 
-                <Disclosure summary="צפייה בנוסח המשרה שנשמר">
-                  <div className="pt-2">
-                    <JobSnapshotPanel detail={detail} />
-                  </div>
-                </Disclosure>
+                {viewState === "analysis_failed" ? (
+                  /* Repair is the task now, not optional reference reading. Keep the
+                     posting and its edit action in view instead of nesting them behind a
+                     second disclosure the reader has no reason to discover. */
+                  <JobSnapshotPanel detail={detail} />
+                ) : (
+                  <Disclosure summary="צפייה בנוסח המשרה שנשמר">
+                    <div className="pt-2">
+                      <JobSnapshotPanel detail={detail} />
+                    </div>
+                  </Disclosure>
+                )}
 
                 {hasArtifacts ? (
                   <Disclosure summary="גרסאות וקבצים">

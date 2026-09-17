@@ -94,6 +94,23 @@ export interface FailurePresentation {
   guidance: string;
 }
 
+/* Most backend failure details deliberately add no user-facing information beyond the
+   translated presentation below. MissingFactRendering is different: its safe detail
+   carries the exact canonical fact and target language the reader must repair. Keep the
+   parsing narrow so a future or malformed server sentence is not echoed as UI copy. */
+export const actionableFailureDetail = (
+  code: OperationFailureCode | null | undefined,
+  detail: string | null | undefined,
+): string | null => {
+  if (code !== "MISSING_FACT_RENDERING" || detail == null) return null;
+
+  const match = /^Fact (\S+) has no '([^']+)' rendering\.$/.exec(detail);
+  if (match == null) return null;
+
+  const [, factId, language] = match;
+  return `לעובדה ${factId} חסר ניסוח בשפה ${language}.`;
+};
+
 const providerRetryGuidance =
   "לא בוצע מעבר אוטומטי למצב דטרמיניסטי. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
 const providerOutputGuidance =

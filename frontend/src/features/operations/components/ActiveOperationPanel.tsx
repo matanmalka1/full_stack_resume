@@ -11,6 +11,7 @@ import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
 import {
+  actionableFailureDetail,
   activeOutputLabels,
   failurePresentations,
   failureTones,
@@ -100,6 +101,7 @@ export const ActiveOperationPanel = ({
   const terminal = isTerminalOperation(operation);
   const progressLabel = operationProgressLabel(operation);
   const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
+  const actionableDetail = actionableFailureDetail(operation.failure_code, operation.safe_failure_detail);
   const produced = activeOutputLabels(operation);
   const aiExecution = operation.provider === "openai" && operation.model != null;
   const summary =
@@ -238,8 +240,13 @@ export const ActiveOperationPanel = ({
           {failure === null && operation.safe_failure_detail != null ? (
             <p dir="auto">{operation.safe_failure_detail}</p>
           ) : null}
+          {actionableDetail === null ? null : (
+            <p className="font-medium" dir="auto">
+              {actionableDetail}
+            </p>
+          )}
           {failure === null ? null : (
-            <p className="mt-2" dir="auto">
+            <p className={actionableDetail === null ? "mt-2" : "mt-1"} dir="auto">
               {failure.guidance}
             </p>
           )}
