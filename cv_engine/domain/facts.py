@@ -10,6 +10,28 @@ FACT_SOURCE_NAMES = ("common.json", "sales.json", "development.json", "situation
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 
+def source_id_of_name(name: str) -> str:
+    """A fact source's stable identity, independent of its storage format."""
+    return name.rsplit(".", 1)[0]
+
+
+def _hashable_fact(fact: Fact) -> dict:
+    """A fact's hashed form, with `source_file` normalized to its stable id.
+
+    `source_file` carries the storage filename (extension included), so
+    hashing it verbatim would make `version`/`lifecycle_version` move with a
+    storage-format change alone. The source a fact belongs to is still
+    represented - a real move between sources still changes the hash - only
+    the on-disk format is excluded.
+    """
+    payload = fact.model_dump(mode="json")
+    source_file = payload.get("source_file")
+    if source_file:
+        directory, _, name = source_file.rpartition("/")
+        payload["source_file"] = f"{directory}/{source_id_of_name(name)}" if directory else source_id_of_name(name)
+    return payload
+
+
 class FactStoreError(ValueError):
     pass
 
@@ -34,7 +56,7 @@ class FactStore:
             canonical_json(
                 {
                     "sources": source_versions,
-                    "facts": [fact.model_dump(mode="json") for fact in canonical],
+                    "facts": [_hashable_fact(fact) for fact in canonical],
                 }
             )
         )
@@ -42,7 +64,7 @@ class FactStore:
             canonical_json(
                 {
                     "sources": source_versions,
-                    "facts": [facts[key].model_dump(mode="json") for key in sorted(facts)],
+                    "facts": [_hashable_fact(facts[key]) for key in sorted(facts)],
                 }
             )
         )
@@ -62,7 +84,10 @@ class FactStore:
         versions: dict[str, str] = {}
         for name in FACT_SOURCE_NAMES:
             source = sources[name]
-            versions[name] = source.source_version
+            # Keyed by the source's stable id, not its storage filename: a
+            # future storage-format change (as this one was) must not look
+            # like a knowledge change to every open draft and operation.
+            versions[source_id_of_name(name)] = source.source_version
             for fact in source.facts:
                 if fact.fact_id in facts:
                     prior = facts[fact.fact_id].source_file
