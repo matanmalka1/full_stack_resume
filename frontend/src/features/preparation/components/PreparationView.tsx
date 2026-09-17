@@ -4,7 +4,6 @@ import { classificationFromAnalysis } from "@/api/analyses";
 import { actionLabel } from "../model/preparationLabels";
 import { Callout } from "@/ui/Callout";
 import type { AnalysisDecisions, ApplicationDetail } from "@/api/contracts";
-import { Disclosure } from "@/ui/Disclosure";
 import { workflowActionPlan } from "../model/workflowActionPlan";
 import { AnalysisStage } from "../stages/analysis/AnalysisStage";
 import { SelectionPlanPanel } from "../stages/content/SelectionPlanPanel";
@@ -108,13 +107,9 @@ export const PreparationView = ({
           )}
 
           {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
-              parallel destination - offered where it is done, folded away until wanted. */}
+              parallel destination - offered where it is done. */}
           {selectionPlanAction === null ? null : (
-            <Disclosure summary="התאמת העובדות שייכנסו לקורות החיים">
-              <div className="pt-2">
-                <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
-              </div>
-            </Disclosure>
+            <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
           )}
         </div>
 
