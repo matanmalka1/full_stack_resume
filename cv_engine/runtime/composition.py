@@ -246,7 +246,7 @@ def build_services(
     operation_client = SqlAlchemyOperationClientStore(transactions)
     operation_execution = SqlAlchemyOperationExecutionStore(transactions)
     # Activation probes recovery state through the runner token. This file-only
-    # reader must not invoke the legacy recovery callback and open another DB scope.
+    # reader must not invoke startup recovery and open another DB scope.
     resolved_activation_knowledge = (
         activation_knowledge
         or knowledge

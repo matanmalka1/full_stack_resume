@@ -856,6 +856,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/maintenance/orphans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect unreferenced immutable payload candidates
+         * @description Read-only observation; candidates may still be awaiting registration.
+         *
+         *     This endpoint neither repairs nor deletes payloads. The database snapshot
+         *     closes before storage enumeration; a concurrent writer can register a
+         *     listed candidate after that snapshot.
+         */
+        get: operations["inspect_orphans_api_v1_maintenance_orphans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/maintenance/reconciliations": {
         parameters: {
             query?: never;
@@ -2851,6 +2875,14 @@ export interface components {
          * @enum {string}
          */
         OperationType: "analyze_job" | "propose_selection_plan" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_revision";
+        /**
+         * OrphanInventoryResponse
+         * @description Observed candidates may still be awaiting registration by active writers.
+         */
+        OrphanInventoryResponse: {
+            /** Candidates */
+            candidates: string[];
+        };
         /**
          * PreparationState
          * @enum {string}
@@ -5052,6 +5084,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    inspect_orphans_api_v1_maintenance_orphans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanInventoryResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

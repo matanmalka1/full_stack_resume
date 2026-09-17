@@ -13,6 +13,7 @@ no repositories or stores, and reconciliation needs both.
 from __future__ import annotations
 
 from ..commands import ReconciliationResult
+from ..maintenance import OrphanInventory
 from ..ports import RevisionPayloadStore
 from ..ports.maintenance import MaintenanceInspection
 from ..ports.transactions import TransactionManager
@@ -64,3 +65,10 @@ class MaintenanceService:
             problems=problems,
             fact_lifecycle=fact_lifecycle,
         )
+
+    def inspect_orphans(self) -> OrphanInventory:
+        """Observe unreferenced payloads without declaring them safe to delete."""
+        with self.transactions.read() as tx:
+            registered = self.inspection.registered_payload_references(tx)
+        stored = self.payloads.payload_inventory()
+        return OrphanInventory(candidates=sorted(set(stored) - registered))

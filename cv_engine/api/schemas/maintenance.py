@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from ...application.commands import ReconciliationResult
+from ...application.maintenance import OrphanInventory
 from .health import HttpSchema
 
-__all__ = ["FactLifecycleReportResponse", "ReconciliationResponse"]
+__all__ = ["FactLifecycleReportResponse", "ReconciliationResponse", "OrphanInventoryResponse"]
 
 
 class FactLifecycleReportResponse(HttpSchema):
@@ -43,3 +44,13 @@ class ReconciliationResponse(HttpSchema):
                 **result.fact_lifecycle.model_dump(mode="json")
             ),
         )
+
+
+class OrphanInventoryResponse(HttpSchema):
+    """Observed candidates may still be awaiting registration by active writers."""
+
+    candidates: list[str]
+
+    @classmethod
+    def of(cls, result: OrphanInventory) -> OrphanInventoryResponse:
+        return cls(candidates=list(result.candidates))

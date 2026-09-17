@@ -225,6 +225,12 @@ diff in the commit message:
 cd openapi && npm ci && npm run generate
 ```
 
+Read-only storage inspection is available at `GET /api/v1/maintenance/orphans`.
+Its `candidates` are managed immutable payload references absent from a database
+snapshot, including payloads that active writers may still be registering. It excludes
+mutable working projections and performs no deletion. Local and S3 stores share this
+inspection contract.
+
 ## Tests
 
 The suite truncates every table on each test, so it never runs against the configured

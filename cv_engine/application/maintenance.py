@@ -82,3 +82,9 @@ def build_application_export(applications: ApplicationListView) -> ApplicationEx
         rows=[{field: row.get(field) for field in EXPORT_FIELDS} for row in source],
         generated_at=utc_now(),
     )
+
+
+class OrphanInventory(BoundaryDTO):
+    """Unreferenced payload candidates, potentially still awaiting registration."""
+
+    candidates: list[str]

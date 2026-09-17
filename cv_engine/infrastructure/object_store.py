@@ -8,7 +8,7 @@ from typing import Protocol
 
 from ..application.errors import InfrastructureFailure
 from ..util import sha256_bytes
-from .paths import resolve_within
+from .paths import is_regular_file_within, resolve_within
 
 
 class ObjectKeyRefused(ValueError):
@@ -67,6 +67,14 @@ class ObjectStore(Protocol):
     the refusal lives in the protocol's contract rather than in one adapter's
     discretion.
     """
+
+    def keys_under(self, prefix: str) -> Iterator[str]:
+        """Enumerate stored keys beneath a prefix without changing any payload.
+
+        Empty prefix inventories the whole store. Listing is observational:
+        concurrent writers may add objects while enumeration is in progress.
+        """
+        ...
 
     def put(self, key: str, payload: bytes) -> StoredObject:
         """Store `payload` under `key`, refusing to replace an existing object.
@@ -307,14 +315,14 @@ class LocalObjectStore:
     def keys_under(self, prefix: str) -> Iterator[str]:
         """Every key stored beneath `prefix`, in sorted order.
 
-        Reconciliation reads this. It is not on the protocol until something
-        needs it from both backends.
+        Only regular contained files are listed; symlinked directories and
+        files are excluded from inspection.
         """
         base = resolve_within(self._root, validate_key(prefix)) if prefix else self._root
         if not base.is_dir():
             return
         for path in sorted(base.rglob("*")):
-            if path.is_file() and not path.is_symlink():
+            if is_regular_file_within(self._root, path):
                 yield path.relative_to(self._root).as_posix()
 
 
@@ -476,3 +484,28 @@ class S3ObjectStore:
         except OSError as exc:
             raise InfrastructureFailure(f"object could not be read: {source}") from exc
         return self.put(key, payload)
+
+    def keys_under(self, prefix: str) -> Iterator[str]:
+        requested = validate_key(prefix) if prefix else ""
+        bucket_prefix = f"{self._prefix}/" if self._prefix else ""
+        query_prefix = f"{bucket_prefix}{requested}/" if requested else bucket_prefix
+        continuation: str | None = None
+        while True:
+            arguments = {"Bucket": self._bucket, "Prefix": query_prefix}
+            if continuation is not None:
+                arguments["ContinuationToken"] = continuation
+            try:
+                response = self._client.list_objects_v2(**arguments)  # type: ignore[attr-defined]
+            except Exception as exc:
+                raise InfrastructureFailure("object inventory could not be read") from exc
+            for row in response.get("Contents", []):
+                key = row["Key"]
+                if not key.startswith(query_prefix) or key.endswith("/"):
+                    continue
+                yield validate_key(key[len(bucket_prefix) :])
+            if not response.get("IsTruncated", False):
+                return
+            next_token = response.get("NextContinuationToken")
+            if not next_token or next_token == continuation:
+                raise InfrastructureFailure("object inventory pagination did not advance")
+            continuation = next_token

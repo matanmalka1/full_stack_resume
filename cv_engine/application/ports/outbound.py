@@ -44,12 +44,10 @@ from .values import (
 
 
 class ArtifactStore(Protocol):
-    """Where immutable and working payloads live.
+    """Mutable working projections and local diagnostic path access.
 
-    The application layer asks for "this application's working draft" or "this
-    approved version"; it never composes a directory name and never opens a
-    file. That is what keeps the storage layout an infrastructure decision
-    instead of a rule spread across services.
+    Immutable payload publication belongs to SnapshotPayloadStore and
+    RevisionPayloadStore, never to this working-projection capability.
     """
 
     def working_paths(self, application_id: str) -> DraftPaths: ...
@@ -59,16 +57,6 @@ class ArtifactStore(Protocol):
     def load_working_draft(self, application_id: str) -> Any: ...
 
     def working_markdown(self, application_id: str) -> str: ...
-
-    def read_document(self, path: Path) -> str: ...
-
-    def load_draft(self, manifest_path: Path) -> Any: ...
-
-    def paths_beside(self, manifest_path: Path) -> DraftPaths: ...
-
-    def approved_version_dir(self, application_id: str, version: int) -> Path: ...
-
-    def publish_working_draft(self, application_id: str, version: int) -> DraftPaths: ...
 
     def resolve(self, stored_path: str) -> Path: ...
 
@@ -110,6 +98,10 @@ class SnapshotPayloadStore(Protocol):
 
 
 class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
+    def payload_inventory(self) -> list[str]:
+        """Read-only observation of managed immutable payload references."""
+        ...
+
     def commit_revision(
         self,
         application_id: str,

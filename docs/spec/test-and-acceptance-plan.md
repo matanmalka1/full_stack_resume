@@ -65,7 +65,7 @@ contract coverage. Cover:
 
 - numbered migrations
 - foreign keys and constraints
-- UnitOfWork commit/rollback
+- transaction-scope commit/rollback
 - immutable row protections
 - status/audit projection consistency
 - artifact identity/hash/path registration

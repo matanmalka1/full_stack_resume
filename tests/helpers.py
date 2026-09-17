@@ -160,13 +160,6 @@ def analysis_proposal(**overrides) -> AnalysisProposal:
     )
 
 
-def script_analysis(fake_openai, **overrides) -> AnalysisProposal:
-    """Script the single analysis call and return what was scripted."""
-    proposal = analysis_proposal(**overrides)
-    fake_openai.script("propose_analysis", proposal)
-    return proposal
-
-
 def validate_active_draft(services: Services, application_id: str):
     """Validate the Application's active draft and return the run result.
 
@@ -214,15 +207,6 @@ def working_claim(services: Services, application_id: str, fact_id: str):
     )
 
 
-def exact_fact_claim(draft, fact_ids: list[str]):
-    return next(
-        claim
-        for section in draft.sections
-        for claim in section.claims
-        if claim.fact_ids == fact_ids
-    )
-
-
 def claim_by_id(draft, claim_id: str):
     return next(
         claim
@@ -245,7 +229,3 @@ def artifact_version_and_path(
             tx, application_id, artifact_type, lifecycle_status
         )
     return version, services.artifacts.resolve(version["path"])
-
-
-def passing_migration_test_runner(root: Path) -> Path:
-    return root / "data/migration/migration-tests.json"

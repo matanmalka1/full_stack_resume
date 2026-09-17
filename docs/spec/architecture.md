@@ -95,50 +95,39 @@ Small internal value objects may be dataclasses when serialization is not a boun
 
 ### 3.2 Application
 
-The application layer owns explicit commands, queries, services, ports, UnitOfWork
+The application layer owns explicit commands, queries, services, ports, transaction
 boundaries, permissions/action policy, state projections, optimistic commit checks,
 and conversion of validated Proposals into domain state.
 
 Services are synchronous. The layer has no dependency on FastAPI or an event loop.
 
-Focused services are:
-
-- `ApplicationService`
-- `ApplicationQueryService`
-- `AnalysisService`
-- `DraftService`
-- `RenderingService`
-- `TrackingService`
-- `KnowledgeService`
-- `OperationService`
-- `SettingsService`
-- `MaintenanceService`
-
-A small façade may compose them for convenience but contains no business logic.
+Services follow consumer and lifecycle boundaries: application intake and queries;
+analysis and selection; draft authoring, validation, approval, and history; rendering;
+recruitment and submission; knowledge queries, fact lifecycle, and recovery; operation
+submission, lifecycle, and replacement; settings and maintenance. The composition
+container exposes these services and required outbound stores, never persistence
+repositories or transaction managers to the API.
 
 ### 3.3 Infrastructure
 
-Infrastructure implements SQLAlchemy Core repositories, PostgreSQL UnitOfWork,
-local/S3-compatible object stores, KnowledgeRepository, OpenAI provider, rendering, operation
-claiming/execution, logging, and Alembic integration.
+Infrastructure implements independent SQLAlchemy Core persistence capabilities,
+PostgreSQL transaction scopes, local/S3-compatible object stores, file-backed Knowledge,
+the OpenAI provider, rendering, operation execution, logging, and Alembic integration.
 
-Repository boundaries follow transactional ownership and use-cases rather than tables:
+Persistence capabilities follow consumer, lifecycle, and trust boundaries rather than
+tables. Intake, job snapshots, analysis/selection plans, draft lifecycle, artifacts,
+validation, decisions, recruitment/submissions, audit, knowledge lifecycle, idempotency,
+and settings each have an explicit Port. Operation client and execution Ports separate
+API permissions from worker authority. Consumer-specific source/context readers,
+application projections, Ready evidence, and maintenance inspection supply minimal
+read models. There is no generic workflow-state DTO or persistence container.
 
-- `ApplicationRepository`
-- `PreparationRepository`
-- `DraftRepository`
-- `ArtifactRepository`
-- `OperationRepository`
-- `TrackingRepository`
-- `AuditRepository`
-- `SettingsRepository`
-- `KnowledgeMutationRepository`
-
-`PreparationRepository` may own JobSnapshot metadata, JobAnalysis, SelectionPlan,
-ValidationRun, and ApprovedRevision metadata where their transactions belong together.
-
-Read-only projection protocols (`QueryRepository`, `ReadinessRepository`) are narrowed
-views over the same tables for query services; they are not additional write owners.
+Concrete adapters neither inherit, hold, nor call other repositories. They hold no
+bound mutable connection and open no transaction. Database methods accept an active
+opaque transaction token explicitly; writes require a write token. Private SQL functions
+may share statements and record conversion without becoming repository wrappers.
+Services depend on application Ports, never concrete persistence implementations or
+casts between capabilities.
 
 ### 3.4 API
 
@@ -159,8 +148,8 @@ first lacks.
 ### 3.5 Runtime and composition
 
 `cv_engine/runtime/composition.py` is the manual composition root. It builds fixed application paths,
-configuration, repositories, UnitOfWork factory, services, provider, renderer,
-operation worker, and API dependencies. No DI framework is used.
+configuration, independent persistence adapters, one transaction manager, services,
+provider, renderer, operation worker, and API dependencies. No DI framework is used.
 
 The system runs as two processes over one database, and neither supervises the other:
 
@@ -228,8 +217,8 @@ PostgreSQL stores structured state and relationships:
 
 The database is addressed by the resolved `database_url` setting (`CV_DATABASE_URL` in
 environment and `.env` surfaces), not by a local database path. One process-wide SQLAlchemy
-`Engine` per URL owns pooling and connection health. UnitOfWork and multi-query projection
-reads use explicit transactions; stable projections use `REPEATABLE READ`.
+`Engine` per URL owns pooling and connection health. Commands and multi-query projection
+reads use explicit token scopes with `REPEATABLE READ`.
 
 Foreign keys and CHECK/UNIQUE constraints enforce relational invariants. Every
 immutable table carries an UPDATE guard and a DELETE guard, and which tables those are
@@ -306,19 +295,34 @@ rendering rules, and templates remain file-backed and version-controlled. Databa
 does not become an alternative Knowledge source of truth. The product never runs Git
 commit automatically.
 
-## 7. UnitOfWork and consistency
+## 7. Transaction ownership and consistency
 
-Commands that mutate several PostgreSQL tables execute through a UnitOfWork:
+Allowlisted application entry-point orchestrators own read/write scopes:
 
 ```python
-with uow:
-    ...
-    uow.commit()
+with transactions.write() as tx:
+    store.mutate(tx, prepared)
 ```
 
-Services do not own global connections or call driver transaction primitives directly.
-Each worker/request obtains an appropriate SQLAlchemy Connection/UnitOfWork. Queries use
-purpose-built projections and explicit joins without hydrating ORM entities.
+Successful write-scope exit commits exactly once; exceptional exit rolls back. Tokens
+close on scope exit. The adapter rejects closed tokens, tokens from another manager or
+engine, writes under a read token, and nested scopes in one execution context. Services
+do not own connections or call driver transaction primitives.
+
+The Operation runner owns source-verification and activation scopes. Handlers,
+activators, and commit gateways receive tokens, never transaction managers. A commit
+gateway accepts prepared immutable data for an atomic fan-in; it makes no business
+decision and calls no external service. Approval uses this boundary for revision,
+artifact, decision, lifecycle, audit, and idempotency registration.
+
+AI, network, browser, filesystem writes, and object-store writes run outside database
+scopes. Outbound adapters enforce this through `assert_external_io_allowed()`. Metadata
+reads finish before payload verification or streaming. Working draft files are derived
+projections written after commit; validation input is produced in memory.
+
+Queries use minimal consumer-specific projections and explicit joins without hydrating
+ORM entities. Application/action-policy reads capture database and Ready metadata in
+one stable snapshot, then verify payloads after the scope closes.
 
 State tables are authoritative current projections. Append-only events provide audit
 and provenance; the system is not event-sourced.
@@ -340,9 +344,16 @@ what the caller registers. Re-hashing the payload afterwards would describe a se
 read rather than the stored object.
 
 Before registration, the artifact is invisible to normal queries. If registration
-fails, reconciliation sees a safe orphan. A full journal is not required where orphan
-reconciliation provides deterministic safety and no active state can reference the
-payload.
+fails, read-only orphan inspection can list the unreferenced payload. A full journal is
+not required: failed registration leaves no active database state referencing the
+payload, and orphan inspection preserves that evidence for reconciliation.
+
+Maintenance inventories registered snapshot, revision, and artifact references in one
+read scope, closes it, then enumerates managed immutable object keys through the same
+backend-neutral Port on local and S3 stores. The resulting orphan candidates are an
+observation only: an active writer may still be awaiting registration. Mutable working
+projections are excluded. There is no orphan deletion or age-based safety claim;
+deleting candidates requires a separate writer-coordination contract.
 
 ### 7.2 Knowledge mutation journal
 

@@ -19,3 +19,20 @@ def relative_within(root: Path, path: Path | str) -> Path:
     """Return a resolved root-relative path, refusing traversal and symlink escapes."""
     resolved_root = Path(root).resolve()
     return resolve_within(resolved_root, path).relative_to(resolved_root)
+
+
+def is_regular_file_within(root: Path, candidate: Path | str) -> bool:
+    """Inspect only contained regular files, excluding symlinked ancestors too."""
+    resolved_root = Path(root).resolve()
+    unresolved = Path(candidate)
+    if not unresolved.is_absolute():
+        unresolved = resolved_root / unresolved
+    try:
+        resolve_within(resolved_root, unresolved)
+    except ValueError:
+        return False
+    return unresolved.is_file() and not any(
+        component.is_symlink()
+        for component in (unresolved, *unresolved.parents)
+        if component != resolved_root
+    )

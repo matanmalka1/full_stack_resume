@@ -145,6 +145,29 @@ def test_console_exception_filter_keeps_message_but_removes_traceback() -> None:
     assert record.exc_info is None
 
 
+def test_orphan_inventory_reports_candidates_without_changing_evidence(api, services) -> None:
+    # Ingest registers the snapshot without registering an artifact version.
+    from cv_engine.application.commands import IngestCommand
+
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Inventory Co", target_role="Engineer", job_text="Stored posting", client="web"
+        )
+    )
+    orphan = services.payloads.commit_snapshot("unregistered", "snapshot", "pending payload")
+    services.paths.artifacts_root.joinpath("working", "projection").mkdir(parents=True)
+    services.paths.artifacts_root.joinpath("working", "projection", "resume.md").write_text(
+        "derived"
+    )
+    before = services.payloads.payload_inventory()
+    response = api.get(f"{API_PREFIX}/maintenance/orphans")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"candidates": [orphan.reference]}
+    assert services.payloads.payload_inventory() == before
+    assert services.payloads.read_snapshot(orphan.reference, orphan.sha256) == "pending payload"
+    assert ingested.job_snapshot_id
+
+
 # --- refusals ---------------------------------------------------------------
 
 

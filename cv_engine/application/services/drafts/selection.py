@@ -20,7 +20,7 @@ from .inputs import compose
 
 
 class SelectionChangeService:
-    """Own only the selection-change transaction; other draft lifecycle stays legacy."""
+    """Own the atomic selection-plan and working-draft change transaction."""
 
     def __init__(
         self,

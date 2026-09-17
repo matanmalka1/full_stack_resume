@@ -130,6 +130,13 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     assert report["passed"], report["problems"]
     assert report["artifact_versions_checked"] > 0
     assert services.knowledge_queries.reconcile_facts().passed
+    # Inventory protects snapshot and revision references as well as artifacts.
+    assert services.maintenance.inspect_orphans().candidates == []
+    orphan = services.payloads.commit_snapshot("unregistered", "snapshot", "awaiting registration")
+    assert services.maintenance.inspect_orphans().candidates == [orphan.reference]
+    assert (
+        services.payloads.read_snapshot(orphan.reference, orphan.sha256) == "awaiting registration"
+    )
 
     # the export projection sees the application the pipeline just produced
     export = build_application_export(services.queries.list_applications())

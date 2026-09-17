@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Protocol
 
@@ -34,9 +33,8 @@ class ArtifactPaths(Protocol):
 class FilesystemArtifactStore:
     """The application's artifact layout, in one place.
 
-    This compatibility adapter owns mutable working-draft paths and reads
-    registered immutable payloads. New snapshot, revision, and rendered-output
-    writes go through PayloadStore's approved layouts.
+    Owns mutable working-draft projections. Immutable snapshot, revision, and
+    rendered-output writes go through PayloadStore's approved layouts.
     """
 
     MARKDOWN = "resume.md"
@@ -62,48 +60,13 @@ class FilesystemArtifactStore:
         return StoredDraft(paths, markdown)
 
     def load_working_draft(self, application_id: str) -> DraftDocument:
-        return self.load_draft(self.working_paths(application_id).manifest)
+        manifest = self.working_paths(application_id).manifest
+        return parse_draft(manifest.read_text(encoding="utf-8"))
 
     def working_markdown(self, application_id: str) -> str:
-        return self.read_document(self.working_paths(application_id).markdown)
-
-    def read_document(self, path: Path) -> str:
-        """A stored document's text, or empty when it is not there.
-
-        An absent document is not an error here: the caller's validation is
-        what decides that a draft without its Markdown is invalid.
-        """
-        return path.read_text(encoding="utf-8") if path.is_file() else ""
-
-    def load_draft(self, manifest_path: Path) -> DraftDocument:
-        return parse_draft(manifest_path.read_text(encoding="utf-8"))
-
-    def paths_beside(self, manifest_path: Path) -> DraftPaths:
-        """The document pair stored alongside a known manifest.
-
-        Approved versions keep both payloads together, so a caller holding one
-        recorded path can ask for the other without naming the file itself.
-        """
-        return self._pair(manifest_path.parent)
-
-    def approved_version_dir(self, application_id: str, version: int) -> Path:
-        return self._root / application_id / f"v{version:03d}"
-
-    def publish_working_draft(self, application_id: str, version: int) -> DraftPaths:
-        """Copy the working draft into a new immutable approved version.
-
-        Refuses an existing directory rather than writing into it: an approved
-        version that already exists is evidence, not a destination.
-        """
-        directory = self.approved_version_dir(application_id, version)
-        if directory.exists():
-            raise FileExistsError(f"approved version directory already exists: {directory}")
-        directory.mkdir(parents=True)
-        working = self.working_paths(application_id)
-        published = self._pair(directory)
-        shutil.copy2(working.markdown, published.markdown)
-        shutil.copy2(working.manifest, published.manifest)
-        return published
+        """Return the derived Markdown, or empty for validation to refuse."""
+        markdown = self.working_paths(application_id).markdown
+        return markdown.read_text(encoding="utf-8") if markdown.is_file() else ""
 
     def resolve(self, stored_path: str) -> Path:
         return self._paths.root / stored_path

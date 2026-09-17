@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, func, select
+from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, func, select, union
 
 from ...application.ports.transactions import ReadTransaction
 from .connection import SqlAlchemyTransactionManager
-from .tables import artifact_versions
+from .tables import approved_revisions, artifact_versions, job_snapshots
 
 
 def _integrity_problems(connection) -> list[str]:
@@ -61,3 +61,12 @@ class SqlAlchemyMaintenanceInspection:
             .all()
         )
         return [dict(row) for row in rows]
+
+    def registered_payload_references(self, tx: ReadTransaction) -> set[str]:
+        statement = union(
+            select(job_snapshots.c.payload_path),
+            select(approved_revisions.c.resume_json_path),
+            select(approved_revisions.c.resume_markdown_path),
+            select(artifact_versions.c.path),
+        )
+        return set(self._transactions.connection_for(tx).execute(statement).scalars())

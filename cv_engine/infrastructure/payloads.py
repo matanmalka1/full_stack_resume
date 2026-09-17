@@ -95,6 +95,22 @@ class PayloadStore:
         self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
+    def payload_inventory(self) -> list[str]:
+        """List managed immutable references; working projections are excluded.
+
+        No bytes are fetched and no objects are changed. This observation can
+        include payloads whose writer has not registered them yet.
+        """
+        assert_external_io_allowed("payload inventory")
+        references = []
+        for key in self._objects.keys_under(""):
+            try:
+                self._approved_destination(key)
+            except ValueError:
+                continue
+            references.append(self._reference_for_key(key))
+        return sorted(set(references))
+
     @staticmethod
     def _component(value: str, *, name: str) -> str:
         candidate = Path(value)

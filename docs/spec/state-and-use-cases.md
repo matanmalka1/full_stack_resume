@@ -854,6 +854,21 @@ destroy the evidence of the mismatch. `passed` is the conjunction of both halves
 failed reconciliation is a successful answer to the question asked, not a command
 failure.
 
+### `inspect_orphans()`
+
+`GET /api/v1/maintenance/orphans` returns `candidates`, a sorted list of managed
+immutable payload references observed in storage but absent from the captured database
+snapshot. References include JobSnapshots, ApprovedRevision JSON/Markdown, and every
+artifact version, including historical and inactive evidence. Mutable working
+projections and files outside managed immutable layouts are excluded.
+
+The database read scope closes before storage enumeration. This is a read-only,
+non-atomic observation: candidates may belong to active writers awaiting registration
+or may have been registered after the snapshot. Listing neither changes reconciliation's
+`passed` verdict nor proves abandonment. It never repairs or deletes payloads. Deletion
+requires a separately specified coordination contract with writers; a grace period alone
+is insufficient.
+
 ## 20. Queries
 
 Initial query contracts include:

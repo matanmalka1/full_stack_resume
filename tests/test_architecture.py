@@ -1,9 +1,9 @@
 """The layering rule, enforced on the import graph rather than by review.
 
 `domain <- application <- infrastructure / api / runtime / worker`: dependencies point
-inward. These tests are the M1 acceptance criterion that domain and application
+inward. These tests enforce that domain and application
 code carries no FastAPI, persistence-library, filesystem-layout, browser, or provider HTTP
-dependency, expressed so it keeps holding as later milestones add code.
+dependency, including every new module discovered in each layer.
 """
 
 from __future__ import annotations
@@ -495,9 +495,8 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     is made where the meaning is known and this check keeps it there.
 
     The exemptions are contract violations by the caller rather than domain
-    refusals: passing a UnitOfWork built against another database, or a
-    non-positive lease. Those are bugs in calling code, and `ValueError` is the
-    right answer to a bug.
+    refusals: a non-positive lease is a bug in calling code, and `ValueError`
+    is the right answer to that bug.
     """
     exempt = {
         "operation_execution.py:lease_seconds must be positive",
@@ -842,7 +841,26 @@ def test_deleted_persistence_surfaces_have_zero_consumers() -> None:
         "ServiceBase",
         "sqlalchemy_unit_of_work",
         "application_repo",
+        "PreparationRepository",
+        "ReadinessRepository",
+        "TrackingRepository",
+        "JobStore",
+        "ArtifactRegistry",
+        "OperationRunnerRepository",
+        "OperationActivationStore",
+        "SqlAlchemyOperationActivationStore",
+        "WorkflowContextReader",
+        "WorkflowContext",
+        "DraftService",
+        "OperationService",
+        "bind",
+        "unit_of_work",
+        "shared",
+        "publish_working_draft",
+        "approved_version_dir",
+        "paths_beside",
     }
+    assert not (ENGINE / "infrastructure" / "persistence" / "repository.py").exists()
     paths = [*ENGINE.rglob("*.py"), *ENGINE.parent.joinpath("tests").rglob("*.py")]
     for path in paths:
         if path == Path(__file__):
@@ -862,6 +880,13 @@ def test_deleted_persistence_surfaces_have_zero_consumers() -> None:
                         module.with_suffix(".py").is_file()
                         or module.joinpath("__init__.py").is_file()
                     ), (path, node.lineno, "missing relative import", node.module)
+            elif isinstance(node, ast.Attribute) and node.attr in {
+                "publish_working_draft",
+                "approved_version_dir",
+                "paths_beside",
+                "unit_of_work",
+            }:
+                raise AssertionError((path, node.lineno, node.attr))
             elif isinstance(node, ast.Attribute) and node.attr == "repository":
                 assert not isinstance(node.value, ast.Name) or node.value.id not in {
                     "services",
@@ -872,20 +897,21 @@ def test_deleted_persistence_surfaces_have_zero_consumers() -> None:
                 )
 
 
-def test_transaction_token_adapters_have_no_legacy_repository_capabilities() -> None:
-    """Discover adapters; a newly added adapter cannot silently join the legacy model."""
+def test_persistence_adapters_are_independent_and_token_explicit() -> None:
+    """Discover every concrete persistence adapter, including inspection readers."""
     persistence = ENGINE / "infrastructure" / "persistence"
     for path in persistence.rglob("*.py"):
         source = path.read_text(encoding="utf-8")
         for node in ast.walk(ast.parse(source)):
             if not isinstance(node, ast.ClassDef):
                 continue
-            if not (
-                node.name == "Repository"
-                or re.fullmatch(
-                    r"SqlAlchemy.*(?:Repository|Store|Reader|Writer|Log|Catalog)", node.name
-                )
-            ):
+            # Transaction infrastructure owns connections/scopes; every other
+            # class discovered here must obey the independent adapter contract.
+            if node.name in {
+                "SqlAlchemyTransactionManager",
+                "SqlAlchemyTransaction",
+                "_SqlAlchemyTransactionScope",
+            }:
                 continue
             assert not node.bases, f"{node.name} inherits another concrete adapter"
             for method in node.body:
@@ -915,57 +941,44 @@ def test_transaction_token_adapters_have_no_legacy_repository_capabilities() -> 
             init = next(
                 n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"
             )
-            for argument in init.args.args[1:]:
+            for argument in [*init.args.args[1:], *init.args.kwonlyargs]:
                 assert ast.unparse(argument.annotation) == "SqlAlchemyTransactionManager"
+            assignments = [inner for inner in ast.walk(node) if isinstance(inner, ast.Assign)]
+            for assignment in assignments:
+                for target in assignment.targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    ):
+                        assert target.attr == "_transactions", (
+                            path,
+                            node.name,
+                            ast.unparse(target),
+                        )
+                        assert isinstance(assignment.value, ast.Name), (path, node.name)
 
 
-def test_migrated_analysis_consumers_have_no_old_persistence_dependencies() -> None:
-    services = ENGINE / "application" / "services"
-    for path in services.glob("analysis*.py"):
-        source = path.read_text(encoding="utf-8")
-        assert "PreparationRepository" not in source and "ServiceBase" not in source
-        assert not any(
-            isinstance(node, ast.Call)
-            and (
+def test_application_has_no_persistence_compatibility_or_capability_casts() -> None:
+    """Discover all application consumers instead of tracking migration file lists."""
+    for path in (ENGINE / "application").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Attribute):
+                assert node.func.attr not in {"bind", "unit_of_work"}, (path, node.lineno)
+            if (
                 isinstance(node.func, ast.Name)
                 and node.func.id == "cast"
                 or isinstance(node.func, ast.Attribute)
-                and node.func.attr in {"bind", "unit_of_work"}
-            )
-            for node in ast.walk(ast.parse(source))
-        ), path
-    # Handler membership is derived from token-scoped source verification.
-    source = (services / "operations" / "handlers.py").read_text(encoding="utf-8")
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        if not any(
-            isinstance(n, ast.FunctionDef) and n.name == "verify_sources" for n in node.body
-        ):
-            continue
-        body = ast.get_source_segment(source, node) or ""
-        assert "cast(" not in body and "PreparationRepository" not in body
-        assert "TransactionManager" not in body
-        assert not any(
-            isinstance(n, ast.Call)
-            and isinstance(n.func, ast.Attribute)
-            and n.func.attr in {"read", "write", "bind", "unit_of_work"}
-            for n in ast.walk(node)
-        )
-    for path in (ENGINE / "application").rglob("*.py"):
-        assert "PreparationRepository" not in path.read_text(encoding="utf-8"), path
-    # The old unscoped writer has no remaining consumer.
-    for path in (ENGINE / "application").rglob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                assert ast.unparse(node.func) not in {
-                    "self.repo.save_analysis",
-                    "repository.save_analysis",
-                    "self.repo.create_selection_plan",
-                    "repository.create_selection_plan",
-                } or any(
-                    isinstance(argument, ast.Name) and argument.id == "tx" for argument in node.args
-                ), path
+                and node.func.attr == "cast"
+            ):
+                target = ast.unparse(node.args[0])
+                assert not re.search(
+                    r"(?:Repository|Store|Reader|Writer|Catalog|Inspection|TransactionManager)",
+                    target,
+                ), (path, node.lineno, target)
 
 
 def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
@@ -991,11 +1004,7 @@ def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
         "SettingsService",
     }
     owners = set()
-    paths = [
-        *(ENGINE / "application" / "services").rglob("*.py"),
-        ENGINE / "application" / "operation_runner.py",
-        ENGINE / "application" / "settings.py",
-    ]
+    paths = (ENGINE / "application").rglob("*.py")
     for path in paths:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not isinstance(node, ast.ClassDef):
@@ -1009,68 +1018,17 @@ def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
     assert owners == allowed, "remove stale transaction-owner exceptions"
 
 
-def test_migrated_draft_services_have_no_legacy_persistence_or_hidden_scopes() -> None:
-    drafts = ENGINE / "application" / "services" / "drafts"
-    migrated = {
-        "activation.py",
-        "approval.py",
-        "approval_commit.py",
-        "authoring.py",
-        "history.py",
-        "inputs.py",
-        "validation.py",
-    }
-    for name in migrated:
-        path = drafts / name
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        assert "DraftRepository" not in source and "ReadinessRepository" not in source, path
-        assert "ServiceBase" not in source and "DraftService" not in source, path
-        assert not any(
-            isinstance(node, ast.Call)
-            and (
-                isinstance(node.func, ast.Name)
-                and node.func.id == "cast"
-                or isinstance(node.func, ast.Attribute)
-                and node.func.attr in {"bind", "unit_of_work"}
-            )
-            for node in ast.walk(tree)
-        ), path
-
-
-def test_phase5_services_have_no_root_repository_casts_or_legacy_scopes() -> None:
+def test_activation_components_cannot_own_transaction_scopes() -> None:
     services = ENGINE / "application" / "services"
-    for name in ("rendering.py", "recruitment.py", "submission.py", "maintenance.py"):
-        path = services / name
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        assert "ReadinessRepository" not in source and "TrackingRepository" not in source
-        assert "ServiceBase" not in source and "cast(" not in source
-        assert not any(
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr in {"bind", "unit_of_work"}
-            for node in ast.walk(tree)
-        ), path
-
-    handler_source = (services / "operations" / "handlers.py").read_text(encoding="utf-8")
-    handler = next(
+    components = [
         node
-        for node in ast.walk(ast.parse(handler_source))
-        if isinstance(node, ast.ClassDef) and node.name == "RenderOperationHandler"
-    )
-    assert "TransactionManager" not in ast.unparse(handler)
-    assert ".read(" not in ast.unparse(handler) and ".write(" not in ast.unparse(handler)
-
-    drafts = services / "drafts"
-    migrated = {"activation.py", "approval.py", "approval_commit.py", "authoring.py"}
-    for gateway_name in {"ApprovalCommitter", "DraftActivation"}:
-        gateway = next(
-            node
-            for name in migrated
-            for node in ast.walk(ast.parse((drafts / name).read_text(encoding="utf-8")))
-            if isinstance(node, ast.ClassDef) and node.name == gateway_name
-        )
+        for path in services.rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ClassDef)
+        and (node.name.endswith("Activation") or node.name.endswith("Committer"))
+    ]
+    assert components
+    for gateway in components:
         body = ast.unparse(gateway)
         assert "TransactionManager" not in body
         assert not any(

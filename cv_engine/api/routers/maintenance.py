@@ -13,7 +13,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ..dependencies import Services
-from ..schemas.maintenance import ReconciliationResponse
+from ..schemas.maintenance import OrphanInventoryResponse, ReconciliationResponse
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 
@@ -26,3 +26,18 @@ router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 def reconcile(services: Services) -> ReconciliationResponse:
     """Check database references, artifact hashes, and the fact lifecycle."""
     return ReconciliationResponse.of(services.maintenance.reconcile())
+
+
+@router.get(
+    "/orphans",
+    response_model=OrphanInventoryResponse,
+    summary="Inspect unreferenced immutable payload candidates",
+)
+def inspect_orphans(services: Services) -> OrphanInventoryResponse:
+    """Read-only observation; candidates may still be awaiting registration.
+
+    This endpoint neither repairs nor deletes payloads. The database snapshot
+    closes before storage enumeration; a concurrent writer can register a
+    listed candidate after that snapshot.
+    """
+    return OrphanInventoryResponse.of(services.maintenance.inspect_orphans())

@@ -53,6 +53,20 @@ class _FakeS3:
             raise _ClientError("404")
         return {}
 
+    def list_objects_v2(
+        self, Bucket: str, Prefix: str, ContinuationToken: str | None = None
+    ) -> dict[str, Any]:
+        keys = sorted(key for key in self.objects if key.startswith(Prefix))
+        start = int(ContinuationToken or 0)
+        # Two objects per page exercise actual continuation rather than one response.
+        page = keys[start : start + 2]
+        more = start + 2 < len(keys)
+        return {
+            "Contents": [{"Key": key} for key in page],
+            "IsTruncated": more,
+            **({"NextContinuationToken": str(start + 2)} if more else {}),
+        }
+
 
 @pytest.fixture
 def local(tmp_path: Path) -> LocalObjectStore:
@@ -128,3 +142,35 @@ def test_ingest_reports_a_source_that_was_never_written(
     for store in _stores(local, s3):
         with pytest.raises(ObjectNotFound):
             store.ingest("outputs/app/rev/id.html", missing)
+
+
+def test_inventory_is_backend_neutral_paginated_and_read_only(local, s3) -> None:
+    keys = ["snapshots/app/one.txt", "snapshots/app/two.txt", "revisions/app/rev/resume.md"]
+    for store in _stores(local, s3):
+        for key in keys:
+            store.put(key, key.encode())
+        assert sorted(store.keys_under("")) == sorted(keys)
+        assert sorted(store.keys_under("snapshots")) == sorted(keys[:2])
+        assert list(store.keys_under("missing")) == []
+        for key in keys:
+            assert store.get(key) == key.encode()
+    # The bucket namespace is neither exposed nor allowed to leak other prefixes.
+    s3._client.objects["another/snapshots/app/not-ours.txt"] = b"other"
+    assert sorted(s3.keys_under("")) == sorted(keys)
+    outside = local.root.parent / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("secret")
+    (local.root / "linked").symlink_to(outside, target_is_directory=True)
+    (local.root / "snapshots" / "link.txt").symlink_to(outside / "secret.txt")
+    assert sorted(local.keys_under("")) == sorted(keys)
+
+
+def test_s3_inventory_failure_is_not_an_empty_success(s3, monkeypatch) -> None:
+    from cv_engine.application.errors import InfrastructureFailure
+
+    def unavailable(**kwargs):
+        raise _ClientError("AccessDenied")
+
+    monkeypatch.setattr(s3._client, "list_objects_v2", unavailable)
+    with pytest.raises(InfrastructureFailure, match="inventory could not be read"):
+        list(s3.keys_under(""))
