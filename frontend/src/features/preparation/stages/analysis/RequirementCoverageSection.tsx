@@ -142,7 +142,7 @@ export const RequirementCoverageSection = ({
   const matchedRequirements = ordered.filter((requirement) => requirement.coverage === "matched");
 
   const requirementRow = (requirement: Requirement) => (
-    <article className="py-4 first:pt-0 last:pb-0" key={requirement.requirementId} role="listitem">
+    <li className="py-4 first:pt-0 last:pb-0" key={requirement.requirementId}>
       <div className="flex items-start gap-3">
         <div
           className={cx(
@@ -196,7 +196,7 @@ export const RequirementCoverageSection = ({
           )}
         </div>
       </div>
-    </article>
+    </li>
   );
 
   return (
@@ -230,7 +230,7 @@ export const RequirementCoverageSection = ({
           fallbackTitle="לא ניתן לטעון את הראיות התומכות"
         />
       )}
-      <div aria-label="פירוט כיסוי דרישות המשרה" role="list">
+      <div aria-label="פירוט כיסוי דרישות המשרה">
         {attentionRequirements.length === 0 ? null : (
           <section aria-labelledby="requirements-attention-heading">
             <div className="flex items-center gap-2 border-b border-cv-border pb-2">
@@ -239,7 +239,9 @@ export const RequirementCoverageSection = ({
                 דורשות תשומת לב ({attentionRequirements.length})
               </h4>
             </div>
-            <div className="divide-y divide-cv-border">{attentionRequirements.map(requirementRow)}</div>
+            <ul aria-labelledby="requirements-attention-heading" className="divide-y divide-cv-border">
+              {attentionRequirements.map(requirementRow)}
+            </ul>
           </section>
         )}
 
@@ -254,7 +256,9 @@ export const RequirementCoverageSection = ({
                 מכוסות במלואן ({matchedRequirements.length})
               </h4>
             </div>
-            <div className="divide-y divide-cv-border">{matchedRequirements.map(requirementRow)}</div>
+            <ul aria-labelledby="requirements-covered-heading" className="divide-y divide-cv-border">
+              {matchedRequirements.map(requirementRow)}
+            </ul>
           </section>
         )}
       </div>

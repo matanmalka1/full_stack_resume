@@ -32,6 +32,8 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
     if (import.meta.env.DEV) context.stack = error.stack;
 
+    // Preserve diagnostics for failures caught by the final application boundary.
+    // oxlint-disable-next-line no-console
     console.error("app_error_boundary", context);
   }
 
