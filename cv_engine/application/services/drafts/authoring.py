@@ -8,6 +8,7 @@ from ....domain.draft_markdown import serialize_markdown
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import allowed_fact_pool
+from ....domain.validation import validate_draft as run_draft_validation
 from ...chain import ChainError, check_loaded_draft_chain, draft_source_mismatch
 from ...commands import (
     DraftCommand,
@@ -42,11 +43,15 @@ from ...ports.drafts import DraftAuthoringSourceReader, DraftEvidencePreserver, 
 from ...ports.validation_store import ValidationStore
 from ..analysis.service import load_analysis_knowledge
 from ..proposals import ProviderEvidence, apply_proposed_claims, evidence_attached, fact_context
-from . import editing as editing_checks
 from .activation import DraftActivation
-from .generation import PreparedDraft
-from .inputs import compose, require_content_hash, require_working_version, validation_lineage
-from .regeneration import PreparedRegeneration
+from .inputs import (
+    PreparedDraft,
+    PreparedRegeneration,
+    compose,
+    require_content_hash,
+    require_working_version,
+    validation_lineage,
+)
 from .selection import SelectionChangeService
 
 
@@ -376,7 +381,7 @@ class DraftAuthoringService:
             raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
         changed = self._commit_edit(working, updated)
         self.store_working_draft(changed.source)
-        report = editing_checks.run_draft_validation(
+        report = run_draft_validation(
             changed.source,
             serialize_markdown(changed.source),
             facts,

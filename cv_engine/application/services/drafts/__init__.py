@@ -2,9 +2,8 @@
 
 from .approval import DraftApprovalService
 from .authoring import DraftAuthoringService
-from .generation import DeterministicRun, PreparedDraft
 from .history import DraftHistoryService
-from .regeneration import PreparedRegeneration
+from .inputs import DeterministicRun, PreparedDraft, PreparedRegeneration
 from .validation import DraftValidationService
 
 __all__ = [

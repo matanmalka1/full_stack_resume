@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from .... import __version__
 from ....domain.draft_markdown import serialize_markdown
+from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import DraftCommand, DraftResult, RegenerationResult
 from ...ports.analysis_plans import AnalysisPlanStore
 from ...ports.drafts import DraftLifecycleStore
 from ...ports.transactions import WriteTransaction
 from ...ports.validation_store import ValidationStore
-from . import generation as generation_checks
-from .generation import DeterministicRun, PreparedDraft
-from .inputs import validation_lineage
-from .regeneration import PreparedRegeneration
+from .inputs import DeterministicRun, PreparedDraft, PreparedRegeneration, validation_lineage
 
 
 class DraftActivation:
@@ -42,7 +40,7 @@ class DraftActivation:
             expected_working_draft_id=command.replaces_working_draft_id,
             expected_edit_version=command.replaces_expected_edit_version,
         )
-        report = generation_checks.run_draft_validation(
+        report = run_draft_validation(
             working.source,
             serialize_markdown(working.source),
             facts,

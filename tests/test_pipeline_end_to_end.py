@@ -19,7 +19,7 @@ import os
 import pytest
 from helpers import ACCOUNT_MANAGER_JOB, seed_existing_analysis
 
-import cv_engine.application.services.drafts.generation as draft_generation_module
+import cv_engine.application.services.drafts.activation as draft_activation_module
 import cv_engine.application.services.drafts.validation as draft_validation_module
 from cv_engine.application.commands import (
     ApproveDraftCommand,
@@ -183,7 +183,7 @@ def test_failed_pre_render_validation_blocks_approval(
     mandatory, and a failing run must leave the application with no approved
     revision rather than one nothing vouched for.
     """
-    real_validate = draft_generation_module.run_draft_validation
+    real_validate = draft_activation_module.run_draft_validation
 
     def fail_validation(*args, **kwargs) -> ValidationReport:
         report = real_validate(*args, **kwargs)
@@ -201,11 +201,11 @@ def test_failed_pre_render_validation_blocks_approval(
         )
 
     # Each draft module imports the domain validator under its own name, so a
-    # patch reaches only the module it names. `generation` records the draft
+    # patch reaches only the module it names. `activation` records the draft
     # Operation's own pre-render run; `validation` is the §15 command this test
     # calls. Both are patched so the assertion does not depend on which one the
     # pipeline happens to route through.
-    monkeypatch.setattr(draft_generation_module, "run_draft_validation", fail_validation)
+    monkeypatch.setattr(draft_activation_module, "run_draft_validation", fail_validation)
     monkeypatch.setattr(draft_validation_module, "run_draft_validation", fail_validation)
 
     ingested = services.applications.ingest(
