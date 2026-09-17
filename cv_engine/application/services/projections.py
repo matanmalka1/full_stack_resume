@@ -1,22 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
-from typing import Protocol
 
 from ...domain.contracts.drafts import WorkingDraft
 from ...domain.contracts.recruitment import ApplicationStatus
-from ...domain.contracts.validation import ReadyQualification
 from ...domain.recruitment import user_transition_targets
 from ..artifacts import verify_artifact
 from ..errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
+    KnowledgeRejected,
     UnknownRecord,
 )
-from ..ports import (
-    QueryRepository,
-)
+from ..ports.application_projections import ApplicationProjectionReader
+from ..ports.outbound import KnowledgeStore, Renderer, RevisionPayloadStore
+from ..ports.ready import ReadyEvidence, ReadyEvidenceReader
+from ..ports.transactions import ReadTransaction, TransactionManager
 from ..queries import (
     ApplicationDetailView,
     ApplicationListQuery,
@@ -44,30 +45,67 @@ from ..queries import (
     snapshot_view,
 )
 from ..queries.views_prep import JobSnapshotHistoryItem, JobSnapshotHistoryView
+from ..ready import qualify_ready_revision
 from ..state import ProjectionContext, project_application_state
-from .base import ServiceBase
 
 
-class ReadyProjection(Protocol):
-    def ready_qualification(
-        self,
-        application_id: str,
-        approved_revision_id: str | None = None,
-        pdf_artifact_version_id: str | None = None,
-    ) -> ReadyQualification: ...
-
-
-class ApplicationQueryService(ServiceBase[QueryRepository]):
+class ApplicationQueryService:
     """Storage-neutral read projections for the API and its clients."""
 
-    def __init__(self, *, ready: ReadyProjection, **dependencies):
-        super().__init__(**dependencies)
-        self._ready = ready
+    def __init__(
+        self,
+        *,
+        transactions: TransactionManager,
+        projections: ApplicationProjectionReader,
+        ready_evidence: ReadyEvidenceReader,
+        knowledge: KnowledgeStore,
+        renderer: Renderer,
+        payloads: RevisionPayloadStore,
+    ):
+        self._transactions = transactions
+        self._projections = projections
+        self._ready_evidence = ready_evidence
+        self._knowledge = knowledge
+        self._renderer = renderer
+        self.snapshot_payloads = payloads
+        self.revision_payloads = payloads
 
-    def _state_inputs(self, transaction, application_record, knowledge, ready_ids):
+    def load_knowledge(self):
+        try:
+            return self._knowledge.load()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
+        except ValueError as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+
+    def fact_store(self):
+        try:
+            return self._knowledge.facts()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read facts: {exc}") from exc
+        except ValueError as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+
+    def candidate(self):
+        return self.load_knowledge().candidate
+
+    @property
+    def renderer(self) -> Renderer:
+        return self._renderer
+
+    def _artifact_versions(self, application_id: str):
+        with self._transactions.read() as tx:
+            return self._projections.artifact_versions(tx, application_id)
+
+    def _state_inputs(
+        self,
+        transaction: ReadTransaction,
+        application_record,
+        knowledge,
+    ):
         application_id = application_record["id"]
-        snapshot_record = transaction.latest_snapshot(application_id)
-        analyses = transaction.analyses(application_id)
+        snapshot_record = self._projections.latest_snapshot(transaction, application_id)
+        analyses = self._projections.analyses(transaction, application_id)
         active_analysis_record = next(
             (
                 record
@@ -79,57 +117,56 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         active_analysis_id = (
             active_analysis_record["id"] if active_analysis_record is not None else None
         )
-        try:
-            latest_plan = transaction.latest_selection_plan(application_id)
-        except UnknownRecord:
-            latest_plan = None
+        latest_plan = self._projections.latest_selection_plan(transaction, application_id)
         active_plan = (
             latest_plan
             if latest_plan is not None and latest_plan.job_analysis_id == active_analysis_id
             else None
         )
-        try:
-            working = transaction.active_working_draft(application_id)
-        except UnknownRecord:
-            working = None
+        working = self._projections.active_working_draft(transaction, application_id)
         draft_plan = (
-            transaction.selection_plan(working.selection_plan_id) if working is not None else None
-        )
-        validation = (
-            transaction.latest_validation_for_working_draft(working.id)
+            self._projections.selection_plan(transaction, working.selection_plan_id)
             if working is not None
             else None
         )
-        revisions = tuple(transaction.approved_revisions(application_id))
-        active_operation = transaction.active_operation(application_id)
-        latest_operation = transaction.latest_operation(application_id)
-        matching_context_operation_active = transaction.has_active_matching_context_operation(
-            application_id
+        validation = (
+            self._projections.latest_validation_for_working_draft(transaction, working.id)
+            if working is not None
+            else None
         )
-        state = project_application_state(
-            ProjectionContext(
-                application=application_record,
-                active_job_snapshot_id=snapshot_record["id"],
-                active_analysis_id=active_analysis_id,
-                active_analysis=(
-                    active_analysis_record["analysis"]
-                    if active_analysis_record is not None
-                    else None
-                ),
-                active_selection_plan=active_plan,
-                draft_selection_plan=draft_plan,
-                active_working_draft=working,
-                latest_validation=validation,
-                approved_revisions=revisions,
-                ready_revision_ids=ready_ids,
-                knowledge=knowledge,
-                today=date.today(),
-                active_operation=active_operation,
-                latest_operation=latest_operation,
-                matching_context_operation_active=matching_context_operation_active,
-            )
+        revisions = tuple(self._projections.approved_revisions(transaction, application_id))
+        active_operation = self._projections.active_operation(transaction, application_id)
+        latest_operation = self._projections.latest_operation(transaction, application_id)
+        matching_context_operation_active = self._projections.has_active_matching_context_operation(
+            transaction, application_id
         )
-        return state, snapshot_record, analyses
+        context = ProjectionContext(
+            application=application_record,
+            active_job_snapshot_id=snapshot_record["id"],
+            active_analysis_id=active_analysis_id,
+            active_analysis=(
+                active_analysis_record["analysis"] if active_analysis_record is not None else None
+            ),
+            active_selection_plan=active_plan,
+            draft_selection_plan=draft_plan,
+            active_working_draft=working,
+            latest_validation=validation,
+            approved_revisions=revisions,
+            ready_revision_ids=frozenset(),
+            knowledge=knowledge,
+            today=date.today(),
+            active_operation=active_operation,
+            latest_operation=latest_operation,
+            matching_context_operation_active=matching_context_operation_active,
+        )
+        return context, snapshot_record, analyses
+
+    def _ready_ids(self, evidence: list[ReadyEvidence], application_id: str) -> frozenset[str]:
+        return frozenset(
+            item.revision.id
+            for item in evidence
+            if qualify_ready_revision(self.revision_payloads, item, application_id).ready_qualified
+        )
 
     def list_applications(self, query: ApplicationListQuery | None = None) -> ApplicationListView:
         """One page of the Application list, narrowed and ordered by `query`.
@@ -144,23 +181,21 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         """
         knowledge = self.load_knowledge()
         try:
-            rows = self.repo.list_applications()
-            ready_by_application = {
-                row["id"]: frozenset(
-                    revision.id
-                    for revision in self.repo.approved_revisions(row["id"])
-                    if self._ready.ready_qualification(row["id"], revision.id).ready_qualified
-                )
-                for row in rows
-            }
+            with self._transactions.read() as transaction:
+                captured = []
+                for row in self._projections.applications(transaction):
+                    context, _, analyses = self._state_inputs(transaction, row, knowledge)
+                    evidence = [
+                        self._ready_evidence.load(transaction, row["id"], revision.id)
+                        for revision in context.approved_revisions
+                    ]
+                    captured.append((row, context, analyses, evidence))
             items = []
-            for row in rows:
-                with self.repo.read_transaction() as transaction:
-                    state, _, analyses = self._state_inputs(
-                        transaction, row, knowledge, ready_by_application[row["id"]]
-                    )
-                    latest = analyses[-1]["analysis"] if analyses else None
-                    items.append(application_list_item_view(row, state, latest))
+            for row, context, analyses, evidence in captured:
+                ready_ids = self._ready_ids(evidence, row["id"])
+                state = project_application_state(replace(context, ready_revision_ids=ready_ids))
+                latest = analyses[-1]["analysis"] if analyses else None
+                items.append(application_list_item_view(row, state, latest))
             return narrow_application_list(items, query or ApplicationListQuery())
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(f"stored application projection is invalid: {exc}") from exc
@@ -168,32 +203,36 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
     def application_detail(self, application_id: str) -> ApplicationDetailView:
         knowledge = self.load_knowledge()
         try:
-            ready_ids = frozenset(
-                revision.id
-                for revision in self.repo.approved_revisions(application_id)
-                if self._ready.ready_qualification(application_id, revision.id).ready_qualified
-            )
-            with self.repo.read_transaction() as transaction:
-                application_record = transaction.get_application(application_id)
-                state, snapshot_record, analyses = self._state_inputs(
-                    transaction, application_record, knowledge, ready_ids
+            with self._transactions.read() as transaction:
+                application_record = self._projections.application(transaction, application_id)
+                context, snapshot_record, analyses = self._state_inputs(
+                    transaction, application_record, knowledge
                 )
+                evidence = [
+                    self._ready_evidence.load(transaction, application_id, revision.id)
+                    for revision in context.approved_revisions
+                ]
                 application = application_view(
                     application_record, analyses[-1]["analysis"] if analyses else None
                 )
-                snapshot = snapshot_view(
-                    snapshot_record,
-                    self.snapshot_payloads.read_snapshot(
-                        snapshot_record["payload_path"],
-                        snapshot_record["source_hash"],
-                    ),
-                )
                 latest = analysis_view(analyses[-1], knowledge.facts) if analyses else None
                 timeline = recruitment_timeline_view(
-                    transaction.recruitment_events(application_id),
-                    transaction.submissions(application_id),
-                    transaction.audit_records(application_id),
+                    self._projections.recruitment_events(transaction, application_id),
+                    self._projections.submissions(transaction, application_id),
+                    self._projections.audit_records(transaction, application_id),
                 )
+            state = project_application_state(
+                replace(
+                    context,
+                    ready_revision_ids=self._ready_ids(evidence, application_id),
+                )
+            )
+            snapshot = snapshot_view(
+                snapshot_record,
+                self.snapshot_payloads.read_snapshot(
+                    snapshot_record["payload_path"], snapshot_record["source_hash"]
+                ),
+            )
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         except (TypeError, ValueError) as exc:
@@ -210,39 +249,40 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         )
 
     def job_snapshot_history(self, application_id: str) -> JobSnapshotHistoryView:
-        with self.repo.read_transaction() as transaction:
-            transaction.get_application(application_id)
-            active = transaction.latest_snapshot(application_id)
-            items = []
-            for record in transaction.job_snapshots(application_id):
-                try:
-                    text = self.snapshot_payloads.read_snapshot(
-                        record["payload_path"], record["source_hash"]
-                    )
-                except (OSError, ValueError):
-                    # Missing, unreadable or unverified content is never reconstructed.
-                    text = None
-                items.append(
-                    JobSnapshotHistoryItem(
-                        id=record["id"],
-                        version_number=record["version_number"],
-                        captured_at=record["captured_at"],
-                        source_url=record.get("source_url"),
-                        job_text=text,
-                    )
+        with self._transactions.read() as transaction:
+            self._projections.application(transaction, application_id)
+            active = self._projections.latest_snapshot(transaction, application_id)
+            records = self._projections.snapshots(transaction, application_id)
+        items = []
+        for record in records:
+            try:
+                text = self.snapshot_payloads.read_snapshot(
+                    record["payload_path"], record["source_hash"]
                 )
+            except (OSError, ValueError):
+                # Missing, unreadable or unverified content is never reconstructed.
+                text = None
+            items.append(
+                JobSnapshotHistoryItem(
+                    id=record["id"],
+                    version_number=record["version_number"],
+                    captured_at=record["captured_at"],
+                    source_url=record.get("source_url"),
+                    job_text=text,
+                )
+            )
         return JobSnapshotHistoryView(active_job_snapshot_id=active["id"], items=items)
 
     def artifact_versions(self, application_id: str) -> ArtifactVersionsView:
         try:
-            self.repo.get_application(application_id)
+            with self._transactions.read() as tx:
+                self._projections.application(tx, application_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
         try:
             return ArtifactVersionsView(
                 items=[
-                    artifact_version_view(row)
-                    for row in self.repo.artifact_versions(application_id)
+                    artifact_version_view(row) for row in self._artifact_versions(application_id)
                 ]
             )
         except (TypeError, ValueError) as exc:
@@ -257,7 +297,8 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         three answers about availability.
         """
         try:
-            record = self.repo.artifact_version(artifact_version_id)
+            with self._transactions.read() as tx:
+                record = self._projections.artifact_version(tx, artifact_version_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown artifact version: {artifact_version_id}") from exc
         try:
@@ -281,10 +322,14 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         exportable, and no longer the active milestone.
         """
         try:
-            revision = self.repo.approved_revision(approved_revision_id)
+            with self._transactions.read() as tx:
+                revision = self._projections.approved_revision(tx, approved_revision_id)
+                evidence = self._ready_evidence.load(tx, revision.application_id, revision.id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
-        qualification = self._ready.ready_qualification(revision.application_id, revision.id)
+        qualification = qualify_ready_revision(
+            self.revision_payloads, evidence, revision.application_id
+        )
         return approved_revision_view(revision, qualification)
 
     def working_draft(self, working_draft_id: str) -> WorkingDraftView:
@@ -295,8 +340,9 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         resolved `latest` for it could hand back a different draft than the one
         the ETag it then sends was taken from.
         """
-        working = self._working_draft(working_draft_id)
-        latest = self.repo.latest_validation_for_working_draft(working_draft_id)
+        with self._transactions.read() as tx:
+            working = self._projections.working_draft(tx, working_draft_id)
+            latest = self._projections.latest_validation_for_working_draft(tx, working_draft_id)
         exact = (
             latest
             if latest is not None
@@ -315,8 +361,9 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
         """§20: one immutable plan plus every fact candidate the decision ranked."""
 
         try:
-            plan = self.repo.selection_plan(selection_plan_id)
-            analysis_record = self.repo.get_analysis(plan.job_analysis_id)
+            with self._transactions.read() as tx:
+                plan = self._projections.selection_plan(tx, selection_plan_id)
+                analysis_record = self._projections.analysis(tx, plan.job_analysis_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown selection plan: {selection_plan_id}") from exc
         try:
@@ -329,7 +376,8 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
             raise InfrastructureFailure(f"stored selection plan detail is invalid: {exc}") from exc
 
     def validation_run(self, validation_run_id: str) -> ValidationRunView:
-        record = self.repo.validation_run(validation_run_id)
+        with self._transactions.read() as tx:
+            record = self._projections.validation_run(tx, validation_run_id)
         report = record["report"]
         return ValidationRunView(
             application_id=record["application_id"],
@@ -344,7 +392,8 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
 
     def _working_draft(self, working_draft_id: str) -> WorkingDraft:
         try:
-            return self.repo.working_draft(working_draft_id)
+            with self._transactions.read() as tx:
+                return self._projections.working_draft(tx, working_draft_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
 
@@ -383,7 +432,8 @@ class ApplicationQueryService(ServiceBase[QueryRepository]):
 
     def latest_decision(self, application_id: str) -> DecisionRecordView:
         try:
-            return decision_view(self.repo.latest_decision(application_id))
+            with self._transactions.read() as tx:
+                return decision_view(self._projections.latest_decision(tx, application_id))
         except UnknownRecord as exc:
             raise UnknownRecord(f"no decision record for application: {application_id}") from exc
         except (TypeError, ValueError) as exc:

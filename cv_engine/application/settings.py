@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from .ai_configuration import (
     AI_MODELS,
@@ -17,6 +17,9 @@ from .ai_configuration import (
 )
 from .commands import BoundaryDTO
 from .errors import PreconditionFailed
+
+if TYPE_CHECKING:
+    from .ports.transactions import ReadTransaction, TransactionManager, WriteTransaction
 
 ExecutionMode = Literal["deterministic", "ai"]
 UiDensity = Literal["comfortable", "compact"]
@@ -65,10 +68,10 @@ class UpdateSettings(BoundaryDTO):
 
 
 class SettingsRepository(Protocol):
-    def app_settings(self) -> StoredSettings: ...
+    def settings(self, tx: ReadTransaction) -> StoredSettings: ...
 
-    def update_app_settings(
-        self, expected_edit_version: int, settings: UpdateSettings
+    def update_settings(
+        self, tx: WriteTransaction, expected_edit_version: int, settings: UpdateSettings
     ) -> StoredSettings: ...
 
 
@@ -86,11 +89,13 @@ class AIModelOption(BoundaryDTO):
 class SettingsService:
     def __init__(
         self,
+        transactions: TransactionManager,
         repository: SettingsRepository,
         *,
         provider_configured: bool,
         runtime_default_model: str = DEFAULT_AI_MODEL,
     ):
+        self.transactions = transactions
         self.repo = repository
         self.provider_configured = provider_configured
         self.runtime_default_model = normalize_ai_model(runtime_default_model)
@@ -119,7 +124,9 @@ class SettingsService:
         )
 
     def read(self) -> SettingsView:
-        return self._view(self.repo.app_settings())
+        with self.transactions.read() as tx:
+            stored = self.repo.settings(tx)
+        return self._view(stored)
 
     def update(self, expected_edit_version: int, command: UpdateSettings) -> SettingsView:
         normalize_ai_model(command.default_ai_model)
@@ -129,5 +136,6 @@ class SettingsService:
             raise PreconditionFailed(
                 "AI cannot be the default execution mode until it is enabled and configured"
             )
-        stored = self.repo.update_app_settings(expected_edit_version, command)
+        with self.transactions.write() as tx:
+            stored = self.repo.update_settings(tx, expected_edit_version, command)
         return self._view(stored)

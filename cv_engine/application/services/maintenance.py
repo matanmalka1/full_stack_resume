@@ -5,7 +5,7 @@ stored artifact evidence checked against the database, and the fact lifecycle
 checked against its audit trail. Both must agree for an instance to be sound,
 so they are reported as one result rather than two a caller has to combine.
 
-The service holds the payload store and the repository directly. That is why
+The service holds the payload store and a token-explicit inspection port. That is why
 this is a service and not a router helper: `ApiServices` deliberately carries
 no repositories or stores, and reconciliation needs both.
 """
@@ -16,7 +16,7 @@ from ..commands import ReconciliationResult
 from ..ports import RevisionPayloadStore
 from ..ports.maintenance import MaintenanceInspection
 from ..ports.transactions import TransactionManager
-from .knowledge import KnowledgeService
+from .knowledge import KnowledgeQueryService
 
 __all__ = ["MaintenanceService"]
 
@@ -30,7 +30,7 @@ class MaintenanceService:
         payloads: RevisionPayloadStore,
         transactions: TransactionManager,
         inspection: MaintenanceInspection,
-        knowledge: KnowledgeService,
+        knowledge: KnowledgeQueryService,
     ) -> None:
         self.payloads = payloads
         self.transactions = transactions

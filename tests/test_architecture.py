@@ -500,7 +500,6 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     right answer to a bug.
     """
     exempt = {
-        "base.py:UnitOfWork belongs to another database",
         "operation_execution.py:lease_seconds must be positive",
     }
     offenders: list[str] = []
@@ -826,23 +825,56 @@ def test_the_activation_transaction_locks_before_it_reads() -> None:
     assert calls and calls[0] == "lock_application", calls
 
 
-# Deliberate remaining exceptions, removed when their owning slice migrates.
-LEGACY_PERSISTENCE_ADAPTERS = {
-    "Repository",
-    "SqlAlchemyApplicationRepository",
-    "SqlAlchemyArtifactRepository",
-    "SqlAlchemyAuditRepository",
-    "SqlAlchemyDraftRepository",
-    "SqlAlchemyKnowledgeMutationRepository",
-    "SqlAlchemyPreparationRepository",
-    "SqlAlchemySettingsRepository",
-}
+def test_deleted_persistence_surfaces_have_zero_consumers() -> None:
+    """Inspect definitions and uses, not a manually registered consumer list."""
+    forbidden = {
+        "Repository",
+        "SqlAlchemyRepositoryBase",
+        "SqlAlchemyUnitOfWork",
+        "SqlAlchemyOperationProjection",
+        "UnitOfWork",
+        "QueryRepository",
+        "ApplicationRepository",
+        "DraftRepository",
+        "FactAudit",
+        "KnowledgeMutationRepository",
+        "KnowledgeAuditRepository",
+        "ServiceBase",
+        "sqlalchemy_unit_of_work",
+        "application_repo",
+    }
+    paths = [*ENGINE.rglob("*.py"), *ENGINE.parent.joinpath("tests").rglob("*.py")]
+    for path in paths:
+        if path == Path(__file__):
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.Name, ast.arg)):
+                name = getattr(node, "name", getattr(node, "id", getattr(node, "arg", None)))
+                assert name not in forbidden, (path, node.lineno, name)
+            elif isinstance(node, ast.ImportFrom):
+                assert not forbidden.intersection(alias.name for alias in node.names), path
+                if node.level and path.is_relative_to(ENGINE):
+                    parent = path.parent
+                    for _ in range(node.level - 1):
+                        parent = parent.parent
+                    module = parent.joinpath(*(node.module or "").split("."))
+                    assert (
+                        module.with_suffix(".py").is_file()
+                        or module.joinpath("__init__.py").is_file()
+                    ), (path, node.lineno, "missing relative import", node.module)
+            elif isinstance(node, ast.Attribute) and node.attr == "repository":
+                assert not isinstance(node.value, ast.Name) or node.value.id not in {
+                    "services",
+                    "ai_services",
+                }, path
+                assert not isinstance(node.value, ast.Attribute) or node.value.attr != "services", (
+                    path
+                )
 
 
 def test_transaction_token_adapters_have_no_legacy_repository_capabilities() -> None:
     """Discover adapters; a newly added adapter cannot silently join the legacy model."""
     persistence = ENGINE / "infrastructure" / "persistence"
-    legacy = set()
     for path in persistence.rglob("*.py"):
         source = path.read_text(encoding="utf-8")
         for node in ast.walk(ast.parse(source)):
@@ -855,13 +887,16 @@ def test_transaction_token_adapters_have_no_legacy_repository_capabilities() -> 
                 )
             ):
                 continue
-            if node.name in LEGACY_PERSISTENCE_ADAPTERS:
-                legacy.add(node.name)
-                continue
             assert not node.bases, f"{node.name} inherits another concrete adapter"
             for method in node.body:
                 if not isinstance(method, ast.FunctionDef) or method.name == "__init__":
                     continue
+                if method.name.startswith("_") and not any(
+                    isinstance(inner, ast.Attribute)
+                    and inner.attr in {"_transactions", "connection_for", "_connection"}
+                    for inner in ast.walk(method)
+                ):
+                    continue  # Pure record conversion helpers do not access persistence.
                 assert method.name not in {"bind", "transaction", "read_connection"}
                 args = method.args.args
                 assert len(args) >= 2 and args[1].arg == "tx", (node.name, method.name)
@@ -882,7 +917,6 @@ def test_transaction_token_adapters_have_no_legacy_repository_capabilities() -> 
             )
             for argument in init.args.args[1:]:
                 assert ast.unparse(argument.annotation) == "SqlAlchemyTransactionManager"
-    assert legacy == LEGACY_PERSISTENCE_ADAPTERS, "remove stale legacy adapter exceptions"
 
 
 def test_migrated_analysis_consumers_have_no_old_persistence_dependencies() -> None:
@@ -920,10 +954,8 @@ def test_migrated_analysis_consumers_have_no_old_persistence_dependencies() -> N
         )
     for path in (ENGINE / "application").rglob("*.py"):
         assert "PreparationRepository" not in path.read_text(encoding="utf-8"), path
-    # Only the explicitly deferred knowledge recovery lifecycle may use the old writer.
+    # The old unscoped writer has no remaining consumer.
     for path in (ENGINE / "application").rglob("*.py"):
-        if path == services / "knowledge" / "mutations.py":
-            continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
                 assert ast.unparse(node.func) not in {
@@ -931,7 +963,9 @@ def test_migrated_analysis_consumers_have_no_old_persistence_dependencies() -> N
                     "repository.save_analysis",
                     "self.repo.create_selection_plan",
                     "repository.create_selection_plan",
-                }, path
+                } or any(
+                    isinstance(argument, ast.Name) and argument.id == "tx" for argument in node.args
+                ), path
 
 
 def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
@@ -951,11 +985,16 @@ def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
         "RecruitmentService",
         "SubmissionService",
         "MaintenanceService",
+        "ApplicationQueryService",
+        "KnowledgeMutationEngine",
+        "KnowledgeQueryService",
+        "SettingsService",
     }
     owners = set()
     paths = [
         *(ENGINE / "application" / "services").rglob("*.py"),
         ENGINE / "application" / "operation_runner.py",
+        ENGINE / "application" / "settings.py",
     ]
     for path in paths:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -1109,30 +1148,36 @@ def test_operation_lifecycle_and_execution_use_only_token_persistence() -> None:
         assert not (forbidden & set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", source))), path
 
 
-def test_remaining_operation_projection_is_restricted_to_phase8_reads() -> None:
+def test_application_projection_replaces_legacy_operation_reads_without_writes() -> None:
     persistence = ENGINE / "infrastructure" / "persistence"
-    path = persistence / "operation_projection.py"
+    assert not (persistence / "operation_projection.py").exists()
+    path = persistence / "application_projections.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     projection = next(
         node
         for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "SqlAlchemyOperationProjection"
+        if isinstance(node, ast.ClassDef) and node.name == "SqlAlchemyApplicationProjectionReader"
     )
     methods = {
         node.name
         for node in projection.body
         if isinstance(node, ast.FunctionDef) and node.name != "__init__"
     }
-    assert methods == {
+    assert {
         "active_operation",
         "latest_operation",
         "has_active_matching_context_operation",
-    }
-    consumers = []
-    for candidate in ENGINE.rglob("*.py"):
-        if candidate == path:
+    } <= methods
+    for node in ast.walk(projection):
+        if not isinstance(node, ast.Call):
             continue
-        source = candidate.read_text(encoding="utf-8")
-        if "SqlAlchemyOperationProjection" in source:
-            consumers.append(candidate.relative_to(ENGINE).as_posix())
-    assert consumers == ["infrastructure/persistence/repository.py"]
+        if isinstance(node.func, ast.Name):
+            assert node.func.id not in {"insert", "update", "delete"}
+        elif isinstance(node.func, ast.Attribute):
+            assert node.func.attr not in {"insert", "update", "delete", "write"}
+        assert not any(
+            keyword.arg == "access"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value == "write"
+            for keyword in node.keywords
+        )

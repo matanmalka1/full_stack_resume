@@ -1,15 +1,15 @@
 """The two-phase commit every Knowledge mutation runs through.
 
 A fact mutation is not one write. It stages the Knowledge file on disk, records
-a prepared mutation, activates the file, commits the database half, and only
-then marks the journal entry committed and discards the staging directory. A
+a prepared mutation, activates the file, and commits the database half together
+with the journal's committed marker before discarding the staging directory. A
 crash can land in any of those windows, so the engine is written to be resumed:
 `recover_knowledge_mutations` re-runs `_complete_prepared` for every prepared
 mutation at startup, and `_complete_prepared` decides from the recorded hashes
 alone whether the mutation can still be finished, must be restored, or has to
 be quarantined so no later command writes over an unresolved one.
 
-Split out of `KnowledgeService` because it is the one part of this package that
+Split out of the public services because it is the one part of this package that
 is not regenerable: everything else here can be re-run, while a defect in the
 recovery decision rewrites or strands a written record. It stays a base class
 of the service rather than a collaborator it holds, because that is the shape
@@ -24,39 +24,74 @@ from typing import Any
 
 from ....domain.contracts.knowledge import Fact
 from ....domain.contracts.selection import SelectionManifest
+from ....domain.facts import FactStore
+from ....domain.knowledge import Knowledge
+from ....domain.profiles import ProfileStore
+from ....domain.selection import EmphasisPolicyStore
 from ...commands import FactMutationResult
-from ...errors import (
-    # Re-exported: the API and test suite catch WorkflowError from here, and
-    # it is bound to the taxonomy's base class, so every refusal below is caught.
-    KnowledgeRejected,
-    PreconditionFailed,
-)
+from ...errors import InfrastructureFailure, KnowledgeRejected, PreconditionFailed
 from ...knowledge_mutations import (
     KnowledgeMutation,
     PrepareKnowledgeMutation,
     StagedKnowledgeFile,
 )
-from ...ports import (
-    KnowledgeAuditRepository,
-)
-from ..base import ServiceBase
+from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
+from ...ports.outbound import KnowledgeStore
+from ...ports.transactions import TransactionManager, WriteTransaction
 
 
-class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
+class KnowledgeMutationEngine:
     """Prepare, complete, restore, quarantine, and recover Knowledge mutations."""
 
+    def __init__(
+        self,
+        *,
+        transactions: TransactionManager,
+        store: KnowledgeLifecycleStore,
+        knowledge: KnowledgeStore,
+    ) -> None:
+        self.transactions = transactions
+        self.store = store
+        self._knowledge = knowledge
+
+    def load_knowledge(self) -> Knowledge:
+        try:
+            return self._knowledge.load()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
+        except ValueError as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+
+    def knowledge(self) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
+        loaded = self.load_knowledge()
+        return loaded.facts, loaded.profiles, loaded.policies
+
+    def fact_store(self) -> FactStore:
+        try:
+            return self._knowledge.facts()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read facts: {exc}") from exc
+        except ValueError as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+
     def _ensure_mutations_allowed(self) -> None:
-        quarantined = self.repo.quarantined_knowledge_mutations()
+        with self.transactions.read() as tx:
+            quarantined = self.store.quarantined_mutations(tx)
         if quarantined:
             raise KnowledgeRejected(
                 f"Knowledge mutations are quarantined by mutation {quarantined[0].id}"
             )
 
     @staticmethod
-    def _apply_db_mutation(repository: KnowledgeAuditRepository, payload: dict[str, Any]) -> None:
+    def _apply_db_mutation(
+        repository: KnowledgeLifecycleStore,
+        tx: WriteTransaction,
+        payload: dict[str, Any],
+    ) -> None:
         for action in payload.get("actions", []):
             if action.get("type") == "fact_event":
                 repository.record_fact_event(
+                    tx,
                     fact_id=action["fact_id"],
                     source_file=action["source_file"],
                     event_type=action["event_type"],
@@ -73,6 +108,7 @@ class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
                 )
             elif action.get("type") == "selection_plan":
                 repository.create_selection_plan(
+                    tx,
                     action["application_id"],
                     action["job_analysis_id"],
                     SelectionManifest.model_validate(action["plan"]),
@@ -89,7 +125,8 @@ class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
 
     def _quarantine(self, mutation: KnowledgeMutation, reason: str) -> None:
         try:
-            self.repo.quarantine_knowledge_mutation(mutation.id, reason)
+            with self.transactions.write() as tx:
+                self.store.quarantine_mutation(tx, mutation.id, reason)
         except PreconditionFailed:
             pass
 
@@ -148,10 +185,9 @@ class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
                 self._knowledge.activate_staged(staged)
 
         try:
-            with self.repo.unit_of_work() as uow:
-                transaction = self.repo.bind(uow)
-                self._apply_db_mutation(transaction, mutation.db_mutation)
-                uow.commit()
+            with self.transactions.write() as tx:
+                self._apply_db_mutation(self.store, tx, mutation.db_mutation)
+                self.store.commit_mutation(tx, mutation.id)
         except Exception as exc:
             for staged in staged_files:
                 state = self._knowledge.staged_file_state(staged)
@@ -164,7 +200,6 @@ class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
             self._quarantine(mutation, reason)
             raise KnowledgeRejected(reason) from exc
 
-        self.repo.commit_knowledge_mutation(mutation.id)
         for staged in staged_files:
             try:
                 self._knowledge.discard_staged(staged)
@@ -175,7 +210,9 @@ class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
 
     def recover_knowledge_mutations(self) -> list[str]:
         recovered: list[str] = []
-        for mutation in self.repo.prepared_knowledge_mutations():
+        with self.transactions.read() as tx:
+            prepared = self.store.prepared_mutations(tx)
+        for mutation in prepared:
             try:
                 self._complete_prepared(mutation)
             except KnowledgeRejected:
@@ -202,7 +239,8 @@ class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
             recovery_strategy="finish_or_restore",
         )
         try:
-            mutation = self.repo.prepare_knowledge_mutation(request)
+            with self.transactions.write() as tx:
+                mutation = self.store.prepare_mutation(tx, request)
         except Exception:
             self._knowledge.discard_staged(staged)
             raise
@@ -213,3 +251,7 @@ class KnowledgeMutationEngine(ServiceBase[KnowledgeAuditRepository]):
             facts_version=action["facts_version"],
             lifecycle_version=action["lifecycle_version"],
         )
+
+
+class KnowledgeRecoveryService(KnowledgeMutationEngine):
+    """Startup recovery surface for prepared cross-store mutations."""

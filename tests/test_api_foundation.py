@@ -71,7 +71,7 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     # Runtime identity is versioned product state, not a selectable root ID.
     assert "workspace_id" not in body
     assert body["api_version"] == "1"
-    assert body["knowledge"] == services.knowledge_lifecycle.knowledge_versions().model_dump()
+    assert body["knowledge"] == services.knowledge_queries.knowledge_versions().model_dump()
 
 
 def test_server_logs_lifecycle_and_secret_free_request_summary(

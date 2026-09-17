@@ -16,11 +16,16 @@ from cv_engine.util import sha256_file, sha256_text
 
 
 def test_validation_refuses_to_record_after_the_draft_changes(
-    drafted_application, monkeypatch: pytest.MonkeyPatch
+    drafted_application,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction_manager,
+    draft_lifecycle_store,
+    validation_store,
 ) -> None:
     setup = drafted_application("Validation Race Co")
-    working = setup.services.repository.active_working_draft(setup.application_id)
-    before = setup.services.repository.latest_validation_for_working_draft(working.id)
+    with transaction_manager.read() as tx:
+        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
+        before = validation_store.latest_validation_for_working_draft(tx, working.id)
 
     from cv_engine.application.services.drafts import validation as validation_module
 
@@ -41,13 +46,18 @@ def test_validation_refuses_to_record_after_the_draft_changes(
             )
         )
 
-    after = setup.services.repository.latest_validation_for_working_draft(working.id)
+    with transaction_manager.read() as tx:
+        after = validation_store.latest_validation_for_working_draft(tx, working.id)
     assert after is not None and before is not None
     assert after["id"] == before["id"]
 
 
 def test_ingest_commits_exact_snapshot_payload_before_registration(
-    services, monkeypatch: pytest.MonkeyPatch
+    services,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction_manager,
+    application_store,
+    application_projection_reader,
 ) -> None:
     """A metadata row must never name a snapshot payload that was not committed."""
     received = "Line one\r\nLine two\n"
@@ -59,7 +69,8 @@ def test_ingest_commits_exact_snapshot_payload_before_registration(
         assert payload.read_bytes() == received.encode("utf-8")
         assert sha256_text(received) == stored.sha256
         with pytest.raises(errors.UnknownRecord):
-            services.repository.get_application(application_id)
+            with transaction_manager.read() as tx:
+                application_store.get_application(tx, application_id)
         return stored
 
     monkeypatch.setattr(services.payloads, "commit_snapshot", assert_payload_exists_first)
@@ -71,12 +82,20 @@ def test_ingest_commits_exact_snapshot_payload_before_registration(
             client="web",
         )
     )
-    snapshot = services.repository.get_snapshot(ingested.job_snapshot_id)
+    with transaction_manager.read() as tx:
+        snapshot = next(
+            row
+            for row in application_projection_reader.snapshots(tx, ingested.application_id)
+            if row["id"] == ingested.job_snapshot_id
+        )
     assert sha256_file(services.paths.root / snapshot["payload_path"]) == snapshot["source_hash"]
 
 
 def test_ingest_database_records_roll_back_together_after_payload_commit(
-    services, monkeypatch: pytest.MonkeyPatch
+    services,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     def refuse_initial_event(*args, **kwargs):
         raise RuntimeError("event refused")
@@ -97,10 +116,9 @@ def test_ingest_database_records_roll_back_together_after_payload_commit(
             )
         )
 
-    assert all(
-        row["company"] != "Atomic Intake"
-        for row in services.repository.list_applications(include_deleted=True)
-    )
+    with transaction_manager.read() as tx:
+        rows = application_projection_reader.applications(tx)
+    assert all(row["company"] != "Atomic Intake" for row in rows)
 
 
 def test_commands_require_sources_owned_by_the_named_application(services) -> None:

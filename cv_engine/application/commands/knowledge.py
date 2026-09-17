@@ -1,4 +1,4 @@
-"""Knowledge/Facts boundary DTOs: consumed exclusively by `KnowledgeService`."""
+"""Knowledge/Facts boundary DTOs consumed by the cohesive Knowledge services."""
 
 from __future__ import annotations
 

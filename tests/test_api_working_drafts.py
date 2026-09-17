@@ -152,13 +152,16 @@ def _snapshots(harness, application_id: str) -> list[dict]:
     ]
 
 
-def _audit(harness, application_id: str, action: str) -> dict:
+def _audit(
+    transaction_manager, application_projection_reader, application_id: str, action: str
+) -> dict:
     """The one audit record for this action, or an assertion naming what is there."""
-    records = [
-        record
-        for record in harness.services.repository.audit_records(application_id)
-        if record["action"] == action
-    ]
+    with transaction_manager.read() as tx:
+        records = [
+            record
+            for record in application_projection_reader.audit_records(tx, application_id)
+            if record["action"] == action
+        ]
     assert len(records) == 1, records
     return records[0]
 
@@ -210,6 +213,8 @@ def test_generation_records_the_explicit_parent_approved_revision(ai_api_worker)
 
 def test_generation_refuses_a_parent_revision_owned_by_another_application(
     ai_api_worker,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     first_id, first_draft, _first_sources = _drafted(ai_api_worker, "Parent Owner Co")
     validated = _validated(ai_api_worker, first_draft)
@@ -237,12 +242,11 @@ def test_generation_refuses_a_parent_revision_owned_by_another_application(
 
     assert queued.status_code == 412, queued.text
     assert queued.json()["code"] == "LINEAGE_BROKEN"
-    assert (
-        ai_api_worker.services.repository.approved_revision(
-            approved.json()["revision_id"]
-        ).application_id
-        == first_id
-    )
+    with transaction_manager.read() as tx:
+        approved_revision = application_projection_reader.approved_revision(
+            tx, approved.json()["revision_id"]
+        )
+    assert approved_revision.application_id == first_id
     assert _state(ai_api_worker, second_id)["active_working_draft_id"] is None
 
 
@@ -669,6 +673,8 @@ def test_a_selection_change_creates_a_plan_and_moves_the_draft_onto_it(ai_api_wo
 def test_selection_change_rolls_back_plan_and_draft_when_the_draft_write_fails(
     ai_api_worker,
     monkeypatch,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     from cv_engine.infrastructure.persistence.selection_drafts import SqlAlchemySelectionDraftStore
 
@@ -692,7 +698,11 @@ def test_selection_change_rolls_back_plan_and_draft_when_the_draft_write_fails(
             analysis_service=services.analysis,
         )
     assert _read(ai_api_worker, working_draft_id).json() == before
-    assert services.repository.latest_selection_plan(application_id).id == sources["selection_plan"]
+    with transaction_manager.read() as tx:
+        assert (
+            application_projection_reader.latest_selection_plan(tx, application_id).id
+            == sources["selection_plan"]
+        )
     assert services.artifacts.working_markdown(application_id) == markdown
 
 
@@ -720,7 +730,11 @@ def test_a_selection_change_refuses_a_draft_carrying_manual_wording(ai_api_worke
     assert after["edit_version"] == edited.json()["edit_version"]
 
 
-def test_archiving_registers_the_snapshot_before_clearing_the_pointer(ai_api_worker) -> None:
+def test_archiving_registers_the_snapshot_before_clearing_the_pointer(
+    ai_api_worker,
+    transaction_manager,
+    application_projection_reader,
+) -> None:
     """§14: the historical record exists first, and the payload is really there."""
     application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Archive Co")
     before = _read(ai_api_worker, working_draft_id).json()
@@ -740,17 +754,31 @@ def test_archiving_registers_the_snapshot_before_clearing_the_pointer(ai_api_wor
     assert registered["artifact_type"] == "working_draft_snapshot"
     assert registered["lifecycle_status"] == "archived"
     assert registered["metadata"]["working_draft_id"] == working_draft_id
-    assert _audit(ai_api_worker, application_id, "archive_working_draft")["client"] == "web"
-    stored = ai_api_worker.services.artifacts.resolve(
-        ai_api_worker.services.repository.artifact_version(body["artifact_version_id"])["path"]
+    assert (
+        _audit(
+            transaction_manager,
+            application_projection_reader,
+            application_id,
+            "archive_working_draft",
+        )["client"]
+        == "web"
     )
+    with transaction_manager.read() as tx:
+        artifact_version = application_projection_reader.artifact_version(
+            tx, body["artifact_version_id"]
+        )
+    stored = ai_api_worker.services.artifacts.resolve(artifact_version["path"])
     assert json.loads(stored.read_text(encoding="utf-8"))["application_id"] == application_id
     state = _state(ai_api_worker, application_id)
     assert state["active_working_draft_id"] is None
     assert state["working_draft_state"] == "none"
 
 
-def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(ai_api_worker) -> None:
+def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(
+    ai_api_worker,
+    transaction_manager,
+    application_projection_reader,
+) -> None:
     """§14 Keep: the snapshot is materialized, and the draft is replaced in place."""
     application_id, working_draft_id, sources = _drafted(ai_api_worker, "Replace Keep Co")
     before = _read(ai_api_worker, working_draft_id).json()
@@ -780,7 +808,15 @@ def test_replacement_keeps_the_previous_draft_when_the_user_asked_to(ai_api_work
         if item["artifact_type"] == "working_draft_snapshot"
     ]
     assert [item["metadata"]["edit_version"] for item in kept] == [before["edit_version"]]
-    assert _audit(ai_api_worker, application_id, "replace_working_draft")["client"] == "web"
+    assert (
+        _audit(
+            transaction_manager,
+            application_projection_reader,
+            application_id,
+            "replace_working_draft",
+        )["client"]
+        == "web"
+    )
 
 
 def test_a_refused_replacement_leaves_the_existing_draft_exactly_as_it_was(ai_api_worker) -> None:
@@ -891,6 +927,8 @@ def test_an_archive_after_the_replacement_was_accepted_does_not_create_a_new_dra
 
 def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapshot(
     ai_api_paused,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     """§14 Keep is a side effect, so a replay must not reach it at all.
 
@@ -925,7 +963,12 @@ def test_a_replayed_replacement_returns_the_same_operation_and_keeps_one_snapsho
     # that matters here: a second Keep would write a second audit record beside the second
     # snapshot. `details_json` is canonical JSON text rather than a mapping.
     kept = json.loads(
-        _audit(ai_api_paused, application_id, "replace_working_draft")["details_json"]
+        _audit(
+            transaction_manager,
+            application_projection_reader,
+            application_id,
+            "replace_working_draft",
+        )["details_json"]
     )
     assert kept["kept"] is True
     assert kept["edit_version"] == before["edit_version"]
@@ -969,6 +1012,8 @@ def test_a_replay_is_settled_by_the_key_even_after_the_draft_moved(ai_api_paused
 
 def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
     ai_api_paused,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     """§14: the crash window between Keep and the Operation is recoverable.
 
@@ -1020,13 +1065,19 @@ def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
     assert [
         item["metadata"]["edit_version"] for item in _snapshots(ai_api_paused, application_id)
     ] == [before["edit_version"]]
-    _audit(ai_api_paused, application_id, "replace_working_draft")
+    _audit(
+        transaction_manager, application_projection_reader, application_id, "replace_working_draft"
+    )
     assert (
         _read(ai_api_paused, working_draft_id).json()["edit_version"] == before["edit_version"] + 1
     )
 
 
-def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(ai_api_paused) -> None:
+def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(
+    ai_api_paused,
+    transaction_manager,
+    application_projection_reader,
+) -> None:
     """§14: a registration is not evidence that the historical copy still exists.
 
     The ensure that makes a crash recoverable reads a row, and a row says a snapshot was
@@ -1062,7 +1113,8 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(ai_
 
     # The snapshot is registered, and then its payload is corrupted underneath the row.
     snapshot = _snapshots(ai_api_paused, application_id)[0]
-    stored = ai_api_paused.services.repository.artifact_version(snapshot["id"])
+    with transaction_manager.read() as tx:
+        stored = application_projection_reader.artifact_version(tx, snapshot["id"])
     ai_api_paused.services.artifacts.resolve(stored["path"]).write_text(
         "tampered", encoding="utf-8"
     )
@@ -1104,7 +1156,11 @@ def test_the_same_key_with_a_different_replacement_is_refused(ai_api_paused) -> 
 # --- E4: validation ----------------------------------------------------------
 
 
-def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(ai_api_worker) -> None:
+def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(
+    ai_api_worker,
+    transaction_manager,
+    validation_store,
+) -> None:
     """§22: `passed=false` is `200`, and the immutable run is written anyway."""
     application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Failing Validation Co")
     read = _read(ai_api_worker, working_draft_id)
@@ -1125,9 +1181,8 @@ def test_a_failed_validation_is_a_successful_outcome_with_its_run_recorded(ai_ap
     body = response.json()
     assert body["passed"] is False
     assert any(issue["code"] == "pending-claim" for issue in body["report"]["issues"])
-    assert ai_api_worker.services.repository.validation_report(
-        body["validation_run_id"]
-    ).passed is (False)
+    with transaction_manager.read() as tx:
+        assert validation_store.validation_report(tx, body["validation_run_id"]).passed is (False)
     assert _state(ai_api_worker, application_id)["working_draft_state"] == "validation_failed"
     stale = _post(
         ai_api_worker,
@@ -1165,12 +1220,15 @@ def test_validation_run_read_remains_historical_after_the_draft_moves(ai_api_wor
 
 def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes(
     ai_api_worker,
+    transaction_manager,
+    validation_store,
 ) -> None:
     application_id, working_draft_id, _sources = _drafted(
         ai_api_worker, "Forward Compatible Report Co"
     )
     ordinary = _validated(ai_api_worker, working_draft_id)
-    lineage = ai_api_worker.services.repository.validation_lineage(ordinary["validation_run_id"])
+    with transaction_manager.read() as tx:
+        lineage = validation_store.validation_lineage(tx, ordinary["validation_run_id"])
     report = ValidationReport(
         passed=False,
         groups={"content": True, "future-validator-group": False},
@@ -1184,19 +1242,21 @@ def test_validation_run_http_projection_preserves_unknown_groups_and_issue_codes
         ],
         evidence={"future-evidence": {"kept": [1, "two", False]}},
     )
-    run_id = ai_api_worker.services.repository.record_validation(
-        application_id,
-        "pre-render",
-        report,
-        lineage=lineage,
-    )
+    with transaction_manager.write() as tx:
+        run_id = validation_store.record_validation(
+            tx,
+            application_id,
+            "pre-render",
+            report,
+            lineage=lineage,
+        )
 
     response = ai_api_worker.client.get(f"{API_PREFIX}/validation-runs/{run_id}")
 
     assert response.status_code == 200, response.text
-    assert response.json()["report"] == ai_api_worker.services.repository.validation_report(
-        run_id
-    ).model_dump(mode="json")
+    with transaction_manager.read() as tx:
+        expected_report = validation_store.validation_report(tx, run_id).model_dump(mode="json")
+    assert response.json()["report"] == expected_report
     assert response.json()["report"]["groups"]["future-validator-group"] is False
     assert response.json()["report"]["issues"] == [
         {
@@ -1223,7 +1283,11 @@ def _validated(harness, working_draft_id: str) -> dict:
     return response.json()
 
 
-def test_an_edit_after_validation_makes_that_run_unusable_for_approval(ai_api_worker) -> None:
+def test_an_edit_after_validation_makes_that_run_unusable_for_approval(
+    ai_api_worker,
+    transaction_manager,
+    application_projection_reader,
+) -> None:
     """The binding check that could not fail before, failing.
 
     Approval used to validate for itself, so the run always described the draft
@@ -1253,11 +1317,14 @@ def test_an_edit_after_validation_makes_that_run_unusable_for_approval(ai_api_wo
 
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "VALIDATION_STALE"
-    assert ai_api_worker.services.repository.approved_revisions(application_id) == []
+    with transaction_manager.read() as tx:
+        assert application_projection_reader.approved_revisions(tx, application_id) == []
 
 
 def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific_code(
     ai_api_worker,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     """An edit outside the Web editor is evidence to preserve, not output to overwrite."""
     application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Diverged Projection Co")
@@ -1278,7 +1345,8 @@ def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific
     assert response.status_code == 409, response.text
     assert response.json()["code"] == "WORKING_PROJECTION_DIVERGED"
     assert markdown_path.read_text(encoding="utf-8") == edited_projection
-    assert ai_api_worker.services.repository.approved_revisions(application_id) == []
+    with transaction_manager.read() as tx:
+        assert application_projection_reader.approved_revisions(tx, application_id) == []
 
 
 def test_a_failing_run_blocks_approval_and_says_which_groups_failed(ai_api_worker) -> None:
@@ -1313,6 +1381,8 @@ def test_a_failing_run_blocks_approval_and_says_which_groups_failed(ai_api_worke
 
 def test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse(
     ai_api_worker,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     """§15: the payload covers all three arguments plus the content hash."""
     application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Approval Key Co")
@@ -1337,7 +1407,8 @@ def test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse(
 
     assert first.status_code == 201, first.text
     assert repeated.json() == first.json()
-    assert len(ai_api_worker.services.repository.approved_revisions(application_id)) == 1
+    with transaction_manager.read() as tx:
+        assert len(application_projection_reader.approved_revisions(tx, application_id)) == 1
 
     for changed in (
         {**body, "expected_edit_version": body["expected_edit_version"] + 1},
@@ -1351,7 +1422,8 @@ def test_the_same_key_returns_the_same_revision_and_a_changed_payload_is_reuse(
         )
         assert refused.status_code == 409, refused.text
         assert refused.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
-    assert len(ai_api_worker.services.repository.approved_revisions(application_id)) == 1
+    with transaction_manager.read() as tx:
+        assert len(application_projection_reader.approved_revisions(tx, application_id)) == 1
 
     _other_app, other_draft_id, _other = _drafted(ai_api_worker, "Approval Key Other Co")
     other = _validated(ai_api_worker, other_draft_id)

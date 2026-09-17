@@ -13,7 +13,6 @@ import json
 from pathlib import Path
 
 from ..application.maintenance import ApplicationExport, build_application_export
-from ..application.ports import ApplicationStore
 from ..application.queries import ApplicationListView
 
 __all__ = ["export_csv", "write_export"]
@@ -33,6 +32,6 @@ def write_export(export: ApplicationExport, output: Path) -> Path:
     return output
 
 
-def export_csv(applications: ApplicationListView | ApplicationStore, output: Path) -> Path:
+def export_csv(applications: ApplicationListView, output: Path) -> Path:
     """Project applications onto the export schema and write them as CSV."""
     return write_export(build_application_export(applications), output)

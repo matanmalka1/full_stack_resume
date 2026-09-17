@@ -38,9 +38,16 @@ def _application(services, company: str, *, job_text: str = ACCOUNT_MANAGER_JOB)
     ).application_id
 
 
-def _existing_analysis(harness, application_id: str, **analysis_values) -> dict[str, str]:
+def _existing_analysis(
+    harness,
+    application_id: str,
+    transaction_manager,
+    application_projection_reader,
+    **analysis_values,
+) -> dict[str, str]:
     """Seed an analysis record explicitly; these tests exercise later API decisions."""
-    snapshot_id = harness.services.repository.latest_snapshot(application_id)["id"]
+    with transaction_manager.read() as tx:
+        snapshot_id = application_projection_reader.latest_snapshot(tx, application_id)["id"]
     analysed = seed_existing_analysis(
         harness.services,
         AnalyzeCommand(application_id=application_id, job_snapshot_id=snapshot_id),
@@ -83,14 +90,19 @@ def _state(harness, application_id: str) -> dict:
 
 
 def test_post_analysis_uses_ai_operation_and_commits_both_records(
-    ai_api_worker, fake_openai, requirement_concepts
+    ai_api_worker,
+    fake_openai,
+    requirement_concepts,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     fake_openai.script(
         "propose_analysis",
         analysis_proposal(summary="account management role", keywords=["retention"]),
     )
     application_id = _application(ai_api_worker.services, "AI Operation Co")
-    snapshot_id = ai_api_worker.services.repository.latest_snapshot(application_id)["id"]
+    with transaction_manager.read() as tx:
+        snapshot_id = application_projection_reader.latest_snapshot(tx, application_id)["id"]
     response = ai_api_worker.client.post(
         f"{API_PREFIX}/applications/{application_id}/analyses",
         json={"job_snapshot_id": snapshot_id},
@@ -105,14 +117,13 @@ def test_post_analysis_uses_ai_operation_and_commits_both_records(
     outputs = {item["output_type"]: item["output_id"] for item in completed["outputs"]}
     assert set(outputs) == {"job_analysis", "selection_plan", "provider_response"}
     assert all(item["active"] for item in completed["outputs"])
-    assert (
-        ai_api_worker.services.repository.selection_plan(outputs["selection_plan"]).job_analysis_id
-        == outputs["job_analysis"]
-    )
+    with transaction_manager.read() as tx:
+        plan = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
+    assert plan.job_analysis_id == outputs["job_analysis"]
 
 
 def test_an_existing_analysis_commits_its_analysis_and_initial_plan_together(
-    api_worker,
+    api_worker, transaction_manager, application_projection_reader
 ) -> None:
     """§13: both records, one activation, and the plan bound to that analysis.
 
@@ -121,10 +132,13 @@ def test_an_existing_analysis_commits_its_analysis_and_initial_plan_together(
     """
     application_id = _application(api_worker.services, "Atomic Analysis Co")
 
-    outputs = _existing_analysis(api_worker, application_id)
+    outputs = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
     assert set(outputs) == {"job_analysis", "selection_plan"}
 
-    plan = api_worker.services.repository.selection_plan(outputs["selection_plan"])
+    with transaction_manager.read() as tx:
+        plan = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
     assert plan.job_analysis_id == outputs["job_analysis"]
     assert plan.application_id == application_id
 
@@ -135,7 +149,7 @@ def test_an_existing_analysis_commits_its_analysis_and_initial_plan_together(
 
 
 def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
-    services, monkeypatch
+    services, monkeypatch, transaction_manager, application_projection_reader
 ) -> None:
     """Atomic means atomic: the failure proves it, the success cannot.
 
@@ -154,8 +168,8 @@ def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
             client="web",
         )
     )
-    repository = services.repository
-    before = len(repository.analyses(ingested.application_id))
+    with transaction_manager.read() as tx:
+        before = len(application_projection_reader.analyses(tx, ingested.application_id))
 
     def refuse_plan(*_args, **_kwargs):
         raise RuntimeError("selection plan insert failed")
@@ -165,7 +179,9 @@ def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
     with pytest.raises(RuntimeError):
         seed_existing_analysis(services, ingested)
 
-    assert len(repository.analyses(ingested.application_id)) == before
+    with transaction_manager.read() as tx:
+        after = len(application_projection_reader.analyses(tx, ingested.application_id))
+    assert after == before
 
 
 # --- POST /applications/{id}/analyses ----------------------------------------
@@ -175,15 +191,22 @@ def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
 
 
 def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
-    api_worker,
+    api_worker, transaction_manager, application_projection_reader
 ) -> None:
     """The meaning branch, and the history it does not touch."""
     application_id = _application(
         api_worker.services, "Decided Classification Co", job_text=REVIEW_DECISION_JOB
     )
-    outputs = _existing_analysis(api_worker, application_id, **REVIEW_ANALYSIS)
-    original_analysis = api_worker.services.repository.get_analysis(outputs["job_analysis"])
-    original_plan = api_worker.services.repository.selection_plan(outputs["selection_plan"])
+    outputs = _existing_analysis(
+        api_worker,
+        application_id,
+        transaction_manager,
+        application_projection_reader,
+        **REVIEW_ANALYSIS,
+    )
+    with transaction_manager.read() as tx:
+        original_analysis = application_projection_reader.analysis(tx, outputs["job_analysis"])
+        original_plan = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
@@ -205,8 +228,14 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
     assert body["plan"]["job_analysis_id"] == body["job_analysis_id"]
 
     # The analysis and plan the user decided against are untouched history.
-    assert api_worker.services.repository.get_analysis(outputs["job_analysis"]) == original_analysis
-    assert api_worker.services.repository.selection_plan(outputs["selection_plan"]) == original_plan
+    with transaction_manager.read() as tx:
+        assert (
+            application_projection_reader.analysis(tx, outputs["job_analysis"]) == original_analysis
+        )
+        assert (
+            application_projection_reader.selection_plan(tx, outputs["selection_plan"])
+            == original_plan
+        )
 
     state = _state(api_worker, application_id)
     assert state["active_analysis_id"] == body["job_analysis_id"]
@@ -223,13 +252,16 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
 
 
 def test_a_fact_overlay_alone_creates_a_replacement_plan_for_the_same_analysis(
-    api_worker,
+    api_worker, transaction_manager, application_projection_reader
 ) -> None:
     """The selection branch: a new plan, and the analysis left exactly as it was."""
     application_id = _application(api_worker.services, "Replacement Plan Co")
-    outputs = _existing_analysis(api_worker, application_id)
-    original = api_worker.services.repository.selection_plan(outputs["selection_plan"])
-    original_analysis = api_worker.services.repository.get_analysis(outputs["job_analysis"])
+    outputs = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
+    with transaction_manager.read() as tx:
+        original = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
+        original_analysis = application_projection_reader.analysis(tx, outputs["job_analysis"])
     removed = next(
         candidate.fact_id
         for candidate in original.plan.candidates
@@ -259,16 +291,26 @@ def test_a_fact_overlay_alone_creates_a_replacement_plan_for_the_same_analysis(
         for candidate in body["plan"]["plan"]["candidates"]
     }[removed] == "excluded_by_user"
 
-    assert api_worker.services.repository.get_analysis(outputs["job_analysis"]) == original_analysis
-    assert api_worker.services.repository.selection_plan(outputs["selection_plan"]) == original
+    with transaction_manager.read() as tx:
+        assert (
+            application_projection_reader.analysis(tx, outputs["job_analysis"]) == original_analysis
+        )
+        assert (
+            application_projection_reader.selection_plan(tx, outputs["selection_plan"]) == original
+        )
 
 
-def test_an_emphasis_decision_replaces_only_the_selection_plan(api_worker) -> None:
+def test_an_emphasis_decision_replaces_only_the_selection_plan(
+    api_worker, transaction_manager, application_projection_reader
+) -> None:
     """Emphasis selects policy; it does not rewrite analysis meaning."""
     application_id = _application(api_worker.services, "Emphasis Plan Co")
-    outputs = _existing_analysis(api_worker, application_id)
-    original_analysis = api_worker.services.repository.get_analysis(outputs["job_analysis"])
-    original_plan = api_worker.services.repository.selection_plan(outputs["selection_plan"])
+    outputs = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
+    with transaction_manager.read() as tx:
+        original_analysis = application_projection_reader.analysis(tx, outputs["job_analysis"])
+        original_plan = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
@@ -290,8 +332,14 @@ def test_an_emphasis_decision_replaces_only_the_selection_plan(api_worker) -> No
     assert body["plan"]["plan"]["emphasis_override"] == "new-business"
     assert body["state"]["active_analysis_id"] == outputs["job_analysis"]
     assert body["state"]["active_selection_plan_id"] == body["selection_plan_id"]
-    assert api_worker.services.repository.get_analysis(outputs["job_analysis"]) == original_analysis
-    assert api_worker.services.repository.selection_plan(outputs["selection_plan"]) == original_plan
+    with transaction_manager.read() as tx:
+        assert (
+            application_projection_reader.analysis(tx, outputs["job_analysis"]) == original_analysis
+        )
+        assert (
+            application_projection_reader.selection_plan(tx, outputs["selection_plan"])
+            == original_plan
+        )
     assert _state(api_worker, application_id)["application"]["emphasis"] == "new-business"
     drafted = api_worker.services.drafts.draft(
         DraftCommand(
@@ -300,13 +348,16 @@ def test_an_emphasis_decision_replaces_only_the_selection_plan(api_worker) -> No
             selection_plan_id=body["selection_plan_id"],
         )
     )
-    working = api_worker.services.repository.working_draft(drafted.working_draft_id)
+    with transaction_manager.read() as tx:
+        working = application_projection_reader.working_draft(tx, drafted.working_draft_id)
     assert working.source.emphasis.value == "new-business"
     assert working.source.selection is not None
     assert working.source.selection.emphasis_override is not None
 
 
-def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> None:
+def test_the_api_refuses_decision_submissions_it_cannot_act_on(
+    api_worker, transaction_manager, application_projection_reader
+) -> None:
     """Three refusals of a classification submission, none of which is a 500.
 
     Both kinds at once: the new analysis has its own initial plan, built from
@@ -324,7 +375,9 @@ def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> No
     application_id = _application(
         api_worker.services, "Both Branches Co", job_text=AMBIGUOUS_HEBREW_JOB
     )
-    outputs = _existing_analysis(api_worker, application_id)
+    outputs = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
@@ -342,7 +395,9 @@ def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> No
     assert response.json()["code"] == "PRECONDITION_FAILED"
 
     empty_application_id = _application(api_worker.services, "Empty Decision Co")
-    empty_outputs = _existing_analysis(api_worker, empty_application_id)
+    empty_outputs = _existing_analysis(
+        api_worker, empty_application_id, transaction_manager, application_projection_reader
+    )
 
     empty = api_worker.client.post(
         f"{API_PREFIX}/analyses/{empty_outputs['job_analysis']}/apply-decisions",
@@ -383,11 +438,16 @@ def test_the_api_refuses_decision_submissions_it_cannot_act_on(api_worker) -> No
 # --- POST /analyses/{id}/selection-plans -------------------------------------
 
 
-def test_the_deterministic_plan_endpoint_returns_the_plan_itself(api_worker) -> None:
+def test_the_deterministic_plan_endpoint_returns_the_plan_itself(
+    api_worker, transaction_manager, application_projection_reader
+) -> None:
     """`201`, synchronously, with no provider anywhere near it (§13)."""
     application_id = _application(api_worker.services, "Deterministic Plan Co")
-    outputs = _existing_analysis(api_worker, application_id)
-    original = api_worker.services.repository.selection_plan(outputs["selection_plan"])
+    outputs = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
+    with transaction_manager.read() as tx:
+        original = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
     pinned = next(
         candidate.fact_id
         for candidate in original.plan.candidates
@@ -419,9 +479,13 @@ def test_the_deterministic_plan_endpoint_returns_the_plan_itself(api_worker) -> 
     )
 
 
-def test_selection_plan_detail_returns_readable_candidate_accounting(api_worker) -> None:
+def test_selection_plan_detail_returns_readable_candidate_accounting(
+    api_worker, transaction_manager, application_projection_reader
+) -> None:
     application_id = _application(api_worker.services, "Selection Detail Co")
-    outputs = _existing_analysis(api_worker, application_id)
+    outputs = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
 
     response = api_worker.client.get(f"{API_PREFIX}/selection-plans/{outputs['selection_plan']}")
 
@@ -443,12 +507,18 @@ def test_selection_plan_detail_returns_readable_candidate_accounting(api_worker)
     ],
 )
 def test_a_plan_built_against_knowledge_that_has_moved_is_refused(
-    api_worker, expected_field: str, expected_source: str
+    api_worker,
+    expected_field: str,
+    expected_source: str,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     """The optimistic check: the candidate accounting the user decided against
     is no longer the one this plan would contain."""
     application_id = _application(api_worker.services, "Moved Knowledge Co")
-    analysis_id = _existing_analysis(api_worker, application_id)["job_analysis"]
+    analysis_id = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )["job_analysis"]
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/selection-plans",
@@ -464,11 +534,15 @@ def test_a_plan_built_against_knowledge_that_has_moved_is_refused(
 
 
 def test_a_selection_plan_cannot_make_a_historical_analysis_active_by_accident(
-    api_worker,
+    api_worker, transaction_manager, application_projection_reader
 ) -> None:
     application_id = _application(api_worker.services, "Historical Analysis Co")
-    original = _existing_analysis(api_worker, application_id)
-    replacement = _existing_analysis(api_worker, application_id)
+    original = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
+    replacement = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{original['job_analysis']}/selection-plans",
@@ -482,14 +556,18 @@ def test_a_selection_plan_cannot_make_a_historical_analysis_active_by_accident(
     assert state["active_selection_plan_id"] == replacement["selection_plan"]
 
 
-def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(api_worker) -> None:
+def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(
+    api_worker, transaction_manager, application_projection_reader
+) -> None:
     """Excluding a heading is refused at the boundary, not silently ignored.
 
     The alternative is a plan that quietly contains what the user asked to
     remove, or a document with bullets under no role.
     """
     application_id = _application(api_worker.services, "Impossible Overlay Co")
-    analysis_id = _existing_analysis(api_worker, application_id)["job_analysis"]
+    analysis_id = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )["job_analysis"]
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/selection-plans",
@@ -504,8 +582,11 @@ def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(api_
     assert response.json()["code"] == "PRECONDITION_FAILED"
 
 
-def _active_plan_id(api_worker, application_id: str) -> str:
-    return api_worker.services.repository.latest_selection_plan(application_id).id
+def _active_plan_id(
+    api_worker, application_id: str, transaction_manager, application_projection_reader
+) -> str:
+    with transaction_manager.read() as tx:
+        return application_projection_reader.latest_selection_plan(tx, application_id).id
 
 
 RIVERSIDE_POSTING = (
@@ -529,7 +610,15 @@ RIVERSIDE_ANALYSIS = {
 }
 
 
-def _pin(api_worker, application_id, analysis_id, fact_ids, **extra):
+def _pin(
+    api_worker,
+    application_id,
+    analysis_id,
+    fact_ids,
+    transaction_manager,
+    application_projection_reader,
+    **extra,
+):
     """A plan-replacing decision the way a client must send it: naming the plan shown.
 
     A pin replaces the SelectionPlan without touching the analysis, which is
@@ -542,7 +631,12 @@ def _pin(api_worker, application_id, analysis_id, fact_ids, **extra):
         "pinned_fact_ids": list(fact_ids),
         **extra,
     }
-    body.setdefault("expected_selection_plan_id", _active_plan_id(api_worker, application_id))
+    body.setdefault(
+        "expected_selection_plan_id",
+        _active_plan_id(
+            api_worker, application_id, transaction_manager, application_projection_reader
+        ),
+    )
     return api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
         json=body,
@@ -550,7 +644,9 @@ def _pin(api_worker, application_id, analysis_id, fact_ids, **extra):
     )
 
 
-def test_deciding_without_naming_both_active_sources_is_refused(api_worker) -> None:
+def test_deciding_without_naming_both_active_sources_is_refused(
+    api_worker, transaction_manager, application_projection_reader
+) -> None:
     """A decision has to name the analysis and plan it was made against.
 
     Without it the decision is applied to whatever plan is active at the
@@ -562,7 +658,13 @@ def test_deciding_without_naming_both_active_sources_is_refused(api_worker) -> N
     application_id = _application(
         api_worker.services, "Unnamed Plan Co", job_text=RIVERSIDE_POSTING
     )
-    outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
+    outputs = _existing_analysis(
+        api_worker,
+        application_id,
+        transaction_manager,
+        application_projection_reader,
+        **RIVERSIDE_ANALYSIS,
+    )
     analysis_id = outputs["job_analysis"]
 
     refused = api_worker.client.post(
@@ -592,30 +694,45 @@ def test_deciding_without_naming_both_active_sources_is_refused(api_worker) -> N
     assert missing_analysis.status_code == 422, missing_analysis.text
 
     # A selection overlay names both sources too.
+    with transaction_manager.read() as tx:
+        first_selected_fact_id = application_projection_reader.selection_plan(
+            tx, outputs["selection_plan"]
+        ).plan.selected_fact_ids[0]
     overlay = api_worker.client.post(
         f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
         json={
             "application_id": application_id,
             "expected_analysis_id": analysis_id,
             "expected_selection_plan_id": outputs["selection_plan"],
-            "pinned_fact_ids": [
-                api_worker.services.repository.selection_plan(
-                    outputs["selection_plan"]
-                ).plan.selected_fact_ids[0]
-            ],
+            "pinned_fact_ids": [first_selected_fact_id],
         },
         headers=MUTATION_HEADERS,
     )
     assert overlay.status_code == 201, overlay.text
 
 
-def test_naming_a_plan_that_has_been_replaced_is_refused(api_worker) -> None:
+def test_naming_a_plan_that_has_been_replaced_is_refused(
+    api_worker, transaction_manager, application_projection_reader
+) -> None:
     """The decision was made against a plan that is no longer active."""
     application_id = _application(api_worker.services, "Moved Plan Co", job_text=RIVERSIDE_POSTING)
-    outputs = _existing_analysis(api_worker, application_id, **RIVERSIDE_ANALYSIS)
+    outputs = _existing_analysis(
+        api_worker,
+        application_id,
+        transaction_manager,
+        application_projection_reader,
+        **RIVERSIDE_ANALYSIS,
+    )
     analysis_id = outputs["job_analysis"]
 
-    first = _pin(api_worker, application_id, analysis_id, ["sales.summary.new_business"])
+    first = _pin(
+        api_worker,
+        application_id,
+        analysis_id,
+        ["sales.summary.new_business"],
+        transaction_manager,
+        application_projection_reader,
+    )
     assert first.status_code == 201, first.text
 
     stale = _pin(
@@ -623,6 +740,8 @@ def test_naming_a_plan_that_has_been_replaced_is_refused(api_worker) -> None:
         application_id,
         analysis_id,
         ["sales.summary.account"],
+        transaction_manager,
+        application_projection_reader,
         expected_selection_plan_id=outputs["selection_plan"],
     )
     assert stale.status_code == 409, stale.text
@@ -630,12 +749,17 @@ def test_naming_a_plan_that_has_been_replaced_is_refused(api_worker) -> None:
 
 
 def test_naming_an_analysis_that_has_been_replaced_is_refused_without_writing(
-    api_worker,
+    api_worker, transaction_manager, application_projection_reader
 ) -> None:
     application_id = _application(api_worker.services, "Moved Analysis Co")
-    first = _existing_analysis(api_worker, application_id)
-    second = _existing_analysis(api_worker, application_id)
-    before = len(api_worker.services.repository.analyses(application_id))
+    first = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
+    second = _existing_analysis(
+        api_worker, application_id, transaction_manager, application_projection_reader
+    )
+    with transaction_manager.read() as tx:
+        before = len(application_projection_reader.analyses(tx, application_id))
 
     stale = api_worker.client.post(
         f"{API_PREFIX}/analyses/{first['job_analysis']}/apply-decisions",
@@ -650,16 +774,21 @@ def test_naming_an_analysis_that_has_been_replaced_is_refused_without_writing(
 
     assert stale.status_code == 409, stale.text
     assert "active JobAnalysis moved" in stale.text
-    assert len(api_worker.services.repository.analyses(application_id)) == before
+    with transaction_manager.read() as tx:
+        after = len(application_projection_reader.analyses(tx, application_id))
+    assert after == before
     assert _state(api_worker, application_id)["active_analysis_id"] == second["job_analysis"]
 
 
 def test_a_context_operation_blocks_voluntary_editing_and_the_command(
-    api_paused,
+    api_paused, transaction_manager, application_projection_reader
 ) -> None:
     application_id = _application(api_paused.services, "Busy Context Co")
-    active = _existing_analysis(api_paused, application_id)
-    before = len(api_paused.services.repository.analyses(application_id))
+    active = _existing_analysis(
+        api_paused, application_id, transaction_manager, application_projection_reader
+    )
+    with transaction_manager.read() as tx:
+        before = len(application_projection_reader.analyses(tx, application_id))
     snapshot_id = _state(api_paused, application_id)["active_job_snapshot_id"]
 
     queued = api_paused.client.post(
@@ -688,4 +817,6 @@ def test_a_context_operation_blocks_voluntary_editing_and_the_command(
     )
     assert refused.status_code == 409, refused.text
     assert "context Operation is active" in refused.text
-    assert len(api_paused.services.repository.analyses(application_id)) == before
+    with transaction_manager.read() as tx:
+        after = len(application_projection_reader.analyses(tx, application_id))
+    assert after == before

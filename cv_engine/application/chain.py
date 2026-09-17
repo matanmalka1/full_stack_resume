@@ -5,7 +5,7 @@ four independent lookups. Resolving each link separately by recency is what lets
 a draft be built from one snapshot and validated against an analysis of another,
 or approved against whichever analysis happens to be newest. Every gate that
 consumes a draft -- validation, approval, rendering, and the ready recheck --
-goes through `check_draft_chain` so they cannot drift apart from each other.
+goes through `check_loaded_draft_chain` so they cannot drift apart from each other.
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ from ..domain.facts import FactStore
 from ..domain.profiles import ProfileStore
 from ..util import canonical_json, sha256_text
 from .errors import UnknownRecord
-from .ports import DraftRepository
 
 # What a re-analysis may change without invalidating a draft built from an
 # earlier one. Everything else -- Track, Profile, Emphasis, language, keywords,
@@ -103,47 +102,6 @@ class DraftChainSources:
     snapshot_record: dict | None
     latest_snapshot_id: str | None
     analyses: tuple[dict, ...]
-
-
-def check_draft_chain(
-    repo: DraftRepository,
-    application_id: str,
-    draft: DraftDocument,
-    profiles: ProfileStore,
-    facts: FactStore,
-    *,
-    recorded_analysis_id: str | None = None,
-) -> DraftChain:
-    """Legacy consumers load the same inputs used by token-scoped draft consumers."""
-    record = None
-    snapshot = None
-    latest_snapshot_id = None
-    history = ()
-    analysis_id = draft.job_analysis_id or recorded_analysis_id
-    if draft.application_id == application_id and analysis_id is not None:
-        try:
-            record = repo.get_analysis(analysis_id)
-        except UnknownRecord:
-            pass
-        if record is not None:
-            try:
-                snapshot = repo.get_snapshot(draft.job_snapshot_id)
-            except UnknownRecord:
-                pass
-            if record["application_id"] == application_id:
-                try:
-                    latest_snapshot_id = repo.latest_snapshot(application_id)["id"]
-                except UnknownRecord:
-                    pass
-                history = tuple(repo.analyses(application_id))
-    return check_loaded_draft_chain(
-        DraftChainSources(record, snapshot, latest_snapshot_id, history),
-        application_id,
-        draft,
-        profiles,
-        facts,
-        recorded_analysis_id=recorded_analysis_id,
-    )
 
 
 def check_loaded_draft_chain(

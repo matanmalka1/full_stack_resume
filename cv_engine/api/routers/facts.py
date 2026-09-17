@@ -46,7 +46,7 @@ def list_facts(
     services: Services,
     fact_status: Annotated[FactStatusFilter | None, Query(alias="status")] = None,
 ) -> FactListResponse:
-    result = services.knowledge.list_facts(fact_status.value if fact_status else None)
+    result = services.knowledge_queries.list_facts(fact_status.value if fact_status else None)
     return FactListResponse(
         items=[
             FactListItemResponse(
@@ -65,7 +65,7 @@ def list_facts(
 )
 def read_fact_history(services: Services) -> FactHistoryResponse:
     """Declared before `/{fact_id}`, so `history` is not read as a fact ID."""
-    result = services.knowledge.fact_history(None)
+    result = services.knowledge_queries.fact_history(None)
     return FactHistoryResponse(events=[fact_event_response(event) for event in result.events])
 
 
@@ -79,7 +79,7 @@ def read_fact_attachment_targets(
     fact_id: Annotated[str | None, Query()] = None,
 ) -> FactAttachmentTargetsResponse:
     """A read-only projection; it does not expose or edit Profile documents."""
-    result = services.knowledge.fact_attachment_targets(fact_id)
+    result = services.knowledge_queries.fact_attachment_targets(fact_id)
     return FactAttachmentTargetsResponse(
         profiles=[
             FactAttachmentProfileTargetResponse(
@@ -101,7 +101,7 @@ def read_fact_attachment_targets(
     summary="Read one fact and its lifecycle events",
 )
 def read_fact(fact_id: str, services: Services) -> FactDetailResponse:
-    result = services.knowledge.show_fact(fact_id)
+    result = services.knowledge_queries.show_fact(fact_id)
     return FactDetailResponse(
         fact=FactResponse.of(result.fact),
         events=[fact_event_response(event) for event in result.events],
@@ -114,7 +114,7 @@ def read_fact(fact_id: str, services: Services) -> FactDetailResponse:
     summary="Read one fact's lifecycle trail",
 )
 def read_one_fact_history(fact_id: str, services: Services) -> FactHistoryResponse:
-    result = services.knowledge.fact_history(fact_id)
+    result = services.knowledge_queries.fact_history(fact_id)
     return FactHistoryResponse(events=[fact_event_response(event) for event in result.events])
 
 

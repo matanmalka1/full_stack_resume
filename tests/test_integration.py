@@ -12,7 +12,19 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import StateConflict, WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.connection import (
+    SqlAlchemyTransactionManager,
+    create_database_engine,
+)
+from cv_engine.infrastructure.persistence.draft_lifecycle import (
+    SqlAlchemyDraftLifecycleRepository,
+)
 from cv_engine.runtime.paths import AppPaths
+
+
+def _transactions(services):
+    return SqlAlchemyTransactionManager(create_database_engine(services.database_url))
 
 
 def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> None:
@@ -123,7 +135,9 @@ def test_approval_refuses_while_the_projection_holds_an_unimported_edit(
         approve_active_draft(services, app_id)
 
     assert "differs from the stored draft" in str(refusal.value)
-    assert services.repository.approved_revisions(app_id) == []
+    transactions = _transactions(services)
+    with transactions.read() as tx:
+        assert SqlAlchemyDraftLifecycleRepository(transactions).approved_revisions(tx, app_id) == []
     # The edit is never touched: refusing is what keeps it recoverable.
     assert "direct SaaS Sales" in markdown.read_text(encoding="utf-8")
 
@@ -160,9 +174,11 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
         "- Media industry experience is preferred.",
     )
     services, app_id = setup
-    markdown_record = services.repository.latest_artifact_version(
-        app_id, "resume_markdown", "approved"
-    )
+    transactions = _transactions(services)
+    with transactions.read() as tx:
+        markdown_record = SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+            tx, app_id, "resume_markdown", "approved"
+        )
     markdown = services.artifacts.resolve(markdown_record["path"])
     markdown.write_text(
         markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8"

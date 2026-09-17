@@ -28,60 +28,6 @@ def current_database_revision(engine: Engine) -> str | None:
         return MigrationContext.configure(connection).get_current_revision()
 
 
-def _engine_for(repository_or_engine: Any) -> Engine:
-    engine = getattr(repository_or_engine, "engine", repository_or_engine)
-    if not isinstance(engine, Engine):
-        raise TypeError("UnitOfWork requires a SQLAlchemy Engine or repository")
-    return engine
-
-
-class SqlAlchemyUnitOfWork:
-    """One explicit-commit SQLAlchemy transaction.
-
-    Exiting without ``commit()`` rolls back even when no exception was raised.
-    REPEATABLE READ also gives a bound multi-query projection one stable
-    snapshot for the lifetime of the unit of work.
-    """
-
-    def __init__(self, repository_or_engine: Any):
-        self.engine = _engine_for(repository_or_engine)
-        self.connection: Connection | None = None
-        self._commit_requested = False
-
-    def __enter__(self) -> SqlAlchemyUnitOfWork:
-        if self.connection is not None:
-            raise RuntimeError("UnitOfWork is already active")
-        self.connection = self.engine.connect().execution_options(isolation_level="REPEATABLE READ")
-        self.connection.begin()
-        self._commit_requested = False
-        return self
-
-    def __exit__(self, *exc: Any) -> bool | None:
-        if self.connection is None:
-            return None
-        try:
-            if exc[0] is None and self._commit_requested:
-                self.connection.commit()
-            else:
-                self.connection.rollback()
-        finally:
-            self.connection.close()
-            self.connection = None
-            self._commit_requested = False
-        return None
-
-    def commit(self) -> None:
-        if self.connection is None:
-            raise RuntimeError("UnitOfWork is not active")
-        self._commit_requested = True
-
-    def rollback(self) -> None:
-        if self.connection is None:
-            raise RuntimeError("UnitOfWork is not active")
-        self.connection.rollback()
-        self._commit_requested = False
-
-
 class SqlAlchemyTransaction:
     """Opaque application token backed by one SQLAlchemy connection."""
 

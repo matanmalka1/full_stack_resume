@@ -1,7 +1,7 @@
 """What the API is given, and nothing more.
 
-`runtime.Services` holds repositories, stores, a renderer, a provider, and the
-Operation worker. A router needs none of those, and being able to reach one is
+Runtime composition wires stores, a renderer, a provider, and the Operation
+worker. A router needs none of those, and being able to reach one is
 how business logic ends up in a router. `ApiServices` is the narrow container the
 composition root fills in: application services, plus the two plain values the
 API itself needs to answer for.
@@ -20,7 +20,7 @@ from ..application.services.drafts import DraftAuthoringService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.validation import DraftValidationService
-from ..application.services.knowledge import KnowledgeService
+from ..application.services.knowledge import FactLifecycleService, KnowledgeQueryService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     OperationLifecycleService,
@@ -68,7 +68,8 @@ class ApiServices:
     rendering: RenderingService
     recruitment: RecruitmentService
     submission: SubmissionService
-    knowledge: KnowledgeService
+    knowledge: FactLifecycleService
+    knowledge_queries: KnowledgeQueryService
     maintenance: MaintenanceService
     operation_submissions: OperationSubmissionService
     operation_lifecycle: OperationLifecycleService

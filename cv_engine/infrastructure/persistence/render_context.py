@@ -7,9 +7,9 @@ from ...application.ports.rendering import RenderOperationSources
 from ...application.ports.transactions import ReadTransaction
 from .analysis_sql import _analysis_record, _selection_plan_record
 from .artifacts_sql import _artifact_version_for_revision, _decision_for_revision
+from .base import json_text_record
 from .connection import SqlAlchemyTransactionManager
 from .drafts_sql import _approved_revision
-from .preparation import _snapshot_record
 from .tables import (
     applications,
     artifact_versions,
@@ -82,7 +82,7 @@ class SqlAlchemyRenderContextReader:
         return RenderOperationSources(
             revision,
             manifest,
-            _snapshot_record(snapshot_row),
+            json_text_record(snapshot_row, "source_metadata_json"),
             _analysis_record(analysis_row),
             _selection_plan_record(plan_row),
             _decision_for_revision(connection, revision_id),

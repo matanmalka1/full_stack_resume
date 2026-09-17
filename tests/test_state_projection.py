@@ -25,7 +25,7 @@ from cv_engine.domain.models import (
     ValidationRunLineage,
 )
 from cv_engine.infrastructure.persistence.tables import applications
-from cv_engine.util import new_id, sha256_text
+from cv_engine.util import new_id, sha256_text, utc_now
 
 
 def test_application_projection_follows_the_preparation_lifecycle(services) -> None:
@@ -232,18 +232,25 @@ def test_voluntary_matching_change_keeps_ready_immutable_and_historical(
     }
 
 
-def test_new_snapshot_makes_ready_historical_and_requires_analysis(ready_application) -> None:
+def test_new_snapshot_makes_ready_historical_and_requires_analysis(
+    ready_application, transaction_manager, job_snapshot_store
+) -> None:
     setup = ready_application("Historical Ready State Co")
     snapshot_id = new_id()
     text = "A changed Account Manager role with a new territory."
     payload = setup.services.payloads.commit_snapshot(setup.application_id, snapshot_id, text)
-    setup.services.repository.add_job_snapshot(
-        setup.application_id,
-        payload.reference,
-        payload.sha256,
-        sha256_text(text.lower()),
-        snapshot_id=snapshot_id,
-    )
+    with transaction_manager.write() as tx:
+        job_snapshot_store.insert_next_snapshot(
+            tx,
+            application_id=setup.application_id,
+            payload_path=payload.reference,
+            source_hash=payload.sha256,
+            normalized_hash=sha256_text(text.lower()),
+            snapshot_id=snapshot_id,
+            source_url=None,
+            source_metadata={},
+            captured_at=utc_now(),
+        )
 
     detail = setup.services.queries.application_detail(setup.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_ANALYSIS
@@ -283,29 +290,39 @@ def test_new_analysis_makes_parallel_draft_stale_without_erasing_ready_history(
     assert {warning.code for warning in detail.warnings} == {"READY_REVISION_FOR_OLDER_ANALYSIS"}
 
 
-def test_failed_exact_validation_drives_state_and_approve_blocker(drafted_application) -> None:
+def test_failed_exact_validation_drives_state_and_approve_blocker(
+    drafted_application,
+    transaction_manager,
+    draft_lifecycle_store,
+    application_projection_reader,
+    validation_store,
+) -> None:
     setup = drafted_application("Failed Validation State Co")
-    working = setup.services.repository.active_working_draft(setup.application_id)
-    analysis = setup.services.repository.get_analysis(setup.analysis_id)
+    with transaction_manager.read() as tx:
+        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
+    with transaction_manager.read() as tx:
+        analysis = application_projection_reader.analysis(tx, setup.analysis_id)
     knowledge = setup.services.knowledge.load()
-    setup.services.repository.record_validation(
-        setup.application_id,
-        "pre-render",
-        ValidationReport.from_findings(
-            groups={"content": False},
-            issues=[ValidationIssue(group="content", code="test-failure", message="failed")],
-        ),
-        lineage=ValidationRunLineage(
-            working_draft_id=working.id,
-            edit_version=working.edit_version,
-            content_hash=working.content_hash,
-            job_snapshot_id=analysis["job_snapshot_id"],
-            job_analysis_id=working.job_analysis_id,
-            selection_plan_id=working.selection_plan_id,
-            knowledge_context_hash=knowledge.document_context_hash(),
-            validator_versions={"test": "1"},
-        ),
-    )
+    with transaction_manager.write() as tx:
+        validation_store.record_validation(
+            tx,
+            setup.application_id,
+            "pre-render",
+            ValidationReport.from_findings(
+                groups={"content": False},
+                issues=[ValidationIssue(group="content", code="test-failure", message="failed")],
+            ),
+            lineage=ValidationRunLineage(
+                working_draft_id=working.id,
+                edit_version=working.edit_version,
+                content_hash=working.content_hash,
+                job_snapshot_id=analysis["job_snapshot_id"],
+                job_analysis_id=working.job_analysis_id,
+                selection_plan_id=working.selection_plan_id,
+                knowledge_context_hash=knowledge.document_context_hash(),
+                validator_versions={"test": "1"},
+            ),
+        )
 
     detail = setup.services.queries.application_detail(setup.application_id)
     assert detail.preparation_state is PreparationState.DRAFT_IN_PROGRESS
@@ -314,15 +331,20 @@ def test_failed_exact_validation_drives_state_and_approve_blocker(drafted_applic
     assert blocked["approve"] == ["VALIDATION_FAILED"]
 
 
-def test_edit_after_validation_is_a_reason_but_not_source_staleness(drafted_application) -> None:
+def test_edit_after_validation_is_a_reason_but_not_source_staleness(
+    drafted_application, transaction_manager, draft_lifecycle_store
+) -> None:
     setup = drafted_application("Edited Validation State Co")
-    working = setup.services.repository.active_working_draft(setup.application_id)
+    with transaction_manager.read() as tx:
+        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
     edited_source = working.source.model_copy(update={"content_hash": "edited-content"})
-    setup.services.repository.update_working_draft(
-        working.id,
-        working.edit_version,
-        edited_source,
-    )
+    with transaction_manager.write() as tx:
+        draft_lifecycle_store.update_working_draft(
+            tx,
+            working.id,
+            working.edit_version,
+            edited_source,
+        )
 
     detail = setup.services.queries.application_detail(setup.application_id)
     assert detail.preparation_state is PreparationState.DRAFT_IN_PROGRESS
@@ -349,11 +371,12 @@ def test_profile_and_policy_versions_are_source_stale_reasons(
 
 
 def test_unrelated_canonical_fact_change_does_not_stale_the_draft(
-    drafted_application, monkeypatch: pytest.MonkeyPatch
+    drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager, draft_lifecycle_store
 ) -> None:
     setup = drafted_application("Unrelated Fact State Co")
     knowledge = setup.services.knowledge.load()
-    working = setup.services.repository.active_working_draft(setup.application_id)
+    with transaction_manager.read() as tx:
+        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
     referenced = {
         fact_id
         for claim in (
@@ -379,7 +402,7 @@ def test_unrelated_canonical_fact_change_does_not_stale_the_draft(
 
 
 def test_deleted_fact_dependency_blocks_review_and_warns_the_active_draft(
-    drafted_application, monkeypatch: pytest.MonkeyPatch
+    drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager, draft_lifecycle_store
 ) -> None:
     """Mirrors `test_unrelated_canonical_fact_change_does_not_stale_the_draft`,
     but the changed fact is one the active draft actually depends on: unlike a
@@ -389,7 +412,8 @@ def test_deleted_fact_dependency_blocks_review_and_warns_the_active_draft(
     """
     setup = drafted_application("Deleted Fact State Co")
     knowledge = setup.services.knowledge.load()
-    working = setup.services.repository.active_working_draft(setup.application_id)
+    with transaction_manager.read() as tx:
+        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
     referenced = {
         fact_id
         for claim in (
@@ -413,9 +437,12 @@ def test_deleted_fact_dependency_blocks_review_and_warns_the_active_draft(
     assert "approve" not in detail.available_actions
 
 
-def test_pending_claim_recommends_its_resolution_action(drafted_application) -> None:
+def test_pending_claim_recommends_its_resolution_action(
+    drafted_application, transaction_manager, draft_lifecycle_store
+) -> None:
     setup = drafted_application("Pending Review State Co")
-    working = setup.services.repository.active_working_draft(setup.application_id)
+    with transaction_manager.read() as tx:
+        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
     section = working.source.sections[0]
     claim = section.claims[0]
     pending = claim.model_copy(
@@ -434,11 +461,13 @@ def test_pending_claim_recommends_its_resolution_action(drafted_application) -> 
             "content_hash": "pending-content",
         }
     )
-    setup.services.repository.update_working_draft(
-        working.id,
-        working.edit_version,
-        changed_source,
-    )
+    with transaction_manager.write() as tx:
+        draft_lifecycle_store.update_working_draft(
+            tx,
+            working.id,
+            working.edit_version,
+            changed_source,
+        )
 
     detail = setup.services.queries.application_detail(setup.application_id)
     assert detail.preparation_state is PreparationState.NEEDS_REVIEW
@@ -447,24 +476,44 @@ def test_pending_claim_recommends_its_resolution_action(drafted_application) -> 
     assert "confirm_and_use_fact" in detail.available_actions
 
 
-def test_projection_queries_share_one_database_snapshot(services) -> None:
+def test_projection_queries_share_one_database_snapshot(
+    services, transaction_manager, application_projection_reader, database_engine, monkeypatch
+) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
             company="Snapshot Co", target_role="Developer", job_text="Python role", client="web"
         )
     )
-    repository = services.repository
-    with repository.read_transaction() as reader:
-        before = reader.get_application(ingested.application_id)
-        with repository.engine.begin() as writer:
+    with transaction_manager.read() as tx:
+        before = application_projection_reader.application(tx, ingested.application_id)
+        with database_engine.begin() as writer:
             writer.execute(
                 update(applications)
                 .where(applications.c.id == ingested.application_id)
                 .values(next_action="Call recruiter")
             )
-        during = reader.get_application(ingested.application_id)
+        during = application_projection_reader.application(tx, ingested.application_id)
 
-    after = repository.get_application(ingested.application_id)
+    with transaction_manager.read() as tx:
+        after = application_projection_reader.application(tx, ingested.application_id)
     assert before["next_action"] is None
     assert during["next_action"] is None
     assert after["next_action"] == "Call recruiter"
+
+    original = type(application_projection_reader).application
+
+    def change_after_identity_read(reader, tx, application_id):
+        record = original(reader, tx, application_id)
+        with database_engine.begin() as writer:
+            writer.execute(
+                update(applications)
+                .where(applications.c.id == application_id)
+                .values(next_action="Changed during projection")
+            )
+        return record
+
+    monkeypatch.setattr(
+        type(application_projection_reader), "application", change_after_identity_read
+    )
+    detail = services.queries.application_detail(ingested.application_id)
+    assert detail.application.next_action == "Call recruiter"

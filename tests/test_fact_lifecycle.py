@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import cast
 
 import pytest
 from helpers import approve_active_draft, seed_analysis_for_command
@@ -21,7 +20,13 @@ from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.models import FactStatus
 from cv_engine.infrastructure.knowledge import FactStoreError, load_fact_store
-from cv_engine.infrastructure.persistence.repository import Repository
+from cv_engine.infrastructure.persistence.connection import (
+    SqlAlchemyTransactionManager,
+    create_database_engine,
+)
+from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
+    SqlAlchemyKnowledgeLifecycleRepository,
+)
 from cv_engine.infrastructure.persistence.tables import fact_events
 from cv_engine.runtime.composition import Services, build_services
 
@@ -33,6 +38,11 @@ NEW_FACT = {
     "provenance": "candidate wording from the user; not yet verified",
     "resume_style": "bullet",
 }
+
+
+def _knowledge_persistence(services: Services):
+    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    return transactions, SqlAlchemyKnowledgeLifecycleRepository(transactions)
 
 
 def _reload(services: Services) -> FactStore:
@@ -63,7 +73,7 @@ def test_contextual_pending_fact_gets_a_generated_uuid(services: Services) -> No
 def test_attachment_target_projection_exposes_sections_without_profile_documents(
     services: Services,
 ) -> None:
-    targets = services.knowledge_lifecycle.fact_attachment_targets()
+    targets = services.knowledge_queries.fact_attachment_targets()
     development = next(item for item in targets.profiles if item.profile == "development")
     assert development.label
     assert development.sections
@@ -73,7 +83,7 @@ def test_attachment_target_projection_exposes_sections_without_profile_documents
     source_profile = knowledge.profiles.get("development")
     source_section = next(section for section in source_profile.sections if section.fact_ids)
     existing_id = source_section.fact_ids[0]
-    existing = services.knowledge_lifecycle.fact_attachment_targets(existing_id)
+    existing = services.knowledge_queries.fact_attachment_targets(existing_id)
     projected_profile = next(item for item in existing.profiles if item.profile == "development")
     projected_section = next(
         item for item in projected_profile.sections if item.section == source_section.name_en
@@ -82,7 +92,7 @@ def test_attachment_target_projection_exposes_sections_without_profile_documents
     assert projected_section.pinned is (existing_id in source_section.pinned_fact_ids)
 
     with pytest.raises(UnknownRecord, match="unknown fact_id"):
-        services.knowledge_lifecycle.fact_attachment_targets("does-not-exist")
+        services.knowledge_queries.fact_attachment_targets("does-not-exist")
 
 
 def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) -> None:
@@ -160,7 +170,9 @@ def test_prepared_knowledge_mutation_recovers_or_quarantines_from_hashes(
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", interrupt)
     with pytest.raises(RuntimeError, match="simulated crash"):
         services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-    mutation = services.repository.prepared_knowledge_mutations()[0]
+    transactions, store = _knowledge_persistence(services)
+    with transactions.read() as tx:
+        mutation = store.prepared_mutations(tx)[0]
     source = services.paths.root / mutation.source_reference
     staged = services.paths.root / mutation.staged_reference
     backup = staged.with_name("old")
@@ -174,11 +186,13 @@ def test_prepared_knowledge_mutation_recovers_or_quarantines_from_hashes(
         backup.unlink()
 
     recovered = build_services(services.paths)
-    assert recovered.repository.prepared_knowledge_mutations() == []
-    quarantined = recovered.repository.quarantined_knowledge_mutations()
+    transactions, store = _knowledge_persistence(recovered)
+    with transactions.read() as tx:
+        assert store.prepared_mutations(tx) == []
+        quarantined = store.quarantined_mutations(tx)
     assert [item.id for item in quarantined] == [mutation.id]
-    assert recovered.knowledge_lifecycle.fact_history().events == []
-    reconciliation = recovered.knowledge_lifecycle.reconcile_facts()
+    assert recovered.knowledge_queries.fact_history().events == []
+    reconciliation = recovered.knowledge_queries.reconcile_facts()
     assert not reconciliation.passed
     assert reconciliation.journal_quarantined == 1
 
@@ -194,16 +208,20 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", interrupt_before)
     with pytest.raises(RuntimeError, match="before replace"):
         services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-    mutation = services.repository.prepared_knowledge_mutations()[0]
+    transactions, store = _knowledge_persistence(services)
+    with transactions.read() as tx:
+        mutation = store.prepared_mutations(tx)[0]
     with pytest.raises(KnowledgeRejected, match="uncommitted prepared mutation"):
-        services.knowledge_lifecycle.list_facts()
-    assert services.knowledge_lifecycle.fact_history().events == []
+        services.knowledge_queries.list_facts()
+    assert services.knowledge_queries.fact_history().events == []
 
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", original_complete)
     recovered = build_services(services.paths)
-    assert recovered.repository.knowledge_mutation(mutation.id).state.value == "COMMITTED"
+    transactions, store = _knowledge_persistence(recovered)
+    with transactions.read() as tx:
+        assert store.mutation(tx, mutation.id).state.value == "COMMITTED"
     assert _reload(recovered).get("situational.postgres").status is FactStatus.PENDING
-    assert len(recovered.knowledge_lifecycle.fact_history("situational.postgres").events) == 1
+    assert len(recovered.knowledge_queries.fact_history("situational.postgres").events) == 1
 
     second_payload = {**NEW_FACT, "fact_id": "situational.postgres.second"}
 
@@ -217,31 +235,34 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
         recovered.knowledge_lifecycle.add_fact("situational_skills.json", second_payload)
     recovered_again = build_services(services.paths)
     assert _reload(recovered_again).get("situational.postgres.second").status is FactStatus.PENDING
-    assert len(recovered_again.knowledge_lifecycle.fact_history().events) == 2
+    assert len(recovered_again.knowledge_queries.fact_history().events) == 2
 
 
 def test_startup_marks_committed_db_mutation_without_duplicate_event(
     services: Services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    original_commit = services.repository.commit_knowledge_mutation
-    calls = 0
+    def interrupt(_mutation):
+        raise RuntimeError("before activation")
 
-    def fail_once(mutation_id: str, *, committed_at: str | None = None):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            raise RuntimeError("after database commit")
-        return original_commit(mutation_id, committed_at=committed_at)
-
-    monkeypatch.setattr(services.repository, "commit_knowledge_mutation", fail_once)
-    with pytest.raises(RuntimeError, match="after database commit"):
+    monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", interrupt)
+    with pytest.raises(RuntimeError, match="before activation"):
         services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-    assert len(services.repository.fact_events("situational.postgres")) == 1
-    assert len(services.repository.prepared_knowledge_mutations()) == 1
+
+    transactions, store = _knowledge_persistence(services)
+    with transactions.read() as tx:
+        mutation = store.prepared_mutations(tx)[0]
+    services.knowledge.activate_staged(services.knowledge.staged_from_mutation(mutation))
+    action = mutation.db_mutation["actions"][0]
+    with transactions.write() as tx:
+        store.record_fact_event(
+            tx, **{key: value for key, value in action.items() if key != "type"}
+        )
 
     recovered = build_services(services.paths)
-    assert recovered.repository.prepared_knowledge_mutations() == []
-    assert len(recovered.repository.fact_events("situational.postgres")) == 1
+    transactions, store = _knowledge_persistence(recovered)
+    with transactions.read() as tx:
+        assert store.prepared_mutations(tx) == []
+        assert len(store.fact_events(tx, "situational.postgres")) == 1
 
 
 def test_audit_failure_restores_source_and_quarantines(
@@ -250,14 +271,17 @@ def test_audit_failure_restores_source_and_quarantines(
     source = services.paths.knowledge_root / "base" / "situational_skills.json"
     before = source.read_bytes()
 
-    def refuse_event(self, **_values):
+    def refuse_event(self, _tx, **_values):
         raise ValueError("simulated audit insertion failure")
 
-    monkeypatch.setattr(type(services.repository), "record_fact_event", refuse_event)
+    _transactions, store = _knowledge_persistence(services)
+    monkeypatch.setattr(type(store), "record_fact_event", refuse_event)
     with pytest.raises(KnowledgeRejected, match="audit insertion failure"):
         services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     assert source.read_bytes() == before
-    assert len(services.repository.quarantined_knowledge_mutations()) == 1
+    transactions, store = _knowledge_persistence(services)
+    with transactions.read() as tx:
+        assert len(store.quarantined_mutations(tx)) == 1
     with pytest.raises(KnowledgeRejected, match="mutations are quarantined"):
         services.knowledge_lifecycle.add_fact(
             "situational_skills.json", {**NEW_FACT, "fact_id": "another.fact"}
@@ -279,10 +303,13 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
         db_mutation={"actions": []},
         recovery_strategy="finish_or_restore",
     )
-    services.repository.prepare_knowledge_mutation(request)
-    services.repository.quarantine_knowledge_mutation(request.mutation_id, "unrecoverable")
+    transactions, store = _knowledge_persistence(services)
+    with transactions.write() as tx:
+        store.prepare_mutation(tx, request)
+    with transactions.write() as tx:
+        store.quarantine_mutation(tx, request.mutation_id, "unrecoverable")
 
-    assert services.knowledge_lifecycle.fact_history().events == []
+    assert services.knowledge_queries.fact_history().events == []
     with pytest.raises(PreconditionFailed, match="approval blocked by quarantined Knowledge"):
         approve_active_draft(services, application_id)
 
@@ -314,7 +341,7 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_plan_command(
     assert created.fact.fact_id in result.selection_plan.plan.selected_fact_ids
     assert result.selection_plan.id != setup.selection_plan_id
     assert result.selection_plan.profile_version == result.profile_store_version
-    events = services.knowledge_lifecycle.fact_history(created.fact.fact_id).events
+    events = services.knowledge_queries.fact_history(created.fact.fact_id).events
     assert [(event.from_status, event.to_status) for event in events] == [
         (None, "pending"),
         ("pending", "confirmed"),
@@ -322,8 +349,10 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_plan_command(
         ("canonical", "canonical"),
     ]
     assert len(result.event_ids) == 3
-    assert services.repository.prepared_knowledge_mutations() == []
-    assert services.repository.quarantined_knowledge_mutations() == []
+    transactions, store = _knowledge_persistence(services)
+    with transactions.read() as tx:
+        assert store.prepared_mutations(tx) == []
+        assert store.quarantined_mutations(tx) == []
 
 
 def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
@@ -367,8 +396,10 @@ def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
     assert fact_source.read_bytes() == before_fact
     assert profile_source.read_bytes() == before_profile
     assert _reload(services).get(created.fact.fact_id).status is FactStatus.PENDING
-    assert services.repository.prepared_knowledge_mutations() == []
-    assert services.repository.quarantined_knowledge_mutations() == []
+    transactions, store = _knowledge_persistence(services)
+    with transactions.read() as tx:
+        assert store.prepared_mutations(tx) == []
+        assert store.quarantined_mutations(tx) == []
 
 
 def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
@@ -393,7 +424,8 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
     def refuse_plan(self, *_args, **_kwargs):
         raise ValueError("simulated SelectionPlan constraint failure")
 
-    monkeypatch.setattr(type(services.repository), "create_selection_plan", refuse_plan)
+    _transactions, store = _knowledge_persistence(services)
+    monkeypatch.setattr(type(store), "create_selection_plan", refuse_plan)
     with pytest.raises(KnowledgeRejected, match="SelectionPlan constraint failure"):
         services.knowledge_lifecycle.confirm_and_use_fact(
             created.fact.fact_id,
@@ -406,7 +438,9 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
     assert fact_source.read_bytes() == before_fact
     assert profile_source.read_bytes() == before_profile
     assert _reload(services).get(created.fact.fact_id).status is FactStatus.PENDING
-    assert len(services.repository.quarantined_knowledge_mutations()) == 1
+    transactions, store = _knowledge_persistence(services)
+    with transactions.read() as tx:
+        assert len(store.quarantined_mutations(tx)) == 1
 
     staged, _fact = services.knowledge.stage_create_fact(
         "stage-change",
@@ -481,22 +515,22 @@ def test_delete_fact_is_one_way_and_excluded_from_default_listing_and_targets(
         services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=True)
 
     # Excluded from the default listing; still reachable by explicit filter and by ID.
-    default_listing = services.knowledge_lifecycle.list_facts()
+    default_listing = services.knowledge_queries.list_facts()
     assert fact_id not in {item.fact.fact_id for item in default_listing.items}
-    deleted_listing = services.knowledge_lifecycle.list_facts("deleted")
+    deleted_listing = services.knowledge_queries.list_facts("deleted")
     assert fact_id in {item.fact.fact_id for item in deleted_listing.items}
-    assert services.knowledge_lifecycle.show_fact(fact_id).fact.status is FactStatus.DELETED
+    assert services.knowledge_queries.show_fact(fact_id).fact.status is FactStatus.DELETED
 
     # Excluded from attachment targets, and refused by confirm/promote/attach.
     with pytest.raises(UnknownRecord, match="deleted"):
-        services.knowledge_lifecycle.fact_attachment_targets(fact_id)
+        services.knowledge_queries.fact_attachment_targets(fact_id)
     with pytest.raises(KnowledgeRejected, match="invalid fact transition"):
         services.knowledge_lifecycle.promote_fact(fact_id, "confirmed", explicitly_confirmed=True)
     with pytest.raises(KnowledgeRejected, match="only canonical facts"):
         services.knowledge_lifecycle.attach_fact(fact_id, "account-manager", "Work Experience")
 
     # The lifecycle trail is preserved, not erased.
-    history = services.knowledge_lifecycle.fact_history(fact_id)
+    history = services.knowledge_queries.fact_history(fact_id)
     assert [event.to_status for event in history.events] == ["pending", "deleted"]
 
 
@@ -562,13 +596,15 @@ def test_duplicate_fact_ids_are_refused(services: Services) -> None:
 
 def test_lifecycle_events_are_immutable(services: Services) -> None:
     services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-    repository = cast(Repository, services.repository)
+    transactions, _store = _knowledge_persistence(services)
 
     with pytest.raises(ProgrammingError, match="immutable record"):
-        with repository.transaction() as connection:
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
             connection.execute(update(fact_events).values(to_status="canonical"))
     with pytest.raises(ProgrammingError, match="immutable record"):
-        with repository.transaction() as connection:
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
             connection.execute(delete(fact_events))
 
 
@@ -649,7 +685,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     selected = _working_claim(services, app_id, "sales.leadership.pipeline_review")
     assert selected.claim_type == "canonical"
     assert selected.text == text
-    events = services.knowledge_lifecycle.fact_history("sales.leadership.pipeline_review").events
+    events = services.knowledge_queries.fact_history("sales.leadership.pipeline_review").events
     assert [event.event_type for event in events] == [
         "fact_created",
         "fact_promoted",

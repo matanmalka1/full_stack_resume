@@ -11,9 +11,11 @@ from __future__ import annotations
 from typing import Any
 
 from ....domain.contracts.knowledge import Fact, FactStatus
-from ....domain.facts import FactStoreError
+from ....domain.facts import FactStore, FactStoreError
+from ....domain.knowledge import Knowledge
+from ....domain.profiles import ProfileStore
+from ....domain.selection import EmphasisPolicyStore, build_selection
 from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
-from ....domain.selection import build_selection
 from ....util import new_id, utc_now
 from ...commands import (
     ConfirmAndUseFactResult,
@@ -39,87 +41,19 @@ from ...errors import (
     UnknownRecord,
 )
 from ...knowledge_mutations import PrepareKnowledgeMutation
-from ..base import working_draft_document
+from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
+from ...ports.outbound import KnowledgeStore
+from ...ports.transactions import TransactionManager
 from .mutations import KnowledgeMutationEngine
 
 
-class KnowledgeService(KnowledgeMutationEngine):
+class FactLifecycleService(KnowledgeMutationEngine):
     """The fact lifecycle and the knowledge version surface.
 
     The mutation engine is a base rather than a collaborator: `add_fact`,
     `attach_fact`, and `confirm_and_use_fact` reach `_complete_prepared`
     through `self`, which is the seam the crash-recovery tests replace.
     """
-
-    def knowledge_versions(self) -> KnowledgeVersionsResult:
-        """One hash surface per knowledge dependency an artifact can depend on."""
-        return KnowledgeVersionsResult.model_validate(self.load_knowledge().versions())
-
-    def list_facts(self, status: str | None = None) -> FactListResult:
-        facts = self.fact_store()
-        recorded = self.repo.latest_fact_statuses()
-        items = facts.by_status(status)
-        if status is None:
-            # No explicit filter excludes deleted facts by default (state-and-
-            # use-cases.md §17); `status=deleted` still reaches them.
-            items = [fact for fact in items if fact.status is not FactStatus.DELETED]
-        return FactListResult(
-            items=[
-                FactListItem(fact=fact, recorded_status=recorded.get(fact.fact_id))
-                for fact in items
-            ]
-        )
-
-    def show_fact(self, fact_id: str) -> FactDetailResult:
-        facts = self.fact_store()
-        try:
-            fact = facts.get(fact_id)
-        except FactStoreError as exc:
-            raise UnknownRecord(str(exc)) from exc
-        return FactDetailResult(
-            fact=fact,
-            events=[fact_event_view(row) for row in self.repo.fact_events(fact_id)],
-        )
-
-    def fact_attachment_targets(self, fact_id: str | None = None) -> FactAttachmentTargetsResult:
-        """Read existing Profile sections without exposing mutable Profile documents."""
-        facts, profiles, _policies = self.knowledge()
-        if fact_id is not None:
-            try:
-                target = facts.get(fact_id)
-            except FactStoreError as exc:
-                raise UnknownRecord(str(exc)) from exc
-            if target.status is FactStatus.DELETED:
-                # Excluded from attachment-targets results, the same as it is
-                # excluded from `list_facts` by default (state-and-use-cases.md §17).
-                raise UnknownRecord(f"fact is deleted: {fact_id}")
-        return FactAttachmentTargetsResult(
-            profiles=[
-                FactAttachmentProfileTarget(
-                    profile=profile.profile,
-                    label=profile.normalized_role,
-                    sections=[
-                        FactAttachmentSectionTarget(
-                            section=section.name_en,
-                            label=section.name_he,
-                            attached=fact_id in section.fact_ids if fact_id is not None else False,
-                            pinned=fact_id in section.pinned_fact_ids
-                            if fact_id is not None
-                            else False,
-                        )
-                        for section in profile.sections
-                    ],
-                )
-                for profile in sorted(
-                    profiles.profiles.values(), key=lambda item: item.profile.value
-                )
-            ]
-        )
-
-    def fact_history(self, fact_id: str | None = None) -> FactHistoryResult:
-        return FactHistoryResult(
-            events=[fact_event_view(row) for row in self.repo.fact_events(fact_id)]
-        )
 
     def _fact_event_action(
         self,
@@ -319,7 +253,8 @@ class KnowledgeService(KnowledgeMutationEngine):
         claim's own text becomes the candidate fact rather than being retyped,
         so nothing is strengthened on the way in.
         """
-        draft = working_draft_document(self.repo, application_id)
+        with self.transactions.read() as tx:
+            draft = self.store.active_working_draft(tx, application_id).source
         claims = [
             draft.headline,
             *draft.contacts,
@@ -452,7 +387,8 @@ class KnowledgeService(KnowledgeMutationEngine):
         """Promote, attach, and select one pending fact as one recoverable command."""
         self._ensure_mutations_allowed()
         try:
-            analysis_record = self.repo.get_analysis(job_analysis_id)
+            with self.transactions.read() as tx:
+                analysis_record = self.store.get_analysis(tx, job_analysis_id)
         except UnknownRecord as exc:
             raise UnknownRecord(str(exc)) from exc
         if analysis_record["application_id"] != application_id:
@@ -576,20 +512,128 @@ class KnowledgeService(KnowledgeMutationEngine):
             recovery_strategy="finish_or_restore",
         )
         try:
-            mutation = self.repo.prepare_knowledge_mutation(request)
+            with self.transactions.write() as tx:
+                mutation = self.store.prepare_mutation(tx, request)
         except Exception:
             for staged in staged_files:
                 self._knowledge.discard_staged(staged)
             raise
         self._complete_prepared(mutation)
+        with self.transactions.read() as tx:
+            selection_plan = self.store.selection_plan(tx, plan_id)
         return ConfirmAndUseFactResult(
             fact=canonical,
             event_ids=[action["event_id"] for action in actions if action["type"] == "fact_event"],
-            selection_plan=self.repo.selection_plan(plan_id),
+            selection_plan=selection_plan,
             facts_version=facts_version,
             lifecycle_version=lifecycle_version,
             profile_store_version=proposed.profiles.version,
         )
+
+
+class KnowledgeQueryService:
+    """Read-only fact projections and lifecycle reconciliation."""
+
+    def __init__(
+        self,
+        *,
+        transactions: TransactionManager,
+        store: KnowledgeLifecycleStore,
+        knowledge: KnowledgeStore,
+    ):
+        self.transactions = transactions
+        self.store = store
+        self._knowledge = knowledge
+
+    def load_knowledge(self) -> Knowledge:
+        try:
+            return self._knowledge.load()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
+        except ValueError as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+
+    def knowledge(self) -> tuple[FactStore, ProfileStore, EmphasisPolicyStore]:
+        loaded = self.load_knowledge()
+        return loaded.facts, loaded.profiles, loaded.policies
+
+    def fact_store(self) -> FactStore:
+        try:
+            return self._knowledge.facts()
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not read facts: {exc}") from exc
+        except ValueError as exc:
+            raise KnowledgeRejected(str(exc)) from exc
+
+    def knowledge_versions(self) -> KnowledgeVersionsResult:
+        """One hash surface per knowledge dependency an artifact can depend on."""
+        return KnowledgeVersionsResult.model_validate(self.load_knowledge().versions())
+
+    def list_facts(self, status: str | None = None) -> FactListResult:
+        facts = self.fact_store()
+        with self.transactions.read() as tx:
+            recorded = self.store.latest_fact_statuses(tx)
+        items = facts.by_status(status)
+        if status is None:
+            # No explicit filter excludes deleted facts by default (state-and-
+            # use-cases.md §17); `status=deleted` still reaches them.
+            items = [fact for fact in items if fact.status is not FactStatus.DELETED]
+        return FactListResult(
+            items=[
+                FactListItem(fact=fact, recorded_status=recorded.get(fact.fact_id))
+                for fact in items
+            ]
+        )
+
+    def show_fact(self, fact_id: str) -> FactDetailResult:
+        facts = self.fact_store()
+        try:
+            fact = facts.get(fact_id)
+        except FactStoreError as exc:
+            raise UnknownRecord(str(exc)) from exc
+        with self.transactions.read() as tx:
+            events = self.store.fact_events(tx, fact_id)
+        return FactDetailResult(fact=fact, events=[fact_event_view(row) for row in events])
+
+    def fact_attachment_targets(self, fact_id: str | None = None) -> FactAttachmentTargetsResult:
+        """Read existing Profile sections without exposing mutable Profile documents."""
+        facts, profiles, _policies = self.knowledge()
+        if fact_id is not None:
+            try:
+                target = facts.get(fact_id)
+            except FactStoreError as exc:
+                raise UnknownRecord(str(exc)) from exc
+            if target.status is FactStatus.DELETED:
+                # Excluded from attachment-targets results, the same as it is
+                # excluded from `list_facts` by default (state-and-use-cases.md §17).
+                raise UnknownRecord(f"fact is deleted: {fact_id}")
+        return FactAttachmentTargetsResult(
+            profiles=[
+                FactAttachmentProfileTarget(
+                    profile=profile.profile,
+                    label=profile.normalized_role,
+                    sections=[
+                        FactAttachmentSectionTarget(
+                            section=section.name_en,
+                            label=section.name_he,
+                            attached=fact_id in section.fact_ids if fact_id is not None else False,
+                            pinned=fact_id in section.pinned_fact_ids
+                            if fact_id is not None
+                            else False,
+                        )
+                        for section in profile.sections
+                    ],
+                )
+                for profile in sorted(
+                    profiles.profiles.values(), key=lambda item: item.profile.value
+                )
+            ]
+        )
+
+    def fact_history(self, fact_id: str | None = None) -> FactHistoryResult:
+        with self.transactions.read() as tx:
+            events = self.store.fact_events(tx, fact_id)
+        return FactHistoryResult(events=[fact_event_view(row) for row in events])
 
     def reconcile_facts(self) -> FactReconciliationResult:
         """Check the persisted lifecycle against its audit trail.
@@ -600,7 +644,8 @@ class KnowledgeService(KnowledgeMutationEngine):
         outside the lifecycle, which is exactly what the trail exists to catch.
         """
         facts = self.fact_store()
-        recorded = self.repo.latest_fact_statuses()
+        with self.transactions.read() as tx:
+            recorded = self.store.latest_fact_statuses(tx)
         problems: list[str] = []
         for fact_id, status in recorded.items():
             if fact_id not in facts.facts:
@@ -618,8 +663,9 @@ class KnowledgeService(KnowledgeMutationEngine):
         problems.extend(
             f"non-canonical fact has no lifecycle event: {fact_id}" for fact_id in untracked
         )
-        prepared = self.repo.prepared_knowledge_mutations()
-        quarantined = self.repo.quarantined_knowledge_mutations()
+        with self.transactions.read() as tx:
+            prepared = self.store.prepared_mutations(tx)
+            quarantined = self.store.quarantined_mutations(tx)
         problems.extend(
             f"Knowledge mutation still requires recovery: {mutation.id}" for mutation in prepared
         )

@@ -280,7 +280,11 @@ def test_the_full_api_journey_reaches_ready_offline(
 
 
 def test_the_review_journey_resolves_once_and_reaches_ready(
-    ai_api_worker, fake_openai: FakeOpenAI, deterministic_renderer
+    ai_api_worker,
+    fake_openai: FakeOpenAI,
+    deterministic_renderer,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     fake_openai.script(
         "propose_analysis",
@@ -332,7 +336,8 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     assert {"fit", "fit_level", "fit_score", "gaps"}.isdisjoint(
         state["latest_analysis"]["analysis"]
     )
-    analysis = ai_api_worker.services.repository.get_analysis(original["job_analysis"])["analysis"]
+    with transaction_manager.read() as tx:
+        analysis = application_projection_reader.analysis(tx, original["job_analysis"])["analysis"]
     assert [
         gap.severity
         for gap in gaps(analysis.requirements, ai_api_worker.services.knowledge.facts())

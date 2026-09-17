@@ -1,17 +1,16 @@
 """The Knowledge fact lifecycle, split from the mutation engine underneath it.
 
-`KnowledgeService` is the whole public surface and the import path did not
-move. Behind it, `mutations` holds the two-phase commit and its crash recovery
-- the one part of this package whose defects are not regenerable - and
-`service` holds the fact lifecycle commands and reads that drive it.
+The public surfaces are split by query, lifecycle, and recovery responsibility.
+`mutations` holds their internal two-phase mutation engine.
 """
 
 from __future__ import annotations
 
-from .mutations import KnowledgeMutationEngine
-from .service import KnowledgeService
+from .mutations import KnowledgeRecoveryService
+from .service import FactLifecycleService, KnowledgeQueryService
 
 __all__ = [
-    "KnowledgeMutationEngine",
-    "KnowledgeService",
+    "FactLifecycleService",
+    "KnowledgeQueryService",
+    "KnowledgeRecoveryService",
 ]

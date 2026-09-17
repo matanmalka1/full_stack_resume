@@ -32,7 +32,24 @@ from cv_engine.application.maintenance import (
     build_application_export,
 )
 from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.connection import (
+    SqlAlchemyTransactionManager,
+    create_database_engine,
+)
+from cv_engine.infrastructure.persistence.draft_lifecycle import (
+    SqlAlchemyDraftLifecycleRepository,
+)
 from cv_engine.runtime.composition import Services
+
+
+def _persistence(services: Services):
+    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    return (
+        transactions,
+        SqlAlchemyDraftLifecycleRepository(transactions),
+        SqlAlchemyArtifactCatalog(transactions),
+    )
 
 
 @pytest.fixture
@@ -78,7 +95,9 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     )
 
     # validate the exact draft version in front of us
-    working = services.repository.active_working_draft(application_id)
+    transactions, drafts, _catalog = _persistence(services)
+    with transactions.read() as tx:
+        working = drafts.active_working_draft(tx, application_id)
     assert working.id == drafted.working_draft_id
     validated = services.draft_validation.validate_draft(
         ValidateDraftCommand(
@@ -110,7 +129,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
     report = services.maintenance.reconcile().model_dump(mode="python")
     assert report["passed"], report["problems"]
     assert report["artifact_versions_checked"] > 0
-    assert services.knowledge_lifecycle.reconcile_facts().passed
+    assert services.knowledge_queries.reconcile_facts().passed
 
     # the export projection sees the application the pipeline just produced
     export = build_application_export(services.queries.list_applications())
@@ -134,7 +153,9 @@ def test_reconcile_reports_a_tampered_artifact(
     setup = ready_application("Tamper Co")
     assert services.maintenance.reconcile().passed
 
-    pdf_record = services.repository.latest_artifact_version(setup.application_id, "resume_pdf")
+    transactions, _drafts, catalog = _persistence(services)
+    with transactions.read() as tx:
+        pdf_record = catalog.latest_artifact_version(tx, setup.application_id, "resume_pdf")
     services.artifacts.resolve(pdf_record["path"]).write_bytes(
         b"%PDF-1.4\n% not the approved bytes\n"
     )
@@ -198,7 +219,9 @@ def test_failed_pre_render_validation_blocks_approval(
         )
     )
 
-    working = services.repository.active_working_draft(ingested.application_id)
+    transactions, drafts, _catalog = _persistence(services)
+    with transactions.read() as tx:
+        working = drafts.active_working_draft(tx, ingested.application_id)
     validated = services.draft_validation.validate_draft(
         ValidateDraftCommand(
             working_draft_id=working.id,
@@ -216,4 +239,5 @@ def test_failed_pre_render_validation_blocks_approval(
                 client="web",
             )
         )
-    assert services.repository.approved_revisions(ingested.application_id) == []
+    with transactions.read() as tx:
+        assert drafts.approved_revisions(tx, ingested.application_id) == []

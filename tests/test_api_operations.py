@@ -41,7 +41,9 @@ def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-
 # --- cancel -----------------------------------------------------------------
 
 
-def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(services) -> None:
+def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(
+    services, transaction_manager, application_projection_reader
+) -> None:
     """No worker here on purpose: queued work must be cancelled before it starts."""
     operation = _queued_analysis(services, "Cancel Co")
 
@@ -58,7 +60,8 @@ def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(services) ->
     assert cancelled.json()["available_actions"] == ["retry"]
     assert cancelled.json()["cancellation_requested_at"] is not None
     assert read_back.json() == cancelled.json()
-    assert services.repository.analyses(operation.application_id) == []
+    with transaction_manager.read() as tx:
+        assert application_projection_reader.analyses(tx, operation.application_id) == []
 
 
 # --- retry ------------------------------------------------------------------

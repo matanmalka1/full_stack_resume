@@ -62,11 +62,12 @@ def _generate(harness, application_id: str, sources: dict[str, str]) -> str:
     ]
 
 
-def _drafted(harness, company: str):
+def _drafted(harness, company: str, transaction_manager, application_projection_reader):
     application_id = _application(harness.services, company)
     sources = _analyze(harness, application_id)
     working_draft_id = _generate(harness, application_id, sources)
-    working = harness.services.repository.working_draft(working_draft_id)
+    with transaction_manager.read() as tx:
+        working = application_projection_reader.working_draft(tx, working_draft_id)
     return application_id, sources, working
 
 
@@ -94,12 +95,13 @@ def test_deterministic_selection_plan_mode_is_still_201_with_the_plan_itself(
 
 
 def test_ai_selection_plan_mode_is_202_with_a_location_on_the_same_route(
-    ai_api_worker, fake_openai: FakeOpenAI
+    ai_api_worker, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
 ) -> None:
     """§13 and architecture §12: one route, two statuses, decided per request."""
     application_id = _application(ai_api_worker.services, "AI Plan Co")
     sources = _analyze(ai_api_worker, application_id)
-    plan = ai_api_worker.services.repository.selection_plan(sources["selection_plan"])
+    with transaction_manager.read() as tx:
+        plan = application_projection_reader.selection_plan(tx, sources["selection_plan"])
     fake_openai.script(
         "propose_selection_plan",
         SelectionProposal(
@@ -141,9 +143,11 @@ def test_ai_selection_plan_mode_refuses_a_user_decision_in_the_same_request(
 
 
 def test_regenerate_claim_is_accepted_at_the_specified_path(
-    ai_api_worker, fake_openai: FakeOpenAI
+    ai_api_worker, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
 ) -> None:
-    application_id, sources, working = _drafted(ai_api_worker, "Claim Route Co")
+    application_id, sources, working = _drafted(
+        ai_api_worker, "Claim Route Co", transaction_manager, application_projection_reader
+    )
     _section, claim = _canonical_claim(working)
     fake_openai.script(
         "regenerate_claim",
@@ -172,10 +176,12 @@ def test_regenerate_claim_is_accepted_at_the_specified_path(
 
 
 def test_a_stale_etag_on_regeneration_is_a_conflict_and_calls_no_provider(
-    ai_api_worker, fake_openai: FakeOpenAI
+    ai_api_worker, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
 ) -> None:
     """The lost-update rule, on the route rather than only in the service."""
-    application_id, sources, working = _drafted(ai_api_worker, "Stale Route Co")
+    application_id, sources, working = _drafted(
+        ai_api_worker, "Stale Route Co", transaction_manager, application_projection_reader
+    )
     _section, claim = _canonical_claim(working)
     response = _post(
         ai_api_worker,

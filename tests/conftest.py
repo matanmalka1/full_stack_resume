@@ -64,11 +64,24 @@ from cv_engine.infrastructure.knowledge import (
     seed_fact_before_project,
 )
 from cv_engine.infrastructure.persistence import (
-    Repository,
+    SqlAlchemyTransactionManager,
     create_database_engine,
     current_database_revision,
 )
+from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
+from cv_engine.infrastructure.persistence.application_projections import (
+    SqlAlchemyApplicationProjectionReader,
+)
+from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
+from cv_engine.infrastructure.persistence.decision_store import SqlAlchemyDecisionRepository
+from cv_engine.infrastructure.persistence.draft_lifecycle import SqlAlchemyDraftLifecycleRepository
+from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
+from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import metadata
+from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.infrastructure.rendering import render_pdf, validate_rendered
 from cv_engine.runtime.composition import Services, build_api_services, build_services
 from cv_engine.runtime.config import resolve_config
@@ -409,8 +422,63 @@ def ai_services(app_paths: AppPaths, fake_openai: FakeOpenAI, task_contracts) ->
 
 
 @pytest.fixture
-def application_repo(database_engine: Engine) -> Repository:
-    return Repository(database_engine)
+def transaction_manager(database_engine: Engine) -> SqlAlchemyTransactionManager:
+    return SqlAlchemyTransactionManager(database_engine)
+
+
+@pytest.fixture
+def application_store(transaction_manager):
+    return SqlAlchemyApplicationStore(transaction_manager)
+
+
+@pytest.fixture
+def job_snapshot_store(transaction_manager):
+    return SqlAlchemyJobSnapshotStore(transaction_manager)
+
+
+@pytest.fixture
+def analysis_plan_store(transaction_manager):
+    return SqlAlchemyAnalysisPlanRepository(transaction_manager)
+
+
+@pytest.fixture
+def draft_lifecycle_store(transaction_manager):
+    return SqlAlchemyDraftLifecycleRepository(transaction_manager)
+
+
+@pytest.fixture
+def artifact_catalog(transaction_manager):
+    return SqlAlchemyArtifactCatalog(transaction_manager)
+
+
+@pytest.fixture
+def validation_store(transaction_manager):
+    return SqlAlchemyValidationRepository(transaction_manager)
+
+
+@pytest.fixture
+def decision_store(transaction_manager):
+    return SqlAlchemyDecisionRepository(transaction_manager)
+
+
+@pytest.fixture
+def recruitment_store(transaction_manager):
+    return SqlAlchemyRecruitmentRepository(transaction_manager)
+
+
+@pytest.fixture
+def audit_log(transaction_manager):
+    return SqlAlchemyAuditLog(transaction_manager)
+
+
+@pytest.fixture
+def settings_store(transaction_manager):
+    return SqlAlchemySettingsStore(transaction_manager)
+
+
+@pytest.fixture
+def application_projection_reader(transaction_manager):
+    return SqlAlchemyApplicationProjectionReader(transaction_manager)
 
 
 @dataclass(frozen=True)
@@ -748,7 +816,13 @@ def deterministic_renderer(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def ready_application(approved_application, deterministic_renderer):
+def ready_application(
+    approved_application,
+    deterministic_renderer,
+    transaction_manager: SqlAlchemyTransactionManager,
+    artifact_catalog: SqlAlchemyArtifactCatalog,
+    application_store: SqlAlchemyApplicationStore,
+):
     def build(
         company: str = "Ready Co",
         role: str = "Account Manager",
@@ -756,15 +830,16 @@ def ready_application(approved_application, deterministic_renderer):
     ) -> WorkflowSetup:
         setup = approved_application(company, role, job_text)
         rendered = setup.services.rendering.render(setup.application_id)
-        pdf_record = setup.services.repository.latest_artifact_version(
-            setup.application_id, "resume_pdf"
-        )
+        with transaction_manager.read() as tx:
+            pdf_record = artifact_catalog.latest_artifact_version(
+                tx, setup.application_id, "resume_pdf"
+            )
+            current_status = application_store.get_application(tx, setup.application_id)[
+                "current_status"
+            ]
         pdf = setup.services.artifacts.resolve(pdf_record["path"])
         assert rendered.validation.passed, rendered.validation.model_dump()
-        assert (
-            setup.services.repository.get_application(setup.application_id)["current_status"]
-            == "saved"
-        )
+        assert current_status == "saved"
         assert setup.services.rendering.ready_qualification(setup.application_id).ready_qualified
         return replace(setup, pdf=pdf, ready_report=rendered.validation)
 

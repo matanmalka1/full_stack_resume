@@ -12,6 +12,41 @@ from __future__ import annotations
 from api_harness import MUTATION_HEADERS
 
 from cv_engine.api.app import API_PREFIX
+from cv_engine.infrastructure.persistence.application_projections import (
+    SqlAlchemyApplicationProjectionReader,
+)
+from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.connection import (
+    SqlAlchemyTransactionManager,
+    create_database_engine,
+)
+
+
+def _transactions(harness):
+    return SqlAlchemyTransactionManager(create_database_engine(harness.services.database_url))
+
+
+def _events(harness, application_id):
+    transactions = _transactions(harness)
+    with transactions.read() as tx:
+        return SqlAlchemyApplicationProjectionReader(transactions).recruitment_events(
+            tx, application_id
+        )
+
+
+def _application(harness, application_id):
+    transactions = _transactions(harness)
+    with transactions.read() as tx:
+        return SqlAlchemyApplicationStore(transactions).get_application(tx, application_id)
+
+
+def _artifact(harness, application_id, artifact_type):
+    transactions = _transactions(harness)
+    with transactions.read() as tx:
+        return SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+            tx, application_id, artifact_type
+        )
 
 
 def _post(harness, path: str, body: dict | None = None):
@@ -60,7 +95,7 @@ def test_status_transitions_are_recorded_and_repeating_one_is_not_an_error(
     # appending a second identical event, so a retry cannot duplicate history.
     assert repeated.status_code == 200, repeated.text
     assert repeated.json()["current_status"] == "withdrawn"
-    events = api_worker.services.repository.recruitment_events(application_id)
+    events = _events(api_worker, application_id)
     assert [event["to_status"] for event in events].count("withdrawn") == 1
 
 
@@ -75,9 +110,7 @@ def test_applied_cannot_be_asked_for_because_it_is_submission_owned(api_worker) 
     )
 
     assert response.status_code == 422, response.text
-    assert api_worker.services.repository.get_application(application_id)["current_status"] == (
-        "saved"
-    )
+    assert _application(api_worker, application_id)["current_status"] == ("saved")
 
 
 def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
@@ -98,7 +131,7 @@ def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
     )
     assert moved.status_code == 200, moved.text
     corrected_event = moved.json()["event_id"]
-    before = len(api_worker.services.repository.recruitment_events(application_id))
+    before = len(_events(api_worker, application_id))
 
     anonymous = _post(
         api_worker,
@@ -118,7 +151,7 @@ def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
     assert anonymous.status_code == 422, anonymous.text
     assert corrected.status_code == 201, corrected.text
     assert corrected.json()["current_status"] == "closed"
-    events = api_worker.services.repository.recruitment_events(application_id)
+    events = _events(api_worker, application_id)
     # The corrected event is still there: a correction appends, it never edits.
     assert len(events) == before + 1
     assert corrected_event in {event["id"] for event in events}
@@ -137,7 +170,7 @@ def test_an_internal_submission_records_the_exact_revision_and_pdf(
     setup = ready_application("Submission Co")
     application_id = setup.application_id
     revision_id = setup.approved.revision_id
-    pdf = api_worker.services.repository.latest_artifact_version(application_id, "resume_pdf")
+    pdf = _artifact(api_worker, application_id, "resume_pdf")
 
     response = _post(
         api_worker,
@@ -176,7 +209,7 @@ def test_a_submission_naming_the_wrong_pdf_is_refused(api_worker, ready_applicat
     """The claim that something was sent is not re-derivable, so it must be exact."""
     setup = ready_application("Mismatched PDF Co")
     application_id = setup.application_id
-    html = api_worker.services.repository.latest_artifact_version(application_id, "resume_html")
+    html = _artifact(api_worker, application_id, "resume_html")
 
     response = _post(
         api_worker,
@@ -189,9 +222,7 @@ def test_a_submission_naming_the_wrong_pdf_is_refused(api_worker, ready_applicat
     )
 
     assert response.status_code == 412, response.text
-    assert api_worker.services.repository.get_application(application_id)["current_status"] != (
-        "applied"
-    )
+    assert _application(api_worker, application_id)["current_status"] != ("applied")
 
 
 def test_an_external_submission_invents_no_revision_or_artifact(api_worker) -> None:

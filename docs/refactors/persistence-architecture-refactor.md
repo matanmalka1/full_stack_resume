@@ -5,11 +5,11 @@
 ## Current status
 
 ```text
-Current phase: Phase 8 — Projections and test migration (NOT STARTED)
-Last completed phase: Phase 7 — Worker and handlers
-Next action: start Phase 8 in a new session
-Known blockers: None; approval replay correction authorized (Decision Log below)
-Last verified boundary: combined Phase 6+7 — all required gates passed at implementation commit 4de239b5006cfff0d786d2e7c2f2c3ecea639cf1
+Current phase: Phase 10 — Final deletion and baseline reset (NOT STARTED)
+Last completed phase: Phase 9 — Knowledge lifecycle (combined Phase 8+9 boundary)
+Next action: Phase 10, not started; await a separate execution request
+Known blockers: None
+Last verified boundary: combined Phase 8+9 — all required gates confirmed passing by the user on 2026-09-17; implementation commit recorded after closeout
 ```
 
 ## 1. Final goal
@@ -865,7 +865,7 @@ Implementation, cleanup, and combined verification are complete.
 
 ## Phase 8 — Projections and test migration
 
-Status: NOT STARTED
+Status: DONE
 
 ### Goal
 
@@ -893,20 +893,30 @@ Finish consumer-specific read models and remove test dependence on a persistence
 
 ### Verification
 
-- [ ] focused tests
-- [ ] typecheck
-- [ ] architecture checks
-- [ ] no forbidden imports
-- [ ] no old consumers remain
-- [ ] no `services.repository` use remains
+- [x] focused tests
+- [x] typecheck
+- [x] architecture checks
+- [x] no forbidden imports
+- [x] no old consumers remain
+- [x] no `services.repository` use remains
 
 ### Handoff notes
 
-None yet.
+Verified at the combined Phase 8+9 boundary on 2026-09-17. Application reads
+capture database and Ready evidence in one read snapshot; payload verification happens after
+the scope closes. Tests use capability-specific token adapters or explicit raw SQL for
+corruption evidence. Root repository, legacy UoW/bind, composed Ports, and their consumers
+were removed. Derived guards cover deleted surfaces and token-explicit adapters without
+legacy exceptions. Primary integration reviewed the two agents' changes and completed
+remaining test migrations. No schema, frontend, render-output, or artifact-path changes.
+The user confirmed all required gates passing: full backend 504 passed, 2 deselected;
+fresh PostgreSQL pipeline 3 passed at Alembic head with OPENAI_API_KEY unset; focused,
+architecture, Pyright, Ruff check, and format checks passed. Final source audit found no
+operational consumers of the deleted persistence surfaces.
 
 ## Phase 9 — Knowledge lifecycle
 
-Status: NOT STARTED
+Status: DONE
 
 ### Goal
 
@@ -932,16 +942,23 @@ Unify fact events and the durable mutation journal behind the final recovery-spe
 
 ### Verification
 
-- [ ] focused tests
-- [ ] typecheck
-- [ ] architecture checks
-- [ ] no forbidden imports
-- [ ] no old consumers remain
-- [ ] crash recovery and external-I/O transaction guards
+- [x] focused tests
+- [x] typecheck
+- [x] architecture checks
+- [x] no forbidden imports
+- [x] no old consumers remain
+- [x] crash recovery and external-I/O transaction guards
 
 ### Handoff notes
 
-None yet.
+Verified under the same combined passing evidence recorded in Phase 8. FactLifecycle,
+KnowledgeQuery, and startup Recovery services use the Knowledge lifecycle port. Fact events,
+optional selection-plan insertion, and the COMMITTED journal marker share one write scope;
+staging, activation, restoration, and cleanup remain outside transactions. Recovery replay
+retains immutable-event identity checks and quarantine behavior. Transaction-guard coverage
+includes each staging effect under read and write scopes. Settings now uses explicit tokens,
+allowing removal of the last functional legacy UoW consumer. The user ran the gates; agents
+ran no tests. No functional legacy is retained for Phase 10. Phase 10 remains NOT STARTED.
 
 ## Phase 10 — Final deletion and baseline reset
 

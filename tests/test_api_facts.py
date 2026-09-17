@@ -146,7 +146,7 @@ def test_fact_http_refusals_preserve_the_pending_fact(api_worker) -> None:
     ]
     for response, expected_status in refusals:
         assert response.status_code == expected_status, response.text
-    assert api_worker.services.knowledge_lifecycle.show_fact(fact_id).fact.status.value == "pending"
+    assert api_worker.services.knowledge_queries.show_fact(fact_id).fact.status.value == "pending"
 
 
 def test_claim_capture_requires_explicit_provenance() -> None:

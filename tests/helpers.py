@@ -10,6 +10,14 @@ from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.connection import (
+    SqlAlchemyTransactionManager,
+    create_database_engine,
+)
+from cv_engine.infrastructure.persistence.draft_lifecycle import (
+    SqlAlchemyDraftLifecycleRepository,
+)
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.paths import AppPaths
 
@@ -167,7 +175,10 @@ def validate_active_draft(services: Services, application_id: str):
     call `validate_working(application_id)` resolves it the same way here
     rather than each writing its own two lines.
     """
-    working = services.repository.active_working_draft(application_id)
+    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    drafts = SqlAlchemyDraftLifecycleRepository(transactions)
+    with transactions.read() as tx:
+        working = drafts.active_working_draft(tx, application_id)
     return services.draft_validation.validate_draft(
         ValidateDraftCommand(
             working_draft_id=working.id,
@@ -227,9 +238,12 @@ def artifact_version_and_path(
     artifact_type: str,
     lifecycle_status: str,
 ):
-    version = services.repository.latest_artifact_version(
-        application_id, artifact_type, lifecycle_status
-    )
+    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    catalog = SqlAlchemyArtifactCatalog(transactions)
+    with transactions.read() as tx:
+        version = catalog.latest_artifact_version(
+            tx, application_id, artifact_type, lifecycle_status
+        )
     return version, services.artifacts.resolve(version["path"])
 
 

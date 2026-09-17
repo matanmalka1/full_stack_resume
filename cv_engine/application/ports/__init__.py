@@ -1,14 +1,6 @@
 """Ports: what the application layer needs from the outside, as protocols.
 
-Split into modules by what a name is, not by who imports it: `values` for
-what crosses a boundary, `outbound` for effects the application cannot
-perform itself, `repositories` for one stored capability each, and the
-`composed_*` modules for the unions a service or the composition root
-receives - themselves split by domain (prep / tracking / knowledge / shared),
-matching how `commands/` and `infrastructure/persistence/tables/` are split.
-
-Re-exported here so importers name one place, as they did when this was a
-single 789-line module.
+Capabilities follow real consumer, lifecycle, and trust boundaries.
 """
 
 from .application_intake import (
@@ -17,9 +9,8 @@ from .application_intake import (
     IntakeApplicationStore,
     JobSnapshotStore,
 )
-from .composed_knowledge import KnowledgeAuditRepository
-from .composed_prep import DraftRepository
-from .composed_shared import ApplicationRepository, QueryRepository
+from .application_projections import ApplicationProjectionReader
+from .knowledge_lifecycle import KnowledgeLifecycleStore
 from .operation_client import OperationClientStore
 from .operation_execution import OperationExecutionStore
 from .outbound import (
@@ -35,15 +26,6 @@ from .outbound import (
     RevisionPayloadStore,
     SelectionPlanContext,
     SnapshotPayloadStore,
-)
-from .repositories import (
-    ApplicationStore,
-    ArtifactRegistry,
-    FactAudit,
-    JobStore,
-    KnowledgeMutationRepository,
-    UnitOfWork,
-    WorkingDraftReader,
 )
 from .settings import SettingsStore
 from .transactions import ReadTransaction, TransactionManager, WriteTransaction
@@ -63,25 +45,18 @@ __all__ = [
     "AnalysisContext",
     "AIProvider",
     "AuditLogWriter",
-    "ApplicationRepository",
-    "ApplicationStore",
-    "ArtifactRegistry",
+    "ApplicationProjectionReader",
     "ArtifactStore",
     "ArtifactStream",
     "DraftPaths",
     "DraftResumeContext",
-    "DraftRepository",
-    "FactAudit",
-    "JobStore",
-    "KnowledgeAuditRepository",
-    "KnowledgeMutationRepository",
+    "KnowledgeLifecycleStore",
     "KnowledgeStore",
     "InitialRecruitmentEventWriter",
     "IntakeApplicationStore",
     "JobSnapshotStore",
     "OperationClientStore",
     "OperationExecutionStore",
-    "QueryRepository",
     "RegenerateClaimContext",
     "RegenerateSectionContext",
     "RenderTargets",
@@ -97,7 +72,5 @@ __all__ = [
     "TaskContract",
     "TaskContracts",
     "TransactionManager",
-    "UnitOfWork",
-    "WorkingDraftReader",
     "WriteTransaction",
 ]

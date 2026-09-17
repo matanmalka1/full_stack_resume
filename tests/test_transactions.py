@@ -8,6 +8,7 @@ from cv_engine.application.transactions import (
     active_transaction_for_tests,
     assert_external_io_allowed,
 )
+from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.tables import applications
@@ -120,6 +121,48 @@ def test_payload_store_refuses_writes_inside_transaction(database_engine, app_pa
         with pytest.raises(RuntimeError, match="object-store write"):
             assert_external_io_allowed("object-store write")
     assert_external_io_allowed("object-store write")
+
+
+@pytest.mark.parametrize("scope", ["read", "write"])
+@pytest.mark.parametrize("effect", ["stage", "activate", "restore", "discard"])
+def test_knowledge_store_refuses_staging_inside_transaction(
+    database_engine, app_paths, scope, effect
+) -> None:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    knowledge = FileKnowledge(
+        app_paths.knowledge_root,
+        project_root=app_paths.root,
+        temp_root=app_paths.temp_root,
+    )
+    payload = {
+        "fact_id": "transaction.guard",
+        "meaning": "Knowledge writes are kept outside database transactions.",
+        "renderings": {"en": "Knowledge writes are kept outside database transactions."},
+        "tags": ["architecture"],
+        "provenance": "transaction boundary regression test",
+        "resume_style": "bullet",
+    }
+
+    staged = None
+    if effect != "stage":
+        staged, _fact = knowledge.stage_create_fact(
+            "guarded-mutation", "situational_skills.json", payload
+        )
+        before = knowledge.staged_file_state(staged)
+    with getattr(transactions, scope)():
+        with pytest.raises(RuntimeError, match="Knowledge"):
+            if effect == "stage":
+                knowledge.stage_create_fact("guarded-mutation", "situational_skills.json", payload)
+            elif effect == "activate":
+                knowledge.activate_staged(staged)
+            elif effect == "restore":
+                knowledge.restore_staged(staged)
+            else:
+                knowledge.discard_staged(staged)
+    if staged is None:
+        assert not (app_paths.temp_root / "knowledge" / "guarded-mutation").exists()
+    else:
+        assert knowledge.staged_file_state(staged) == before
 
 
 @pytest.mark.parametrize("scope", ["read", "write"])

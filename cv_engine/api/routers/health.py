@@ -10,7 +10,7 @@ router = APIRouter(tags=["health"])
 
 @router.get("/health", response_model=HealthResponse, summary="Instance identity and versions")
 def health(services: Services) -> HealthResponse:
-    versions = services.knowledge.knowledge_versions()
+    versions = services.knowledge_queries.knowledge_versions()
     identity = services.identity
     return HealthResponse(
         status="ok",

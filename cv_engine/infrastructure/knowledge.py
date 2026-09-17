@@ -12,6 +12,7 @@ from ..application.knowledge_mutations import (
     StagedKnowledgeFile,
 )
 from ..application.ports import TaskContract, TaskContracts
+from ..application.transactions import assert_external_io_allowed
 from ..domain.analysis.requirements.concepts import (
     RequirementConceptError,
     RequirementConceptStore,
@@ -193,7 +194,7 @@ def seed_fact_before_project(
 ) -> Fact:
     """Seed bootstrap Knowledge before its journal exists.
 
-    Normal commands must use ``KnowledgeService``. This helper exists only for
+    Normal commands must use ``FactLifecycleService``. This helper exists only for
     constructing an isolated test Knowledge fixture before services
     and database are created.
     """
@@ -289,6 +290,7 @@ class FileKnowledge:
         proposed_text: str,
         proposed_versions: dict[str, str],
     ) -> StagedKnowledgeFile:
+        assert_external_io_allowed("Knowledge staging write")
         if not mutation_id or "/" in mutation_id or "\\" in mutation_id:
             raise ValueError("knowledge mutation ID is not a safe path component")
         source = resolve_within(self.knowledge_root, source)
@@ -489,6 +491,7 @@ class FileKnowledge:
         )
 
     def activate_staged(self, staged: StagedKnowledgeFile) -> None:
+        assert_external_io_allowed("Knowledge activation write")
         source, new_path, old_path = self._paths(staged)
         if sha256_file(source) != staged.old_sha256:
             raise ValueError("Knowledge source changed before activation")
@@ -500,6 +503,7 @@ class FileKnowledge:
         self._fsync_directory(source.parent)
 
     def restore_staged(self, staged: StagedKnowledgeFile) -> None:
+        assert_external_io_allowed("Knowledge restoration write")
         source, _new_path, old_path = self._paths(staged)
         if sha256_file(source) != staged.new_sha256:
             raise ValueError("Knowledge source is not the activated mutation")
@@ -509,6 +513,7 @@ class FileKnowledge:
         self._fsync_directory(source.parent)
 
     def discard_staged(self, staged: StagedKnowledgeFile) -> None:
+        assert_external_io_allowed("Knowledge staging cleanup")
         _source, new_path, old_path = self._paths(staged)
         new_path.unlink(missing_ok=True)
         old_path.unlink(missing_ok=True)

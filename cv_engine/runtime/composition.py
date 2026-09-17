@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,12 +11,10 @@ from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
     AIProvider,
-    ApplicationRepository,
     ArtifactStore,
     KnowledgeStore,
     Renderer,
     RevisionPayloadStore,
-    UnitOfWork,
 )
 from ..application.ports.analysis_plans import AnalysisKnowledgeSource
 from ..application.services.analysis import AnalysisService
@@ -28,7 +25,11 @@ from ..application.services.drafts.approval_commit import ApprovalCommitter
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.selection import SelectionChangeService
 from ..application.services.drafts.validation import DraftValidationService
-from ..application.services.knowledge import KnowledgeService
+from ..application.services.knowledge import (
+    FactLifecycleService,
+    KnowledgeQueryService,
+    KnowledgeRecoveryService,
+)
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     AnalysisOperationHandler,
@@ -51,13 +52,15 @@ from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3Objec
 from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import (
-    Repository,
     SqlAlchemyTransactionManager,
     create_database_engine,
     current_database_revision,
 )
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisSelectionSourceReader
+from ..infrastructure.persistence.application_projections import (
+    SqlAlchemyApplicationProjectionReader,
+)
 from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from ..infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
@@ -78,6 +81,9 @@ from ..infrastructure.persistence.draft_validation_sources import (
 )
 from ..infrastructure.persistence.idempotency import SqlAlchemyIdempotencyRepository
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from ..infrastructure.persistence.knowledge_lifecycle import (
+    SqlAlchemyKnowledgeLifecycleRepository,
+)
 from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
@@ -111,6 +117,14 @@ def _config_for(root: Path) -> RuntimeConfig:
     return resolve_config(env=os.environ, project_root=root)
 
 
+def _has_prepared_knowledge_mutation(
+    transactions: SqlAlchemyTransactionManager,
+    store: SqlAlchemyKnowledgeLifecycleRepository,
+) -> bool:
+    with transactions.read() as tx:
+        return bool(store.prepared_mutations(tx))
+
+
 @dataclass(frozen=True)
 class Services:
     """Everything a client needs, wired to one fixed application root."""
@@ -118,11 +132,9 @@ class Services:
     paths: AppPaths
     database_url: str
     schema_version: str
-    repository: ApplicationRepository
     knowledge: KnowledgeStore
     artifacts: ArtifactStore
     payloads: RevisionPayloadStore
-    unit_of_work: Callable[[], UnitOfWork]
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
@@ -134,7 +146,8 @@ class Services:
     recruitment: RecruitmentService
     submission: SubmissionService
     maintenance: MaintenanceService
-    knowledge_lifecycle: KnowledgeService
+    knowledge_lifecycle: FactLifecycleService
+    knowledge_queries: KnowledgeQueryService
     operation_submissions: OperationSubmissionService
     operation_lifecycle: OperationLifecycleService
     operation_replacements: OperationReplacementService
@@ -178,7 +191,6 @@ def build_services(
     paths: AppPaths,
     *,
     database_url: str | None = None,
-    repository: ApplicationRepository | None = None,
     knowledge: KnowledgeStore | None = None,
     activation_knowledge: AnalysisKnowledgeSource | None = None,
     artifacts: ArtifactStore | None = None,
@@ -195,29 +207,21 @@ def build_services(
     """
     resolved_config = config or _config_for(paths.root)
     resolved_database_url = database_url or str(resolved_config.get("database_url"))
-    if repository is None:
-        engine = create_database_engine(resolved_database_url)
-        resolved_repository = Repository(engine)
-        schema_version = current_database_revision(engine) or ""
-    else:
-        resolved_repository = repository
-        repository_engine = getattr(repository, "engine", None)
-        schema_version = (
-            current_database_revision(repository_engine) if repository_engine is not None else None
-        ) or ""
-        if repository_engine is None:
-            raise TypeError("temporary repository substitution must expose its SQLAlchemy engine")
-        engine = repository_engine
+    engine = create_database_engine(resolved_database_url)
+    schema_version = current_database_revision(engine) or ""
     transactions = SqlAlchemyTransactionManager(engine)
     intake_applications = SqlAlchemyApplicationStore(transactions)
     intake_snapshots = SqlAlchemyJobSnapshotStore(transactions)
     intake_recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
     intake_audit = SqlAlchemyAuditLog(transactions)
+    knowledge_lifecycle_store = SqlAlchemyKnowledgeLifecycleRepository(transactions)
     resolved_knowledge = knowledge or FileKnowledge(
         paths.knowledge_root,
         project_root=paths.root,
         temp_root=paths.temp_root,
-        has_prepared_mutation=lambda: bool(resolved_repository.prepared_knowledge_mutations()),
+        has_prepared_mutation=lambda: _has_prepared_knowledge_mutation(
+            transactions, knowledge_lifecycle_store
+        ),
     )
     resolved_artifacts = artifacts or FilesystemArtifactStore(paths)
     resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
@@ -235,16 +239,9 @@ def build_services(
             default_model=str(resolved_config.get("model")),
             api_key=str(api_key),
         )
-    shared = {
-        "repository": resolved_repository,
-        "knowledge": resolved_knowledge,
-        "artifacts": resolved_artifacts,
-        "renderer": resolved_renderer,
-        "provider": resolved_provider,
-        "snapshots": resolved_payloads,
-    }
     analysis_plans = SqlAlchemyAnalysisPlanRepository(transactions)
     analysis_sources = SqlAlchemyAnalysisSelectionSourceReader(transactions)
+    application_projections = SqlAlchemyApplicationProjectionReader(transactions)
     evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
     operation_client = SqlAlchemyOperationClientStore(transactions)
     operation_execution = SqlAlchemyOperationExecutionStore(transactions)
@@ -333,11 +330,12 @@ def build_services(
             draft_lifecycle, draft_catalog, draft_decisions, intake_audit, draft_receipts
         ),
     )
+    ready_evidence = SqlAlchemyReadyEvidenceReader(transactions)
     rendering_service = RenderingService(
         transactions=transactions,
         catalog=draft_catalog,
         validations=draft_validations,
-        ready_evidence=SqlAlchemyReadyEvidenceReader(transactions),
+        ready_evidence=ready_evidence,
         contexts=SqlAlchemyRenderContextReader(transactions),
         drafts=draft_lifecycle,
         knowledge=resolved_knowledge,
@@ -402,16 +400,28 @@ def build_services(
         operation_event_logger=failure_logger.record_event,
     )
     worker = OperationWorker(runner, request_cancellation=operation_lifecycle.cancel)
-    knowledge_service = KnowledgeService(**shared)
-    knowledge_service.recover_knowledge_mutations()
+    knowledge_service = FactLifecycleService(
+        transactions=transactions,
+        store=knowledge_lifecycle_store,
+        knowledge=resolved_knowledge,
+    )
+    KnowledgeRecoveryService(
+        transactions=transactions,
+        store=knowledge_lifecycle_store,
+        knowledge=resolved_knowledge,
+    ).recover_knowledge_mutations()
+    knowledge_queries = KnowledgeQueryService(
+        transactions=transactions, store=knowledge_lifecycle_store, knowledge=resolved_knowledge
+    )
     maintenance_service = MaintenanceService(
         payloads=resolved_payloads,
         transactions=transactions,
         inspection=SqlAlchemyMaintenanceInspection(transactions),
-        knowledge=knowledge_service,
+        knowledge=knowledge_queries,
     )
     settings_service = SettingsService(
-        resolved_repository,
+        transactions,
+        SqlAlchemySettingsStore(transactions),
         provider_configured=resolved_provider is not None,
         runtime_default_model=str(resolved_config.get("model")),
     )
@@ -419,11 +429,9 @@ def build_services(
         paths=paths,
         database_url=resolved_database_url,
         schema_version=schema_version,
-        repository=resolved_repository,
         knowledge=resolved_knowledge,
         artifacts=resolved_artifacts,
         payloads=resolved_payloads,
-        unit_of_work=resolved_repository.unit_of_work,
         applications=ApplicationService(
             transactions=transactions,
             applications=intake_applications,
@@ -432,7 +440,14 @@ def build_services(
             audit=intake_audit,
             payloads=resolved_payloads,
         ),
-        queries=ApplicationQueryService(ready=rendering_service, **shared),
+        queries=ApplicationQueryService(
+            transactions=transactions,
+            projections=application_projections,
+            ready_evidence=ready_evidence,
+            knowledge=resolved_knowledge,
+            renderer=resolved_renderer,
+            payloads=resolved_payloads,
+        ),
         analysis=analysis_service,
         drafts=draft_service,
         draft_validation=draft_validation,
@@ -443,6 +458,7 @@ def build_services(
         submission=submission_service,
         maintenance=maintenance_service,
         knowledge_lifecycle=knowledge_service,
+        knowledge_queries=knowledge_queries,
         operation_submissions=operation_submissions,
         operation_lifecycle=operation_lifecycle,
         operation_replacements=operation_replacements,
@@ -484,6 +500,7 @@ def build_api_services(
         recruitment=services.recruitment,
         submission=services.submission,
         knowledge=services.knowledge_lifecycle,
+        knowledge_queries=services.knowledge_queries,
         maintenance=services.maintenance,
         operation_submissions=services.operation_submissions,
         operation_lifecycle=services.operation_lifecycle,

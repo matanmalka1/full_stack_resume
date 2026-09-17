@@ -12,7 +12,11 @@ from cv_engine.infrastructure.persistence import (
     SqlAlchemyTransactionManager,
     current_database_revision,
 )
+from cv_engine.infrastructure.persistence.application_projections import (
+    SqlAlchemyApplicationProjectionReader,
+)
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
@@ -27,12 +31,12 @@ from cv_engine.infrastructure.persistence.tables import (
 from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 
 
-def _create(repo, *, company: str, target_role: str, text: str):
+def _create(engine, *, company: str, target_role: str, text: str):
     digest = sha256_text(text)
     application_id = new_id()
     snapshot_id = new_id()
     created_at = utc_now()
-    transactions = SqlAlchemyTransactionManager(repo.engine)
+    transactions = SqlAlchemyTransactionManager(engine)
     application_store = SqlAlchemyApplicationStore(transactions)
     snapshots = SqlAlchemyJobSnapshotStore(transactions)
     recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
@@ -68,26 +72,28 @@ def _create(repo, *, company: str, target_role: str, text: str):
     return application_id, snapshot_id
 
 
-def _recruitment(repo):
-    transactions = SqlAlchemyTransactionManager(repo.engine)
+def _recruitment(engine):
+    transactions = SqlAlchemyTransactionManager(engine)
     return transactions, SqlAlchemyRecruitmentRepository(transactions)
 
 
-def test_recruitment_event_and_transition_contract(application_repo) -> None:
+def test_recruitment_event_and_transition_contract(database_engine) -> None:
     """Named for the table it reads.
 
     It was `test_status_history_...` until recruitment_events replaced that
     table; the body moved and the name did not, which is how the dead table kept
     looking referenced.
     """
-    repo = application_repo
-    app_id, _ = _create(repo, company="Acme", target_role="Developer", text="Python developer role")
-    assert not hasattr(repo, "transition_status")
+    app_id, _ = _create(
+        database_engine, company="Acme", target_role="Developer", text="Python developer role"
+    )
     with pytest.raises(ValueError):
         ApplicationStatus("preparing")
     with pytest.raises(ValueError):
         ApplicationStatus("ready")
-    with repo.read_connection() as connection:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    with transactions.read() as tx:
+        connection = transactions.connection_for(tx)
         history = connection.execute(
             select(
                 recruitment_events.c.from_status,
@@ -99,7 +105,8 @@ def test_recruitment_event_and_transition_contract(application_repo) -> None:
             .order_by(recruitment_events.c.occurred_at, recruitment_events.c.seq)
         ).all()
     with pytest.raises(IntegrityError, match="ck_applications_current_status"):
-        with repo.transaction() as connection:
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
             connection.execute(
                 update(applications)
                 .where(applications.c.id == app_id)
@@ -109,7 +116,7 @@ def test_recruitment_event_and_transition_contract(application_repo) -> None:
 
 
 def test_removed_cli_client_is_refused_at_the_command_and_database_boundaries(
-    application_repo,
+    database_engine,
 ) -> None:
     with pytest.raises(ValidationError):
         IngestCommand(
@@ -131,13 +138,13 @@ def test_removed_cli_client_is_refused_at_the_command_and_database_boundaries(
         )
 
     app_id, _ = _create(
-        application_repo,
+        database_engine,
         company="Database Client Guard",
         target_role="Developer",
         text="Python role",
     )
     with pytest.raises(IntegrityError, match="ck_recruitment_events_client"):
-        transactions, recruitment = _recruitment(application_repo)
+        transactions, recruitment = _recruitment(database_engine)
         with transactions.write() as tx:
             recruitment.insert_next_action(
                 tx,
@@ -149,16 +156,20 @@ def test_removed_cli_client_is_refused_at_the_command_and_database_boundaries(
                 occurred_at="2026-08-30T12:00:00+00:00",
             )
 
-    assert application_repo.get_application(app_id)["next_action"] is None
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    application_store = SqlAlchemyApplicationStore(transactions)
+    with transactions.read() as tx:
+        assert application_store.get_application(tx, app_id)["next_action"] is None
 
 
-def test_immutable_job_snapshot_trigger(application_repo) -> None:
-    repo = application_repo
+def test_immutable_job_snapshot_trigger(database_engine) -> None:
     _, snapshot_id = _create(
-        repo, company="Acme", target_role="Developer", text="Original exact text"
+        database_engine, company="Acme", target_role="Developer", text="Original exact text"
     )
+    transactions = SqlAlchemyTransactionManager(database_engine)
     with pytest.raises(ProgrammingError, match="immutable record"):
-        with repo.transaction() as connection:
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
             connection.execute(
                 update(job_snapshots)
                 .where(job_snapshots.c.id == snapshot_id)
@@ -166,10 +177,9 @@ def test_immutable_job_snapshot_trigger(application_repo) -> None:
             )
 
 
-def test_next_action_is_not_a_status(application_repo) -> None:
-    repo = application_repo
-    app_id, _ = _create(repo, company="Acme", target_role="Sales", text="Sales role")
-    transactions, recruitment = _recruitment(repo)
+def test_next_action_is_not_a_status(database_engine) -> None:
+    app_id, _ = _create(database_engine, company="Acme", target_role="Sales", text="Sales role")
+    transactions, recruitment = _recruitment(database_engine)
     with transactions.write() as tx:
         event_id = recruitment.insert_next_action(
             tx,
@@ -180,41 +190,52 @@ def test_next_action_is_not_a_status(application_repo) -> None:
             client="web",
             occurred_at="2026-08-19T10:00:00+00:00",
         )
-    row = repo.get_application(app_id)
+    application_store = SqlAlchemyApplicationStore(transactions)
+    with transactions.read() as tx:
+        row = application_store.get_application(tx, app_id)
     assert row["current_status"] == "saved"
     assert row["next_action"] == "Follow up"
     with transactions.read() as tx:
         assert recruitment.event(tx, event_id)["event_type"] == "next_action"
 
 
-def test_database_is_at_registered_head_schema(application_repo) -> None:
-    assert current_database_revision(application_repo.engine) == alembic_head()
+def test_database_is_at_registered_head_schema(database_engine) -> None:
+    assert current_database_revision(database_engine) == alembic_head()
 
 
 def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
-    application_repo,
+    database_engine,
 ) -> None:
-    repo = application_repo
     app_id, snapshot_id = _create(
-        repo,
+        database_engine,
         company="Move Guard Success",
         target_role="Developer",
         text="Another Python role",
     )
-    pdf_id = repo.register_artifact_version(
-        app_id,
-        "resume_pdf",
-        "resume",
-        "artifacts/success/v001/resume.pdf",
-        "c" * 64,
-        "rendered",
-        job_snapshot_id=snapshot_id,
-    )
-    assert not hasattr(repo, "set_ready")
-    assert not hasattr(repo, "_set_ready")
-    assert not hasattr(repo, "record_submission")
-    assert not hasattr(repo, "_record_submission")
-    transactions, recruitment = _recruitment(repo)
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    catalog = SqlAlchemyArtifactCatalog(transactions)
+    application_store = SqlAlchemyApplicationStore(transactions)
+    projections = SqlAlchemyApplicationProjectionReader(transactions)
+    with transactions.write() as tx:
+        pdf_id = catalog.register_artifact_version(
+            tx,
+            app_id,
+            "resume_pdf",
+            "resume",
+            "artifacts/success/v001/resume.pdf",
+            "c" * 64,
+            "rendered",
+            job_snapshot_id=snapshot_id,
+        )
+    # Legacy monolith methods (`set_ready`, `record_submission`, and their
+    # private forms) have no equivalent on any migrated store - there is
+    # nothing left to assert `hasattr(..., "set_ready")` against here. Their
+    # absence from the codebase is covered by the architecture's old-consumer
+    # guards instead of a per-object hasattr check.
+    transactions, recruitment = _recruitment(database_engine)
+    catalog = SqlAlchemyArtifactCatalog(transactions)
+    application_store = SqlAlchemyApplicationStore(transactions)
+    projections = SqlAlchemyApplicationProjectionReader(transactions)
     with transactions.write() as tx:
         recruitment.insert_submission(
             tx,
@@ -238,18 +259,22 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
             occurred_at="2026-08-18T10:00:00+00:00",
             terminal_outcome=None,
         )
-    assert repo.get_application(app_id)["current_status"] == "applied"
+    with transactions.read() as tx:
+        assert application_store.get_application(tx, app_id)["current_status"] == "applied"
 
-    second_id = repo.register_artifact_version(
-        app_id,
-        "resume_pdf",
-        "resume",
-        "artifacts/success/v002/resume.pdf",
-        "b" * 64,
-        "rendered",
-        job_snapshot_id=snapshot_id,
-    )
-    versions = repo.artifact_versions(app_id)
+    with transactions.write() as tx:
+        second_id = catalog.register_artifact_version(
+            tx,
+            app_id,
+            "resume_pdf",
+            "resume",
+            "artifacts/success/v002/resume.pdf",
+            "b" * 64,
+            "rendered",
+            job_snapshot_id=snapshot_id,
+        )
+    with transactions.read() as tx:
+        versions = catalog.artifact_versions(tx, app_id)
     assert [(row["id"], row["version_number"]) for row in versions] == [
         (pdf_id, 1),
         (second_id, 2),
@@ -308,7 +333,8 @@ def test_ready_is_not_persisted_and_submission_storage_commits_atomically(
                 f"2026-08-18T1{index}:30:00+00:00",
                 {},
             )
-    assert len(repo.submissions(app_id)) == 3
+    with transactions.read() as tx:
+        assert len(projections.submissions(tx, app_id)) == 3
 
 
 def test_tracking_service_sets_next_action_without_changing_status(services) -> None:

@@ -15,7 +15,6 @@ from typing import Any
 
 from ..util import utc_now
 from .commands import BoundaryDTO
-from .ports import ApplicationStore
 from .queries import ApplicationListView
 
 EXPORT_SCHEMA_VERSION = "2.0"
@@ -68,9 +67,7 @@ class ApplicationExport(BoundaryDTO):
         }
 
 
-def build_application_export(
-    applications: ApplicationListView | ApplicationStore,
-) -> ApplicationExport:
+def build_application_export(applications: ApplicationListView) -> ApplicationExport:
     """Project applications onto the versioned export schema.
 
     The v1 export had no version marker, so a consumer could not tell which
@@ -78,11 +75,7 @@ def build_application_export(
     v2 export keeps the same columns and records the schema beside them rather
     than inventing a compatibility mode nothing asked for.
     """
-    source = (
-        [item.model_dump(mode="json") for item in applications.items]
-        if isinstance(applications, ApplicationListView)
-        else applications.list_applications()
-    )
+    source = [item.model_dump(mode="json") for item in applications.items]
     return ApplicationExport(
         export_schema_version=EXPORT_SCHEMA_VERSION,
         columns=list(EXPORT_FIELDS),

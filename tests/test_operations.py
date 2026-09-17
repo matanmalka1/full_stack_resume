@@ -56,8 +56,12 @@ from cv_engine.application.operations import (
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.payloads import PayloadStore
+from cv_engine.infrastructure.persistence.application_projections import (
+    SqlAlchemyApplicationProjectionReader,
+)
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
+from cv_engine.infrastructure.persistence.draft_lifecycle import SqlAlchemyDraftLifecycleRepository
 from cv_engine.infrastructure.persistence.operation_execution import (
     SqlAlchemyOperationExecutionStore,
 )
@@ -70,6 +74,68 @@ from cv_engine.infrastructure.persistence.tables import (
 from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
+
+
+def _active_operation(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyApplicationProjectionReader(transactions).active_operation(tx, *args)
+
+
+def _active_working_draft(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyDraftLifecycleRepository(transactions).active_working_draft(tx, *args)
+
+
+def _working_draft(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyDraftLifecycleRepository(transactions).working_draft(tx, *args)
+
+
+def _approved_revision(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyDraftLifecycleRepository(transactions).approved_revision(tx, *args)
+
+
+def _approved_revisions(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyDraftLifecycleRepository(transactions).approved_revisions(tx, *args)
+
+
+def _latest_validation_for_working_draft(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyValidationRepository(transactions).latest_validation_for_working_draft(
+            tx, *args
+        )
+
+
+def _artifact_version(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyArtifactCatalog(transactions).artifact_version(tx, *args)
+
+
+def _artifact_versions(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyArtifactCatalog(transactions).artifact_versions(tx, *args)
+
+
+def _artifact_version_for_revision(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyArtifactCatalog(transactions).artifact_version_for_revision(tx, *args)
+
+
+def _latest_artifact_version(services, *args):
+    transactions = services.operation_runner.transactions
+    with transactions.read() as tx:
+        return SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(tx, *args)
 
 
 def _runner(services, handlers, **options) -> OperationRunner:
@@ -260,7 +326,7 @@ def test_operation_creation_is_idempotent_and_projects_active_work(services) -> 
     assert created.payload_hash == request.payload_hash
     assert created.status is OperationStatus.QUEUED
     assert _operation(services, created.id) == created
-    assert services.repository.active_operation(ingested.application_id).id == created.id
+    assert _active_operation(services, ingested.application_id).id == created.id
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.active_operation == as_operation_view(created)
     assert detail.latest_operation == as_operation_view(created)
@@ -309,7 +375,7 @@ def test_operation_rejects_idempotency_key_with_another_payload(services) -> Non
     assert raised.value.code == IDEMPOTENCY_KEY_REUSED
 
 
-def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> None:
+def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, database_engine) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
             company="Immutable Op Co", target_role="Developer", job_text="Python role", client="web"
@@ -319,7 +385,7 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
         services,
         _stored_request(ingested.application_id),
     )
-    with services.repository.transaction() as connection:
+    with database_engine.begin() as connection:
         connection.execute(
             update(operations)
             .where(operations.c.id == created.id)
@@ -331,16 +397,16 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
         )
 
     with pytest.raises(ProgrammingError, match="immutable terminal operation"):
-        with services.repository.transaction() as connection:
+        with database_engine.begin() as connection:
             connection.execute(
                 update(operations).where(operations.c.id == created.id).values(message="rewritten")
             )
     with pytest.raises(ProgrammingError, match="immutable record"):
-        with services.repository.transaction() as connection:
+        with database_engine.begin() as connection:
             connection.execute(delete(operations).where(operations.c.id == created.id))
 
 
-def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
+def test_two_runners_racing_one_operation_produce_one_claim(services, database_engine) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
             company="Claim Race Co", target_role="Developer", job_text="Python role", client="web"
@@ -353,7 +419,7 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
     barrier = Barrier(2)
 
     def claim(runner_id: str):
-        transactions = SqlAlchemyTransactionManager(services.repository.engine)
+        transactions = SqlAlchemyTransactionManager(database_engine)
         execution = SqlAlchemyOperationExecutionStore(transactions)
         barrier.wait(timeout=2)
         with transactions.write() as tx:
@@ -374,7 +440,8 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
     # The loser must release only what it took. Releasing by operation_id
     # deleted the winner's leases, and the winner then failed at its first
     # heartbeat mid-execution with "operation resource leases are missing".
-    with services.repository.read_connection() as connection:
+    with services.operation_runner.transactions.read() as tx:
+        connection = services.operation_runner.transactions.connection_for(tx)
         held = connection.execute(
             select(operation_resource_leases.c.resource_kind).where(
                 operation_resource_leases.c.operation_id == created.id,
@@ -611,9 +678,11 @@ def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) 
     assert _operation(services, created.id).status is OperationStatus.INTERRUPTED
 
 
-def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(services) -> None:
+def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(
+    services, database_engine
+) -> None:
     operation = _operation_for_runner(services, "Expired Queued Co")
-    with services.repository.transaction() as connection:
+    with database_engine.begin() as connection:
         connection.execute(
             update(operations)
             .where(operations.c.id == operation.id)
@@ -956,8 +1025,8 @@ def test_draft_operation_activates_one_validated_working_draft(services) -> None
 
     assert completed.status is OperationStatus.SUCCEEDED
     working_id = completed.outputs[0].output_id
-    assert services.repository.active_working_draft(ingested.application_id).id == working_id
-    validation = services.repository.latest_validation_for_working_draft(working_id)
+    assert _active_working_draft(services, ingested.application_id).id == working_id
+    validation = _latest_validation_for_working_draft(services, working_id)
     assert validation is not None and validation["report"].passed
 
 
@@ -999,7 +1068,7 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
     with pytest.raises(UnknownRecord):
-        services.repository.active_working_draft(ingested.application_id)
+        _active_working_draft(services, ingested.application_id)
 
 
 def test_foreground_draft_runs_through_one_operation(services) -> None:
@@ -1032,7 +1101,7 @@ def test_foreground_draft_runs_through_one_operation(services) -> None:
 
     assert completed.status is OperationStatus.SUCCEEDED
     outputs = {output.output_type: output.output_id for output in completed.outputs}
-    validation = services.repository.latest_validation_for_working_draft(outputs["working_draft"])
+    validation = _latest_validation_for_working_draft(services, outputs["working_draft"])
     assert validation is not None
     assert validation["report"].passed
 
@@ -1091,7 +1160,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
     assert all(not output.active for output in failed.outputs)
     for output in failed.outputs:
         assert (
-            setup.services.repository.artifact_version(output.output_id)["lifecycle_status"]
+            _artifact_version(setup.services, output.output_id)["lifecycle_status"]
             == "rendered-invalid"
         )
 
@@ -1125,8 +1194,8 @@ def _cancel_after_render(setup, operation_id: str):
 
 def _move_the_source_after_render(setup, _operation_id: str):
     def interfere(_executed) -> None:
-        manifest = setup.services.repository.artifact_version_for_revision(
-            setup.approved.revision_id, "claim_manifest", "approved"
+        manifest = _artifact_version_for_revision(
+            setup.services, setup.approved.revision_id, "claim_manifest", "approved"
         )
         path = setup.services.artifacts.resolve(manifest["path"])
         path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
@@ -1171,8 +1240,8 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
     nowhere, so resolving both *is* the assertion.
     """
     setup = ready_application(f"Stopped Render {expected_status.value}")
-    existing_pdf = setup.services.repository.latest_artifact_version(
-        setup.application_id, "resume_pdf", "rendered"
+    existing_pdf = _latest_artifact_version(
+        setup.services, setup.application_id, "resume_pdf", "rendered"
     )
     original_record_validation = SqlAlchemyValidationRepository.record_validation
     post_render_writes = 0
@@ -1214,7 +1283,7 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
     assert len(outputs) == 2
     assert all(not output.active for output in outputs)
     for output in outputs:
-        registered = setup.services.repository.artifact_version(output.output_id)
+        registered = _artifact_version(setup.services, output.output_id)
         assert registered["revision_id"] == setup.approved.revision_id
         assert registered["lifecycle_status"] == "rendered"
 
@@ -1243,8 +1312,7 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
     first two did not survive it.
     """
     setup = ready_application("Partial Registration Co")
-    repository = setup.services.repository
-    before = {row["id"] for row in repository.artifact_versions(setup.application_id)}
+    before = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
     operation = _render_operation(setup, "partial-registration")
     original = SqlAlchemyArtifactCatalog.register_artifact_version
     calls = 0
@@ -1266,7 +1334,7 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
 
     assert failed.status is OperationStatus.FAILED
     assert calls == 2, "the injected failure never reached the code under test"
-    after = {row["id"] for row in repository.artifact_versions(setup.application_id)}
+    after = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
     assert after == before, "a partial render registration survived"
     assert not [
         output for output in failed.outputs if output.output_type in {"resume_html", "resume_pdf"}
@@ -1277,9 +1345,7 @@ def test_a_failure_ingesting_the_second_render_payload_registers_neither(
     ready_application, monkeypatch
 ) -> None:
     setup = ready_application("Partial Render Ingest Co")
-    before = {
-        row["id"] for row in setup.services.repository.artifact_versions(setup.application_id)
-    }
+    before = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
     original = PayloadStore.ingest_render_output
     calls = 0
 
@@ -1295,7 +1361,7 @@ def test_a_failure_ingesting_the_second_render_payload_registers_neither(
         _render_operation(setup, "partial-render-ingest").id
     )
     assert failed.status is OperationStatus.FAILED
-    after = {row["id"] for row in setup.services.repository.artifact_versions(setup.application_id)}
+    after = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
     assert after == before
 
 
@@ -1312,7 +1378,7 @@ def _approve_command(services, application_id) -> ApproveDraftCommand:
 
 def test_pending_approval_receipt_recovers_a_committed_revision(drafted_application) -> None:
     setup = drafted_application("Approval Recovery Co")
-    working = setup.services.repository.active_working_draft(setup.application_id)
+    working = _active_working_draft(setup.services, setup.application_id)
     command = _approve_command(setup.services, setup.application_id)
     reserved_revision = new_id()
     receipt = _claim_receipt(
@@ -1356,7 +1422,7 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
         "approval-recovery",
     )
     assert completed["status"] == "completed"
-    assert len(setup.services.repository.approved_revisions(setup.application_id)) == 1
+    assert len(_approved_revisions(setup.services, setup.application_id)) == 1
 
 
 @pytest.mark.parametrize("receipt_status", ["pending", "completed"])
@@ -1368,8 +1434,7 @@ def test_approval_recovery_refuses_changed_inputs(
 ) -> None:
     setup = drafted_application("Approval Frozen Inputs Co")
     command = _approve_command(setup.services, setup.application_id)
-    repository = setup.services.repository
-    working = repository.working_draft(command.working_draft_id)
+    working = _working_draft(setup.services, command.working_draft_id)
     receipt = _claim_receipt(
         setup.services,
         "approve_draft",
@@ -1398,8 +1463,8 @@ def test_approval_recovery_refuses_changed_inputs(
     after = _read_receipt(setup.services, "approve_draft", "approval-frozen-inputs")
     assert after["status"] == receipt_status
     assert after["payload"] == receipt["payload"]
-    assert repository.approved_revisions(setup.application_id) == [
-        repository.approved_revision(committed.revision_id)
+    assert _approved_revisions(setup.services, setup.application_id) == [
+        _approved_revision(setup.services, committed.revision_id)
     ]
     replayed = setup.services.draft_approval.approve_idempotent(
         command,
@@ -1416,8 +1481,7 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
 ) -> None:
     setup = drafted_application("Approval Retry Co")
     command = _approve_command(setup.services, setup.application_id)
-    repository = setup.services.repository
-    before_artifacts = repository.artifact_versions(setup.application_id)
+    before_artifacts = _artifact_versions(setup.services, setup.application_id)
     calls = 0
     if failure_stage == "artifact_registration":
         original = SqlAlchemyArtifactCatalog.register_artifact_version
@@ -1470,11 +1534,11 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
         f"artifacts/revisions/{setup.application_id}/{receipt['reserved_entity_id']}/resume.md",
     ]
     published = [setup.services.payloads.read_payload_text(reference) for reference in references]
-    revisions = repository.approved_revisions(setup.application_id)
+    revisions = _approved_revisions(setup.services, setup.application_id)
     if failure_stage in {"artifact_registration", "receipt_completion"}:
         assert revisions == []
-        assert repository.artifact_versions(setup.application_id) == before_artifacts
-        assert repository.working_draft(command.working_draft_id).active
+        assert _artifact_versions(setup.services, setup.application_id) == before_artifacts
+        assert _working_draft(setup.services, command.working_draft_id).active
         if failure_stage == "artifact_registration":
             monkeypatch.setattr(SqlAlchemyArtifactCatalog, "register_artifact_version", original)
         else:
@@ -1499,7 +1563,7 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
     )
     assert recovered == repeated
     assert recovered.revision_id == receipt["reserved_entity_id"]
-    assert len(repository.approved_revisions(setup.application_id)) == 1
+    assert len(_approved_revisions(setup.services, setup.application_id)) == 1
     completed = _read_receipt(setup.services, "approve_draft", "approval-retry")
     assert completed["id"] == receipt["id"]
     assert completed["payload"] == receipt["payload"]

@@ -22,15 +22,22 @@ from cv_engine.domain.models import (
     ValidationRunLineage,
     WorkingDraft,
 )
-from cv_engine.infrastructure.persistence import Repository, SqlAlchemyTransactionManager
+from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record
+from cv_engine.infrastructure.persistence.application_projections import (
+    SqlAlchemyApplicationProjectionReader,
+)
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
+    SqlAlchemyKnowledgeLifecycleRepository,
+)
 from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from cv_engine.infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
+from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import (
     app_settings,
     applications,
@@ -76,6 +83,16 @@ def analysis_plans(analysis_transactions):
     return SqlAlchemyAnalysisPlanRepository(analysis_transactions)
 
 
+@pytest.fixture
+def knowledge_transactions(database_engine):
+    return SqlAlchemyTransactionManager(database_engine)
+
+
+@pytest.fixture
+def knowledge_store(knowledge_transactions):
+    return SqlAlchemyKnowledgeLifecycleRepository(knowledge_transactions)
+
+
 def test_analysis_plan_adapter_rejects_read_closed_and_foreign_tokens(
     analysis_transactions,
     analysis_plans,
@@ -93,19 +110,17 @@ def test_analysis_plan_adapter_rejects_read_closed_and_foreign_tokens(
 
 
 def _create_application(
-    repository,
+    transactions,
     *,
     company: str,
     target_role: str,
     text: str,
-    transactions=None,
     tx=None,
 ):
     digest = sha256_text(text)
     application_id = new_id()
     snapshot_id = new_id()
     created_at = utc_now()
-    transactions = transactions or SqlAlchemyTransactionManager(repository.engine)
     application_store = SqlAlchemyApplicationStore(transactions)
     snapshots = SqlAlchemyJobSnapshotStore(transactions)
     recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
@@ -148,13 +163,12 @@ def _create_application(
     return application_id, snapshot_id
 
 
-def _save_analysis(repository, application_id: str, snapshot_id: str, analysis):
+def _save_analysis(transactions, application_id: str, snapshot_id: str, analysis):
     plan = SelectionManifest(
         policy_version="test-selection-v1",
         emphasis=analysis.emphasis,
         emphasis_policy_version="test-emphasis-v1",
     )
-    transactions = SqlAlchemyTransactionManager(repository.engine)
     plans = SqlAlchemyAnalysisPlanRepository(transactions)
     with transactions.write() as tx:
         return plans.save_analysis(
@@ -176,9 +190,12 @@ def _save_analysis(repository, application_id: str, snapshot_id: str, analysis):
         )
 
 
-def _create_selection_plan(repository_or_engine, *args, **kwargs):
-    engine = getattr(repository_or_engine, "engine", repository_or_engine)
-    transactions = SqlAlchemyTransactionManager(engine)
+def _create_selection_plan(transactions_or_engine, *args, **kwargs):
+    transactions = (
+        transactions_or_engine
+        if isinstance(transactions_or_engine, SqlAlchemyTransactionManager)
+        else SqlAlchemyTransactionManager(transactions_or_engine)
+    )
     plans = SqlAlchemyAnalysisPlanRepository(transactions)
     with transactions.write() as tx:
         return plans.create_selection_plan(tx, *args, **kwargs)
@@ -191,7 +208,7 @@ def test_non_3_analysis_documents_are_rejected_without_an_adapter(document) -> N
 
 
 def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
-    application_repo,
+    database_engine,
 ) -> None:
     valid = {
         "singleton_id": 1,
@@ -216,14 +233,20 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         {**valid, "ui_text_size": "huge"},
         {**valid, "ui_theme": "sepia"},
     )
+    transactions = SqlAlchemyTransactionManager(database_engine)
     for values in invalid_values:
         with pytest.raises(IntegrityError):
-            with application_repo.transaction() as connection:
+            with transactions.write() as tx:
+                connection = transactions.connection_for(tx, access="write")
                 connection.execute(insert(app_settings).values(**values))
 
 
-def test_app_settings_default_read_is_pure(application_repo) -> None:
-    assert application_repo.app_settings().model_dump(mode="python") == {
+def test_app_settings_default_read_is_pure(database_engine) -> None:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    settings = SqlAlchemySettingsStore(transactions)
+    with transactions.read() as tx:
+        stored = settings.settings(tx)
+    assert stored.model_dump(mode="python") == {
         "edit_version": 0,
         "auto_generate_when_review_not_required": False,
         "ai_enabled_override": None,
@@ -235,68 +258,81 @@ def test_app_settings_default_read_is_pure(application_repo) -> None:
         "ui_theme": "system",
         "updated_at": None,
     }
-    with application_repo.read_connection() as connection:
+    with database_engine.connect() as connection:
         assert connection.execute(select(func.count()).select_from(app_settings)).scalar_one() == 0
 
 
-def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkeypatch) -> None:
-    first = application_repo.update_app_settings(
-        0,
-        UpdateSettings(
-            auto_generate_when_review_not_required=True,
-            ai_enabled_override=False,
-            default_execution_mode="deterministic",
-            default_ai_model="gpt-5.6-terra",
-            default_reasoning_effort="medium",
-            ui_density="compact",
-            ui_text_size="large",
-            ui_theme="system",
-        ),
-    )
+def test_app_settings_updates_are_optimistic_and_atomic(database_engine, monkeypatch) -> None:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    settings = SqlAlchemySettingsStore(transactions)
+    with transactions.write() as tx:
+        first = settings.update_settings(
+            tx,
+            0,
+            UpdateSettings(
+                auto_generate_when_review_not_required=True,
+                ai_enabled_override=False,
+                default_execution_mode="deterministic",
+                default_ai_model="gpt-5.6-terra",
+                default_reasoning_effort="medium",
+                ui_density="compact",
+                ui_text_size="large",
+                ui_theme="system",
+            ),
+        )
     assert first.edit_version == 1
     assert first.ui_density == "compact"
 
     with pytest.raises(StateConflict, match="changed from version 0 to 1"):
-        application_repo.update_app_settings(
-            0,
+        with transactions.write() as tx:
+            settings.update_settings(
+                tx,
+                0,
+                UpdateSettings(
+                    auto_generate_when_review_not_required=False,
+                    ai_enabled_override=None,
+                    default_execution_mode="deterministic",
+                    default_ai_model="gpt-5.6-terra",
+                    default_reasoning_effort="medium",
+                    ui_density="comfortable",
+                    ui_text_size="normal",
+                    ui_theme="system",
+                ),
+            )
+    with transactions.read() as tx:
+        assert settings.settings(tx) == first
+
+    def refuse_post_commit_reread() -> None:
+        raise AssertionError("an update response must describe its own committed write")
+
+    monkeypatch.setattr(settings, "settings", refuse_post_commit_reread)
+    with transactions.write() as tx:
+        second = settings.update_settings(
+            tx,
+            1,
             UpdateSettings(
                 auto_generate_when_review_not_required=False,
                 ai_enabled_override=None,
                 default_execution_mode="deterministic",
-                default_ai_model="gpt-5.6-terra",
-                default_reasoning_effort="medium",
+                default_ai_model="gpt-5.6-luna",
+                default_reasoning_effort="low",
                 ui_density="comfortable",
                 ui_text_size="normal",
                 ui_theme="system",
             ),
         )
-    assert application_repo.app_settings() == first
-
-    def refuse_post_commit_reread() -> None:
-        raise AssertionError("an update response must describe its own committed write")
-
-    monkeypatch.setattr(application_repo, "app_settings", refuse_post_commit_reread)
-    second = application_repo.update_app_settings(
-        1,
-        UpdateSettings(
-            auto_generate_when_review_not_required=False,
-            ai_enabled_override=None,
-            default_execution_mode="deterministic",
-            default_ai_model="gpt-5.6-luna",
-            default_reasoning_effort="low",
-            ui_density="comfortable",
-            ui_text_size="normal",
-            ui_theme="system",
-        ),
-    )
     assert second.edit_version == 2
-    assert Repository(application_repo.engine).app_settings() == second
+    verification = SqlAlchemySettingsStore(transactions)
+    with transactions.read() as tx:
+        assert verification.settings(tx) == second
 
 
-def test_connection_policy_transaction_scope_and_foreign_keys(application_repo) -> None:
-    repository = application_repo
+def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -> None:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    application_store = SqlAlchemyApplicationStore(transactions)
     with pytest.raises(IntegrityError, match="ForeignKeyViolation"):
-        with repository.transaction() as connection:
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
             connection.execute(
                 insert(job_snapshots).values(
                     id="missing-snapshot",
@@ -311,63 +347,60 @@ def test_connection_policy_transaction_scope_and_foreign_keys(application_repo) 
                 )
             )
 
-    transactions = SqlAlchemyTransactionManager(repository.engine)
     with transactions.write() as tx:
         app_id, _ = _create_application(
-            repository,
+            transactions,
             company="Committed",
             target_role="Developer",
             text="Python",
-            transactions=transactions,
             tx=tx,
         )
-    assert repository.get_application(app_id)["company"] == "Committed"
+    with transactions.read() as tx:
+        assert application_store.get_application(tx, app_id)["company"] == "Committed"
 
     with pytest.raises(RuntimeError, match="force rollback"):
         with transactions.write() as tx:
             rolled_back_id, _ = _create_application(
-                repository,
+                transactions,
                 company="Rolled Back",
                 target_role="Developer",
                 text="Python",
-                transactions=transactions,
                 tx=tx,
             )
             raise RuntimeError("force rollback")
     with pytest.raises(UnknownRecord):
-        repository.get_application(rolled_back_id)
+        with transactions.read() as tx:
+            application_store.get_application(tx, rolled_back_id)
 
 
-def test_concurrent_writers_do_not_silently_overwrite(application_repo) -> None:
-    repository = application_repo
-    _create_application(repository, company="Writer", target_role="Developer", text="Python")
+def test_concurrent_writers_do_not_silently_overwrite(database_engine) -> None:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    _create_application(transactions, company="Writer", target_role="Developer", text="Python")
     started = threading.Event()
     release = threading.Event()
     results: list[str] = []
     failures: list[Exception] = []
 
     def first_writer() -> None:
-        with repository.unit_of_work() as uow:
-            assert uow.connection is not None
-            uow.connection.execute(
+        with transactions.write() as tx:
+            connection = transactions.connection_for(tx, access="write")
+            connection.execute(
                 update(applications).where(applications.c.company == "Writer").values(notes="first")
             )
             started.set()
             release.wait(timeout=2)
-            uow.commit()
 
     def second_writer() -> None:
         started.wait(timeout=2)
         try:
-            with repository.unit_of_work() as uow:
-                assert uow.connection is not None
-                uow.connection.execute(
+            with transactions.write() as tx:
+                connection = transactions.connection_for(tx, access="write")
+                connection.execute(
                     update(applications)
                     .where(applications.c.company == "Writer")
                     .values(notes="second")
                 )
-                uow.commit()
-                results.append("committed")
+            results.append("committed")
         except Exception as exc:
             failures.append(exc)
 
@@ -380,13 +413,16 @@ def test_concurrent_writers_do_not_silently_overwrite(application_repo) -> None:
     first.join(timeout=2)
     second.join(timeout=2)
     assert len(results) + len(failures) == 1
-    assert repository.list_applications()[0]["notes"] in {"first", "second"}
+    applications_reader = SqlAlchemyApplicationProjectionReader(transactions)
+    with transactions.read() as tx:
+        assert applications_reader.applications(tx)[0]["notes"] in {"first", "second"}
 
 
 def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
-    application_repo,
+    database_engine,
+    knowledge_transactions,
+    knowledge_store,
 ) -> None:
-    repository = application_repo
     request = PrepareKnowledgeMutation(
         mutation_id="mutation-1",
         mutation_type="promote_fact",
@@ -400,33 +436,36 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
         recovery_strategy="finish_or_restore",
     )
 
-    prepared = repository.prepare_knowledge_mutation(
-        request, prepared_at="2026-08-19T10:00:00+00:00"
-    )
+    with knowledge_transactions.write() as tx:
+        prepared = knowledge_store.prepare_mutation(
+            tx, request, prepared_at="2026-08-19T10:00:00+00:00"
+        )
     assert prepared.state is KnowledgeMutationState.PREPARED
-    assert repository.prepared_knowledge_mutations() == [prepared]
+    with knowledge_transactions.read() as tx:
+        assert knowledge_store.prepared_mutations(tx) == [prepared]
     assert prepared.db_mutation == {"fact_id": "fact-1", "to_status": "canonical"}
 
-    with repository.unit_of_work() as uow:
-        committed = repository.bind(uow).commit_knowledge_mutation(
-            prepared.id, committed_at="2026-08-19T10:01:00+00:00"
+    with knowledge_transactions.write() as tx:
+        committed = knowledge_store.commit_mutation(
+            tx, prepared.id, committed_at="2026-08-19T10:01:00+00:00"
         )
-        assert repository.bind(uow).knowledge_mutation(prepared.id) == committed
-        uow.commit()
+        assert knowledge_store.mutation(tx, prepared.id) == committed
 
     assert committed.state is KnowledgeMutationState.COMMITTED
-    assert repository.prepared_knowledge_mutations() == []
+    with knowledge_transactions.read() as tx:
+        assert knowledge_store.prepared_mutations(tx) == []
     with pytest.raises(PreconditionFailed, match="not prepared"):
-        repository.commit_knowledge_mutation(prepared.id)
+        with knowledge_transactions.write() as tx:
+            knowledge_store.commit_mutation(tx, prepared.id)
     with pytest.raises(ProgrammingError, match="invalid knowledge mutation transition"):
-        with repository.transaction() as connection:
+        with database_engine.begin() as connection:
             connection.execute(
                 update(knowledge_mutation_journal)
                 .where(knowledge_mutation_journal.c.id == prepared.id)
                 .values(mutation_type="attach_fact")
             )
     with pytest.raises(ProgrammingError, match="immutable record"):
-        with repository.transaction() as connection:
+        with database_engine.begin() as connection:
             connection.execute(
                 delete(knowledge_mutation_journal).where(
                     knowledge_mutation_journal.c.id == prepared.id
@@ -435,9 +474,9 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
 
 
 def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
-    application_repo,
+    knowledge_transactions,
+    knowledge_store,
 ) -> None:
-    repository = application_repo
     request = PrepareKnowledgeMutation(
         mutation_id="mutation-1",
         mutation_type="attach_fact",
@@ -450,32 +489,39 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
         db_mutation={"fact_id": "fact-1"},
         recovery_strategy="finish_or_restore",
     )
-    repository.prepare_knowledge_mutation(request)
+    with knowledge_transactions.write() as tx:
+        knowledge_store.prepare_mutation(tx, request)
 
     with pytest.raises(PreconditionFailed, match="requires a reason"):
-        repository.quarantine_knowledge_mutation(request.mutation_id, " ")
+        with knowledge_transactions.write() as tx:
+            knowledge_store.quarantine_mutation(tx, request.mutation_id, " ")
     with pytest.raises(IntegrityError, match="uq_knowledge_mutation_journal"):
-        repository.prepare_knowledge_mutation(
-            PrepareKnowledgeMutation(
-                **{
-                    **request.__dict__,
-                    "mutation_id": "mutation-2",
-                    "staged_reference": "temp/knowledge/mutation-2.json",
-                }
+        with knowledge_transactions.write() as tx:
+            knowledge_store.prepare_mutation(
+                tx,
+                PrepareKnowledgeMutation(
+                    **{
+                        **request.__dict__,
+                        "mutation_id": "mutation-2",
+                        "staged_reference": "temp/knowledge/mutation-2.json",
+                    }
+                ),
             )
-        )
 
-    quarantined = repository.quarantine_knowledge_mutation(
-        request.mutation_id,
-        "staged bytes no longer match",
-        quarantined_at="2026-08-19T10:02:00+00:00",
-    )
+    with knowledge_transactions.write() as tx:
+        quarantined = knowledge_store.quarantine_mutation(
+            tx,
+            request.mutation_id,
+            "staged bytes no longer match",
+            quarantined_at="2026-08-19T10:02:00+00:00",
+        )
     assert quarantined.state is KnowledgeMutationState.QUARANTINED
     assert quarantined.quarantine_reason == "staged bytes no longer match"
-    assert repository.quarantined_knowledge_mutations() == [quarantined]
+    with knowledge_transactions.read() as tx:
+        assert knowledge_store.quarantined_mutations(tx) == [quarantined]
 
 
-def test_every_product_table_is_immutable_unless_explicitly_exempt(application_repo) -> None:
+def test_every_product_table_is_immutable_unless_explicitly_exempt(database_engine) -> None:
     """Completeness, not a roll-call.
 
     The previous version listed the immutable tables by hand, so a new immutable
@@ -484,9 +530,8 @@ def test_every_product_table_is_immutable_unless_explicitly_exempt(application_r
     tables are discovered and immutability is assumed, so the only way to be
     exempt is to say so in MUTABLE_TABLES.
     """
-    repository = application_repo
     tables = set(metadata.tables)
-    with repository.read_connection() as connection:
+    with database_engine.connect() as connection:
         assert set(inspect(connection).get_table_names()) == tables | {"alembic_version"}
         trigger_rows = connection.execute(
             text(
@@ -514,9 +559,9 @@ def test_every_product_table_is_immutable_unless_explicitly_exempt(application_r
     assert tables - MUTABLE_TABLES
 
 
-def test_every_immutable_table_guard_calls_its_shared_reject_function(application_repo) -> None:
+def test_every_immutable_table_guard_calls_its_shared_reject_function(database_engine) -> None:
     """Derive both guard groups from the live catalog, including future tables."""
-    with application_repo.read_connection() as connection:
+    with database_engine.connect() as connection:
         guarded = {
             (table, trigger_name, function_name)
             for table, trigger_name, function_name in connection.execute(
@@ -541,7 +586,9 @@ def test_every_immutable_table_guard_calls_its_shared_reject_function(applicatio
     assert guarded == expected
 
 
-def test_immutability_triggers_refuse_real_repository_writes(application_repo) -> None:
+def test_immutability_triggers_refuse_real_repository_writes(
+    database_engine, transaction_manager, application_projection_reader, audit_log
+) -> None:
     """Behavioural evidence over records the repository actually wrote.
 
     The derived test above covers every immutable table, but with foreign keys
@@ -549,15 +596,16 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
     repository created, so the four tables it can reach cheaply are proven under
     the conditions production actually runs in.
     """
-    repository = application_repo
+    repository = transaction_manager
     _create_application(
         repository,
         company="Immutable Co",
         target_role="Account Manager",
         text="immutable application source",
     )
-    application_id = repository.list_applications()[0]["id"]
-    transactions = SqlAlchemyTransactionManager(repository.engine)
+    with transaction_manager.read() as tx:
+        application_id = application_projection_reader.applications(tx)[0]["id"]
+    transactions = transaction_manager
     recruitment = SqlAlchemyRecruitmentRepository(transactions)
     with transactions.write() as tx:
         recruitment.insert_submission(
@@ -570,50 +618,66 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
             "2026-08-19T10:00:00+00:00",
             {},
         )
-    repository.insert_audit(
-        AuditRecord(
-            id="audit-record",
-            application_id=application_id,
-            action="record_external_submission",
-            entity_type="submission",
-            entity_id="external-submission",
-            actor_type="user",
-            client="web",
-            occurred_at="2026-08-19T10:00:00+00:00",
+    with transaction_manager.write() as tx:
+        audit_log.insert_audit(
+            tx,
+            AuditRecord(
+                id="audit-record",
+                application_id=application_id,
+                action="record_external_submission",
+                entity_type="submission",
+                entity_id="external-submission",
+                actor_type="user",
+                client="web",
+                occurred_at="2026-08-19T10:00:00+00:00",
+            ),
         )
-    )
 
     for table_name in ("job_snapshots", "recruitment_events", "submissions", "audit_records"):
         table = metadata.tables[table_name]
         for statement in (update(table).values(id=table.c.id), delete(table)):
             with pytest.raises(ProgrammingError, match="immutable record"):
-                with repository.transaction() as connection:
+                with database_engine.begin() as connection:
                     connection.execute(statement)
 
 
 def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
-    application_repo, draft_factory, analysis_document
+    database_engine,
+    draft_factory,
+    analysis_document,
+    transaction_manager,
+    application_projection_reader,
+    analysis_plan_store,
+    draft_lifecycle_store,
+    validation_store,
 ) -> None:
-    repository = application_repo
+    repository = transaction_manager
     app_id, snapshot_id = _create_application(
         repository,
         company="Typed Records",
         target_role="Developer",
         text="Python backend developer API React",
     )
-    assert set(repository.get_snapshot(snapshot_id)) == {
-        "id",
-        "application_id",
-        "version_number",
-        "payload_path",
-        "source_hash",
-        "normalized_hash",
-        "source_url",
-        "captured_at",
-        "source_metadata_json",
-        "content_hash",
-        "prior_snapshot_id",
-    }
+    with transaction_manager.read() as tx:
+        assert set(
+            next(
+                row
+                for row in application_projection_reader.snapshots(tx, app_id)
+                if row["id"] == snapshot_id
+            )
+        ) == {
+            "id",
+            "application_id",
+            "version_number",
+            "payload_path",
+            "source_hash",
+            "normalized_hash",
+            "source_url",
+            "captured_at",
+            "source_metadata_json",
+            "content_hash",
+            "prior_snapshot_id",
+        }
     analysis = analysis_document()
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
     document = draft_factory(
@@ -640,33 +704,42 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
         },
     )
     assert isinstance(plan, SelectionPlan)
-    assert repository.selection_plan(plan.id) == plan
+    with transaction_manager.read() as tx:
+        assert analysis_plan_store.selection_plan(tx, plan.id) == plan
 
-    working = repository.create_working_draft(
-        app_id,
-        analysis_id,
-        plan.id,
-        document,
-    )
+    with transaction_manager.write() as tx:
+        working = draft_lifecycle_store.create_working_draft(
+            tx,
+            app_id,
+            analysis_id,
+            plan.id,
+            document,
+        )
     assert isinstance(working, WorkingDraft)
-    assert repository.active_working_draft(app_id) == working
+    with transaction_manager.read() as tx:
+        assert draft_lifecycle_store.active_working_draft(tx, app_id) == working
 
     changed_source = document.model_copy(update={"content_hash": "changed-hash"})
-    changed = repository.update_working_draft(
-        working.id,
-        working.edit_version,
-        changed_source,
-    )
+    with transaction_manager.write() as tx:
+        changed = draft_lifecycle_store.update_working_draft(
+            tx,
+            working.id,
+            working.edit_version,
+            changed_source,
+        )
     assert changed.edit_version == working.edit_version + 1
     assert changed.content_hash == "changed-hash"
 
     with pytest.raises(StateConflict, match="edit version mismatch"):
-        repository.update_working_draft(
-            working.id,
-            working.edit_version,
-            document.model_copy(update={"content_hash": "stale-write"}),
-        )
-    assert repository.working_draft(working.id) == changed
+        with transaction_manager.write() as tx:
+            draft_lifecycle_store.update_working_draft(
+                tx,
+                working.id,
+                working.edit_version,
+                document.model_copy(update={"content_hash": "stale-write"}),
+            )
+    with transaction_manager.read() as tx:
+        assert draft_lifecycle_store.working_draft(tx, working.id) == changed
 
     lineage = ValidationRunLineage(
         working_draft_id=changed.id,
@@ -678,19 +751,22 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
         knowledge_context_hash="knowledge-hash",
         validator_versions={"draft": "2.0"},
     )
-    validation_id = repository.record_validation(
-        app_id,
-        "pre-render",
-        ValidationReport.from_findings({"content": True}, []),
-        lineage=lineage,
-    )
-    assert repository.validation_lineage(validation_id) == lineage
+    with transaction_manager.write() as tx:
+        validation_id = validation_store.record_validation(
+            tx,
+            app_id,
+            "pre-render",
+            ValidationReport.from_findings({"content": True}, []),
+            lineage=lineage,
+        )
+    with transaction_manager.read() as tx:
+        assert validation_store.validation_lineage(tx, validation_id) == lineage
 
 
 def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
-    application_repo, draft_factory, analysis_document
+    database_engine, draft_factory, analysis_document, transaction_manager, draft_lifecycle_store
 ) -> None:
-    repository = application_repo
+    repository = transaction_manager
     app_id, snapshot_id = _create_application(
         repository,
         company="Constraint Records",
@@ -718,24 +794,26 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         selection_policy_version=document.selection.policy_version,
         track_emphasis_dependencies={},
     )
-    repository.create_working_draft(app_id, analysis_id, plan.id, document)
+    with transaction_manager.write() as tx:
+        draft_lifecycle_store.create_working_draft(tx, app_id, analysis_id, plan.id, document)
 
     with pytest.raises(ProgrammingError, match="immutable record"):
-        with repository.transaction() as connection:
+        with database_engine.begin() as connection:
             connection.execute(
                 update(selection_plans)
                 .where(selection_plans.c.id == plan.id)
                 .values(plan_json=selection_plans.c.plan_json)
             )
     with pytest.raises(ProgrammingError, match="immutable record"):
-        with repository.transaction() as connection:
+        with database_engine.begin() as connection:
             connection.execute(delete(selection_plans).where(selection_plans.c.id == plan.id))
     with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
-        repository.create_working_draft(app_id, analysis_id, plan.id, document)
+        with transaction_manager.write() as tx:
+            draft_lifecycle_store.create_working_draft(tx, app_id, analysis_id, plan.id, document)
 
 
 def test_only_one_working_draft_per_application_can_be_active(
-    application_repo, analysis_document
+    database_engine, analysis_document, transaction_manager
 ) -> None:
     """Product invariant 3, enforced by storage rather than by a filesystem path.
 
@@ -745,7 +823,7 @@ def test_only_one_working_draft_per_application_can_be_active(
     through SQLAlchemy Core: a repository method could satisfy it by convention while the
     table underneath still allowed two.
     """
-    repository = application_repo
+    repository = transaction_manager
     now = "2026-08-18T00:00:00+00:00"
 
     def insert_draft(connection, draft_id: str, *, active: bool) -> None:
@@ -764,7 +842,7 @@ def test_only_one_working_draft_per_application_can_be_active(
             )
         )
 
-    with repository.transaction() as connection:
+    with database_engine.begin() as connection:
         connection.execute(
             insert(applications).values(
                 id="a",
@@ -791,19 +869,19 @@ def test_only_one_working_draft_per_application_can_be_active(
     analysis = analysis_document()
     analysis_id, plan = _save_analysis(repository, "a", "s", analysis)
     assert analysis_id == plan.job_analysis_id
-    with repository.transaction() as connection:
+    with database_engine.begin() as connection:
         insert_draft(connection, "first", active=True)
 
     with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
-        with repository.transaction() as connection:
+        with database_engine.begin() as connection:
             insert_draft(connection, "second", active=True)
 
-    with repository.transaction() as connection:
+    with database_engine.begin() as connection:
         connection.execute(
             update(working_drafts).where(working_drafts.c.id == "first").values(active=False)
         )
         insert_draft(connection, "third", active=True)
-    with repository.read_connection() as connection:
+    with database_engine.connect() as connection:
         assert (
             connection.execute(
                 select(func.count())
@@ -815,7 +893,7 @@ def test_only_one_working_draft_per_application_can_be_active(
 
 
 def test_a_stale_plan_write_is_refused_rather_than_silently_rebased(
-    application_repo, analysis_document
+    database_engine, analysis_document, transaction_manager
 ) -> None:
     """The lost-update path, closed.
 
@@ -827,7 +905,7 @@ def test_a_stale_plan_write_is_refused_rather_than_silently_rebased(
     guard is not: it belongs to write consistency, and it was very nearly
     removed together with the acceptance carry that happened to invoke it.
     """
-    repository = application_repo
+    repository = transaction_manager
     app_id, snapshot_id = _create_application(
         repository,
         company="Concurrent Plan Co",
@@ -865,7 +943,7 @@ def test_a_stale_plan_write_is_refused_rather_than_silently_rebased(
 
 
 def test_a_plan_write_blocks_on_the_application_lock(
-    application_repo, database_url, analysis_document
+    database_engine, database_url, analysis_document, transaction_manager
 ) -> None:
     """Deterministic proof that the lock is taken, and taken before the read.
 
@@ -879,7 +957,7 @@ def test_a_plan_write_blocks_on_the_application_lock(
     proceed and times out; if it does not, it writes happily. The timeout is the
     assertion.
     """
-    repository = application_repo
+    repository = transaction_manager
     app_id, snapshot_id = _create_application(
         repository,
         company="Locked Application Co",

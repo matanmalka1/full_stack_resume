@@ -22,8 +22,15 @@ ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
 
 
+def _get_snapshot(transaction_manager, application_projection_reader, application_id, snapshot_id):
+    """Fetch one snapshot by id (no single-snapshot Port method exists)."""
+    with transaction_manager.read() as tx:
+        snapshots = application_projection_reader.snapshots(tx, application_id)
+    return next(snapshot for snapshot in snapshots if snapshot["id"] == snapshot_id)
+
+
 def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings(
-    services,
+    services, transaction_manager, application_projection_reader
 ) -> None:
     original = services.applications.ingest(
         IngestCommand(
@@ -36,7 +43,8 @@ def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings
     )
     snapshots = services.paths.artifacts_root / "snapshots"
     files_before = sorted(snapshots.rglob("*.txt"))
-    applications_before = services.repository.list_applications()
+    with transaction_manager.read() as tx:
+        applications_before = application_projection_reader.applications(tx)
     command = IngestCommand(
         company=" duplicate  co ",
         target_role="DEVELOPER",
@@ -60,7 +68,8 @@ def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings
     else:
         raise AssertionError("unacknowledged duplicates must be refused")
 
-    assert services.repository.list_applications() == applications_before
+    with transaction_manager.read() as tx:
+        assert application_projection_reader.applications(tx) == applications_before
     assert sorted(snapshots.rglob("*.txt")) == files_before
 
     created = services.applications.ingest(
@@ -72,19 +81,29 @@ def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings
         "DUPLICATE_COMPANY_TITLE",
     ]
     assert created.duplicate_matches[0].application_id == original.application_id
-    creation_event = services.repository.recruitment_events(created.application_id)[0]
+    with transaction_manager.read() as tx:
+        creation_event = application_projection_reader.recruitment_events(
+            tx, created.application_id
+        )[0]
     assert creation_event["actor_type"] == "user"
     assert creation_event["client"] == "web"
 
 
-def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(services) -> None:
+def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(
+    services, transaction_manager, application_projection_reader
+) -> None:
     initial_text = "Initial line\n"
     created = services.applications.ingest(
         IngestCommand(
             company="Snapshot Co", target_role="Developer", job_text=initial_text, client="web"
         )
     )
-    initial = services.repository.get_snapshot(created.job_snapshot_id)
+    initial = _get_snapshot(
+        transaction_manager,
+        application_projection_reader,
+        created.application_id,
+        created.job_snapshot_id,
+    )
     replacement_text = "Replacement line one\r\nReplacement line two\n"
 
     replacement = services.applications.create_job_snapshot(
@@ -98,8 +117,18 @@ def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(serv
         )
     )
 
-    historical = services.repository.get_snapshot(created.job_snapshot_id)
-    latest = services.repository.get_snapshot(replacement.job_snapshot_id)
+    historical = _get_snapshot(
+        transaction_manager,
+        application_projection_reader,
+        created.application_id,
+        created.job_snapshot_id,
+    )
+    latest = _get_snapshot(
+        transaction_manager,
+        application_projection_reader,
+        created.application_id,
+        replacement.job_snapshot_id,
+    )
     assert historical == initial
     assert (
         services.payloads.read_snapshot(historical["payload_path"], historical["source_hash"])
@@ -113,7 +142,8 @@ def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(serv
     detail = services.queries.application_detail(created.application_id)
     assert detail.latest_snapshot.id == replacement.job_snapshot_id
     assert detail.latest_snapshot.job_text == replacement_text
-    audit = services.repository.audit_records(created.application_id)
+    with transaction_manager.read() as tx:
+        audit = application_projection_reader.audit_records(tx, created.application_id)
     assert len(audit) == 1
     assert audit[0]["action"] == "create_job_snapshot"
     assert audit[0]["entity_type"] == "job_snapshot"
@@ -124,7 +154,10 @@ def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(serv
 
 
 def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
-    services, monkeypatch: pytest.MonkeyPatch
+    services,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     created = services.applications.ingest(
         IngestCommand(
@@ -147,12 +180,20 @@ def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
             )
         )
 
-    assert services.repository.latest_snapshot(created.application_id)["version_number"] == 1
-    assert services.repository.audit_records(created.application_id) == []
+    with transaction_manager.read() as tx:
+        assert (
+            application_projection_reader.latest_snapshot(tx, created.application_id)[
+                "version_number"
+            ]
+            == 1
+        )
+        assert application_projection_reader.audit_records(tx, created.application_id) == []
     assert len(list(snapshots.iterdir())) == len(files_before) + 1
 
 
-def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(services) -> None:
+def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(
+    services, transaction_manager, application_projection_reader
+) -> None:
     created = services.applications.ingest(
         IngestCommand(
             company="Repeat Co", target_role="Developer", job_text="Exact text", client="web"
@@ -175,10 +216,18 @@ def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(serv
         raise AssertionError("the immutable per-application content identity must be preserved")
 
     assert sorted(snapshots.iterdir()) == files_before
-    assert services.repository.latest_snapshot(created.application_id)["version_number"] == 1
+    with transaction_manager.read() as tx:
+        assert (
+            application_projection_reader.latest_snapshot(tx, created.application_id)[
+                "version_number"
+            ]
+            == 1
+        )
 
 
-def test_application_http_create_read_snapshot_and_close_sequence(services) -> None:
+def test_application_http_create_read_snapshot_and_close_sequence(
+    services, transaction_manager, application_projection_reader
+) -> None:
     with TestClient(create_app(build_api_services(services))) as api:
         created = api.post(
             f"{API_PREFIX}/applications",
@@ -219,7 +268,8 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         assert api.get(f"{API_PREFIX}/applications/{application_id}").json()["application"][
             "notes"
         ] == ("Recruiter referred me")
-        notes_audit = services.repository.audit_records(application_id)[-1]
+        with transaction_manager.read() as tx:
+            notes_audit = application_projection_reader.audit_records(tx, application_id)[-1]
         assert notes_audit["action"] == "update_application_notes"
         assert notes_audit["details_json"] == '{"field":"notes"}'
 
@@ -233,7 +283,8 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         )
         assert replacement.status_code == 201
         replacement_id = replacement.json()["job_snapshot_id"]
-        snapshot_audit = services.repository.audit_records(application_id)
+        with transaction_manager.read() as tx:
+            snapshot_audit = application_projection_reader.audit_records(tx, application_id)
         assert snapshot_audit[-1]["action"] == "create_job_snapshot"
         assert snapshot_audit[-1]["actor_type"] == "user"
         assert snapshot_audit[-1]["client"] == "web"
@@ -267,7 +318,8 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
         assert still_reachable.status_code == 200
         assert still_reachable.json()["application"]["deleted_at"] is not None
 
-        delete_audit = services.repository.audit_records(application_id)[-1]
+        with transaction_manager.read() as tx:
+            delete_audit = application_projection_reader.audit_records(tx, application_id)[-1]
         assert delete_audit["action"] == "delete_application"
 
         # Idempotency: deleting an already-deleted Application is refused (409),
@@ -278,7 +330,11 @@ def test_application_http_create_read_snapshot_and_close_sequence(services) -> N
             headers=MUTATION_HEADERS,
         )
         assert redeleted.status_code == 409
-        assert services.repository.audit_records(application_id)[-1]["id"] == delete_audit["id"]
+        with transaction_manager.read() as tx:
+            assert (
+                application_projection_reader.audit_records(tx, application_id)[-1]["id"]
+                == delete_audit["id"]
+            )
 
         # A duplicate application for the same posting is no longer flagged
         # against a deleted Application.
@@ -471,6 +527,8 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(service
 
 def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_content(
     services,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
     first = services.applications.ingest(
         IngestCommand(
@@ -495,7 +553,8 @@ def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_con
                 client="web",
             )
         )
-        records_before = services.repository.job_snapshots(first.application_id)
+        with transaction_manager.read() as tx:
+            records_before = application_projection_reader.snapshots(tx, first.application_id)
         history = api.get(path).json()
         assert history["active_job_snapshot_id"] == second.job_snapshot_id
         assert [item["id"] for item in history["items"]] == [
@@ -512,7 +571,10 @@ def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_con
             "https://jobs.example/second",
         ]
         assert "payload_path" not in history["items"][0]
-        assert services.repository.job_snapshots(first.application_id) == records_before
+        with transaction_manager.read() as tx:
+            assert (
+                application_projection_reader.snapshots(tx, first.application_id) == records_before
+            )
         assert api.get(f"{API_PREFIX}/applications/unknown/job-snapshots").status_code == 404
         # Corrupt only the isolated fixture's historical payload: never trust or
         # reconstruct it from a live posting, and keep the other version readable.
