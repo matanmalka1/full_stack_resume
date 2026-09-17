@@ -1,27 +1,23 @@
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any
 
 from sqlalchemy import func, insert, select, update
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Connection
 
 from ...application.errors import (
     LineageBroken,
-    PreconditionFailed,
     StateConflict,
     UnknownRecord,
 )
 from ...application.operations import MATCHING_CONTEXT_OPERATION_TYPES
-from ...application.ports import UnitOfWork
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.selection import (
     SelectionManifest,
     SelectionPlan,
 )
 from ...util import canonical_json, new_id, utc_now
-from .applications import SqlAlchemyApplicationRepository
-from .base import SqlAlchemyRepositoryBase, sqlalchemy_unit_of_work
-from .connection import SqlAlchemyUnitOfWork
+from .base import SqlAlchemyRepositoryBase
 from .tables import applications, job_analyses, job_snapshots, operations, selection_plans
 
 
@@ -32,137 +28,6 @@ def _snapshot_record(row: Any) -> dict[str, Any]:
 
 
 class SqlAlchemyPreparationRepository(SqlAlchemyRepositoryBase):
-    def __init__(
-        self,
-        engine: Engine,
-        connection: Connection | None = None,
-        applications: SqlAlchemyApplicationRepository | None = None,
-    ):
-        super().__init__(engine, connection)
-        self.applications = applications or SqlAlchemyApplicationRepository(engine, connection)
-
-    def bind(self, uow: UnitOfWork) -> Self:
-        sqlalchemy_uow = sqlalchemy_unit_of_work(uow)
-        if sqlalchemy_uow.connection is None:
-            raise RuntimeError("UnitOfWork is not active")
-        if sqlalchemy_uow.engine is not self.engine:
-            raise ValueError("UnitOfWork belongs to another database")
-        return type(self)(
-            self.engine,
-            sqlalchemy_uow.connection,
-            self.applications.bind(uow),
-        )
-
-    def create_application(
-        self,
-        *,
-        company: str,
-        target_role: str,
-        payload_path: str,
-        source_hash: str,
-        normalized_hash: str,
-        source_url: str | None = None,
-        source: str = "manual",
-        notes: str = "",
-        application_id: str | None = None,
-        snapshot_id: str | None = None,
-        captured_at: str | None = None,
-        source_metadata: dict[str, Any] | None = None,
-        actor_type: str = "user",
-        client: str,
-    ) -> tuple[str, str]:
-        if not company.strip() or not target_role.strip():
-            raise PreconditionFailed("company and target role are required")
-        if not payload_path or not source_hash or not normalized_hash:
-            raise PreconditionFailed("snapshot payload path and hashes are required")
-        app_id = application_id or new_id()
-        snap_id = snapshot_id or new_id()
-        now = captured_at or utc_now()
-
-        if self._bound_connection is None:
-            with SqlAlchemyUnitOfWork(self.engine) as uow:
-                bound = self.bind(uow)
-                bound._create_application_records(
-                    app_id,
-                    snap_id,
-                    company,
-                    target_role,
-                    payload_path,
-                    source_hash,
-                    normalized_hash,
-                    source_url,
-                    source,
-                    notes,
-                    now,
-                    source_metadata,
-                    actor_type,
-                    client,
-                )
-                uow.commit()
-        else:
-            self._create_application_records(
-                app_id,
-                snap_id,
-                company,
-                target_role,
-                payload_path,
-                source_hash,
-                normalized_hash,
-                source_url,
-                source,
-                notes,
-                now,
-                source_metadata,
-                actor_type,
-                client,
-            )
-        return app_id, snap_id
-
-    def _create_application_records(
-        self,
-        app_id: str,
-        snap_id: str,
-        company: str,
-        target_role: str,
-        payload_path: str,
-        source_hash: str,
-        normalized_hash: str,
-        source_url: str | None,
-        source: str,
-        notes: str,
-        now: str,
-        source_metadata: dict[str, Any] | None,
-        actor_type: str,
-        client: str,
-    ) -> None:
-        self.applications._insert_application(
-            application_id=app_id,
-            company=company,
-            target_role=target_role,
-            source_url=source_url,
-            notes=notes,
-            source=source,
-            created_at=now,
-            actor_type=actor_type,
-            client=client,
-        )
-        with self.transaction() as connection:
-            connection.execute(
-                insert(job_snapshots).values(
-                    id=snap_id,
-                    application_id=app_id,
-                    version_number=1,
-                    payload_path=payload_path,
-                    source_hash=source_hash,
-                    normalized_hash=normalized_hash,
-                    source_url=source_url,
-                    captured_at=now,
-                    source_metadata_json=source_metadata or {},
-                    content_hash=source_hash,
-                    prior_snapshot_id=None,
-                )
-            )
-
     def add_job_snapshot(
         self,
         application_id: str,

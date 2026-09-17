@@ -501,7 +501,6 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     """
     exempt = {
         "base.py:UnitOfWork belongs to another database",
-        "preparation.py:UnitOfWork belongs to another database",
         "operations.py:lease_seconds must be positive",
     }
     offenders: list[str] = []

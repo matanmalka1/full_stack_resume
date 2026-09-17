@@ -8,25 +8,62 @@ from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
 from cv_engine.domain.models import ApplicationStatus, AuditRecord
-from cv_engine.infrastructure.persistence import current_database_revision
+from cv_engine.infrastructure.persistence import (
+    SqlAlchemyTransactionManager,
+    current_database_revision,
+)
+from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from cv_engine.infrastructure.persistence.recruitment_store import (
+    SqlAlchemyInitialRecruitmentEventWriter,
+)
 from cv_engine.infrastructure.persistence.tables import (
     applications,
     job_snapshots,
     recruitment_events,
 )
-from cv_engine.util import normalized_text, sha256_text
+from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 
 
 def _create(repo, *, company: str, target_role: str, text: str):
     digest = sha256_text(text)
-    return repo.create_application(
-        company=company,
-        target_role=target_role,
-        payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
-        source_hash=digest,
-        normalized_hash=sha256_text(normalized_text(text)),
-        client="web",
-    )
+    application_id = new_id()
+    snapshot_id = new_id()
+    created_at = utc_now()
+    transactions = SqlAlchemyTransactionManager(repo.engine)
+    application_store = SqlAlchemyApplicationStore(transactions)
+    snapshots = SqlAlchemyJobSnapshotStore(transactions)
+    recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
+    with transactions.write() as tx:
+        application_store.insert_application(
+            tx,
+            application_id=application_id,
+            company=company,
+            target_role=target_role,
+            source_url=None,
+            notes="",
+            source="manual",
+            created_at=created_at,
+        )
+        snapshots.insert_initial_snapshot(
+            tx,
+            snapshot_id=snapshot_id,
+            application_id=application_id,
+            payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
+            source_hash=digest,
+            normalized_hash=sha256_text(normalized_text(text)),
+            source_url=None,
+            source_metadata={},
+            captured_at=created_at,
+        )
+        recruitment.insert_initial_saved_event(
+            tx,
+            application_id=application_id,
+            actor_type="user",
+            client="web",
+            occurred_at=created_at,
+        )
+    return application_id, snapshot_id
 
 
 def test_recruitment_event_and_transition_contract(application_repo) -> None:

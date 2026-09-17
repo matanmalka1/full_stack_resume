@@ -54,21 +54,6 @@ class UnitOfWork(Protocol):
 class ApplicationStore(Protocol):
     """Applications themselves: identity, status, and tracking fields."""
 
-    def create_application(
-        self,
-        *,
-        company: str,
-        target_role: str,
-        payload_path: str,
-        source_hash: str,
-        normalized_hash: str,
-        source_url: str | None,
-        application_id: str | None = None,
-        snapshot_id: str | None = None,
-        actor_type: str = ...,
-        client: str,
-    ) -> tuple[str, str]: ...
-
     def get_application(self, application_id: str) -> dict[str, Any]: ...
 
     def list_applications(self, *, include_deleted: bool = False) -> list[dict[str, Any]]: ...

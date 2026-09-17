@@ -37,9 +37,8 @@ class Repository(
         self,
         engine: Engine,
         connection: Connection | None = None,
-        applications: SqlAlchemyApplicationRepository | None = None,
     ):
-        super().__init__(engine, connection, applications)
+        super().__init__(engine, connection)
 
     def unit_of_work(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.engine)

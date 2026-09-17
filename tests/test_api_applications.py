@@ -15,7 +15,7 @@ from cv_engine.application.errors import (
     InfrastructureFailure,
     StateConflict,
 )
-from cv_engine.infrastructure.persistence.audit import SqlAlchemyAuditRepository
+from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
 from cv_engine.runtime.composition import build_api_services
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
@@ -134,10 +134,10 @@ def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
     snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
     files_before = sorted(snapshots.iterdir())
 
-    def refuse_audit(_repository, _record) -> None:
+    def refuse_audit(_repository, _tx, _record) -> None:
         raise InfrastructureFailure("injected audit failure")
 
-    monkeypatch.setattr(SqlAlchemyAuditRepository, "insert_audit", refuse_audit)
+    monkeypatch.setattr(SqlAlchemyAuditLog, "insert_audit", refuse_audit)
     with pytest.raises(InfrastructureFailure, match="injected audit failure"):
         services.applications.create_job_snapshot(
             CreateJobSnapshotCommand(

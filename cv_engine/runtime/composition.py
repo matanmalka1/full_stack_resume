@@ -43,8 +43,15 @@ from ..infrastructure.operation_logging import OperationFailureLogger
 from ..infrastructure.payloads import PayloadStore
 from ..infrastructure.persistence import (
     Repository,
+    SqlAlchemyTransactionManager,
     create_database_engine,
     current_database_revision,
+)
+from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
+from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from ..infrastructure.persistence.recruitment_store import (
+    SqlAlchemyInitialRecruitmentEventWriter,
 )
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
@@ -151,6 +158,14 @@ def build_services(
         schema_version = (
             current_database_revision(repository_engine) if repository_engine is not None else None
         ) or ""
+        if repository_engine is None:
+            raise TypeError("temporary repository substitution must expose its SQLAlchemy engine")
+        engine = repository_engine
+    transactions = SqlAlchemyTransactionManager(engine)
+    intake_applications = SqlAlchemyApplicationStore(transactions)
+    intake_snapshots = SqlAlchemyJobSnapshotStore(transactions)
+    intake_recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
+    intake_audit = SqlAlchemyAuditLog(transactions)
     resolved_knowledge = knowledge or FileKnowledge(
         paths.knowledge_root,
         project_root=paths.root,
@@ -225,7 +240,14 @@ def build_services(
         artifacts=resolved_artifacts,
         payloads=resolved_payloads,
         unit_of_work=resolved_repository.unit_of_work,
-        applications=ApplicationService(**shared),
+        applications=ApplicationService(
+            transactions=transactions,
+            applications=intake_applications,
+            snapshots=intake_snapshots,
+            recruitment=intake_recruitment,
+            audit=intake_audit,
+            payloads=resolved_payloads,
+        ),
         queries=ApplicationQueryService(**shared),
         analysis=analysis_service,
         drafts=draft_service,

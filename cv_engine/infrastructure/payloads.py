@@ -19,6 +19,7 @@ from ..application.ports import (
     RevisionPayloads,
     SnapshotPayload,
 )
+from ..application.transactions import assert_external_io_allowed
 from ..util import sha256_bytes
 from .object_store import (
     LocalObjectStore,
@@ -256,6 +257,7 @@ class PayloadStore:
         the return value is the same storage-neutral `SnapshotPayload` that
         every other commit produces.
         """
+        assert_external_io_allowed("render output ingestion")
         rendered = Path(path)
         key = self._key_for_render_location(rendered)
         try:
@@ -379,6 +381,7 @@ class PayloadStore:
         the window between the old `exists()` check and the `os.rename` that
         followed it.
         """
+        assert_external_io_allowed("immutable payload write")
         key = self._key(destination)
         if validate(payload) is False:
             raise ValueError(f"payload validation failed: {destination}")

@@ -28,10 +28,14 @@ from ..errors import (
     StateConflict,
     UnknownRecord,
 )
-from ..ports import (
-    PreparationRepository,
+from ..ports import SnapshotPayloadStore
+from ..ports.application_intake import (
+    AuditLogWriter,
+    InitialRecruitmentEventWriter,
+    IntakeApplicationStore,
+    JobSnapshotStore,
 )
-from .base import ServiceBase
+from ..ports.transactions import TransactionManager
 
 JOB_TEXT_MAX_BYTES = 1024 * 1024
 _LABEL_MAX_CHARACTERS = 500
@@ -48,8 +52,25 @@ _MATCH_ORDER: tuple[DuplicateMatchReason, ...] = (
 )
 
 
-class ApplicationService(ServiceBase[PreparationRepository]):
+class ApplicationService:
     """Creating an application and its immutable job snapshot."""
+
+    def __init__(
+        self,
+        *,
+        transactions: TransactionManager,
+        applications: IntakeApplicationStore,
+        snapshots: JobSnapshotStore,
+        recruitment: InitialRecruitmentEventWriter,
+        audit: AuditLogWriter,
+        payloads: SnapshotPayloadStore,
+    ):
+        self._transactions = transactions
+        self._applications = applications
+        self._snapshots = snapshots
+        self._recruitment = recruitment
+        self._audit = audit
+        self._payloads = payloads
 
     def duplicate_check(self, command: DuplicateCheckCommand) -> DuplicateCheckResult:
         _validate_intake(command.company, command.target_role, command.job_text, command.source_url)
@@ -57,7 +78,9 @@ class ApplicationService(ServiceBase[PreparationRepository]):
         company_key = normalized_text(command.company)
         title_key = normalized_text(command.target_role)
         by_application: dict[str, dict] = {}
-        for row in self.repo.duplicate_application_inputs():
+        with self._transactions.read() as tx:
+            stored_inputs = self._snapshots.duplicate_application_inputs(tx)
+        for row in stored_inputs:
             matched_on = set()
             if command.source_url is not None and row["source_url"] == command.source_url:
                 matched_on.add("source_url")
@@ -110,23 +133,41 @@ class ApplicationService(ServiceBase[PreparationRepository]):
         try:
             application_id = new_id()
             snapshot_id = new_id()
-            payload = self.snapshot_payloads.commit_snapshot(
+            payload = self._payloads.commit_snapshot(
                 application_id,
                 snapshot_id,
                 command.job_text,
             )
-            application_id, snapshot_id = self.repo.create_application(
-                company=command.company,
-                target_role=command.target_role,
-                payload_path=payload.reference,
-                source_hash=payload.sha256,
-                normalized_hash=sha256_text(normalized_text(command.job_text)),
-                source_url=command.source_url,
-                application_id=application_id,
-                snapshot_id=snapshot_id,
-                actor_type=command.actor_type,
-                client=command.client,
-            )
+            now = utc_now()
+            with self._transactions.write() as tx:
+                self._applications.insert_application(
+                    tx,
+                    application_id=application_id,
+                    company=command.company,
+                    target_role=command.target_role,
+                    source_url=command.source_url,
+                    notes="",
+                    source="manual",
+                    created_at=now,
+                )
+                self._snapshots.insert_initial_snapshot(
+                    tx,
+                    snapshot_id=snapshot_id,
+                    application_id=application_id,
+                    payload_path=payload.reference,
+                    source_hash=payload.sha256,
+                    normalized_hash=sha256_text(normalized_text(command.job_text)),
+                    source_url=command.source_url,
+                    source_metadata={},
+                    captured_at=now,
+                )
+                self._recruitment.insert_initial_saved_event(
+                    tx,
+                    application_id=application_id,
+                    actor_type=command.actor_type,
+                    client=command.client,
+                    occurred_at=now,
+                )
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc
         except OSError as exc:
@@ -141,41 +182,58 @@ class ApplicationService(ServiceBase[PreparationRepository]):
     def create_job_snapshot(self, command: CreateJobSnapshotCommand) -> CreatedJobSnapshot:
         _validate_job_text(command.job_text)
         _validate_source_url(command.source_url)
-        try:
-            self.repo.get_application(command.application_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown application: {command.application_id}") from exc
         source_hash = sha256_text(command.job_text)
-        if self.repo.snapshot_for_content_hash(command.application_id, source_hash) is not None:
-            raise StateConflict("the application already has a snapshot with this exact content")
         snapshot_id = new_id()
         normalized_hash = sha256_text(normalized_text(command.job_text))
         now = utc_now()
         try:
-            payload = self.snapshot_payloads.commit_snapshot(
+            with self._transactions.read() as tx:
+                try:
+                    self._applications.get_application(tx, command.application_id)
+                except UnknownRecord as exc:
+                    raise UnknownRecord(f"unknown application: {command.application_id}") from exc
+                duplicate = self._snapshots.snapshot_for_content_hash(
+                    tx, command.application_id, source_hash
+                )
+            if duplicate is not None:
+                raise StateConflict(
+                    "the application already has a snapshot with this exact content"
+                )
+            payload = self._payloads.commit_snapshot(
                 command.application_id,
                 snapshot_id,
                 command.job_text,
             )
-            with self.repo.unit_of_work() as uow:
-                transaction = self.repo.bind(uow)
-                created_id = transaction.add_job_snapshot(
-                    command.application_id,
-                    payload.reference,
-                    payload.sha256,
-                    normalized_hash,
+            with self._transactions.write() as tx:
+                self._applications.get_application(tx, command.application_id)
+                if (
+                    self._snapshots.snapshot_for_content_hash(
+                        tx, command.application_id, source_hash
+                    )
+                    is not None
+                ):
+                    raise StateConflict(
+                        "the application already has a snapshot with this exact content"
+                    )
+                self._snapshots.insert_next_snapshot(
+                    tx,
+                    snapshot_id=snapshot_id,
+                    application_id=command.application_id,
+                    payload_path=payload.reference,
+                    source_hash=payload.sha256,
+                    normalized_hash=normalized_hash,
                     source_url=command.source_url,
                     source_metadata=command.source_metadata,
-                    snapshot_id=snapshot_id,
                     captured_at=now,
                 )
-                transaction.insert_audit(
+                self._audit.insert_audit(
+                    tx,
                     AuditRecord(
                         id=new_id(),
                         application_id=command.application_id,
                         action="create_job_snapshot",
                         entity_type="job_snapshot",
-                        entity_id=created_id,
+                        entity_id=snapshot_id,
                         actor_type=command.actor_type,
                         client=command.client,
                         occurred_at=now,
@@ -184,29 +242,29 @@ class ApplicationService(ServiceBase[PreparationRepository]):
                             "normalized_hash": normalized_hash,
                             "source_url": command.source_url,
                         },
-                    )
+                    ),
                 )
-                uow.commit()
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc
         except OSError as exc:
             raise InfrastructureFailure(f"could not create job snapshot: {exc}") from exc
         return CreatedJobSnapshot(
             application_id=command.application_id,
-            job_snapshot_id=created_id,
+            job_snapshot_id=snapshot_id,
         )
 
     def update_notes(self, command: UpdateApplicationNotesCommand) -> UpdatedApplicationNotes:
         now = utc_now()
-        with self.repo.unit_of_work() as uow:
-            transaction = self.repo.bind(uow)
-            updated = transaction.update_application_notes(
+        with self._transactions.write() as tx:
+            updated = self._applications.update_application_notes(
+                tx,
                 command.application_id,
                 command.notes,
                 command.expected_notes,
                 updated_at=now,
             )
-            transaction.insert_audit(
+            self._audit.insert_audit(
+                tx,
                 AuditRecord(
                     id=new_id(),
                     application_id=command.application_id,
@@ -217,9 +275,8 @@ class ApplicationService(ServiceBase[PreparationRepository]):
                     client=command.client,
                     occurred_at=now,
                     details={"field": "notes"},
-                )
+                ),
             )
-            uow.commit()
         return UpdatedApplicationNotes(
             application_id=command.application_id,
             notes=updated["notes"],

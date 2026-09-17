@@ -22,8 +22,13 @@ from cv_engine.domain.models import (
     ValidationRunLineage,
     WorkingDraft,
 )
-from cv_engine.infrastructure.persistence import Repository
+from cv_engine.infrastructure.persistence import Repository, SqlAlchemyTransactionManager
+from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.preparation import SqlAlchemyPreparationRepository
+from cv_engine.infrastructure.persistence.recruitment_store import (
+    SqlAlchemyInitialRecruitmentEventWriter,
+)
 from cv_engine.infrastructure.persistence.tables import (
     app_settings,
     applications,
@@ -33,7 +38,7 @@ from cv_engine.infrastructure.persistence.tables import (
     selection_plans,
     working_drafts,
 )
-from cv_engine.util import normalized_text, sha256_text
+from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 
 # Immutability is the default, so nothing has to be registered when an immutable
 # table is added. A table is exempt only by being named here, which means that
@@ -59,16 +64,60 @@ DELETE_ONLY_TABLES = frozenset(
 IMMUTABLE_MESSAGE = "immutable record"
 
 
-def _create_application(repository, *, company: str, target_role: str, text: str):
+def _create_application(
+    repository,
+    *,
+    company: str,
+    target_role: str,
+    text: str,
+    transactions=None,
+    tx=None,
+):
     digest = sha256_text(text)
-    return repository.create_application(
-        company=company,
-        target_role=target_role,
-        payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
-        source_hash=digest,
-        normalized_hash=sha256_text(normalized_text(text)),
-        client="web",
-    )
+    application_id = new_id()
+    snapshot_id = new_id()
+    created_at = utc_now()
+    transactions = transactions or SqlAlchemyTransactionManager(repository.engine)
+    application_store = SqlAlchemyApplicationStore(transactions)
+    snapshots = SqlAlchemyJobSnapshotStore(transactions)
+    recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
+
+    def insert_records(transaction) -> None:
+        application_store.insert_application(
+            transaction,
+            application_id=application_id,
+            company=company,
+            target_role=target_role,
+            source_url=None,
+            notes="",
+            source="manual",
+            created_at=created_at,
+        )
+        snapshots.insert_initial_snapshot(
+            transaction,
+            snapshot_id=snapshot_id,
+            application_id=application_id,
+            payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
+            source_hash=digest,
+            normalized_hash=sha256_text(normalized_text(text)),
+            source_url=None,
+            source_metadata={},
+            captured_at=created_at,
+        )
+        recruitment.insert_initial_saved_event(
+            transaction,
+            application_id=application_id,
+            actor_type="user",
+            client="web",
+            occurred_at=created_at,
+        )
+
+    if tx is None:
+        with transactions.write() as transaction:
+            insert_records(transaction)
+    else:
+        insert_records(tx)
+    return application_id, snapshot_id
 
 
 def _save_analysis(repository, application_id: str, snapshot_id: str, analysis):
@@ -206,7 +255,7 @@ def test_app_settings_updates_are_optimistic_and_atomic(application_repo, monkey
     assert Repository(application_repo.engine).app_settings() == second
 
 
-def test_connection_policy_unit_of_work_bind_and_foreign_keys(application_repo) -> None:
+def test_connection_policy_transaction_scope_and_foreign_keys(application_repo) -> None:
     repository = application_repo
     with pytest.raises(IntegrityError, match="ForeignKeyViolation"):
         with repository.transaction() as connection:
@@ -224,19 +273,29 @@ def test_connection_policy_unit_of_work_bind_and_foreign_keys(application_repo) 
                 )
             )
 
-    with repository.unit_of_work() as uow:
-        bound = repository.bind(uow)
+    transactions = SqlAlchemyTransactionManager(repository.engine)
+    with transactions.write() as tx:
         app_id, _ = _create_application(
-            bound, company="Committed", target_role="Developer", text="Python"
+            repository,
+            company="Committed",
+            target_role="Developer",
+            text="Python",
+            transactions=transactions,
+            tx=tx,
         )
-        uow.commit()
     assert repository.get_application(app_id)["company"] == "Committed"
 
-    with repository.unit_of_work() as uow:
-        bound = repository.bind(uow)
-        rolled_back_id, _ = _create_application(
-            bound, company="Rolled Back", target_role="Developer", text="Python"
-        )
+    with pytest.raises(RuntimeError, match="force rollback"):
+        with transactions.write() as tx:
+            rolled_back_id, _ = _create_application(
+                repository,
+                company="Rolled Back",
+                target_role="Developer",
+                text="Python",
+                transactions=transactions,
+                tx=tx,
+            )
+            raise RuntimeError("force rollback")
     with pytest.raises(UnknownRecord):
         repository.get_application(rolled_back_id)
 
@@ -453,13 +512,11 @@ def test_immutability_triggers_refuse_real_repository_writes(application_repo) -
     the conditions production actually runs in.
     """
     repository = application_repo
-    repository.create_application(
+    _create_application(
+        repository,
         company="Immutable Co",
         target_role="Account Manager",
-        payload_path="artifacts/snapshots/app/snapshot.txt",
-        source_hash="s" * 64,
-        normalized_hash="n" * 64,
-        client="web",
+        text="immutable application source",
     )
     application_id = repository.list_applications()[0]["id"]
     repository.insert_submission(

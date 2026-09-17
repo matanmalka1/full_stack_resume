@@ -11,6 +11,12 @@ Re-exported here so importers name one place, as they did when this was a
 single 789-line module.
 """
 
+from .application_intake import (
+    AuditLogWriter,
+    InitialRecruitmentEventWriter,
+    IntakeApplicationStore,
+    JobSnapshotStore,
+)
 from .composed_knowledge import KnowledgeAuditRepository
 from .composed_prep import DraftRepository, PreparationRepository, ReadinessRepository
 from .composed_shared import ApplicationRepository, QueryRepository
@@ -39,6 +45,7 @@ from .repositories import (
     UnitOfWork,
     WorkingDraftReader,
 )
+from .transactions import ReadTransaction, TransactionManager, WriteTransaction
 from .values import (
     ArtifactStream,
     DraftPaths,
@@ -54,6 +61,7 @@ __all__ = [
     "AIProposal",
     "AnalysisContext",
     "AIProvider",
+    "AuditLogWriter",
     "ApplicationRepository",
     "ApplicationStore",
     "ArtifactRegistry",
@@ -67,6 +75,9 @@ __all__ = [
     "KnowledgeAuditRepository",
     "KnowledgeMutationRepository",
     "KnowledgeStore",
+    "InitialRecruitmentEventWriter",
+    "IntakeApplicationStore",
+    "JobSnapshotStore",
     "OperationRepository",
     "PreparationRepository",
     "QueryRepository",
@@ -75,6 +86,7 @@ __all__ = [
     "RegenerateSectionContext",
     "RenderTargets",
     "Renderer",
+    "ReadTransaction",
     "RevisionPayloadStore",
     "RevisionPayloads",
     "SelectionPlanContext",
@@ -84,6 +96,8 @@ __all__ = [
     "TaskContract",
     "TaskContracts",
     "TrackingRepository",
+    "TransactionManager",
     "UnitOfWork",
     "WorkingDraftReader",
+    "WriteTransaction",
 ]
