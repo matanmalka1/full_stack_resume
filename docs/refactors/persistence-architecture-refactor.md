@@ -5,11 +5,11 @@
 ## Current status
 
 ```text
-Current phase: Phase 4 — Draft lifecycle and evidence (DONE; implementation not yet committed)
+Current phase: Phase 5 — Rendering, Ready, recruitment, and submission (NOT STARTED)
 Last completed phase: Phase 4 — Draft lifecycle and evidence
-Next action: review and approve the Phase 4 implementation commit; Phase 5 remains unstarted
+Next action: begin Phase 5 in a fresh session from the verified Phase 4 commit
 Known blockers: None; approval replay correction authorized (Decision Log below)
-Last verified commit: 247dd6f20c5512f312e4da918464c3c7df9f813c — refactor(persistence): migrate analysis and selection lifecycle
+Last verified commit: 08f69ee2cc13c3e329b0b47d2c40e2e031e4deed — refactor(persistence): migrate draft lifecycle and evidence
 ```
 
 ## 1. Final goal
@@ -577,8 +577,8 @@ validation, and decision ownership.
 
 ### Handoff notes
 
-Phase 4 implementation is complete in the worktree and all user-run boundary gates passed;
-the phase is **DONE** but not yet committed. Phase 5 has not started. Recovery began from
+Phase 4 implementation is complete and all user-run boundary gates passed; the phase is **DONE**
+in commit `08f69ee2cc13c3e329b0b47d2c40e2e031e4deed`. Phase 5 has not started. Recovery began from
 `67b36e6d0f9f041585b76857618732846e532421`; the verified Phase 3 implementation and its
 evidence remain unchanged.
 
@@ -675,13 +675,12 @@ and Ruff check passed. The format check found only the corrected conditional ass
 Ruff format check over the diff.
 
 Final boundary result (user-run): Ruff format check passed with 58 files already formatted. All
-Phase 4 gates are now green, so Phase 4 is DONE. No implementation commit has been created; Phase 5
-remains NOT STARTED.
+Phase 4 gates are green, and the implementation was committed as `08f69ee`. Phase 5 remains
+NOT STARTED.
 
-The final implementation spans 62 paths (`git diff HEAD --stat`: 4,711 insertions and 2,481
-deletions). The implementation paths are staged and this final status-document update is unstaged;
-no commit was created. Use `git diff HEAD` for boundary-file derivation so both index and worktree
-changes are included. `git diff --check` is clean; HEAD remains `67b36e6`.
+The final implementation commit spans 62 paths: 4,711 insertions and 2,481 deletions. Its pre-commit
+index and worktree checks were clean. The follow-up status update records the implementation hash
+without amending that commit.
 
 User-reported focused iteration result: **12 passed in 23.51s**. This evidence covers
 the approval contract correction at this iteration, not the unfinished Phase 4 migration.
