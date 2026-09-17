@@ -37,3 +37,16 @@ Excluded via `componentSrcMap: {"QueryState": null}` in config and from `tsconfi
 ## ErrorCallout
 Imports `type { ProblemDetails }` from `@/api/client` — only a type import.
 Handled by stub. Keep in sync.
+
+## Fonts — self-hosted Heebo
+Claude Design runs sandboxed with no CDN access. Heebo is loaded via Google Fonts in
+`frontend/index.html`, so it's absent from the Vite CSS output.
+
+Fix applied: downloaded 3 subsets (hebrew, latin-ext, latin) to `ds-bundle/fonts/` and
+created `ds-bundle/fonts/heebo.css` with `@font-face` ranges 300–800 pointing to local files.
+`ds-bundle/styles.css` prepends `@import "./fonts/heebo.css"`.
+
+**After a full rebuild** (`buildCmd` → re-copy `.ds-styles.css`), the styles.css in ds-bundle
+is regenerated and the font import is lost. Re-add it manually before upload:
+  `sed -i '' '1s/^/@import ".\/fonts\/heebo.css";\n/' ds-bundle/styles.css`
+or automate by extending `buildCmd`.

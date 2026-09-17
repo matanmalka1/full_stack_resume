@@ -9,5 +9,5 @@
   "runtimeFontPrefixes": ["Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew"],
   "componentSrcMap": {"QueryState": null},
   "overrides": {"Dialog": {"cardMode": "single", "primaryStory": "OpenState"}},
-  "buildCmd": "cd frontend && npm run build && cp $(ls dist/assets/*.css | head -1) .ds-styles.css"
+  "buildCmd": "cd frontend && npx vite build && CSS=$(ls dist/assets/*.css | head -1) && { printf '@import \"./fonts/heebo.css\";\\n'; cat \"$CSS\"; } > .ds-styles.css"
 }
