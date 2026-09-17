@@ -1,0 +1,13 @@
+{
+  "projectId": "1f93d94a-ca99-486f-8954-d3885540a632",
+  "shape": "package",
+  "pkg": "cv-application-frontend",
+  "globalName": "cvUI",
+  "srcDir": "src/ui",
+  "cssEntry": ".ds-styles.css",
+  "tsconfig": "tsconfig.app.json",
+  "runtimeFontPrefixes": ["Heebo", "Assistant", "Rubik", "Arial Hebrew", "Noto Sans Hebrew"],
+  "componentSrcMap": {"QueryState": null},
+  "overrides": {"Dialog": {"cardMode": "single", "primaryStory": "OpenState"}},
+  "buildCmd": "cd frontend && npm run build && cp $(ls dist/assets/*.css | head -1) .ds-styles.css"
+}
