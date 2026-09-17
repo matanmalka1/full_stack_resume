@@ -20,6 +20,23 @@ different checkout. `uv` installs third-party packages from its global cache usi
 copy-on-write clones on macOS, avoiding another physical copy of Playwright's 115 MB
 Node driver and the other shared dependencies.
 
+The bootstrap also installs the locked frontend dependencies and creates `.env` from
+`.env.example` when no local configuration exists. It never replaces an existing
+`.env`.
+
+PostgreSQL lifecycle and schema upgrades stay explicit. For the first run, start the
+local database and apply the current migrations before starting the application:
+
+```bash
+docker compose up -d postgres
+./.venv/bin/alembic upgrade head
+./scripts/dev.sh
+```
+
+Multiple worktrees may share the same PostgreSQL server, but worktrees that run in
+parallel should use separate databases through `CV_DATABASE_URL`; they do not need
+separate PostgreSQL servers.
+
 PDF generation uses Playwright-managed Chromium. Playwright's normal macOS browser
 cache is shared at `~/Library/Caches/ms-playwright`; the bootstrap refuses
 `PLAYWRIGHT_BROWSERS_PATH=0`, which would instead duplicate browser binaries inside
@@ -149,6 +166,15 @@ artifact preserves token usage, the dated pricing snapshot, and its calculated U
 Two ways to run it, for two different jobs.
 
 **Developing the frontend** — no build step:
+
+```bash
+./scripts/dev.sh
+```
+
+The script starts the API, queued-work worker, and Vite frontend together. Open
+`http://localhost:5173`; `Ctrl+C` gracefully stops all three process groups, including
+the Uvicorn reload and Vite child processes. It is equivalent to running these commands
+in separate terminals:
 
 ```bash
 export CV_API_DEV_ORIGIN=http://localhost:5173

@@ -10,6 +10,11 @@ if ! command -v uv >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required to install the frontend dependencies" >&2
+    exit 1
+fi
+
 if [ -e .venv ]; then
     echo "refusing to replace existing worktree environment: $repo_root/.venv" >&2
     exit 1
@@ -24,5 +29,11 @@ bootstrap_python=${CV_BOOTSTRAP_PYTHON:-$(command -v python3)}
 uv venv --python "$bootstrap_python" .venv
 uv pip install --python .venv/bin/python -e '.[test]'
 ./.venv/bin/python -m playwright install chromium
+npm ci --prefix frontend
+
+if [ ! -e .env ]; then
+    cp .env.example .env
+    echo "created local configuration: $repo_root/.env"
+fi
 
 echo "worktree environment ready: $repo_root/.venv"
