@@ -133,7 +133,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "fact_id": "development.phdigital.nextjs",
       "meaning": "Built a customer marketing site with Next.js App Router, React Server Components, TypeScript, Tailwind CSS, RTL Hebrew, Sentry, and Vitest.",
       "renderings": {
-        "en": "Built a customer-facing site with Next.js App Router, React Server Components, TypeScript, Tailwind CSS, RTL Hebrew, Sentry, and Vitest."
+        "en": "Built a customer-facing site with Next.js App Router, React Server Components, TypeScript, Tailwind CSS, RTL Hebrew, Sentry, and Vitest.",
+        "he": "בניית אתר שיווקי ללקוחות באמצעות Next.js App Router, React Server Components, TypeScript, Tailwind CSS, תמיכה בעברית RTL, Sentry ו-Vitest."
       },
       "tags": [
         "development",
@@ -174,7 +175,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "fact_id": "development.phdigital.agile",
       "meaning": "Delivered features in Agile sprints with frontend and product teams.",
       "renderings": {
-        "en": "Delivered features in Agile sprints, collaborating with frontend and product teams."
+        "en": "Delivered features in Agile sprints, collaborating with frontend and product teams.",
+        "he": "פיתוח פיצ'רים במסגרת ספרינטים Agile, תוך שיתוף פעולה עם צוותי frontend ומוצר."
       },
       "tags": [
         "development",
@@ -299,7 +301,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "fact_id": "development.project.mami",
       "meaning": "Personal Mami Supermarket project is a full-stack grocery platform using Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind, JWT, Alembic, and Pydantic.",
       "renderings": {
-        "en": "Mami Supermarket: full-stack grocery delivery and operations platform built with Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic, and Pydantic."
+        "en": "Mami Supermarket: full-stack grocery delivery and operations platform built with Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic, and Pydantic.",
+        "he": "Mami Supermarket: פלטפורמת full-stack למשלוחי מכולת וניהול תפעול, שנבנתה עם Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic ו-Pydantic."
       },
       "tags": [
         "development",
@@ -319,7 +322,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "fact_id": "development.project.bar_exam",
       "meaning": "Personal Bar Exam Practice App uses FastAPI, PostgreSQL, SQLAlchemy, Alembic, Pydantic, JWT, slowapi, Sentry, PDF parsing, React, TypeScript, React Query, Zod, Tailwind, and pytest.",
       "renderings": {
-        "en": "Bar Exam Practice App: FastAPI/PostgreSQL backend and React/TypeScript frontend with authentication, migrations, rate limiting, monitoring, PDF ingestion, and pytest coverage."
+        "en": "Bar Exam Practice App: FastAPI/PostgreSQL backend and React/TypeScript frontend with authentication, migrations, rate limiting, monitoring, PDF ingestion, and pytest coverage.",
+        "he": "Bar Exam Practice App: backend מבוסס FastAPI/PostgreSQL ו-frontend מבוסס React/TypeScript, כולל אימות משתמשים, מיגרציות, הגבלת קצב בקשות, ניטור, קליטת PDF וכיסוי בדיקות pytest."
       },
       "tags": [
         "development",
@@ -339,7 +343,8 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
       "fact_id": "development.project.gd",
       "meaning": "Freelance G.D Financial Services responsive marketing site used React, Vite, Tailwind CSS, Radix UI, React Hook Form, and Zod.",
       "renderings": {
-        "en": "G.D Financial Services: responsive freelance marketing site built with React, Vite, Tailwind CSS, Radix UI, React Hook Form, and Zod."
+        "en": "G.D Financial Services: responsive freelance marketing site built with React, Vite, Tailwind CSS, Radix UI, React Hook Form, and Zod.",
+        "he": "G.D Financial Services: אתר שיווקי responsive בעבודה עצמאית, שנבנה עם React, Vite, Tailwind CSS, Radix UI, React Hook Form ו-Zod."
       },
       "tags": [
         "development",
