@@ -7,9 +7,9 @@
 ```text
 Current phase: Phase 3 — Analysis and selection lifecycle (DONE)
 Last completed phase: Phase 3 — Analysis and selection lifecycle
-Next action: Phase 3 closeout commit when explicitly requested; Phase 4 not started
+Next action: new session for Phases 4–5; neither phase started
 Known blockers: None
-Last verified commit: Phase 1–2 closeout commit (see git log; working-tree evidence recorded below)
+Last verified commit: 247dd6f20c5512f312e4da918464c3c7df9f813c — refactor(persistence): migrate analysis and selection lifecycle
 ```
 
 ## 1. Final goal
@@ -440,7 +440,8 @@ or repository casts.
 
 Initial worktree was clean at `24d80de627f35bb47e9c49b8a47c6d110742540c`.
 Phase 3 verification, including the requested closeout cleanup, has passed. Product/type/architecture gates were run by the user;
-Ruff gates were run by the agent only after the user explicitly requested them. No commit has been created.
+Ruff gates were run by the agent only after the user explicitly requested them.
+Phase 3 and cleanup are committed as `247dd6f20c5512f312e4da918464c3c7df9f813c`.
 
 User-reported verification checkpoint:
 
@@ -511,11 +512,13 @@ imports, Ports, helper references and migrated transaction paths. No architectur
   entry point and token plan entry point intentionally coexist and share SQL; future-phase historical readers
   also coexist with minimal token projections. No duplicate migrated write implementation remains for the
   removed capabilities. Legacy operation lifecycle and token activation methods coexist until Phase 6.
-- User-staged Phase 3 files were left staged; cleanup edits remain unstaged. No commit or Phase 4 work.
+- Cleanup was initially left unstaged. At user-authorized closeout, it was staged with the rest of Phase 3
+  and included in the single implementation commit above. No Phase 4 work was performed.
 
 User-reported cleanup results: focused tests **100 passed**; Pyright **0 errors, 0 warnings**;
 architecture **17 passed**; Ruff check **passed**; format check **7 files already formatted**.
-All cleanup gates passed. No commit has been created and Phase 4 remains NOT STARTED.
+All cleanup gates passed. The verified code and cleanup are in the Phase 3 implementation commit above;
+Phase 4 remains NOT STARTED. A documentation-only follow-up records its hash without amending that commit.
 
 Focused cleanup gates (user-run, completed):
 
