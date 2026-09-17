@@ -33,7 +33,9 @@ from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     AnalysisOperationHandler,
     DraftOperationHandler,
-    OperationService,
+    OperationLifecycleService,
+    OperationReplacementService,
+    OperationSubmissionService,
     RegenerationOperationHandler,
     RenderOperationHandler,
     SelectionPlanOperationHandler,
@@ -77,7 +79,8 @@ from ..infrastructure.persistence.draft_validation_sources import (
 from ..infrastructure.persistence.idempotency import SqlAlchemyIdempotencyRepository
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
-from ..infrastructure.persistence.operation_activation import SqlAlchemyOperationActivationStore
+from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
+from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
 from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
 from ..infrastructure.persistence.ready_evidence import SqlAlchemyReadyEvidenceReader
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
@@ -86,6 +89,7 @@ from ..infrastructure.persistence.recruitment_store import (
 )
 from ..infrastructure.persistence.render_context import SqlAlchemyRenderContextReader
 from ..infrastructure.persistence.selection_drafts import SqlAlchemySelectionDraftStore
+from ..infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from ..infrastructure.persistence.submission_context import SqlAlchemySubmissionContextReader
 from ..infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from ..infrastructure.providers import OpenAIProvider
@@ -131,7 +135,9 @@ class Services:
     submission: SubmissionService
     maintenance: MaintenanceService
     knowledge_lifecycle: KnowledgeService
-    operations: OperationService
+    operation_submissions: OperationSubmissionService
+    operation_lifecycle: OperationLifecycleService
+    operation_replacements: OperationReplacementService
     operation_runner: OperationRunner
     operation_worker: OperationWorker
     settings: SettingsService
@@ -240,7 +246,8 @@ def build_services(
     analysis_plans = SqlAlchemyAnalysisPlanRepository(transactions)
     analysis_sources = SqlAlchemyAnalysisSelectionSourceReader(transactions)
     evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
-    activation_store = SqlAlchemyOperationActivationStore(transactions)
+    operation_client = SqlAlchemyOperationClientStore(transactions)
+    operation_execution = SqlAlchemyOperationExecutionStore(transactions)
     # Activation probes recovery state through the runner token. This file-only
     # reader must not invoke the legacy recovery callback and open another DB scope.
     resolved_activation_knowledge = (
@@ -273,10 +280,19 @@ def build_services(
         payloads=resolved_payloads,
         applications=SqlAlchemyDraftHistoryApplicationReader(transactions),
     )
-    operation_service = OperationService(
-        draft_history=draft_history,
-        **shared,
+    operation_submissions = OperationSubmissionService(
+        transactions=transactions,
+        operations=operation_client,
+        settings=SqlAlchemySettingsStore(transactions),
         default_ai_model=str(resolved_config.get("model")),
+    )
+    operation_lifecycle = OperationLifecycleService(transactions, operation_client)
+    operation_replacements = OperationReplacementService(
+        transactions=transactions,
+        operations=operation_client,
+        receipts=SqlAlchemyIdempotencyRepository(transactions),
+        submissions=operation_submissions,
+        draft_history=draft_history,
     )
     draft_validations = SqlAlchemyValidationRepository(transactions)
     draft_receipts = SqlAlchemyIdempotencyRepository(transactions)
@@ -341,9 +357,7 @@ def build_services(
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
     draft_operation_sources = SqlAlchemyDraftOperationSourceReader(transactions)
     runner = OperationRunner(
-        resolved_repository,
-        {},
-        transaction_handlers={
+        {
             OperationType.RENDER_REVISION: RenderOperationHandler(
                 rendering_service, SqlAlchemyRenderContextReader(transactions)
             ),
@@ -381,13 +395,13 @@ def build_services(
             ),
         },
         transactions=transactions,
-        activation_store=activation_store,
+        execution_store=operation_execution,
         runner_id=f"local-{new_id()}",
         technical_logger=failure_logger.record,
         operation_failure_logger=failure_logger.record_operation_failure,
         operation_event_logger=failure_logger.record_event,
     )
-    worker = OperationWorker(resolved_repository, runner)
+    worker = OperationWorker(runner, request_cancellation=operation_lifecycle.cancel)
     knowledge_service = KnowledgeService(**shared)
     knowledge_service.recover_knowledge_mutations()
     maintenance_service = MaintenanceService(
@@ -429,7 +443,9 @@ def build_services(
         submission=submission_service,
         maintenance=maintenance_service,
         knowledge_lifecycle=knowledge_service,
-        operations=operation_service,
+        operation_submissions=operation_submissions,
+        operation_lifecycle=operation_lifecycle,
+        operation_replacements=operation_replacements,
         operation_runner=runner,
         operation_worker=worker,
         settings=settings_service,
@@ -469,7 +485,9 @@ def build_api_services(
         submission=services.submission,
         knowledge=services.knowledge_lifecycle,
         maintenance=services.maintenance,
-        operations=services.operations,
+        operation_submissions=services.operation_submissions,
+        operation_lifecycle=services.operation_lifecycle,
+        operation_replacements=services.operation_replacements,
         settings=services.settings,
         identity=InstanceIdentity(
             product_version=__version__,

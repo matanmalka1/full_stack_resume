@@ -7,21 +7,19 @@ from typing import Any, Protocol, Self
 
 from ...domain.contracts.drafts import WorkingDraft
 from ...domain.contracts.records import ApprovedRevision
+from ..operations import OperationView
 from ..settings import SettingsRepository
 from .composed_knowledge import KnowledgeAuditRepository
 from .repositories import (
     ApplicationStore,
     ArtifactRegistry,
     JobStore,
-    OperationRepository,
     UnitOfWork,
     WorkingDraftReader,
 )
 
 
-class QueryRepository(
-    ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, OperationRepository, Protocol
-):
+class QueryRepository(ApplicationStore, JobStore, ArtifactRegistry, WorkingDraftReader, Protocol):
     """Read sources used to build storage-neutral query projections."""
 
     def read_transaction(self) -> AbstractContextManager[Self]: ...
@@ -40,11 +38,16 @@ class QueryRepository(
 
     def audit_records(self, application_id: str) -> list[dict[str, Any]]: ...
 
+    def active_operation(self, application_id: str) -> OperationView | None: ...
+
+    def latest_operation(self, application_id: str) -> OperationView | None: ...
+
+    def has_active_matching_context_operation(self, application_id: str) -> bool: ...
+
 
 class ApplicationRepository(
     QueryRepository,
     KnowledgeAuditRepository,
-    OperationRepository,
     SettingsRepository,
     Protocol,
 ):

@@ -501,7 +501,7 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     """
     exempt = {
         "base.py:UnitOfWork belongs to another database",
-        "operations.py:lease_seconds must be positive",
+        "operation_execution.py:lease_seconds must be positive",
     }
     offenders: list[str] = []
     seen: set[str] = set()
@@ -793,7 +793,7 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
     )
 
 
-def test_the_activation_unit_of_work_locks_before_it_reads() -> None:
+def test_the_activation_transaction_locks_before_it_reads() -> None:
     """The runner's snapshot has to begin where the lock does.
 
     A unit of work runs at REPEATABLE READ, so its first statement fixes its
@@ -810,38 +810,20 @@ def test_the_activation_unit_of_work_locks_before_it_reads() -> None:
     source = (
         Path(__file__).resolve().parents[1] / "cv_engine" / "application" / "operation_runner.py"
     ).read_text(encoding="utf-8")
-    blocks = [
+    activation = next(
         node
         for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.With)
-        and "unit_of_work()" in (ast.get_source_segment(source, node) or "")
-    ]
-    assert blocks, "the activation unit of work was not found; fix this guard"
-    for block in blocks:
-        names = [
-            getattr(inner.func, "attr", None) or getattr(inner.func, "id", None)
-            for statement in block.body
-            for inner in ast.walk(statement)
-            if isinstance(inner, ast.Call)
-        ]
-        taken = names.index("lock_application") if "lock_application" in names else None
-        assert taken is not None, "the activation unit of work never takes the Application lock"
-        assert taken == 0 or names[:taken] == ["bind"], (
-            "the activation unit of work reads before it locks, so its snapshot is fixed "
-            f"before the lock: {names[: taken + 1]}"
-        )
-
-    migrated = next(
-        node
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.FunctionDef) and node.name == "_activate_transactional"
+        if isinstance(node, ast.FunctionDef) and node.name == "_activate"
     )
-    scopes = [node for node in ast.walk(migrated) if isinstance(node, ast.With)]
+    scopes = [node for node in ast.walk(activation) if isinstance(node, ast.With)]
     assert len(scopes) == 1
-    first = scopes[0].body[0]
-    assert isinstance(first, ast.Expr) and isinstance(first.value, ast.Call)
-    assert isinstance(first.value.func, ast.Attribute)
-    assert first.value.func.attr == "lock_application"
+    calls = [
+        inner.func.attr
+        for statement in scopes[0].body
+        for inner in ast.walk(statement)
+        if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)
+    ]
+    assert calls and calls[0] == "lock_application", calls
 
 
 # Deliberate remaining exceptions, removed when their owning slice migrates.
@@ -852,7 +834,6 @@ LEGACY_PERSISTENCE_ADAPTERS = {
     "SqlAlchemyAuditRepository",
     "SqlAlchemyDraftRepository",
     "SqlAlchemyKnowledgeMutationRepository",
-    "SqlAlchemyOperationRepository",
     "SqlAlchemyPreparationRepository",
     "SqlAlchemySettingsRepository",
 }
@@ -959,6 +940,9 @@ def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
         "AnalysisService",
         "SelectionChangeService",
         "OperationRunner",
+        "OperationSubmissionService",
+        "OperationLifecycleService",
+        "OperationReplacementService",
         "DraftValidationService",
         "DraftHistoryService",
         "DraftApprovalService",
@@ -1056,3 +1040,99 @@ def test_phase5_services_have_no_root_repository_casts_or_legacy_scopes() -> Non
             and node.func.attr in {"read", "write", "bind", "unit_of_work"}
             for node in ast.walk(gateway)
         )
+
+
+def test_operation_lifecycle_and_execution_use_only_token_persistence() -> None:
+    application = ENGINE / "application"
+    services = application / "services" / "operations"
+    migrated = [
+        services / "service.py",
+        services / "lifecycle.py",
+        services / "replacement.py",
+        services / "handlers.py",
+        application / "operation_runner.py",
+    ]
+    for path in migrated:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        assert "OperationRepository" not in source and "ServiceBase" not in source, path
+        assert not any(
+            isinstance(node, ast.Call)
+            and (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "cast"
+                or isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"bind", "unit_of_work"}
+            )
+            for node in ast.walk(tree)
+        ), path
+
+    runner_source = (application / "operation_runner.py").read_text(encoding="utf-8")
+    runner_tree = ast.parse(runner_source)
+    assert "OperationRunnerRepository" not in runner_source
+    assert "transaction_handlers" not in runner_source
+    assert "execution_store" in runner_source
+    for scope in (node for node in ast.walk(runner_tree) if isinstance(node, ast.With)):
+        body = ast.get_source_segment(runner_source, scope) or ""
+        if "self.transactions." in body:
+            assert "handler.execute(" not in body
+            assert "verify_external_sources(" not in body
+
+    handlers = ast.parse((services / "handlers.py").read_text(encoding="utf-8"))
+    for node in ast.walk(handlers):
+        if not isinstance(node, ast.ClassDef) or not node.name.endswith("OperationHandler"):
+            continue
+        body = ast.unparse(node)
+        assert "TransactionManager" not in body
+        assert not any(
+            isinstance(inner, ast.Call)
+            and isinstance(inner.func, ast.Attribute)
+            and inner.func.attr in {"read", "write", "bind", "unit_of_work"}
+            for inner in ast.walk(node)
+        ), node.name
+
+    routers = ENGINE / "api" / "routers"
+    for path in routers.glob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        assert ".transactions." not in source, path
+        assert "unit_of_work" not in source and ".bind(" not in source, path
+
+    production = [*(ENGINE / "application").rglob("*.py"), *(ENGINE / "runtime").rglob("*.py")]
+    forbidden = {
+        "OperationService",
+        "OperationRunnerRepository",
+        "OperationActivationStore",
+        "SqlAlchemyOperationActivationStore",
+    }
+    for path in production:
+        source = path.read_text(encoding="utf-8")
+        assert not (forbidden & set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", source))), path
+
+
+def test_remaining_operation_projection_is_restricted_to_phase8_reads() -> None:
+    persistence = ENGINE / "infrastructure" / "persistence"
+    path = persistence / "operation_projection.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    projection = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SqlAlchemyOperationProjection"
+    )
+    methods = {
+        node.name
+        for node in projection.body
+        if isinstance(node, ast.FunctionDef) and node.name != "__init__"
+    }
+    assert methods == {
+        "active_operation",
+        "latest_operation",
+        "has_active_matching_context_operation",
+    }
+    consumers = []
+    for candidate in ENGINE.rglob("*.py"):
+        if candidate == path:
+            continue
+        source = candidate.read_text(encoding="utf-8")
+        if "SqlAlchemyOperationProjection" in source:
+            consumers.append(candidate.relative_to(ENGINE).as_posix())
+    assert consumers == ["infrastructure/persistence/repository.py"]

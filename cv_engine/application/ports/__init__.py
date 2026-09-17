@@ -20,6 +20,8 @@ from .application_intake import (
 from .composed_knowledge import KnowledgeAuditRepository
 from .composed_prep import DraftRepository
 from .composed_shared import ApplicationRepository, QueryRepository
+from .operation_client import OperationClientStore
+from .operation_execution import OperationExecutionStore
 from .outbound import (
     AIProposal,
     AIProvider,
@@ -40,10 +42,10 @@ from .repositories import (
     FactAudit,
     JobStore,
     KnowledgeMutationRepository,
-    OperationRepository,
     UnitOfWork,
     WorkingDraftReader,
 )
+from .settings import SettingsStore
 from .transactions import ReadTransaction, TransactionManager, WriteTransaction
 from .values import (
     ArtifactStream,
@@ -77,7 +79,8 @@ __all__ = [
     "InitialRecruitmentEventWriter",
     "IntakeApplicationStore",
     "JobSnapshotStore",
-    "OperationRepository",
+    "OperationClientStore",
+    "OperationExecutionStore",
     "QueryRepository",
     "RegenerateClaimContext",
     "RegenerateSectionContext",
@@ -87,6 +90,7 @@ __all__ = [
     "RevisionPayloadStore",
     "RevisionPayloads",
     "SelectionPlanContext",
+    "SettingsStore",
     "SnapshotPayload",
     "SnapshotPayloadStore",
     "StoredDraft",

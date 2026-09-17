@@ -101,7 +101,9 @@ class AITaskHandler:
     def prepared(self, value: Any) -> PreparedOperation:
         return PreparedOperation(value=value, outputs=self.evidence_outputs(value))
 
-    def _preserve_rejected(self, operation: PersistedOperation, error: ApplicationError) -> None:
+    def _preserve_rejected(
+        self, operation: PersistedOperation, error: ApplicationError
+    ) -> tuple[OperationOutputReference, ...]:
         """Record a refused provider answer as inactive immutable evidence.
 
         Two shapes arrive here. A `ProposalRejected` carries evidence that
@@ -123,15 +125,17 @@ class AITaskHandler:
         completed = getattr(error, "completed_evidence", ())
         evidence = getattr(error, "evidence", None)
         provenance = getattr(error, "provenance", None)
+        outputs = [
+            OperationOutputReference(
+                output_type="provider_response", output_id=item.artifact_version_id, active=False
+            )
+            for item in completed
+        ]
         try:
-            for item in completed:
-                self.service.repo.record_operation_output(
-                    operation.id, "provider_response", item.artifact_version_id, active=False
-                )
             if evidence is not None and any(
                 item.artifact_version_id == evidence.artifact_version_id for item in completed
             ):
-                return
+                return tuple(outputs)
             if evidence is not None:
                 artifact_version_id = evidence.artifact_version_id
             elif provenance is not None:
@@ -139,22 +143,22 @@ class AITaskHandler:
                     operation.application_id, operation.id, provenance.task, provenance
                 ).artifact_version_id
             else:
-                return
-            self.service.repo.record_operation_output(
-                operation.id,
-                "provider_response",
-                artifact_version_id,
-                active=False,
+                return tuple(outputs)
+            outputs.append(
+                OperationOutputReference(
+                    output_type="provider_response", output_id=artifact_version_id, active=False
+                )
             )
         except ApplicationError:
-            return
+            pass
+        return tuple(outputs)
 
     def _classified(
         self, operation: PersistedOperation, error: ApplicationError
     ) -> OperationExecutionError:
         code = failure_code_for(error)
-        self._preserve_rejected(operation, error)
-        return OperationExecutionError(code, safe_failure_detail_for(error))
+        outputs = self._preserve_rejected(operation, error)
+        return OperationExecutionError(code, safe_failure_detail_for(error), outputs=outputs)
 
 
 class RegisteredEvidenceTaskHandler(AITaskHandler):
@@ -166,18 +170,28 @@ class RegisteredEvidenceTaskHandler(AITaskHandler):
     def load_knowledge(self):
         return load_analysis_knowledge(self.knowledge)
 
-    def _preserve_rejected(self, operation: PersistedOperation, error: ApplicationError) -> None:
+    def _preserve_rejected(
+        self, operation: PersistedOperation, error: ApplicationError
+    ) -> tuple[OperationOutputReference, ...]:
         # Completed evidence already includes its durable inactive output registration.
         if getattr(error, "evidence", None) is not None or getattr(error, "completed_evidence", ()):
-            return
+            return ()
         provenance = getattr(error, "provenance", None)
         if provenance is not None:
             try:
-                self.service.preserve(
+                evidence = self.service.preserve(
                     operation.application_id, operation.id, provenance.task, provenance
                 )
+                return (
+                    OperationOutputReference(
+                        output_type="provider_response",
+                        output_id=evidence.artifact_version_id,
+                        active=False,
+                    ),
+                )
             except ApplicationError:
-                return
+                return ()
+        return ()
 
 
 class AnalysisTaskHandler(RegisteredEvidenceTaskHandler):

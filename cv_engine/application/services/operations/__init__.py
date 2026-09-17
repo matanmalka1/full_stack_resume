@@ -1,10 +1,4 @@
-"""Durable Operations: the handlers that run one, and the service that records it.
-
-`OperationService` and the six handlers are the whole public surface, and the
-composition root imports them from here. The split behind it is by
-collaborator: a new Operation type touches `handlers` alone, an idempotency or
-submission change touches `service` alone.
-"""
+"""Durable Operation submission, lifecycle, replacement, and execution handlers."""
 
 from __future__ import annotations
 
@@ -18,14 +12,18 @@ from .handlers import (
     RenderOperationHandler,
     SelectionPlanOperationHandler,
 )
-from .service import OperationService
+from .lifecycle import OperationLifecycleService
+from .replacement import OperationReplacementService
+from .service import OperationSubmissionService
 
 __all__ = [
     "FAILURE_CODE_BY_ERROR",
     "AITaskHandler",
     "AnalysisOperationHandler",
     "DraftOperationHandler",
-    "OperationService",
+    "OperationLifecycleService",
+    "OperationReplacementService",
+    "OperationSubmissionService",
     "RegenerationOperationHandler",
     "RenderOperationHandler",
     "SelectionPlanOperationHandler",

@@ -229,7 +229,7 @@ def regenerate_section(
     left exactly as it was, and continuing deterministically is
     `apply-selection-change`, which the user issues themselves.
     """
-    queued = services.operations.submit_regeneration(
+    queued = services.operation_submissions.submit_regeneration(
         RegenerateSectionCommand(
             working_draft_id=working_draft_id,
             **request.model_dump(mode="python"),
@@ -259,7 +259,7 @@ def regenerate_claim(
     facts and nothing else, so a proposal cannot reach for a fact this line was
     never built from.
     """
-    queued = services.operations.submit_regeneration(
+    queued = services.operation_submissions.submit_regeneration(
         RegenerateClaimCommand(
             working_draft_id=working_draft_id,
             **request.model_dump(mode="python"),

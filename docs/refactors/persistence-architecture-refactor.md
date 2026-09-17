@@ -5,11 +5,11 @@
 ## Current status
 
 ```text
-Current phase: Phase 6 — Operation submission, lifecycle, and replacement (NOT STARTED)
-Last completed phase: Phase 5 — Rendering, Ready, recruitment, and submission
-Next action: start Phase 6 in a new session from the Phase 5 implementation commit
+Current phase: Phase 8 — Projections and test migration (NOT STARTED)
+Last completed phase: Phase 7 — Worker and handlers
+Next action: start Phase 8 in a new session
 Known blockers: None; approval replay correction authorized (Decision Log below)
-Last verified boundary: Phase 5 — all required gates passed; implementation commit is the current history tip
+Last verified boundary: combined Phase 6+7 — all required gates passed; implementation commit pending
 ```
 
 ## 1. Final goal
@@ -715,7 +715,7 @@ Phase 5 helper/import remains.
 
 ## Phase 6 — Operation submission, lifecycle, and replacement
 
-Status: NOT STARTED
+Status: DONE
 
 ### Goal
 
@@ -744,20 +744,61 @@ Split the old Operation service and isolate generic idempotency from durable Ope
 
 ### Verification
 
-- [ ] focused tests
-- [ ] typecheck
-- [ ] architecture checks
-- [ ] no forbidden imports
-- [ ] no old consumers remain
-- [ ] replacement crash-window coverage
+- [x] focused tests
+- [x] typecheck
+- [x] architecture checks
+- [x] no forbidden imports
+- [x] no old consumers remain
+- [x] replacement crash-window coverage
 
 ### Handoff notes
 
-None yet.
+Implementation, cleanup, and combined verification are complete.
+
+- `OperationSubmissionService`, `OperationLifecycleService`, and
+  `OperationReplacementService` now own explicit token scopes over a stateless
+  `OperationClientStore`; the old `OperationService` façade is removed.
+- Submission freezes source identities outside the enqueue transaction, then rechecks and locks
+  the Application while replaying or creating the immutable queued Operation. Operation-row
+  uniqueness remains the atomic generic submission idempotency record, including lost-response
+  replay and changed-payload refusal.
+- Replacement uses the token `IdempotencyStore`: reserve/replay precedes Keep, immutable Keep
+  payload work runs outside a database scope, and enqueue visibility follows successful Keep.
+  Pending-receipt recovery distinguishes failure before Keep, after Keep, and after enqueue.
+- API containers and routers expose the three cohesive surfaces without opening scopes or
+  changing HTTP status, body, or Operation `Location` behavior.
+- The root Operation command/retry/cancellation/idempotency methods and broad
+  `OperationRepository` Port are removed. Tests now use the client, execution, and receipt token
+  capabilities for Phase 6+7 behavior.
+- The runner integration boundary receives queued immutable Operations from the submission
+  service and owns every execution scope described in the Phase 7 handoff.
+- Final passing evidence: combined Operation/API coverage (147 passed), full backend coverage,
+  architecture and old-consumer guards, Pyright, Ruff lint/format, and the fresh PostgreSQL
+  pipeline with `OPENAI_API_KEY` unset all passed.
+
+### Combined Phase 6+7 initial consumer map (before implementation)
+
+| Consumer | Existing persistence/external boundaries and migration ownership |
+| --- | --- |
+| asynchronous API submitters in `applications.py`, `analyses.py`, `working_drafts.py`, and `approved_revisions.py` | `OperationService` freezes sources through migrated domain services, then writes through the root `OperationRepository`; Phase 6 moves reservation/replay and enqueue into service-owned token scopes without changing `202`/`Location` behavior |
+| `api/routers/operations.py` | client-visible get, queued/running cancellation, and immutable retry currently share the broad Operation service/repository; Phase 6 moves them to `OperationLifecycleService` and `OperationClientStore` |
+| WorkingDraft replacement submitter | one broad method owns idempotency reservation, Keep/archive, and replacement enqueue; Phase 6 preserves durable keep-before-visibility and crash-window replay while separating external payload work from short database scopes |
+| `OperationRunner` | mixes direct root-repository calls with a legacy `unit_of_work()`/`bind()` activation path and the newer token activation path; Phase 7 makes the runner the sole owner of claim, execution, and activation scopes |
+| six Operation handlers | all are already registered on the transactional handler path, but the compatibility handler contract and persistence arguments remain; Phase 7 leaves handlers with source readers/activators and transaction tokens only |
+| `OperationWorker` and foreground executor | claim/recovery/cancellation currently call `OperationRepository` directly; Phase 7 moves them to the execution Port while preserving API/worker process separation |
+| `SqlAlchemyOperationRepository` and Operation SQL | one bound concrete adapter serves client, runner, idempotency, and activation capabilities; Phases 6+7 retain shared private connection-level SQL but expose independent stateless token capabilities |
+| composition and public service containers | `Services`/`ApiServices` expose one `OperationService`, while runner/worker receive the root repository; the primary integration step wires three cohesive services and the independent Operation adapter without exposing scopes to routers |
+| root repository and composed Ports | Operation inheritance is the remaining Phase 6+7 reason they include Operation methods; post-migration cleanup removes those members while retaining only demonstrated Phase 8 query and Phase 9 Knowledge consumers |
+| tests and architecture guards | operation/API/foreground fixtures still use the root repository and legacy runner shape; migrate only Phase 6+7 behavior here, while Phase 8 retains unrelated root-backed query/assertion fixtures |
+
+The shared composition root, Port/export modules, architecture guards, and final legacy deletion are
+primary-agent integration ownership. Phase 6 owns client application/API persistence; Phase 7 owns
+runner/handler/worker persistence. Neither sub-slice may delete shared legacy before this combined map
+is re-checked after both consumer migrations.
 
 ## Phase 7 — Worker and handlers
 
-Status: NOT STARTED
+Status: DONE
 
 ### Goal
 
@@ -785,17 +826,42 @@ methods.
 
 ### Verification
 
-- [ ] focused tests
-- [ ] typecheck
-- [ ] architecture checks
-- [ ] no forbidden imports
-- [ ] no old consumers remain
-- [ ] handlers/activators cannot open transactions
-- [ ] no external execution in activation transaction
+- [x] focused tests
+- [x] typecheck
+- [x] architecture checks
+- [x] no forbidden imports
+- [x] no old consumers remain
+- [x] handlers/activators cannot open transactions
+- [x] no external execution in activation transaction
 
 ### Handoff notes
 
-None yet.
+Implementation, cleanup, and combined verification are complete.
+
+- `OperationRunner` now depends only on `TransactionManager`, `OperationExecutionStore`, and the
+  handler registry. Claims, recovery, heartbeat, phases, attempts, cancellation observation,
+  inactive outputs, failure, and completion all use short runner-owned token scopes.
+- External source checks and provider/browser/filesystem execution remain outside database
+  transactions. Activation is one short transaction ordered as Application lock, Operation/lease
+  reload, persisted-source recheck, cancellation recheck, activation, output activation, and
+  terminal completion. Post-commit projection and structured filesystem logging remain outside.
+- Every registered handler uses one token contract for persisted source checks and activation;
+  handlers and activators receive no transaction manager and open no scopes. Rejected provider
+  evidence is returned to the runner for durable inactive registration rather than written through
+  a persistence cast.
+- Worker claim/recovery and foreground execution now delegate to the runner. The API process still
+  creates Operations only; the worker remains the separate execution host.
+- Removed `OperationRunnerRepository`, legacy/transactional handler bifurcation, runner
+  `unit_of_work()`/`bind()`, `OperationActivationStore`, `SqlAlchemyOperationActivationStore`, the
+  broad `SqlAlchemyOperationRepository`, and their obsolete Ports/imports.
+- Remaining legacy is limited to demonstrated future consumers: `SqlAlchemyOperationProjection`
+  supplies `active_operation`, `latest_operation`, and
+  `has_active_matching_context_operation` to `ApplicationQueryService` for Phase 8; the root
+  repository/UoW/bind path otherwise remains only for Phase 8 projections and Phase 9 Knowledge
+  mutation/recovery. No Phase 6+7 service, runner, handler, worker, or focused test consumes it.
+- Final passing evidence: claim/lease/heartbeat and foreground/worker race coverage, the combined
+  Operation/API suite, full backend coverage, architecture and transaction-scope guards, Pyright,
+  Ruff lint/format, and the fresh PostgreSQL pipeline all passed.
 
 ## Phase 8 — Projections and test migration
 

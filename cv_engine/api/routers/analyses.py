@@ -112,7 +112,7 @@ def create_selection_plan(
                 "emphasis_override is a deterministic-mode decision; submit it through "
                 "the deterministic mode instead"
             )
-        queued = services.operations.submit_selection_plan_proposal(
+        queued = services.operation_submissions.submit_selection_plan_proposal(
             ProposeSelectionPlanCommand(
                 job_analysis_id=analysis_id,
                 expected_selection_plan_id=overlay["expected_selection_plan_id"],

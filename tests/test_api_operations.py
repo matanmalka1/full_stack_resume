@@ -28,7 +28,7 @@ def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-
             client="web",
         )
     )
-    return services.operations.submit_analysis(
+    return services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
@@ -66,7 +66,7 @@ def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(services) ->
 
 def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(services) -> None:
     operation = _queued_analysis(services, "Retry Co")
-    original_record = services.repository.operation(operation.id)
+    original_record = services.operation_runner.operation(operation.id)
 
     with TestClient(create_app(build_api_services(services))) as api:
         api.post(f"{API_PREFIX}/operations/{operation.id}/cancel", headers=MUTATION_HEADERS)
@@ -85,8 +85,8 @@ def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(service
     assert retried.json()["available_actions"] == ["cancel"]
     assert followed.status_code == 200
     assert followed.json() == retried.json()
-    assert services.repository.operation(operation.id).status.value == "cancelled"
-    assert services.repository.operation(operation.id).payload == original_record.payload
+    assert services.operation_lifecycle.get(operation.id).status.value == "cancelled"
+    assert services.operation_runner.operation(operation.id).payload == original_record.payload
 
 
 def test_retry_replaying_a_used_idempotency_key_returns_the_same_operation(services) -> None:
@@ -127,13 +127,16 @@ def test_retrying_work_that_is_not_terminal_is_a_conflict(services) -> None:
 
 def test_source_changed_operation_withholds_and_refuses_retry(services) -> None:
     operation = _queued_analysis(services, "Changed Source Co")
-    services.repository.claim_operation(operation.id, runner_id="runner")
-    services.repository.fail_operation(
-        operation.id,
-        OperationFailureCode.SOURCE_CHANGED,
-        "Operation sources changed.",
-        runner_id="runner",
-    )
+    runner = services.operation_runner
+    with runner.transactions.write() as tx:
+        runner.execution_store.claim_operation(tx, operation.id, runner_id="runner")
+        runner.execution_store.fail_operation(
+            tx,
+            operation.id,
+            OperationFailureCode.SOURCE_CHANGED,
+            "Operation sources changed.",
+            runner_id="runner",
+        )
 
     with TestClient(create_app(build_api_services(services))) as api:
         failed = api.get(f"{API_PREFIX}/operations/{operation.id}")

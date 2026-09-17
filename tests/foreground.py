@@ -15,7 +15,6 @@ from time import sleep
 
 from cv_engine.application.operation_runner import OperationRunner
 from cv_engine.application.operations import PersistedOperation, is_terminal_operation
-from cv_engine.application.ports import OperationRepository
 
 __all__ = ["ForegroundOperationExecutor", "foreground_executor"]
 
@@ -25,21 +24,19 @@ class ForegroundOperationExecutor:
 
     def __init__(
         self,
-        repository: OperationRepository,
         runner: OperationRunner,
         *,
         poll_interval_seconds: float = 0.25,
         sleeper=sleep,
     ):
-        self.repository = repository
         self.runner = runner
         self.poll_interval_seconds = poll_interval_seconds
         self.sleeper = sleeper
 
     def execute(self, operation_id: str) -> PersistedOperation:
-        self.repository.interrupt_expired_operations()
+        self.runner.recover_expired()
         while True:
-            current = self.repository.operation(operation_id)
+            current = self.runner.operation(operation_id)
             if is_terminal_operation(current.status):
                 return current
             if current.status.value == "queued":
@@ -51,4 +48,4 @@ class ForegroundOperationExecutor:
 
 def foreground_executor(services) -> ForegroundOperationExecutor:
     """A foreground executor over a built `Services`' repository and runner."""
-    return ForegroundOperationExecutor(services.repository, services.operation_runner)
+    return ForegroundOperationExecutor(services.operation_runner)

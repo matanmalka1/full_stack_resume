@@ -17,7 +17,7 @@ router = APIRouter(prefix="/operations", tags=["operations"])
     summary="Read the progress of one durable Operation",
 )
 def operation(operation_id: str, services: Services) -> OperationResponse:
-    return operation_response(services.operations.get(operation_id))
+    return operation_response(services.operation_lifecycle.get(operation_id))
 
 
 @router.post(
@@ -33,7 +33,7 @@ def cancel_operation(operation_id: str, services: Services) -> OperationResponse
     returned status is truthfully still `running` - the request is what
     completed, not the Operation.
     """
-    return operation_response(services.operations.cancel(operation_id))
+    return operation_response(services.operation_lifecycle.cancel(operation_id))
 
 
 @router.post(
@@ -53,7 +53,7 @@ def retry_operation(
     The original is immutable and is not touched. Only a terminal Operation can
     be retried; retrying a live one is a `409`.
     """
-    queued = services.operations.retry(
+    queued = services.operation_lifecycle.retry(
         operation_id,
         idempotency_key=idempotency_key or new_id(),
     )

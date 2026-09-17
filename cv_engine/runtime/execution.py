@@ -9,13 +9,13 @@ application paths.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event, Lock
 from time import monotonic
 
 from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationStatus, PersistedOperation
-from ..application.ports import OperationRepository
 
 logger = logging.getLogger("cv_engine.worker")
 
@@ -25,29 +25,26 @@ class OperationWorker:
 
     def __init__(
         self,
-        repository: OperationRepository,
         runner: OperationRunner,
         *,
+        request_cancellation: Callable[[str], object],
         concurrency: int = 2,
         poll_interval_seconds: float = 0.25,
     ):
         if concurrency < 1:
             raise ValueError("worker concurrency must be positive")
-        self.repository = repository
         self.runner = runner
+        self.request_cancellation = request_cancellation
         self.concurrency = concurrency
         self.poll_interval_seconds = poll_interval_seconds
         self._active_ids: set[str] = set()
         self._active_lock = Lock()
 
     def recover_startup(self) -> list[str]:
-        return self.repository.interrupt_expired_operations()
+        return self.runner.recover_expired()
 
     def run_once(self) -> PersistedOperation | None:
-        claimed = self.repository.claim_next_operation(
-            runner_id=self.runner.runner_id,
-            lease_seconds=self.runner.lease_seconds,
-        )
+        claimed = self.runner.claim_next()
         if claimed is None:
             return None
         logger.info(
@@ -161,4 +158,4 @@ class OperationWorker:
             with self._active_lock:
                 active = tuple(self._active_ids)
             for operation_id in active:
-                self.repository.request_operation_cancellation(operation_id)
+                self.request_cancellation(operation_id)

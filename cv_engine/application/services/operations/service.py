@@ -1,4 +1,4 @@
-"""Submission, cancellation, retry, and query for durable Operations.
+"""Submission of durable Operations.
 
 What a submitted Operation *does* lives in `handlers`; this module owns the
 record: the frozen sources, the idempotency key, and the `OperationView` every
@@ -6,8 +6,6 @@ method narrows to before returning.
 """
 
 from __future__ import annotations
-
-from typing import Any, cast
 
 from ....util import new_id
 from ...ai_configuration import (
@@ -25,7 +23,6 @@ from ...commands import (
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
-    ReplaceWorkingDraftCommand,
 )
 from ...errors import (
     LineageBroken,
@@ -34,19 +31,16 @@ from ...errors import (
 )
 from ...operations import (
     CreateOperation,
-    OperationFailureCode,
     OperationSources,
     OperationType,
     OperationView,
     as_operation_view,
-    is_terminal_operation,
 )
-from ...ports import OperationRepository
-from ...settings import SettingsRepository
+from ...ports.operation_client import OperationClientStore
+from ...ports.settings import SettingsStore
+from ...ports.transactions import TransactionManager
 from ..analysis import AnalysisService
-from ..base import ServiceBase
 from ..drafts import DraftAuthoringService
-from ..drafts.history import DraftHistoryService
 from ..rendering import RenderingService
 from .common import (
     _model_hash,
@@ -55,8 +49,8 @@ from .common import (
 )
 
 
-class OperationService(ServiceBase[OperationRepository]):
-    """Create, cancel, retry, and query durable Operations.
+class OperationSubmissionService:
+    """Validate and freeze commands before making queued work visible.
 
     Every method returns `OperationView`, never the runner record. Submission is
     included: a `202` body is the same representation `GET /operations/{id}`
@@ -71,17 +65,20 @@ class OperationService(ServiceBase[OperationRepository]):
         *,
         default_ai_model: str = DEFAULT_AI_MODEL,
         default_reasoning_effort: str = DEFAULT_REASONING_EFFORT,
-        draft_history: DraftHistoryService,
-        **dependencies: Any,
+        transactions: TransactionManager,
+        operations: OperationClientStore,
+        settings: SettingsStore,
     ):
-        super().__init__(**dependencies)
-        self.draft_history = draft_history
+        self.transactions = transactions
+        self.operations = operations
+        self.settings = settings
         self._default_ai_model = normalize_ai_model(default_ai_model)
         self._default_reasoning_effort = normalize_reasoning_effort(default_reasoning_effort)
 
     def _freeze_ai_execution(self, command):
         """Copy current safe preferences into the immutable Operation payload."""
-        stored = cast(SettingsRepository, self.repo).app_settings()
+        with self.transactions.read() as tx:
+            stored = self.settings.settings(tx)
         model = normalize_ai_model(
             command.model or stored.default_ai_model or self._default_ai_model
         )
@@ -91,6 +88,23 @@ class OperationService(ServiceBase[OperationRepository]):
             or self._default_reasoning_effort
         )
         return command.model_copy(update={"model": model, "reasoning_effort": effort})
+
+    def _load_active_application(self, application_id: str) -> dict[str, object]:
+        try:
+            with self.transactions.read() as tx:
+                application = self.operations.application(tx, application_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown application: {application_id}") from exc
+        if application.get("deleted_at") is not None:
+            raise StateConflict(f"application is deleted: {application_id}")
+        return application
+
+    def _enqueue(
+        self, request: CreateOperation, *, operation_id: str | None = None
+    ) -> OperationView:
+        with self.transactions.write() as tx:
+            stored = self.operations.enqueue(tx, request, operation_id=operation_id or new_id())
+        return as_operation_view(stored)
 
     @staticmethod
     def _validated_reasoning_effort(value: str | None) -> ReasoningEffort | None:
@@ -104,7 +118,7 @@ class OperationService(ServiceBase[OperationRepository]):
         idempotency_key: str,
         analysis_service: AnalysisService,
     ) -> OperationView:
-        self.load_active_application(command.application_id)
+        self._load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
         snapshot = analysis_service.snapshot_source(command.application_id, command.job_snapshot_id)
         analysis_service.refuse_deleted(snapshot.application_id, snapshot.deleted_at)
@@ -124,7 +138,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
-        return as_operation_view(self.repo.create_operation(request))
+        return self._enqueue(request)
 
     def submit_draft(
         self,
@@ -134,7 +148,7 @@ class OperationService(ServiceBase[OperationRepository]):
         draft_service: DraftAuthoringService,
         operation_id: str | None = None,
     ) -> OperationView:
-        self.load_active_application(command.application_id)
+        self._load_active_application(command.application_id)
         command = (
             self._freeze_ai_execution(command)
             if command.provider == "openai"
@@ -213,7 +227,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
-        return as_operation_view(self.repo.create_operation(request, operation_id=operation_id))
+        return self._enqueue(request, operation_id=operation_id)
 
     def submit_selection_plan_proposal(
         self,
@@ -228,7 +242,7 @@ class OperationService(ServiceBase[OperationRepository]):
         replaces the analysis while this is queued fails the source check
         instead of proposing a plan for an analysis nobody is looking at.
         """
-        self.load_active_application(command.application_id)
+        self._load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
         source = analysis_service.selection_source(command.application_id, command.job_analysis_id)
         analysis_service.refuse_deleted(source.application_id, source.deleted_at)
@@ -263,7 +277,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
-        return as_operation_view(self.repo.create_operation(request))
+        return self._enqueue(request)
 
     def submit_regeneration(
         self,
@@ -280,7 +294,7 @@ class OperationService(ServiceBase[OperationRepository]):
         so a regeneration cannot be launched against sources the client did not
         name.
         """
-        self.load_active_application(command.application_id)
+        self._load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
         try:
             working = draft_service.working_draft(command.working_draft_id)
@@ -332,104 +346,7 @@ class OperationService(ServiceBase[OperationRepository]):
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
-        return as_operation_view(self.repo.create_operation(request))
-
-    def submit_replacement_draft(
-        self,
-        command: ReplaceWorkingDraftCommand,
-        *,
-        idempotency_key: str,
-        draft_service: DraftAuthoringService,
-    ) -> OperationView:
-        """§14 replace: the Keep decision, then the same draft Operation.
-
-        Replacement is generation against an Application that already has an
-        active draft, so it queues the same `CREATE_DRAFT` work and inherits its
-        frozen sources and `SOURCE_CHANGED` protection rather than growing a
-        second path that would have to repeat them. What replacement adds is the
-        two things generation has no opinion about: which exact draft version
-        the user meant to replace, and whether to keep it.
-
-        `prepare_replacement` is what proves the named draft belongs to the
-        named Application before any of that starts.
-
-        Order matters here, and it used to be wrong. Keep is a side effect that
-        writes an immutable snapshot and an audit record, and it ran before the
-        Operation existed - so a resent request with the same key materialized a
-        second snapshot before reaching the idempotency check that would have
-        recognized it as a replay. The replay is settled first now, against the
-        payload the replacement would create; only a genuinely new command
-        reaches Keep.
-
-        The draft identity travels in the payload rather than being consumed
-        here, which is also what makes two replacements distinguishable: the
-        idempotency check hashes the payload, and a payload that named neither
-        the draft nor its version made a replacement of version 8 look like a
-        replay of the one sent for version 7.
-        """
-        self.load_active_application(command.application_id)
-        draft_command = DraftCommand(
-            application_id=command.application_id,
-            job_analysis_id=command.job_analysis_id,
-            selection_plan_id=command.selection_plan_id,
-            provider=command.provider,
-            replaces_working_draft_id=command.working_draft_id,
-            replaces_expected_edit_version=command.expected_edit_version,
-            replaces_keep_previous=command.keep_previous,
-        )
-        # A receipt is claimed before anything happens, and it reserves the Operation's id.
-        #
-        # Two orderings were tried and both were wrong. Keep first ran its snapshot ahead
-        # of the idempotency check, so a resend did the work again before being recognized
-        # as a replay. The Operation first was worse: it enters the queue `queued` and the
-        # worker is a separate process, so it could be claimed and could replace the draft
-        # *before* the Keep snapshot this call had not written yet - losing the historical
-        # copy the user asked for, and then failing the caller for a replacement that had
-        # already happened.
-        #
-        # So neither goes first. `claim_idempotency_receipt` settles the replay question
-        # atomically and hands back a reserved id, exactly as approval does. Keep runs
-        # under that reservation, and only once it has succeeded does the Operation become
-        # visible to the worker. A crash between them leaves a pending receipt and no
-        # runnable Operation: the snapshot is a true record of content that existed, and
-        # nothing has replaced anything.
-        command_type = "replace_working_draft"
-        receipt = self.repo.claim_idempotency_receipt(
-            command_type,
-            idempotency_key,
-            draft_command.model_dump(mode="json"),
-            reserved_entity_id=new_id(),
-        )
-        reserved_id = receipt["reserved_entity_id"]
-        if receipt["status"] == "completed":
-            # The replacement this key names already reached the queue. Its Operation is
-            # the answer, and Keep is not run a second time.
-            #
-            # Answered from the reservation rather than by re-deriving the command: the
-            # draft has usually moved by now - this replacement is what moved it - so a
-            # replay that re-read the draft and re-checked its version would fail on the
-            # very state its own first attempt produced. A replay is settled by the key,
-            # not by re-litigating the preconditions.
-            return as_operation_view(self.repo.operation(reserved_id))
-        # A pending receipt is a first attempt that did not finish. Its Operation may
-        # already exist - the crash could have landed after `submit_draft` and before the
-        # receipt was completed - and in that case Keep has already run.
-        try:
-            existing = self.repo.operation(reserved_id)
-        except UnknownRecord:
-            existing = None
-        if existing is not None:
-            self.repo.complete_idempotency_receipt(receipt["id"], {"operation_id": existing.id})
-            return as_operation_view(existing)
-        self.draft_history.prepare_replacement(command)
-        queued = self.submit_draft(
-            draft_command,
-            idempotency_key=idempotency_key,
-            draft_service=draft_service,
-            operation_id=reserved_id,
-        )
-        self.repo.complete_idempotency_receipt(receipt["id"], {"operation_id": queued.id})
-        return queued
+        return self._enqueue(request)
 
     def submit_render(
         self,
@@ -438,7 +355,7 @@ class OperationService(ServiceBase[OperationRepository]):
         idempotency_key: str,
         rendering_service: RenderingService,
     ) -> OperationView:
-        self.load_active_application(command.application_id)
+        self._load_active_application(command.application_id)
         try:
             sources = rendering_service.freeze_operation_sources(
                 command, document_knowledge_context_hash(rendering_service)
@@ -456,49 +373,4 @@ class OperationService(ServiceBase[OperationRepository]):
             provider="deterministic",
             model="playwright",
         )
-        return as_operation_view(self.repo.create_operation(request))
-
-    def cancel(self, operation_id: str) -> OperationView:
-        """Cancel queued work outright; ask running work to stop (§19).
-
-        The narrow view is the contract for every client of this service - the
-        every caller alike. Only the runner reads the full record, and it
-        reads it from the repository rather than from here.
-        """
-        return as_operation_view(self.repo.request_operation_cancellation(operation_id))
-
-    def retry(self, operation_id: str, *, idempotency_key: str) -> OperationView:
-        """Queue a new Operation carrying `retry_of_operation_id` (§19).
-
-        The original stays immutable, and reusing its idempotency key returns
-        the original rather than creating a second attempt.
-        """
-        original = self.repo.operation(operation_id)
-        self.load_active_application(original.application_id)
-        if not is_terminal_operation(original.status):
-            raise StateConflict("only a terminal Operation can be retried")
-        failure_code = original.failure_code
-        if failure_code is not None and failure_code in {
-            OperationFailureCode.MISSING_FACT_RENDERING,
-            OperationFailureCode.SOURCE_CHANGED,
-        }:
-            raise StateConflict(
-                f"an Operation that failed with {failure_code.value} cannot be retried "
-                "against the same frozen sources"
-            )
-        request = CreateOperation(
-            application_id=original.application_id,
-            operation_type=original.operation_type,
-            payload=original.payload,
-            idempotency_key=idempotency_key,
-            sources=original.sources,
-            provider=original.provider,
-            model=original.model,
-            reasoning_effort=original.reasoning_effort,
-            retry_of_operation_id=original.id,
-        )
-        return as_operation_view(self.repo.create_operation(request))
-
-    def get(self, operation_id: str) -> OperationView:
-        """Operation status as a query contract (§20), never the runner record."""
-        return as_operation_view(self.repo.operation(operation_id))
+        return self._enqueue(request)

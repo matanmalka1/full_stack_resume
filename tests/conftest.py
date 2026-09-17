@@ -536,7 +536,7 @@ def analyzed_application(ai_services: Services, fake_openai: FakeOpenAI, require
                 client="web",
             )
         )
-        queued = ai_services.operations.submit_analysis(
+        queued = ai_services.operation_submissions.submit_analysis(
             AnalyzeCommand(
                 application_id=ingested.application_id,
                 job_snapshot_id=ingested.job_snapshot_id,

@@ -8,7 +8,7 @@ from .audit import SqlAlchemyAuditRepository
 from .connection import SqlAlchemyUnitOfWork
 from .drafts import SqlAlchemyDraftRepository
 from .knowledge import SqlAlchemyKnowledgeMutationRepository
-from .operations import SqlAlchemyOperationRepository
+from .operation_projection import SqlAlchemyOperationProjection
 from .preparation import SqlAlchemyPreparationRepository
 from .settings import SqlAlchemySettingsRepository
 from .tracking import SqlAlchemyTrackingProjection
@@ -21,7 +21,7 @@ class Repository(
     SqlAlchemyDraftRepository,
     SqlAlchemyTrackingProjection,
     SqlAlchemyAuditRepository,
-    SqlAlchemyOperationRepository,
+    SqlAlchemyOperationProjection,
     SqlAlchemyKnowledgeMutationRepository,
     SqlAlchemySettingsRepository,
 ):

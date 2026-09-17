@@ -995,7 +995,7 @@ def test_a_replacement_interrupted_after_keep_resumes_without_a_second_snapshot(
     path = f"/applications/{application_id}/working-draft/replace"
     key = {"Idempotency-Key": "replace-interrupted-1"}
 
-    operations = ai_api_paused.services.operations
+    operations = ai_api_paused.services.operation_submissions
     original = operations.submit_draft
 
     def fail_after_keep(*_args, **_kwargs):
@@ -1048,7 +1048,7 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(ai_
     path = f"/applications/{application_id}/working-draft/replace"
     key = {"Idempotency-Key": "replace-lost-snapshot-1"}
 
-    operations = ai_api_paused.services.operations
+    operations = ai_api_paused.services.operation_submissions
     original = operations.submit_draft
 
     def fail_after_keep(*_args, **_kwargs):

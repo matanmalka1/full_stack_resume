@@ -22,7 +22,11 @@ from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.validation import DraftValidationService
 from ..application.services.knowledge import KnowledgeService
 from ..application.services.maintenance import MaintenanceService
-from ..application.services.operations import OperationService
+from ..application.services.operations import (
+    OperationLifecycleService,
+    OperationReplacementService,
+    OperationSubmissionService,
+)
 from ..application.services.projections import ApplicationQueryService
 from ..application.services.recruitment import RecruitmentService
 from ..application.services.rendering import RenderingService
@@ -66,7 +70,9 @@ class ApiServices:
     submission: SubmissionService
     knowledge: KnowledgeService
     maintenance: MaintenanceService
-    operations: OperationService
+    operation_submissions: OperationSubmissionService
+    operation_lifecycle: OperationLifecycleService
+    operation_replacements: OperationReplacementService
     settings: SettingsService
     identity: InstanceIdentity
     limits: ApiLimits

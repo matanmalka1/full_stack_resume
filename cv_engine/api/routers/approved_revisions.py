@@ -107,7 +107,7 @@ def render_revision(
     The same `Idempotency-Key` with the same payload returns the Operation it
     already created instead of queueing a second render.
     """
-    queued = services.operations.submit_render(
+    queued = services.operation_submissions.submit_render(
         RenderCommand(
             application_id=request.application_id,
             approved_revision_id=approved_revision_id,

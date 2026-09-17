@@ -56,8 +56,11 @@ from cv_engine.application.operations import (
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.payloads import PayloadStore
-from cv_engine.infrastructure.persistence import Repository
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
+from cv_engine.infrastructure.persistence.operation_execution import (
+    SqlAlchemyOperationExecutionStore,
+)
 from cv_engine.infrastructure.persistence.render_context import SqlAlchemyRenderContextReader
 from cv_engine.infrastructure.persistence.tables import (
     OPERATION_FAILURE_CODES,
@@ -67,6 +70,63 @@ from cv_engine.infrastructure.persistence.tables import (
 from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
+
+
+def _runner(services, handlers, **options) -> OperationRunner:
+    return OperationRunner(
+        handlers,
+        transactions=services.operation_runner.transactions,
+        execution_store=services.operation_runner.execution_store,
+        **options,
+    )
+
+
+def _enqueue_operation(services, request, *, operation_id=None, created_at=None):
+    with services.operation_runner.transactions.write() as tx:
+        return services.operation_submissions.operations.enqueue(
+            tx,
+            request,
+            operation_id=operation_id or new_id(),
+            created_at=created_at,
+        )
+
+
+def _operation(services, operation_id):
+    return services.operation_runner.operation(operation_id)
+
+
+def _claim_operation(services, operation_id, **options):
+    with services.operation_runner.transactions.write() as tx:
+        return services.operation_runner.execution_store.claim_operation(
+            tx, operation_id, **options
+        )
+
+
+def _claim_next_operation(services, **options):
+    with services.operation_runner.transactions.write() as tx:
+        return services.operation_runner.execution_store.claim_next_operation(tx, **options)
+
+
+def _execution_write(services, method, *args, **options):
+    with services.operation_runner.transactions.write() as tx:
+        return getattr(services.operation_runner.execution_store, method)(tx, *args, **options)
+
+
+def _claim_receipt(services, *args, **options):
+    with services.draft_approval.transactions.write() as tx:
+        return services.draft_approval.receipts.claim_idempotency_receipt(tx, *args, **options)
+
+
+def _read_receipt(services, command_type, idempotency_key):
+    with services.draft_approval.transactions.read() as tx:
+        return services.draft_approval.receipts.idempotency_receipt(
+            tx, command_type, idempotency_key
+        )
+
+
+def _complete_receipt(services, receipt_id, result):
+    with services.draft_approval.transactions.write() as tx:
+        return services.draft_approval.receipts.complete_idempotency_receipt(tx, receipt_id, result)
 
 
 def test_operation_lifecycle_accepts_only_forward_transitions() -> None:
@@ -184,12 +244,14 @@ def test_operation_creation_is_idempotent_and_projects_active_work(services) -> 
     )
     request = _stored_request(ingested.application_id)
 
-    created = services.repository.create_operation(
+    created = _enqueue_operation(
+        services,
         request,
         operation_id="operation-id",
         created_at="2026-08-19T08:00:00+00:00",
     )
-    repeated = services.repository.create_operation(
+    repeated = _enqueue_operation(
+        services,
         request,
         operation_id="ignored-id",
     )
@@ -197,19 +259,22 @@ def test_operation_creation_is_idempotent_and_projects_active_work(services) -> 
     assert repeated == created
     assert created.payload_hash == request.payload_hash
     assert created.status is OperationStatus.QUEUED
-    assert services.repository.operation(created.id) == created
+    assert _operation(services, created.id) == created
     assert services.repository.active_operation(ingested.application_id).id == created.id
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.active_operation == as_operation_view(created)
     assert detail.latest_operation == as_operation_view(created)
     assert detail.active_operation.status is OperationStatus.QUEUED
 
-    services.repository.claim_operation(
+    _claim_operation(
+        services,
         created.id,
         runner_id="runner",
         now="2026-08-19T08:01:00+00:00",
     )
-    failed = services.repository.fail_operation(
+    failed = _execution_write(
+        services,
+        "fail_operation",
         created.id,
         OperationFailureCode.PROVIDER_UNAVAILABLE,
         "provider unavailable",
@@ -228,7 +293,8 @@ def test_operation_rejects_idempotency_key_with_another_payload(services) -> Non
         )
     )
     request = _stored_request(ingested.application_id)
-    services.repository.create_operation(
+    _enqueue_operation(
+        services,
         request,
     )
     conflicting = request.model_copy(update={"payload": {"mode": "ai"}})
@@ -236,7 +302,8 @@ def test_operation_rejects_idempotency_key_with_another_payload(services) -> Non
     # Assert the contracted code rather than the prose: the code is what a client
     # switches on, and the message is free to be rewritten for a human.
     with pytest.raises(StateConflict) as raised:
-        services.repository.create_operation(
+        _enqueue_operation(
+            services,
             conflicting,
         )
     assert raised.value.code == IDEMPOTENCY_KEY_REUSED
@@ -248,7 +315,8 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services) -> Non
             company="Immutable Op Co", target_role="Developer", job_text="Python role", client="web"
         )
     )
-    created = services.repository.create_operation(
+    created = _enqueue_operation(
+        services,
         _stored_request(ingested.application_id),
     )
     with services.repository.transaction() as connection:
@@ -278,19 +346,23 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
             company="Claim Race Co", target_role="Developer", job_text="Python role", client="web"
         )
     )
-    created = services.repository.create_operation(
+    created = _enqueue_operation(
+        services,
         _stored_request(ingested.application_id),
     )
     barrier = Barrier(2)
 
     def claim(runner_id: str):
-        repository = Repository(services.repository.engine)
+        transactions = SqlAlchemyTransactionManager(services.repository.engine)
+        execution = SqlAlchemyOperationExecutionStore(transactions)
         barrier.wait(timeout=2)
-        return repository.claim_operation(
-            created.id,
-            runner_id=runner_id,
-            now="2026-08-19T08:00:00+00:00",
-        )
+        with transactions.write() as tx:
+            return execution.claim_operation(
+                tx,
+                created.id,
+                runner_id=runner_id,
+                now="2026-08-19T08:00:00+00:00",
+            )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(claim, ("runner-a", "runner-b")))
@@ -310,7 +382,7 @@ def test_two_runners_racing_one_operation_produce_one_claim(services) -> None:
             )
         ).scalars()
         assert sorted(held) == sorted(resource.kind.value for resource in winner.resources)
-    services.repository.heartbeat_operation(created.id, runner_id=str(winner.lease_owner))
+    _execution_write(services, "heartbeat_operation", created.id, runner_id=str(winner.lease_owner))
 
 
 def test_foreground_executor_and_worker_race_one_operation_without_duplicate_execution(
@@ -330,9 +402,8 @@ def test_foreground_executor_and_worker_race_one_operation_without_duplicate_exe
 
     handler = _Handler(execute=execute)
     foreground = ForegroundOperationExecutor(
-        services.repository,
-        OperationRunner(
-            services.repository,
+        _runner(
+            services,
             {OperationType.ANALYZE_JOB: handler},
             runner_id="foreground-racer",
         ),
@@ -340,12 +411,12 @@ def test_foreground_executor_and_worker_race_one_operation_without_duplicate_exe
         sleeper=lambda _seconds: None,
     )
     worker = OperationWorker(
-        services.repository,
-        OperationRunner(
-            services.repository,
+        _runner(
+            services,
             {OperationType.ANALYZE_JOB: handler},
             runner_id="worker-racer",
         ),
+        request_cancellation=services.operation_lifecycle.cancel,
         concurrency=1,
         poll_interval_seconds=0,
     )
@@ -367,7 +438,7 @@ def test_foreground_executor_and_worker_race_one_operation_without_duplicate_exe
     assert executions == 1
     assert foreground_result is not None
     assert foreground_result.status is OperationStatus.SUCCEEDED
-    assert services.repository.operation(operation.id).status is OperationStatus.SUCCEEDED
+    assert _operation(services, operation.id).status is OperationStatus.SUCCEEDED
     assert worker_result is None or worker_result.id == operation.id
 
 
@@ -377,15 +448,15 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
     operation = _operation_for_runner(services, "Worker Logging Co")
     event_logger = OperationFailureLogger(tmp_path, tmp_path / "logs")
     worker = OperationWorker(
-        services.repository,
-        OperationRunner(
-            services.repository,
+        _runner(
+            services,
             {OperationType.ANALYZE_JOB: _Handler()},
             runner_id="logging-worker",
             technical_logger=event_logger.record,
             operation_failure_logger=event_logger.record_operation_failure,
             operation_event_logger=event_logger.record_event,
         ),
+        request_cancellation=services.operation_lifecycle.cancel,
         concurrency=1,
     )
     caplog.set_level("INFO", logger="cv_engine.worker")
@@ -439,8 +510,8 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
             client="web",
         )
     )
-    app_one = services.repository.create_operation(_stored_request(first.application_id, "app-1"))
-    same_app = services.repository.create_operation(_stored_request(first.application_id, "app-2"))
+    app_one = _enqueue_operation(services, _stored_request(first.application_id, "app-1"))
+    same_app = _enqueue_operation(services, _stored_request(first.application_id, "app-2"))
     render_request = CreateOperation(
         application_id=second.application_id,
         operation_type=OperationType.RENDER_REVISION,
@@ -448,7 +519,7 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
         idempotency_key="render-1",
         sources=OperationSources(approved_revision_id="revision-1"),
     )
-    render_one = services.repository.create_operation(render_request)
+    render_one = _enqueue_operation(services, render_request)
     third = services.applications.ingest(
         IngestCommand(
             company="Lease C",
@@ -458,7 +529,8 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
             client="web",
         )
     )
-    render_two = services.repository.create_operation(
+    render_two = _enqueue_operation(
+        services,
         render_request.model_copy(
             update={
                 "application_id": third.application_id,
@@ -467,12 +539,12 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
         ),
     )
 
-    assert services.repository.claim_operation(app_one.id, runner_id="runner-a") is not None
-    assert services.repository.claim_operation(same_app.id, runner_id="runner-b") is None
-    assert services.repository.operation(same_app.id).phase.value == "waiting_for_application"
-    assert services.repository.claim_operation(render_one.id, runner_id="runner-b") is not None
-    assert services.repository.claim_operation(render_two.id, runner_id="runner-c") is None
-    assert services.repository.operation(render_two.id).phase.value == "waiting_for_render_slot"
+    assert _claim_operation(services, app_one.id, runner_id="runner-a") is not None
+    assert _claim_operation(services, same_app.id, runner_id="runner-b") is None
+    assert _operation(services, same_app.id).phase.value == "waiting_for_application"
+    assert _claim_operation(services, render_one.id, runner_id="runner-b") is not None
+    assert _claim_operation(services, render_two.id, runner_id="runner-c") is None
+    assert _operation(services, render_two.id).phase.value == "waiting_for_render_slot"
 
 
 def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> None:
@@ -490,12 +562,12 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
         request = _stored_request(ingested.application_id, f"ai-{number}").model_copy(
             update={"provider": "openai", "model": "test-model"}
         )
-        operations.append(services.repository.create_operation(request))
+        operations.append(_enqueue_operation(services, request))
 
-    assert services.repository.claim_operation(operations[0].id, runner_id="ai-a")
-    assert services.repository.claim_operation(operations[1].id, runner_id="ai-b")
-    assert services.repository.claim_operation(operations[2].id, runner_id="ai-c") is None
-    assert services.repository.operation(operations[2].id).phase.value == "waiting_for_ai_slot"
+    assert _claim_operation(services, operations[0].id, runner_id="ai-a")
+    assert _claim_operation(services, operations[1].id, runner_id="ai-b")
+    assert _claim_operation(services, operations[2].id, runner_id="ai-c") is None
+    assert _operation(services, operations[2].id).phase.value == "waiting_for_ai_slot"
 
 
 def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) -> None:
@@ -504,29 +576,39 @@ def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) 
             company="Heartbeat Co", target_role="Developer", job_text="Python role", client="web"
         )
     )
-    created = services.repository.create_operation(
+    created = _enqueue_operation(
+        services,
         _stored_request(ingested.application_id),
     )
-    claimed = services.repository.claim_operation(
+    claimed = _claim_operation(
+        services,
         created.id,
         runner_id="runner-a",
         lease_seconds=30,
         now="2026-08-19T08:00:00+00:00",
     )
     assert claimed is not None
-    assert services.repository.interrupt_expired_operations(now="2026-08-19T08:00:20+00:00") == []
+    assert (
+        _execution_write(services, "interrupt_expired_operations", now="2026-08-19T08:00:20+00:00")
+        == []
+    )
 
-    services.repository.heartbeat_operation(
+    _execution_write(
+        services,
+        "heartbeat_operation",
         created.id,
         runner_id="runner-a",
         lease_seconds=30,
         now="2026-08-19T08:00:20+00:00",
     )
-    assert services.repository.interrupt_expired_operations(now="2026-08-19T08:00:49+00:00") == []
-    assert services.repository.interrupt_expired_operations(now="2026-08-19T08:00:51+00:00") == [
-        created.id
-    ]
-    assert services.repository.operation(created.id).status is OperationStatus.INTERRUPTED
+    assert (
+        _execution_write(services, "interrupt_expired_operations", now="2026-08-19T08:00:49+00:00")
+        == []
+    )
+    assert _execution_write(
+        services, "interrupt_expired_operations", now="2026-08-19T08:00:51+00:00"
+    ) == [created.id]
+    assert _operation(services, created.id).status is OperationStatus.INTERRUPTED
 
 
 def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(services) -> None:
@@ -542,26 +624,34 @@ def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(serv
             )
         )
 
-    interrupted = services.repository.interrupt_expired_operations(now="2026-08-19T08:00:00+00:00")
+    interrupted = _execution_write(
+        services, "interrupt_expired_operations", now="2026-08-19T08:00:00+00:00"
+    )
 
     assert interrupted == [operation.id]
-    assert services.repository.operation(operation.id).status is OperationStatus.INTERRUPTED
+    assert _operation(services, operation.id).status is OperationStatus.INTERRUPTED
 
 
 class _Handler:
     def __init__(self, *, execute=None, check=None, activate=None):
         self._execute = execute or (lambda _operation, _cancelled: PreparedOperation())
-        self._check = check or (lambda _operation, _repository: None)
-        self._activate = activate or (lambda _operation, _prepared, _repository: ())
+        self._check = check or (lambda _operation, _tx: None)
+        self._activate = activate or (lambda _operation, _prepared, _tx: ())
 
-    def check_sources(self, operation, repository):
-        return self._check(operation, repository)
+    def verify_external_sources(self, operation):
+        del operation
+
+    def verify_sources(self, tx, operation):
+        return self._check(operation, tx)
 
     def execute(self, operation, cancellation_requested):
         return self._execute(operation, cancellation_requested)
 
-    def activate(self, operation, prepared, repository):
-        return self._activate(operation, prepared, repository)
+    def activate(self, tx, operation, prepared):
+        return self._activate(operation, prepared, tx)
+
+    def after_activation(self, operation, prepared):
+        del operation, prepared
 
 
 def _ingest_for_operation(services, company: str):
@@ -585,7 +675,8 @@ def _ingest_for_operation(services, company: str):
 
 def _operation_for_runner(services, company: str = "Runner Co"):
     ingested = _ingest_for_operation(services, company)
-    operation = services.repository.create_operation(
+    operation = _enqueue_operation(
+        services,
         _stored_request(ingested.application_id, company.casefold().replace(" ", "-")),
     )
     return operation
@@ -603,8 +694,8 @@ def test_runner_activates_outputs_and_completes_in_one_activation_transaction(se
             ),
         ),
     )
-    runner = OperationRunner(
-        services.repository,
+    runner = _runner(
+        services,
         {OperationType.ANALYZE_JOB: _Handler(execute=lambda *_args: prepared)},
         runner_id="foreground-test",
     )
@@ -629,8 +720,8 @@ def test_source_changed_is_checked_before_execution_and_again_before_activation(
             if checks == target:
                 raise SourceChanged()
 
-        result = OperationRunner(
-            services.repository,
+        result = _runner(
+            services,
             {OperationType.ANALYZE_JOB: _Handler(check=check)},
             runner_id=f"runner-{fail_on_check}",
         ).run(operation.id)
@@ -644,7 +735,7 @@ def test_cancellation_after_output_creation_keeps_output_inactive(services) -> N
     operation = _operation_for_runner(services, "Cancel Output Co")
 
     def execute(_operation, _cancelled):
-        services.repository.request_operation_cancellation(operation.id)
+        services.operation_lifecycle.cancel(operation.id)
         return PreparedOperation(
             outputs=(
                 OperationOutputReference(
@@ -653,8 +744,8 @@ def test_cancellation_after_output_creation_keeps_output_inactive(services) -> N
             )
         )
 
-    result = OperationRunner(
-        services.repository,
+    result = _runner(
+        services,
         {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
         runner_id="runner-cancel",
     ).run(operation.id)
@@ -680,8 +771,8 @@ def test_runner_retries_one_transient_failure_and_keeps_technical_detail_out_of_
             )
         return PreparedOperation()
 
-    result = OperationRunner(
-        services.repository,
+    result = _runner(
+        services,
         {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
         runner_id="runner-retry",
         sleeper=delays.append,
@@ -692,8 +783,8 @@ def test_runner_retries_one_transient_failure_and_keeps_technical_detail_out_of_
     assert delays == [0.25]
 
     failed_operation = _operation_for_runner(services, "Technical Failure Co")
-    failed = OperationRunner(
-        services.repository,
+    failed = _runner(
+        services,
         {
             OperationType.ANALYZE_JOB: _Handler(
                 execute=lambda *_args: (_ for _ in ()).throw(RuntimeError("secret traceback"))
@@ -734,7 +825,7 @@ def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
         raise InfrastructureFailure("provider request timed out")
 
     monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
-    operation = services.operations.submit_analysis(
+    operation = services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
@@ -771,7 +862,7 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
         raise MissingFactRendering("situational.agentic_multi_agent", "he")
 
     monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
-    operation = services.operations.submit_analysis(
+    operation = services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
@@ -798,7 +889,7 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
         == ()
     )
     with pytest.raises(StateConflict, match="cannot be retried"):
-        services.operations.retry(completed.id, idempotency_key="meaningless-retry")
+        services.operation_lifecycle.retry(completed.id, idempotency_key="meaningless-retry")
     assert completed.attempts_completed == 1
     assert attempts == 1
 
@@ -821,7 +912,7 @@ def test_foreground_analysis_reuses_an_explicit_idempotency_key(
 
     def submit_and_run() -> str:
         fake_openai.script("propose_analysis", analysis_proposal())
-        operation = ai_services.operations.submit_analysis(
+        operation = ai_services.operation_submissions.submit_analysis(
             command,
             idempotency_key="analysis-idempotency-key",
             analysis_service=ai_services.analysis,
@@ -832,7 +923,7 @@ def test_foreground_analysis_reuses_an_explicit_idempotency_key(
     second = submit_and_run()
 
     assert first == second
-    assert ai_services.repository.operation(first).status is OperationStatus.SUCCEEDED
+    assert _operation(ai_services, first).status is OperationStatus.SUCCEEDED
 
 
 def test_draft_operation_activates_one_validated_working_draft(services) -> None:
@@ -851,7 +942,7 @@ def test_draft_operation_activates_one_validated_working_draft(services) -> None
             job_snapshot_id=ingested.job_snapshot_id,
         ),
     )
-    operation = services.operations.submit_draft(
+    operation = services.operation_submissions.submit_draft(
         DraftCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysis.analysis_id,
@@ -891,7 +982,7 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
         job_analysis_id=analysis.analysis_id,
         selection_plan_id=analysis.selection_plan_id,
     )
-    operation = services.operations.submit_draft(
+    operation = services.operation_submissions.submit_draft(
         command,
         idempotency_key="draft-plan-race",
         draft_service=services.drafts,
@@ -928,7 +1019,7 @@ def test_foreground_draft_runs_through_one_operation(services) -> None:
         ),
     )
 
-    operation = services.operations.submit_draft(
+    operation = services.operation_submissions.submit_draft(
         DraftCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
@@ -966,7 +1057,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
         "validate_rendered",
         lambda *_args, **_kwargs: failed_report,
     )
-    operation = setup.services.operations.submit_render(
+    operation = setup.services.operation_submissions.submit_render(
         RenderCommand(
             application_id=setup.application_id,
             approved_revision_id=setup.approved.revision_id,
@@ -1004,7 +1095,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
             == "rendered-invalid"
         )
 
-    retried = setup.services.operations.retry(
+    retried = setup.services.operation_lifecycle.retry(
         failed.id, idempotency_key="invalid-render-operation-retry"
     )
     failed_again = foreground_executor(setup.services).execute(retried.id)
@@ -1015,7 +1106,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
 
 
 def _render_operation(setup, key: str):
-    return setup.services.operations.submit_render(
+    return setup.services.operation_submissions.submit_render(
         RenderCommand(
             application_id=setup.application_id,
             approved_revision_id=setup.approved.revision_id,
@@ -1027,7 +1118,7 @@ def _render_operation(setup, key: str):
 
 def _cancel_after_render(setup, operation_id: str):
     def interfere(_executed) -> None:
-        setup.services.repository.request_operation_cancellation(operation_id)
+        setup.services.operation_lifecycle.cancel(operation_id)
 
     return interfere
 
@@ -1224,7 +1315,8 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
     working = setup.services.repository.active_working_draft(setup.application_id)
     command = _approve_command(setup.services, setup.application_id)
     reserved_revision = new_id()
-    receipt = setup.services.repository.claim_idempotency_receipt(
+    receipt = _claim_receipt(
+        setup.services,
         "approve_draft",
         "approval-recovery",
         {
@@ -1248,9 +1340,7 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
                 idempotency_key="approval-recovery",
             )
         assert refused.value.code == IDEMPOTENCY_KEY_REUSED
-        unchanged = setup.services.repository.idempotency_receipt(
-            "approve_draft", "approval-recovery"
-        )
+        unchanged = _read_receipt(setup.services, "approve_draft", "approval-recovery")
         assert unchanged["status"] == "pending"
         assert unchanged["payload"] == receipt["payload"]
 
@@ -1260,7 +1350,8 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
     )
 
     assert recovered == committed
-    completed = setup.services.repository.idempotency_receipt(
+    completed = _read_receipt(
+        setup.services,
         "approve_draft",
         "approval-recovery",
     )
@@ -1279,7 +1370,8 @@ def test_approval_recovery_refuses_changed_inputs(
     command = _approve_command(setup.services, setup.application_id)
     repository = setup.services.repository
     working = repository.working_draft(command.working_draft_id)
-    receipt = repository.claim_idempotency_receipt(
+    receipt = _claim_receipt(
+        setup.services,
         "approve_draft",
         "approval-frozen-inputs",
         {**command.model_dump(mode="json"), "content_hash": working.content_hash},
@@ -1289,7 +1381,7 @@ def test_approval_recovery_refuses_changed_inputs(
         command, revision_id=receipt["reserved_entity_id"]
     )
     if receipt_status == "completed":
-        repository.complete_idempotency_receipt(receipt["id"], committed.model_dump(mode="json"))
+        _complete_receipt(setup.services, receipt["id"], committed.model_dump(mode="json"))
     changed_values = {
         "expected_edit_version": command.expected_edit_version + 1,
         "validation_run_id": new_id(),
@@ -1303,7 +1395,7 @@ def test_approval_recovery_refuses_changed_inputs(
             idempotency_key="approval-frozen-inputs",
         )
     assert refused.value.code == IDEMPOTENCY_KEY_REUSED
-    after = repository.idempotency_receipt("approve_draft", "approval-frozen-inputs")
+    after = _read_receipt(setup.services, "approve_draft", "approval-frozen-inputs")
     assert after["status"] == receipt_status
     assert after["payload"] == receipt["payload"]
     assert repository.approved_revisions(setup.application_id) == [
@@ -1371,7 +1463,7 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
             idempotency_key="approval-retry",
         )
     assert calls == (2 if failure_stage == "artifact_registration" else 1)
-    receipt = repository.idempotency_receipt("approve_draft", "approval-retry")
+    receipt = _read_receipt(setup.services, "approve_draft", "approval-retry")
     assert receipt["status"] == ("completed" if failure_stage == "after_commit" else "pending")
     references = [
         f"artifacts/revisions/{setup.application_id}/{receipt['reserved_entity_id']}/resume.json",
@@ -1408,7 +1500,7 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
     assert recovered == repeated
     assert recovered.revision_id == receipt["reserved_entity_id"]
     assert len(repository.approved_revisions(setup.application_id)) == 1
-    completed = repository.idempotency_receipt("approve_draft", "approval-retry")
+    completed = _read_receipt(setup.services, "approve_draft", "approval-retry")
     assert completed["id"] == receipt["id"]
     assert completed["payload"] == receipt["payload"]
     assert completed["status"] == "completed"
@@ -1427,13 +1519,18 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
             Event().wait(0.01)
         return PreparedOperation()
 
-    runner = OperationRunner(
-        services.repository,
+    runner = _runner(
+        services,
         {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
         runner_id="shutdown-worker",
         heartbeat_interval_seconds=0.02,
     )
-    worker = OperationWorker(services.repository, runner, concurrency=1, poll_interval_seconds=0.01)
+    worker = OperationWorker(
+        runner,
+        request_cancellation=services.operation_lifecycle.cancel,
+        concurrency=1,
+        poll_interval_seconds=0.01,
+    )
     stop = Event()
     thread = Thread(target=worker.serve, args=(stop,))
     thread.start()
@@ -1443,23 +1540,24 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(services)
     thread.join(timeout=2)
 
     assert not thread.is_alive()
-    assert services.repository.operation(operation.id).status is OperationStatus.CANCELLED
+    assert _operation(services, operation.id).status is OperationStatus.CANCELLED
 
 
-# --- repository methods against real PostgreSQL ------------------------------
+# --- execution-store methods against real PostgreSQL -------------------------
 #
 # The tests above drive Operations through the runner and the services, which is
-# where the product's behaviour lives. These drive eight repository methods
+# where the product's behaviour lives. These drive the token adapter methods
 # directly, because their refusals are the branches a successful run never
 # takes: a lease claimed by someone else, an output activated after
 # cancellation, a receipt completed twice. Acceptance item 1 asks for the
-# repository under real PostgreSQL, and a method whose only coverage is the happy
+# adapter under real PostgreSQL, and a method whose only coverage is the happy
 # path is not covered.
 
 
 def _queued(services, company: str, key: str = "request-1", created_at: str | None = None):
     ingested = _ingest_for_operation(services, company)
-    return services.repository.create_operation(
+    return _enqueue_operation(
+        services,
         _stored_request(ingested.application_id, key=key),
         created_at=created_at,
     )
@@ -1474,24 +1572,27 @@ def test_claim_next_operation_takes_the_oldest_ready_operation_or_nothing(servic
     assertion tests the guarantee that exists rather than one that holds only
     when the clock happens to tick between two calls.
     """
-    repository = services.repository
     first = _queued(services, "Queue One", key="queue-1", created_at="2026-08-19T07:00:00+00:00")
     second = _queued(services, "Queue Two", key="queue-2", created_at="2026-08-19T07:00:01+00:00")
 
-    claimed = repository.claim_next_operation(runner_id="runner-a", now="2026-08-19T08:00:00+00:00")
+    claimed = _claim_next_operation(services, runner_id="runner-a", now="2026-08-19T08:00:00+00:00")
     assert claimed is not None
     assert claimed.id == first.id, "the older queued operation is taken first"
 
     # A retry that is not due yet is not ready, so the queue skips past it.
-    repository.record_operation_attempt(
-        first.id, runner_id="runner-a", retry_at="2026-08-19T09:00:00+00:00"
+    _execution_write(
+        services,
+        "record_operation_attempt",
+        first.id,
+        runner_id="runner-a",
+        retry_at="2026-08-19T09:00:00+00:00",
     )
-    again = repository.claim_next_operation(runner_id="runner-b", now="2026-08-19T08:00:00+00:00")
+    again = _claim_next_operation(services, runner_id="runner-b", now="2026-08-19T08:00:00+00:00")
     assert again is not None
     assert again.id == second.id
 
     assert (
-        repository.claim_next_operation(runner_id="runner-c", now="2026-08-19T08:00:00+00:00")
+        _claim_next_operation(services, runner_id="runner-c", now="2026-08-19T08:00:00+00:00")
         is None
     ), "an empty ready queue returns None rather than blocking or raising"
 
@@ -1503,71 +1604,84 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
     when that matches nothing. Parameterised over the calls rather than written
     five times, so a sixth lease-owning method is one line.
     """
-    repository = services.repository
     operation = _queued(services, "Lease Co")
-    repository.claim_operation(operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
     calls = {
-        "set_operation_phase": lambda runner: repository.set_operation_phase(
-            operation.id, OperationPhase.EXECUTING, runner_id=runner
+        "set_operation_phase": lambda runner: _execution_write(
+            services,
+            "set_operation_phase",
+            operation.id,
+            OperationPhase.EXECUTING,
+            runner_id=runner,
         ),
-        "record_operation_attempt": lambda runner: repository.record_operation_attempt(
-            operation.id, runner_id=runner
+        "record_operation_attempt": lambda runner: _execution_write(
+            services, "record_operation_attempt", operation.id, runner_id=runner
         ),
-        "heartbeat_operation": lambda runner: repository.heartbeat_operation(
-            operation.id, runner_id=runner
+        "heartbeat_operation": lambda runner: _execution_write(
+            services, "heartbeat_operation", operation.id, runner_id=runner
         ),
-        "fail_operation": lambda runner: repository.fail_operation(
+        "fail_operation": lambda runner: _execution_write(
+            services,
+            "fail_operation",
             operation.id,
             OperationFailureCode.PROVIDER_UNAVAILABLE,
             "provider down",
             runner_id=runner,
         ),
-        "complete_operation": lambda runner: repository.complete_operation(
-            operation.id, runner_id=runner
+        "complete_operation": lambda runner: _execution_write(
+            services, "complete_operation", operation.id, runner_id=runner
         ),
     }
     for name, call in calls.items():
         with pytest.raises(StateConflict, match="lease is not owned"):
             call("impostor")
-        assert repository.operation(operation.id).status is OperationStatus.RUNNING, (
+        assert _operation(services, operation.id).status is OperationStatus.RUNNING, (
             f"{name} must not change the operation when it refuses"
         )
 
-    assert repository.record_operation_attempt(operation.id, runner_id="owner") == 1
-    assert repository.operation(operation.id).phase is OperationPhase.RETRY_WAIT
+    assert (
+        _execution_write(services, "record_operation_attempt", operation.id, runner_id="owner") == 1
+    )
+    assert _operation(services, operation.id).phase is OperationPhase.RETRY_WAIT
 
 
 def test_completing_a_cancelled_operation_records_cancellation_not_success(services) -> None:
-    repository = services.repository
     operation = _queued(services, "Cancel Co")
-    repository.claim_operation(operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
-    repository.request_operation_cancellation(operation.id)
+    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+    services.operation_lifecycle.cancel(operation.id)
 
-    completed = repository.complete_operation(operation.id, runner_id="owner")
+    completed = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
     assert completed.status is OperationStatus.CANCELLED
     assert completed.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
     assert completed.finished_at
 
 
 def test_outputs_cannot_be_activated_once_the_operation_stops_running(services) -> None:
-    repository = services.repository
     operation = _queued(services, "Output Co")
-    repository.claim_operation(operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
-    repository.record_operation_output(operation.id, "analysis", "analysis-1")
-    repository.activate_operation_output(operation.id, "analysis", "analysis-1")
+    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-1")
+    _execution_write(services, "activate_operation_output", operation.id, "analysis", "analysis-1")
     with pytest.raises(StateConflict, match="cannot be activated"):
-        repository.activate_operation_output(operation.id, "analysis", "analysis-1")
+        _execution_write(
+            services, "activate_operation_output", operation.id, "analysis", "analysis-1"
+        )
     with pytest.raises(StateConflict, match="cannot be activated"):
-        repository.activate_operation_output(operation.id, "analysis", "never-recorded")
+        _execution_write(
+            services, "activate_operation_output", operation.id, "analysis", "never-recorded"
+        )
 
     with pytest.raises(UnknownRecord):
-        repository.record_operation_output("no-such-operation", "analysis", "analysis-2")
+        _execution_write(
+            services, "record_operation_output", "no-such-operation", "analysis", "analysis-2"
+        )
 
     # Cancellation closes the window: an output may still be recorded, but not
     # activated, which is what keeps a cancelled run from taking effect.
-    repository.request_operation_cancellation(operation.id)
-    repository.record_operation_output(operation.id, "analysis", "analysis-3")
+    services.operation_lifecycle.cancel(operation.id)
+    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-3")
     with pytest.raises(StateConflict, match="cannot be activated"):
-        repository.record_operation_output(operation.id, "analysis", "analysis-4", active=True)
+        _execution_write(
+            services, "record_operation_output", operation.id, "analysis", "analysis-4", active=True
+        )

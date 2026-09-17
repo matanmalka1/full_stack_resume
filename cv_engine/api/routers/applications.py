@@ -232,7 +232,7 @@ def create_analysis(
     payload holding enum members rather than plain strings would depend on how
     Pydantic coerces a `str` subclass to survive the round trip.
     """
-    queued = services.operations.submit_analysis(
+    queued = services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=application_id,
             **request.model_dump(mode="json"),
@@ -262,7 +262,7 @@ def generate_working_draft(
     analysis or plan that moves before activation fails the source check as
     `SOURCE_CHANGED` instead of silently drafting from something else.
     """
-    queued = services.operations.submit_draft(
+    queued = services.operation_submissions.submit_draft(
         DraftCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),
@@ -299,7 +299,7 @@ def replace_working_draft(
     `keep_previous` materializes the historical snapshot before any of it
     starts.
     """
-    queued = services.operations.submit_replacement_draft(
+    queued = services.operation_replacements.submit_replacement_draft(
         ReplaceWorkingDraftCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),

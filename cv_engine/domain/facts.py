@@ -28,7 +28,9 @@ def _hashable_fact(fact: Fact) -> dict:
     source_file = payload.get("source_file")
     if source_file:
         directory, _, name = source_file.rpartition("/")
-        payload["source_file"] = f"{directory}/{source_id_of_name(name)}" if directory else source_id_of_name(name)
+        payload["source_file"] = (
+            f"{directory}/{source_id_of_name(name)}" if directory else source_id_of_name(name)
+        )
     return payload
 
 

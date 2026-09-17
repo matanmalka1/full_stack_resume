@@ -143,7 +143,7 @@ def _analysis_operation(
     """
     if fake_openai is not None and not fake_openai.scripts.get("propose_analysis"):
         fake_openai.script("propose_analysis", analysis_proposal())
-    return services.operations.submit_analysis(
+    return services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
@@ -237,7 +237,7 @@ def test_propose_selection_plan_commits_the_proposed_overlay(
         SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r"),
     )
 
-    queued = ai_services.operations.submit_selection_plan_proposal(
+    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
         ProposeSelectionPlanCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
@@ -264,7 +264,7 @@ def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
         "propose_selection_plan",
         SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
     )
-    queued = ai_services.operations.submit_selection_plan_proposal(
+    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
         ProposeSelectionPlanCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
@@ -351,7 +351,7 @@ def test_draft_resume_commits_wording_its_facts_support(
         ),
     )
 
-    queued = ai_services.operations.submit_draft(
+    queued = ai_services.operation_submissions.submit_draft(
         DraftCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
@@ -376,7 +376,7 @@ def test_draft_resume_commits_wording_its_facts_support(
 
 
 def _regenerate_section(services, ingested, analysed, working, section, claims):
-    return services.operations.submit_regeneration(
+    return services.operation_submissions.submit_regeneration(
         RegenerateSectionCommand(
             application_id=ingested.application_id,
             working_draft_id=working.id,
@@ -392,7 +392,7 @@ def _regenerate_section(services, ingested, analysed, working, section, claims):
 
 
 def _regenerate_claim(services, ingested, analysed, working, claim):
-    return services.operations.submit_regeneration(
+    return services.operation_submissions.submit_regeneration(
         RegenerateClaimCommand(
             application_id=ingested.application_id,
             working_draft_id=working.id,
@@ -691,7 +691,7 @@ def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
 
     def prepare_then_cancel(command, *, operation_id=None):
         prepared = original(command, operation_id=operation_id)
-        ai_services.repository.request_operation_cancellation(operation_id)
+        ai_services.operation_lifecycle.cancel(operation_id)
         return prepared
 
     fake_openai.script("propose_analysis", ANALYSIS)
@@ -768,7 +768,7 @@ def test_selection_context_carries_the_profile_pool_and_not_every_fact(
         "propose_selection_plan",
         SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
     )
-    queued = ai_services.operations.submit_selection_plan_proposal(
+    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
         ProposeSelectionPlanCommand(
             application_id=ingested.application_id,
             job_analysis_id=analysed.analysis_id,
@@ -1058,7 +1058,7 @@ def analysis_selection_operation(ai_services, fake_openai):
             "propose_selection_plan",
             SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
         )
-        queued = ai_services.operations.submit_selection_plan_proposal(
+        queued = ai_services.operation_submissions.submit_selection_plan_proposal(
             ProposeSelectionPlanCommand(
                 application_id=ingested.application_id, job_analysis_id=analysed.analysis_id
             ),
@@ -1083,8 +1083,8 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
     from sqlalchemy import func, select
 
     from cv_engine.infrastructure.persistence import analysis_sql
-    from cv_engine.infrastructure.persistence.operation_activation import (
-        SqlAlchemyOperationActivationStore,
+    from cv_engine.infrastructure.persistence.operation_execution import (
+        SqlAlchemyOperationExecutionStore,
     )
     from cv_engine.infrastructure.persistence.tables import job_analyses, selection_plans
 
@@ -1112,13 +1112,13 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
         monkeypatch.setattr(analysis_sql, "_insert_selection_plan", fail_after_insert)
     else:
         method = "activate_operation_output" if failure_at == "evidence" else "complete_operation"
-        original = getattr(SqlAlchemyOperationActivationStore, method)
+        original = getattr(SqlAlchemyOperationExecutionStore, method)
 
         def fail_after_write(*args, **kwargs):
             original(*args, **kwargs)
             raise RuntimeError("activation rollback")
 
-        monkeypatch.setattr(SqlAlchemyOperationActivationStore, method, fail_after_write)
+        monkeypatch.setattr(SqlAlchemyOperationExecutionStore, method, fail_after_write)
 
     completed = _run(ai_services, queued)
     assert completed.status.value == "failed"
@@ -1151,8 +1151,8 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
     )
     from cv_engine.infrastructure.object_store import LocalObjectStore
     from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
-    from cv_engine.infrastructure.persistence.operation_activation import (
-        SqlAlchemyOperationActivationStore,
+    from cv_engine.infrastructure.persistence.operation_execution import (
+        SqlAlchemyOperationExecutionStore,
     )
 
     ingested, queued = analysis_selection_operation(kind)
@@ -1192,9 +1192,9 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
     )
     for method in ("activate_operation_output", "complete_operation"):
         monkeypatch.setattr(
-            SqlAlchemyOperationActivationStore,
+            SqlAlchemyOperationExecutionStore,
             method,
-            tracked(getattr(SqlAlchemyOperationActivationStore, method)),
+            tracked(getattr(SqlAlchemyOperationExecutionStore, method)),
         )
     completed = _run(ai_services, queued)
     assert completed.status.value == "succeeded", completed.safe_failure_detail
@@ -1220,7 +1220,7 @@ def test_selection_cancelled_before_activation_registers_no_new_plan(
 
     def prepare_then_cancel(*args, **kwargs):
         value = original(*args, **kwargs)
-        ai_services.repository.request_operation_cancellation(queued.id)
+        ai_services.operation_lifecycle.cancel(queued.id)
         return value
 
     monkeypatch.setattr(ai_services.analysis, method, prepare_then_cancel)
@@ -1259,7 +1259,7 @@ def test_retry_reuses_the_same_provider_output_without_rewriting_evidence(
             value.evidence.provenance,
         )
         assert repeated.artifact_version_id == value.evidence.artifact_version_id
-        ai_services.repository.request_operation_cancellation(queued.id)
+        ai_services.operation_lifecycle.cancel(queued.id)
         return value
 
     monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
@@ -1272,7 +1272,7 @@ def test_retry_reuses_the_same_provider_output_without_rewriting_evidence(
         fake_openai.scripts["propose_analysis"] = [
             envelope(analysis_proposal(), id="resp_distinct_retry")
         ]
-    retried = ai_services.operations.retry(queued.id, idempotency_key=new_id())
+    retried = ai_services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
     completed = _run(ai_services, retried)
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     after = _provider_artifacts(ai_services, ingested.application_id)
@@ -1289,6 +1289,6 @@ def test_retry_reuses_the_same_provider_output_without_rewriting_evidence(
     )
     assert (first.output_id == second.output_id) is same_response
     assert not first.active and second.active
-    original_operation = ai_services.repository.operation(queued.id)
+    original_operation = ai_services.operation_lifecycle.get(queued.id)
     assert original_operation.status.value == "cancelled"
     assert all(not output.active for output in original_operation.outputs)
