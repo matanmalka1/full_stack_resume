@@ -77,7 +77,7 @@ export const NewApplicationPage = () => {
     >
       {/* The wizard frame carries the spine; the single-column form takes a shorter reading
           measure inside it so long fields remain easy to scan. */}
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto w-full max-w-3xl">
         <ApplicationIntakeForm
           duplicates={submission.duplicateMatches}
           draftStatus={intakeDraft.status}
