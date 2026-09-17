@@ -3,7 +3,7 @@
 This was `cv_engine/infrastructure/canonical_data.py`: 831 lines, of which about
 770 were the candidate's facts written out as Python literals. Nothing in the
 engine ever imported it — only tests did — so it was a second canonical location
-for facts whose first one is `base/*.md`, living inside the product for no
+for facts whose first one is `base/*.json`, living inside the product for no
 reason. CLAUDE.md allows exactly one canonical location per fact.
 
 It is now four data files plus this loader. Two things follow from that.
@@ -22,13 +22,12 @@ checks is the thing that quietly rots.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 from pathlib import Path
 from typing import Any
 
 SEED_DIR = Path(__file__).parent / "fixtures/seed"
-SEED_SOURCES = ("common.md", "sales.md", "development.md", "situational_skills.md")
+SEED_SOURCES = ("common.json", "sales.json", "development.json", "situational_skills.json")
 
 # Added through the normal fact lifecycle rather than baked into the seed, so the
 # fixture exercises the path a real new fact takes. New v2 facts take UUIDv4
@@ -54,16 +53,6 @@ def write_canonical_sources(base_dir: Path) -> list[Path]:
     return written
 
 
-_JSON_BLOCK = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
-
-
 def facts_in(text: str) -> dict[str, dict[str, Any]]:
-    """The facts a rendered source carries, keyed by id.
-
-    Parsed from the embedded JSON rather than the prose, because the prose is a
-    rendering of the JSON and only the JSON is the record.
-    """
-    match = _JSON_BLOCK.search(text)
-    if not match:
-        return {}
-    return {fact["fact_id"]: fact for fact in json.loads(match.group(1))["facts"]}
+    """The facts a fact source carries, keyed by id."""
+    return {fact["fact_id"]: fact for fact in json.loads(text)["facts"]}

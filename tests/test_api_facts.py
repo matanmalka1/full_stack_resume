@@ -18,7 +18,7 @@ from cv_engine.api.schemas.facts import CaptureClaimFactRequest
 
 def _content(**overrides) -> dict:
     return {
-        "source": "situational_skills.md",
+        "source": "situational_skills.json",
         "meaning": "candidate has production PostgreSQL experience",
         "renderings": {"en": "PostgreSQL"},
         "tags": ["database"],
@@ -155,7 +155,7 @@ def test_claim_capture_requires_explicit_provenance() -> None:
             {
                 "application_id": "application",
                 "claim_id": "claim",
-                "source": "sales.md",
+                "source": "sales.json",
                 "meaning": "candidate introduced a weekly pipeline review",
                 "tags": ["sales", "pipeline"],
             }

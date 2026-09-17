@@ -3,7 +3,7 @@
 `FactResponse` restates the domain `Fact` rather than carrying it, which is the
 opposite of how the analysis schemas treat `JobAnalysis`. The reason is one
 field: a stored `Fact` carries `source_file`, a repository-relative path like
-`base/sales.md`, and architecture 14 forbids an endpoint from exposing a
+`base/sales.json`, and architecture 14 forbids an endpoint from exposing a
 filesystem location. What a client needs is *which* canonical source a fact
 belongs to, so the wire carries `source` - the name alone, derived through
 `source_name_of`.
@@ -34,7 +34,7 @@ from ...domain.contracts.taxonomy import ProfileName
 from ...domain.facts import FACT_SOURCE_NAMES, source_name_of
 from .health import HttpSchema
 
-FactSource = Literal["common.md", "sales.md", "development.md", "situational_skills.md"]
+FactSource = Literal["common.json", "sales.json", "development.json", "situational_skills.json"]
 
 # The transport vocabulary is the domain's, derived rather than retyped: a
 # fifth source file added to `FACT_SOURCE_NAMES` must not silently keep being

@@ -478,7 +478,7 @@ describe("DraftEditorPage", () => {
       id: "event-1",
       lifecycle_version: "lifecycle-2",
       reason: "explicit confirmation",
-      source: "sales.md",
+      source: "sales.json",
       to_status: "confirmed",
     };
     const fetchMock = vi.fn((input: unknown) => {
@@ -500,7 +500,7 @@ describe("DraftEditorPage", () => {
               renderings: { en: "Delivered 30% growth." },
               replaces: null,
               resume_style: "bullet",
-              source: "sales.md",
+              source: "sales.json",
               status: "confirmed",
               tags: ["growth"],
             },
@@ -753,7 +753,7 @@ describe("DraftEditorPage", () => {
                 status: confirmed ? "canonical" : "pending",
                 tags: [],
                 provenance: "Candidate",
-                source: "sales.md",
+                source: "sales.json",
               },
               events: [],
             } satisfies FactDetail),

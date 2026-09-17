@@ -19,7 +19,7 @@ export interface FactFormFields {
    track is guessed; the person can still pick any source, and a fact that belongs
    nowhere in particular is filed by hand. */
 export const defaultFactSource = (profile: string | null): FactSource =>
-  profile === "development" ? "development.md" : "sales.md";
+  profile === "development" ? "development.json" : "sales.json";
 
 export const emptyFactForm = (profile: string | null, meaning = ""): FactFormFields => ({
   english: "",

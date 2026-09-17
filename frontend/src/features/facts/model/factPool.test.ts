@@ -14,7 +14,7 @@ const item = (factId: string, status: FactStatus, recorded: string | null): Fact
     renderings: { en: "Led a B2B sales team" },
     replaces: null,
     resume_style: "bullet",
-    source: "sales.md",
+    source: "sales.json",
     status,
     tags: [],
   },

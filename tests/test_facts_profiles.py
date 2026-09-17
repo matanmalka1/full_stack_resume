@@ -246,7 +246,7 @@ def test_a_role_without_a_readable_span_is_refused(fact_store, project_root: Pat
 def test_seed_and_repository_knowledge_hold_the_same_facts() -> None:
     """The frozen test seed must not drift from the candidate's live facts.
 
-    The seed is a second copy of `base/*.md`, kept frozen so that editing a real
+    The seed is a second copy of `base/*.json`, kept frozen so that editing a real
     CV fact cannot silently change what 200-odd tests assert. A copy nobody
     compares is the one that rots, so this compares it.
 

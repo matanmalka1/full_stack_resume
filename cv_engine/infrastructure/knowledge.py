@@ -30,7 +30,6 @@ from ..domain.facts import (
     FactStoreError,
     build_new_fact,
     parse_fact_source,
-    parse_fact_source_document,
     render_fact_source,
     source_name_of,
     with_deleted_fact,
@@ -122,8 +121,8 @@ def read_fact_source(path: Path) -> FactSource:
     return parse_fact_source(path.read_text(encoding="utf-8"), origin=str(path))
 
 
-def _write_fact_source(path: Path, title: str, source: FactSource) -> None:
-    path.write_text(render_fact_source(title, source), encoding="utf-8")
+def _write_fact_source(path: Path, source: FactSource) -> None:
+    path.write_text(render_fact_source(source), encoding="utf-8")
 
 
 def load_fact_store(base_dir: Path) -> FactStore:
@@ -201,8 +200,8 @@ def seed_fact_before_project(
     store = load_fact_store(base_dir)
     record = build_new_fact(store, source_name, payload, canonical=canonical)
     path = base_dir / source_name
-    title, source = parse_fact_source_document(path.read_text(encoding="utf-8"), origin=str(path))
-    _write_fact_source(path, title, with_new_fact(source, record, canonical=canonical))
+    source = parse_fact_source(path.read_text(encoding="utf-8"), origin=str(path))
+    _write_fact_source(path, with_new_fact(source, record, canonical=canonical))
     return record.model_copy(update={"source_file": f"base/{source_name}"})
 
 
@@ -380,8 +379,8 @@ class FileKnowledge:
         store = self.facts()
         record = build_new_fact(store, source_name, payload, canonical=canonical)
         path = resolve_within(self.base_dir, self.base_dir / source_name)
-        title, source = parse_fact_source_document(path.read_text("utf-8"), origin=str(path))
-        proposed = render_fact_source(title, with_new_fact(source, record, canonical=canonical))
+        source = parse_fact_source(path.read_text("utf-8"), origin=str(path))
+        proposed = render_fact_source(with_new_fact(source, record, canonical=canonical))
         staged = self._stage(mutation_id, path, proposed)
         return staged, record.model_copy(update={"source_file": f"base/{source_name}"})
 
@@ -398,11 +397,9 @@ class FileKnowledge:
         before = store.get(fact_id)
         promoted = store.promote(fact_id, status, explicitly_confirmed=explicitly_confirmed)
         path = resolve_within(self.base_dir, self.base_dir / source_name_of(before))
-        title, source = parse_fact_source_document(path.read_text("utf-8"), origin=str(path))
+        source = parse_fact_source(path.read_text("utf-8"), origin=str(path))
         confirmed_at = before.confirmed_at or utc_now()[:10]
-        proposed = render_fact_source(
-            title, with_promoted_fact(source, fact_id, status, confirmed_at)
-        )
+        proposed = render_fact_source(with_promoted_fact(source, fact_id, status, confirmed_at))
         staged = self._stage(mutation_id, path, proposed)
         return staged, before, promoted.model_copy(update={"confirmed_at": confirmed_at})
 
@@ -415,8 +412,8 @@ class FileKnowledge:
         before = store.get(fact_id)
         deleted = store.delete(fact_id)
         path = resolve_within(self.base_dir, self.base_dir / source_name_of(before))
-        title, source = parse_fact_source_document(path.read_text("utf-8"), origin=str(path))
-        proposed = render_fact_source(title, with_deleted_fact(source, fact_id))
+        source = parse_fact_source(path.read_text("utf-8"), origin=str(path))
+        proposed = render_fact_source(with_deleted_fact(source, fact_id))
         staged = self._stage(mutation_id, path, proposed)
         return staged, before, deleted
 
@@ -458,11 +455,8 @@ class FileKnowledge:
         ).model_copy(update={"confirmed_at": confirmed.confirmed_at})
 
         fact_path = resolve_within(self.base_dir, self.base_dir / source_name_of(before))
-        title, fact_source = parse_fact_source_document(
-            fact_path.read_text("utf-8"), origin=str(fact_path)
-        )
+        fact_source = parse_fact_source(fact_path.read_text("utf-8"), origin=str(fact_path))
         fact_text = render_fact_source(
-            title,
             with_promoted_fact(
                 fact_source, fact_id, FactStatus.CANONICAL, canonical.confirmed_at or utc_now()[:10]
             ),

@@ -13,7 +13,7 @@ const fact = (overrides: Partial<Fact> = {}): Fact => ({
   renderings: { en: "Led a B2B sales team of six" },
   replaces: null,
   resume_style: "bullet",
-  source: "sales.md",
+  source: "sales.json",
   status: "canonical",
   tags: ["sales"],
   ...overrides,
@@ -51,7 +51,7 @@ describe("the fact vocabulary", () => {
   it("translates the statuses and sources the contract declares", () => {
     expect(factStatusLabel("pending")).toBe("ממתינה לאישור");
     expect(factStatusLabel("canonical")).toBe("מקור אמת");
-    expect(factSourceLabel("development.md")).toBe("ניסיון בפיתוח");
+    expect(factSourceLabel("development.json")).toBe("ניסיון בפיתוח");
   });
 
   /* Status and source arrive as open strings. A value the backend adds before this
@@ -64,23 +64,23 @@ describe("the fact vocabulary", () => {
 
 describe("attaching a fact across career tracks", () => {
   it("names the mismatch when the fact belongs to the other track", () => {
-    expect(isCrossTrackFact("development.md", "sales.md")).toBe(true);
+    expect(isCrossTrackFact("development.json", "sales.json")).toBe(true);
   });
 
   it("stays quiet when the fact is already on the active track", () => {
-    expect(isCrossTrackFact("sales.md", "sales.md")).toBe(false);
+    expect(isCrossTrackFact("sales.json", "sales.json")).toBe(false);
   });
 
   /* Shared and situational facts are written to be reused across tracks, so attaching
      one is ordinary rather than something to warn about. */
   it("treats the track-neutral sources as belonging everywhere", () => {
-    expect(isCrossTrackFact("common.md", "sales.md")).toBe(false);
-    expect(isCrossTrackFact("situational_skills.md", "development.md")).toBe(false);
+    expect(isCrossTrackFact("common.json", "sales.json")).toBe(false);
+    expect(isCrossTrackFact("situational_skills.json", "development.json")).toBe(false);
   });
 
   /* With no active Profile there is no track to be crossing, and a warning would be
      naming a conflict that does not exist. */
   it("raises nothing when there is no active Profile to compare against", () => {
-    expect(isCrossTrackFact("development.md", null)).toBe(false);
+    expect(isCrossTrackFact("development.json", null)).toBe(false);
   });
 });

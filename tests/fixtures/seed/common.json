@@ -1,8 +1,3 @@
-# Common Canonical Facts
-
-This file is an authoritative fact source. Edit facts through the fact lifecycle; profiles may reference IDs but must not copy content.
-
-```json
 {
   "source_version": "1.0.0",
   "facts": [
@@ -283,4 +278,3 @@ This file is an authoritative fact source. Edit facts through the fact lifecycle
     }
   ]
 }
-```

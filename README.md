@@ -48,8 +48,8 @@ each worktree. To install the browser again without replacing the environment:
 
 ## Architecture
 
-- `base/common.md`, `base/sales.md`, `base/development.md`, and
-  `base/situational_skills.md` are the modular canonical fact store.
+- `base/common.json`, `base/sales.json`, `base/development.json`, and
+  `base/situational_skills.json` are the modular canonical fact store.
 - `profiles/` selects and weights facts without duplicating content.
 - `rendering/rules/` and `rendering/templates/` define Development, Sales LTR/RTL,
   and deterministic profile-specific presentations of canonical facts. Tech Sales
@@ -273,8 +273,8 @@ The pre-v1 generation scripts and the v1 submission data they wrote (`outputs/`,
 `jobs/status.csv`, `cv-html/`) were removed: every row was an unsent `draft`, so it
 recorded no submission and preserved no evidence. The v1 source documents — `base/cv_base.md`,
 `base/cv-formatted.md`, `base/cv-pdf/` — went with them. Nothing in v2 read them: the
-canonical fact sources are `common.md`, `sales.md`, `development.md`, and
-`situational_skills.md`.
+canonical fact sources are `common.json`, `sales.json`, `development.json`, and
+`situational_skills.json`.
 
 `ai/prompts/` holds exactly the live prompt. The task contract in
 `ai/contracts/task_contracts.json` names it, and a superseded version is deleted rather

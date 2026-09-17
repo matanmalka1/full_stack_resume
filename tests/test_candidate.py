@@ -77,7 +77,7 @@ def test_filename_override_and_dependency_hash_follow_canonical_context(
     assert context.display_name("en") == "Matan Malka"
 
     before = context.version_hash
-    common = project_root / "base/common.md"
+    common = project_root / "base/common.json"
     text = common.read_text(encoding="utf-8")
     common.write_text(
         text.replace("linkedin.com/in/matanmalka1", "linkedin.com/in/other"), encoding="utf-8"

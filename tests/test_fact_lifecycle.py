@@ -41,23 +41,23 @@ def _reload(services: Services) -> FactStore:
 
 
 def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Services) -> None:
-    result = services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    result = services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
 
     assert result.fact.status is FactStatus.PENDING
     stored = _reload(services).get("situational.postgres")
     assert stored.status is FactStatus.PENDING
-    assert stored.source_file == "base/situational_skills.md"
+    assert stored.source_file == "base/situational_skills.json"
     with pytest.raises(FactStoreError, match="not canonical"):
         _reload(services).get("situational.postgres", canonical_only=True)
 
 
 def test_contextual_pending_fact_gets_a_generated_uuid(services: Services) -> None:
     payload = {key: value for key, value in NEW_FACT.items() if key != "fact_id"}
-    result = services.knowledge_lifecycle.create_pending_fact("situational_skills.md", payload)
+    result = services.knowledge_lifecycle.create_pending_fact("situational_skills.json", payload)
     assert uuid.UUID(result.fact.fact_id).version == 4
     assert result.fact.status is FactStatus.PENDING
     with pytest.raises(KnowledgeRejected, match="not user-editable"):
-        services.knowledge_lifecycle.create_pending_fact("situational_skills.md", dict(NEW_FACT))
+        services.knowledge_lifecycle.create_pending_fact("situational_skills.json", dict(NEW_FACT))
 
 
 def test_attachment_target_projection_exposes_sections_without_profile_documents(
@@ -97,7 +97,7 @@ def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) 
     created = services.knowledge_lifecycle.create_fact_from_claim(
         application_id,
         claim.claim_id,
-        source="sales.md",
+        source="sales.json",
         meaning="Introduced a weekly pipeline review with the Sales team.",
         tags=["sales", "leadership", "pipeline"],
     )
@@ -110,17 +110,17 @@ def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) 
 def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
     services: Services,
 ) -> None:
-    source = services.paths.knowledge_root / "base" / "situational_skills.md"
+    source = services.paths.knowledge_root / "base" / "situational_skills.json"
     before = source.read_bytes()
 
     staged, fact = services.knowledge.stage_create_fact(
         "staged-create",
-        "situational_skills.md",
+        "situational_skills.json",
         dict(NEW_FACT),
     )
     assert fact.status is FactStatus.PENDING
     assert source.read_bytes() == before
-    assert staged.source_reference == "base/situational_skills.md"
+    assert staged.source_reference == "base/situational_skills.json"
     assert staged.staged_reference == "tmp/knowledge/staged-create/new"
 
     services.knowledge.activate_staged(staged)
@@ -134,10 +134,10 @@ def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
 def test_knowledge_file_activation_refuses_source_or_staged_hash_changes(
     services: Services,
 ) -> None:
-    source = services.paths.knowledge_root / "base" / "situational_skills.md"
+    source = services.paths.knowledge_root / "base" / "situational_skills.json"
     staged, _fact = services.knowledge.stage_create_fact(
         "source-change",
-        "situational_skills.md",
+        "situational_skills.json",
         dict(NEW_FACT),
     )
     original = source.read_text(encoding="utf-8")
@@ -159,7 +159,7 @@ def test_prepared_knowledge_mutation_recovers_or_quarantines_from_hashes(
 
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", interrupt)
     with pytest.raises(RuntimeError, match="simulated crash"):
-        services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     mutation = services.repository.prepared_knowledge_mutations()[0]
     source = services.paths.root / mutation.source_reference
     staged = services.paths.root / mutation.staged_reference
@@ -193,7 +193,7 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
 
     monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", interrupt_before)
     with pytest.raises(RuntimeError, match="before replace"):
-        services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     mutation = services.repository.prepared_knowledge_mutations()[0]
     with pytest.raises(KnowledgeRejected, match="uncommitted prepared mutation"):
         services.knowledge_lifecycle.list_facts()
@@ -214,7 +214,7 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
 
     monkeypatch.setattr(recovered.knowledge_lifecycle, "_complete_prepared", interrupt_after)
     with pytest.raises(RuntimeError, match="after replace"):
-        recovered.knowledge_lifecycle.add_fact("situational_skills.md", second_payload)
+        recovered.knowledge_lifecycle.add_fact("situational_skills.json", second_payload)
     recovered_again = build_services(services.paths)
     assert _reload(recovered_again).get("situational.postgres.second").status is FactStatus.PENDING
     assert len(recovered_again.knowledge_lifecycle.fact_history().events) == 2
@@ -235,7 +235,7 @@ def test_startup_marks_committed_db_mutation_without_duplicate_event(
 
     monkeypatch.setattr(services.repository, "commit_knowledge_mutation", fail_once)
     with pytest.raises(RuntimeError, match="after database commit"):
-        services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     assert len(services.repository.fact_events("situational.postgres")) == 1
     assert len(services.repository.prepared_knowledge_mutations()) == 1
 
@@ -247,7 +247,7 @@ def test_startup_marks_committed_db_mutation_without_duplicate_event(
 def test_audit_failure_restores_source_and_quarantines(
     services: Services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = services.paths.knowledge_root / "base" / "situational_skills.md"
+    source = services.paths.knowledge_root / "base" / "situational_skills.json"
     before = source.read_bytes()
 
     def refuse_event(self, **_values):
@@ -255,12 +255,12 @@ def test_audit_failure_restores_source_and_quarantines(
 
     monkeypatch.setattr(type(services.repository), "record_fact_event", refuse_event)
     with pytest.raises(KnowledgeRejected, match="audit insertion failure"):
-        services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     assert source.read_bytes() == before
     assert len(services.repository.quarantined_knowledge_mutations()) == 1
     with pytest.raises(KnowledgeRejected, match="mutations are quarantined"):
         services.knowledge_lifecycle.add_fact(
-            "situational_skills.md", {**NEW_FACT, "fact_id": "another.fact"}
+            "situational_skills.json", {**NEW_FACT, "fact_id": "another.fact"}
         )
 
 
@@ -270,7 +270,7 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
     request = PrepareKnowledgeMutation(
         mutation_id="quarantined-mutation",
         mutation_type="promote_fact",
-        source_reference="base/sales.md",
+        source_reference="base/sales.json",
         staged_reference="tmp/knowledge/quarantined-mutation/new",
         old_sha256="a" * 64,
         new_sha256="b" * 64,
@@ -293,7 +293,7 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_plan_command(
     setup = drafted_application("Contextual Knowledge Co")
     services, application_id = setup
     created = services.knowledge_lifecycle.add_fact(
-        "sales.md",
+        "sales.json",
         {
             **NEW_FACT,
             "fact_id": "sales.contextual.pipeline_review",
@@ -332,7 +332,7 @@ def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
     setup = analyzed_application("Hebrew Contextual Knowledge Co")
     services, application_id = setup
     created = services.knowledge_lifecycle.add_fact(
-        "sales.md",
+        "sales.json",
         {
             **NEW_FACT,
             "fact_id": "sales.contextual.hebrew_gap",
@@ -348,7 +348,7 @@ def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
             language_override="he",
         ),
     )
-    fact_source = services.paths.knowledge_root / "base" / "sales.md"
+    fact_source = services.paths.knowledge_root / "base" / "sales.json"
     profile_source = services.paths.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
     before_fact = fact_source.read_bytes()
     before_profile = profile_source.read_bytes()
@@ -377,7 +377,7 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
     setup = drafted_application("Contextual Rollback Co")
     services, application_id = setup
     created = services.knowledge_lifecycle.add_fact(
-        "sales.md",
+        "sales.json",
         {
             **NEW_FACT,
             "fact_id": "sales.contextual.rollback",
@@ -385,7 +385,7 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
         },
         application_id=application_id,
     )
-    fact_source = services.paths.knowledge_root / "base" / "sales.md"
+    fact_source = services.paths.knowledge_root / "base" / "sales.json"
     profile_source = services.paths.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
     before_fact = fact_source.read_bytes()
     before_profile = profile_source.read_bytes()
@@ -410,7 +410,7 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
 
     staged, _fact = services.knowledge.stage_create_fact(
         "stage-change",
-        "situational_skills.md",
+        "situational_skills.json",
         dict(NEW_FACT),
     )
     staged_path = services.paths.root / staged.staged_reference
@@ -429,7 +429,7 @@ def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
     a `pending` fact changes `lifecycle_version` only.
     """
     before = _reload(services)
-    services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     after = _reload(services)
 
     assert after.version == before.version
@@ -449,7 +449,7 @@ def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
 def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
     services: Services,
 ) -> None:
-    services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
         services.knowledge_lifecycle.promote_fact(
@@ -465,7 +465,7 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
 def test_delete_fact_is_one_way_and_excluded_from_default_listing_and_targets(
     services: Services,
 ) -> None:
-    created = services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    created = services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     fact_id = created.fact.fact_id
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
@@ -513,7 +513,7 @@ def test_lifecycle_survives_process_boundaries_over_http(
     created = live_api_server.post(
         "/facts",
         {
-            "source": "situational_skills.md",
+            "source": "situational_skills.json",
             "meaning": NEW_FACT["meaning"],
             "renderings": NEW_FACT["renderings"],
             "tags": ["development", "situational"],
@@ -550,18 +550,18 @@ def test_lifecycle_survives_process_boundaries_over_http(
 
 
 def test_duplicate_fact_ids_are_refused(services: Services) -> None:
-    services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
 
     with pytest.raises(KnowledgeRejected, match="fact already exists"):
-        services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     with pytest.raises(KnowledgeRejected, match="fact already exists"):
         services.knowledge_lifecycle.add_fact(
-            "common.md", {**NEW_FACT, "meaning": "different meaning"}
+            "common.json", {**NEW_FACT, "meaning": "different meaning"}
         )
 
 
 def test_lifecycle_events_are_immutable(services: Services) -> None:
-    services.knowledge_lifecycle.add_fact("situational_skills.md", dict(NEW_FACT))
+    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
     repository = cast(Repository, services.repository)
 
     with pytest.raises(ProgrammingError, match="immutable record"):
@@ -595,7 +595,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     captured = services.knowledge_lifecycle.capture_claim_fact(
         app_id,
         claim.claim_id,
-        source="sales.md",
+        source="sales.json",
         fact_id="sales.leadership.pipeline_review",
         meaning="Introduced a weekly pipeline review with the Sales team.",
         tags=["sales", "leadership", "pipeline"],

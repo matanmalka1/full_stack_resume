@@ -7,10 +7,10 @@ export type FactSource = CreateFactRequest["source"];
 export type FactStyle = CreateFactRequest["resume_style"];
 
 export const factSourceLabels: Record<FactSource, string> = {
-  "common.md": "עובדות משותפות",
-  "sales.md": "ניסיון במכירות",
-  "development.md": "ניסיון בפיתוח",
-  "situational_skills.md": "כישורים מצביים",
+  "common.json": "עובדות משותפות",
+  "sales.json": "ניסיון במכירות",
+  "development.json": "ניסיון בפיתוח",
+  "situational_skills.json": "כישורים מצביים",
 };
 
 export const factStyleLabels: Record<FactStyle, string> = {
@@ -63,7 +63,7 @@ export const factLabelInLanguage = (fact: Fact, language: string): string =>
 
 /* Sources that belong to no single career track. A fact filed under one of these is
    meant to be reused across tracks, so attaching it anywhere raises nothing. */
-const TRACK_NEUTRAL_SOURCES = new Set<string>(["common.md", "situational_skills.md"]);
+const TRACK_NEUTRAL_SOURCES = new Set<string>(["common.json", "situational_skills.json"]);
 
 /* Whether attaching this fact would pull it across career tracks - a development fact
    onto a sales Profile, or the reverse. Not forbidden: a fact can legitimately cross,

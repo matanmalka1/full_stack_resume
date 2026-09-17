@@ -1888,7 +1888,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "common.md" | "sales.md" | "development.md" | "situational_skills.md";
+            source: "common.json" | "sales.json" | "development.json" | "situational_skills.json";
             /** Tags */
             tags: string[];
         };
@@ -2407,7 +2407,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "common.md" | "sales.md" | "development.md" | "situational_skills.md";
+            source: "common.json" | "sales.json" | "development.json" | "situational_skills.json";
             /** Tags */
             tags: string[];
         };

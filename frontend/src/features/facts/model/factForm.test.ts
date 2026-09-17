@@ -5,14 +5,14 @@ import { defaultFactSource, emptyFactForm, factFieldRules, parseFactTags, replac
 
 describe("where a new fact is filed", () => {
   it("files it under the active Profile's own track", () => {
-    expect(defaultFactSource("development")).toBe("development.md");
-    expect(defaultFactSource("field-sales")).toBe("sales.md");
+    expect(defaultFactSource("development")).toBe("development.json");
+    expect(defaultFactSource("field-sales")).toBe("sales.json");
   });
 
   /* A guess, not a decision: the person can still pick any source, so the absence of a
      Profile picks a starting point rather than refusing to open the form. */
   it("still offers a starting source with no active Profile", () => {
-    expect(defaultFactSource(null)).toBe("sales.md");
+    expect(defaultFactSource(null)).toBe("sales.json");
   });
 });
 
@@ -25,7 +25,7 @@ describe("the fact form's starting state", () => {
       hebrew: "",
       meaning: "Delivered 30% growth.",
       provenance: "",
-      source: "development.md",
+      source: "development.json",
       style: "bullet",
       tags: "",
     });
@@ -42,7 +42,7 @@ describe("the fact form's starting state", () => {
       provenance: "candidate notes",
       renderings: { en: "Built APIs", he: "בניית ממשקים" },
       resume_style: "bullet",
-      source: "development.md",
+      source: "development.json",
       status: "canonical",
       tags: ["backend", "api"],
     } satisfies Fact;
@@ -51,7 +51,7 @@ describe("the fact form's starting state", () => {
       hebrew: "בניית ממשקים",
       meaning: "Built APIs",
       provenance: "candidate notes",
-      source: "development.md",
+      source: "development.json",
       style: "bullet",
       tags: "backend, api",
     });

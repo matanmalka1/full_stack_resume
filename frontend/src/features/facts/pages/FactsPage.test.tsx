@@ -11,7 +11,7 @@ const fact = (overrides: Partial<Fact> = {}): Fact => ({
   provenance: "Confirmed by candidate",
   renderings: { en: "Built backend services", he: "בניית שירותי Backend" },
   resume_style: "bullet",
-  source: "development.md",
+  source: "development.json",
   status: "canonical",
   tags: ["backend", "api"],
   ...overrides,
@@ -82,7 +82,7 @@ describe("FactsPage", () => {
       fact_id: "fact.sales",
       meaning: "Managed accounts",
       renderings: { en: "Managed accounts" },
-      source: "sales.md",
+      source: "sales.json",
       status: "pending",
       tags: ["sales"],
     });

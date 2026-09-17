@@ -6,9 +6,7 @@ import re
 from ..util import canonical_json, sha256_text, utc_now
 from .contracts.knowledge import Fact, FactSource, FactStatus
 
-FACT_BLOCK = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
-FACT_SOURCE_NAMES = ("common.md", "sales.md", "development.md", "situational_skills.md")
-SOURCE_TITLE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+FACT_SOURCE_NAMES = ("common.json", "sales.json", "development.json", "situational_skills.json")
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 
@@ -130,32 +128,15 @@ class FactStore:
 
 def parse_fact_source(text: str, *, origin: str) -> FactSource:
     """Parse one fact source document. `origin` only names it in errors."""
-    match = FACT_BLOCK.search(text)
-    if not match:
-        raise FactStoreError(f"no JSON fact block in {origin}")
     try:
-        payload = json.loads(match.group(1))
+        payload = json.loads(text)
         return FactSource.model_validate(payload)
     except (json.JSONDecodeError, ValueError) as exc:
         raise FactStoreError(f"invalid fact source {origin}: {exc}") from exc
 
 
-def render_fact_source(title: str, source: FactSource) -> str:
-    payload = json.dumps(source.model_dump(mode="json"), ensure_ascii=False, indent=2)
-    return (
-        f"# {title}\n\n"
-        "This file is an authoritative fact source. Edit facts through the fact "
-        "lifecycle; profiles may reference IDs but must not copy content.\n\n"
-        f"```json\n{payload}\n```\n"
-    )
-
-
-def parse_fact_source_document(text: str, *, origin: str) -> tuple[str, FactSource]:
-    """The document's title and parsed facts, for read-modify-write."""
-    title = SOURCE_TITLE.search(text)
-    if not title:
-        raise FactStoreError(f"fact source has no title heading: {origin}")
-    return title.group(1), parse_fact_source(text, origin=origin)
+def render_fact_source(source: FactSource) -> str:
+    return json.dumps(source.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
 
 
 def _next_source_version(version: str) -> str:

@@ -206,7 +206,7 @@ def project_root(tmp_path: Path) -> Path:
     # The identity fact and candidate context are added the way the product
     # adds them, rather than baked into the seed sources, so the fixture
     # exercises the real lifecycle instead of a shortcut around it.
-    seed_fact_before_project(root / "base", "common.md", dict(V2_IDENTITY_FACT), canonical=True)
+    seed_fact_before_project(root / "base", "common.json", dict(V2_IDENTITY_FACT), canonical=True)
     shutil.copy2(SOURCE_ROOT / "base/candidate.json", root / "base/candidate.json")
     for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)
