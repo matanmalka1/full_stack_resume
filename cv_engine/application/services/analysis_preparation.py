@@ -11,10 +11,8 @@ from ..commands import AnalyzeCommand
 from ..errors import (
     ApplicationError,
     InfrastructureFailure,
-    LineageBroken,
     PreconditionFailed,
     ProviderInvalidOutput,
-    UnknownRecord,
 )
 from ..ports import AnalysisContext
 from .analysis_selection import AnalysisSelection
@@ -45,23 +43,16 @@ class AnalysisPreparation:
 
         `operation_id` is required. It is
         where the sanitized provider response is preserved, and it is the
-        Operation's own ID rather than the analysis's, so a retry - which is
-        a second Operation - writes beside the first attempt's evidence
-        instead of colliding with it.
+        Operation's own ID rather than the analysis's. A distinct provider output
+        from a retry is written beside the first attempt's evidence. Re-observing
+        the same provider-assigned response identity reuses immutable evidence;
+        the new Operation still receives its own inactive output reference.
         """
-        try:
-            snapshot = service.repo.get_snapshot(command.job_snapshot_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown job snapshot: {command.job_snapshot_id}") from exc
-        if snapshot["application_id"] != command.application_id:
-            raise LineageBroken(
-                f"job snapshot {command.job_snapshot_id} does not belong to application "
-                f"{command.application_id}"
-            )
+        snapshot = service.snapshot_source(command.application_id, command.job_snapshot_id)
+        service.refuse_deleted(snapshot.application_id, snapshot.deleted_at)
         try:
             job_text = service.snapshot_payloads.read_snapshot(
-                snapshot["payload_path"],
-                snapshot["source_hash"],
+                snapshot.payload_path, snapshot.source_hash
             )
         except (OSError, ValueError) as exc:
             raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
@@ -79,6 +70,7 @@ class AnalysisPreparation:
         overrides: dict[OverrideKey, str] = {
             key: value for key, value in override_candidates.items() if value is not None
         }
+        service.assert_provider_io_allowed()
         try:
             answered = service.provider.propose_analysis(
                 AnalysisContext(
@@ -103,7 +95,7 @@ class AnalysisPreparation:
                     facts=knowledge.facts,
                     profiles=profiles,
                     concepts=knowledge.requirement_concepts,
-                    normalized_hash=snapshot["normalized_hash"],
+                    normalized_hash=snapshot.normalized_hash,
                     overrides=overrides,
                 )
             except ValueError as exc:

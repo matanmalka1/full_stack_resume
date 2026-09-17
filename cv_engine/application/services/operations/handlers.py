@@ -23,6 +23,7 @@ from ...errors import (
     ApplicationError,
     DependencyUnavailable,
     InfrastructureFailure,
+    KnowledgeRejected,
     LineageBroken,
     MissingFactRendering,
     ProposalRejected,
@@ -38,10 +39,17 @@ from ...operations import (
 from ...ports import (
     DraftRepository,
     OperationRepository,
-    PreparationRepository,
     ReadinessRepository,
 )
-from ..analysis import AnalysisService, PreparedAnalysis, PreparedSelectionProposal
+from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.transactions import ReadTransaction, WriteTransaction
+from ..analysis import (
+    AnalysisService,
+    PreparedAnalysis,
+    PreparedSelectionProposal,
+    load_analysis_knowledge,
+)
+from ..analysis_activation import AnalysisActivation
 from ..drafts import DraftService, PreparedDraft, PreparedRegeneration
 from ..proposals import ProviderEvidence
 from ..rendering import ExecutedRender, RenderingService
@@ -145,37 +153,70 @@ class AITaskHandler:
         return OperationExecutionError(code, safe_failure_detail_for(error))
 
 
-class AnalysisOperationHandler(AITaskHandler):
+class AnalysisTaskHandler(AITaskHandler):
+    service: AnalysisService
+    knowledge: AnalysisKnowledgeSource
+    sources: AnalysisSelectionSourceReader
+
+    def load_knowledge(self):
+        return load_analysis_knowledge(self.knowledge)
+
+    def _preserve_rejected(self, operation: PersistedOperation, error: ApplicationError) -> None:
+        # Completed evidence already includes its durable inactive output registration.
+        if getattr(error, "evidence", None) is not None or getattr(error, "completed_evidence", ()):
+            return
+        provenance = getattr(error, "provenance", None)
+        if provenance is not None:
+            try:
+                self.service.preserve(
+                    operation.application_id, operation.id, provenance.task, provenance
+                )
+            except ApplicationError:
+                return
+
+
+class AnalysisOperationHandler(AnalysisTaskHandler):
     task = "propose_analysis"
 
-    def __init__(self, service: AnalysisService):
+    def __init__(
+        self,
+        service: AnalysisService,
+        sources: AnalysisSelectionSourceReader,
+        activation: AnalysisActivation,
+        knowledge: AnalysisKnowledgeSource,
+    ):
         self.service = service
+        self.sources = sources
+        self.activation = activation
+        self.knowledge = knowledge
 
     @staticmethod
     def _command(operation: PersistedOperation) -> AnalyzeCommand:
         return AnalyzeCommand.model_validate(operation.payload)
 
-    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
         sources = operation.sources
         if sources.job_snapshot_id is None or sources.job_snapshot_hash is None:
             raise SourceChanged("Analysis Operation has no frozen job snapshot identity.")
-        preparation = cast(PreparationRepository, repository)
         try:
-            snapshot = preparation.get_snapshot(sources.job_snapshot_id)
+            snapshot = self.sources.analysis_source(tx, sources.job_snapshot_id)
         except UnknownRecord as exc:
             raise SourceChanged("The job snapshot no longer exists.") from exc
         if (
-            snapshot["application_id"] != operation.application_id
-            or snapshot["source_hash"] != sources.job_snapshot_hash
+            snapshot.application_id != operation.application_id
+            or snapshot.source_hash != sources.job_snapshot_hash
         ):
             raise SourceChanged("The job snapshot changed before analysis activation.")
-        try:
-            active_snapshot = preparation.latest_snapshot(operation.application_id)
-        except UnknownRecord as exc:
-            raise SourceChanged("The Application no longer has an active job snapshot.") from exc
-        if active_snapshot["id"] != sources.job_snapshot_id:
+        if snapshot.deleted_at is not None:
+            raise SourceChanged("The Application was deleted before analysis activation.")
+        if snapshot.active_snapshot_id != sources.job_snapshot_id:
             raise SourceChanged("A newer job snapshot replaced the analysis source.")
-        if sources.knowledge_context_hash != analysis_knowledge_context_hash(self.service):
+
+        if self.sources.knowledge_is_prepared(tx):
+            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
+        if operation.sources.knowledge_context_hash != analysis_knowledge_context_hash(
+            self.load_knowledge()
+        ):
             raise SourceChanged("Knowledge changed before analysis activation.")
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
@@ -193,14 +234,10 @@ class AnalysisOperationHandler(AITaskHandler):
         ) as exc:
             raise self._classified(operation, exc) from exc
 
-    def activate(self, operation, prepared, repository):
+    def activate(self, tx: WriteTransaction, operation, prepared):
         if not isinstance(prepared.value, PreparedAnalysis):
             raise TypeError("analysis handler received an invalid prepared value")
-        result = self.service.activate(
-            self._command(operation),
-            prepared.value,
-            cast(PreparationRepository, repository),
-        )
+        result = self.activation.activate(tx, self._command(operation), prepared.value)
         return (
             OperationOutputReference(
                 output_type="job_analysis", output_id=result.analysis_id, active=True
@@ -311,52 +348,54 @@ class DraftOperationHandler(AITaskHandler):
         )
 
 
-class SelectionPlanOperationHandler(AITaskHandler):
+class SelectionPlanOperationHandler(AnalysisTaskHandler):
     """`propose_selection_plan`: the AI branch of §13 `create_selection_plan`."""
 
     task = "propose_selection_plan"
 
-    def __init__(self, service: AnalysisService):
+    def __init__(
+        self,
+        service: AnalysisService,
+        sources: AnalysisSelectionSourceReader,
+        activation: AnalysisActivation,
+        knowledge: AnalysisKnowledgeSource,
+    ):
         self.service = service
+        self.sources = sources
+        self.activation = activation
+        self.knowledge = knowledge
 
     @staticmethod
     def _command(operation: PersistedOperation) -> ProposeSelectionPlanCommand:
         return ProposeSelectionPlanCommand.model_validate(operation.payload)
 
-    def check_sources(self, operation: PersistedOperation, repository: OperationRepository) -> None:
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
         command = self._command(operation)
         sources = operation.sources
         if sources.job_analysis_id is None:
             raise SourceChanged("Selection Operation has no frozen analysis identity.")
-        preparation = cast(PreparationRepository, repository)
         try:
-            analysis = preparation.get_analysis(sources.job_analysis_id)
-            active_analysis_id, _ = preparation.latest_analysis(operation.application_id)
-            active_snapshot = preparation.latest_snapshot(operation.application_id)
+            source = self.sources.selection_source(tx, sources.job_analysis_id)
         except UnknownRecord as exc:
             raise SourceChanged("The selection plan source no longer exists.") from exc
         if (
-            analysis["application_id"] != operation.application_id
-            or active_analysis_id != sources.job_analysis_id
-            or active_snapshot["id"] != analysis["job_snapshot_id"]
-            or _model_hash(analysis["analysis"]) != sources.dependency_hashes.get("job_analysis")
+            source.application_id != operation.application_id
+            or source.deleted_at is not None
+            or source.active_analysis_id != sources.job_analysis_id
+            or source.active_snapshot_id != source.job_snapshot_id
+            or _model_hash(source.analysis) != sources.dependency_hashes.get("job_analysis")
         ):
             raise SourceChanged("The analysis changed before the plan proposal activated.")
-        if sources.knowledge_context_hash != document_knowledge_context_hash(self.service):
-            raise SourceChanged("Knowledge changed before the plan proposal activated.")
-        try:
-            latest_plan = preparation.latest_selection_plan(operation.application_id)
-        except UnknownRecord:
-            latest_plan = None
-        active_plan_id = (
-            latest_plan.id
-            if latest_plan is not None and latest_plan.job_analysis_id == sources.job_analysis_id
-            else None
-        )
+        active_plan_id = source.active_plan.id if source.active_plan is not None else None
         if command.enforce_expected_selection_plan and (
             active_plan_id != command.expected_selection_plan_id
         ):
             raise SourceChanged("The active SelectionPlan changed before the proposal activated.")
+
+        if self.sources.knowledge_is_prepared(tx):
+            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
+        if operation.sources.knowledge_context_hash != document_knowledge_context_hash(self):
+            raise SourceChanged("Knowledge changed before the plan proposal activated.")
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
@@ -375,16 +414,11 @@ class SelectionPlanOperationHandler(AITaskHandler):
         ) as exc:
             raise self._classified(operation, exc) from exc
 
-    def activate(self, operation, prepared, repository):
+    def activate(self, tx: WriteTransaction, operation, prepared):
+        del operation
         if not isinstance(prepared.value, PreparedSelectionProposal):
             raise TypeError("selection handler received an invalid prepared value")
-        try:
-            result = self.service.activate_selection_proposal(
-                prepared.value,
-                cast(PreparationRepository, repository),
-            )
-        except MissingFactRendering as exc:
-            raise self._classified(operation, exc) from exc
+        result = self.activation.activate_selection_plan(tx, prepared.value.selection)
         return (
             OperationOutputReference(
                 output_type="selection_plan",
@@ -458,6 +492,7 @@ class RegenerationOperationHandler(AITaskHandler):
             InfrastructureFailure,
             ProposalRejected,
             StateConflict,
+            KnowledgeRejected,
             LineageBroken,
             UnknownRecord,
         ) as exc:

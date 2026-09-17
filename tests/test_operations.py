@@ -19,6 +19,7 @@ from sqlalchemy.exc import ProgrammingError
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApproveDraftCommand,
+    CreateSelectionPlanCommand,
     DraftCommand,
     IngestCommand,
     RenderCommand,
@@ -891,16 +892,11 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
         idempotency_key="draft-plan-race",
         draft_service=services.drafts,
     )
-    old_plan = services.repository.selection_plan(analysis.selection_plan_id)
-    services.repository.create_selection_plan(
-        ingested.application_id,
-        analysis.analysis_id,
-        old_plan.plan,
-        candidate_context_version=old_plan.candidate_context_version,
-        candidate_context_hash=old_plan.candidate_context_hash,
-        profile_version=old_plan.profile_version,
-        selection_policy_version=old_plan.selection_policy_version,
-        track_emphasis_dependencies=old_plan.track_emphasis_dependencies,
+    services.analysis.create_selection_plan(
+        CreateSelectionPlanCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysis.analysis_id,
+        )
     )
 
     failed = foreground_executor(services).execute(operation.id)

@@ -66,14 +66,14 @@ class AnalysisCorrection:
         source analysis already carried, so a second decision does not silently
         drop the first, and withholding a field is not a retraction of it.
         """
-        service.load_active_application(command.application_id)
         if command.expected_analysis_id != command.job_analysis_id:
             raise StateConflict(
                 "the analysis addressed by the request does not match the analysis "
                 "observed by the form"
             )
-        record = service._analysis_record(command.application_id, command.job_analysis_id)
-        analysis: JobAnalysis = record["analysis"]
+        record = service.selection_source(command.application_id, command.job_analysis_id)
+        service.refuse_deleted(record.application_id, record.deleted_at)
+        analysis: JobAnalysis = record.analysis
 
         candidates: dict[OverrideKey, str | None] = {
             "track": command.track_override,
@@ -87,7 +87,7 @@ class AnalysisCorrection:
         active_plan: SelectionPlan | None = None
         if command.expected_selection_plan_id is not None:
             try:
-                observed_plan = service.repo.selection_plan(command.expected_selection_plan_id)
+                observed_plan = service.selection_plan(command.expected_selection_plan_id)
             except UnknownRecord:
                 observed_plan = None
             if (
@@ -154,7 +154,7 @@ class AnalysisCorrection:
                 selection_plan_id=result.selection_plan_id,
                 created_analysis=True,
                 analysis=result.analysis,
-                plan=service.repo.selection_plan(result.selection_plan_id),
+                plan=service.selection_plan(result.selection_plan_id),
             )
 
         if not has_overlay:
@@ -193,7 +193,7 @@ class AnalysisCorrection:
         service,
         command: ApplyAnalysisDecisionsCommand,
         analysis: JobAnalysis,
-        record: dict,
+        record,
         merged_overrides: dict[str, str],
     ) -> AnalysisResult:
         """Create a user-revised analysis without invoking an extractor or provider."""
@@ -204,7 +204,7 @@ class AnalysisCorrection:
         return service.activate(
             AnalyzeCommand(
                 application_id=command.application_id,
-                job_snapshot_id=record["job_snapshot_id"],
+                job_snapshot_id=record.job_snapshot_id,
                 expected_analysis_id=command.expected_analysis_id,
                 expected_selection_plan_id=command.expected_selection_plan_id,
                 refuse_matching_context_operation=True,

@@ -12,9 +12,7 @@ from ...application.operations import (
     MATCHING_CONTEXT_OPERATION_TYPES,
     CreateOperation,
     OperationFailureCode,
-    OperationOutputReference,
     OperationPhase,
-    OperationSources,
     OperationStatus,
     OperationView,
     PersistedOperation,
@@ -23,9 +21,9 @@ from ...application.operations import (
 )
 from ...util import canonical_json, new_id, sha256_text, utc_now
 from .base import SqlAlchemyRepositoryBase
+from .operation_sql import _operation_record, _outputs, _release
 from .tables import (
     applications,
-    artifact_versions,
     idempotency_receipts,
     operation_outputs,
     operation_resource_leases,
@@ -45,79 +43,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
         if lease_seconds < 1:
             raise ValueError("lease_seconds must be positive")
         return (datetime.fromisoformat(now) + timedelta(seconds=lease_seconds)).isoformat()
-
-    @staticmethod
-    def _operation_record(row: Any, outputs: list[Any]) -> PersistedOperation:
-        if row is None:
-            raise UnknownRecord("operation does not exist")
-        record = dict(row)
-        provider_metadata = next(
-            (
-                output.get("metadata_json") or {}
-                for output in outputs
-                if output["output_type"] == "provider_response"
-            ),
-            {},
-        )
-        usage = provider_metadata.get("usage") or {}
-        cost = provider_metadata.get("cost") or {}
-        return PersistedOperation(
-            id=record["id"],
-            application_id=record["application_id"],
-            operation_type=record["operation_type"],
-            payload=record["payload_json"],
-            payload_hash=record["payload_hash"],
-            idempotency_key=record["idempotency_key"],
-            sources=OperationSources.model_validate(record["sources_json"]),
-            resources=tuple(record["resources_json"]),
-            provider=record["provider"],
-            model=record["model"],
-            reasoning_effort=record["reasoning_effort"],
-            input_tokens=usage.get("input_tokens"),
-            cached_input_tokens=usage.get("cached_input_tokens"),
-            output_tokens=usage.get("output_tokens"),
-            total_tokens=usage.get("total_tokens"),
-            cost_usd=cost.get("total_usd"),
-            status=record["status"],
-            phase=record["phase"],
-            message=record["message"],
-            created_at=record["created_at"],
-            started_at=record["started_at"],
-            finished_at=record["finished_at"],
-            lease_owner=record["lease_owner"],
-            lease_expires_at=record["lease_expires_at"],
-            heartbeat_at=record["heartbeat_at"],
-            cancellation_requested_at=record["cancellation_requested_at"],
-            failure_code=record["failure_code"],
-            safe_failure_detail=record["safe_failure_detail"],
-            technical_log_reference=record["technical_log_reference"],
-            retry_of_operation_id=record["retry_of_operation_id"],
-            attempts_completed=record["attempts_completed"],
-            next_attempt_at=record["next_attempt_at"],
-            outputs=[
-                OperationOutputReference(
-                    output_type=output["output_type"],
-                    output_id=output["output_id"],
-                    active=bool(output["active"]),
-                )
-                for output in outputs
-            ],
-        )
-
-    @staticmethod
-    def _outputs(connection: Connection, operation_id: str) -> list[Any]:
-        statement = (
-            select(
-                operation_outputs.c.output_type,
-                operation_outputs.c.output_id,
-                operation_outputs.c.active,
-                artifact_versions.c.metadata_json,
-            )
-            .outerjoin(artifact_versions, artifact_versions.c.id == operation_outputs.c.output_id)
-            .where(operation_outputs.c.operation_id == operation_id)
-            .order_by(operation_outputs.c.created_at, operation_outputs.c.id)
-        )
-        return list(connection.execute(statement).mappings())
 
     def create_operation(
         self,
@@ -156,7 +81,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                         "idempotency key already used with a different Operation payload",
                         code=IDEMPOTENCY_KEY_REUSED,
                     )
-                return self._operation_record(existing, self._outputs(connection, existing["id"]))
+                return _operation_record(existing, _outputs(connection, existing["id"]))
             try:
                 connection.execute(
                     insert(operations).values(
@@ -187,7 +112,15 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
-            return self._operation_record(row, [])
+            return _operation_record(row, [])
+
+    def lock_application(self, application_id: str) -> None:
+        with self.transaction() as connection:
+            connection.execute(
+                select(applications.c.id)
+                .where(applications.c.id == application_id)
+                .with_for_update()
+            ).one_or_none()
 
     def operation(self, operation_id: str) -> PersistedOperation:
         with self.read_connection() as connection:
@@ -196,7 +129,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
-            return self._operation_record(row, self._outputs(connection, operation_id))
+            return _operation_record(row, _outputs(connection, operation_id))
 
     def active_operation(self, application_id: str) -> OperationView | None:
         with self.read_connection() as connection:
@@ -219,9 +152,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             )
             if row is None:
                 return None
-            return as_operation_view(
-                self._operation_record(row, self._outputs(connection, row["id"]))
-            )
+            return as_operation_view(_operation_record(row, _outputs(connection, row["id"])))
 
     def has_active_matching_context_operation(self, application_id: str) -> bool:
         """Whether any queued/running Operation can replace matching context.
@@ -267,9 +198,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             )
             if row is None:
                 return None
-            return as_operation_view(
-                self._operation_record(row, self._outputs(connection, row["id"]))
-            )
+            return as_operation_view(_operation_record(row, _outputs(connection, row["id"])))
 
     @staticmethod
     def _waiting_phase(resource_kind: str) -> tuple[str, str]:
@@ -371,7 +300,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
-            return self._operation_record(current, self._outputs(connection, operation_id))
+            return _operation_record(current, _outputs(connection, operation_id))
 
     def claim_next_operation(
         self,
@@ -563,7 +492,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
-            return self._operation_record(current, self._outputs(connection, operation_id))
+            return _operation_record(current, _outputs(connection, operation_id))
 
     def record_operation_output(
         self,
@@ -667,14 +596,6 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 )
             )
 
-    @staticmethod
-    def _release(connection: Connection, operation_id: str) -> None:
-        connection.execute(
-            delete(operation_resource_leases).where(
-                operation_resource_leases.c.operation_id == operation_id
-            )
-        )
-
     def complete_operation(
         self,
         operation_id: str,
@@ -697,7 +618,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
             )
             if row is None:
                 raise StateConflict("operation lease is not owned by this runner")
-            self._release(connection, operation_id)
+            _release(connection, operation_id)
             if row["cancellation_requested_at"] is not None:
                 status = OperationStatus.CANCELLED.value
                 failure_code = OperationFailureCode.CANCELLED_BEFORE_ACTIVATION.value
@@ -732,7 +653,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
-            return self._operation_record(current, self._outputs(connection, operation_id))
+            return _operation_record(current, _outputs(connection, operation_id))
 
     def fail_operation(
         self,
@@ -746,7 +667,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
     ) -> PersistedOperation:
         timestamp = now or utc_now()
         with self.transaction() as connection:
-            self._release(connection, operation_id)
+            _release(connection, operation_id)
             changed = connection.execute(
                 update(operations)
                 .where(
@@ -776,7 +697,7 @@ class SqlAlchemyOperationRepository(SqlAlchemyRepositoryBase):
                 .mappings()
                 .one_or_none()
             )
-            return self._operation_record(current, self._outputs(connection, operation_id))
+            return _operation_record(current, _outputs(connection, operation_id))
 
     def claim_idempotency_receipt(
         self,

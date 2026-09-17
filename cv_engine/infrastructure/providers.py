@@ -56,6 +56,7 @@ from ..application.ports import (
     SelectionPlanContext,
     TaskContracts,
 )
+from ..application.transactions import assert_external_io_allowed
 from ..domain.contracts.analysis_proposal import AnalysisProposal
 from ..domain.contracts.base import StrictModel
 from ..domain.contracts.providers import (
@@ -242,6 +243,7 @@ class OpenAIResponsesProvider:
         }
 
     def _post(self, body: dict[str, Any]) -> str:
+        assert_external_io_allowed("provider HTTP request")
         request = urllib.request.Request(
             "https://api.openai.com/v1/responses",
             data=canonical_json(body).encode("utf-8"),
@@ -430,6 +432,7 @@ class OpenAIProvider:
         model: str | None = None,
         reasoning_effort: str | None = None,
     ):
+        assert_external_io_allowed("provider execution")
         contract = self._contracts.get(task)
         output_model = TASK_OUTPUT_MODELS[task]
         # The contract file names the input and output models. Checked here

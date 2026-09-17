@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import func, insert, select
 
+from cv_engine.application.ports import AnalysisContext
 from cv_engine.application.transactions import (
     active_transaction_for_tests,
     assert_external_io_allowed,
@@ -10,6 +11,7 @@ from cv_engine.application.transactions import (
 from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.tables import applications
+from cv_engine.infrastructure.providers import OpenAIResponsesProvider
 
 
 def _application(application_id: str) -> dict[str, str]:
@@ -118,3 +120,23 @@ def test_payload_store_refuses_writes_inside_transaction(database_engine, app_pa
         with pytest.raises(RuntimeError, match="object-store write"):
             assert_external_io_allowed("object-store write")
     assert_external_io_allowed("object-store write")
+
+
+@pytest.mark.parametrize("scope", ["read", "write"])
+def test_provider_and_transport_refuse_io_inside_transaction(
+    database_engine,
+    task_contracts,
+    fake_openai,
+    scope,
+) -> None:
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    provider = fake_openai.provider(task_contracts)
+    transport = OpenAIResponsesProvider(model="gpt-5.6-terra", api_key="test-key")
+    with getattr(transactions, scope)():
+        with pytest.raises(RuntimeError, match="provider execution"):
+            provider.propose_analysis(
+                AnalysisContext(job_text="job", candidate_facts=[], overrides={})
+            )
+        with pytest.raises(RuntimeError, match="provider HTTP request"):
+            transport._post({})
+    assert fake_openai.calls == []

@@ -23,6 +23,7 @@ from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestC
 from cv_engine.domain.contracts.analysis import (
     Requirement,
 )
+from cv_engine.infrastructure.persistence import analysis_sql
 
 
 def _application(services, company: str, *, job_text: str = ACCOUNT_MANAGER_JOB) -> str:
@@ -159,7 +160,7 @@ def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
     def refuse_plan(*_args, **_kwargs):
         raise RuntimeError("selection plan insert failed")
 
-    monkeypatch.setattr(type(repository), "_insert_selection_plan", refuse_plan)
+    monkeypatch.setattr(analysis_sql, "_insert_selection_plan", refuse_plan)
 
     with pytest.raises(RuntimeError):
         seed_existing_analysis(services, ingested)

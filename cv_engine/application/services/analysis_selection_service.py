@@ -6,28 +6,18 @@ from dataclasses import asdict
 
 from ...domain.analysis.projection import gaps as project_gaps
 from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.taxonomy import Emphasis
+from ...domain.knowledge import Knowledge
 from ...domain.profiles import allowed_fact_pool
-from ..commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand, SelectionPlanResult
-from ..errors import PreconditionFailed, UnknownRecord
-from ..ports import PreparationRepository, SelectionPlanContext
-from .analysis_selection import AnalysisSelection, PreparedSelectionProposal
+from ..commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand
+from ..errors import PreconditionFailed
+from ..ports import SelectionPlanContext
+from ..ports.analysis_plans import SelectionSource
+from .analysis_selection import AnalysisSelection, PreparedSelectionPlan, PreparedSelectionProposal
 from .proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
 
 
 class AnalysisSelectionService:
-    @staticmethod
-    def _active_plan(
-        repo: PreparationRepository, application_id: str, job_analysis_id: str
-    ) -> SelectionPlan | None:
-        """The latest plan only participates when it belongs to this analysis."""
-        try:
-            latest = repo.latest_selection_plan(application_id)
-        except UnknownRecord:
-            return None
-        return latest if latest.job_analysis_id == job_analysis_id else None
-
     @staticmethod
     def refuse_moved_sources(command: CreateSelectionPlanCommand, knowledge) -> None:
         """The optimistic check on what the user was looking at when they decided.
@@ -59,34 +49,29 @@ class AnalysisSelectionService:
             )
 
     @staticmethod
-    def create_selection_plan(
+    def prepare_selection_plan(
         service,
         command: CreateSelectionPlanCommand,
-        repository: PreparationRepository | None = None,
-    ) -> SelectionPlanResult:
-        """§13, deterministic form: synchronous, and it returns the plan itself.
+    ) -> PreparedSelectionPlan:
+        """Read sources and build a deterministic overlay before opening a write scope."""
+        source = service.selection_source(command.application_id, command.job_analysis_id)
+        service.refuse_deleted(source.application_id, source.deleted_at)
+        return AnalysisSelectionService.prepare_selection(command, source, service.load_knowledge())
 
-        No provider call happens inside a synchronous request, so this path
-        never needs one. The AI `propose_selection_plan` mode is the same
-        command's asynchronous form and arrives with the rest of the AI tasks.
-
-        `repository` is the same escape `activate` takes: a caller that has to
-        commit this plan together with something else binds its own UnitOfWork
-        and passes the bound repository, so `apply_selection_change` gets one
-        implementation of the overlay rather than a second copy of it.
-        """
-        service.load_active_application(command.application_id)
-        repo = repository or service.repo
-        record = service._analysis_record(command.application_id, command.job_analysis_id, repo)
-        analysis: JobAnalysis = record["analysis"]
-        active_plan = AnalysisSelectionService._active_plan(
-            repo, command.application_id, command.job_analysis_id
-        )
+    @staticmethod
+    def prepare_selection(
+        command: CreateSelectionPlanCommand,
+        source: SelectionSource,
+        knowledge: Knowledge,
+    ) -> PreparedSelectionPlan:
+        """Pure policy validation, shared by preparation and atomic activation."""
+        analysis: JobAnalysis = source.analysis
+        active_plan = source.active_plan
         try:
             effective_emphasis = (
                 Emphasis(command.emphasis_override)
                 if command.emphasis_override is not None
-                else active_plan.plan.emphasis
+                else active_plan.emphasis
                 if active_plan is not None
                 else analysis.emphasis
             )
@@ -95,12 +80,11 @@ class AnalysisSelectionService:
         explicit_emphasis = (
             effective_emphasis
             if command.emphasis_override is not None
-            else active_plan.plan.emphasis_override
+            else active_plan.emphasis_override
             if active_plan is not None
             else None
         )
         selection_analysis = analysis.model_copy(update={"emphasis": effective_emphasis})
-        knowledge = service.load_knowledge()
         AnalysisSelectionService.refuse_moved_sources(command, knowledge)
         AnalysisSelection.profile(selection_analysis, knowledge.profiles)
         manifest = AnalysisSelection.manifest(
@@ -110,10 +94,10 @@ class AnalysisSelectionService:
             excluded_fact_ids=frozenset(command.excluded_fact_ids),
         )
         manifest = manifest.model_copy(update={"emphasis_override": explicit_emphasis})
-        plan = repo.create_selection_plan(
-            command.application_id,
-            command.job_analysis_id,
-            manifest,
+        return PreparedSelectionPlan(
+            command=command,
+            knowledge=knowledge,
+            manifest=manifest,
             candidate_context_version=knowledge.candidate.context_version,
             candidate_context_hash=knowledge.candidate.version_hash,
             profile_version=knowledge.profiles.version,
@@ -122,15 +106,6 @@ class AnalysisSelectionService:
                 "track": analysis.track.value,
                 "emphasis": effective_emphasis.value,
             },
-            expected_selection_plan_id=command.expected_selection_plan_id,
-            enforce_expected_selection_plan=command.enforce_expected_selection_plan,
-            refuse_matching_context_operation=command.refuse_matching_context_operation,
-        )
-        return SelectionPlanResult(
-            application_id=command.application_id,
-            job_analysis_id=command.job_analysis_id,
-            selection_plan_id=plan.id,
-            plan=plan,
         )
 
     @staticmethod
@@ -148,13 +123,12 @@ class AnalysisSelectionService:
         turned into a deterministic command and committed by `activate`, after
         the runner's final source check.
         """
-        record = service._analysis_record(command.application_id, command.job_analysis_id)
-        analysis: JobAnalysis = record["analysis"]
-        active_plan = AnalysisSelectionService._active_plan(
-            service.repo, command.application_id, command.job_analysis_id
-        )
+        source = service.selection_source(command.application_id, command.job_analysis_id)
+        service.refuse_deleted(source.application_id, source.deleted_at)
+        analysis: JobAnalysis = source.analysis
+        active_plan = source.active_plan
         effective_analysis = (
-            analysis.model_copy(update={"emphasis": active_plan.plan.emphasis})
+            analysis.model_copy(update={"emphasis": active_plan.emphasis})
             if active_plan is not None
             else analysis
         )
@@ -163,6 +137,7 @@ class AnalysisSelectionService:
         allowed = allowed_fact_pool(profile)
         manifest = AnalysisSelection.manifest(effective_analysis, knowledge)
 
+        service.assert_provider_io_allowed()
         answered = service.provider.propose_selection_plan(
             SelectionPlanContext(
                 job_analysis={
@@ -199,40 +174,28 @@ class AnalysisSelectionService:
                 allowed,
                 task="propose_selection_plan",
             )
-        return PreparedSelectionProposal(
-            command=CreateSelectionPlanCommand(
-                application_id=command.application_id,
-                job_analysis_id=command.job_analysis_id,
-                pinned_fact_ids=list(proposal.pinned_fact_ids),
-                excluded_fact_ids=list(proposal.excluded_fact_ids),
-                emphasis_override=(
-                    active_plan.plan.emphasis_override.value
-                    if active_plan is not None and active_plan.plan.emphasis_override is not None
-                    else None
-                ),
-                expected_candidate_context_hash=command.expected_candidate_context_hash,
-                expected_facts_version=command.expected_facts_version,
-                expected_profile_version=command.expected_profile_version,
-                expected_selection_policy_version=command.expected_selection_policy_version,
-                expected_selection_plan_id=command.expected_selection_plan_id,
-                enforce_expected_selection_plan=command.enforce_expected_selection_plan,
+        selection_command = CreateSelectionPlanCommand(
+            application_id=command.application_id,
+            job_analysis_id=command.job_analysis_id,
+            pinned_fact_ids=list(proposal.pinned_fact_ids),
+            excluded_fact_ids=list(proposal.excluded_fact_ids),
+            emphasis_override=(
+                active_plan.emphasis_override.value
+                if active_plan is not None and active_plan.emphasis_override is not None
+                else None
             ),
+            expected_candidate_context_hash=command.expected_candidate_context_hash,
+            expected_facts_version=command.expected_facts_version,
+            expected_profile_version=command.expected_profile_version,
+            expected_selection_policy_version=command.expected_selection_policy_version,
+            expected_selection_plan_id=command.expected_selection_plan_id,
+            enforce_expected_selection_plan=command.enforce_expected_selection_plan,
+        )
+        with evidence_attached(evidence):
+            selection = AnalysisSelectionService.prepare_selection_plan(service, selection_command)
+        return PreparedSelectionProposal(
+            command=selection_command,
             proposal=proposal,
             evidence=evidence,
+            selection=selection,
         )
-
-    @staticmethod
-    def activate_selection_proposal(
-        service,
-        prepared: PreparedSelectionProposal,
-        repository: PreparationRepository | None = None,
-    ) -> SelectionPlanResult:
-        """Commit the proposed overlay through the validated selection command.
-
-        Every check `create_selection_plan` makes runs again here, against
-        Knowledge as it is at activation - not as it was when the provider was
-        asked. That is the optimistic rule §13 requires, and it prevents the AI
-        proposal from bypassing selection policy.
-        """
-        repo = repository or service.repo
-        return service.create_selection_plan(prepared.command, repo)

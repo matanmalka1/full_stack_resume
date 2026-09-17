@@ -8,13 +8,13 @@ computation rather than two spellings of it.
 
 from __future__ import annotations
 
+from ....domain.knowledge import Knowledge
 from ....util import canonical_json, sha256_text
-from ..analysis import AnalysisService
 
 
-def analysis_knowledge_context_hash(service: AnalysisService) -> str:
+def analysis_knowledge_context_hash(knowledge: Knowledge) -> str:
     """Everything an analysis may have read, including the requirement vocabulary."""
-    return service.load_knowledge().context_hash()
+    return knowledge.context_hash()
 
 
 def document_knowledge_context_hash(service) -> str:

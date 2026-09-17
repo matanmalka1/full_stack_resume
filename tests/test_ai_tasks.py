@@ -714,6 +714,9 @@ def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
     with pytest.raises(UnknownRecord):
         ai_services.repository.latest_analysis(ingested.application_id)
 
+    with pytest.raises(UnknownRecord):
+        ai_services.repository.latest_selection_plan(ingested.application_id)
+
 
 def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_evidence(
     ai_services, fake_openai: FakeOpenAI, monkeypatch
@@ -1042,3 +1045,250 @@ def test_an_override_reaches_the_provider_and_is_applied_to_the_result(
     assert payload["overrides"] == {"emphasis": "account-growth"}
     assert analysis.emphasis.value == "account-growth"
     assert analysis.user_override["emphasis"] == "account-growth"
+
+
+@pytest.fixture
+def analysis_selection_operation(ai_services, fake_openai):
+    def build(kind):
+        if kind == "analysis":
+            ingested = _ingested(ai_services, "Atomic Analysis Co")
+            return ingested, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+        ingested, analysed = _analyzed(ai_services, "Atomic Selection Co")
+        fake_openai.script(
+            "propose_selection_plan",
+            SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
+        )
+        queued = ai_services.operations.submit_selection_plan_proposal(
+            ProposeSelectionPlanCommand(
+                application_id=ingested.application_id, job_analysis_id=analysed.analysis_id
+            ),
+            idempotency_key=new_id(),
+            analysis_service=ai_services.analysis,
+        )
+        return ingested, queued
+
+    return build
+
+
+@pytest.mark.parametrize("kind", ["analysis", "selection"])
+@pytest.mark.parametrize("failure_at", ["plan", "evidence", "completion"])
+def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
+    ai_services,
+    analysis_selection_operation,
+    kind,
+    failure_at,
+    database_engine,
+    monkeypatch,
+) -> None:
+    from sqlalchemy import func, select
+
+    from cv_engine.infrastructure.persistence import analysis_sql
+    from cv_engine.infrastructure.persistence.operation_activation import (
+        SqlAlchemyOperationActivationStore,
+    )
+    from cv_engine.infrastructure.persistence.tables import job_analyses, selection_plans
+
+    ingested, queued = analysis_selection_operation(kind)
+
+    def counts():
+        with database_engine.connect() as connection:
+            return tuple(
+                connection.execute(
+                    select(func.count())
+                    .select_from(table)
+                    .where(table.c.application_id == ingested.application_id)
+                ).scalar_one()
+                for table in (job_analyses, selection_plans)
+            )
+
+    baseline = counts()
+    if failure_at == "plan":
+        original = analysis_sql._insert_selection_plan
+
+        def fail_after_insert(*args, **kwargs):
+            original(*args, **kwargs)
+            raise RuntimeError("activation rollback")
+
+        monkeypatch.setattr(analysis_sql, "_insert_selection_plan", fail_after_insert)
+    else:
+        method = "activate_operation_output" if failure_at == "evidence" else "complete_operation"
+        original = getattr(SqlAlchemyOperationActivationStore, method)
+
+        def fail_after_write(*args, **kwargs):
+            original(*args, **kwargs)
+            raise RuntimeError("activation rollback")
+
+        monkeypatch.setattr(SqlAlchemyOperationActivationStore, method, fail_after_write)
+
+    completed = _run(ai_services, queued)
+    assert completed.status.value == "failed"
+    assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
+    assert counts() == baseline
+    evidence = [output for output in completed.outputs if output.output_type == "provider_response"]
+    assert len(evidence) == 1 and not evidence[0].active
+    assert len(completed.outputs) == 1
+    artifacts = _provider_artifacts(ai_services, ingested.application_id)
+    assert len(artifacts) == 1 and artifacts[0]["id"] == evidence[0].output_id
+    assert (
+        ai_services.payloads.verify_payload(artifacts[0]["path"], artifacts[0]["content_hash"])
+        == "ok"
+    )
+
+
+@pytest.mark.parametrize("kind", ["analysis", "selection"])
+def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
+    ai_services,
+    fake_openai,
+    analysis_selection_operation,
+    kind,
+    monkeypatch,
+) -> None:
+    import urllib.request
+
+    from cv_engine.application.transactions import (
+        active_transaction_for_tests,
+        transaction_is_active,
+    )
+    from cv_engine.infrastructure.object_store import LocalObjectStore
+    from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
+    from cv_engine.infrastructure.persistence.operation_activation import (
+        SqlAlchemyOperationActivationStore,
+    )
+
+    ingested, queued = analysis_selection_operation(kind)
+    network = fake_openai.urlopen
+
+    def guarded_network(*args, **kwargs):
+        assert not transaction_is_active(), "provider I/O inside activation"
+        return network(*args, **kwargs)
+
+    monkeypatch.setattr(urllib.request, "urlopen", guarded_network)
+    for method in ("get", "put", "stat", "exists"):
+        original = getattr(LocalObjectStore, method)
+
+        def guard(original):
+            def call(*args, **kwargs):
+                assert not transaction_is_active(), "object-store I/O inside activation"
+                return original(*args, **kwargs)
+
+            return call
+
+        monkeypatch.setattr(LocalObjectStore, method, guard(original))
+    tokens = []
+
+    def tracked(original):
+        def call(self, tx, *args, **kwargs):
+            assert active_transaction_for_tests() is tx
+            tokens.append(tx)
+            return original(self, tx, *args, **kwargs)
+
+        return call
+
+    plan_method = "save_analysis" if kind == "analysis" else "create_selection_plan"
+    monkeypatch.setattr(
+        SqlAlchemyAnalysisPlanRepository,
+        plan_method,
+        tracked(getattr(SqlAlchemyAnalysisPlanRepository, plan_method)),
+    )
+    for method in ("activate_operation_output", "complete_operation"):
+        monkeypatch.setattr(
+            SqlAlchemyOperationActivationStore,
+            method,
+            tracked(getattr(SqlAlchemyOperationActivationStore, method)),
+        )
+    completed = _run(ai_services, queued)
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    assert len(tokens) == 3 and all(token is tokens[0] for token in tokens)
+    assert not tokens[0].active
+    assert all(output.active for output in completed.outputs)
+    assert len(_provider_artifacts(ai_services, ingested.application_id)) == 1
+
+
+def test_selection_cancelled_before_activation_registers_no_new_plan(
+    ai_services,
+    analysis_selection_operation,
+    database_engine,
+    monkeypatch,
+) -> None:
+    from sqlalchemy import func, select
+
+    from cv_engine.infrastructure.persistence.tables import job_analyses, selection_plans
+
+    ingested, queued = analysis_selection_operation("selection")
+    method = "prepare_selection_proposal"
+    original = getattr(ai_services.analysis, method)
+
+    def prepare_then_cancel(*args, **kwargs):
+        value = original(*args, **kwargs)
+        ai_services.repository.request_operation_cancellation(queued.id)
+        return value
+
+    monkeypatch.setattr(ai_services.analysis, method, prepare_then_cancel)
+    completed = _run(ai_services, queued)
+    assert completed.status.value == "cancelled"
+    assert len(completed.outputs) == 1 and not completed.outputs[0].active
+    assert completed.outputs[0].output_type == "provider_response"
+    with database_engine.connect() as connection:
+        for table in (job_analyses, selection_plans):
+            count = connection.execute(
+                select(func.count())
+                .select_from(table)
+                .where(table.c.application_id == ingested.application_id)
+            ).scalar_one()
+            assert count == 1
+
+
+@pytest.mark.parametrize("same_response", [True, False])
+def test_retry_reuses_the_same_provider_output_without_rewriting_evidence(
+    ai_services,
+    fake_openai,
+    monkeypatch,
+    same_response,
+) -> None:
+    ingested = _ingested(ai_services, "Evidence Retry Co")
+    queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    prepare = ai_services.analysis.prepare
+
+    def prepare_then_cancel(command, *, operation_id=None):
+        value = prepare(command, operation_id=operation_id)
+        # Idempotent re-registration within one Operation also keeps one output.
+        repeated = ai_services.analysis.preserve(
+            ingested.application_id,
+            queued.id,
+            value.evidence.task,
+            value.evidence.provenance,
+        )
+        assert repeated.artifact_version_id == value.evidence.artifact_version_id
+        ai_services.repository.request_operation_cancellation(queued.id)
+        return value
+
+    monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
+    cancelled = _run(ai_services, queued)
+    assert cancelled.status.value == "cancelled"
+    original_artifacts = _provider_artifacts(ai_services, ingested.application_id)
+    assert len(original_artifacts) == 1
+    monkeypatch.setattr(ai_services.analysis, "prepare", prepare)
+    if not same_response:
+        fake_openai.scripts["propose_analysis"] = [
+            envelope(analysis_proposal(), id="resp_distinct_retry")
+        ]
+    retried = ai_services.operations.retry(queued.id, idempotency_key=new_id())
+    completed = _run(ai_services, retried)
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    after = _provider_artifacts(ai_services, ingested.application_id)
+    assert len(after) == (1 if same_response else 2)
+    assert (
+        next(row for row in after if row["id"] == original_artifacts[0]["id"])
+        == original_artifacts[0]
+    )
+    first = next(
+        output for output in cancelled.outputs if output.output_type == "provider_response"
+    )
+    second = next(
+        output for output in completed.outputs if output.output_type == "provider_response"
+    )
+    assert (first.output_id == second.output_id) is same_response
+    assert not first.active and second.active
+    original_operation = ai_services.repository.operation(queued.id)
+    assert original_operation.status.value == "cancelled"
+    assert all(not output.active for output in original_operation.outputs)

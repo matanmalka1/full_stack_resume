@@ -15,7 +15,6 @@ from ...domain.contracts.records import (
     ValidationRunLineage,
 )
 from ...domain.contracts.selection import (
-    SelectionManifest,
     SelectionPlan,
 )
 from ...domain.contracts.validation import ValidationReport
@@ -60,12 +59,6 @@ class ApplicationStore(Protocol):
 
     def set_application_deleted(self, application_id: str, deleted_at: str) -> None: ...
 
-    def set_normalized_role(self, application_id: str, normalized_role: str) -> None: ...
-
-    def update_application_notes(
-        self, application_id: str, notes: str, expected_notes: str, *, updated_at: str
-    ) -> dict[str, Any]: ...
-
     def record_event(
         self, application_id: str, event_type: str, payload: dict[str, Any]
     ) -> str: ...
@@ -73,8 +66,6 @@ class ApplicationStore(Protocol):
 
 class JobStore(Protocol):
     """Immutable job snapshots and the analyses derived from them."""
-
-    def duplicate_application_inputs(self) -> list[dict[str, Any]]: ...
 
     def add_job_snapshot(
         self,
@@ -88,61 +79,17 @@ class JobStore(Protocol):
         captured_at: str | None = ...,
     ) -> str: ...
 
-    def snapshot_for_content_hash(
-        self, application_id: str, content_hash: str
-    ) -> dict[str, Any] | None: ...
-
     def latest_snapshot(self, application_id: str) -> dict[str, Any]: ...
 
     def job_snapshots(self, application_id: str) -> list[dict[str, Any]]: ...
 
     def get_snapshot(self, snapshot_id: str) -> dict[str, Any]: ...
 
-    def save_analysis(
-        self,
-        application_id: str,
-        snapshot_id: str,
-        analysis: Any,
-        plan: SelectionManifest,
-        *,
-        provider: str,
-        model: str,
-        candidate_context_version: str,
-        candidate_context_hash: str,
-        profile_version: str,
-        selection_policy_version: str,
-        track_emphasis_dependencies: dict[str, str],
-        expected_analysis_id: str | None = ...,
-        expected_selection_plan_id: str | None = ...,
-        enforce_expected_selection_plan: bool = ...,
-        refuse_matching_context_operation: bool = ...,
-    ) -> tuple[str, SelectionPlan]: ...
-
     def get_analysis(self, analysis_id: str) -> dict[str, Any]: ...
 
     def analyses(self, application_id: str) -> list[dict[str, Any]]: ...
 
     def latest_analysis(self, application_id: str) -> tuple[str, Any]: ...
-
-    def create_selection_plan(
-        self,
-        application_id: str,
-        job_analysis_id: str,
-        plan: SelectionManifest,
-        *,
-        candidate_context_version: str,
-        candidate_context_hash: str,
-        profile_version: str,
-        selection_policy_version: str,
-        track_emphasis_dependencies: dict[str, str],
-        expected_selection_plan_id: str | None = None,
-        enforce_expected_selection_plan: bool = False,
-        refuse_matching_context_operation: bool = False,
-        plan_id: str | None = None,
-        created_at: str | None = None,
-    ) -> SelectionPlan: ...
-
-    def lock_application(self, application_id: str) -> None: ...
 
     def selection_plan(self, selection_plan_id: str) -> SelectionPlan: ...
 
@@ -284,6 +231,8 @@ class KnowledgeMutationRepository(Protocol):
 
 class OperationRepository(Protocol):
     """Durable Operations shared safely by concurrent claimers."""
+
+    def lock_application(self, application_id: str) -> None: ...
 
     def create_operation(
         self,

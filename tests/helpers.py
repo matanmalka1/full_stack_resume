@@ -77,11 +77,7 @@ def seed_existing_analysis(
 
 def seed_analysis_for_command(services: Services, command: AnalyzeCommand, **analysis_values):
     """Seed an existing analysis explicitly for a downstream test scenario."""
-    snapshot = services.repository.get_snapshot(command.job_snapshot_id)
-    if snapshot["application_id"] != command.application_id:
-        from cv_engine.application.errors import LineageBroken
-
-        raise LineageBroken("job snapshot does not belong to the named Application")
+    services.analysis.snapshot_source(command.application_id, command.job_snapshot_id)
     return seed_existing_analysis(
         services,
         command,

@@ -48,7 +48,6 @@ from ...operations import (
 from ...ports import (
     DraftRepository,
     OperationRepository,
-    PreparationRepository,
     ReadinessRepository,
 )
 from ...settings import SettingsRepository
@@ -112,16 +111,8 @@ class OperationService(ServiceBase[OperationRepository]):
     ) -> OperationView:
         self.load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
-        preparation = cast(PreparationRepository, self.repo)
-        try:
-            snapshot = preparation.get_snapshot(command.job_snapshot_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown job snapshot: {command.job_snapshot_id}") from exc
-        if snapshot["application_id"] != command.application_id:
-            raise LineageBroken(
-                f"job snapshot {command.job_snapshot_id} does not belong to application "
-                f"{command.application_id}"
-            )
+        snapshot = analysis_service.snapshot_source(command.application_id, command.job_snapshot_id)
+        analysis_service.refuse_deleted(snapshot.application_id, snapshot.deleted_at)
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.ANALYZE_JOB,
@@ -129,8 +120,10 @@ class OperationService(ServiceBase[OperationRepository]):
             idempotency_key=idempotency_key,
             sources=OperationSources(
                 job_snapshot_id=command.job_snapshot_id,
-                job_snapshot_hash=snapshot["source_hash"],
-                knowledge_context_hash=analysis_knowledge_context_hash(analysis_service),
+                job_snapshot_hash=snapshot.source_hash,
+                knowledge_context_hash=analysis_knowledge_context_hash(
+                    analysis_service.load_knowledge()
+                ),
             ),
             provider=command.provider,
             model=command.model,
@@ -244,16 +237,8 @@ class OperationService(ServiceBase[OperationRepository]):
         """
         self.load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
-        preparation = cast(PreparationRepository, self.repo)
-        try:
-            analysis = preparation.get_analysis(command.job_analysis_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown job analysis: {command.job_analysis_id}") from exc
-        if analysis["application_id"] != command.application_id:
-            raise LineageBroken(
-                f"job analysis {command.job_analysis_id} does not belong to application "
-                f"{command.application_id}"
-            )
+        source = analysis_service.selection_source(command.application_id, command.job_analysis_id)
+        analysis_service.refuse_deleted(source.application_id, source.deleted_at)
         # A caller that omitted an expectation gets the current compatible pointer frozen
         # here. An HTTP client that stated one - including explicit `null` for no plan -
         # keeps exactly that expectation. Deferring a mismatch to the Operation's source
@@ -261,16 +246,7 @@ class OperationService(ServiceBase[OperationRepository]):
         # original terminal Operation after that Operation itself changed the active plan.
         expected_plan_id = command.expected_selection_plan_id
         if not command.enforce_expected_selection_plan:
-            try:
-                latest_plan = preparation.latest_selection_plan(command.application_id)
-            except UnknownRecord:
-                latest_plan = None
-            expected_plan_id = (
-                latest_plan.id
-                if latest_plan is not None
-                and latest_plan.job_analysis_id == command.job_analysis_id
-                else None
-            )
+            expected_plan_id = source.active_plan.id if source.active_plan is not None else None
         command = command.model_copy(
             update={
                 "expected_selection_plan_id": expected_plan_id,
@@ -283,12 +259,12 @@ class OperationService(ServiceBase[OperationRepository]):
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
             sources=OperationSources(
-                job_snapshot_id=analysis["job_snapshot_id"],
+                job_snapshot_id=source.job_snapshot_id,
                 job_analysis_id=command.job_analysis_id,
                 # Building a plan reads no requirement concepts: it consumes the
                 # analysis, which is already frozen in `dependency_hashes`.
                 knowledge_context_hash=document_knowledge_context_hash(analysis_service),
-                dependency_hashes={"job_analysis": _model_hash(analysis["analysis"])},
+                dependency_hashes={"job_analysis": _model_hash(source.analysis)},
             ),
             provider="openai",
             model=command.model,

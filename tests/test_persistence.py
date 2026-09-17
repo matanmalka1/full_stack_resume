@@ -23,9 +23,10 @@ from cv_engine.domain.models import (
     WorkingDraft,
 )
 from cv_engine.infrastructure.persistence import Repository, SqlAlchemyTransactionManager
+from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
+from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
-from cv_engine.infrastructure.persistence.preparation import SqlAlchemyPreparationRepository
 from cv_engine.infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
@@ -62,6 +63,32 @@ DELETE_ONLY_TABLES = frozenset(
 )
 
 IMMUTABLE_MESSAGE = "immutable record"
+
+
+@pytest.fixture
+def analysis_transactions(database_engine):
+    return SqlAlchemyTransactionManager(database_engine)
+
+
+@pytest.fixture
+def analysis_plans(analysis_transactions):
+    return SqlAlchemyAnalysisPlanRepository(analysis_transactions)
+
+
+def test_analysis_plan_adapter_rejects_read_closed_and_foreign_tokens(
+    analysis_transactions,
+    analysis_plans,
+    database_engine,
+) -> None:
+    with analysis_transactions.read() as tx:
+        with pytest.raises(TypeError, match="write transaction"):
+            analysis_plans.lock_application(tx, "application")
+    with pytest.raises(RuntimeError, match="transaction is closed"):
+        analysis_plans.selection_plan(tx, "plan")
+    foreign = SqlAlchemyTransactionManager(database_engine)
+    with foreign.read() as tx:
+        with pytest.raises(TypeError, match="another transaction manager"):
+            analysis_plans.selection_plan(tx, "plan")
 
 
 def _create_application(
@@ -126,30 +153,40 @@ def _save_analysis(repository, application_id: str, snapshot_id: str, analysis):
         emphasis=analysis.emphasis,
         emphasis_policy_version="test-emphasis-v1",
     )
-    return repository.save_analysis(
-        application_id,
-        snapshot_id,
-        analysis,
-        plan,
-        provider="test",
-        model="fixture",
-        candidate_context_version="candidate-v1",
-        candidate_context_hash="candidate-hash",
-        profile_version="profile-v1",
-        selection_policy_version=plan.policy_version,
-        track_emphasis_dependencies={
-            "track": analysis.track.value,
-            "emphasis": analysis.emphasis.value,
-        },
-    )
+    transactions = SqlAlchemyTransactionManager(repository.engine)
+    plans = SqlAlchemyAnalysisPlanRepository(transactions)
+    with transactions.write() as tx:
+        return plans.save_analysis(
+            tx,
+            application_id,
+            snapshot_id,
+            analysis,
+            plan,
+            provider="test",
+            model="fixture",
+            candidate_context_version="candidate-v1",
+            candidate_context_hash="candidate-hash",
+            profile_version="profile-v1",
+            selection_policy_version=plan.policy_version,
+            track_emphasis_dependencies={
+                "track": analysis.track.value,
+                "emphasis": analysis.emphasis.value,
+            },
+        )
+
+
+def _create_selection_plan(repository_or_engine, *args, **kwargs):
+    engine = getattr(repository_or_engine, "engine", repository_or_engine)
+    transactions = SqlAlchemyTransactionManager(engine)
+    plans = SqlAlchemyAnalysisPlanRepository(transactions)
+    with transactions.write() as tx:
+        return plans.create_selection_plan(tx, *args, **kwargs)
 
 
 @pytest.mark.parametrize("document", [{"analysis_version": "2.0"}, {}])
 def test_non_3_analysis_documents_are_rejected_without_an_adapter(document) -> None:
     with pytest.raises(UnknownRecord, match="only 3.0 can be read"):
-        SqlAlchemyPreparationRepository._analysis_record(
-            {"id": "historical-analysis", "structured_json": document}
-        )
+        _analysis_record({"id": "historical-analysis", "structured_json": document})
 
 
 def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
@@ -583,7 +620,8 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
     ).draft
     assert document.selection is not None
 
-    plan = repository.create_selection_plan(
+    plan = _create_selection_plan(
+        repository,
         app_id,
         analysis_id,
         document.selection,
@@ -664,7 +702,8 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         job_analysis_id=analysis_id,
     ).draft
     assert document.selection is not None
-    plan = repository.create_selection_plan(
+    plan = _create_selection_plan(
+        repository,
         app_id,
         analysis_id,
         document.selection,
@@ -794,7 +833,8 @@ def test_a_stale_plan_write_is_refused_rather_than_silently_rebased(
     analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
 
     def write(expected: str | None):
-        return repository.create_selection_plan(
+        return _create_selection_plan(
+            repository,
             app_id,
             analysis_id,
             initial.plan,
@@ -854,9 +894,9 @@ def test_a_plan_write_blocks_on_the_application_lock(
                 select(applications.c.id).where(applications.c.id == app_id).with_for_update()
             ).one()
 
-            writer = SqlAlchemyPreparationRepository(impatient)
             with pytest.raises(OperationalError, match="lock timeout"):
-                writer.create_selection_plan(
+                _create_selection_plan(
+                    impatient,
                     app_id,
                     analysis_id,
                     initial.plan,
@@ -869,7 +909,8 @@ def test_a_plan_write_blocks_on_the_application_lock(
 
         # The holder committed; the same write now goes through and the version
         # it allocates is the one after whatever the lock was protecting.
-        after = SqlAlchemyPreparationRepository(impatient).create_selection_plan(
+        after = _create_selection_plan(
+            impatient,
             app_id,
             analysis_id,
             initial.plan,

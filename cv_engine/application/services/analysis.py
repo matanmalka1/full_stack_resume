@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from ...domain.contracts.providers import ProviderTaskResult
+from ...domain.contracts.selection import SelectionPlan
+from ...domain.knowledge import Knowledge
+from ...util import new_id
 from ..commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
@@ -9,103 +13,188 @@ from ..commands import (
     ProposeSelectionPlanCommand,
     SelectionPlanResult,
 )
-from ..errors import LineageBroken, UnknownRecord
-from ..ports import PreparationRepository
+from ..errors import (
+    DependencyUnavailable,
+    InfrastructureFailure,
+    KnowledgeRejected,
+    LineageBroken,
+    StateConflict,
+)
+from ..ports import AIProvider, TransactionManager
+from ..ports.analysis_plans import (
+    AnalysisKnowledgeSource,
+    AnalysisPayloadStore,
+    AnalysisPlanStore,
+    AnalysisSelectionSourceReader,
+    AnalysisSnapshotSource,
+    SelectionSource,
+)
+from ..ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
+from ..transactions import assert_external_io_allowed
+from .analysis_activation import AnalysisActivation
 from .analysis_correction import AnalysisCorrection
 from .analysis_preparation import AnalysisPreparation, PreparedAnalysis
-from .analysis_selection import PreparedSelectionProposal
+from .analysis_selection import PreparedSelectionPlan, PreparedSelectionProposal
 from .analysis_selection_service import AnalysisSelectionService
-from .base import ServiceBase
+from .proposals import ProviderEvidence
 
 
-class AnalysisService(ServiceBase[PreparationRepository]):
-    """Coordinate AI analysis, user decisions, and selection-plan activation."""
+def load_analysis_knowledge(source: AnalysisKnowledgeSource) -> Knowledge:
+    try:
+        return source.load()
+    except OSError as exc:
+        raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
+    except ValueError as exc:
+        raise KnowledgeRejected(str(exc)) from exc
 
-    def _analysis_record(
+
+class AnalysisService:
+    """Own preparation scopes and synchronous analysis/selection transaction boundaries."""
+
+    def __init__(
         self,
-        application_id: str,
-        job_analysis_id: str,
-        repository: PreparationRepository | None = None,
-    ) -> dict:
-        """One named analysis, proven to belong to the named Application.
+        *,
+        transactions: TransactionManager,
+        plans: AnalysisPlanStore,
+        sources: AnalysisSelectionSourceReader,
+        evidence: ProviderEvidenceStore,
+        knowledge: AnalysisKnowledgeSource,
+        payloads: AnalysisPayloadStore,
+        provider: AIProvider | None,
+    ):
+        self.transactions = transactions
+        self.plans = plans
+        self.sources = sources
+        self.evidence = evidence
+        self._knowledge = knowledge
+        self.snapshot_payloads = payloads
+        self._provider = provider
+        self.activation = AnalysisActivation(plans, sources)
 
-        Both IDs are explicit. Resolving the analysis from the Application would
-        be `latest` inside a command, which is exactly what lets a decision land
-        on something other than what the user was looking at.
-        """
-        try:
-            record = (repository or self.repo).get_analysis(job_analysis_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown job analysis: {job_analysis_id}") from exc
-        if record["application_id"] != application_id:
+    @staticmethod
+    def refuse_deleted(application_id: str, deleted_at: str | None) -> None:
+        if deleted_at is not None:
+            raise StateConflict(f"application is deleted: {application_id}")
+
+    def snapshot_source(self, application_id: str, job_snapshot_id: str) -> AnalysisSnapshotSource:
+        with self.transactions.read() as tx:
+            source = self.sources.analysis_source(tx, job_snapshot_id)
+        if source.application_id != application_id:
+            raise LineageBroken(
+                f"job snapshot {job_snapshot_id} does not belong to application {application_id}"
+            )
+        return source
+
+    def selection_source(self, application_id: str, job_analysis_id: str) -> SelectionSource:
+        with self.transactions.read() as tx:
+            source = self.sources.selection_source(tx, job_analysis_id)
+        if source.application_id != application_id:
             raise LineageBroken(
                 f"job analysis {job_analysis_id} does not belong to application {application_id}"
             )
-        return record
+        return source
+
+    def selection_plan(self, selection_plan_id: str) -> SelectionPlan:
+        with self.transactions.read() as tx:
+            return self.plans.selection_plan(tx, selection_plan_id)
+
+    def load_knowledge(self) -> Knowledge:
+        return load_analysis_knowledge(self._knowledge)
+
+    @staticmethod
+    def assert_provider_io_allowed() -> None:
+        assert_external_io_allowed("analysis/selection provider execution")
+
+    @property
+    def provider(self) -> AIProvider:
+        if self._provider is None:
+            raise DependencyUnavailable("AI mode was requested but no provider is configured")
+        return self._provider
+
+    def preserve(
+        self,
+        application_id: str,
+        operation_id: str,
+        task: str,
+        provenance: ProviderTaskResult,
+    ) -> ProviderEvidence:
+        assert_external_io_allowed("provider response preservation")
+        with self.transactions.read() as tx:
+            response = self.evidence.find_response(
+                tx, application_id, operation_id, task, provenance
+            )
+        if response is None:
+            artifact_version_id = new_id()
+            try:
+                payload = self.snapshot_payloads.commit_provider_response(
+                    application_id,
+                    operation_id,
+                    artifact_version_id,
+                    provenance.sanitized_response,
+                )
+            except (OSError, ValueError) as exc:
+                raise InfrastructureFailure(
+                    f"could not preserve the provider response: {exc}"
+                ) from exc
+            response = StoredProviderResponse(artifact_version_id, payload)
+        if (
+            self.snapshot_payloads.verify_payload(
+                response.payload.reference, response.payload.sha256
+            )
+            != "ok"
+        ):
+            raise InfrastructureFailure("preserved provider response failed payload verification")
+        with self.transactions.write() as tx:
+            registered = self.evidence.register_inactive(
+                tx,
+                application_id,
+                operation_id,
+                task,
+                provenance,
+                response,
+            )
+        if registered != response:
+            if (
+                self.snapshot_payloads.verify_payload(
+                    registered.payload.reference, registered.payload.sha256
+                )
+                != "ok"
+            ):
+                raise InfrastructureFailure(
+                    "preserved provider response failed payload verification"
+                )
+        response = registered
+        return ProviderEvidence(task, response.artifact_version_id, response.payload, provenance)
 
     def prepare(
         self, command: AnalyzeCommand, *, operation_id: str | None = None
     ) -> PreparedAnalysis:
+        assert_external_io_allowed("analysis preparation")
         return AnalysisPreparation.prepare(self, command, operation_id=operation_id)
 
-    def activate(
-        self,
-        command: AnalyzeCommand,
-        prepared: PreparedAnalysis,
-        repository: PreparationRepository | None = None,
-    ) -> AnalysisResult:
-        """Commit a prepared result after the runner's final optimistic check."""
-        repo = repository or self.repo
-        analysis_id, selection_plan = repo.save_analysis(
-            command.application_id,
-            command.job_snapshot_id,
-            prepared.result,
-            prepared.plan_manifest,
-            provider=prepared.provider,
-            model=prepared.model,
-            candidate_context_version=prepared.candidate_context_version,
-            candidate_context_hash=prepared.candidate_context_hash,
-            profile_version=prepared.profile_version,
-            # The manifest's own `policy_version` is the label the policy files
-            # declare; editing a policy does not move it. The store's `version`
-            # hashes the policy content, so it is the value a later change can
-            # actually be compared against.
-            selection_policy_version=prepared.selection_policy_version,
-            track_emphasis_dependencies=prepared.track_emphasis_dependencies,
-            expected_analysis_id=command.expected_analysis_id,
-            expected_selection_plan_id=command.expected_selection_plan_id,
-            enforce_expected_selection_plan=command.expected_analysis_id is not None,
-            refuse_matching_context_operation=command.refuse_matching_context_operation,
-        )
-        repo.set_normalized_role(command.application_id, prepared.normalized_role)
-        return AnalysisResult(
-            application_id=command.application_id,
-            job_snapshot_id=command.job_snapshot_id,
-            analysis_id=analysis_id,
-            selection_plan_id=selection_plan.id,
-            analysis=prepared.result,
-        )
+    def activate(self, command: AnalyzeCommand, prepared: PreparedAnalysis) -> AnalysisResult:
+        with self.transactions.write() as tx:
+            return self.activation.activate(tx, command, prepared)
 
-    def create_selection_plan(
-        self,
-        command: CreateSelectionPlanCommand,
-        repository: PreparationRepository | None = None,
-    ) -> SelectionPlanResult:
-        return AnalysisSelectionService.create_selection_plan(self, command, repository)
+    def prepare_selection_plan(self, command: CreateSelectionPlanCommand) -> PreparedSelectionPlan:
+        assert_external_io_allowed("selection preparation")
+        return AnalysisSelectionService.prepare_selection_plan(self, command)
+
+    def create_selection_plan(self, command: CreateSelectionPlanCommand) -> SelectionPlanResult:
+        prepared = self.prepare_selection_plan(command)
+        with self.transactions.write() as tx:
+            return self.activation.activate_selection_plan(tx, prepared)
 
     def prepare_selection_proposal(
-        self, command: ProposeSelectionPlanCommand, *, operation_id: str
+        self,
+        command: ProposeSelectionPlanCommand,
+        *,
+        operation_id: str,
     ) -> PreparedSelectionProposal:
+        assert_external_io_allowed("selection provider preparation")
         return AnalysisSelectionService.prepare_selection_proposal(
             self, command, operation_id=operation_id
         )
-
-    def activate_selection_proposal(
-        self,
-        prepared: PreparedSelectionProposal,
-        repository: PreparationRepository | None = None,
-    ) -> SelectionPlanResult:
-        return AnalysisSelectionService.activate_selection_proposal(self, prepared, repository)
 
     def apply_analysis_decisions(
         self, command: ApplyAnalysisDecisionsCommand

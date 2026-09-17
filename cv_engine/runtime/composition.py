@@ -19,9 +19,11 @@ from ..application.ports import (
     RevisionPayloadStore,
     UnitOfWork,
 )
+from ..application.ports.analysis_plans import AnalysisKnowledgeSource
 from ..application.services.analysis import AnalysisService
 from ..application.services.applications import ApplicationService
 from ..application.services.drafts import DraftService
+from ..application.services.drafts.selection import SelectionChangeService
 from ..application.services.knowledge import KnowledgeService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
@@ -47,12 +49,17 @@ from ..infrastructure.persistence import (
     create_database_engine,
     current_database_revision,
 )
+from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
+from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisSelectionSourceReader
 from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
+from ..infrastructure.persistence.operation_activation import SqlAlchemyOperationActivationStore
+from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
 from ..infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
+from ..infrastructure.persistence.selection_drafts import SqlAlchemySelectionDraftStore
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
@@ -134,6 +141,7 @@ def build_services(
     database_url: str | None = None,
     repository: ApplicationRepository | None = None,
     knowledge: KnowledgeStore | None = None,
+    activation_knowledge: AnalysisKnowledgeSource | None = None,
     artifacts: ArtifactStore | None = None,
     payloads: RevisionPayloadStore | None = None,
     renderer: Renderer | None = None,
@@ -196,19 +204,48 @@ def build_services(
         "provider": resolved_provider,
         "snapshots": resolved_payloads,
     }
-    analysis_service = AnalysisService(**shared)
+    analysis_plans = SqlAlchemyAnalysisPlanRepository(transactions)
+    analysis_sources = SqlAlchemyAnalysisSelectionSourceReader(transactions)
+    evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
+    activation_store = SqlAlchemyOperationActivationStore(transactions)
+    # Activation probes recovery state through the runner token. This file-only
+    # reader must not invoke the legacy recovery callback and open another DB scope.
+    resolved_activation_knowledge = (
+        activation_knowledge
+        or knowledge
+        or FileKnowledge(
+            paths.knowledge_root,
+            project_root=paths.root,
+            temp_root=paths.temp_root,
+        )
+    )
+    analysis_service = AnalysisService(
+        transactions=transactions,
+        plans=analysis_plans,
+        sources=analysis_sources,
+        evidence=evidence_store,
+        knowledge=resolved_knowledge,
+        payloads=resolved_payloads,
+        provider=resolved_provider,
+    )
     operation_service = OperationService(
         **shared,
         default_ai_model=str(resolved_config.get("model")),
     )
-    draft_service = DraftService(**shared)
+    draft_service = DraftService(
+        **shared,
+        selection_changes=SelectionChangeService(
+            transactions,
+            SqlAlchemySelectionDraftStore(transactions),
+            resolved_knowledge,
+            resolved_artifacts,
+        ),
+    )
     rendering_service = RenderingService(**shared)
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
     runner = OperationRunner(
         resolved_repository,
         {
-            OperationType.ANALYZE_JOB: AnalysisOperationHandler(analysis_service),
-            OperationType.PROPOSE_SELECTION_PLAN: SelectionPlanOperationHandler(analysis_service),
             OperationType.CREATE_DRAFT: DraftOperationHandler(draft_service),
             OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
                 draft_service, task="regenerate_section"
@@ -218,6 +255,22 @@ def build_services(
             ),
             OperationType.RENDER_REVISION: RenderOperationHandler(rendering_service),
         },
+        transaction_handlers={
+            OperationType.ANALYZE_JOB: AnalysisOperationHandler(
+                analysis_service,
+                analysis_sources,
+                analysis_service.activation,
+                resolved_activation_knowledge,
+            ),
+            OperationType.PROPOSE_SELECTION_PLAN: SelectionPlanOperationHandler(
+                analysis_service,
+                analysis_sources,
+                analysis_service.activation,
+                resolved_activation_knowledge,
+            ),
+        },
+        transactions=transactions,
+        activation_store=activation_store,
         runner_id=f"local-{new_id()}",
         technical_logger=failure_logger.record,
         operation_failure_logger=failure_logger.record_operation_failure,

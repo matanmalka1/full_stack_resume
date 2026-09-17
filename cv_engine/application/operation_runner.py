@@ -20,6 +20,8 @@ from .operations import (
     allows_automatic_retry,
 )
 from .ports import OperationRepository, UnitOfWork
+from .ports.operation_activation import OperationActivationStore
+from .ports.transactions import ReadTransaction, TransactionManager, WriteTransaction
 
 logger = logging.getLogger("cv_engine.worker")
 
@@ -80,6 +82,20 @@ class OperationRunnerRepository(OperationRepository, Protocol):
     def lock_application(self, application_id: str) -> None: ...
 
 
+class TransactionalOperationHandler(Protocol):
+    """Migrated execution contract; the runner owns every database scope."""
+
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None: ...
+
+    def execute(
+        self, operation: PersistedOperation, cancellation_requested: Callable[[], bool]
+    ) -> PreparedOperation: ...
+
+    def activate(
+        self, tx: WriteTransaction, operation: PersistedOperation, prepared: PreparedOperation
+    ) -> Sequence[OperationOutputReference]: ...
+
+
 class OperationRunner:
     def __init__(
         self,
@@ -87,6 +103,9 @@ class OperationRunner:
         handlers: Mapping[OperationType, OperationHandler],
         *,
         runner_id: str,
+        transaction_handlers: Mapping[OperationType, TransactionalOperationHandler] | None = None,
+        transactions: TransactionManager | None = None,
+        activation_store: OperationActivationStore | None = None,
         retry_delay_seconds: float = 0.25,
         sleeper: Callable[[float], None] = sleep,
         technical_logger: Callable[[BaseException], str | None] | None = None,
@@ -103,6 +122,13 @@ class OperationRunner:
     ):
         self.repository = repository
         self.handlers = dict(handlers)
+        self.transaction_handlers = dict(transaction_handlers or {})
+        self.transactions = transactions
+        self.activation_store = activation_store
+        if self.transaction_handlers and (transactions is None or activation_store is None):
+            raise TypeError("transaction handlers require transaction and activation ports")
+        if self.handlers.keys() & self.transaction_handlers.keys():
+            raise ValueError("an Operation type must have exactly one handler")
         self.runner_id = runner_id
         self.retry_delay_seconds = retry_delay_seconds
         self.sleeper = sleeper
@@ -231,7 +257,8 @@ class OperationRunner:
         ):
             raise ValueError("Operation is not claimed by this runner")
         handler = self.handlers.get(operation.operation_type)
-        if handler is None:
+        transaction_handler = self.transaction_handlers.get(operation.operation_type)
+        if handler is None and transaction_handler is None:
             error = OperationExecutionError(
                 OperationFailureCode.SCHEMA_VIOLATION,
                 "No executor is registered for this Operation type.",
@@ -251,14 +278,24 @@ class OperationRunner:
         while True:
             try:
                 operation = self._set_phase(operation_id, OperationPhase.PRE_EXECUTION_CHECK)
-                handler.check_sources(operation, self.repository)
+                if transaction_handler is not None:
+                    transactions = self.transactions
+                    if transactions is None:
+                        raise TypeError("transaction handler has no transaction manager")
+                    with transactions.read() as tx:
+                        transaction_handler.verify_sources(tx, operation)
+                elif handler is not None:
+                    handler.check_sources(operation, self.repository)
                 if self._cancelled(operation_id):
                     return self.repository.complete_operation(
                         operation_id, runner_id=self.runner_id
                     )
                 self._set_phase(operation_id, OperationPhase.EXECUTING)
                 with self._heartbeat(operation_id):
-                    prepared = handler.execute(operation, lambda: self._cancelled(operation_id))
+                    executor = transaction_handler or handler
+                    if executor is None:
+                        raise TypeError("Operation has no executor")
+                    prepared = executor.execute(operation, lambda: self._cancelled(operation_id))
                 break
             except OperationExecutionError as error:
                 if error.technical_log_reference is None:
@@ -308,17 +345,32 @@ class OperationRunner:
                     ),
                 )
 
-        for output in prepared.outputs:
-            self.repository.record_operation_output(
-                operation_id,
-                output.output_type,
-                output.output_id,
-                active=False,
-            )
+        if transaction_handler is not None:
+            transactions = self.transactions
+            activation_store = self.activation_store
+            if transactions is None or activation_store is None:
+                raise TypeError("transaction handler has no activation persistence")
+            with transactions.write() as tx:
+                for output in prepared.outputs:
+                    activation_store.record_operation_output(
+                        tx, operation_id, output.output_type, output.output_id, active=False
+                    )
+        else:
+            for output in prepared.outputs:
+                self.repository.record_operation_output(
+                    operation_id,
+                    output.output_type,
+                    output.output_id,
+                    active=False,
+                )
         if self._cancelled(operation_id):
             return self.repository.complete_operation(operation_id, runner_id=self.runner_id)
 
         try:
+            if transaction_handler is not None:
+                return self._activate_transactional(operation, prepared, transaction_handler)
+            if handler is None:
+                raise TypeError("Operation has no activation handler")
             with self.repository.unit_of_work() as uow:
                 bound = self.repository.bind(uow)
                 # First statement, before any read. A unit of work runs at
@@ -416,3 +468,51 @@ class OperationRunner:
                     technical_log_reference=reference,
                 ),
             )
+
+    def _activate_transactional(
+        self,
+        operation: PersistedOperation,
+        prepared: PreparedOperation,
+        handler: TransactionalOperationHandler,
+    ) -> PersistedOperation:
+        transactions = self.transactions
+        store = self.activation_store
+        if transactions is None or store is None:
+            raise TypeError("transaction handler has no activation persistence")
+        phase_events: list[PersistedOperation] = []
+        with transactions.write() as tx:
+            store.lock_application(tx, operation.application_id)
+            operation = store.operation(tx, operation.id)
+            store.set_operation_phase(
+                tx, operation.id, OperationPhase.PRE_ACTIVATION_CHECK, runner_id=self.runner_id
+            )
+            phase_events.append(store.operation(tx, operation.id))
+            handler.verify_sources(tx, operation)
+            if store.cancellation_requested(tx, operation.id):
+                result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
+            else:
+                store.set_operation_phase(
+                    tx, operation.id, OperationPhase.ACTIVATING, runner_id=self.runner_id
+                )
+                phase_events.append(store.operation(tx, operation.id))
+                activated = handler.activate(tx, operation, prepared)
+                known = {(item.output_type, item.output_id) for item in prepared.outputs}
+                if prepared.activate_outputs:
+                    for output in prepared.outputs:
+                        store.activate_operation_output(
+                            tx, operation.id, output.output_type, output.output_id
+                        )
+                for output in activated:
+                    if (output.output_type, output.output_id) not in known:
+                        store.record_operation_output(
+                            tx, operation.id, output.output_type, output.output_id, active=True
+                        )
+                if prepared.terminal_failure is not None:
+                    raise prepared.terminal_failure
+                result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
+        # Logging writes files; it cannot run inside the database scope.
+        for phase_operation in phase_events:
+            self.record_event(
+                "operation.phase_changed", "INFO", phase_operation, {"runner_id": self.runner_id}
+            )
+        return result

@@ -8,6 +8,7 @@ from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.knowledge import Profile
 from ...domain.contracts.providers import SelectionProposal
 from ...domain.contracts.selection import SelectionManifest
+from ...domain.knowledge import Knowledge
 from ...domain.profiles import ProfileStore, classification_mismatch
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.selection import build_selection
@@ -17,10 +18,23 @@ from .proposals import ProviderEvidence
 
 
 @dataclass(frozen=True)
+class PreparedSelectionPlan:
+    command: CreateSelectionPlanCommand
+    knowledge: Knowledge
+    manifest: SelectionManifest
+    candidate_context_version: str
+    candidate_context_hash: str
+    profile_version: str
+    selection_policy_version: str
+    track_emphasis_dependencies: dict[str, str]
+
+
+@dataclass(frozen=True)
 class PreparedSelectionProposal:
     command: CreateSelectionPlanCommand
     proposal: SelectionProposal
     evidence: ProviderEvidence
+    selection: PreparedSelectionPlan
 
 
 class AnalysisSelection:

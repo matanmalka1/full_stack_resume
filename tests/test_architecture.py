@@ -669,24 +669,19 @@ def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
     somewhere in the function: locking after the read would satisfy a presence
     check and protect nothing.
     """
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "cv_engine"
-        / "infrastructure"
-        / "persistence"
-        / "preparation.py"
-    ).read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    writers = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef)
-        and node.name != "_insert_selection_plan"
-        and "_insert_selection_plan(" in (ast.get_source_segment(source, node) or "")
-    ]
-    assert {node.name for node in writers} == {"save_analysis", "create_selection_plan"}, (
-        "a new selection-plan writer appeared; it must lock before it reads"
-    )
+    persistence = ENGINE / "infrastructure" / "persistence"
+    writers = []
+    for path in persistence.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.FunctionDef)
+                and node.name != "_insert_selection_plan"
+                and "_insert_selection_plan(" in (ast.get_source_segment(source, node) or "")
+            ):
+                writers.append(node)
+    assert writers, "no selection-plan writers discovered"
     for node in writers:
         calls = [
             (inner.lineno, getattr(inner.func, "attr", None) or getattr(inner.func, "id", None))
@@ -761,7 +756,10 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
         if not isinstance(node, ast.ClassDef):
             continue
         for method in node.body:
-            if isinstance(method, ast.FunctionDef) and method.name == "check_sources":
+            if isinstance(method, ast.FunctionDef) and method.name in {
+                "check_sources",
+                "verify_sources",
+            }:
                 handler_scopes[node.name] = scope(
                     ast.get_source_segment(handlers_source, method) or ""
                 )
@@ -825,3 +823,143 @@ def test_the_activation_unit_of_work_locks_before_it_reads() -> None:
             "the activation unit of work reads before it locks, so its snapshot is fixed "
             f"before the lock: {names[: taken + 1]}"
         )
+
+    migrated = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == "_activate_transactional"
+    )
+    scopes = [node for node in ast.walk(migrated) if isinstance(node, ast.With)]
+    assert len(scopes) == 1
+    first = scopes[0].body[0]
+    assert isinstance(first, ast.Expr) and isinstance(first.value, ast.Call)
+    assert isinstance(first.value.func, ast.Attribute)
+    assert first.value.func.attr == "lock_application"
+
+
+# Deliberate remaining exceptions, removed when their owning slice migrates.
+LEGACY_PERSISTENCE_ADAPTERS = {
+    "Repository",
+    "SqlAlchemyApplicationRepository",
+    "SqlAlchemyArtifactRepository",
+    "SqlAlchemyAuditRepository",
+    "SqlAlchemyDraftRepository",
+    "SqlAlchemyKnowledgeMutationRepository",
+    "SqlAlchemyOperationRepository",
+    "SqlAlchemyPreparationRepository",
+    "SqlAlchemySettingsRepository",
+    "SqlAlchemyTrackingRepository",
+}
+
+
+def test_transaction_token_adapters_have_no_legacy_repository_capabilities() -> None:
+    """Discover adapters; a newly added adapter cannot silently join the legacy model."""
+    persistence = ENGINE / "infrastructure" / "persistence"
+    legacy = set()
+    for path in persistence.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if not (
+                node.name == "Repository"
+                or re.fullmatch(r"SqlAlchemy.*(?:Repository|Store|Reader|Writer|Log)", node.name)
+            ):
+                continue
+            if node.name in LEGACY_PERSISTENCE_ADAPTERS:
+                legacy.add(node.name)
+                continue
+            assert not node.bases, f"{node.name} inherits another concrete adapter"
+            for method in node.body:
+                if not isinstance(method, ast.FunctionDef) or method.name == "__init__":
+                    continue
+                assert method.name not in {"bind", "transaction", "read_connection"}
+                args = method.args.args
+                assert len(args) >= 2 and args[1].arg == "tx", (node.name, method.name)
+                assert ast.unparse(args[1].annotation) in {"ReadTransaction", "WriteTransaction"}
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Attribute):
+                    assert inner.attr not in {"_bound_connection", "commit", "rollback", "begin"}
+                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute):
+                    assert inner.func.attr not in {
+                        "read",
+                        "write",
+                        "connect",
+                        "bind",
+                        "unit_of_work",
+                    }
+            init = next(
+                n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"
+            )
+            for argument in init.args.args[1:]:
+                assert ast.unparse(argument.annotation) == "SqlAlchemyTransactionManager"
+    assert legacy == LEGACY_PERSISTENCE_ADAPTERS, "remove stale legacy adapter exceptions"
+
+
+def test_migrated_analysis_consumers_have_no_old_persistence_dependencies() -> None:
+    services = ENGINE / "application" / "services"
+    for path in services.glob("analysis*.py"):
+        source = path.read_text(encoding="utf-8")
+        assert "PreparationRepository" not in source and "ServiceBase" not in source
+        assert not any(
+            isinstance(node, ast.Call)
+            and (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "cast"
+                or isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"bind", "unit_of_work"}
+            )
+            for node in ast.walk(ast.parse(source))
+        ), path
+    # Handler membership is derived from token-scoped source verification.
+    source = (services / "operations" / "handlers.py").read_text(encoding="utf-8")
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if not any(
+            isinstance(n, ast.FunctionDef) and n.name == "verify_sources" for n in node.body
+        ):
+            continue
+        body = ast.get_source_segment(source, node) or ""
+        assert "cast(" not in body and "PreparationRepository" not in body
+        assert "TransactionManager" not in body
+        assert not any(
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute)
+            and n.func.attr in {"read", "write", "bind", "unit_of_work"}
+            for n in ast.walk(node)
+        )
+    for path in (ENGINE / "application").rglob("*.py"):
+        assert "PreparationRepository" not in path.read_text(encoding="utf-8"), path
+    # Only the explicitly deferred knowledge recovery lifecycle may use the old writer.
+    for path in (ENGINE / "application").rglob("*.py"):
+        if path == services / "knowledge" / "mutations.py":
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                assert ast.unparse(node.func) not in {
+                    "self.repo.save_analysis",
+                    "repository.save_analysis",
+                    "self.repo.create_selection_plan",
+                    "repository.create_selection_plan",
+                }, path
+
+
+def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
+    allowed = {"ApplicationService", "AnalysisService", "SelectionChangeService", "OperationRunner"}
+    owners = set()
+    paths = [
+        *(ENGINE / "application" / "services").rglob("*.py"),
+        ENGINE / "application" / "operation_runner.py",
+    ]
+    for path in paths:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for argument in (n for n in ast.walk(node) if isinstance(n, ast.arg)):
+                if argument.annotation is not None and "TransactionManager" in ast.unparse(
+                    argument.annotation
+                ):
+                    owners.add(node.name)
+                    assert node.name in allowed, f"{node.name} cannot own transaction scopes"
+    assert owners == allowed, "remove stale transaction-owner exceptions"

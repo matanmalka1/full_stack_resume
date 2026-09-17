@@ -1,85 +1,95 @@
-"""§14: changing what the draft selects, plan and rebuilt document in one write."""
+"""§14: changing selection, committing the plan and rebuilt draft together."""
 
 from __future__ import annotations
 
-from typing import cast
-
-from ....domain.contracts.analysis import JobAnalysis
 from ....domain.drafts import manually_edited
 from ...commands import (
     ApplySelectionChangeCommand,
     CreateSelectionPlanCommand,
     SelectionChangeResult,
 )
-from ...errors import (
-    # Re-exported: the API and test suite catch WorkflowError from here, and
-    # it is bound to the taxonomy's base class, so every refusal below is caught.
-    PreconditionFailed,
+from ...errors import InfrastructureFailure, PreconditionFailed, StateConflict
+from ...ports import (
+    AIProvider,
+    ArtifactStore,
+    DraftRepository,
+    KnowledgeStore,
+    Renderer,
+    RevisionPayloadStore,
+    TransactionManager,
 )
-from ...ports import PreparationRepository
-from ..analysis import AnalysisService
+from ...ports.selection_drafts import SelectionDraftStore
+from ..analysis import AnalysisService, load_analysis_knowledge
 from .common import DraftServiceBase
 
 
-class DraftSelectionChange(DraftServiceBase):
-    """A deterministic re-selection over the draft that is already active."""
+class SelectionChangeService:
+    """Own only the selection-change transaction; other draft lifecycle stays legacy."""
 
-    def apply_selection_change(
+    def __init__(
+        self,
+        transactions: TransactionManager,
+        drafts: SelectionDraftStore,
+        knowledge: KnowledgeStore,
+        artifacts: ArtifactStore,
+    ):
+        self.transactions = transactions
+        self.drafts = drafts
+        self.knowledge = knowledge
+        self.artifacts = artifacts
+
+    def apply(
         self,
         command: ApplySelectionChangeCommand,
         *,
         analysis_service: AnalysisService,
     ) -> SelectionChangeResult:
-        """§14: a deterministic selection change, plan and draft committed together.
-
-        The new SelectionPlan and the draft that is built from it are one write.
-        A plan that landed without its draft would be a decision the document
-        does not reflect; a draft that landed without its plan would be content
-        with no record of what chose it.
-
-        A draft carrying manual wording takes the other branch §14 names. The
-        rebuild is deterministic, so it would replace the user's own sentences
-        with the engine's without asking - which is the definition of a change
-        that needs wording judgment.
-        """
-        working = self._working(command.working_draft_id, command.expected_edit_version)
-        self.load_active_application(working.application_id)
+        with self.transactions.read() as tx:
+            working = self.drafts.working_draft(tx, command.working_draft_id)
+        if not working.active:
+            raise PreconditionFailed(f"working draft {working.id} is no longer the active draft")
+        if working.edit_version != command.expected_edit_version:
+            raise StateConflict(
+                f"working draft {working.id} is at edit version {working.edit_version}, "
+                f"not {command.expected_edit_version}"
+            )
+        source = analysis_service.selection_source(working.application_id, working.job_analysis_id)
+        analysis_service.refuse_deleted(source.application_id, source.deleted_at)
         if manually_edited(working.source):
             raise PreconditionFailed(
                 "this draft carries manual wording that a deterministic rebuild would "
-                "discard; use regenerate_section or regenerate_claim to change its "
-                "selection"
+                "discard; use regenerate_section or regenerate_claim to change its selection"
             )
-        knowledge = self.load_knowledge()
-        record = self.repo.get_analysis(working.job_analysis_id)
-        analysis: JobAnalysis = record["analysis"]
-        with self.repo.unit_of_work() as uow:
-            transaction = self.repo.bind(uow)
-            created = analysis_service.create_selection_plan(
-                CreateSelectionPlanCommand(
-                    application_id=working.application_id,
-                    job_analysis_id=working.job_analysis_id,
-                    pinned_fact_ids=list(command.pinned_fact_ids),
-                    excluded_fact_ids=list(command.excluded_fact_ids),
-                ),
-                cast(PreparationRepository, transaction),
-            )
-            source = self._compose(
+        knowledge = load_analysis_knowledge(self.knowledge)
+        prepared = analysis_service.prepare_selection_plan(
+            CreateSelectionPlanCommand(
                 application_id=working.application_id,
-                job_snapshot_id=record["job_snapshot_id"],
                 job_analysis_id=working.job_analysis_id,
-                analysis=analysis,
+                pinned_fact_ids=list(command.pinned_fact_ids),
+                excluded_fact_ids=list(command.excluded_fact_ids),
+            )
+        )
+        with self.transactions.write() as tx:
+            created = analysis_service.activation.activate_selection_plan(tx, prepared)
+            document = DraftServiceBase._compose(
+                application_id=working.application_id,
+                job_snapshot_id=source.job_snapshot_id,
+                job_analysis_id=working.job_analysis_id,
+                analysis=source.analysis,
                 plan=created.plan,
                 knowledge=knowledge,
             )
-            changed = transaction.update_working_draft(
+            changed = self.drafts.update_selection(
+                tx,
                 working.id,
                 working.edit_version,
-                source,
-                selection_plan_id=created.selection_plan_id,
+                document,
+                created.selection_plan_id,
             )
-            uow.commit()
-        self.store_working_draft(changed.source)
+        try:
+            self.artifacts.write_working_draft(changed.source)
+        except OSError as exc:
+            raise InfrastructureFailure(f"could not store working draft: {exc}") from exc
         return SelectionChangeResult(
             application_id=changed.application_id,
             working_draft_id=changed.id,
@@ -88,3 +98,34 @@ class DraftSelectionChange(DraftServiceBase):
             selection_plan_id=changed.selection_plan_id,
             plan=created.plan,
         )
+
+
+class DraftSelectionChange(DraftServiceBase):
+    def __init__(
+        self,
+        *,
+        selection_changes: SelectionChangeService,
+        repository: DraftRepository,
+        knowledge: KnowledgeStore,
+        artifacts: ArtifactStore,
+        renderer: Renderer | None = None,
+        provider: AIProvider | None = None,
+        snapshots: RevisionPayloadStore | None = None,
+    ):
+        super().__init__(
+            repository=repository,
+            knowledge=knowledge,
+            artifacts=artifacts,
+            renderer=renderer,
+            provider=provider,
+            snapshots=snapshots,
+        )
+        self.selection_changes = selection_changes
+
+    def apply_selection_change(
+        self,
+        command: ApplySelectionChangeCommand,
+        *,
+        analysis_service: AnalysisService,
+    ) -> SelectionChangeResult:
+        return self.selection_changes.apply(command, analysis_service=analysis_service)

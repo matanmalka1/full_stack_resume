@@ -21,11 +21,12 @@ from __future__ import annotations
 import json
 from html.parser import HTMLParser
 
+import pytest
 from api_harness import MUTATION_HEADERS, analyze_offline
 from helpers import ACCOUNT_MANAGER_JOB, working_claim
 
 from cv_engine.api.app import API_PREFIX
-from cv_engine.application.commands import IngestCommand
+from cv_engine.application.commands import ApplySelectionChangeCommand, IngestCommand
 from cv_engine.application.errors import InfrastructureFailure
 from cv_engine.domain.models import ValidationIssue, ValidationReport
 
@@ -662,6 +663,36 @@ def test_a_selection_change_creates_a_plan_and_moves_the_draft_onto_it(ai_api_wo
     assert after["selection_plan_id"] == body["selection_plan_id"]
     assert excluded not in after["source"]["selected_fact_ids"]
     assert after["source"]["omitted_facts"][excluded] == "excluded_by_user"
+
+
+def test_selection_change_rolls_back_plan_and_draft_when_the_draft_write_fails(
+    ai_api_worker,
+    monkeypatch,
+) -> None:
+    from cv_engine.infrastructure.persistence.selection_drafts import SqlAlchemySelectionDraftStore
+
+    application_id, working_draft_id, sources = _drafted(ai_api_worker, "Reselection Rollback Co")
+    before = _read(ai_api_worker, working_draft_id).json()
+    services = ai_api_worker.services
+    markdown = services.artifacts.working_markdown(application_id)
+    original = SqlAlchemySelectionDraftStore.update_selection
+
+    def fail_after_update(*args, **kwargs):
+        original(*args, **kwargs)
+        raise InfrastructureFailure("draft write rollback")
+
+    monkeypatch.setattr(SqlAlchemySelectionDraftStore, "update_selection", fail_after_update)
+    with pytest.raises(InfrastructureFailure, match="draft write rollback"):
+        services.drafts.apply_selection_change(
+            ApplySelectionChangeCommand(
+                working_draft_id=working_draft_id,
+                expected_edit_version=before["edit_version"],
+            ),
+            analysis_service=services.analysis,
+        )
+    assert _read(ai_api_worker, working_draft_id).json() == before
+    assert services.repository.latest_selection_plan(application_id).id == sources["selection_plan"]
+    assert services.artifacts.working_markdown(application_id) == markdown
 
 
 def test_a_selection_change_refuses_a_draft_carrying_manual_wording(ai_api_worker) -> None:

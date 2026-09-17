@@ -5,9 +5,9 @@
 ## Current status
 
 ```text
-Current phase: Phase 3 — Analysis and selection lifecycle
-Last completed phase: Phase 2 — Application Intake vertical slice
-Next action: Phase 3 — Analysis and selection lifecycle
+Current phase: Phase 3 — Analysis and selection lifecycle (DONE)
+Last completed phase: Phase 3 — Analysis and selection lifecycle
+Next action: Phase 3 closeout commit when explicitly requested; Phase 4 not started
 Known blockers: None
 Last verified commit: Phase 1–2 closeout commit (see git log; working-tree evidence recorded below)
 ```
@@ -399,7 +399,7 @@ refactor.
 
 ## Phase 3 — Analysis and selection lifecycle
 
-Status: NOT STARTED
+Status: DONE
 
 ### Goal
 
@@ -429,16 +429,108 @@ or repository casts.
 
 ### Verification
 
-- [ ] focused tests
-- [ ] typecheck
-- [ ] architecture checks
-- [ ] no forbidden imports
-- [ ] no old consumers remain
-- [ ] no provider/network call inside a transaction
+- [x] focused tests
+- [x] typecheck
+- [x] architecture checks
+- [x] no forbidden imports
+- [x] no old consumers remain
+- [x] no provider/network call inside a transaction
 
 ### Handoff notes
 
-None yet.
+Initial worktree was clean at `24d80de627f35bb47e9c49b8a47c6d110742540c`.
+Phase 3 verification, including the requested closeout cleanup, has passed. Product/type/architecture gates were run by the user;
+Ruff gates were run by the agent only after the user explicitly requested them. No commit has been created.
+
+User-reported verification checkpoint:
+
+- Main focused command: 137 passed, 1 failed. The rollback test still patched the deleted root
+  `_insert_selection_plan`; updated to patch the actual private SQL insertion primitive.
+- Pyright: 1 error, missing `lock_application` on the legacy composed repository capability.
+  Restored that declaration on the existing OperationRepository Port, where the legacy lock
+  implementation now lives. No new root Port or persistence cast was introduced.
+- Persistence subset: 8 passed; working-draft selection subset: 3 passed; knowledge subset: 3 passed.
+- Architecture: 17 passed. Fresh PostgreSQL pipeline with OPENAI_API_KEY unset: 3 passed.
+- User subsequently reported the corrected rollback test, Pyright and architecture rerun passed.
+  Previously passing product subsets and pipeline remain applicable to these test/Port-only corrections.
+- Ruff check: passed. Ruff format check: passed, 38 changed/new Python files already formatted.
+  Both were run by the agent under the user's explicit instruction.
+- All scoped gates now have passing evidence; Phase 3 is DONE. Phase 4 remains NOT STARTED.
+
+- Added independent token adapters for analysis/plans, minimal analysis/selection sources, provider
+  evidence, operation activation, and the atomic selection-plan/working-draft update.
+- `AnalysisService` has explicit narrow dependencies, without ServiceBase, preparation aggregate,
+  persistence casts or bound UoW. Handlers receive a scope-free activator; the runner owns activation.
+- Provider execution and payload preservation/verification precede durable inactive evidence registration.
+  Source/lineage recheck, analysis + initial plan, evidence activation and operation completion are atomic.
+  Cancellation or activation rollback retains inactive evidence. Selection replacement preserves plan CAS.
+- Migrated only the atomic plan/draft selection-change boundary; other draft lifecycle paths are unchanged.
+- Removed preparation `save_analysis`, obsolete JobStore members, the PreparationRepository Port,
+  analysis/selection casts and binds, and the unused proposal activation helper.
+- Preparation remains for real future consumers: historical analysis/plan reads and snapshot capabilities
+  (draft/readiness/query/knowledge), plus `knowledge/mutations.py` selection-plan writes with fact events
+  and recovery journal semantics (Phase 9). Shared private SQL primitives serve these consumers without
+  repositories calling repositories or wrapping the new token API. Root Repository, legacy UoW, composed
+  Ports and unrelated handlers remain intentionally. Phase 4 has not started.
+- Activation probes knowledge recovery state through its token and loads canonical files through a
+  file-only collaborator, avoiding the legacy FileKnowledge callback opening a nested DB scope.
+  Composition permits explicit `activation_knowledge` injection.
+- Added rollback, shared-token activation, external-I/O exclusion, cancellation, retry/deduplication,
+  plan/draft atomicity, token rejection and derived architecture coverage. Schema, immutable historical
+  records, artifact paths, rendering output and `domain/facts.py` were not changed.
+
+### User-run gates (ordered)
+
+All gates passed, including the focused cleanup reruns recorded below.
+
+1. Focused analysis/selection, AI evidence, operation/API and transaction tests.
+2. Persistence subset (tokens, lineage, immutable plans, CAS, locking); working-draft selection changes;
+   knowledge `confirm_and_use` / selection-plan rollback subset.
+3. `./.venv/bin/pyright cv_engine` and `tests/test_architecture.py` (including old-consumer guards).
+4. Ruff check and format check on changed/new Python files; unrelated baseline files excluded.
+5. `tests/test_pipeline_end_to_end.py` against fresh PostgreSQL with `OPENAI_API_KEY` unset.
+
+### Closeout cleanup — verified
+
+Repository-wide searches covered production and test consumers, dynamic monkeypatch/getattr usage,
+imports, Ports, helper references and migrated transaction paths. No architecture redesign was performed.
+
+- Deleted unused legacy `_insert_application`, `set_normalized_role`, `update_application_notes`
+  from the application adapter; deleted unused `duplicate_application_inputs` and
+  `snapshot_for_content_hash` from preparation. Their migrated token implementations remain.
+- Removed the four corresponding obsolete ApplicationStore/JobStore Protocol members and dead imports.
+- Migrated `seed_analysis_for_command` snapshot ownership checking to AnalysisService's source projection.
+- Reused private `_lock_application` SQL in provider evidence and operation activation instead of duplicated
+  lock queries; corrected its stale READ COMMITTED/version-allocation docstring.
+- Other extracted analysis/operation/draft SQL helpers have real consumers and are already shared.
+  No unused Phase 1–3 composition dependency or temporary compatibility wrapper was found.
+- Retained `add_job_snapshot` because readiness/chain/state tests use it to create future-phase scenarios.
+  Historical analysis/plan/snapshot reads, draft/readiness/query casts and UoW, the root/composed Ports,
+  and knowledge's Phase 9 plan writer remain required. Provider proposal-type casts are not persistence casts.
+- Duplicate intake/normalized-role/note paths without consumers were removed. The legacy knowledge plan
+  entry point and token plan entry point intentionally coexist and share SQL; future-phase historical readers
+  also coexist with minimal token projections. No duplicate migrated write implementation remains for the
+  removed capabilities. Legacy operation lifecycle and token activation methods coexist until Phase 6.
+- User-staged Phase 3 files were left staged; cleanup edits remain unstaged. No commit or Phase 4 work.
+
+User-reported cleanup results: focused tests **100 passed**; Pyright **0 errors, 0 warnings**;
+architecture **17 passed**; Ruff check **passed**; format check **7 files already formatted**.
+All cleanup gates passed. No commit has been created and Phase 4 remains NOT STARTED.
+
+Focused cleanup gates (user-run, completed):
+
+```sh
+./.venv/bin/python -m pytest -q tests/test_application_contracts.py tests/test_api_applications.py tests/test_analysis.py tests/test_selection.py tests/test_ai_tasks.py tests/test_api_analyses.py
+./.venv/bin/pyright cv_engine
+./.venv/bin/python -m pytest -q tests/test_architecture.py
+./.venv/bin/ruff check cv_engine/application/ports/repositories.py cv_engine/infrastructure/persistence/applications.py cv_engine/infrastructure/persistence/preparation.py cv_engine/infrastructure/persistence/analysis_sql.py cv_engine/infrastructure/persistence/operation_activation.py cv_engine/infrastructure/persistence/provider_evidence.py tests/helpers.py
+./.venv/bin/ruff format --check cv_engine/application/ports/repositories.py cv_engine/infrastructure/persistence/applications.py cv_engine/infrastructure/persistence/preparation.py cv_engine/infrastructure/persistence/analysis_sql.py cv_engine/infrastructure/persistence/operation_activation.py cv_engine/infrastructure/persistence/provider_evidence.py tests/helpers.py
+```
+
+AI tests cover activation lock ordering, evidence registration/retry/cancellation, atomic rollback and external
+I/O exclusion; application contracts cover the migrated helper's ownership validation. No observable signature,
+stored-value meaning, projection field, schema, render or artifact path changed in cleanup, so the prior fresh
+PostgreSQL pipeline evidence remains applicable without another pipeline rerun.
 
 ## Phase 4 — Draft lifecycle and evidence
 
@@ -779,4 +871,67 @@ For each contradiction:
 
 ### Deviations
 
-- None.
+#### 2026-09-17 — Provider-evidence registration boundary (approved)
+
+- Code evidence: `application/services/base.py:ServiceBase.preserve()` registers the
+  provider-response artifact during execution. `services/operations/handlers.py` returns
+  it as an inactive prepared output. `application/operation_runner.py:run_claimed()`
+  records inactive outputs before cancellation checks, then activates them inside the
+  successful activation transaction.
+- Binding behavior: product-spec §18 requires completed output after cancellation to be
+  recorded as inactive evidence; state-and-use-cases §19 requires later output to be
+  registered inactive and prohibits activation.
+- Conflict if interpreted literally: the session requirement to save provider evidence
+  as part of atomic activation cannot make initial artifact/output registration conditional
+  on activation. Cancellation can skip activation; activation rollback must not erase
+  already-recorded immutable evidence.
+- Smallest proposed target clarification: prepare payloads outside transactions; register
+  immutable artifacts and inactive operation outputs before activation in short database
+  scopes; activate evidence outputs atomically with analysis + initial plan (or replacement
+  plan) and operation completion. Initial registration remains outside the activation
+  rollback domain. Provider/network/filesystem writes remain outside database scopes.
+- Approved by the user: `prepare → persist inactive evidence → activation transaction →
+  activate evidence`. Provider execution and payload preservation/verification occur outside
+  database scopes. Initial metadata/output registration remains durable and inactive on
+  cancellation or failed activation. Evidence activation, source/lineage recheck, analysis,
+  initial plan, and associated operation activation writes share one transaction. Re-registering
+  the same provider output must not duplicate evidence. No locked decision reopened.
+
+### Phase 3 initial consumer map (before implementation)
+
+| Public operation / consumer | Persistence and boundary |
+| --- | --- |
+| `AnalysisService.prepare` | snapshot identity/hash/payload source read; provider and payload outside DB scope |
+| `AnalysisService.activate` | analysis + initial plan + classification/normalized role; synchronous entry point owns scope, runner owns operation scope |
+| `create_selection_plan` | named analysis, compatible active plan, replacement write and expected-plan CAS |
+| `prepare_selection_proposal` | named analysis/compatible plan; provider response preserved before activation |
+| `activate_selection_proposal` | prepared deterministic overlay activation under runner scope |
+| `apply_analysis_decisions` | named analysis/observed plan; classification replacement or plan replacement with CAS |
+| analysis/selection handlers | frozen-source rechecks and activation; legacy preparation casts removed in this phase |
+| operation submission | snapshot/analysis/compatible plan sources; two preparation casts removed |
+| `drafts/selection.py` | bound UoW + preparation cast; migrate only the atomic plan/draft selection-change boundary |
+| `knowledge/mutations.py` | real future-phase consumer of legacy `create_selection_plan`, atomically with fact events and recovery journal semantics |
+| draft/readiness/query/knowledge reads | existing analysis/plan history readers remain until owning phases migrate |
+
+`preparation.py` owns `save_analysis`, `create_selection_plan`, lock/CAS/lineage helpers,
+analysis history readers, selection-plan readers, and legacy snapshot readers/writers.
+`AnalysisService` inherits persistence casts through `ServiceBase` (application lookup and
+provider artifact registration), even though its own module contains no `cast()`.
+The runner currently binds its root UoW for every activation. Only analysis/selection activation
+will use transaction tokens in this phase; unrelated handlers remain on their existing path.
+The knowledge selection-plan writer cannot be deleted while that real Phase 9 consumer remains;
+its persistence implementation may share private SQL primitives, without calling another
+repository or wrapping the new transaction-token API.
+
+### Phase 3 evidence identity and activation wiring
+
+- Deduplication uses provider response identity, task, provider/model, input/output hashes and execution
+  settings. The same provider-assigned response can be reused across retry Operations without rewriting
+  its immutable artifact; each Operation has its own inactive/active output association. Without a provider
+  response identity, reuse is limited to the same Operation. Distinct outputs remain distinct evidence.
+  New metadata carries `evidence_key` and `payload_size`; old immutable records are untouched.
+- Registration serializes on the Application lock and repeats lookup before insertion. Concurrent payload
+  preservation can leave an unused immutable payload orphan, consistent with reconciliation invariants.
+- Initial registration owns a separate short service transaction. Handlers and activators own no scope.
+  The runner locks the Application as its first activation statement and emits filesystem-backed phase
+  events after the transaction closes.

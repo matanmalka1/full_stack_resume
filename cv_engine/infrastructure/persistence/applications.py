@@ -4,57 +4,13 @@ from typing import Any
 
 from sqlalchemy import insert, select, update
 
-from ...application.errors import StateConflict, UnknownRecord
-from ...domain.contracts.recruitment import ApplicationStatus
+from ...application.errors import UnknownRecord
 from ...util import new_id, utc_now
 from .base import SqlAlchemyRepositoryBase
-from .tables import applications, draft_lifecycle_events, recruitment_events
+from .tables import applications, draft_lifecycle_events
 
 
 class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
-    def _insert_application(
-        self,
-        *,
-        application_id: str,
-        company: str,
-        target_role: str,
-        source_url: str | None,
-        notes: str,
-        source: str,
-        created_at: str,
-        actor_type: str,
-        client: str,
-    ) -> None:
-        with self.transaction() as connection:
-            connection.execute(
-                insert(applications).values(
-                    id=application_id,
-                    company=company.strip(),
-                    target_role=target_role.strip(),
-                    source_url=source_url,
-                    current_status=ApplicationStatus.SAVED.value,
-                    notes=notes,
-                    source=source,
-                    created_at=created_at,
-                    updated_at=created_at,
-                )
-            )
-            connection.execute(
-                insert(recruitment_events).values(
-                    id=new_id(),
-                    application_id=application_id,
-                    event_type="status_transition",
-                    from_status=None,
-                    to_status="saved",
-                    reason="application created",
-                    actor_type=actor_type,
-                    client=client,
-                    occurred_at=created_at,
-                    payload_json={},
-                    created_at=created_at,
-                )
-            )
-
     def get_application(self, application_id: str) -> dict[str, Any]:
         with self.read_connection() as connection:
             row = (
@@ -97,39 +53,3 @@ class SqlAlchemyApplicationRepository(SqlAlchemyRepositoryBase):
                 )
             )
         return event_id
-
-    def set_normalized_role(self, application_id: str, normalized_role: str) -> None:
-        with self.transaction() as connection:
-            result = connection.execute(
-                update(applications)
-                .where(applications.c.id == application_id)
-                .values(normalized_role=normalized_role, updated_at=utc_now())
-            )
-            if result.rowcount != 1:
-                raise UnknownRecord(application_id)
-
-    def update_application_notes(
-        self, application_id: str, notes: str, expected_notes: str, *, updated_at: str
-    ) -> dict[str, Any]:
-        with self.transaction() as connection:
-            result = connection.execute(
-                update(applications)
-                .where(
-                    applications.c.id == application_id,
-                    applications.c.notes == expected_notes,
-                )
-                .values(notes=notes, updated_at=updated_at)
-            )
-            if result.rowcount != 1:
-                exists = connection.execute(
-                    select(applications.c.id).where(applications.c.id == application_id)
-                ).scalar_one_or_none()
-                if exists is None:
-                    raise UnknownRecord(application_id)
-                raise StateConflict("application notes changed before commit")
-            row = (
-                connection.execute(select(applications).where(applications.c.id == application_id))
-                .mappings()
-                .one()
-            )
-            return dict(row)
