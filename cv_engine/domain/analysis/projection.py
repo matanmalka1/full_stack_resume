@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from ..contracts.analysis import FitLevel, Importance, JobAnalysis, Requirement
+from ..contracts.analysis import FitLevel, Importance, Requirement
 from ..facts import FactStore
 
 #: Why a requirement is not met, when no boundary fact gives the authoritative
@@ -163,7 +163,3 @@ def gaps(requirements: Sequence[Requirement], facts: FactStore) -> list[Gap]:
 
 def hard_gaps(requirements: Sequence[Requirement], facts: FactStore) -> list[Gap]:
     return [gap for gap in gaps(requirements, facts) if gap.severity == "hard"]
-
-
-def mandatory_requirements(analysis: JobAnalysis) -> list[Requirement]:
-    return [item for item in analysis.requirements if item.importance == "mandatory"]

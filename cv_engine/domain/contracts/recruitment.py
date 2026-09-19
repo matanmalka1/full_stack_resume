@@ -17,9 +17,3 @@ class ApplicationStatus(StrEnum):
     REJECTED = "rejected"
     WITHDRAWN = "withdrawn"
     CLOSED = "closed"
-
-
-class TerminalOutcome(StrEnum):
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    WITHDRAWN = "withdrawn"
