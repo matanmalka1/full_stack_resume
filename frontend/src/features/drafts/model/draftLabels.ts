@@ -13,6 +13,7 @@ export const claimTypeLabels: Record<ClaimType, string> = {
   canonical: "מבוסס עובדה",
   composite: "מורכב מכמה עובדות",
   derived: "נוסח נגזר מעובדות",
+  reviewed: "נבדק מול העובדות",
   pending: "ללא ביסוס",
   headline: "כותרת",
 };
@@ -21,6 +22,7 @@ export const claimTypeTones: Record<ClaimType, Tone> = {
   canonical: "success",
   composite: "success",
   derived: "success",
+  reviewed: "success",
   /* Free text nothing could authorize. A.4: it is preserved, marked unsafe at once, and
      blocks approval - not the save. */
   pending: "blocker",
@@ -31,6 +33,7 @@ export const claimTypeExplanations: Record<ClaimType, string> = {
   canonical: "הטקסט הוא הניסוח הקנוני של העובדה שמתחתיו.",
   composite: "הטקסט מחבר כמה עובדות לפי תבנית קבועה.",
   derived: "הטקסט נגזר מהעובדות שמתחתיו לפי כלל ניסוח.",
+  reviewed: "הטקסט נוסח מחדש ונבדק בביקורת סמנטית נפרדת מול המקורות הקנוניים.",
   pending: "אין עובדה שמאשרת את הטקסט הזה. הוא נשמר כפי שנכתב, ואינו מאפשר אישור של הגרסה.",
   headline: "שורת הכותרת של קורות החיים.",
 };

@@ -177,6 +177,63 @@ def _claim_is_not_pending(context: _ClaimContext) -> None:
         )
 
 
+def _reviewed_claim_has_current_complete_evidence(context: _ClaimContext) -> None:
+    claim = context.claim
+    validation = context.validation
+    if claim.claim_type != "reviewed":
+        return
+    evidence = claim.review_evidence
+    if evidence is None or evidence.policy_version != "semantic-claim-support-v1":
+        validation.add_issue("content", "invalid-review-evidence", claim.claim_id)
+        return
+    covered = "".join(item.claim_quote for item in evidence.assertions)
+
+    def normalize(value: str) -> str:
+        return re.sub(r"[^\w]", "", value, flags=re.UNICODE).casefold()
+
+    if normalize(covered) != normalize(claim.text):
+        validation.add_issue(
+            "content", "incomplete-review-coverage", f"claim {claim.claim_id} is not fully reviewed"
+        )
+    cited: set[str] = set()
+    for assertion in evidence.assertions:
+        ids = assertion.fact_ids
+        quotes = assertion.source_quotes
+        cited.update(ids)
+        if len(ids) != len(quotes):
+            validation.add_issue(
+                "content",
+                "invalid-review-source-quote",
+                f"claim {claim.claim_id} does not map one source quote per fact",
+            )
+            continue
+        try:
+            invalid_quote = False
+            for fact_id, quote in zip(ids, quotes, strict=True):
+                fact = validation.facts.get(fact_id, canonical_only=True)
+                sources = [
+                    fact.meaning,
+                    validation.facts.rendering(fact_id, validation.draft.language),
+                ]
+                if quote not in sources[0] and quote not in sources[1]:
+                    invalid_quote = True
+        except FactStoreError as exc:
+            validation.add_issue("content", "stale-review-source", str(exc))
+            continue
+        if invalid_quote:
+            validation.add_issue(
+                "content",
+                "invalid-review-source-quote",
+                f"claim {claim.claim_id} has unverified source quotes",
+            )
+    if cited != set(claim.fact_ids):
+        validation.add_issue(
+            "content",
+            "review-fact-coverage-mismatch",
+            f"claim {claim.claim_id} evidence does not cover its linked facts",
+        )
+
+
 def _canonical_claim_has_one_fact(context: _ClaimContext) -> None:
     claim = context.claim
     if claim.claim_type == "canonical" and len(claim.fact_ids) != 1:
@@ -249,6 +306,7 @@ CLAIM_RULES: tuple[ClaimRule, ...] = (
     _claim_is_linked,
     _derived_claim_is_supported,
     _claim_is_not_pending,
+    _reviewed_claim_has_current_complete_evidence,
     _canonical_claim_has_one_fact,
     _composite_claim_matches_template,
     _fact_links_are_canonical,

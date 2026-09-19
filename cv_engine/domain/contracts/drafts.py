@@ -11,7 +11,20 @@ from .selection import OmissionReason, SelectionManifest
 from .taxonomy import Emphasis, ProfileName, Track
 
 ClaimStyle = Literal["paragraph", "heading", "date", "bullet", "item", "contact", "headline"]
-ClaimType = Literal["canonical", "composite", "derived", "pending", "headline"]
+ClaimType = Literal["canonical", "composite", "derived", "reviewed", "pending", "headline"]
+
+
+class ClaimReviewAssertion(StrictModel):
+    claim_quote: str = Field(min_length=1)
+    fact_ids: list[str]
+    source_quotes: list[str]
+
+
+class ClaimReviewEvidence(StrictModel):
+    policy_version: str = Field(min_length=1)
+    provider_artifact_version_id: str = Field(min_length=1)
+    input_hash: str = Field(min_length=1)
+    assertions: list[ClaimReviewAssertion]
 
 
 class ClaimLine(StrictModel):
@@ -26,6 +39,7 @@ class ClaimLine(StrictModel):
     derivation_id: str | None = None
     derivation_version: str | None = None
     pending_reason: str | None = None
+    review_evidence: ClaimReviewEvidence | None = None
 
     @model_validator(mode="after")
     def validate_template_identity(self) -> ClaimLine:
@@ -43,6 +57,10 @@ class ClaimLine(StrictModel):
             raise ValueError("pending claims require a reason")
         if self.claim_type != "pending" and self.pending_reason is not None:
             raise ValueError("only pending claims may include a pending reason")
+        if self.claim_type == "reviewed" and self.review_evidence is None:
+            raise ValueError("reviewed claims require semantic review evidence")
+        if self.claim_type != "reviewed" and self.review_evidence is not None:
+            raise ValueError("only reviewed claims may include semantic review evidence")
         return self
 
 

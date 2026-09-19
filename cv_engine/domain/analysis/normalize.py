@@ -44,7 +44,7 @@ from .requirements.identity import normalize_span, requirement_id
 #: a new entity. `REQUIREMENT_ID_VERSION` names the identity algorithm itself, so that a
 #: change to how identity is computed can still be stated as one.
 EXTRACTION_VERSION = "analysis-v1"
-PROMPT_VERSION = "system-v5"
+PROMPT_VERSION = "system-v6"
 REQUIREMENT_ID_VERSION = "v1"
 
 #: Least claim first. Merging duplicates and resolving conflicts both take the

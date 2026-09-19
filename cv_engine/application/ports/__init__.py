@@ -14,6 +14,7 @@ from .knowledge_lifecycle import KnowledgeLifecycleStore
 from .operation_client import OperationClientStore
 from .operation_execution import OperationExecutionStore
 from .outbound import (
+    AssessClaimSupportContext,
     AIProposal,
     AIProvider,
     AnalysisContext,
@@ -42,6 +43,7 @@ from .values import (
 
 __all__ = [
     "AIProposal",
+    "AssessClaimSupportContext",
     "AnalysisContext",
     "AIProvider",
     "AuditLogWriter",

@@ -7,7 +7,6 @@ from ....domain.contracts.selection import SelectionPlan
 from ....domain.draft_markdown import serialize_markdown
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....domain.knowledge import Knowledge
-from ....domain.profiles import allowed_fact_pool
 from ....domain.validation import validate_draft as run_draft_validation
 from ...chain import ChainError, check_loaded_draft_chain, draft_source_mismatch
 from ...commands import (
@@ -21,6 +20,7 @@ from ...commands import (
     WorkingDraftUpdateResult,
 )
 from ...errors import (
+    ApplicationError,
     DependencyUnavailable,
     InfrastructureFailure,
     LineageBroken,
@@ -32,17 +32,25 @@ from ...errors import (
 from ...ports import (
     AIProvider,
     ArtifactStore,
+    AssessClaimSupportContext,
     DraftResumeContext,
     KnowledgeStore,
     RegenerateClaimContext,
     RegenerateSectionContext,
+    SnapshotPayloadStore,
     TransactionManager,
 )
 from ...ports.analysis_plans import AnalysisPlanStore
 from ...ports.drafts import DraftAuthoringSourceReader, DraftEvidencePreserver, DraftLifecycleStore
 from ...ports.validation_store import ValidationStore
 from ..analysis.service import load_analysis_knowledge
-from ..proposals import ProviderEvidence, apply_proposed_claims, evidence_attached, fact_context
+from ..proposals import (
+    ProviderEvidence,
+    apply_proposed_claims,
+    authorize_semantically_reviewed_claims,
+    evidence_attached,
+    fact_context,
+)
 from .activation import DraftActivation
 from .inputs import (
     PreparedDraft,
@@ -69,6 +77,7 @@ class DraftAuthoringService:
         provider: AIProvider | None,
         evidence: DraftEvidencePreserver,
         selection_changes: SelectionChangeService,
+        snapshot_payloads: SnapshotPayloadStore | None = None,
     ):
         self.transactions = transactions
         self.drafts = drafts
@@ -80,6 +89,7 @@ class DraftAuthoringService:
         self._provider = provider
         self.evidence = evidence
         self.selection_changes = selection_changes
+        self.snapshot_payloads = snapshot_payloads
         self.activation = DraftActivation(drafts, plans, validations)
 
     @property
@@ -264,12 +274,13 @@ class DraftAuthoringService:
             knowledge=knowledge,
         )
         evidence: ProviderEvidence | None = None
+        review_evidence: ProviderEvidence | None = None
         if command.provider == "openai":
             if operation_id is None:
                 raise PreconditionFailed(
                     "AI generation runs as an Operation; there is no synchronous form"
                 )
-            draft, evidence = self._propose_wording(
+            draft, evidence, review_evidence = self._propose_wording(
                 command.application_id,
                 operation_id,
                 draft,
@@ -279,7 +290,12 @@ class DraftAuthoringService:
                 reasoning_effort=command.reasoning_effort,
             )
         return PreparedDraft(
-            source=draft, analysis=analysis, plan_id=plan.id, knowledge=knowledge, evidence=evidence
+            source=draft,
+            analysis=analysis,
+            plan_id=plan.id,
+            knowledge=knowledge,
+            evidence=evidence,
+            review_evidence=review_evidence,
         )
 
     def _propose_wording(
@@ -292,7 +308,7 @@ class DraftAuthoringService:
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> tuple[DraftDocument, ProviderEvidence]:
+    ) -> tuple[DraftDocument, ProviderEvidence, ProviderEvidence | None]:
         """`draft_resume`: ask for wording over a document the engine composed.
 
         The provider never decides *which* facts appear - the SelectionPlan
@@ -302,8 +318,6 @@ class DraftAuthoringService:
         refused as `ProposalRejected`, not saved as a pending claim: §14's
         pending rule is for a person mid-edit, not for a wrong answer.
         """
-        profile = knowledge.profiles.get(analysis.profile)
-        allowed = allowed_fact_pool(profile)
         selected = sorted(
             {
                 fact_id
@@ -312,6 +326,15 @@ class DraftAuthoringService:
                 for fact_id in claim.fact_ids
             }
         )
+        snapshot = self.snapshot_source(draft.job_snapshot_id)
+        job_text = ""
+        if self.snapshot_payloads is not None and snapshot.get("payload_path"):
+            try:
+                job_text = self.snapshot_payloads.read_snapshot(
+                    snapshot["payload_path"], snapshot["source_hash"]
+                )
+            except (OSError, ValueError) as exc:
+                raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
         answered = self.provider.draft_resume(
             DraftResumeContext(
                 job_analysis={
@@ -321,6 +344,8 @@ class DraftAuthoringService:
                     "language": analysis.language,
                     "keywords": list(analysis.keywords),
                 },
+                job_text=job_text,
+                requirements=[item.model_dump(mode="json") for item in analysis.requirements],
                 language=draft.language,
                 sections=[
                     {
@@ -342,12 +367,26 @@ class DraftAuthoringService:
             reasoning_effort=reasoning_effort,
         )
         evidence = self.preserve(application_id, operation_id, "draft_resume", answered.provenance)
-        del allowed
         with evidence_attached(evidence):
             updated = apply_proposed_claims(
-                draft, answered.proposal.claims, knowledge.facts, set(selected), task="draft_resume"
+                draft,
+                answered.proposal.claims,
+                knowledge.facts,
+                set(selected),
+                task="draft_resume",
+                allow_semantic_review=True,
             )
-        return (updated, evidence)
+        updated, review_evidence = self._review_pending_claims(
+            application_id,
+            operation_id,
+            updated,
+            knowledge,
+            selected,
+            evidence,
+            model=model,
+            reasoning_effort=reasoning_effort,
+        )
+        return (updated, evidence, review_evidence)
 
     def edit_claim(
         self,
@@ -511,6 +550,56 @@ class DraftAuthoringService:
         record = self.analysis_record(working.job_analysis_id)
         return (working, knowledge, record["analysis"])
 
+    def _review_pending_claims(
+        self,
+        application_id: str,
+        operation_id: str,
+        draft: DraftDocument,
+        knowledge: Knowledge,
+        selected: list[str],
+        writer_evidence: ProviderEvidence,
+        *,
+        model: str | None,
+        reasoning_effort: str | None,
+    ) -> tuple[DraftDocument, ProviderEvidence | None]:
+        pending_ids = {
+            claim.claim_id for claim in draft_claims(draft) if claim.claim_type == "pending"
+        }
+        if not pending_ids:
+            return draft, None
+        claims = [
+            {
+                "claim_id": claim.claim_id,
+                "section": section.name,
+                "text": claim.text,
+                "fact_ids": list(claim.fact_ids),
+            }
+            for section in draft.sections
+            for claim in section.claims
+            if claim.claim_id in pending_ids
+        ]
+        try:
+            reviewed = self.provider.assess_claim_support(
+                AssessClaimSupportContext(
+                    language=draft.language,
+                    claims=claims,
+                    allowed_facts=fact_context(knowledge.facts, selected, draft.language),
+                ),
+                model=model,
+                reasoning_effort=reasoning_effort,
+            )
+            evidence = self.preserve(
+                application_id, operation_id, "assess_claim_support", reviewed.provenance
+            )
+            with evidence_attached(evidence):
+                authorized = authorize_semantically_reviewed_claims(
+                    draft, reviewed.proposal, knowledge.facts, evidence
+                )
+        except ApplicationError as exc:
+            exc.completed_evidence = (writer_evidence,)
+            raise
+        return authorized, evidence
+
     def prepare_section_regeneration(
         self, command: RegenerateSectionCommand, *, operation_id: str
     ) -> PreparedRegeneration:
@@ -557,13 +646,29 @@ class DraftAuthoringService:
                     f"regenerate_section answered for section {proposed.section!r}, not {section.name!r}"
                 )
             updated = apply_proposed_claims(
-                draft, proposed.claims, knowledge.facts, set(allowed), task="regenerate_section"
+                draft,
+                proposed.claims,
+                knowledge.facts,
+                set(allowed),
+                task="regenerate_section",
+                allow_semantic_review=True,
             )
+        updated, review_evidence = self._review_pending_claims(
+            command.application_id,
+            operation_id,
+            updated,
+            knowledge,
+            allowed,
+            evidence,
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
+        )
         return PreparedRegeneration(
             working=working,
             source=updated,
             claim_ids=[str(claim.claim_id) for claim in proposed.claims],
             evidence=evidence,
+            review_evidence=review_evidence,
         )
 
     def prepare_claim_regeneration(
@@ -627,18 +732,31 @@ class DraftAuthoringService:
                 knowledge.facts,
                 set(allowed),
                 task="regenerate_claim",
+                allow_semantic_review=True,
             )
+        updated, review_evidence = self._review_pending_claims(
+            command.application_id,
+            operation_id,
+            updated,
+            knowledge,
+            allowed,
+            evidence,
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
+        )
         return PreparedRegeneration(
-            working=working, source=updated, claim_ids=[proposed.claim_id], evidence=evidence
+            working=working,
+            source=updated,
+            claim_ids=[proposed.claim_id],
+            evidence=evidence,
+            review_evidence=review_evidence,
         )
 
     @staticmethod
     def _analysis_context(analysis: JobAnalysis) -> dict:
         """The narrow analysis view a wording task needs.
 
-        Not the analysis record. Requirements, Fit, approval routing, and
-        overrides decide policy, and a task that does not receive them cannot
-        be argued into changing them by the job text it is given.
+        Requirements are relevant writing context; Fit and approval routing remain policy.
         """
         return {
             "track": analysis.track.value,
@@ -646,4 +764,5 @@ class DraftAuthoringService:
             "emphasis": analysis.emphasis.value,
             "language": analysis.language,
             "keywords": list(analysis.keywords),
+            "requirements": [item.model_dump(mode="json") for item in analysis.requirements],
         }

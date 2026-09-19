@@ -2226,7 +2226,7 @@ export interface components {
              * Claim Type
              * @enum {string}
              */
-            claim_type: "canonical" | "composite" | "derived" | "pending" | "headline";
+            claim_type: "canonical" | "composite" | "derived" | "reviewed" | "pending" | "headline";
             /** Fact Ids */
             fact_ids: string[];
             /** Pending Reason */

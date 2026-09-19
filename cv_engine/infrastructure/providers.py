@@ -6,7 +6,7 @@ Two layers, deliberately separate.
 JSON-Schema envelope, HTTP status classification, and how to sanitize a raw
 response. It knows nothing about job analyses, selection plans, or drafts. It
 was called `AIProvider` until Stage G, which is the name the application layer
-needs for its own contract - a protocol describing five product tasks, not one
+needs for its own contract - a protocol describing six product tasks, not one
 describing an HTTP call.
 
 `OpenAIProvider` is the *contract*. It implements `application.ports.AIProvider`,
@@ -50,6 +50,7 @@ from ..application.errors import (
 from ..application.ports import (
     AIProposal,
     AnalysisContext,
+    AssessClaimSupportContext,
     DraftResumeContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
@@ -61,6 +62,7 @@ from ..domain.contracts.analysis_proposal import AnalysisProposal
 from ..domain.contracts.base import StrictModel
 from ..domain.contracts.providers import (
     ClaimProposal,
+    ClaimSupportProposal,
     DraftProposal,
     ProviderContext,
     ProviderCost,
@@ -104,7 +106,7 @@ class StructuredOutputClient(Protocol):
 
     Deliberately stringly-typed in `task`, because at this level a task *is*
     just the schema name that goes into the request. The typed contract is one
-    layer up, where the five tasks have five different inputs.
+    layer up, where the six tasks have six different inputs.
     """
 
     name: str
@@ -395,13 +397,14 @@ TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
     "propose_analysis": AnalysisProposal,
     "propose_selection_plan": SelectionProposal,
     "draft_resume": DraftProposal,
+    "assess_claim_support": ClaimSupportProposal,
     "regenerate_section": SectionProposal,
     "regenerate_claim": ClaimProposal,
 }
 
 
 class OpenAIProvider:
-    """The five contracted tasks, behind the application's `AIProvider` port.
+    """The six contracted tasks, behind the application's `AIProvider` port.
 
     An Operation supplies the model and reasoning values it froze at submission.
     The task-contract model remains a backend-only fallback for direct application
@@ -492,6 +495,18 @@ class OpenAIProvider:
             "draft_resume", context, model=model, reasoning_effort=reasoning_effort
         )
         return AIProposal(proposal=cast(DraftProposal, proposal), provenance=provenance)
+
+    def assess_claim_support(
+        self,
+        context: AssessClaimSupportContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[ClaimSupportProposal]:
+        proposal, provenance = self._run(
+            "assess_claim_support", context, model=model, reasoning_effort=reasoning_effort
+        )
+        return AIProposal(proposal=cast(ClaimSupportProposal, proposal), provenance=provenance)
 
     def regenerate_section(
         self,

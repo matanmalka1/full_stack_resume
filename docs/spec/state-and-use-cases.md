@@ -545,9 +545,13 @@ activated after cancellation or against a newer draft/source context.
 A missing/stale review or unresolved clarification blocks approval through both action
 policy and application services. Claim-level evidence may remain reusable after an
 unrelated edit only when its actual dependencies still match. No previous document
-ValidationRun becomes reusable as a consequence. Proposal presentation, clarification,
-and acceptance command/HTTP DTOs must be specified before implementation; this
-contract does not implicitly add routes or PreparationState enum values.
+ValidationRun becomes reusable as a consequence. The v1 writer/reviewer flow adds no
+public command or PreparationState value. Its provider DTOs carry the exact proposed
+claims, section context, linked fact IDs, allowed canonical sources, and one ordered
+assertion/source-quote mapping per reviewed claim. Only a fully supported result
+activates. Uncertain/unsupported results fail the existing Operation with immutable
+inactive provider evidence and leave the current draft unchanged. A later interactive
+clarification flow requires its own explicit public DTOs and routes.
 
 ### `create_draft(application_id, job_analysis_id, selection_plan_id, provider)`
 

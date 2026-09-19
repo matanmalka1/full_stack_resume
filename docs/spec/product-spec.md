@@ -433,7 +433,7 @@ revision/provenance summary, and creation of a new WorkingDraft.
 
 The application implements one OpenAI adapter behind the provider-neutral `AIProvider`
 protocol.
-The AI task catalog has five implemented tasks and one approved target task. Task names
+The AI task catalog has six implemented tasks. Task names
 are the provider's; `analyze_job` is the application command that calls the first:
 
 - `propose_analysis` — the posting's requirements with their importance and
@@ -453,10 +453,16 @@ the posting is kept and marked unverified; an unresolvable citation is dropped a
 positive coverage resting on it falls to unknown. Uncertainty is recorded as unknown and
 never as an absence of experience.
 
-- `assess_claim_support` — separate semantic
-  review of wording against supplied canonical sources and contextual attribution,
-  returning evidence proposals only. It must not be advertised as available until the
-  evidence, clarification, staleness, and activation contracts in §10.1 are implemented.
+- `assess_claim_support` — separate semantic review of wording against supplied
+  canonical sources and contextual attribution, returning evidence proposals only.
+
+In the first implemented lifecycle, generation and regeneration run writer then reviewer
+inside one persisted Operation. Only complete `supported` evidence may activate wording.
+`uncertain` and `unsupported` are terminal domain outcomes for that Operation: both
+provider responses remain immutable inactive evidence, the current WorkingDraft is not
+replaced, and retry/correction is offered. There is no acknowledgement bypass. A future
+claim-clarification UI may add a richer inactive-proposal lifecycle without weakening
+this acceptance rule.
 
 The support reviewer runs separately from the writer and does not use the writer's
 self-assessment as evidence. Separation of calls is not a guarantee of independent

@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0",
+  "version": "4.0.0",
   "prompt": {
-    "version": "system-v5",
-    "file": "ai/prompts/system-v5.md"
+    "version": "system-v6",
+    "file": "ai/prompts/system-v6.md"
   },
   "tasks": {
     "propose_analysis": {
@@ -27,6 +27,14 @@
       "input_schema_version": "2.0.0",
       "output": "DraftProposal",
       "output_schema_version": "2.0.0",
+      "critical_state": true
+    },
+    "assess_claim_support": {
+      "version": "1.0.0",
+      "input": "AssessClaimSupportContext",
+      "input_schema_version": "1.0.0",
+      "output": "ClaimSupportProposal",
+      "output_schema_version": "1.0.0",
       "critical_state": true
     },
     "regenerate_section": {

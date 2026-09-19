@@ -30,6 +30,7 @@ from cv_engine.application.errors import (
 )
 from cv_engine.application.ports import (
     AnalysisContext,
+    AssessClaimSupportContext,
     DraftResumeContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
@@ -38,6 +39,8 @@ from cv_engine.application.ports import (
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.providers import (
     ClaimProposal,
+    ClaimSupportAssessment,
+    ClaimSupportProposal,
     DraftProposal,
     ProposedClaim,
     SectionProposal,
@@ -57,9 +60,16 @@ SELECTION_CONTEXT = SelectionPlanContext(
 )
 DRAFT_CONTEXT = DraftResumeContext(
     job_analysis={"track": "sales"},
+    job_text="Account manager role",
+    requirements=[],
     language="en",
     sections=[{"section": "Experience", "claims": []}],
     allowed_facts=[{"fact_id": "a.b"}],
+)
+REVIEW_CONTEXT = AssessClaimSupportContext(
+    language="en",
+    claims=[{"claim_id": "c1", "section": "Experience", "text": "t", "fact_ids": ["a.b"]}],
+    allowed_facts=[{"fact_id": "a.b", "meaning": "t", "rendering": "t"}],
 )
 SECTION_CONTEXT = RegenerateSectionContext(
     section="Experience",
@@ -97,6 +107,11 @@ SECTION = SectionProposal(
     rationale="r",
 )
 CLAIM = ClaimProposal(claim_id="c1", text="t", fact_ids=["a.b"], rationale="r")
+REVIEW = ClaimSupportProposal(
+    assessments=[
+        ClaimSupportAssessment(claim_id="c1", verdict="supported", assertions=[], rationale="r")
+    ]
+)
 
 #: Every contracted task, its port method, its context, and its Proposal.
 #: Read as a table so a new task cannot be added without appearing here -
@@ -106,6 +121,7 @@ TASKS = [
     ("propose_analysis", ANALYSIS_CONTEXT, ANALYSIS),
     ("propose_selection_plan", SELECTION_CONTEXT, SELECTION),
     ("draft_resume", DRAFT_CONTEXT, DRAFT),
+    ("assess_claim_support", REVIEW_CONTEXT, REVIEW),
     ("regenerate_section", SECTION_CONTEXT, SECTION),
     ("regenerate_claim", CLAIM_CONTEXT, CLAIM),
 ]

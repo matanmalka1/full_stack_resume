@@ -1,4 +1,4 @@
-"""The five AI tasks as the product runs them: Operations, evidence, refusals.
+"""The six AI tasks as the product runs them: Operations, evidence, refusals.
 
 Every test here drives the real Operation runner over the real adapter with a
 scripted transport, so a passing test says the product behaves this way, not
@@ -41,8 +41,11 @@ from cv_engine.domain.analysis.projection import fit_level, fit_score
 from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
 from cv_engine.domain.contracts.providers import (
     ClaimProposal,
+    ClaimSupportAssessment,
+    ClaimSupportProposal,
     DraftProposal,
     ProposedClaim,
+    ReviewedAssertion,
     SectionProposal,
     SelectionProposal,
 )
@@ -158,7 +161,7 @@ def _analysis_operation(
 
 
 # --------------------------------------------------------------------------
-# The five tasks reach committed state
+# The six tasks reach committed state
 # --------------------------------------------------------------------------
 
 
@@ -345,6 +348,31 @@ def test_draft_resume_commits_wording_its_facts_support(
         for claim in section.claims
         if claim.claim_type == "composite"
     )
+    if change_composite:
+        changed_text = composite.text + " Consistently exceeded every quota by 400%."
+        facts = ai_services.drafts.load_knowledge().facts
+        fake_openai.script(
+            "assess_claim_support",
+            ClaimSupportProposal(
+                assessments=[
+                    ClaimSupportAssessment(
+                        claim_id=composite.claim_id,
+                        verdict="supported",
+                        assertions=[
+                            ReviewedAssertion(
+                                claim_quote=changed_text,
+                                fact_ids=list(composite.fact_ids),
+                                source_quotes=[
+                                    facts.rendering(fact_id, working.source.language)
+                                    for fact_id in composite.fact_ids
+                                ],
+                            )
+                        ],
+                        rationale="Scripted false positive; hard numeric policy must win.",
+                    )
+                ]
+            ),
+        )
     fake_openai.script(
         "draft_resume",
         DraftProposal(
@@ -353,7 +381,7 @@ def test_draft_resume_commits_wording_its_facts_support(
                     section=section.name,
                     claim_id=claim.claim_id,
                     text=(
-                        claim.text + " Consistently exceeded every quota by 400%."
+                        changed_text
                         if change_composite and claim.claim_id == composite.claim_id
                         else claim.text
                     ),
@@ -390,6 +418,98 @@ def test_draft_resume_commits_wording_its_facts_support(
     with transaction_manager.read() as tx:
         actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
     assert actual.source.sections == working.source.sections
+
+
+def test_draft_resume_accepts_separately_reviewed_paraphrase(
+    ai_services,
+    fake_openai: FakeOpenAI,
+    transaction_manager,
+    application_projection_reader,
+) -> None:
+    ingested = _ingested(ai_services, "Reviewed Draft Co")
+    analysed = seed_analysis_for_command(
+        ai_services,
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+        ),
+    )
+    ai_services.drafts.draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+        )
+    )
+    with transaction_manager.read() as tx:
+        working = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    section, claim = next(
+        (section, claim)
+        for section in working.source.sections
+        for claim in section.claims
+        if claim.claim_type == "canonical" and claim.style in {"paragraph", "bullet", "item"}
+    )
+    wording = f"Proven experience: {claim.text}"
+    fake_openai.script(
+        "draft_resume",
+        DraftProposal(
+            claims=[
+                ProposedClaim(
+                    section=section.name,
+                    claim_id=claim.claim_id,
+                    text=wording,
+                    fact_ids=list(claim.fact_ids),
+                )
+            ],
+            rationale="Tailored emphasis",
+        ),
+    )
+    fake_openai.script(
+        "assess_claim_support",
+        ClaimSupportProposal(
+            assessments=[
+                ClaimSupportAssessment(
+                    claim_id=claim.claim_id,
+                    verdict="supported",
+                    assertions=[
+                        ReviewedAssertion(
+                            claim_quote=wording,
+                            fact_ids=list(claim.fact_ids),
+                            source_quotes=[claim.text],
+                        )
+                    ],
+                    rationale="The wording preserves the supplied fact.",
+                )
+            ]
+        ),
+    )
+    queued = ai_services.operation_submissions.submit_draft(
+        DraftCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+            provider="openai",
+        ),
+        idempotency_key=new_id(),
+        draft_service=ai_services.drafts,
+    )
+    completed = _run(ai_services, queued)
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    assert sum(output.output_type == "provider_response" for output in completed.outputs) == 2
+    assert any(output.output_type == "working_draft" for output in completed.outputs)
+    assert len(fake_openai.calls_for("assess_claim_support")) == 1
+    with transaction_manager.read() as tx:
+        actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    reviewed = next(
+        item
+        for section in actual.source.sections
+        for item in section.claims
+        if item.claim_id == claim.claim_id
+    )
+    assert reviewed.text == wording
+    assert reviewed.claim_type == "reviewed"
+    assert reviewed.review_evidence is not None
 
 
 def _regenerate_section(services, ingested, analysed, working, section, claims):
@@ -509,6 +629,19 @@ def test_a_valid_fact_id_with_strengthened_wording_fails_the_operation(
             text="Consistently exceeded every quota by 400% across all regions.",
             fact_ids=list(claim.fact_ids),
             rationale="r",
+        ),
+    )
+    fake_openai.script(
+        "assess_claim_support",
+        ClaimSupportProposal(
+            assessments=[
+                ClaimSupportAssessment(
+                    claim_id=claim.claim_id,
+                    verdict="unsupported",
+                    assertions=[],
+                    rationale="The supplied fact does not support the strengthened quota claim.",
+                )
+            ]
         ),
     )
     completed = _run(

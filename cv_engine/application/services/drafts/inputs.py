@@ -85,6 +85,7 @@ class PreparedDraft:
     plan_id: str
     knowledge: Knowledge
     evidence: ProviderEvidence | None = None
+    review_evidence: ProviderEvidence | None = None
 
 
 @dataclass(frozen=True)
@@ -119,3 +120,4 @@ class PreparedRegeneration:
     source: DraftDocument
     claim_ids: list[str]
     evidence: ProviderEvidence
+    review_evidence: ProviderEvidence | None = None

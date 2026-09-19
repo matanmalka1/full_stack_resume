@@ -58,6 +58,7 @@ class SqlAlchemyDraftAuthoringSourceReader:
                     job_snapshots.c.id,
                     job_snapshots.c.application_id,
                     job_snapshots.c.source_hash,
+                    job_snapshots.c.payload_path,
                 ).where(job_snapshots.c.id == snapshot_id)
             )
             .mappings()

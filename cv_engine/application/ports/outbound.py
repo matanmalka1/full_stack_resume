@@ -20,6 +20,7 @@ from ...domain.contracts.knowledge import (
 )
 from ...domain.contracts.providers import (
     ClaimProposal,
+    ClaimSupportProposal,
     DraftProposal,
     ProviderTaskResult,
     SectionProposal,
@@ -308,8 +309,18 @@ class DraftResumeContext(StrictModel):
     """`draft_resume`: the composed sections and the facts each one selected."""
 
     job_analysis: dict[str, Any]
+    job_text: str
+    requirements: list[dict[str, Any]]
     language: str
     sections: list[dict[str, Any]]
+    allowed_facts: list[dict[str, Any]]
+
+
+class AssessClaimSupportContext(StrictModel):
+    """Exact proposed wording, document context, and canonical sources only."""
+
+    language: str
+    claims: list[dict[str, Any]]
     allowed_facts: list[dict[str, Any]]
 
 
@@ -337,7 +348,7 @@ class RegenerateClaimContext(StrictModel):
 
 
 class AIProvider(Protocol):
-    """The five contracted AI tasks, as the application declares them.
+    """The six contracted AI tasks, as the application declares them.
 
     One method per task rather than one `run(task, payload)`, because the
     tasks take different inputs and return different Proposal types, and a
@@ -378,6 +389,14 @@ class AIProvider(Protocol):
         model: str | None = None,
         reasoning_effort: str | None = None,
     ) -> AIProposal[DraftProposal]: ...
+
+    def assess_claim_support(
+        self,
+        context: AssessClaimSupportContext,
+        *,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIProposal[ClaimSupportProposal]: ...
 
     def regenerate_section(
         self,

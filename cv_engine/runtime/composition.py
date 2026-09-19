@@ -309,6 +309,7 @@ def build_services(
             resolved_knowledge,
             resolved_artifacts,
         ),
+        snapshot_payloads=resolved_payloads,
     )
     draft_validation = DraftValidationService(
         transactions=transactions,

@@ -60,6 +60,27 @@ class ClaimProposal(StrictModel):
     rationale: str
 
 
+class ReviewedAssertion(StrictModel):
+    """One factual assertion in proposed wording and its exact source evidence."""
+
+    claim_quote: str
+    fact_ids: list[str]
+    source_quotes: list[str]
+
+
+class ClaimSupportAssessment(StrictModel):
+    claim_id: str
+    verdict: Literal["supported", "uncertain", "unsupported"]
+    assertions: list[ReviewedAssertion]
+    rationale: str
+
+
+class ClaimSupportProposal(StrictModel):
+    """Reviewer output; application policy still decides eligibility."""
+
+    assessments: list[ClaimSupportAssessment]
+
+
 class ProviderUsage(StrictModel):
     input_tokens: int = 0
     cached_input_tokens: int = 0

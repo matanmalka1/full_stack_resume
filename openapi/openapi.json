@@ -2817,6 +2817,7 @@
               "canonical",
               "composite",
               "derived",
+              "reviewed",
               "pending",
               "headline"
             ],

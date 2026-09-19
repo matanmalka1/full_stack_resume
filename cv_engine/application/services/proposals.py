@@ -16,17 +16,24 @@ is that refusal, and it names the claims that caused it.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-from ...domain.contracts.drafts import DraftDocument
+from ...domain.contracts.drafts import ClaimReviewEvidence, DraftDocument
 from ...domain.contracts.knowledge import FactStatus
 from ...domain.contracts.providers import (
+    ClaimSupportProposal,
     ProposedClaim,
     ProviderTaskResult,
 )
-from ...domain.drafts import apply_claim_edit, draft_claims
+from ...domain.drafts import (
+    EDITABLE_STYLES,
+    apply_claim_edit,
+    authorize_reviewed_claim,
+    draft_claims,
+)
 from ...domain.facts import FactStore
 from ..errors import ProposalRejected
 from ..ports import SnapshotPayload
@@ -145,6 +152,7 @@ def apply_proposed_claims(
     allowed: set[str],
     *,
     task: str,
+    allow_semantic_review: bool = False,
 ) -> DraftDocument:
     """Apply proposed wording through the deterministic edit path, or refuse.
 
@@ -212,9 +220,108 @@ def apply_proposed_claims(
         for line in draft_claims(updated)
         if line.claim_id in touched and line.claim_type == "pending"
     )
-    if unsupported:
+    if unsupported and not allow_semantic_review:
         raise ProposalRejected(
             f"{task} proposed wording its facts do not support: {', '.join(unsupported)}",
             unsupported=unsupported,
+        )
+    return updated
+
+
+def authorize_semantically_reviewed_claims(
+    draft: DraftDocument,
+    proposal: ClaimSupportProposal,
+    facts: FactStore,
+    evidence: ProviderEvidence,
+) -> DraftDocument:
+    """Apply only complete, positive, source-attested semantic review evidence."""
+    pending = {
+        claim.claim_id: claim for claim in draft_claims(draft) if claim.claim_type == "pending"
+    }
+    assessments = {item.claim_id: item for item in proposal.assessments}
+    if len(assessments) != len(proposal.assessments) or set(assessments) != set(pending):
+        missing = sorted(set(pending) - set(assessments))
+        extra = sorted(set(assessments) - set(pending))
+        raise ProposalRejected(
+            "assess_claim_support did not cover the exact pending claims; "
+            f"missing={missing}, extra={extra}",
+            unsupported=missing + extra,
+        )
+
+    updated = draft
+    refused: list[str] = []
+    for claim_id, claim in pending.items():
+        assessment = assessments[claim_id]
+        if (
+            claim.style not in EDITABLE_STYLES
+            or assessment.verdict != "supported"
+            or not assessment.assertions
+        ):
+            refused.append(claim_id)
+            continue
+        joined_claim_quotes = "".join(item.claim_quote for item in assessment.assertions)
+
+        def normalize(value: str) -> str:
+            return "".join(char.casefold() for char in value if char.isalnum())
+
+        if normalize(joined_claim_quotes) != normalize(claim.text):
+            refused.append(claim_id)
+            continue
+        cited: set[str] = set()
+        valid = True
+        for assertion in assessment.assertions:
+            if not assertion.claim_quote or assertion.claim_quote not in claim.text:
+                valid = False
+                break
+            cited.update(assertion.fact_ids)
+            if len(assertion.source_quotes) != len(assertion.fact_ids):
+                valid = False
+                break
+            try:
+                for fact_id, quote in zip(assertion.fact_ids, assertion.source_quotes, strict=True):
+                    if fact_id not in claim.fact_ids:
+                        valid = False
+                        break
+                    fact = facts.get(fact_id, canonical_only=True)
+                    sources = [fact.meaning, facts.rendering(fact_id, draft.language)]
+                    if quote not in sources[0] and quote not in sources[1]:
+                        valid = False
+                        break
+            except ValueError:
+                valid = False
+                break
+        source_text = " ".join(
+            " ".join(
+                (
+                    facts.get(fact_id, canonical_only=True).meaning,
+                    facts.rendering(fact_id, draft.language),
+                )
+            )
+            for fact_id in claim.fact_ids
+        )
+
+        def protected(value: str) -> set[str]:
+            return set(re.findall(r"\d+(?:[.,]\d+)?%?", value))
+
+        if cited != set(claim.fact_ids) or protected(claim.text) - protected(source_text):
+            valid = False
+        if not valid:
+            refused.append(claim_id)
+            continue
+        updated = authorize_reviewed_claim(
+            updated,
+            claim_id,
+            facts,
+            ClaimReviewEvidence(
+                policy_version="semantic-claim-support-v1",
+                provider_artifact_version_id=evidence.artifact_version_id,
+                input_hash=evidence.provenance.input_hash,
+                assertions=[item.model_dump(mode="json") for item in assessment.assertions],
+            ),
+        )
+    if refused:
+        raise ProposalRejected(
+            f"semantic review did not authorize claims: {', '.join(sorted(refused))}",
+            unsupported=sorted(refused),
         )
     return updated

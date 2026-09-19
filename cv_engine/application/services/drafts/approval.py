@@ -251,6 +251,12 @@ class DraftApprovalService:
                 for claim in section.claims
                 if claim.claim_type in {"composite", "derived"}
             ],
+            "reviewed_statements": [
+                claim.model_dump(mode="json")
+                for section in draft.sections
+                for claim in section.claims
+                if claim.claim_type == "reviewed"
+            ],
             "user_overrides": decision_overrides,
             "fact_store_version": facts.version,
             "job_snapshot_id": draft.job_snapshot_id,

@@ -7,7 +7,14 @@ from dataclasses import dataclass
 
 from ..util import canonical_json, sha256_text
 from .contracts.analysis import JobAnalysis
-from .contracts.drafts import ClaimLine, ClaimStyle, ClaimType, DraftDocument, ResumeSection
+from .contracts.drafts import (
+    ClaimLine,
+    ClaimReviewEvidence,
+    ClaimStyle,
+    ClaimType,
+    DraftDocument,
+    ResumeSection,
+)
 from .contracts.knowledge import CandidateContext, Profile
 from .contracts.selection import OmissionReason, SelectionManifest
 from .draft_markdown import serialize_markdown as _serialize_markdown
@@ -51,6 +58,7 @@ def _claim(
     derivation_id: str | None = None,
     derivation_version: str | None = None,
     pending_reason: str | None = None,
+    review_evidence: ClaimReviewEvidence | None = None,
 ) -> ClaimLine:
     identity = {
         "style": style,
@@ -64,6 +72,8 @@ def _claim(
         identity.update({"derivation_id": derivation_id, "derivation_version": derivation_version})
     if pending_reason is not None:
         identity["pending_reason"] = pending_reason
+    if review_evidence is not None:
+        identity["review_evidence"] = review_evidence.model_dump(mode="json")
     return ClaimLine(
         claim_id=str(uuid.uuid5(CLAIM_NAMESPACE, canonical_json(identity))),
         style=style,
@@ -76,7 +86,36 @@ def _claim(
         derivation_id=derivation_id,
         derivation_version=derivation_version,
         pending_reason=pending_reason,
+        review_evidence=review_evidence,
     )
+
+
+def authorize_reviewed_claim(
+    draft: DraftDocument,
+    claim_id: str,
+    facts: FactStore,
+    evidence: ClaimReviewEvidence,
+) -> DraftDocument:
+    """Promote exact pending wording after separate semantic review."""
+    try:
+        current = next(claim for claim in draft_claims(draft) if claim.claim_id == claim_id)
+    except StopIteration as exc:
+        raise KeyError(claim_id) from exc
+    if current.claim_type != "pending" or not current.fact_ids:
+        raise ValueError("semantic review may authorize only linked pending wording")
+    if current.style not in EDITABLE_STYLES:
+        raise ValueError("semantic review cannot authorize structural wording")
+    for fact_id in current.fact_ids:
+        facts.get(fact_id, canonical_only=True)
+    replacement = _claim(
+        current.style,
+        current.text,
+        list(current.fact_ids),
+        "reviewed",
+        review_evidence=evidence,
+    ).model_copy(update={"claim_id": current.claim_id})
+    _replace_claim(draft, claim_id, replacement)
+    return _refresh_selection(draft, facts)
 
 
 def _omitted_facts(
