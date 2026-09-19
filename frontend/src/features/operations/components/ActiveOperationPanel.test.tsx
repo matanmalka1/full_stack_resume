@@ -50,6 +50,12 @@ describe("ActiveOperationPanel progress", () => {
     expect(screen.queryByText("בביצוע")).not.toBeInTheDocument();
   });
 
+  it("makes the writer and reviewer stage visible during draft generation", () => {
+    renderPanel(operation({ operation_type: "create_draft" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("מנסחת ובודקת את הטענות");
+  });
+
   it("prefers a specific waiting phase over a generic running status", () => {
     renderPanel(operation({ phase: "waiting_for_ai_slot" }));
 
@@ -120,6 +126,22 @@ describe("ActiveOperationPanel progress", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן להשלים את בדיקות הפעולה");
     expect(screen.queryByText("Operation execution failed.")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["CLAIM_REVIEW_UNCERTAIN", "הבדיקה לא הצליחה לקבוע שהניסוח נתמך"],
+    ["CLAIM_REVIEW_UNSUPPORTED", "הבדיקה מצאה טענה שאינה נתמכת בעובדות"],
+  ] as const)("presents %s as a distinct review outcome", (failureCode, title) => {
+    renderPanel(
+      operation({
+        status: "failed",
+        phase: "completed",
+        is_terminal: true,
+        failure_code: failureCode,
+      }),
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(title);
   });
 
   it("reveals cancellation only when live work is taking unusually long", () => {

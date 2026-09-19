@@ -146,6 +146,14 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
     title: "הצעת הספק לא הייתה בטוחה לשימוש",
     guidance: providerOutputGuidance,
   },
+  CLAIM_REVIEW_UNCERTAIN: {
+    title: "הבדיקה לא הצליחה לקבוע שהניסוח נתמך",
+    guidance: "הניסוח לא הופעל והטיוטה הקיימת נשמרה. אפשר לנסות יצירה מחדש או לערוך את השורה.",
+  },
+  CLAIM_REVIEW_UNSUPPORTED: {
+    title: "הבדיקה מצאה טענה שאינה נתמכת בעובדות",
+    guidance: "הניסוח לא הופעל והטיוטה הקיימת נשמרה. יש ליצור ניסוח חדש או להסיר את הטענה שאינה נתמכת.",
+  },
   SCHEMA_VIOLATION: {
     title: "תשובת הספק לא הייתה במבנה הנדרש",
     guidance: providerOutputGuidance,

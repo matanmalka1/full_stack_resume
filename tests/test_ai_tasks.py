@@ -407,7 +407,7 @@ def test_draft_resume_commits_wording_its_facts_support(
     completed = _run(ai_services, queued)
     if change_composite:
         assert completed.status.value == "failed"
-        assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+        assert completed.failure_code is OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED
         with transaction_manager.read() as tx:
             actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
         assert actual.content_hash == working.content_hash
@@ -510,6 +510,18 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     assert reviewed.text == wording
     assert reviewed.claim_type == "reviewed"
     assert reviewed.review_evidence is not None
+    public = ai_services.queries.working_draft(actual.id)
+    public_reviewed = next(
+        item
+        for section in public.outline.sections
+        for item in section.claims
+        if item.claim_id == claim.claim_id
+    )
+    assert public_reviewed.review_evidence is not None
+    assert public_reviewed.review_evidence.assertions[0].source_quotes == [claim.text]
+    public_evidence_fields = type(public_reviewed.review_evidence).model_fields
+    assert "provider_artifact_version_id" not in public_evidence_fields
+    assert "input_hash" not in public_evidence_fields
 
 
 def _regenerate_section(services, ingested, analysed, working, section, claims):
@@ -608,8 +620,20 @@ def test_regenerate_claim_commits_against_the_exact_frozen_version(
 # --------------------------------------------------------------------------
 
 
-def test_a_valid_fact_id_with_strengthened_wording_fails_the_operation(
-    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
+@pytest.mark.parametrize(
+    ("verdict", "expected_code"),
+    [
+        ("unsupported", OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED),
+        ("uncertain", OperationFailureCode.CLAIM_REVIEW_UNCERTAIN),
+    ],
+)
+def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
+    ai_services,
+    fake_openai: FakeOpenAI,
+    transaction_manager,
+    application_projection_reader,
+    verdict,
+    expected_code,
 ) -> None:
     """§6 and invariant 12: the ID is not the proof.
 
@@ -637,7 +661,7 @@ def test_a_valid_fact_id_with_strengthened_wording_fails_the_operation(
             assessments=[
                 ClaimSupportAssessment(
                     claim_id=claim.claim_id,
-                    verdict="unsupported",
+                    verdict=verdict,
                     assertions=[],
                     rationale="The supplied fact does not support the strengthened quota claim.",
                 )
@@ -649,7 +673,7 @@ def test_a_valid_fact_id_with_strengthened_wording_fails_the_operation(
     )
 
     assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+    assert completed.failure_code is expected_code
     with transaction_manager.read() as tx:
         unchanged = application_projection_reader.active_working_draft(tx, ingested.application_id)
     assert unchanged.edit_version == working.edit_version

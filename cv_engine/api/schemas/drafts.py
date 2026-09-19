@@ -206,6 +206,19 @@ class ApproveDraftRequest(WorkingDraftVersionRequest):
     validation_run_id: str
 
 
+class ClaimReviewAssertionResponse(HttpSchema):
+    claim_quote: str
+    fact_ids: list[str]
+    source_quotes: list[str]
+
+
+class ClaimReviewEvidenceResponse(HttpSchema):
+    """User-facing proof excerpts, without provider artifact IDs or input hashes."""
+
+    policy_version: str
+    assertions: list[ClaimReviewAssertionResponse]
+
+
 class DraftClaimResponse(HttpSchema):
     """One editable line: what a claim edit addresses, plus what it currently is.
 
@@ -220,6 +233,7 @@ class DraftClaimResponse(HttpSchema):
     claim_type: ClaimType
     fact_ids: list[str]
     pending_reason: str | None = None
+    review_evidence: ClaimReviewEvidenceResponse | None = None
 
 
 class DraftSectionResponse(HttpSchema):

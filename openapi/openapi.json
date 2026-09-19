@@ -2132,6 +2132,59 @@
         "title": "ClaimPatchRequest",
         "type": "object"
       },
+      "ClaimReviewAssertionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_quote": {
+            "title": "Claim Quote",
+            "type": "string"
+          },
+          "fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fact Ids",
+            "type": "array"
+          },
+          "source_quotes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Quotes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "claim_quote",
+          "fact_ids",
+          "source_quotes"
+        ],
+        "title": "ClaimReviewAssertionResponse",
+        "type": "object"
+      },
+      "ClaimReviewEvidenceResponse": {
+        "additionalProperties": false,
+        "description": "User-facing proof excerpts, without provider artifact IDs or input hashes.",
+        "properties": {
+          "assertions": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimReviewAssertionResponse"
+            },
+            "title": "Assertions",
+            "type": "array"
+          },
+          "policy_version": {
+            "title": "Policy Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_version",
+          "assertions"
+        ],
+        "title": "ClaimReviewEvidenceResponse",
+        "type": "object"
+      },
       "CloseApplicationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2841,6 +2894,16 @@
               }
             ],
             "title": "Pending Reason"
+          },
+          "review_evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimReviewEvidenceResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "style": {
             "enum": [
@@ -4164,6 +4227,8 @@
           "PROVIDER_UNAVAILABLE",
           "PROVIDER_REFUSED",
           "INVALID_OUTPUT",
+          "CLAIM_REVIEW_UNCERTAIN",
+          "CLAIM_REVIEW_UNSUPPORTED",
           "SCHEMA_VIOLATION",
           "RENDER_FAILED",
           "BROWSER_START_FAILED",

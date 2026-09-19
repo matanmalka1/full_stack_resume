@@ -332,6 +332,11 @@ linked facts, claim status, warnings, and edit/regenerate/remove controls. Secti
 is policy-controlled. The editor may offer simple up/down bullet controls if needed but
 does not include drag-and-drop.
 
+For reviewed wording, the read model exposes a safe explanation containing the review
+policy version and assertion-to-source excerpts. Provider artifact identifiers and input
+hashes remain internal. The editor labels this as semantic review rather than
+deterministic proof, and warns that changing the exact wording invalidates that review.
+
 A deterministic selection change creates a new SelectionPlan and synchronously updates
 the WorkingDraft only when it requires no AI and contains no semantic ambiguity. A
 semantic or rewording change creates the new plan and then runs a regeneration

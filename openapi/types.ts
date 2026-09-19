@@ -1952,6 +1952,25 @@ export interface components {
             /** Text */
             text?: string | null;
         };
+        /** ClaimReviewAssertionResponse */
+        ClaimReviewAssertionResponse: {
+            /** Claim Quote */
+            claim_quote: string;
+            /** Fact Ids */
+            fact_ids: string[];
+            /** Source Quotes */
+            source_quotes: string[];
+        };
+        /**
+         * ClaimReviewEvidenceResponse
+         * @description User-facing proof excerpts, without provider artifact IDs or input hashes.
+         */
+        ClaimReviewEvidenceResponse: {
+            /** Assertions */
+            assertions: components["schemas"]["ClaimReviewAssertionResponse"][];
+            /** Policy Version */
+            policy_version: string;
+        };
         /** CloseApplicationResponse */
         CloseApplicationResponse: {
             /** Application Id */
@@ -2231,6 +2250,7 @@ export interface components {
             fact_ids: string[];
             /** Pending Reason */
             pending_reason?: string | null;
+            review_evidence?: components["schemas"]["ClaimReviewEvidenceResponse"] | null;
             /**
              * Style
              * @enum {string}
@@ -2766,7 +2786,7 @@ export interface components {
          * OperationFailureCode
          * @enum {string}
          */
-        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION";
+        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "CLAIM_REVIEW_UNCERTAIN" | "CLAIM_REVIEW_UNSUPPORTED" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION";
         /**
          * OperationOutputResponse
          * @description One immutable output an Operation produced.

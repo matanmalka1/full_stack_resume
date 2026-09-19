@@ -58,6 +58,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
 
   const evidenceLabel = facts.length === 1 ? "העובדה שמאחורי השורה" : `${facts.length} עובדות שמאחורי השורה`;
   const distinctFacts = facts.filter((fact) => fact.text !== null && fact.text !== claim.text);
+  const editingReviewedClaim = claim.claim_type === "reviewed";
 
   return (
     <li
@@ -106,19 +107,42 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
                 size="compact"
                 variant="secondary"
               >
-                שחזור הטקסט הקודם
+                {editingReviewedClaim ? "שחזור הנוסח שנבדק" : "שחזור הטקסט הקודם"}
               </Button>
             }
             className="mt-2"
             role="alert"
-            title="השורה מנותקת מהעובדה הקנונית"
+            title={editingReviewedClaim ? "העריכה מבטלת את הביקורת הקודמת" : "השורה מנותקת מהעובדה הקנונית"}
             tone="warning"
           >
             <p dir="auto">
-              העריכה משנה את הניסוח בלי לשנות את מה שעומד מאחורי השורה. שחזור הטקסט הקודם מחבר אותה מחדש.
+              {editingReviewedClaim
+                ? "הבדיקה חלה על הנוסח הקודם בלבד. לאחר השמירה השורה תחזור למצב שממתין לאימות."
+                : "העריכה משנה את הניסוח בלי לשנות את מה שעומד מאחורי השורה. שחזור הטקסט הקודם מחבר אותה מחדש."}
             </p>
           </Callout>
         )}
+
+        {claim.claim_type === "reviewed" && claim.review_evidence != null ? (
+          <details className="mt-2 rounded-control border border-cv-border px-3 py-2 text-support text-cv-text-muted">
+            <summary className="cursor-pointer font-medium text-cv-text">למה הניסוח אושר?</summary>
+            <p className="mt-2 leading-6">
+              הניסוח נבדק סמנטית מול העובדות המקושרות. זו בדיקת תמיכה של המודל, לא הוכחה דטרמיניסטית.
+            </p>
+            <ul className="mt-2 space-y-2">
+              {claim.review_evidence.assertions.map((assertion, index) => (
+                <li className="rounded-control bg-cv-surface-muted px-2 py-1.5" key={`${assertion.claim_quote}-${index}`}>
+                  <p dir="auto">טענה: {assertion.claim_quote}</p>
+                  {assertion.source_quotes.map((quote, quoteIndex) => (
+                    <p className="mt-1" dir="auto" key={`${quote}-${quoteIndex}`}>
+                      מקור: {quote}
+                    </p>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
 
         {/* A fact identical to the line it backs adds nothing next to it - only the ones
             whose wording actually differs from the claim's canonical text are worth a

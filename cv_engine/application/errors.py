@@ -224,6 +224,14 @@ class ProposalRejected(PreconditionFailed):
         self.evidence: Any = None
 
 
+class ClaimReviewUncertain(ProposalRejected):
+    """The semantic reviewer could not establish support for a proposed claim."""
+
+
+class ClaimReviewUnsupported(ProposalRejected):
+    """The semantic reviewer found that a proposed claim exceeds its sources."""
+
+
 # Codes the specification names directly (`state-and-use-cases.md` §22). They are
 # contracted strings rather than derived ones, so they are declared in one place
 # instead of being retyped at each raise site.

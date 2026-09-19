@@ -19,6 +19,8 @@ from .narrowing import application_is_closed
 from .views_prep import (
     ApprovedRevisionView,
     ArtifactVersionView,
+    ClaimReviewAssertionView,
+    ClaimReviewEvidenceView,
     DecisionRecordView,
     DraftClaimView,
     DraftFactView,
@@ -51,6 +53,19 @@ def application_view(
 
 
 def _claim_view(claim: Any) -> DraftClaimView:
+    review_evidence = None
+    if claim.review_evidence is not None:
+        review_evidence = ClaimReviewEvidenceView(
+            policy_version=claim.review_evidence.policy_version,
+            assertions=[
+                ClaimReviewAssertionView(
+                    claim_quote=assertion.claim_quote,
+                    fact_ids=list(assertion.fact_ids),
+                    source_quotes=list(assertion.source_quotes),
+                )
+                for assertion in claim.review_evidence.assertions
+            ],
+        )
     return DraftClaimView(
         claim_id=claim.claim_id,
         style=claim.style,
@@ -58,6 +73,7 @@ def _claim_view(claim: Any) -> DraftClaimView:
         claim_type=claim.claim_type,
         fact_ids=list(claim.fact_ids),
         pending_reason=claim.pending_reason,
+        review_evidence=review_evidence,
     )
 
 

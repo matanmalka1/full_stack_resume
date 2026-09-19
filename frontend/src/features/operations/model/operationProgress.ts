@@ -8,6 +8,13 @@ import { phaseLabels, statusLabels } from "./operationLabels";
 export const operationProgressLabel = (operation: Operation): string => {
   if (operation.is_terminal) return statusLabels[operation.status];
 
+  if (
+    operation.phase === "executing" &&
+    ["create_draft", "regenerate_section", "regenerate_claim"].includes(operation.operation_type)
+  ) {
+    return "מנסחת ובודקת את הטענות";
+  }
+
   if (operation.phase === "queued" || operation.phase === "executing") {
     return statusLabels[operation.status];
   }

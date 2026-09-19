@@ -85,6 +85,19 @@ class WorkingDraftState(StrEnum):
     STALE = "stale"
 
 
+class ClaimReviewAssertionView(BoundaryDTO):
+    claim_quote: str
+    fact_ids: list[str]
+    source_quotes: list[str]
+
+
+class ClaimReviewEvidenceView(BoundaryDTO):
+    """Safe, user-readable evidence; internal provider lineage stays private."""
+
+    policy_version: str
+    assertions: list[ClaimReviewAssertionView]
+
+
 class DraftClaimView(BoundaryDTO):
     """One editable line, as the editor needs to see it.
 
@@ -100,6 +113,7 @@ class DraftClaimView(BoundaryDTO):
     claim_type: ClaimType
     fact_ids: list[str]
     pending_reason: str | None = None
+    review_evidence: ClaimReviewEvidenceView | None = None
 
 
 class DraftSectionView(BoundaryDTO):

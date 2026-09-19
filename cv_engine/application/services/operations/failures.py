@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from ...errors import (
     ApplicationError,
+    ClaimReviewUncertain,
+    ClaimReviewUnsupported,
     DependencyUnavailable,
     InfrastructureFailure,
     LineageBroken,
@@ -38,11 +40,8 @@ FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
     ProviderRefused: OperationFailureCode.PROVIDER_REFUSED,
     ProviderSchemaViolation: OperationFailureCode.SCHEMA_VIOLATION,
     ProviderInvalidOutput: OperationFailureCode.INVALID_OUTPUT,
-    # A Proposal the engine refused is an invalid output, not a transport
-    # failure, and there is no separate code for it: the baseline schema's
-    # `failure_code` CHECK is the specification's list, and inventing another
-    # value would be a schema change for a distinction the safe failure detail
-    # already carries.
+    ClaimReviewUncertain: OperationFailureCode.CLAIM_REVIEW_UNCERTAIN,
+    ClaimReviewUnsupported: OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED,
     ProposalRejected: OperationFailureCode.INVALID_OUTPUT,
     DependencyUnavailable: OperationFailureCode.PROVIDER_REFUSED,
     StateConflict: OperationFailureCode.SOURCE_CHANGED,
@@ -62,6 +61,12 @@ _FAILURE_DETAIL: dict[OperationFailureCode, str] = {
     OperationFailureCode.PROVIDER_REFUSED: "The AI provider refused the request.",
     OperationFailureCode.SCHEMA_VIOLATION: "The AI provider returned an invalid schema.",
     OperationFailureCode.INVALID_OUTPUT: "The AI proposal was rejected.",
+    OperationFailureCode.CLAIM_REVIEW_UNCERTAIN: (
+        "Semantic review could not establish support for the proposed claim."
+    ),
+    OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED: (
+        "Semantic review found an unsupported proposed claim."
+    ),
     OperationFailureCode.SOURCE_CHANGED: "Operation sources changed.",
     OperationFailureCode.MISSING_FACT_RENDERING: (
         "A selected fact has no rendering in the target language."

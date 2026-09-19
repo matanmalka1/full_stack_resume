@@ -345,6 +345,8 @@ PROVIDER_RATE_LIMITED
 PROVIDER_UNAVAILABLE
 PROVIDER_REFUSED
 INVALID_OUTPUT
+CLAIM_REVIEW_UNCERTAIN
+CLAIM_REVIEW_UNSUPPORTED
 SCHEMA_VIOLATION
 RENDER_FAILED
 BROWSER_START_FAILED
@@ -352,6 +354,12 @@ MISSING_FACT_RENDERING
 VALIDATION_EXECUTION_FAILED
 CANCELLED_BEFORE_ACTIVATION
 ```
+
+`CLAIM_REVIEW_UNCERTAIN` means the semantic reviewer could not establish that a
+proposed paraphrase is supported. `CLAIM_REVIEW_UNSUPPORTED` means it found that the
+proposal exceeds or contradicts the cited canonical facts. Both are terminal and leave
+the current draft active; malformed or incomplete reviewer output remains
+`INVALID_OUTPUT`.
 
 An Operation may be failed/cancelled while owning an inactive immutable output. Output
 existence and output activation are separate.

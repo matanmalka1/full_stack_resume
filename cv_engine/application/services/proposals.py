@@ -35,7 +35,7 @@ from ...domain.drafts import (
     draft_claims,
 )
 from ...domain.facts import FactStore
-from ..errors import ProposalRejected
+from ..errors import ClaimReviewUncertain, ClaimReviewUnsupported, ProposalRejected
 from ..ports import SnapshotPayload
 
 
@@ -250,13 +250,17 @@ def authorize_semantically_reviewed_claims(
 
     updated = draft
     refused: list[str] = []
+    uncertain: list[str] = []
+    unsupported: list[str] = []
     for claim_id, claim in pending.items():
         assessment = assessments[claim_id]
-        if (
-            claim.style not in EDITABLE_STYLES
-            or assessment.verdict != "supported"
-            or not assessment.assertions
-        ):
+        if assessment.verdict == "uncertain":
+            uncertain.append(claim_id)
+            continue
+        if assessment.verdict == "unsupported":
+            unsupported.append(claim_id)
+            continue
+        if claim.style not in EDITABLE_STYLES or not assessment.assertions:
             refused.append(claim_id)
             continue
         joined_claim_quotes = "".join(item.claim_quote for item in assessment.assertions)
@@ -303,8 +307,11 @@ def authorize_semantically_reviewed_claims(
         def protected(value: str) -> set[str]:
             return set(re.findall(r"\d+(?:[.,]\d+)?%?", value))
 
-        if cited != set(claim.fact_ids) or protected(claim.text) - protected(source_text):
+        if cited != set(claim.fact_ids):
             valid = False
+        if protected(claim.text) - protected(source_text):
+            unsupported.append(claim_id)
+            continue
         if not valid:
             refused.append(claim_id)
             continue
@@ -318,6 +325,16 @@ def authorize_semantically_reviewed_claims(
                 input_hash=evidence.provenance.input_hash,
                 assertions=[item.model_dump(mode="json") for item in assessment.assertions],
             ),
+        )
+    if unsupported:
+        raise ClaimReviewUnsupported(
+            f"semantic review found unsupported claims: {', '.join(sorted(unsupported))}",
+            unsupported=sorted(unsupported),
+        )
+    if uncertain:
+        raise ClaimReviewUncertain(
+            f"semantic review was uncertain about claims: {', '.join(sorted(uncertain))}",
+            unsupported=sorted(uncertain),
         )
     if refused:
         raise ProposalRejected(

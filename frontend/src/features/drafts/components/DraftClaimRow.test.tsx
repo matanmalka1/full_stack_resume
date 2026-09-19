@@ -18,6 +18,22 @@ const claim: DraftClaim = {
 
 const facts: DraftFact[] = [{ fact_id: "fact-1", linked_claim_ids: ["claim-1"], text: "חמש שנות ניסיון" }];
 
+const reviewedClaim: DraftClaim = {
+  ...claim,
+  claim_type: "reviewed",
+  text: "בניית מערכות Full-Stack במשך חמש שנים.",
+  review_evidence: {
+    policy_version: "semantic-claim-support-v1",
+    assertions: [
+      {
+        claim_quote: "במשך חמש שנים",
+        fact_ids: ["fact-1"],
+        source_quotes: ["חמש שנות ניסיון"],
+      },
+    ],
+  },
+};
+
 const actions = (overrides: Partial<DraftClaimActions> = {}): DraftClaimActions => ({
   onAdd: vi.fn(),
   onCommit: vi.fn(),
@@ -57,6 +73,19 @@ describe("DraftClaimRow", () => {
     expect(rowActions.onEdit).toHaveBeenLastCalledWith(claim, claim.text);
     expect(rowActions.onCommit).toHaveBeenCalled();
     expect(screen.queryByText("השורה מנותקת מהעובדה הקנונית")).not.toBeInTheDocument();
+  });
+
+  it("explains reviewed wording and warns that editing invalidates that review", () => {
+    render(<DraftClaimRow actions={actions()} claim={reviewedClaim} facts={facts} removal={{ route: "none" }} />);
+
+    fireEvent.click(screen.getByText("למה הניסוח אושר?"));
+    expect(screen.getByText(/זו בדיקת תמיכה של המודל/)).toBeInTheDocument();
+    expect(screen.getByText("מקור: חמש שנות ניסיון")).toBeInTheDocument();
+
+    openEditor();
+    fireEvent.change(screen.getByRole("textbox", { name: "טקסט השורה" }), { target: { value: "ניסוח חדש" } });
+    expect(screen.getByText("העריכה מבטלת את הביקורת הקודמת")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "שחזור הנוסח שנבדק" })).toBeInTheDocument();
   });
 
   it("does not remove the line until the confirmation dialog is accepted", () => {
