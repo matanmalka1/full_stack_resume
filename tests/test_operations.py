@@ -53,7 +53,7 @@ from cv_engine.application.operations import (
     is_terminal_operation,
     require_operation_transition,
 )
-from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence.application_projections import (

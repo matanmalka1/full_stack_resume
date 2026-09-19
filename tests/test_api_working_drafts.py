@@ -28,7 +28,7 @@ from helpers import ACCOUNT_MANAGER_JOB, working_claim
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import ApplySelectionChangeCommand, IngestCommand
 from cv_engine.application.errors import InfrastructureFailure
-from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
 from cv_engine.util import new_id
 
 UNSUPPORTED_WORDING = "Delivered 30% improvement in direct SaaS Sales."

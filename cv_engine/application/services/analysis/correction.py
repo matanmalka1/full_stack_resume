@@ -19,7 +19,7 @@ from ...errors import (
     UnknownRecord,
 )
 from .preparation import PreparedAnalysis
-from .selection import AnalysisSelection
+from .selection_policy import AnalysisSelection
 
 
 def revise_classification(

@@ -12,15 +12,12 @@ from helpers import PAYME_TECH_SALES_JOB
 from pydantic import ValidationError
 
 from cv_engine.domain.analysis.projection import fit_level, fit_score
+from cv_engine.domain.contracts.analysis import Coverage, Requirement
+from cv_engine.domain.contracts.knowledge import Profile
+from cv_engine.domain.contracts.selection import SelectionCandidate
+from cv_engine.domain.contracts.taxonomy import Emphasis
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.facts import FactStore
-from cv_engine.domain.models import (
-    Coverage,
-    Emphasis,
-    Profile,
-    Requirement,
-    SelectionCandidate,
-)
 from cv_engine.domain.profiles import ProfileStore
 from cv_engine.domain.selection import (
     STRUCTURAL_STYLES,

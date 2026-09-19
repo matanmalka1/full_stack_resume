@@ -9,8 +9,8 @@ import pytest
 from conftest import SOURCE_ROOT
 from seed import V2_IDENTITY_FACT, facts_in, source_texts
 
+from cv_engine.domain.contracts.knowledge import FactStatus
 from cv_engine.domain.facts import FactStore
-from cv_engine.domain.models import FactStatus
 from cv_engine.domain.profiles import ProfileStore, ProfileStoreError
 from cv_engine.domain.selection import STRUCTURAL_STYLES
 

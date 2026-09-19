@@ -41,14 +41,10 @@ from cv_engine.application.commands import (
 )
 from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
 from cv_engine.domain.candidate import contact_href
+from cv_engine.domain.contracts.analysis import JobAnalysis
+from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.drafts import build_draft
 from cv_engine.domain.facts import FactStore
-from cv_engine.domain.models import (
-    Emphasis,
-    JobAnalysis,
-    ProfileName,
-    Track,
-)
 from cv_engine.domain.profiles import ProfileStore
 from cv_engine.domain.render_validation import RenderEvidence, RenderGeometry
 from cv_engine.domain.selection import EmphasisPolicyStore

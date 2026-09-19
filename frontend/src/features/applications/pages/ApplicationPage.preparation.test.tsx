@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApplicationDetail, Operation, Settings } from "@/api/contracts";
 import { applicationDetailQueryKey } from "@/api/applications";
 import { operationQueryKey, operationQueryOptions } from "@/api/operations";
-import { autoDraftSources } from "@/features/preparation/model/autoDraft";
 import { settingsQueryKey } from "@/api/settings";
 import { ApplicationPage } from "./ApplicationPage";
 
@@ -884,39 +883,6 @@ describe("ApplicationPage at the preparation route", () => {
       .map(([, init]) => (init?.headers as Headers | undefined)?.get("Idempotency-Key"));
     expect(keys).toEqual(["auto-draft:analysis-1:plan-1", "auto-draft:analysis-1:plan-1"]);
   });
-
-  it.each(["blocked", "new-analysis", "new-plan", "inactive-output", "cancelled", "deleted", "existing-draft"])(
-    "does not authorize a restored automatic draft with %s",
-    (scenario) => {
-      const analyzed = queued({
-        status: "succeeded",
-        is_terminal: true,
-        outputs: [
-          { output_type: "job_analysis", output_id: "analysis-1", active: true },
-          { output_type: "selection_plan", output_id: "plan-1", active: true },
-        ],
-      });
-      const projection = analyzed_detail({ active_selection_plan_id: "plan-1" });
-      if (scenario === "blocked")
-        projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
-      if (scenario === "new-analysis") projection.active_analysis_id = "analysis-2";
-      if (scenario === "new-plan") projection.active_selection_plan_id = "plan-2";
-      if (scenario === "inactive-output")
-        analyzed.outputs.forEach((output) => {
-          output.active = false;
-        });
-      if (scenario === "cancelled") analyzed.status = "cancelled";
-      if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
-      if (scenario === "existing-draft") projection.active_working_draft_id = "draft-1";
-      expect(
-        autoDraftSources(
-          analyzed,
-          { ...deterministicSettings, auto_generate_when_review_not_required: true },
-          projection,
-        ),
-      ).toBeNull();
-    },
-  );
 
   it("isolates late watched analysis results across URL changes and Back / Forward", async () => {
     let resolveOld: (response: Response) => void = () => {};

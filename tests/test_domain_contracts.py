@@ -5,16 +5,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from cv_engine.domain.models import (
-    DraftDocument,
-    JobAnalysis,
+from cv_engine.domain.contracts.analysis import JobAnalysis
+from cv_engine.domain.contracts.drafts import DraftDocument, WorkingDraft
+from cv_engine.domain.contracts.selection import SelectionManifest, SelectionPlan
+from cv_engine.domain.contracts.validation import (
     ReadyQualification,
-    SelectionManifest,
-    SelectionPlan,
     ValidationIssue,
     ValidationReport,
     ValidationRunLineage,
-    WorkingDraft,
 )
 
 
