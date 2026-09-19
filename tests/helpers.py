@@ -4,7 +4,7 @@ from pathlib import Path
 
 from cv_engine.application.commands import AnalyzeCommand, ApproveDraftCommand, ValidateDraftCommand
 from cv_engine.application.services.analysis.preparation import PreparedAnalysis
-from cv_engine.application.services.analysis.selection import AnalysisSelection
+from cv_engine.application.services.analysis.selection_policy import AnalysisSelection
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track

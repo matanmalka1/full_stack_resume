@@ -16,7 +16,7 @@ from ...errors import (
 )
 from ...ports import AnalysisContext
 from ..proposals import ProviderEvidence, analysis_fact_context
-from .selection import AnalysisSelection
+from .selection_policy import AnalysisSelection
 
 
 @dataclass(frozen=True)

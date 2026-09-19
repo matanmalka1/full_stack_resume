@@ -20,7 +20,7 @@ from helpers import ACCOUNT_MANAGER_JOB
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
-from cv_engine.domain.models import ClaimProposal, SelectionProposal
+from cv_engine.domain.contracts.providers import ClaimProposal, SelectionProposal
 
 
 def _post(harness, path: str, body: dict, **headers):

@@ -39,7 +39,7 @@ from cv_engine.application.operations import OperationFailureCode
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.projection import fit_level, fit_score
 from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
-from cv_engine.domain.models import (
+from cv_engine.domain.contracts.providers import (
     ClaimProposal,
     DraftProposal,
     ProposedClaim,

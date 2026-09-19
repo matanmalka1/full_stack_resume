@@ -7,7 +7,8 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from cv_engine.application.commands import IngestCommand, NextActionCommand
-from cv_engine.domain.models import ApplicationStatus, AuditRecord
+from cv_engine.domain.contracts.records import AuditRecord
+from cv_engine.domain.contracts.recruitment import ApplicationStatus
 from cv_engine.infrastructure.persistence import (
     SqlAlchemyTransactionManager,
     current_database_revision,

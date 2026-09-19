@@ -36,7 +36,7 @@ from cv_engine.application.ports import (
     SelectionPlanContext,
 )
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
-from cv_engine.domain.models import (
+from cv_engine.domain.contracts.providers import (
     ClaimProposal,
     DraftProposal,
     ProposedClaim,

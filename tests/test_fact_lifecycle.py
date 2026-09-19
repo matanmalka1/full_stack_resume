@@ -17,8 +17,8 @@ from cv_engine.application.errors import (
     UnknownRecord,
 )
 from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
+from cv_engine.domain.contracts.knowledge import FactStatus
 from cv_engine.domain.facts import FactStore
-from cv_engine.domain.models import FactStatus
 from cv_engine.infrastructure.knowledge import FactStoreError, load_fact_store
 from cv_engine.infrastructure.persistence.connection import (
     SqlAlchemyTransactionManager,

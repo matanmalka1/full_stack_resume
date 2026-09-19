@@ -31,7 +31,7 @@ from cv_engine.application.errors import ValidationBlocked
 from cv_engine.application.maintenance import (
     build_application_export,
 )
-from cv_engine.domain.models import ValidationIssue, ValidationReport
+from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import (
     SqlAlchemyTransactionManager,

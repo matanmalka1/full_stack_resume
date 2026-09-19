@@ -7,8 +7,8 @@ from ...errors import LineageBroken, StateConflict
 from ...ports.analysis_plans import AnalysisPlanStore, AnalysisSelectionSourceReader
 from ...ports.transactions import WriteTransaction
 from .preparation import PreparedAnalysis
-from .selection import PreparedSelectionPlan
-from .selection_service import AnalysisSelectionService
+from .selection_plans import AnalysisSelectionService
+from .selection_policy import PreparedSelectionPlan
 
 
 class AnalysisActivation:

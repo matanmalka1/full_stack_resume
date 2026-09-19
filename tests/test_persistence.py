@@ -14,14 +14,10 @@ from cv_engine.application.knowledge_mutations import (
     PrepareKnowledgeMutation,
 )
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.models import (
-    AuditRecord,
-    SelectionManifest,
-    SelectionPlan,
-    ValidationReport,
-    ValidationRunLineage,
-    WorkingDraft,
-)
+from cv_engine.domain.contracts.drafts import WorkingDraft
+from cv_engine.domain.contracts.records import AuditRecord, ValidationRunLineage
+from cv_engine.domain.contracts.selection import SelectionManifest, SelectionPlan
+from cv_engine.domain.contracts.validation import ValidationReport
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record

@@ -42,7 +42,7 @@ from ...ports.rendering import RenderContextReader
 from ...ports.transactions import ReadTransaction, WriteTransaction
 from ..analysis.activation import AnalysisActivation
 from ..analysis.preparation import PreparedAnalysis
-from ..analysis.selection import PreparedSelectionProposal
+from ..analysis.selection_policy import PreparedSelectionProposal
 from ..analysis.service import AnalysisService, load_analysis_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation

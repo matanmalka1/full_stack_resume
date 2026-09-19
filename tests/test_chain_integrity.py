@@ -39,8 +39,8 @@ from cv_engine.application.errors import (
     UnknownRecord,
     WorkflowError,
 )
+from cv_engine.domain.contracts.records import DecisionRecord
 from cv_engine.domain.draft_markdown import parse_draft
-from cv_engine.domain.models import DecisionRecord
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )

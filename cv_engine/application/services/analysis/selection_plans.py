@@ -14,7 +14,7 @@ from ...errors import PreconditionFailed
 from ...ports import SelectionPlanContext
 from ...ports.analysis_plans import SelectionSource
 from ..proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
-from .selection import AnalysisSelection, PreparedSelectionPlan, PreparedSelectionProposal
+from .selection_policy import AnalysisSelection, PreparedSelectionPlan, PreparedSelectionProposal
 
 
 class AnalysisSelectionService:

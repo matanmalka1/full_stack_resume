@@ -35,8 +35,8 @@ from ..proposals import ProviderEvidence
 from .activation import AnalysisActivation
 from .correction import AnalysisCorrection
 from .preparation import AnalysisPreparation, PreparedAnalysis
-from .selection import PreparedSelectionPlan, PreparedSelectionProposal
-from .selection_service import AnalysisSelectionService
+from .selection_plans import AnalysisSelectionService
+from .selection_policy import PreparedSelectionPlan, PreparedSelectionProposal
 
 
 def load_analysis_knowledge(source: AnalysisKnowledgeSource) -> Knowledge:
