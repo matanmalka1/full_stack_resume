@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, FactDetail, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { ApplicationDetail, FactDetail, Operation, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { settingsQueryKey } from "@/api/settings";
 import { DraftEditorPage } from "./DraftEditorPage";
 
@@ -154,7 +154,14 @@ const updateResponse = (editVersion: number): Response =>
 const stubReads = (
   answers: Partial<
     Record<
-      "detail" | "draft" | "facts" | "selectionChange" | "regenerate" | "validation" | "validationRun",
+      | "detail"
+      | "draft"
+      | "facts"
+      | "operation"
+      | "selectionChange"
+      | "regenerate"
+      | "validation"
+      | "validationRun",
       () => Response
     >
   >,
@@ -164,6 +171,9 @@ const stubReads = (
 
     if (url.includes("/regenerate-")) {
       return Promise.resolve(answers.regenerate?.() ?? jsonResponse({}, 500));
+    }
+    if (url.startsWith("/api/v1/operations/")) {
+      return Promise.resolve(answers.operation?.() ?? jsonResponse({}, 404));
     }
     if (url.endsWith("/apply-selection-change")) {
       return Promise.resolve(
@@ -1149,24 +1159,26 @@ describe("DraftEditorPage regeneration", () => {
 
   it("refreshes the draft version when regeneration activates its output", async () => {
     let draftReads = 0;
+    const completed: Operation = {
+      id: "op-complete",
+      application_id: "app-1",
+      operation_type: "regenerate_claim",
+      status: "succeeded",
+      phase: "completed",
+      is_terminal: true,
+      available_actions: [],
+      outputs: [{ active: true, output_id: "wd-1", output_type: "working_draft" }],
+      message: "",
+      created_at: "2026-08-24T07:00:00Z",
+    };
     stubReads({
       detail: () =>
         jsonResponse(
           detail({
-            latest_operation: {
-              id: "op-complete",
-              application_id: "app-1",
-              operation_type: "regenerate_claim",
-              status: "succeeded",
-              phase: "completed",
-              is_terminal: true,
-              available_actions: [],
-              outputs: [{ active: true, output_id: "wd-1", output_type: "working_draft" }],
-              message: "",
-              created_at: "2026-08-24T07:00:00Z",
-            },
+            latest_operation: completed,
           }),
         ),
+      operation: () => jsonResponse(completed),
       draft: () => {
         draftReads += 1;
         return jsonResponse(draft());
@@ -1249,7 +1261,7 @@ describe("DraftEditorPage preview", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
-    expect(screen.getByText("הטיוטה השתנתה מאז הבדיקה. יש לבדוק את הגרסה הנוכחית מחדש.")).toBeVisible();
+    expect(screen.getByText("המערכת תבדוק את הגרסה המוצגת לפני הכנת ה־PDF.")).toBeVisible();
   });
 
   it("shows the text just typed when the line is closed, not the version on the server", async () => {
