@@ -17,11 +17,8 @@ from cv_engine.application.queries import PreparationState, WorkingDraftState
 from cv_engine.application.state import ProjectionContext, derive_review_reasons
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.knowledge import FactStatus
-from cv_engine.domain.contracts.validation import (
-    ValidationIssue,
-    ValidationReport,
-    ValidationRunLineage,
-)
+from cv_engine.domain.contracts.records import ValidationRunLineage
+from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.knowledge import Knowledge
 from cv_engine.infrastructure.persistence.tables import applications
