@@ -1147,6 +1147,38 @@ describe("DraftEditorPage regeneration", () => {
     );
   });
 
+  it("refreshes the draft version when regeneration activates its output", async () => {
+    let draftReads = 0;
+    stubReads({
+      detail: () =>
+        jsonResponse(
+          detail({
+            latest_operation: {
+              id: "op-complete",
+              application_id: "app-1",
+              operation_type: "regenerate_claim",
+              status: "succeeded",
+              phase: "completed",
+              is_terminal: true,
+              available_actions: [],
+              outputs: [{ active: true, output_id: "wd-1", output_type: "working_draft" }],
+              message: "",
+              created_at: "2026-08-24T07:00:00Z",
+            },
+          }),
+        ),
+      draft: () => {
+        draftReads += 1;
+        return jsonResponse(draft());
+      },
+    });
+
+    renderPage();
+
+    await screen.findByRole("heading", { name: "טיוטה ואימות" });
+    await waitFor(() => expect(draftReads).toBeGreaterThanOrEqual(2));
+  });
+
   it("withholds regeneration while an edit is still unsaved, and says why", async () => {
     stubReads({});
 
@@ -1195,6 +1227,29 @@ describe("DraftEditorPage preview", () => {
        starts with validation and changes to explicit approval only after that passes. */
     expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
     expect(screen.getByText("המערכת תבדוק את הגרסה המוצגת לפני הכנת ה־PDF.")).toBeInTheDocument();
+  });
+
+  it("keeps revalidation available when only the previous validation became stale", async () => {
+    stubReads({
+      detail: () =>
+        jsonResponse(
+          detail({
+            stale_reasons: [
+              {
+                code: "DRAFT_EDITED_AFTER_VALIDATION",
+                message: "The working draft changed after its latest validation.",
+                entity_references: { working_draft_id: "wd-1" },
+                allowed_resolution_actions: ["replace_working_draft", "archive_working_draft"],
+              },
+            ],
+          } as Partial<ApplicationDetail>),
+        ),
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
+    expect(screen.getByText("הטיוטה השתנתה מאז הבדיקה. יש לבדוק את הגרסה הנוכחית מחדש.")).toBeVisible();
   });
 
   it("shows the text just typed when the line is closed, not the version on the server", async () => {

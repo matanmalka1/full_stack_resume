@@ -39,12 +39,12 @@ from .requirements.identity import normalize_span, requirement_id
 #:
 #: `EXTRACTION_VERSION` is what produced the record. `PROMPT_VERSION` is how the
 #: provider was asked, and belongs with the provider provenance; it is recorded
-#: and it is *not* an input to identity, because rewording a prompt into v6
+#: and it is *not* an input to identity, because rewording a prompt into v7
 #: would otherwise turn every unchanged requirement in an unchanged posting into
 #: a new entity. `REQUIREMENT_ID_VERSION` names the identity algorithm itself, so that a
 #: change to how identity is computed can still be stated as one.
 EXTRACTION_VERSION = "analysis-v1"
-PROMPT_VERSION = "system-v6"
+PROMPT_VERSION = "system-v7"
 REQUIREMENT_ID_VERSION = "v1"
 
 #: Least claim first. Merging duplicates and resolving conflicts both take the

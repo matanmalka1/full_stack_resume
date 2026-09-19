@@ -16,6 +16,7 @@ import {
   validation as validationFixture,
 } from "@/test/fixtures";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
+import { DraftApprovalBar } from "./DraftApprovalBar";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { useDraftValidation } from "../hooks/useDraftValidation";
@@ -78,6 +79,24 @@ const DraftFlow = () => {
 };
 
 describe("DraftValidationPanel", () => {
+  it("keeps revalidation available after a stale approval refusal", () => {
+    render(
+      <MemoryRouter>
+        <DraftApprovalBar
+          applicationHref="/applications/app-1"
+          exactPassingRunId={null}
+          onApprove={vi.fn()}
+          onValidate={vi.fn()}
+          reviewBlocked={false}
+          stale
+          validationPending={false}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("button", { name: "בדיקה מחדש והכנת PDF" })).toBeEnabled();
+  });
+
   it("renders hard issues as blockers and soft issues as warnings without dropping unknown values", async () => {
     const run = validationFixture({
       passed: false,

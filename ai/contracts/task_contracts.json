@@ -1,8 +1,8 @@
 {
-  "version": "4.0.0",
+  "version": "5.0.0",
   "prompt": {
-    "version": "system-v6",
-    "file": "ai/prompts/system-v6.md"
+    "version": "system-v7",
+    "file": "ai/prompts/system-v7.md"
   },
   "tasks": {
     "propose_analysis": {
@@ -14,9 +14,9 @@
       "critical_state": true
     },
     "propose_selection_plan": {
-      "version": "2.0.0",
+      "version": "3.0.0",
       "input": "SelectionPlanContext",
-      "input_schema_version": "2.0.0",
+      "input_schema_version": "3.0.0",
       "output": "SelectionProposal",
       "output_schema_version": "2.0.0",
       "critical_state": true

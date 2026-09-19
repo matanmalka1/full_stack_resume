@@ -1000,6 +1000,9 @@ def test_selection_context_carries_the_profile_pool_and_not_every_fact(
         "tags",
         "style",
     }
+    protected = set(payload["deterministic_selection"]["non_excludable_fact_ids"])
+    assert protected <= set(payload["deterministic_selection"]["selected_fact_ids"])
+    assert protected
 
 
 def test_the_analysis_context_carries_canonical_facts_and_nothing_else_about_them(

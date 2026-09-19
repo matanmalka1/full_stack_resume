@@ -56,7 +56,7 @@ ANALYSIS_CONTEXT = AnalysisContext(
 SELECTION_CONTEXT = SelectionPlanContext(
     job_analysis={"track": "sales"},
     allowed_facts=[{"fact_id": "a.b"}],
-    deterministic_selection={"selected_fact_ids": ["a.b"]},
+    deterministic_selection={"selected_fact_ids": ["a.b"], "non_excludable_fact_ids": []},
 )
 DRAFT_CONTEXT = DraftResumeContext(
     job_analysis={"track": "sales"},

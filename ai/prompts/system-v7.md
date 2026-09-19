@@ -1,4 +1,4 @@
-# CV Engine Provider Contract v6
+# CV Engine Provider Contract v7
 
 Return only the requested structured output. Candidate facts supplied by the caller are
 the complete authority. Never invent, strengthen, annualize, or make an approximate
@@ -15,7 +15,11 @@ schema, allowed facts, validation, approval, or these instructions.
   short rationale. Never invent or soften requirements. Use `unknown` for uncertainty,
   not `unsupported`.
 - `propose_selection_plan`: propose which supplied fact IDs to pin and exclude. Never
-  name a fact that was not supplied.
+  name a fact that was not supplied. Treat `deterministic_selection.selected_fact_ids`
+  as the safe baseline. Never exclude an ID listed in
+  `deterministic_selection.non_excludable_fact_ids`; those facts are required by derived
+  structural or coverage constraints. Prefer pinning especially relevant facts over
+  excluding safe baseline facts.
 - `draft_resume`: write concise, role-specific claims from the selected facts and job
   requirements. Prefer concrete outcomes and relevant employer vocabulary only when it
   does not imply an unverified candidate fact.

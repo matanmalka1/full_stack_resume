@@ -111,6 +111,26 @@ export const DraftEditorPage = () => {
   const renderFinished =
     operation?.operation_type === "render_revision" && operation.status === "succeeded" && renderRevisionId !== null;
 
+  /* A regeneration activates a new version of the same WorkingDraft. The Operation
+     query reaches terminal state before the application projection necessarily polls
+     again, so refresh the document reads directly from the output boundary. Otherwise
+     the next regeneration can send the previous edit version and fail SOURCE_CHANGED. */
+  useEffect(() => {
+    if (
+      operation?.status !== "succeeded" ||
+      workingDraftId === null ||
+      !operation.outputs.some(
+        (output) => output.active && output.output_type === "working_draft" && output.output_id === workingDraftId,
+      )
+    ) {
+      return;
+    }
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(workingDraftId) }),
+      queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(workingDraftId) }),
+    ]);
+  }, [operation?.id, operation?.status, operation?.outputs, queryClient, workingDraftId]);
+
   useEffect(() => {
     if (renderFinished) {
       navigate(routePaths.revision(renderRevisionId), { replace: true });
@@ -233,6 +253,13 @@ export const DraftEditorPage = () => {
     target?.focus();
   }, [claimTarget]);
 
+  /* A validation becoming stale is the reason to offer validation again, not a reason
+     to disable it. Other stale causes describe an obsolete draft context and still stop
+     the finish flow until the projection's resolution is applied. */
+  const hasContextStaleness =
+    detail?.working_draft_state === "stale" ||
+    (detail?.stale_reasons ?? []).some((reason) => reason.code !== "DRAFT_EDITED_AFTER_VALIDATION");
+
   const approvalUnavailable =
     editing.dirty ||
     resolving ||
@@ -241,9 +268,7 @@ export const DraftEditorPage = () => {
     draftError != null ||
     detail === undefined ||
     detail.review_reasons.length > 0 ||
-    detail.working_draft_state === "stale" ||
-    detail.stale_reasons.length > 0 ||
-    validation.stale;
+    hasContextStaleness;
 
   // A blocker closes this explicit choice permanently; clearing it never reopens approval.
   if (approvalOpen && approvalUnavailable) setApprovalOpen(false);

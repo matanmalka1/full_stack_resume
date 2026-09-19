@@ -10,7 +10,7 @@ from ....domain.contracts.taxonomy import Emphasis
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import allowed_fact_pool
 from ...commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand
-from ...errors import PreconditionFailed
+from ...errors import PreconditionFailed, ProposalRejected
 from ...ports import SelectionPlanContext
 from ...ports.analysis_plans import SelectionSource
 from ..proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
@@ -18,6 +18,29 @@ from .selection_policy import AnalysisSelection, PreparedSelectionPlan, Prepared
 
 
 class AnalysisSelectionService:
+    @staticmethod
+    def _non_excludable_selected_facts(
+        analysis: JobAnalysis,
+        knowledge: Knowledge,
+        selected_fact_ids: list[str],
+    ) -> list[str]:
+        """Derive facts whose individual exclusion violates selection policy.
+
+        This is advisory context for the provider, never an authorization rule:
+        the complete proposed overlay still runs through ``build_selection``.
+        """
+        protected: list[str] = []
+        for fact_id in selected_fact_ids:
+            try:
+                AnalysisSelection.manifest(
+                    analysis,
+                    knowledge,
+                    excluded_fact_ids=frozenset({fact_id}),
+                )
+            except PreconditionFailed:
+                protected.append(fact_id)
+        return sorted(protected)
+
     @staticmethod
     def refuse_moved_sources(command: CreateSelectionPlanCommand, knowledge) -> None:
         """The optimistic check on what the user was looking at when they decided.
@@ -136,6 +159,11 @@ class AnalysisSelectionService:
         profile = AnalysisSelection.profile(effective_analysis, knowledge.profiles)
         allowed = allowed_fact_pool(profile)
         manifest = AnalysisSelection.manifest(effective_analysis, knowledge)
+        non_excludable = AnalysisSelectionService._non_excludable_selected_facts(
+            effective_analysis,
+            knowledge,
+            manifest.selected_fact_ids,
+        )
 
         service.assert_provider_io_allowed()
         answered = service.provider.propose_selection_plan(
@@ -155,6 +183,7 @@ class AnalysisSelectionService:
                 ),
                 deterministic_selection={
                     "selected_fact_ids": list(manifest.selected_fact_ids),
+                    "non_excludable_fact_ids": non_excludable,
                     "emphasis_policy_version": manifest.emphasis_policy_version,
                 },
             ),
@@ -192,7 +221,17 @@ class AnalysisSelectionService:
             enforce_expected_selection_plan=command.enforce_expected_selection_plan,
         )
         with evidence_attached(evidence):
-            selection = AnalysisSelectionService.prepare_selection_plan(service, selection_command)
+            try:
+                selection = AnalysisSelectionService.prepare_selection_plan(
+                    service, selection_command
+                )
+            except PreconditionFailed as exc:
+                raise ProposalRejected(
+                    "propose_selection_plan produced an overlay rejected by selection policy",
+                    unsupported=sorted(
+                        set(proposal.pinned_fact_ids) | set(proposal.excluded_fact_ids)
+                    ),
+                ) from exc
         return PreparedSelectionProposal(
             command=selection_command,
             proposal=proposal,
