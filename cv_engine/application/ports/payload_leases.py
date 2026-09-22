@@ -60,6 +60,15 @@ class PayloadWriteLeaseStore(Protocol):
         """
         ...
 
+    def pending(self, tx: ReadTransaction, group_key: str) -> dict | None:
+        """Return the current pending attempt for ``group_key``, if any.
+
+        This is used only to resume the same already-published write after its
+        database registration rolled back.  It does not make a fenced attempt
+        live again and does not transfer the reservation to another attempt.
+        """
+        ...
+
     def renew(
         self,
         tx: WriteTransaction,

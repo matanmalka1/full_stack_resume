@@ -77,6 +77,20 @@ class SqlAlchemyPayloadLeaseStore:
             )
         )
 
+    def pending(self, tx: ReadTransaction, group_key: str) -> dict | None:
+        connection = self._transactions.connection_for(tx)
+        row = (
+            connection.execute(
+                select(payload_write_leases).where(
+                    payload_write_leases.c.group_key == group_key,
+                    payload_write_leases.c.state == "pending",
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        return None if row is None else _row_to_entry(row)
+
     def renew(
         self,
         tx: WriteTransaction,

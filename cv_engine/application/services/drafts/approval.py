@@ -177,11 +177,17 @@ class DraftApprovalService:
         # revision_id but scoped to this attempt_id (architecture.md §7.1).
         attempt_id = new_id()
         group_key = f"revision:{application_id}:{revision_id}"
-        # A crash can leave the receipt pending and the previous attempt's
-        # lease expired. Fence and remove that attempt before claiming a new
-        # one for the same reserved revision ID.
+        pending_attempt = None
         if reserved_revision_id:
-            self.maintenance.reclaim_group(group_key)
+            with self.transactions.read() as tx:
+                pending_attempt = self.leases.pending(tx, group_key)
+            # A pending attempt is the same publication whose registration may
+            # have rolled back, and is resumed below without reacquiring it.
+            # Expiry alone does not abandon it; a maintenance fence does.
+            if pending_attempt is None:
+                self.maintenance.reclaim_group(group_key)
+            else:
+                attempt_id = pending_attempt["attempt_id"]
         structured_reference = self.revision_payloads.reference_for(
             self.revision_payloads.revision_path(
                 application_id, revision_id, attempt_id, format="json"
@@ -192,34 +198,48 @@ class DraftApprovalService:
                 application_id, revision_id, attempt_id, format="md"
             )
         )
-        with self.transactions.write() as tx:
-            self.leases.acquire(
-                tx,
-                group_key,
-                attempt_id,
-                keys=[structured_reference, markdown_reference],
-                ttl_seconds=DEFAULT_LEASE_TTL_SECONDS,
-            )
-        try:
-            published = self.revision_payloads.commit_revision(
-                application_id,
-                revision_id,
-                attempt_id,
-                structured_json,
-                markdown,
-            )
-        except FileExistsError as exc:
+        structured_hash = sha256_text(structured_json)
+        markdown_hash = sha256_text(markdown)
+        expected_references = sorted([structured_reference, markdown_reference])
+        if pending_attempt is not None:
+            if pending_attempt["keys"] != expected_references:
+                raise StateConflict(
+                    f"payload write lease for {group_key} does not match the reserved approval"
+                )
+            self.revision_payloads.verify_payload(structured_reference, structured_hash)
+            self.revision_payloads.verify_payload(markdown_reference, markdown_hash)
+        else:
             with self.transactions.write() as tx:
-                self.leases.release(tx, group_key, attempt_id)
-            raise StateConflict(str(exc)) from exc
-        except (OSError, ValueError) as exc:
-            with self.transactions.write() as tx:
-                self.leases.release(tx, group_key, attempt_id)
-            raise InfrastructureFailure(f"could not publish approved revision: {exc}") from exc
-        if published.structured.sha256 != sha256_text(
-            structured_json
-        ) or published.markdown.sha256 != sha256_text(markdown):
-            raise InfrastructureFailure("approved revision payload hash verification failed")
+                self.leases.acquire(
+                    tx,
+                    group_key,
+                    attempt_id,
+                    keys=expected_references,
+                    ttl_seconds=DEFAULT_LEASE_TTL_SECONDS,
+                )
+            try:
+                published = self.revision_payloads.commit_revision(
+                    application_id,
+                    revision_id,
+                    attempt_id,
+                    structured_json,
+                    markdown,
+                )
+            except FileExistsError as exc:
+                with self.transactions.write() as tx:
+                    self.leases.release(tx, group_key, attempt_id)
+                raise StateConflict(str(exc)) from exc
+            except (OSError, ValueError) as exc:
+                with self.transactions.write() as tx:
+                    self.leases.release(tx, group_key, attempt_id)
+                raise InfrastructureFailure(
+                    f"could not publish approved revision: {exc}"
+                ) from exc
+            if (
+                published.structured.sha256 != structured_hash
+                or published.markdown.sha256 != markdown_hash
+            ):
+                raise InfrastructureFailure("approved revision payload hash verification failed")
 
         now = utc_now()
         recruiter_pdf_filename = self.renderer.filename_for(
@@ -263,7 +283,7 @@ class DraftApprovalService:
             "job_snapshot_id": draft.job_snapshot_id,
             "job_analysis_id": analysis_id,
             "artifact_paths": {
-                "markdown": published.markdown.reference,
+                "markdown": markdown_reference,
             },
             "recruiter_pdf_filename": recruiter_pdf_filename,
         }
@@ -278,10 +298,10 @@ class DraftApprovalService:
             validation_id,
             draft.job_snapshot_id,
             analysis_id,
-            published.structured.reference,
-            published.structured.sha256,
-            published.markdown.reference,
-            published.markdown.sha256,
+            structured_reference,
+            structured_hash,
+            markdown_reference,
+            markdown_hash,
             draft.track.value,
             draft.profile.value,
             draft.emphasis.value,

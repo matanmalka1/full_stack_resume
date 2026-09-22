@@ -75,7 +75,7 @@ def test_a_fenced_lease_cannot_complete_registration(services, lease_transaction
     with lease_transactions.write() as tx:
         leases.acquire(tx, key, key, keys=[key], ttl_seconds=1, now=_past())
     with lease_transactions.write() as tx:
-        assert leases.fence(tx, key, key, now=_past(), reclaim_deadline=_past())
+        assert leases.fence(tx, key, key, now=_past(500), reclaim_deadline=_past())
     with pytest.raises(StateConflict):
         with lease_transactions.write() as tx:
             leases.mark_committed(tx, key, key, keys=[key])
