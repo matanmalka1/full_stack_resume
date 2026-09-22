@@ -235,21 +235,28 @@ class SqlAlchemyOperationExecutionStore:
         if leases < 1:
             raise StateConflict("operation resource leases are missing")
 
-    def interrupt_expired_operations(
-        self, tx: WriteTransaction, *, now: str | None = None
+    def _interrupt_claimed(
+        self, tx: WriteTransaction, *, now: str | None, only_if_expired: bool
     ) -> list[str]:
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
+        conditions = [
+            operations.c.status.in_(("queued", "running")),
+            operations.c.lease_expires_at.is_not(None),
+        ]
+        if only_if_expired:
+            conditions.append(operations.c.lease_expires_at <= timestamp)
         identifiers = list(
             connection.execute(
                 select(operations.c.id)
-                .where(
-                    operations.c.status.in_(("queued", "running")),
-                    operations.c.lease_expires_at.is_not(None),
-                    operations.c.lease_expires_at <= timestamp,
-                )
+                .where(*conditions)
                 .order_by(operations.c.created_at, operations.c.id)
             ).scalars()
+        )
+        message = (
+            "Interrupted after runner lease expired."
+            if only_if_expired
+            else "Interrupted by a fresh worker startup."
         )
         for identifier in identifiers:
             _release(connection, identifier)
@@ -262,7 +269,7 @@ class SqlAlchemyOperationExecutionStore:
                 .values(
                     status="interrupted",
                     phase="completed",
-                    message="Interrupted after runner lease expired.",
+                    message=message,
                     finished_at=timestamp,
                     lease_owner=None,
                     lease_expires_at=None,
@@ -270,6 +277,26 @@ class SqlAlchemyOperationExecutionStore:
                 )
             )
         return identifiers
+
+    def interrupt_expired_operations(
+        self, tx: WriteTransaction, *, now: str | None = None
+    ) -> list[str]:
+        return self._interrupt_claimed(tx, now=now, only_if_expired=True)
+
+    def interrupt_claims_from_previous_runners(
+        self, tx: WriteTransaction, *, now: str | None = None
+    ) -> list[str]:
+        """Reclaim every held lease unconditionally, for a fresh process's one-time sweep.
+
+        Called once, before this process has claimed anything of its own, so any
+        lease still on a row belongs to a runner instance that no longer exists -
+        there is nothing of this process's own that a wall-clock TTL could be
+        protecting it from. Waiting for the lease to actually expire only widens
+        the window in which a restarted worker fails to reclaim a row a dead
+        predecessor held, leaving that Application's mutation lock stuck until
+        some later restart happens to land after the original lease's TTL.
+        """
+        return self._interrupt_claimed(tx, now=now, only_if_expired=False)
 
     def operation(self, tx: ReadTransaction, operation_id: str) -> PersistedOperation:
         connection = self._transactions.connection_for(tx)

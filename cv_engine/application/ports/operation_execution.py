@@ -41,6 +41,9 @@ class OperationExecutionStore(Protocol):
     def interrupt_expired_operations(
         self, tx: WriteTransaction, *, now: str | None = None
     ) -> list[str]: ...
+    def interrupt_claims_from_previous_runners(
+        self, tx: WriteTransaction, *, now: str | None = None
+    ) -> list[str]: ...
     def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
     def set_operation_phase(
         self,

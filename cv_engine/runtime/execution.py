@@ -41,7 +41,7 @@ class OperationWorker:
         self._active_lock = Lock()
 
     def recover_startup(self) -> list[str]:
-        return self.runner.recover_expired()
+        return self.runner.recover_previous_runner_claims()
 
     def run_once(self) -> PersistedOperation | None:
         claimed = self.runner.claim_next()

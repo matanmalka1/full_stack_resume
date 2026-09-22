@@ -76,14 +76,23 @@ const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void =
 
 /* A.4 autosave, and the serialisation debounce alone does not give.
 
-   Two saves in flight let an older response install an older ETag over a newer one, and
-   the next save then conflicts against a token the server has already moved past. So:
-   one request at a time, edits coalesced by claim while one is running, and the token for
-   the next request taken from the response that just settled rather than from whatever was
-   captured when the user typed.
+   `activeSave` makes only one request outstanding at a time - a second call to `send`
+   while one is in flight returns that same promise instead of starting another - and the
+   request always reads `token.current` at call time rather than a value captured when the
+   user typed. That alone stops an older response from installing an older ETag over a
+   newer one.
+
+   What it does not do is get anything typed *during* that request out the door: the
+   debounce timer such an edit sets can fire before the request settles, find a save
+   already in flight, and do nothing - and by then the timer that fired is already spent,
+   so nothing is left counting down for it. `send` closes that gap itself, by recursing
+   into another `send()` immediately after a success, as part of the same promise rather
+   than a separately scheduled one - which is also what lets `settle()` await one call and
+   know the buffer is genuinely empty, not just that the request it happened to catch in
+   flight has finished.
 
    Everything that must not race is a ref. Component state here would be read at the value
-   it had when the callback was created, which is exactly the stale token this is
+   it had when the callback was created, which is exactly the staleness this is
    preventing. */
 export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: UseDraftAutosaveOptions) => {
   const edits = useRef(new Map<string, ClaimPatch>());
@@ -96,6 +105,11 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
   const token = useRef(etag);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const halted = useRef(false);
+  /* `send` recurses into itself on success (below) to drain whatever was queued while it was
+     in flight, and the unmount cleanup effect below needs to reach it too - both from
+     closures that must not call a `send` frozen at an earlier render (a stale
+     `workingDraftId` or `onSaved`), so both go through this ref instead of the function
+     value directly. */
   const sendRef = useRef<() => Promise<void>>(async () => undefined);
   const [state, setState] = useState<AutosaveState>({
     status: "idle",
@@ -248,7 +262,10 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       }
 
       /* Whatever arrived while that request was open goes now, against the token it just
-       returned. */
+       returned - as part of this same promise, not fired separately. `settle()` awaits
+       exactly this promise to know the buffer is genuinely empty before it lets the caller
+       navigate away; a follow-up send kicked off from an effect would resolve on its own
+       schedule, outside `settle()`'s wait. */
       await sendRef.current();
     })();
     activeSave.current = task;

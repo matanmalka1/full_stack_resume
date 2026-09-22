@@ -236,6 +236,19 @@ class OperationRunner:
         with self.transactions.write() as tx:
             return self.execution_store.interrupt_expired_operations(tx)
 
+    def recover_previous_runner_claims(self) -> list[str]:
+        """A fresh process's one-time startup sweep: reclaim every held lease.
+
+        Distinct from `recover_expired`, which only reclaims a lease whose TTL
+        has actually passed. At startup, before this process has claimed
+        anything of its own, nothing legitimate could hold a lease it needs
+        protected - so there is no reason to wait out a TTL that only widens
+        the window in which a fast restart fails to recover a dead
+        predecessor's rows.
+        """
+        with self.transactions.write() as tx:
+            return self.execution_store.interrupt_claims_from_previous_runners(tx)
+
     def run(self, operation_id: str) -> PersistedOperation:
         with self.transactions.write() as tx:
             operation = self.execution_store.claim_operation(
