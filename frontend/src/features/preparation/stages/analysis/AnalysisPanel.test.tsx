@@ -80,7 +80,7 @@ describe("AnalysisPanel", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText("1 דרישות חובה דורשות תשומת לב, ללא פער קשיח.")).toBeInTheDocument();
+    expect(screen.getByText("דרישת חובה אחת דורשת תשומת לב, ללא פער קשיח.")).toBeInTheDocument();
     expect(screen.getByText(/פער קטן:/)).toBeInTheDocument();
     expect(screen.getByText(/verified duration is slightly below/)).toBeInTheDocument();
   });

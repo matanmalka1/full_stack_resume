@@ -103,7 +103,9 @@ export const RequirementCoverageSummary = ({
           hardGapCount === 0 && uncoveredMandatory === 0
             ? "אין דרישות חובה ללא כיסוי מלא."
             : hardGapCount === 0
-              ? `${uncoveredMandatory} דרישות חובה דורשות תשומת לב, ללא פער קשיח.`
+              ? uncoveredMandatory === 1
+                ? "דרישת חובה אחת דורשת תשומת לב, ללא פער קשיח."
+                : `${uncoveredMandatory} דרישות חובה דורשות תשומת לב, ללא פער קשיח.`
               : hardGapCount === 1
                 ? "נמצא פער קשיח אחד בדרישות החובה."
                 : `נמצאו ${hardGapCount} פערים קשיחים בדרישות החובה.`

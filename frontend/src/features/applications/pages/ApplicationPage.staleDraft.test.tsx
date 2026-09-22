@@ -158,6 +158,9 @@ const routedFetch = (answers: { archive?: Response; draft?: () => Response; repl
     if (url.includes(DRAFT_PATH)) {
       return Promise.resolve(answers.draft === undefined ? json(draftRead()) : answers.draft());
     }
+    if (url.includes("/api/v1/operations/op-1")) {
+      return Promise.resolve(json(operation()));
+    }
     return Promise.resolve(json(detail()));
   });
 

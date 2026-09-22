@@ -554,7 +554,8 @@ describe("ApplicationPage at the preparation route", () => {
 
     expect(await screen.findByText("gpt-5.6-luna")).toBeInTheDocument();
     expect(screen.getByText("$0.00002806")).toBeInTheDocument();
-    expect(screen.getByText(/מאמץ גבוה/)).toBeInTheDocument();
+    expect(screen.getByText("מאמץ חשיבה")).toBeInTheDocument();
+    expect(screen.getByText("גבוה")).toBeInTheDocument();
   });
 
   it("does not present a superseded analysis as the one in force", async () => {
@@ -661,7 +662,7 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.getByText("חלקיות")).toBeInTheDocument();
     expect(screen.getByText("לא מכוסות")).toBeInTheDocument();
     expect(screen.getByText("לא ניתנות להצגה: 1")).toBeInTheDocument();
-    expect(screen.getByText("דרישת חובה אחת עדיין אינה מכוסה במלואה.")).toBeInTheDocument();
+    expect(screen.getByText("דרישת חובה אחת דורשת תשומת לב, ללא פער קשיח.")).toBeInTheDocument();
     expect(screen.getByText("דרישה אחת אינה ניתנת להצגה")).toBeInTheDocument();
     expect(await screen.findByText(/5 years building backend systems in Python/)).toBeInTheDocument();
     expect(screen.getByText(/^למה הכיסוי מוגבל/)).toBeInTheDocument();
