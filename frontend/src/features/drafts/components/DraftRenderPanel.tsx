@@ -7,8 +7,8 @@ import { operationQueryKey } from "@/api/operations";
 import { approvedRevisionQueryOptions, renderApprovedRevision } from "@/api/revisions";
 import { routePaths } from "@/app/routePaths";
 import { PendingWorkCard, operationTypeLabels } from "@/features/operations";
-import { CommitBar, NEXT_STEP_LABEL } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
+import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 
 interface DraftRenderPanelProps {

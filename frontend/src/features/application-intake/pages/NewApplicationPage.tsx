@@ -4,9 +4,10 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
-import { CommitBar, NEXT_STEP_LABEL, WizardStepShell } from "@/features/preparation";
+import { WizardStepShell } from "@/features/preparation";
 import { useAppForm } from "@/hooks/useAppForm";
 import { Button, buttonClasses } from "@/ui/Button";
+import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
 import { readApplicationIntakeDraft, useApplicationIntakeDraft } from "../hooks/useApplicationIntakeDraft";

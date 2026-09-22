@@ -2,8 +2,8 @@ import { Circle, CircleCheck } from "lucide-react";
 import { createContext, useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { cx } from "@/ui/cx";
-import { LiveRegion } from "@/ui/LiveRegion";
+import { cx } from "./cx";
+import { LiveRegion } from "./LiveRegion";
 
 /* What every pinned bar in the flow calls itself when it is a wizard step's action rather
    than a form's commit. Named "מה עושים עכשיו" and not "הצעד הבא": the bar carries the

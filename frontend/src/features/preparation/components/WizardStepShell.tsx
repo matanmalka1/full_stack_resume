@@ -2,9 +2,9 @@ import { useState, type ReactNode } from "react";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { PageShell } from "@/ui/PageShell";
+import { CommitBarTargetContext } from "@/ui/CommitBar";
 import { type WorkflowStage, workflowStageLabels } from "../model/workflowStages";
 import { PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
-import { CommitBarTargetContext } from "./CommitBar";
 
 interface WizardStepShellProps {
   /* Absent on intake, where the Application does not exist yet, and while the record

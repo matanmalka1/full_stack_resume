@@ -1,8 +1,8 @@
 import { ArrowRight, FileCheck2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { CommitBar, NEXT_STEP_LABEL } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
+import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 
 interface DraftApprovalBarProps {
   /* The step behind this one. It was a lone secondary link at the foot of the editor
