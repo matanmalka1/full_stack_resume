@@ -59,9 +59,7 @@ def _register(transaction_manager, artifact_catalog, *args, **kwargs):
 
 def _latest(transaction_manager, artifact_catalog, application_id, artifact_type):
     with transaction_manager.read() as tx:
-        return artifact_catalog.latest_artifact_version(
-            tx, application_id, artifact_type
-        )
+        return artifact_catalog.latest_artifact_version(tx, application_id, artifact_type)
 
 
 def _post(harness, path: str, body: dict | None = None, **headers):
@@ -598,9 +596,7 @@ def _rendered_pdf(
 ):
     setup = artifact_approved_application(company)
     services.rendering.render(setup.application_id)
-    return setup, _latest(
-        transaction_manager, artifact_catalog, setup.application_id, "resume_pdf"
-    )
+    return setup, _latest(transaction_manager, artifact_catalog, setup.application_id, "resume_pdf")
 
 
 def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(

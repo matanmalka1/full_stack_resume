@@ -1116,9 +1116,7 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(
     snapshot = _snapshots(ai_api_paused, application_id)[0]
     with transaction_manager.read() as tx:
         stored = application_projection_reader.artifact_version(tx, snapshot["id"])
-    artifact_path(ai_api_paused.services, stored["path"]).write_text(
-        "tampered", encoding="utf-8"
-    )
+    artifact_path(ai_api_paused.services, stored["path"]).write_text("tampered", encoding="utf-8")
 
     refused = _post(ai_api_paused, path, body, **key)
 

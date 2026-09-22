@@ -162,9 +162,7 @@ def test_reconcile_reports_a_tampered_artifact(
     transactions, _drafts, catalog = _persistence(services)
     with transactions.read() as tx:
         pdf_record = catalog.latest_artifact_version(tx, setup.application_id, "resume_pdf")
-    artifact_path(services, pdf_record["path"]).write_bytes(
-        b"%PDF-1.4\n% not the approved bytes\n"
-    )
+    artifact_path(services, pdf_record["path"]).write_bytes(b"%PDF-1.4\n% not the approved bytes\n")
 
     report = services.maintenance.reconcile().model_dump(mode="python")
     assert not report["passed"]

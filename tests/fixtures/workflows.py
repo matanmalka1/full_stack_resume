@@ -20,7 +20,6 @@ from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApp
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.runtime.composition import Services
 from cv_engine.util import new_id
-
 from fixtures.models import WorkflowSetup
 
 

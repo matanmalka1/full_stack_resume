@@ -108,7 +108,10 @@ ClaimRule = Callable[[_ClaimContext], None]
 
 def _manifest_matches(context: _ValidationContext) -> None:
     expected = serialize_markdown(context.draft)
-    if context.markdown != expected or draft_content_hash(context.draft) != context.draft.content_hash:
+    if (
+        context.markdown != expected
+        or draft_content_hash(context.draft) != context.draft.content_hash
+    ):
         context.add_issue(
             "content",
             "draft-manifest-mismatch",

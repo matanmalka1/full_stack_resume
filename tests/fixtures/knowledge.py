@@ -27,7 +27,6 @@ from cv_engine.infrastructure.knowledge import (
 )
 from cv_engine.runtime.composition import Services, build_services
 from cv_engine.runtime.paths import AppPaths
-
 from fixtures.models import DraftSetup
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]

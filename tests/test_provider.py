@@ -292,10 +292,7 @@ def test_analysis_prompt_requires_self_contained_quotes_when_splitting(
 ) -> None:
     prompt = task_contracts.prompt_text
 
-    assert (
-        "return each as its own requirement only if every one of them can be quoted"
-        in prompt
-    )
+    assert "return each as its own requirement only if every one of them can be quoted" in prompt
     assert "Keep any qualifier that applies to a given piece" in prompt
     assert "keep the sentence as one requirement instead" in prompt
 
