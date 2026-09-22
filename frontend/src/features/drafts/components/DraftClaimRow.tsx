@@ -59,6 +59,12 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
   const evidenceLabel = facts.length === 1 ? "העובדה שמאחורי השורה" : `${facts.length} עובדות שמאחורי השורה`;
   const distinctFacts = facts.filter((fact) => fact.text !== null && fact.text !== claim.text);
   const editingReviewedClaim = claim.claim_type === "reviewed";
+  const reviewAssertions = new Map(
+    claim.review_evidence?.assertions.map((assertion) => [
+      JSON.stringify([assertion.claim_quote, assertion.fact_ids, assertion.source_quotes]),
+      assertion,
+    ] as const) ?? [],
+  );
 
   return (
     <li
@@ -130,11 +136,11 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
               הניסוח נבדק סמנטית מול העובדות המקושרות. זו בדיקת תמיכה של המודל, לא הוכחה דטרמיניסטית.
             </p>
             <ul className="mt-2 space-y-2">
-              {claim.review_evidence.assertions.map((assertion, index) => (
-                <li className="rounded-control bg-cv-surface-muted px-2 py-1.5" key={`${assertion.claim_quote}-${index}`}>
+              {Array.from(reviewAssertions, ([key, assertion]) => (
+                <li className="rounded-control bg-cv-surface-muted px-2 py-1.5" key={key}>
                   <p dir="auto">טענה: {assertion.claim_quote}</p>
-                  {assertion.source_quotes.map((quote, quoteIndex) => (
-                    <p className="mt-1" dir="auto" key={`${quote}-${quoteIndex}`}>
+                  {Array.from(new Set(assertion.source_quotes), (quote) => (
+                    <p className="mt-1" dir="auto" key={quote}>
                       מקור: {quote}
                     </p>
                   ))}

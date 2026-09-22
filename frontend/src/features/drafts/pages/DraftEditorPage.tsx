@@ -129,7 +129,7 @@ export const DraftEditorPage = () => {
       queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(workingDraftId) }),
       queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(workingDraftId) }),
     ]);
-  }, [operation?.id, operation?.status, operation?.outputs, queryClient, workingDraftId]);
+  }, [operation?.status, operation?.outputs, queryClient, workingDraftId]);
 
   useEffect(() => {
     if (renderFinished) {
