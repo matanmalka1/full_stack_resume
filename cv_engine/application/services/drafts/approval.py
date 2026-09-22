@@ -33,6 +33,7 @@ from ...ports import (
 )
 from ...ports.drafts import DraftApprovalContext, DraftApprovalSourceReader, DraftLifecycleStore
 from ...ports.idempotency import IdempotencyStore
+from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
 from ..analysis.service import load_analysis_knowledge
 from .approval_commit import ApprovalCommitter, PreparedApproval
 from .inputs import require_working_version
@@ -51,6 +52,7 @@ class DraftApprovalService:
         knowledge: KnowledgeStore,
         renderer: Renderer,
         payloads: RevisionPayloadStore,
+        leases: PayloadWriteLeaseStore,
         committer: ApprovalCommitter,
     ):
         self.transactions = transactions
@@ -60,6 +62,7 @@ class DraftApprovalService:
         self._knowledge = knowledge
         self.renderer = renderer
         self.revision_payloads = payloads
+        self.leases = leases
         self.committer = committer
 
     def load_knowledge(self) -> Knowledge:
@@ -163,16 +166,46 @@ class DraftApprovalService:
         if selection_plan.plan.emphasis_override is not None:
             decision_overrides["emphasis"] = selection_plan.plan.emphasis_override.value
         revision_id = revision_id or new_id()
+        # revision_id is stable across a retry of the same idempotency key
+        # (state-and-use-cases.md §15), so it alone cannot be the physical
+        # key - a fresh attempt_id is minted every call, and the revision
+        # group's lease (structured + markdown together) is keyed by
+        # revision_id but scoped to this attempt_id (architecture.md §7.1).
+        attempt_id = new_id()
+        group_key = f"revision:{application_id}:{revision_id}"
+        structured_reference = self.revision_payloads.reference_for(
+            self.revision_payloads.revision_path(
+                application_id, revision_id, attempt_id, format="json"
+            )
+        )
+        markdown_reference = self.revision_payloads.reference_for(
+            self.revision_payloads.revision_path(
+                application_id, revision_id, attempt_id, format="md"
+            )
+        )
+        with self.transactions.write() as tx:
+            self.leases.acquire(
+                tx,
+                group_key,
+                attempt_id,
+                keys=[structured_reference, markdown_reference],
+                ttl_seconds=DEFAULT_LEASE_TTL_SECONDS,
+            )
         try:
             published = self.revision_payloads.commit_revision(
                 application_id,
                 revision_id,
+                attempt_id,
                 structured_json,
                 markdown,
             )
         except FileExistsError as exc:
+            with self.transactions.write() as tx:
+                self.leases.release(tx, group_key, attempt_id)
             raise StateConflict(str(exc)) from exc
         except (OSError, ValueError) as exc:
+            with self.transactions.write() as tx:
+                self.leases.release(tx, group_key, attempt_id)
             raise InfrastructureFailure(f"could not publish approved revision: {exc}") from exc
         if published.structured.sha256 != sha256_text(
             structured_json
@@ -231,6 +264,7 @@ class DraftApprovalService:
         return PreparedApproval(
             application_id,
             revision_id,
+            attempt_id,
             working.id,
             validation_id,
             draft.job_snapshot_id,

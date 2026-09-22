@@ -13,7 +13,11 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ..dependencies import Services
-from ..schemas.maintenance import OrphanInventoryResponse, ReconciliationResponse
+from ..schemas.maintenance import (
+    OrphanInventoryResponse,
+    ReclaimResultResponse,
+    ReconciliationResponse,
+)
 
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 
@@ -34,10 +38,25 @@ def reconcile(services: Services) -> ReconciliationResponse:
     summary="Inspect unreferenced immutable payload candidates",
 )
 def inspect_orphans(services: Services) -> OrphanInventoryResponse:
-    """Read-only observation; candidates may still be awaiting registration.
+    """Read-only observation; a candidate holds no database reference and no live lease.
 
-    This endpoint neither repairs nor deletes payloads. The database snapshot
-    closes before storage enumeration; a concurrent writer can register a
-    listed candidate after that snapshot.
+    This endpoint neither repairs nor deletes payloads.
     """
     return OrphanInventoryResponse.of(services.maintenance.inspect_orphans())
+
+
+@router.post(
+    "/orphans/reclaim",
+    response_model=ReclaimResultResponse,
+    summary="Remove orphan payloads whose write lease is fenced and unreferenced",
+)
+def reclaim_orphans(services: Services) -> ReclaimResultResponse:
+    """Remove exactly the candidates this call can prove are safe (architecture.md §7.1).
+
+    Never removes a payload a database record references, and never lets a
+    reclaimed attempt's registration succeed afterward. Not exhaustive: an
+    object-store write behind an already-fenced lease can still land after
+    this call finishes, so `reclaim_orphans` is meant to be called on a
+    schedule, not once. Idempotent and safe to call concurrently with itself.
+    """
+    return ReclaimResultResponse.of(services.maintenance.reclaim_orphans())

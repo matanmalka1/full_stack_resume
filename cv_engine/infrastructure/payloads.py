@@ -95,6 +95,19 @@ class PayloadStore:
         self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
+    def delete_payload(self, reference: str) -> None:
+        """Remove one stored payload `reclaim_orphans` has decided is safe to remove.
+
+        A reference that does not resolve to an approved, contained layout is
+        refused (`ValueError`) rather than silently ignored - the same
+        refusal every other reference-resolving method on this store makes.
+        Within an approved layout, removal is idempotent: the key may already
+        be gone, including because an earlier `reclaim_orphans` call already
+        removed it (architecture.md §7.1).
+        """
+        assert_external_io_allowed("immutable payload removal")
+        self._objects.delete(self._key_for_reference(reference))
+
     def payload_inventory(self) -> list[str]:
         """List managed immutable references; working projections are excluded.
 
@@ -167,15 +180,36 @@ class PayloadStore:
             f"{self._component(snapshot_id, name='snapshot_id')}.txt",
         )
 
-    def revision_path(self, application_id: str, revision_id: str, *, format: str) -> Path:
+    def revision_path(
+        self, application_id: str, revision_id: str, attempt_id: str, *, format: str
+    ) -> Path:
+        """Where one approval attempt's revision payload belongs.
+
+        `attempt_id` is part of the key, not just the row: architecture.md
+        §7.1 requires a later attempt against the same `revision_id` -
+        approval is retried under the same idempotency key - to mint new
+        physical keys rather than reuse or overwrite a prior attempt's, so a
+        reclaimed attempt's key can never be resurrected by a legitimate
+        retry landing on the same path.
+        """
         if format not in {"json", "md"}:
             raise ValueError(f"unsupported revision format: {format}")
         return self._target(
             "revisions",
             self._component(application_id, name="application_id"),
             self._component(revision_id, name="revision_id"),
+            self._component(attempt_id, name="attempt_id"),
             f"resume.{format}",
         )
+
+    def reference_for(self, destination: Path) -> str:
+        """The stored reference `destination` would receive, without writing anything.
+
+        Pure and side-effect-free: it lets a caller compute the physical
+        key(s) a write is about to produce *before* writing, so a payload
+        write lease (architecture.md §7.1) can be acquired first.
+        """
+        return self._reference_for_key(self._key(destination))
 
     def draft_snapshot_path(
         self, application_id: str, working_draft_id: str, edit_version: int
@@ -348,9 +382,9 @@ class PayloadStore:
             len(parts) == 3
             and parts[0] == "snapshots"
             and parts[2].endswith(".txt")
-            or len(parts) == 4
+            or len(parts) == 5
             and parts[0] == "revisions"
-            and parts[3] in {"resume.json", "resume.md"}
+            and parts[4] in {"resume.json", "resume.md"}
             or len(parts) == 4
             and parts[0] == "outputs"
             and Path(parts[3]).suffix
@@ -625,52 +659,32 @@ class PayloadStore:
         self,
         application_id: str,
         revision_id: str,
+        attempt_id: str,
         structured_json: str,
         markdown: str,
     ) -> RevisionPayloads:
-        """Commit and re-hash both immutable ApprovedRevision payloads.
+        """Commit both immutable ApprovedRevision payloads, under this attempt's own keys.
 
         Database registration is deliberately left to the caller. If either
-        registration later fails, these files are safe reconciliation orphans.
+        registration later fails, these files are safe reconciliation orphans
+        - or, once their payload write lease expires without registering,
+        safe `reclaim_orphans` candidates (architecture.md §7.1).
+
+        A retry of the same `revision_id` - approval retried under the same
+        idempotency key - is `attempt_id`'s job to keep safe: it always
+        writes to a fresh key, never reusing or overwriting a prior attempt's,
+        so there is no content-equality reuse to special-case here.
         """
-
-        def commit_or_reuse(
-            destination: Path, content: bytes, validator: PayloadValidator
-        ) -> StoredPayload:
-            key = self._key(destination)
-            if self._objects.exists(key):
-                existing = self._objects.get(key)
-                if existing != content:
-                    raise FileExistsError(
-                        f"immutable payload already exists with different content: {destination}"
-                    )
-                if validator(existing) is False:
-                    raise ValueError(f"existing immutable payload failed validation: {destination}")
-                return StoredPayload(
-                    path=self._path_for_key(key),
-                    project_relative=self._reference_for_key(key),
-                    sha256=sha256_bytes(existing),
-                    size=len(existing),
-                )
-            return self.commit(destination, payload=content, validate=validator)
-
-        structured = commit_or_reuse(
-            self.revision_path(application_id, revision_id, format="json"),
-            structured_json.encode("utf-8"),
-            self._valid_json,
+        structured = self.commit(
+            self.revision_path(application_id, revision_id, attempt_id, format="json"),
+            payload=structured_json.encode("utf-8"),
+            validate=self._valid_json,
         )
-        rendered = commit_or_reuse(
-            self.revision_path(application_id, revision_id, format="md"),
-            markdown.encode("utf-8"),
-            lambda _payload: True,
+        rendered = self.commit(
+            self.revision_path(application_id, revision_id, attempt_id, format="md"),
+            payload=markdown.encode("utf-8"),
+            validate=lambda _payload: True,
         )
-        for stored in (structured, rendered):
-            actual = self._objects.stat(self._key_for_reference(stored.project_relative)).sha256
-            if actual != stored.sha256:
-                raise ValueError(
-                    "committed revision payload hash mismatch: "
-                    f"expected {stored.sha256}, got {actual}"
-                )
         return RevisionPayloads(
             structured=self._reference(structured),
             markdown=self._reference(rendered),

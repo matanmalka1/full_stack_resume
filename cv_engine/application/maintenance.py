@@ -88,3 +88,13 @@ class OrphanInventory(BoundaryDTO):
     """Unreferenced payload candidates, potentially still awaiting registration."""
 
     candidates: list[str]
+
+
+class ReclaimResult(BoundaryDTO):
+    """What one `reclaim_orphans()` call removed (architecture.md §7.1).
+
+    Not exhaustive by design: a payload an old attempt's storage write lands
+    after this call finished is invisible to it and waits for a later call.
+    """
+
+    removed: list[str]

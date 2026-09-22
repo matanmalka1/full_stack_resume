@@ -13,6 +13,7 @@ from ...ports.artifact_catalog import ArtifactCatalog
 from ...ports.decision_store import DecisionStore
 from ...ports.drafts import DraftLifecycleStore
 from ...ports.idempotency import IdempotencyStore
+from ...ports.payload_leases import PayloadWriteLeaseStore
 from ...ports.transactions import WriteTransaction
 
 
@@ -20,6 +21,7 @@ from ...ports.transactions import WriteTransaction
 class PreparedApproval:
     application_id: str
     revision_id: str
+    attempt_id: str
     working_draft_id: str
     validation_run_id: str
     job_snapshot_id: str
@@ -49,17 +51,30 @@ class ApprovalCommitter:
         decisions: DecisionStore,
         audit: AuditLogWriter,
         receipts: IdempotencyStore,
+        leases: PayloadWriteLeaseStore,
     ):
         self.drafts = drafts
         self.catalog = catalog
         self.decisions = decisions
         self.audit = audit
         self.receipts = receipts
+        self.leases = leases
 
     def commit(
         self, tx: WriteTransaction, prepared: PreparedApproval, receipt_id: str | None = None
     ) -> ApprovalResult:
         p = prepared
+        # First: this is the atomicity boundary architecture.md §7.1 requires
+        # for a multi-file group - the revision's JSON and Markdown commit
+        # together with everything below, or neither does, because a
+        # StateConflict here (the attempt was reclaimed as abandoned) must
+        # abort before any row naming its payloads is written.
+        self.leases.mark_committed(
+            tx,
+            f"revision:{p.application_id}:{p.revision_id}",
+            p.attempt_id,
+            keys=[p.structured_reference, p.markdown_reference],
+        )
         revision = self.drafts.create_approved_revision(
             tx,
             p.application_id,

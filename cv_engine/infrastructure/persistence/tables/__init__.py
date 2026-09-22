@@ -31,6 +31,7 @@ from .shared import (
     operation_outputs,
     operation_resource_leases,
     operations,
+    payload_write_leases,
 )
 from .tracking import recruitment_events, submissions
 
@@ -59,6 +60,7 @@ __all__ = [
     "operation_resource_leases",
     "operation_outputs",
     "idempotency_receipts",
+    "payload_write_leases",
     "app_settings",
     "fact_events",
     "knowledge_mutation_journal",

@@ -87,6 +87,7 @@ from ..infrastructure.persistence.knowledge_lifecycle import (
 from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
+from ..infrastructure.persistence.payload_leases import SqlAlchemyPayloadLeaseStore
 from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
 from ..infrastructure.persistence.ready_evidence import SqlAlchemyReadyEvidenceReader
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
@@ -245,6 +246,7 @@ def build_services(
     evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
     operation_client = SqlAlchemyOperationClientStore(transactions)
     operation_execution = SqlAlchemyOperationExecutionStore(transactions)
+    payload_leases = SqlAlchemyPayloadLeaseStore(transactions)
     # Activation probes recovery state through the runner token. This file-only
     # reader must not invoke startup recovery and open another DB scope.
     resolved_activation_knowledge = (
@@ -263,6 +265,7 @@ def build_services(
         evidence=evidence_store,
         knowledge=resolved_knowledge,
         payloads=resolved_payloads,
+        leases=payload_leases,
         provider=resolved_provider,
     )
     draft_lifecycle = SqlAlchemyDraftLifecycleRepository(transactions)
@@ -275,6 +278,7 @@ def build_services(
         decisions=draft_decisions,
         audit=intake_audit,
         payloads=resolved_payloads,
+        leases=payload_leases,
         applications=SqlAlchemyDraftHistoryApplicationReader(transactions),
     )
     operation_submissions = OperationSubmissionService(
@@ -326,8 +330,14 @@ def build_services(
         knowledge=resolved_knowledge,
         renderer=resolved_renderer,
         payloads=resolved_payloads,
+        leases=payload_leases,
         committer=ApprovalCommitter(
-            draft_lifecycle, draft_catalog, draft_decisions, intake_audit, draft_receipts
+            draft_lifecycle,
+            draft_catalog,
+            draft_decisions,
+            intake_audit,
+            draft_receipts,
+            payload_leases,
         ),
     )
     ready_evidence = SqlAlchemyReadyEvidenceReader(transactions)
@@ -341,6 +351,7 @@ def build_services(
         knowledge=resolved_knowledge,
         renderer=resolved_renderer,
         payloads=resolved_payloads,
+        leases=payload_leases,
     )
     recruitment_store = SqlAlchemyRecruitmentRepository(transactions)
     recruitment_service = RecruitmentService(transactions, recruitment_store, intake_audit)
@@ -417,6 +428,7 @@ def build_services(
         payloads=resolved_payloads,
         transactions=transactions,
         inspection=SqlAlchemyMaintenanceInspection(transactions),
+        leases=payload_leases,
         knowledge=knowledge_queries,
     )
     settings_service = SettingsService(
@@ -439,6 +451,7 @@ def build_services(
             recruitment=intake_recruitment,
             audit=intake_audit,
             payloads=resolved_payloads,
+            leases=payload_leases,
         ),
         queries=ApplicationQueryService(
             transactions=transactions,

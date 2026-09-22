@@ -28,14 +28,15 @@ from ...errors import (
     StateConflict,
     UnknownRecord,
 )
-from ...ports import SnapshotPayloadStore
+from ...ports import SnapshotPayload, SnapshotPayloadStore
 from ...ports.application_intake import (
     AuditLogWriter,
     InitialRecruitmentEventWriter,
     IntakeApplicationStore,
     JobSnapshotStore,
 )
-from ...ports.transactions import TransactionManager
+from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
+from ...ports.transactions import TransactionManager, WriteTransaction
 
 JOB_TEXT_MAX_BYTES = 1024 * 1024
 _LABEL_MAX_CHARACTERS = 500
@@ -64,6 +65,7 @@ class ApplicationService:
         recruitment: InitialRecruitmentEventWriter,
         audit: AuditLogWriter,
         payloads: SnapshotPayloadStore,
+        leases: PayloadWriteLeaseStore,
     ):
         self._transactions = transactions
         self._applications = applications
@@ -71,6 +73,35 @@ class ApplicationService:
         self._recruitment = recruitment
         self._audit = audit
         self._payloads = payloads
+        self._leases = leases
+
+    def _write_snapshot_payload(
+        self, application_id: str, snapshot_id: str, job_text: str
+    ) -> SnapshotPayload:
+        """Write one JobSnapshot payload under its own write lease (architecture.md §7.1).
+
+        The reference is single-file and already unique per call - `snapshot_id`
+        is freshly minted by every caller - so it serves as its own group key
+        and attempt_id; there is no separate attempt identity to track.
+        """
+        reference = self._payloads.reference_for(
+            self._payloads.snapshot_path(application_id, snapshot_id)
+        )
+        with self._transactions.write() as tx:
+            self._leases.acquire(
+                tx, reference, reference, keys=[reference], ttl_seconds=DEFAULT_LEASE_TTL_SECONDS
+            )
+        try:
+            return self._payloads.commit_snapshot(application_id, snapshot_id, job_text)
+        except Exception:
+            with self._transactions.write() as tx:
+                self._leases.release(tx, reference, reference)
+            raise
+
+    def _mark_snapshot_committed(self, tx: WriteTransaction, payload: SnapshotPayload) -> None:
+        self._leases.mark_committed(
+            tx, payload.reference, payload.reference, keys=[payload.reference]
+        )
 
     def duplicate_check(self, command: DuplicateCheckCommand) -> DuplicateCheckResult:
         _validate_intake(command.company, command.target_role, command.job_text, command.source_url)
@@ -133,13 +164,10 @@ class ApplicationService:
         try:
             application_id = new_id()
             snapshot_id = new_id()
-            payload = self._payloads.commit_snapshot(
-                application_id,
-                snapshot_id,
-                command.job_text,
-            )
+            payload = self._write_snapshot_payload(application_id, snapshot_id, command.job_text)
             now = utc_now()
             with self._transactions.write() as tx:
+                self._mark_snapshot_committed(tx, payload)
                 self._applications.insert_application(
                     tx,
                     application_id=application_id,
@@ -199,10 +227,8 @@ class ApplicationService:
                 raise StateConflict(
                     "the application already has a snapshot with this exact content"
                 )
-            payload = self._payloads.commit_snapshot(
-                command.application_id,
-                snapshot_id,
-                command.job_text,
+            payload = self._write_snapshot_payload(
+                command.application_id, snapshot_id, command.job_text
             )
             with self._transactions.write() as tx:
                 self._applications.get_application(tx, command.application_id)
@@ -215,6 +241,7 @@ class ApplicationService:
                     raise StateConflict(
                         "the application already has a snapshot with this exact content"
                     )
+                self._mark_snapshot_committed(tx, payload)
                 self._snapshots.insert_next_snapshot(
                     tx,
                     snapshot_id=snapshot_id,

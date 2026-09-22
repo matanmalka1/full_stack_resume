@@ -29,6 +29,7 @@ from ...ports.analysis_plans import (
     AnalysisSnapshotSource,
     SelectionSource,
 )
+from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
 from ...ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
 from ...transactions import assert_external_io_allowed
 from ..proposals import ProviderEvidence
@@ -60,6 +61,7 @@ class AnalysisService:
         evidence: ProviderEvidenceStore,
         knowledge: AnalysisKnowledgeSource,
         payloads: AnalysisPayloadStore,
+        leases: PayloadWriteLeaseStore,
         provider: AIProvider | None,
     ):
         self.transactions = transactions
@@ -68,6 +70,7 @@ class AnalysisService:
         self.evidence = evidence
         self._knowledge = knowledge
         self.snapshot_payloads = payloads
+        self._leases = leases
         self._provider = provider
         self.activation = AnalysisActivation(plans, sources)
 
@@ -123,8 +126,25 @@ class AnalysisService:
             response = self.evidence.find_response(
                 tx, application_id, operation_id, task, provenance
             )
+        lease_reference: str | None = None
         if response is None:
             artifact_version_id = new_id()
+            # provider_path already embeds a freshly-minted artifact_version_id
+            # per attempt, so - as with a JobSnapshot payload - the reference
+            # serves as its own group key and attempt_id (architecture.md §7.1).
+            reference = self.snapshot_payloads.reference_for(
+                self.snapshot_payloads.provider_path(
+                    application_id, operation_id, artifact_version_id
+                )
+            )
+            with self.transactions.write() as tx:
+                self._leases.acquire(
+                    tx,
+                    reference,
+                    reference,
+                    keys=[reference],
+                    ttl_seconds=DEFAULT_LEASE_TTL_SECONDS,
+                )
             try:
                 payload = self.snapshot_payloads.commit_provider_response(
                     application_id,
@@ -133,10 +153,13 @@ class AnalysisService:
                     provenance.sanitized_response,
                 )
             except (OSError, ValueError) as exc:
+                with self.transactions.write() as tx:
+                    self._leases.release(tx, reference, reference)
                 raise InfrastructureFailure(
                     f"could not preserve the provider response: {exc}"
                 ) from exc
             response = StoredProviderResponse(artifact_version_id, payload)
+            lease_reference = reference
         if (
             self.snapshot_payloads.verify_payload(
                 response.payload.reference, response.payload.sha256
@@ -145,6 +168,10 @@ class AnalysisService:
         ):
             raise InfrastructureFailure("preserved provider response failed payload verification")
         with self.transactions.write() as tx:
+            if lease_reference is not None:
+                self._leases.mark_committed(
+                    tx, lease_reference, lease_reference, keys=[lease_reference]
+                )
             registered = self.evidence.register_inactive(
                 tx,
                 application_id,

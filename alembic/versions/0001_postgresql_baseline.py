@@ -46,7 +46,8 @@ DECLARE
         'operation_outputs',
         'idempotency_receipts',
         'knowledge_mutation_journal',
-        'app_settings'
+        'app_settings',
+        'payload_write_leases'
     ];
 BEGIN
     SELECT array_agg(exception_name ORDER BY exception_name)
@@ -851,6 +852,31 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
+        "payload_write_leases",
+        sa.Column("group_key", sa.Text(), nullable=False),
+        sa.Column("attempt_id", sa.String(), nullable=False),
+        sa.Column("state", sa.Text(), nullable=False),
+        sa.Column("owner", sa.Text(), nullable=False),
+        sa.Column("keys_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("claimed_at", sa.Text(), nullable=False),
+        sa.Column("lease_expires_at", sa.Text(), nullable=False),
+        sa.Column("reclaim_deadline_at", sa.Text(), nullable=True),
+        sa.Column("committed_at", sa.Text(), nullable=True),
+        sa.CheckConstraint(
+            "state IN ('pending', 'reclaiming', 'committed')",
+            name=op.f("ck_payload_write_leases_state"),
+        ),
+        sa.CheckConstraint(
+            "(state = 'committed') = (committed_at IS NOT NULL)",
+            name=op.f("ck_payload_write_leases_committed_at"),
+        ),
+        sa.CheckConstraint(
+            "(state = 'reclaiming') = (reclaim_deadline_at IS NOT NULL)",
+            name=op.f("ck_payload_write_leases_reclaim_deadline_at"),
+        ),
+        sa.PrimaryKeyConstraint("group_key", name=op.f("pk_payload_write_leases")),
+    )
+    op.create_table(
         "selection_plans",
         sa.Column("id", sa.String(), nullable=False),
         sa.Column("application_id", sa.String(), nullable=False),
@@ -1242,6 +1268,7 @@ def downgrade() -> None:
     op.drop_table("selection_plans")
     op.drop_index("idx_operation_resource_leases_operation", table_name="operation_resource_leases")
     op.drop_table("operation_resource_leases")
+    op.drop_table("payload_write_leases")
     op.drop_index("idx_operation_outputs_operation", table_name="operation_outputs")
     op.drop_table("operation_outputs")
     op.drop_index("idx_analyses_application", table_name="job_analyses")
