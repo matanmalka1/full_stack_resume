@@ -50,6 +50,13 @@ _COVERAGE_VALUE = {"matched": 1.0, "partial": 0.5, "unsupported": 0.0, "unknown"
 FIT_SCORE_HIGH_THRESHOLD = 0.85
 FIT_SCORE_MEDIUM_THRESHOLD = 0.55
 
+#: How many hard gaps it takes to cap the Fit level at LOW outright. Fewer
+#: than this caps it at MEDIUM instead: a single demanded requirement the
+#: facts contradict is a real deduction, but only compounding failures -
+#: several things the posting demanded that the candidate cannot show -
+#: justify writing the candidate off regardless of how everything else scored.
+HARD_GAP_LOW_THRESHOLD = 2
+
 
 @dataclass(frozen=True)
 class Gap:
@@ -86,19 +93,21 @@ def fit_score(requirements: Sequence[Requirement]) -> float | None:
 
 
 def fit_level(requirements: Sequence[Requirement]) -> FitLevel:
-    """The Fit band, read off the score and lowered by any hard gap.
+    """The Fit band, read off the score and capped by hard gaps.
 
-    A hard gap caps the level at LOW however well everything else scored: a
-    demanded requirement the facts contradict is not offset by unrelated
-    strengths.
+    `HARD_GAP_LOW_THRESHOLD` or more hard gaps caps the level at LOW however
+    well everything else scored. A single hard gap caps it at MEDIUM instead:
+    one contradicted demand deducts, but it takes compounding failures to
+    outweigh unrelated strengths entirely.
     """
     score = fit_score(requirements)
     if score is None:
         return FitLevel.UNKNOWN
-    if any(gap.severity == "hard" for gap in _bare_gaps(requirements)):
+    hard_gap_count = sum(1 for gap in _bare_gaps(requirements) if gap.severity == "hard")
+    if hard_gap_count >= HARD_GAP_LOW_THRESHOLD:
         return FitLevel.LOW
     if score >= FIT_SCORE_HIGH_THRESHOLD:
-        return FitLevel.HIGH
+        return FitLevel.MEDIUM if hard_gap_count == 1 else FitLevel.HIGH
     if score >= FIT_SCORE_MEDIUM_THRESHOLD:
         return FitLevel.MEDIUM
     return FitLevel.LOW

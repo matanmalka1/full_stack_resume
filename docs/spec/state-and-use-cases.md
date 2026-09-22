@@ -508,9 +508,10 @@ coverage is `unknown` receives zero credit without becoming an approval blocker.
 a weighted fraction of requirement coverage (mandatory requirements weighted double),
 where `unknown` counts at zero credit rather than being excluded - an incompletely
 assessed posting must not outscore a fully assessed one. `fit` (`high`/`medium`/`low`)
-is derived from `fit_score` against fixed thresholds, with any hard gap still forcing
-`low` outright regardless of the score. This remains diagnostic. `fit_score` is `null`
-only when nothing at all could be scored.
+is derived from `fit_score` against fixed thresholds, then capped by hard gap count
+regardless of the score: two or more hard gaps force `low` outright; exactly one caps
+the level at `medium`. This remains diagnostic. `fit_score` is `null` only when nothing
+at all could be scored.
 
 A mandatory `unsupported` requirement is a hard gap. A mandatory `partial` requirement
 is hard only when its uncovered condition has `material` shortfall severity; `minor` and

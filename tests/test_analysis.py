@@ -116,18 +116,35 @@ def test_a_matched_requirement_projects_no_gap(fact_store) -> None:
     assert gaps([_requirement()], fact_store) == []
 
 
-def test_a_hard_gap_caps_the_level_however_well_the_rest_scored(fact_store) -> None:
-    """One demanded requirement the facts contradict is not offset by strengths.
+def test_a_single_hard_gap_caps_the_level_at_medium_however_well_the_rest_scored(
+    fact_store,
+) -> None:
+    """One demanded requirement the facts contradict deducts, but not to LOW.
 
     Nine matched requirements and one unsupported demand still score above the
-    high threshold; the level is LOW anyway, because the posting asked for
-    something the candidate cannot show.
+    high threshold; the level caps at MEDIUM because the posting asked for
+    something the candidate cannot show - a single failure is not yet the
+    compounding pattern that would write the candidate off entirely.
     """
     requirements = [_requirement(requirement_id=f"r{index}") for index in range(9)]
     requirements.append(_requirement(requirement_id="gap", coverage="unsupported"))
     assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
-    assert fit_level(requirements) is FitLevel.LOW
+    assert fit_level(requirements) is FitLevel.MEDIUM
     assert [gap.requirement_id for gap in hard_gaps(requirements, fact_store)] == ["gap"]
+
+
+def test_two_hard_gaps_cap_the_level_at_low_however_well_the_rest_scored() -> None:
+    """Compounding failures, not just one, justify writing the candidate off.
+
+    Eighteen matched requirements and two unsupported demands still score
+    above the high threshold; the level is LOW because the posting asked for
+    several things the candidate cannot show.
+    """
+    requirements = [_requirement(requirement_id=f"r{index}") for index in range(18)]
+    requirements.append(_requirement(requirement_id="gap-1", coverage="unsupported"))
+    requirements.append(_requirement(requirement_id="gap-2", coverage="unsupported"))
+    assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
+    assert fit_level(requirements) is FitLevel.LOW
 
 
 def test_a_minor_partial_demand_does_not_cap_an_otherwise_high_fit() -> None:
