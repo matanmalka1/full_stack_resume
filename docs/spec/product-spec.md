@@ -629,10 +629,16 @@ policy version, and every Track/Emphasis dependency. These immutable contexts de
 staleness without rewriting past plans.
 
 Approved, submitted, historical, and inactive Operation outputs are not automatically
-deleted. Read-only orphan inspection reports reconciliation candidates; a candidate
-may still belong to an active writer awaiting database registration. Automatic orphan
-deletion is outside the current scope. A future deletion contract must coordinate with
-writers and prove the payload is not awaiting registration; TTL alone is insufficient.
+deleted by registration or approval activity. Read-only orphan inspection reports
+reconciliation candidates; a candidate may still belong to an active writer awaiting
+database registration. `reclaim_orphans` (state-and-use-cases.md §19b) removes a
+candidate only after fencing the write lease that reserved its destination, which
+proves the writer that produced it can no longer register it and that nothing
+registered already references it. Reclaim guarantees no registered payload is ever
+removed and no reclaimed write ever completes registration; it does not guarantee a
+single call removes every orphan, since the underlying object-store write is not
+itself fenced and may still land after its lease is gone, producing a new, always-safe
+orphan for a later call to remove (architecture.md §7.1).
 Replacing a WorkingDraft may discard the old working copy after success; an explicit `Keep` archives
 it as a historical draft snapshot while preserving only one active WorkingDraft.
 

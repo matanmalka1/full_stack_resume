@@ -888,17 +888,37 @@ failure.
 ### `inspect_orphans()`
 
 `GET /api/v1/maintenance/orphans` returns `candidates`, a sorted list of managed
-immutable payload references observed in storage but absent from the captured database
-snapshot. References include JobSnapshots, ApprovedRevision JSON/Markdown, and every
+immutable payload references observed in storage but absent from both the captured
+database snapshot and a live write lease (`pending` or `reclaiming`; architecture.md
+§7.1). References include JobSnapshots, ApprovedRevision JSON/Markdown, and every
 artifact version, including historical and inactive evidence. Mutable working
 projections and files outside managed immutable layouts are excluded.
 
 The database read scope closes before storage enumeration. This is a read-only,
-non-atomic observation: candidates may belong to active writers awaiting registration
-or may have been registered after the snapshot. Listing neither changes reconciliation's
-`passed` verdict nor proves abandonment. It never repairs or deletes payloads. Deletion
-requires a separately specified coordination contract with writers; a grace period alone
-is insufficient.
+non-atomic observation: a candidate may belong to a writer whose lease has not yet
+expired, or may have been registered after the snapshot closed. Listing neither changes
+reconciliation's `passed` verdict nor deletes anything.
+
+### `reclaim_orphans()`
+
+`POST /api/v1/maintenance/orphans/reclaim` removes exactly the candidates
+`inspect_orphans` would list whose write lease has expired, and only those. For each: it
+fences the lease (`pending -> reclaiming`, which blocks a new attempt from acquiring the
+same group key and makes the original writer's own pending registration affect zero rows
+if it is still in flight), deletes every stored payload that attempt produced, re-checks
+that the database now holds no reference to any of them, then removes the lease row. A
+candidate whose lease is still `pending` and unexpired, or already `reclaiming` under a
+concurrent call, is left untouched.
+
+It guarantees exactly two things: it never removes a payload a database record
+references, and it never lets a reclaimed attempt's registration succeed afterward. It
+does not guarantee one call removes every orphan - the object-store write behind an
+expired lease is not itself fenced, so a write already in flight when its lease was
+reclaimed can still land afterward, producing a new orphan with no lease of its own.
+Such an orphan can never be registered, since registration always requires first
+winning a lease for its exact key, so it is safe for a later call to remove
+(architecture.md §7.1). `reclaim_orphans` is idempotent and safe to call repeatedly,
+including concurrently with itself; operators run it on a schedule rather than once.
 
 ## 20. Queries
 

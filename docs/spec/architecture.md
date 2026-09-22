@@ -354,12 +354,42 @@ fails, read-only orphan inspection can list the unreferenced payload. A full jou
 not required: failed registration leaves no active database state referencing the
 payload, and orphan inspection preserves that evidence for reconciliation.
 
+A write claims its destination through a `payload_write_leases` row before any bytes are
+stored: the owner claims a group key - one immutable payload, or the small file set one
+registration depends on, such as an ApprovedRevision's JSON and Markdown together - in
+`pending` state with a bounded, renewable expiry. `acquire` refuses a group key that
+already holds a live row, in `pending` (unexpired) or `reclaiming` state. Storage happens
+under a key scoped to that specific attempt; a later attempt against the same group key,
+including a legitimate retry, always gets a fresh attempt key and never reuses or
+overwrites a prior attempt's key. Registration and the lease's flip to `committed` happen
+in the same transaction, for every file the group key covers, gated on the lease still
+being `pending` under that owner. A lease reclaimed out from under a writer makes that
+writer's own registration attempt affect zero rows, so nothing is ever registered after
+its write was declared abandoned.
+
 Maintenance inventories registered snapshot, revision, and artifact references in one
 read scope, closes it, then enumerates managed immutable object keys through the same
-backend-neutral Port on local and S3 stores. The resulting orphan candidates are an
-observation only: an active writer may still be awaiting registration. Mutable working
-projections are excluded. There is no orphan deletion or age-based safety claim;
-deleting candidates requires a separate writer-coordination contract.
+backend-neutral Port on local and S3 stores. `inspect_orphans` lists candidates absent
+from both the database and a live lease. `reclaim_orphans` additionally fences an expired
+`pending` lease (`pending -> reclaiming`, which blocks both a new acquire on that group
+key and the original owner's registration), deletes every stored payload that attempt
+produced, re-checks that the database still holds no reference to any of them, then
+removes the lease row.
+
+This guarantees exactly two things: a registration can never point at a payload
+`reclaim_orphans` has removed, and a reclaimed attempt can never complete registration
+afterward. It does not guarantee one `reclaim_orphans` call removes every orphan. The
+object-store write itself is not fenced, only its registration is - `ObjectStore`
+refuses only an already-occupied key, not an invalid lease - so a `put` already in
+flight when its lease was reclaimed can still land afterward, producing a new orphan
+under that same attempt-scoped key with no lease of its own. Such an orphan can never be
+registered, since no code path registers a payload without first winning its lease for
+that exact key, so removing it is always safe; it is simply invisible to a sweep that ran
+before it existed. `reclaim_orphans` is specified as a repeatable operation, not a fixed
+point: operators call it on a schedule, and each call removes whatever qualifies as of
+that call. A guarantee that a single call is exhaustive, or that no transient orphan can
+ever appear, would require the object store itself to refuse a write once its lease is
+gone - a fenced or conditional write keyed to lease validity - which is not implemented.
 
 ### 7.2 Knowledge mutation journal
 
