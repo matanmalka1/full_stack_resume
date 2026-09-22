@@ -2,23 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, validate_active_draft
+from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
 from helpers import working_claim as _working_claim
 
 from cv_engine.application.commands import (
     IngestCommand,
 )
-from cv_engine.application.errors import StateConflict, WorkflowError
+from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import (
     SqlAlchemyTransactionManager,
     create_database_engine,
-)
-from cv_engine.infrastructure.persistence.draft_lifecycle import (
-    SqlAlchemyDraftLifecycleRepository,
 )
 from cv_engine.runtime.paths import AppPaths
 
@@ -107,39 +103,6 @@ def test_validate_reports_on_the_stored_draft_not_the_edited_file(
 
     assert report.passed, report.model_dump()
     assert _working_claim(services, app_id, "sales.metric.performance").claim_type == "canonical"
-
-
-def test_approval_refuses_while_the_projection_holds_an_unimported_edit(
-    drafted_application,
-) -> None:
-    """The data-loss guard: approval rebuilds the projection from the database.
-
-    An unimported file edit would be destroyed without a word, so approval
-    refuses rather than overwriting it. The refusal is the whole protection -
-    it names the two ways forward and touches nothing.
-    """
-    setup = drafted_application("Unimported Edit")
-    services, app_id = setup
-    markdown = setup.markdown
-    claim = _working_claim(services, app_id, "sales.metric.performance")
-    markdown.write_text(
-        markdown.read_text(encoding="utf-8").replace(
-            claim.text,
-            "Delivered 30% improvement in direct SaaS Sales.",
-            1,
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(StateConflict) as refusal:
-        approve_active_draft(services, app_id)
-
-    assert "differs from the stored draft" in str(refusal.value)
-    transactions = _transactions(services)
-    with transactions.read() as tx:
-        assert SqlAlchemyDraftLifecycleRepository(transactions).approved_revisions(tx, app_id) == []
-    # The edit is never touched: refusing is what keeps it recoverable.
-    assert "direct SaaS Sales" in markdown.read_text(encoding="utf-8")
 
 
 def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application) -> None:

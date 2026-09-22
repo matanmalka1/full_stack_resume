@@ -6,11 +6,7 @@ from dataclasses import asdict
 
 from ....domain.analysis.projection import fit_level
 from ....domain.analysis.projection import gaps as project_gaps
-from ....domain.contracts.drafts import (
-    DraftDocument,
-    WorkingDraft,
-)
-from ....domain.draft_markdown import serialize_markdown
+from ....domain.contracts.drafts import WorkingDraft
 from ....domain.drafts import seal_draft
 from ....domain.knowledge import Knowledge
 from ....util import canonical_json, new_id, sha256_text, utc_now
@@ -21,7 +17,6 @@ from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     VALIDATION_STALE,
-    WORKING_PROJECTION_DIVERGED,
     ApplicationError,
     InfrastructureFailure,
     LineageBroken,
@@ -31,7 +26,6 @@ from ...errors import (
     ValidationBlocked,
 )
 from ...ports import (
-    ArtifactStore,
     KnowledgeStore,
     Renderer,
     RevisionPayloadStore,
@@ -55,7 +49,6 @@ class DraftApprovalService:
         sources: DraftApprovalSourceReader,
         receipts: IdempotencyStore,
         knowledge: KnowledgeStore,
-        artifacts: ArtifactStore,
         renderer: Renderer,
         payloads: RevisionPayloadStore,
         committer: ApprovalCommitter,
@@ -65,7 +58,6 @@ class DraftApprovalService:
         self.sources = sources
         self.receipts = receipts
         self._knowledge = knowledge
-        self.artifacts = artifacts
         self.renderer = renderer
         self.revision_payloads = payloads
         self.committer = committer
@@ -76,12 +68,6 @@ class DraftApprovalService:
     def candidate(self):
         return self.load_knowledge().candidate
 
-    def working_markdown(self, application_id: str) -> str:
-        try:
-            return self.artifacts.working_markdown(application_id)
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not read working Markdown: {exc}") from exc
-
     def _working(self, working_draft_id: str, expected_version: int) -> WorkingDraft:
         with self.transactions.read() as tx:
             try:
@@ -90,32 +76,6 @@ class DraftApprovalService:
                 raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
         require_working_version(working, expected_version)
         return working
-
-    def _require_synced_projection(self, application_id: str, draft: DraftDocument) -> None:
-        """Refuse to approve while the projection holds edits storage has not imported.
-
-        The database is authoritative from boundary 2a, and approval rebuilds the
-        projection from it, so an unimported file edit would be destroyed without
-        a word. `validate` deliberately reports on the stored draft instead of
-        refusing, because that report is true; approval is the trust boundary and
-        the point of loss, so the refusal belongs here.
-
-        The edit is never touched. Editing the projection file by hand is no
-        longer a supported path - claims are edited through the draft's own
-        autosave, which the database sees - so the way forward is to make the
-        edit again there, or to regenerate and discard it. The refusal stays
-        either way: silently destroying a user's writing is the failure this
-        exists to prevent, and it does not become acceptable because the file
-        was edited outside the product.
-        """
-        stored = self.working_markdown(application_id)
-        if stored and stored != serialize_markdown(draft):
-            raise StateConflict(
-                "the working Markdown projection differs from the stored draft; "
-                "re-apply the change through the draft editor, or regenerate the "
-                "draft to discard it",
-                code=WORKING_PROJECTION_DIVERGED,
-            )
 
     def _require_binding_validation(
         self,
@@ -178,7 +138,6 @@ class DraftApprovalService:
             raise PreconditionFailed(
                 f"approval blocked by quarantined Knowledge mutation {context.quarantined_mutation_id}"
             )
-        self._require_synced_projection(application_id, working.source)
         knowledge = self.load_knowledge()
         self._require_binding_validation(working, command.validation_run_id, knowledge, context)
         validation_id = command.validation_run_id

@@ -5,8 +5,7 @@ from pathlib import Path
 from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
 
 from cv_engine.domain.contracts.drafts import ClaimLine
-from cv_engine.domain.draft_markdown import serialize_markdown
-from cv_engine.domain.drafts import apply_claim_edit
+from cv_engine.domain.drafts import apply_claim_edit, draft_content_hash
 from cv_engine.domain.validation import validate_draft
 from cv_engine.util import sha256_text
 
@@ -37,7 +36,7 @@ def test_unsafe_headline_fails_only_the_draft_side_headline_group(
     )
     draft.headline.text = "Invented Executive Seniority"
     draft.headline.text_hash = sha256_text(draft.headline.text)
-    draft.content_hash = sha256_text(serialize_markdown(draft))
+    draft.content_hash = draft_content_hash(draft)
     markdown, _text = store_draft(project_root, draft)
 
     report = validate_draft(
@@ -130,7 +129,7 @@ def test_forged_derived_claim_manifest_blocks_approval(project_root: Path, draft
         for index, item in enumerate(section.claims):
             if item.claim_id == claim.claim_id:
                 section.claims[index] = forged
-    draft.content_hash = sha256_text(serialize_markdown(draft))
+    draft.content_hash = draft_content_hash(draft)
     markdown, _text = store_draft(project_root, draft)
 
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
@@ -159,7 +158,7 @@ def test_profile_presentation_wording_is_recomputed_during_validation(
     )
     summary.text = "Sold SaaS through strategic channel partnerships."
     summary.text_hash = sha256_text(summary.text)
-    draft.content_hash = sha256_text(serialize_markdown(draft))
+    draft.content_hash = draft_content_hash(draft)
     markdown, _text = store_draft(project_root, draft)
 
     report = validate_draft(
@@ -202,7 +201,7 @@ def test_headline_claim_type_outside_the_headline_is_blocked(
     # list mutation deliberately bypasses the model-level guard, so this asserts the
     # deterministic validator blocks the injection on its own.
     _inject_headline_typed_claim(draft)
-    tampered = draft.model_copy(update={"content_hash": sha256_text(serialize_markdown(draft))})
+    tampered = draft.model_copy(update={"content_hash": draft_content_hash(draft)})
     markdown, _text = store_draft(project_root, tampered)
 
     report = validate_draft(

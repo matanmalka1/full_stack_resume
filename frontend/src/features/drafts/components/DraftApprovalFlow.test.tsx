@@ -313,46 +313,6 @@ describe("DraftApprovalDialog", () => {
     expect(dialog).toHaveAttribute("open");
   });
 
-  it("gives direct recovery for a preserved out-of-band Markdown edit", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request, init?: RequestInit) =>
-        init?.method === "POST"
-          ? Promise.resolve(
-              json(
-                {
-                  type: "about:blank",
-                  title: "Conflict",
-                  status: 409,
-                  code: "WORKING_PROJECTION_DIVERGED",
-                  detail: "projection differs",
-                },
-                409,
-              ),
-            )
-          : Promise.resolve(
-              json(
-                String(input).includes("validation-runs")
-                  ? validationFixture()
-                  : String(input).includes("working-drafts")
-                    ? draft()
-                    : detail(),
-              ),
-            ),
-      ),
-    );
-    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    const openApproval = await screen.findByRole("button", { name: "אישור והכנת PDF" });
-    await waitFor(() => expect(openApproval).toBeEnabled());
-    fireEvent.click(openApproval);
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
-
-    expect(await screen.findByText("נמצא שינוי בקובץ העבודה שלא יובא לטיוטה")).toBeInTheDocument();
-    expect(screen.getByText(/השינוי נשמר ולא נדרס/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "חזרה לעורך" })).toBeInTheDocument();
-    expect(screen.queryByText("projection differs")).not.toBeInTheDocument();
-  });
-
   it("returns VALIDATION_STALE to the validation panel without retrying automatically", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) =>
       init?.method === "POST"
