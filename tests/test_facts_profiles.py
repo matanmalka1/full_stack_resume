@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from conftest import SOURCE_ROOT
+from fixtures.knowledge import SOURCE_ROOT
 from seed import V2_IDENTITY_FACT, facts_in, source_texts
 
 from cv_engine.domain.contracts.knowledge import FactStatus

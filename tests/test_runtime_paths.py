@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import _isolated_database_url
+from fixtures.database import _isolated_database_url
 
 from cv_engine.runtime.config import CONFIG_NAME, ConfigError, parse_env_file, resolve_config
 from cv_engine.runtime.paths import AppPaths, PathConfigurationError

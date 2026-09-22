@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from conftest import alembic_head
+from fixtures.database import alembic_head
 from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, ProgrammingError

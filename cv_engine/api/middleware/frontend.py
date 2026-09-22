@@ -78,8 +78,9 @@ def source_frontend_dist() -> Path:
     it under `frontend/dist` after `npm run build`. Neither is required: the
     API serves without one, which is what the Vite dev server proxies to.
     """
-    packaged = Path(__file__).resolve().parents[1] / "frontend_dist"
-    checkout = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+    middleware_dir = Path(__file__).resolve().parent
+    packaged = middleware_dir.parent / "frontend_dist"
+    checkout = middleware_dir.parent.parent.parent / "frontend" / "dist"
     return packaged if (packaged / "index.html").is_file() else checkout
 
 

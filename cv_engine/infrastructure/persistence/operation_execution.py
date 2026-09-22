@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.operations import (
@@ -406,16 +406,21 @@ class SqlAlchemyOperationExecutionStore:
     ) -> None:
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
-        changed = connection.execute(
-            update(operation_outputs)
-            .where(
-                operation_outputs.c.operation_id == operation_id,
-                operation_outputs.c.output_type == output_type,
-                operation_outputs.c.output_id == output_id,
-                operation_outputs.c.active.is_(False),
-            )
-            .values(active=True, activated_at=timestamp)
-        ).rowcount
+        try:
+            changed = connection.execute(
+                update(operation_outputs)
+                .where(
+                    operation_outputs.c.operation_id == operation_id,
+                    operation_outputs.c.output_type == output_type,
+                    operation_outputs.c.output_id == output_id,
+                    operation_outputs.c.active.is_(False),
+                )
+                .values(active=True, activated_at=timestamp)
+            ).rowcount
+        except DBAPIError as error:
+            if "invalid operation output update" in str(error.orig):
+                raise StateConflict("operation output cannot be activated") from error
+            raise
         if changed != 1:
             raise StateConflict("operation output cannot be activated")
 
