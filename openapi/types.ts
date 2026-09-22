@@ -865,15 +865,39 @@ export interface paths {
         };
         /**
          * Inspect unreferenced immutable payload candidates
-         * @description Read-only observation; candidates may still be awaiting registration.
+         * @description Read-only observation; a candidate holds no database reference and no live lease.
          *
-         *     This endpoint neither repairs nor deletes payloads. The database snapshot
-         *     closes before storage enumeration; a concurrent writer can register a
-         *     listed candidate after that snapshot.
+         *     This endpoint neither repairs nor deletes payloads.
          */
         get: operations["inspect_orphans_api_v1_maintenance_orphans_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maintenance/orphans/reclaim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove orphan payloads whose write lease is fenced and unreferenced
+         * @description Remove exactly the candidates this call can prove are safe (architecture.md §7.1).
+         *
+         *     Never removes a payload a database record references, and never lets a
+         *     reclaimed attempt's registration succeed afterward. Not exhaustive: an
+         *     object-store write behind an already-fenced lease can still land after
+         *     this call finishes, so `reclaim_orphans` is meant to be called on a
+         *     schedule, not once. Idempotent and safe to call concurrently with itself.
+         */
+        post: operations["reclaim_orphans_api_v1_maintenance_orphans_reclaim_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2897,7 +2921,7 @@ export interface components {
         OperationType: "analyze_job" | "propose_selection_plan" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_revision";
         /**
          * OrphanInventoryResponse
-         * @description Observed candidates may still be awaiting registration by active writers.
+         * @description Observed candidates hold no database reference and no live write lease.
          */
         OrphanInventoryResponse: {
             /** Candidates */
@@ -2936,6 +2960,14 @@ export interface components {
             };
             /** Message */
             message: string;
+        };
+        /**
+         * ReclaimResultResponse
+         * @description What one reclaim call removed. Not exhaustive - see architecture.md §7.1.
+         */
+        ReclaimResultResponse: {
+            /** Removed */
+            removed: string[];
         };
         /**
          * ReconciliationResponse
@@ -5133,6 +5165,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrphanInventoryResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    reclaim_orphans_api_v1_maintenance_orphans_reclaim_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReclaimResultResponse"];
                 };
             };
             /** @description The request did not match the API contract. */
