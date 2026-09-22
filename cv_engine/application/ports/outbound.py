@@ -100,6 +100,12 @@ class SnapshotPayloadStore(Protocol):
 
 
 class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
+    def output_path(
+        self, application_id: str, revision_id: str, artifact_id: str, *, suffix: str
+    ) -> Path:
+        """Canonical storage destination for a rendered artifact."""
+        ...
+
     def payload_inventory(self) -> list[str]:
         """Read-only observation of managed immutable payload references."""
         ...

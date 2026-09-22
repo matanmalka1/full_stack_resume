@@ -271,10 +271,30 @@ class RenderingService:
         # key needs no identity stabler than one fresh id per attempt
         # (architecture.md §7.1). Chromium is about to write real bytes to
         # html_path/pdf_path, so the lease is acquired before that, not after.
-        render_attempt_id = new_id()
-        group_key = f"render:{render_attempt_id}"
-        html_reference = self.revision_payloads.reference_for(html_path)
-        pdf_reference = self.revision_payloads.reference_for(pdf_path)
+        # The two artifact IDs were minted together in prepare(). They are
+        # also the physical output names, so the lease can verify both keys
+        # belong to this exact render attempt at registration.
+        render_attempt_id = ":".join(prepared.artifact_ids)
+        group_key = (
+            f"render:{prepared.command.application_id}:"
+            f"{prepared.command.approved_revision_id}:{render_attempt_id}"
+        )
+        html_reference = self.revision_payloads.reference_for(
+            self.revision_payloads.output_path(
+                prepared.command.application_id,
+                prepared.command.approved_revision_id,
+                prepared.artifact_ids[0],
+                suffix="html",
+            )
+        )
+        pdf_reference = self.revision_payloads.reference_for(
+            self.revision_payloads.output_path(
+                prepared.command.application_id,
+                prepared.command.approved_revision_id,
+                prepared.artifact_ids[1],
+                suffix="pdf",
+            )
+        )
         with self._transactions.write() as tx:
             self.leases.acquire(
                 tx,
@@ -283,10 +303,22 @@ class RenderingService:
                 keys=[html_reference, pdf_reference],
                 ttl_seconds=RENDER_LEASE_TTL_SECONDS,
             )
+
+        def renew() -> None:
+            with self._transactions.write() as tx:
+                self.leases.renew(
+                    tx,
+                    group_key,
+                    render_attempt_id,
+                    ttl_seconds=RENDER_LEASE_TTL_SECONDS,
+                )
+
         try:
             try:
                 self.renderer.render_html(draft, html_path, candidate)
+                renew()
                 geometry = self.renderer.render_pdf(html_path, pdf_path)
+                renew()
                 report = self.renderer.validate_rendered(
                     draft,
                     prepared.profile,
@@ -296,6 +328,7 @@ class RenderingService:
                     candidate,
                     targets.recruiter_pdf_filename,
                 )
+                renew()
             except FileExistsError as exc:
                 raise StateConflict(str(exc)) from exc
             except ApplicationError:
@@ -381,10 +414,7 @@ class RenderingService:
                 tx,
                 group_key,
                 render_attempt_id,
-                keys=[
-                    self.revision_payloads.reference_for(targets.html),
-                    self.revision_payloads.reference_for(targets.pdf),
-                ],
+                keys=[stored.reference for _, _, stored in stored_outputs],
             )
             final_ids = []
             for artifact_version_id, artifact_type, stored in stored_outputs:

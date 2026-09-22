@@ -34,6 +34,7 @@ from ...ports import (
 from ...ports.drafts import DraftApprovalContext, DraftApprovalSourceReader, DraftLifecycleStore
 from ...ports.idempotency import IdempotencyStore
 from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
+from ..maintenance import MaintenanceService
 from ..analysis.service import load_analysis_knowledge
 from .approval_commit import ApprovalCommitter, PreparedApproval
 from .inputs import require_working_version
@@ -53,6 +54,7 @@ class DraftApprovalService:
         renderer: Renderer,
         payloads: RevisionPayloadStore,
         leases: PayloadWriteLeaseStore,
+        maintenance: MaintenanceService,
         committer: ApprovalCommitter,
     ):
         self.transactions = transactions
@@ -63,6 +65,7 @@ class DraftApprovalService:
         self.renderer = renderer
         self.revision_payloads = payloads
         self.leases = leases
+        self.maintenance = maintenance
         self.committer = committer
 
     def load_knowledge(self) -> Knowledge:
@@ -165,6 +168,7 @@ class DraftApprovalService:
         decision_overrides = dict(analysis.user_override)
         if selection_plan.plan.emphasis_override is not None:
             decision_overrides["emphasis"] = selection_plan.plan.emphasis_override.value
+        reserved_revision_id = revision_id is not None
         revision_id = revision_id or new_id()
         # revision_id is stable across a retry of the same idempotency key
         # (state-and-use-cases.md §15), so it alone cannot be the physical
@@ -173,6 +177,11 @@ class DraftApprovalService:
         # revision_id but scoped to this attempt_id (architecture.md §7.1).
         attempt_id = new_id()
         group_key = f"revision:{application_id}:{revision_id}"
+        # A crash can leave the receipt pending and the previous attempt's
+        # lease expired. Fence and remove that attempt before claiming a new
+        # one for the same reserved revision ID.
+        if reserved_revision_id:
+            self.maintenance.reclaim_group(group_key)
         structured_reference = self.revision_payloads.reference_for(
             self.revision_payloads.revision_path(
                 application_id, revision_id, attempt_id, format="json"

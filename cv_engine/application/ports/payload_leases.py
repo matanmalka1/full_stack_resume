@@ -60,6 +60,22 @@ class PayloadWriteLeaseStore(Protocol):
         """
         ...
 
+    def renew(
+        self,
+        tx: WriteTransaction,
+        group_key: str,
+        attempt_id: str,
+        *,
+        ttl_seconds: int,
+        now: str | None = None,
+    ) -> None:
+        """Extend an unexpired pending lease owned by this attempt.
+
+        A fenced or expired attempt cannot renew. Raises `StateConflict` if
+        the conditional update loses the race with reclaim.
+        """
+        ...
+
     def mark_committed(
         self,
         tx: WriteTransaction,
@@ -80,7 +96,7 @@ class PayloadWriteLeaseStore(Protocol):
         ...
 
     def live_physical_keys(self, tx: ReadTransaction) -> set[str]:
-        """Every physical key covered by a `pending` or `reclaiming` row.
+        """Keys covered by an unexpired `pending` or any `reclaiming` row.
 
         Used to exclude an active writer's key from `inspect_orphans`
         candidacy. A `committed` row's keys are not included - they are

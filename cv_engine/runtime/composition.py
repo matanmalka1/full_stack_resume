@@ -247,6 +247,16 @@ def build_services(
     operation_client = SqlAlchemyOperationClientStore(transactions)
     operation_execution = SqlAlchemyOperationExecutionStore(transactions)
     payload_leases = SqlAlchemyPayloadLeaseStore(transactions)
+    knowledge_queries = KnowledgeQueryService(
+        transactions=transactions, store=knowledge_lifecycle_store, knowledge=resolved_knowledge
+    )
+    maintenance_service = MaintenanceService(
+        payloads=resolved_payloads,
+        transactions=transactions,
+        inspection=SqlAlchemyMaintenanceInspection(transactions),
+        leases=payload_leases,
+        knowledge=knowledge_queries,
+    )
     # Activation probes recovery state through the runner token. This file-only
     # reader must not invoke startup recovery and open another DB scope.
     resolved_activation_knowledge = (
@@ -331,6 +341,7 @@ def build_services(
         renderer=resolved_renderer,
         payloads=resolved_payloads,
         leases=payload_leases,
+        maintenance=maintenance_service,
         committer=ApprovalCommitter(
             draft_lifecycle,
             draft_catalog,
@@ -421,16 +432,6 @@ def build_services(
         store=knowledge_lifecycle_store,
         knowledge=resolved_knowledge,
     ).recover_knowledge_mutations()
-    knowledge_queries = KnowledgeQueryService(
-        transactions=transactions, store=knowledge_lifecycle_store, knowledge=resolved_knowledge
-    )
-    maintenance_service = MaintenanceService(
-        payloads=resolved_payloads,
-        transactions=transactions,
-        inspection=SqlAlchemyMaintenanceInspection(transactions),
-        leases=payload_leases,
-        knowledge=knowledge_queries,
-    )
     settings_service = SettingsService(
         transactions,
         SqlAlchemySettingsStore(transactions),

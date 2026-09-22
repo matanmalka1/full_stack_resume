@@ -123,6 +123,27 @@ class MaintenanceService:
 
         return ReclaimResult(removed=sorted(removed))
 
+    def reclaim_group(self, group_key: str) -> ReclaimResult:
+        """Resume an expired write for one logical group before a genuine retry."""
+        now = utc_now()
+        with self.transactions.read() as tx:
+            expired = [
+                entry for entry in self.leases.expired_pending(tx, now)
+                if entry["group_key"] == group_key
+            ]
+            stale = [
+                entry for entry in self.leases.stale_reclaiming(tx, now)
+                if entry["group_key"] == group_key
+            ]
+        removed: set[str] = set()
+        for entry in expired:
+            removed.update(self._fence_and_finish(entry, now))
+        for entry in stale:
+            removed.update(
+                self._finish_reclaim(entry["group_key"], entry["attempt_id"], entry["keys"])
+            )
+        return ReclaimResult(removed=sorted(removed))
+
     def _fence_and_finish(self, entry: dict[str, Any], now: str) -> list[str]:
         group_key, attempt_id, keys = entry["group_key"], entry["attempt_id"], entry["keys"]
         with self.transactions.write() as tx:

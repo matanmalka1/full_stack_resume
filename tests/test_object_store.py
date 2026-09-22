@@ -53,6 +53,10 @@ class _FakeS3:
             raise _ClientError("404")
         return {}
 
+    def delete_object(self, Bucket: str, Key: str) -> dict[str, Any]:
+        self.objects.pop(Key, None)
+        return {}
+
     def list_objects_v2(
         self, Bucket: str, Prefix: str, ContinuationToken: str | None = None
     ) -> dict[str, Any]:
@@ -142,6 +146,15 @@ def test_ingest_reports_a_source_that_was_never_written(
     for store in _stores(local, s3):
         with pytest.raises(ObjectNotFound):
             store.ingest("outputs/app/rev/id.html", missing)
+
+
+def test_delete_is_idempotent_on_both_object_stores(local, s3) -> None:
+    key = "snapshots/app/snap.txt"
+    for store in _stores(local, s3):
+        store.put(key, b"immutable")
+        store.delete(key)
+        store.delete(key)
+        assert not store.exists(key)
 
 
 def test_inventory_is_backend_neutral_paginated_and_read_only(local, s3) -> None:
