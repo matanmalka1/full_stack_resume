@@ -3,6 +3,7 @@ import { useState } from "react";
 import { classificationFromAnalysis } from "@/api/analyses";
 import { actionLabel } from "../model/preparationLabels";
 import { Callout } from "@/ui/Callout";
+import { WideRow } from "@/ui/WideRow";
 import type { AnalysisDecisions, ApplicationDetail } from "@/api/contracts";
 import { workflowActionPlan } from "../model/workflowActionPlan";
 import { AnalysisStage } from "../stages/analysis/AnalysisStage";
@@ -33,7 +34,9 @@ import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
    wants two readable columns rather than one: what changes this step (the action, the
    matching form, the facts checklist) beside what explains it (the verdict's reasoning),
    the same split `DraftWorkspace` draws between the editable draft and its evidence, at
-   the same wide measure the shell gives that step for the same reason. */
+   the same wide measure the shell gives that step for the same reason. The reasoning
+   column reads wider than the work column here - 60/40 rather than an even split - because
+   the diagnosis is prose and long lists, and the work column is mostly form controls. */
 export const PreparationView = ({
   detail,
   onQueued,
@@ -71,59 +74,81 @@ export const PreparationView = ({
           function's decision rather than being pre-empted here. */}
       <AnalysisStatusBanner classification={classification} supersededAnalysis={supersededAnalysis} />
 
-      {/* The work column beside the reasoning column, at the same breakpoint and the same
-          basis split `DraftWorkspace` uses: what this step changes stays wide enough to
-          use, and what explains it stays in view beside that work instead of pushed below
-          a long checklist. */}
-      <div className="flex flex-col gap-6 lg:flex-row-reverse lg:items-start lg:gap-8 xl:gap-10">
-        <div className="flex min-w-0 flex-col gap-6 lg:flex-1 lg:basis-7/12">
-          {/* The one thing to do now: run the analysis, resolve the open decisions, or
-              generate the draft and move to the editor. */}
-          <VerificationStage detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
+      {/* The work column beside the reasoning column, at the same breakpoint
+          `DraftWorkspace` uses. 40/60: see the file doc for why the split favours the
+          reasoning column here rather than the work column.
 
-          {/* A voluntary configuration edit is a different intent from resolving a review
-              blocker even though both currently reach the same backend command. While this
-              screen already owns a required decision, its form is the single commit surface;
-              otherwise this section is the explicit entry for changing a settled context.
-              The CAS source pair is also the local form's lifetime: a changed pair remounts
-              the editor before older local choices can be submitted against the new pair. */}
-          {classification === null ? null : (
-            <MatchingConfigurationEditor
-              classification={classification}
+          Wrapped in `WideRow`: `PageShell`'s landmark grid reserves the rail's 13rem
+          column for this whole step's height, which would inset this row by that width
+          even though the rail itself is only a few lines tall. `WideRow` portals it into
+          the shell's `afterBody` slot instead, a later sibling of the grid rather than a
+          box stretched to overlap it - see that component's doc for why a negative-margin
+          bleed here isn't safe. The other rows - the draft notice, the verdict banner,
+          the operation cards above this component - stay inset, reading beside the rail
+          the way the rest of the step does; only this one moves. */}
+      <WideRow>
+        <div className="flex flex-col gap-6 lg:flex-row-reverse lg:items-start lg:gap-8 xl:gap-10">
+          {/* The work column, sticky - not the reasoning column beside it. At 60/40 the
+              reasoning column (long prose, the full requirement list) is reliably the
+              taller of the two, so it is also the taller of the row: a sticky element
+              cannot float above a sibling once its own box is the one setting the row's
+              height, so it never actually detaches from the flow. The work column stays
+              the shorter one, so pinning it keeps the action the step is waiting on in
+              view while the long diagnosis scrolls past beside it - the reverse of the
+              role each column held before the split favoured the reasoning column. */}
+          <div className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:flex-1 lg:basis-2/5">
+            {/* The one thing to do now: run the analysis, resolve the open decisions, or
+                generate the draft and move to the editor. */}
+            <VerificationStage
               detail={detail}
-              onSaved={setMatchingSaved}
-              key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
+              hasRecommendation={hasRecommendation}
+              onQueued={onQueued}
+              plan={plan}
             />
-          )}
 
-          {matchingSaveInContext && matchingSaved !== null && (
-            // Callout renders a semantic output for its status prop.
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-            <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
-              {matchingSaved.state.recommended_action == null
-                ? "מצב המועמדות עודכן לפי ההקשר החדש."
-                : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
-            </Callout>
-          )}
+            {/* A voluntary configuration edit is a different intent from resolving a review
+                blocker even though both currently reach the same backend command. While this
+                screen already owns a required decision, its form is the single commit surface;
+                otherwise this section is the explicit entry for changing a settled context.
+                The CAS source pair is also the local form's lifetime: a changed pair remounts
+                the editor before older local choices can be submitted against the new pair. */}
+            {classification === null ? null : (
+              <MatchingConfigurationEditor
+                classification={classification}
+                detail={detail}
+                onSaved={setMatchingSaved}
+                key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
+              />
+            )}
 
-          {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
-              parallel destination - offered where it is done. */}
-          {selectionPlanAction === null ? null : (
-            <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
+            {matchingSaveInContext && matchingSaved !== null && (
+              // Callout renders a semantic output for its status prop.
+              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+              <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
+                {matchingSaved.state.recommended_action == null
+                  ? "מצב המועמדות עודכן לפי ההקשר החדש."
+                  : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
+              </Callout>
+            )}
+
+            {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
+                parallel destination - offered where it is done. */}
+            {selectionPlanAction === null ? null : (
+              <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
+            )}
+          </div>
+
+          {/* The reasoning behind the verdict, for a reader who wants to check it before
+              acting. It decides nothing; the acceptance controls it once held are in the
+              work column beside it - see that column's own comment for why it, not this
+              one, is the sticky side of the row. */}
+          {classification === null ? null : (
+            <div className="flex min-w-0 flex-col gap-6 lg:flex-1 lg:basis-3/5">
+              <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
+            </div>
           )}
         </div>
-
-        {/* The reasoning behind the verdict, for a reader who wants to check it before
-            acting. It decides nothing; the acceptance controls it once held are in the
-            work column. Sticky for the same reason the draft's evidence pane is: it is
-            read, not acted on, from this step, so it stays in view while the work beside
-            it scrolls. */}
-        {classification === null ? null : (
-          <div className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:flex-1 lg:basis-5/12">
-            <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
-          </div>
-        )}
-      </div>
+      </WideRow>
     </div>
   );
 };

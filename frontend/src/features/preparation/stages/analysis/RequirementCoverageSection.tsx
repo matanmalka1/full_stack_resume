@@ -160,69 +160,94 @@ export const RequirementCoverageSection = ({
   const attentionRequirements = ordered.filter((requirement) => requirement.coverage !== "matched");
   const matchedRequirements = ordered.filter((requirement) => requirement.coverage === "matched");
 
-  const requirementRow = (requirement: Requirement) => (
-    <li className="py-4 first:pt-0 last:pb-0" key={requirement.requirementId}>
-      <div className="flex items-start gap-3">
-        <div
-          className={cx(
-            "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-pill border",
-            requirement.coverage === "matched"
-              ? "border-cv-success/30 bg-cv-success-soft text-cv-success"
-              : "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
-          )}
-        >
-          {requirement.coverage === "matched" ? (
-            <Check aria-hidden="true" className="size-icon-md" />
-          ) : (
-            <CircleAlert aria-hidden="true" className="size-icon-md" />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-body font-bold text-cv-text" dir="auto">
-              {requirement.text}
-            </h4>
-            <StatusBadge tone={coverageTones[requirement.coverage]}>{coverageLabels[requirement.coverage]}</StatusBadge>
-          </div>
-          <p className="mt-0.5 text-caption font-semibold text-cv-text-muted">
-            {importanceLabels[requirement.importance]}
-          </p>
-          {requirement.coverage === "matched" ? null : (
-            <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-              <span className="font-bold text-cv-text">
-                {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:{" "}
-              </span>
-              {requirement.shortfallReason ?? gapReasons.get(requirement.requirementId) ?? "לא סופק הסבר מפורט לפער."}
+  const requirementRow = (requirement: Requirement) => {
+    const isMatched = requirement.coverage === "matched";
+    const hasEvidence =
+      factsQuery.data !== undefined &&
+      (requirement.supportingFactIds.length > 0 || requirement.boundaryFactIds.length > 0);
+    const evidence = !hasEvidence ? null : (
+      <div className="flex flex-col gap-2 border-s-2 border-cv-border ps-3">
+        {requirement.supportingFactIds.length === 0 ? null : (
+          <div className="flex items-start gap-2">
+            <FileCheck2 aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-success" />
+            <p className="text-support text-cv-text-muted" dir="auto">
+              <span className="font-bold text-cv-text">ראיות תומכות: </span>
+              {requirement.supportingFactIds.map(factLabel).join(" · ")}
             </p>
-          )}
+          </div>
+        )}
+        {requirement.boundaryFactIds.length === 0 ? null : (
+          <div className="flex items-start gap-2">
+            <ShieldAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-warning" />
+            <p className="text-support text-cv-text-muted" dir="auto">
+              <span className="font-bold text-cv-text">למה הכיסוי מוגבל: </span>
+              {requirement.boundaryFactIds.map(factLabel).join(" · ")}
+            </p>
+          </div>
+        )}
+      </div>
+    );
 
-          {factsQuery.data === undefined ||
-          (requirement.supportingFactIds.length === 0 && requirement.boundaryFactIds.length === 0) ? null : (
-            <div className="mt-3 flex flex-col gap-2 border-s-2 border-cv-border ps-3">
-              {requirement.supportingFactIds.length === 0 ? null : (
-                <div className="flex items-start gap-2">
-                  <FileCheck2 aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-success" />
-                  <p className="text-support text-cv-text-muted" dir="auto">
-                    <span className="font-bold text-cv-text">ראיות תומכות: </span>
-                    {requirement.supportingFactIds.map(factLabel).join(" · ")}
-                  </p>
-                </div>
-              )}
-              {requirement.boundaryFactIds.length === 0 ? null : (
-                <div className="flex items-start gap-2">
-                  <ShieldAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-warning" />
-                  <p className="text-support text-cv-text-muted" dir="auto">
-                    <span className="font-bold text-cv-text">למה הכיסוי מוגבל: </span>
-                    {requirement.boundaryFactIds.map(factLabel).join(" · ")}
-                  </p>
-                </div>
+    return (
+      <li className="py-4 first:pt-0 last:pb-0" key={requirement.requirementId}>
+        <div className="flex items-start gap-3">
+          <div
+            className={cx(
+              "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-pill border",
+              isMatched
+                ? "border-cv-success/30 bg-cv-success-soft text-cv-success"
+                : "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
+            )}
+          >
+            {isMatched ? (
+              <Check aria-hidden="true" className="size-icon-md" />
+            ) : (
+              <CircleAlert aria-hidden="true" className="size-icon-md" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-body font-bold text-cv-text" dir="auto">
+                {requirement.text}
+              </h4>
+              {/* Matched rows skip the badge: the green icon plus the "מכוסות במלואן"
+                  heading above the list already say "covered", so the badge repeated
+                  that verdict a third time. Non-matched coverage still needs it -
+                  the icon alone does not distinguish partial/unsupported/unknown. */}
+              {isMatched ? null : (
+                <StatusBadge tone={coverageTones[requirement.coverage]}>
+                  {coverageLabels[requirement.coverage]}
+                </StatusBadge>
               )}
             </div>
-          )}
+            <p className="mt-0.5 text-caption font-semibold text-cv-text-muted">
+              {importanceLabels[requirement.importance]}
+            </p>
+            {isMatched ? null : (
+              <p className="mt-1 text-support text-cv-text-muted" dir="auto">
+                <span className="font-bold text-cv-text">
+                  {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:{" "}
+                </span>
+                {requirement.shortfallReason ?? gapReasons.get(requirement.requirementId) ?? "לא סופק הסבר מפורט לפער."}
+              </p>
+            )}
+
+            {evidence === null ? null : isMatched ? (
+              /* Matched requirements are confirmation, not action items: the evidence
+                 that earned the checkmark stays a click away instead of matching the
+                 unmet requirements' full multi-line weight by default. */
+              <details className="mt-2 marker:text-cv-text-muted">
+                <summary className="cursor-pointer text-support text-cv-text-muted">הצג ראיות תומכות</summary>
+                <div className="mt-2">{evidence}</div>
+              </details>
+            ) : (
+              <div className="mt-3">{evidence}</div>
+            )}
+          </div>
         </div>
-      </div>
-    </li>
-  );
+      </li>
+    );
+  };
 
   return (
     <AnalysisSection title="דרישות המשרה וכיסויין">

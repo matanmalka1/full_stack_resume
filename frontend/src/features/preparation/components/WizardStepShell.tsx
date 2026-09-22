@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import type { ApplicationDetail } from "@/api/contracts";
 import { PageShell } from "@/ui/PageShell";
 import { CommitBarTargetContext } from "@/ui/CommitBar";
+import { WideRowTargetContext } from "@/ui/WideRow";
 import { type WorkflowStage, workflowStageLabels } from "../model/workflowStages";
 import { PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
 
@@ -29,6 +30,11 @@ interface WizardStepShellProps {
      the wide frame. Intake, which asks one thing and shows nothing beside it, takes the
      narrower wizard measure. */
   measure?: "wide" | "wizard";
+  /* Whether this step gives its body a `WideRow` target - see that component's doc.
+     Only the analysis step sets this: its work/reasoning split reads there instead of
+     inset beside the rail, so it can use the width the rail's reserved column would
+     otherwise leave unused for the rest of the step's height. */
+  wideRow?: boolean;
   /* Which step of the flow this screen is, and what the spine marks as current. The
      projection still marks which *other* steps read as already complete - a step ahead of
      this one, reached by revisiting an earlier screen - but it never moves the current
@@ -59,16 +65,34 @@ export const WizardStepShell = ({
   queryError,
   stage,
   title,
+  wideRow = false,
 }: WizardStepShellProps) => {
   const [commitBarTarget, setCommitBarTarget] = useState<HTMLDivElement | null>(null);
+  const [wideRowTarget, setWideRowTarget] = useState<HTMLDivElement | null>(null);
 
   if (queryError !== null && queryError !== undefined) {
     return children;
   }
 
-  return (
+  const body = (
     <CommitBarTargetContext.Provider value={commitBarTarget}>
       <PageShell
+        afterBody={
+          wideRow ? (
+            /* The commit bar's target moves in here too, and after the wide row's own
+               target rather than staying at the end of the inset `children` flow below:
+               `position: sticky` only has room to visibly float within its own
+               containing block, and once the wide row's content moved out of that inset
+               flow, that flow was left too short to hold it - the bar would sit
+               statically instead of pinning to the viewport bottom, unlike every other
+               step. Placed after the wide row's target so it still closes the step, the
+               same order `WorkflowActions`' own doc describes. */
+            <div className="flex flex-col gap-6">
+              <div className="contents" ref={setWideRowTarget} />
+              <div className="contents" ref={setCommitBarTarget} />
+            </div>
+          ) : undefined
+        }
         description={description}
         eyebrow={eyebrow}
         landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} stage={stage} />}
@@ -77,9 +101,12 @@ export const WizardStepShell = ({
       >
         <div className="flex flex-col gap-6">
           {children}
-          <div className="contents" ref={setCommitBarTarget} />
+          {wideRow ? null : <div className="contents" ref={setCommitBarTarget} />}
         </div>
       </PageShell>
     </CommitBarTargetContext.Provider>
   );
+
+  if (!wideRow) return body;
+  return <WideRowTargetContext.Provider value={wideRowTarget}>{body}</WideRowTargetContext.Provider>;
 };

@@ -9,6 +9,7 @@ import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { QueryState } from "@/ui/QueryState";
+import { WideRow } from "@/ui/WideRow";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Skeleton } from "@/ui/Skeleton";
 import { ActiveOperationPanel, PendingWorkCard, operationTypeLabels } from "@/features/operations";
@@ -117,12 +118,16 @@ export const ApplicationPage = () => {
 
        Wide, like the draft and ready steps after it: `PreparationView` puts the facts
        checklist and the matching form beside the full diagnosis, the same two-column shape
-       those later steps put the document beside its evidence in. */
+       those later steps put the document beside its evidence in. `wideRow`: that split
+       reads in the shell's `WideRow` slot rather than inset beside the rail - see that
+       component's doc for why beside the rail wasn't safe once the split wanted the
+       width the rail's reserved column leaves unused past its own height. */
     <WizardStepShell
       applicationId={applicationId}
       detail={detail}
       measure="wide"
       queryError={query.error}
+      wideRow
       /* Held at one line's width while the projection is in flight. Absent, the masthead
          drew the heading a line higher and dropped it when the name arrived - the page's
          own title moving under the reader as the first thing it did. */
@@ -203,31 +208,38 @@ export const ApplicationPage = () => {
             {/* A failed analysis can be repaired only from its source context. In
                 particular, updating a malformed posting lives in JobSnapshotPanel, so
                 hiding reference material on failure also hid the way out. */}
+            {/* Wrapped in `WideRow` so it lands after `PreparationView`'s own wide row
+                rather than before it: both portal into the same `afterBody` slot, and
+                that slot sits after the whole inset column regardless of source order,
+                so this block has to join it too to keep reading last, the way its own
+                comment above says it should. */}
             {viewState === "content" || viewState === "analysis_failed" ? (
-              <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
-                <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
+              <WideRow>
+                <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
+                  <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
 
-                {viewState === "analysis_failed" ? (
-                  /* Repair is the task now, not optional reference reading. Keep the
-                     posting and its edit action in view instead of nesting them behind a
-                     second disclosure the reader has no reason to discover. */
-                  <JobSnapshotPanel detail={detail} />
-                ) : (
-                  <Disclosure summary="צפייה בנוסח המשרה שנשמר">
-                    <div className="pt-2">
-                      <JobSnapshotPanel detail={detail} />
-                    </div>
-                  </Disclosure>
-                )}
+                  {viewState === "analysis_failed" ? (
+                    /* Repair is the task now, not optional reference reading. Keep the
+                       posting and its edit action in view instead of nesting them behind a
+                       second disclosure the reader has no reason to discover. */
+                    <JobSnapshotPanel detail={detail} />
+                  ) : (
+                    <Disclosure summary="צפייה בנוסח המשרה שנשמר">
+                      <div className="pt-2">
+                        <JobSnapshotPanel detail={detail} />
+                      </div>
+                    </Disclosure>
+                  )}
 
-                {hasArtifacts ? (
-                  <Disclosure summary="גרסאות וקבצים">
-                    <div className="pt-2">
-                      <ApplicationArtifacts applicationId={applicationId} />
-                    </div>
-                  </Disclosure>
-                ) : null}
-              </div>
+                  {hasArtifacts ? (
+                    <Disclosure summary="קבצים ותוצרים">
+                      <div className="pt-2">
+                        <ApplicationArtifacts applicationId={applicationId} />
+                      </div>
+                    </Disclosure>
+                  ) : null}
+                </div>
+              </WideRow>
             ) : null}
           </div>
         )}

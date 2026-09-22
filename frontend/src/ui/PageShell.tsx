@@ -13,6 +13,14 @@ interface PageShellProps {
      knows of no such progression, so the page supplies one where it has one and nothing
      where it does not. */
   landmark?: ReactNode;
+  /* A block rendered after the landmark/content grid, at the section's own full measure
+     rather than inset beside the landmark's reserved column. The grid reserves that
+     column's width only for its own row - exactly the landmark's height, whatever that
+     turns out to be - so a later sibling here can use the full width without any risk of
+     overlapping the landmark: normal block flow stacks it below, it never shares the
+     landmark's row. `children` still renders inset in the usual place; this is an
+     addition, not a replacement. */
+  afterBody?: ReactNode;
   /* "wide" is the shared outer measure, which suits listings and record views. "form"
      is a shorter reading measure for a page whose whole body is one column of inputs:
      a text field stretched across the full frame is harder to scan, not easier.
@@ -33,6 +41,7 @@ interface PageShellProps {
    a surface or a shorter reading measure provide it around their own content. */
 export const PageShell = ({
   actions,
+  afterBody,
   children,
   description,
   eyebrow,
@@ -72,6 +81,7 @@ export const PageShell = ({
           )}
         </div>
       </div>
+      {afterBody === undefined ? null : <div className="mt-section-gap">{afterBody}</div>}
     </section>
   );
 };
