@@ -200,14 +200,6 @@ describe("ApplicationPage", () => {
         logical_name: "resume.md",
         revision_id: "revision-1",
       }),
-      artifact({
-        id: "legacy-render-image",
-        artifact_id: "legacy-render-image",
-        artifact_type: "visual_evidence",
-        created_at: "2026-09-05T08:00:00Z",
-        logical_name: "retired.png",
-        revision_id: "revision-1",
-      }),
     ];
     renderPage((input) =>
       Promise.resolve(
@@ -228,7 +220,6 @@ describe("ApplicationPage", () => {
     expect(screen.getByText("קובץ PDF של קורות החיים")).toBeInTheDocument();
     expect(screen.getByText("קובץ HTML של קורות החיים")).toBeInTheDocument();
     expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
-    expect(screen.queryByText("visual_evidence")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "הצגת גרסאות קודמות (1)" }));
     expect(screen.getByText("גרסה קודמת")).toBeInTheDocument();

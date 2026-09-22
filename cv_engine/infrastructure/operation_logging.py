@@ -46,7 +46,7 @@ class OperationFailureLogger:
         return self.log_reference
 
     def record(self, error: BaseException) -> str:
-        """Record an unscoped technical error for compatibility with other hosts."""
+        """Record a technical error when no durable Operation context exists."""
         cause = error.__cause__
         entry = {
             "occurred_at": utc_now(),

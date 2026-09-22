@@ -8,8 +8,8 @@ const formatters: Record<DateTimeStyle, Intl.DateTimeFormat> = {
 
 const dateFormatter = new Intl.DateTimeFormat("he-IL", { dateStyle: "medium", timeZone: "UTC" });
 
-/* Stored timestamps are evidence. If a legacy or external value cannot be parsed, keep
-   the exact value visible rather than replacing it with an invented date or “Invalid”. */
+/* Stored timestamps are evidence. If a value cannot be parsed, keep the exact value
+   visible rather than replacing it with an invented date or “Invalid”. */
 export const formatDateTime = (value: string, style: DateTimeStyle = "medium"): string => {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : formatters[style].format(parsed);
