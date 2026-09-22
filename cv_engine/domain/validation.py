@@ -11,7 +11,7 @@ from .contracts.knowledge import Profile
 from .contracts.selection import SelectionPlan
 from .contracts.validation import ValidationIssue, ValidationReport
 from .draft_markdown import serialize_markdown
-from .drafts import render_composite_claim, validate_derived_wording
+from .drafts import draft_content_hash, render_composite_claim, validate_derived_wording
 from .facts import FactStore, FactStoreError
 from .presentations import PresentationStore
 from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
@@ -108,7 +108,7 @@ ClaimRule = Callable[[_ClaimContext], None]
 
 def _manifest_matches(context: _ValidationContext) -> None:
     expected = serialize_markdown(context.draft)
-    if context.markdown != expected or sha256_text(context.markdown) != context.draft.content_hash:
+    if context.markdown != expected or draft_content_hash(context.draft) != context.draft.content_hash:
         context.add_issue(
             "content",
             "draft-manifest-mismatch",

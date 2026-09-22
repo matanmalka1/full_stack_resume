@@ -22,6 +22,17 @@ from .facts import FactStore
 from .presentations import PresentationStore, PresentedClaim
 from .selection import EmphasisPolicyStore, build_selection, require_fact_renderings
 
+
+def draft_content_hash(draft: DraftDocument) -> str:
+    """The fingerprint of one draft's own data, independent of any rendering.
+
+    Excludes `content_hash` itself so the value is stable whether the draft
+    already carries one or not, and independent of Markdown so a change to how
+    the document is rendered can never move it.
+    """
+    return sha256_text(canonical_json(draft.model_dump(mode="json", exclude={"content_hash"})))
+
+
 CLAIM_NAMESPACE = uuid.UUID("e47cfc95-7f5c-4dd2-acd4-19be02c8f988")
 CANONICAL_JOIN_TEMPLATE = ("canonical-renderings", "1.0.0")
 EXTRACTIVE_DERIVATION = ("extractive-clauses", "1.0.0")
@@ -290,19 +301,19 @@ def build_draft(
         selection=selection,
         fact_store_version=facts.version,
     )
-    markdown = _serialize_markdown(draft)
-    return draft.model_copy(update={"content_hash": sha256_text(markdown)})
+    return draft.model_copy(update={"content_hash": draft_content_hash(draft)})
 
 
 def seal_draft(draft: DraftDocument) -> tuple[DraftDocument, str, str]:
     """The two payloads a stored draft consists of, and the draft they describe.
 
-    The content hash is bound to the Markdown here, so the pair cannot be
-    written out of step. Where the two payloads land is a storage decision made
-    outside this layer.
+    The content hash is derived from the draft's own data, independent of the
+    Markdown rendered here, so re-sealing an unchanged draft can never move it
+    even if how Markdown is rendered changes. Where the two payloads land is a
+    storage decision made outside this layer.
     """
-    markdown = _serialize_markdown(draft)
-    sealed = draft.model_copy(update={"content_hash": sha256_text(markdown)})
+    sealed = draft.model_copy(update={"content_hash": draft_content_hash(draft)})
+    markdown = _serialize_markdown(sealed)
     manifest = json.dumps(sealed.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
     return sealed, markdown, manifest
 
@@ -350,9 +361,7 @@ def reorder_draft(
             )
         section.claims = [claims[claim_id] for claim_id in requested]
 
-    return reordered.model_copy(
-        update={"content_hash": sha256_text(_serialize_markdown(reordered))}
-    )
+    return reordered.model_copy(update={"content_hash": draft_content_hash(reordered)})
 
 
 def manually_edited(draft: DraftDocument) -> bool:
@@ -419,7 +428,7 @@ def _refresh_selection(draft: DraftDocument, facts: FactStore) -> DraftDocument:
         ),
         selected,
     )
-    return draft.model_copy(update={"content_hash": sha256_text(_serialize_markdown(draft))})
+    return draft.model_copy(update={"content_hash": draft_content_hash(draft)})
 
 
 def _normalized_clause(text: str) -> str:
