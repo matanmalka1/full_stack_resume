@@ -60,10 +60,10 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
   const distinctFacts = facts.filter((fact) => fact.text !== null && fact.text !== claim.text);
   const editingReviewedClaim = claim.claim_type === "reviewed";
   const reviewAssertions = new Map(
-    claim.review_evidence?.assertions.map((assertion) => [
-      JSON.stringify([assertion.claim_quote, assertion.fact_ids, assertion.source_quotes]),
-      assertion,
-    ] as const) ?? [],
+    claim.review_evidence?.assertions.map(
+      (assertion) =>
+        [JSON.stringify([assertion.claim_quote, assertion.fact_ids, assertion.source_quotes]), assertion] as const,
+    ) ?? [],
   );
 
   return (

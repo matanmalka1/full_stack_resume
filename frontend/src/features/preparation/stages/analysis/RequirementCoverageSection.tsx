@@ -147,10 +147,7 @@ export const RequirementCoverageSection = ({
     }
     return meanings;
   }, [factsQuery.data]);
-  const gapReasons = useMemo(
-    () => new Map(gaps.map((gap) => [gap.requirementId, gap.reason])),
-    [gaps],
-  );
+  const gapReasons = useMemo(() => new Map(gaps.map((gap) => [gap.requirementId, gap.reason])), [gaps]);
 
   if (requirements.length === 0 && unreadableRequirementCount === 0) {
     return null;
@@ -191,12 +188,9 @@ export const RequirementCoverageSection = ({
           {requirement.coverage === "matched" ? null : (
             <p className="mt-1 text-support text-cv-text-muted" dir="auto">
               <span className="font-bold text-cv-text">
-                {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:
-                {" "}
+                {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:{" "}
               </span>
-              {requirement.shortfallReason ??
-                gapReasons.get(requirement.requirementId) ??
-                "לא סופק הסבר מפורט לפער."}
+              {requirement.shortfallReason ?? gapReasons.get(requirement.requirementId) ?? "לא סופק הסבר מפורט לפער."}
             </p>
           )}
 

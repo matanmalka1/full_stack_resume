@@ -215,11 +215,8 @@ const requirementsFrom = (value: unknown): { items: Requirement[]; unreadableCou
         text: requirement.text,
         importance: requirement.importance,
         coverage: requirement.coverage,
-        shortfallSeverity: isShortfallSeverity(requirement.shortfall_severity)
-          ? requirement.shortfall_severity
-          : null,
-        shortfallReason:
-          typeof requirement.shortfall_reason === "string" ? requirement.shortfall_reason : null,
+        shortfallSeverity: isShortfallSeverity(requirement.shortfall_severity) ? requirement.shortfall_severity : null,
+        shortfallReason: typeof requirement.shortfall_reason === "string" ? requirement.shortfall_reason : null,
         supportingFactIds: stringsFrom(requirement.supporting_fact_ids),
         boundaryFactIds: stringsFrom(requirement.boundary_fact_ids),
       },

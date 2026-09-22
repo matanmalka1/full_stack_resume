@@ -154,14 +154,7 @@ const updateResponse = (editVersion: number): Response =>
 const stubReads = (
   answers: Partial<
     Record<
-      | "detail"
-      | "draft"
-      | "facts"
-      | "operation"
-      | "selectionChange"
-      | "regenerate"
-      | "validation"
-      | "validationRun",
+      "detail" | "draft" | "facts" | "operation" | "selectionChange" | "regenerate" | "validation" | "validationRun",
       () => Response
     >
   >,
