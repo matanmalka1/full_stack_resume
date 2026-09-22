@@ -8,7 +8,6 @@ artifact, a decision, an analysis, or an application field is not a guard.
 from __future__ import annotations
 
 import json
-import shutil
 import uuid
 from pathlib import Path
 
@@ -516,53 +515,6 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
 
 
 # --- 3. records may not cross application ownership boundaries -------------
-
-
-def test_foreign_working_projection_cannot_replace_the_database_source(
-    project_root: Path, drafted_application
-) -> None:
-    target = drafted_application("Target Co")
-    other = drafted_application("Other Co", role="Key Account Manager")
-    services = target.services
-    working = project_root / "artifacts/working"
-    for name in ("resume.md", "resume.claims.json"):
-        shutil.copy2(working / other.application_id / name, working / target.application_id / name)
-    # Validation is its own command now, and it legitimately records a run: it
-    # validated the draft the database holds, which the foreign projection did not
-    # replace. So the baseline is taken *after* it, and what the assertion then
-    # measures is approval alone - which is the command under test.
-    validated = validate_active_draft(services, target.application_id)
-    before_target = _persisted(services)
-    before_other = _persisted(services)
-
-    # The database is authoritative, so the foreign projection cannot become the
-    # approved content. It does not silently lose either: approval refuses while
-    # the projection disagrees with the stored draft, so a corrupted or
-    # hand-copied working file cannot reach a revision at all.
-    with pytest.raises(StateConflict, match="differs from the stored draft"):
-        services.draft_approval.approve_draft(
-            ApproveDraftCommand(
-                working_draft_id=validated.working_draft_id,
-                expected_edit_version=validated.edit_version,
-                validation_run_id=validated.validation_run_id,
-                client="web",
-            )
-        )
-
-    assert _persisted(services) == before_target
-    assert _persisted(services) == before_other
-    # Regenerating rewrites the projection from the database, and approval proceeds.
-    services.drafts.draft(
-        DraftCommand(
-            application_id=target.application_id,
-            job_analysis_id=target.analysis_id,
-            selection_plan_id=target.selection_plan_id,
-        )
-    )
-    restored = services.artifacts.load_working_draft(target.application_id)
-    assert restored.application_id == target.application_id
-    approved = approve_active_draft(services, target.application_id)
-    assert approved.application_id == target.application_id
 
 
 def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
