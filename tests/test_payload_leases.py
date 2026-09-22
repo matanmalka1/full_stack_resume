@@ -28,7 +28,7 @@ def _lease_row(transactions, group_key: str):
         ).mappings().one_or_none()
 
 
-def test_lease_registration_requires_matching_attempt_keys_and_unexpired_ownership(
+def test_lease_registration_requires_matching_attempt_and_keys(
     services, lease_transactions
 ) -> None:
     leases = services.maintenance.leases
@@ -46,11 +46,35 @@ def test_lease_registration_requires_matching_attempt_keys_and_unexpired_ownersh
         leases.mark_committed(tx, first, first, keys=[first])
     assert _lease_row(lease_transactions, first)["state"] == "committed"
 
+
+def test_an_expired_but_unfenced_lease_can_still_complete_registration(
+    services, lease_transactions
+) -> None:
+    """Expiry alone is never authoritative - only fencing is (architecture.md §7.1).
+
+    A write slower than its nominal TTL, but never actually reclaimed, must
+    still be able to register: the alternative reintroduces "TTL proves
+    abandonment", which the design explicitly rejects.
+    """
+    leases = services.maintenance.leases
+    key = "artifacts/snapshots/app/slow.txt"
     with lease_transactions.write() as tx:
-        leases.acquire(tx, second, second, keys=[second], ttl_seconds=1, now=_past())
+        leases.acquire(tx, key, key, keys=[key], ttl_seconds=1, now=_past())
+    with lease_transactions.write() as tx:
+        leases.mark_committed(tx, key, key, keys=[key])
+    assert _lease_row(lease_transactions, key)["state"] == "committed"
+
+
+def test_a_fenced_lease_cannot_complete_registration(services, lease_transactions) -> None:
+    leases = services.maintenance.leases
+    key = "artifacts/snapshots/app/fenced.txt"
+    with lease_transactions.write() as tx:
+        leases.acquire(tx, key, key, keys=[key], ttl_seconds=1, now=_past())
+    with lease_transactions.write() as tx:
+        assert leases.fence(tx, key, key, now=_past(), reclaim_deadline=_past())
     with pytest.raises(StateConflict):
         with lease_transactions.write() as tx:
-            leases.mark_committed(tx, second, second, keys=[second])
+            leases.mark_committed(tx, key, key, keys=[key])
 
 
 def test_renewed_lease_cannot_be_fenced_from_an_old_expiry_snapshot(
@@ -118,11 +142,10 @@ def test_revision_retry_cannot_claim_or_register_a_prior_attempts_keys(
         leases.acquire(tx, group, "old", keys=old_keys, ttl_seconds=300)
     with lease_transactions.write() as tx:
         leases.release(tx, group, "old")
-    with pytest.raises(StateConflict):
-        with lease_transactions.write() as tx:
-            leases.acquire(tx, group, "new", keys=old_keys, ttl_seconds=300)
     with lease_transactions.write() as tx:
         leases.acquire(tx, group, "new", keys=new_keys, ttl_seconds=300)
+    # "new" can only register what it actually claimed at acquire time - not
+    # "old"'s keys, even though both attempts share the same group_key.
     with pytest.raises(StateConflict):
         with lease_transactions.write() as tx:
             leases.mark_committed(tx, group, "new", keys=old_keys)

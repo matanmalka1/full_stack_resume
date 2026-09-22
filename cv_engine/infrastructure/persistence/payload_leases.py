@@ -35,23 +35,6 @@ def _row_to_entry(row: Any) -> dict:
     }
 
 
-def _expected_keys(group_key: str, attempt_id: str) -> list[str]:
-    """Derive allowed physical references from the claimed write identity."""
-    if group_key.startswith("revision:"):
-        _, application_id, revision_id = group_key.split(":")
-        stem = f"artifacts/revisions/{application_id}/{revision_id}/{attempt_id}"
-        return sorted((f"{stem}/resume.json", f"{stem}/resume.md"))
-    if group_key.startswith("render:"):
-        _, application_id, revision_id, html_id, pdf_id = group_key.split(":")
-        if attempt_id != f"{html_id}:{pdf_id}":
-            raise StateConflict("render lease attempt does not match its artifact IDs")
-        stem = f"artifacts/outputs/{application_id}/{revision_id}"
-        return sorted((f"{stem}/{html_id}.html", f"{stem}/{pdf_id}.pdf"))
-    if group_key != attempt_id:
-        raise StateConflict("single-payload lease attempt does not match its key")
-    return [group_key]
-
-
 class SqlAlchemyPayloadLeaseStore:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
@@ -67,8 +50,6 @@ class SqlAlchemyPayloadLeaseStore:
         now: str | None = None,
     ) -> None:
         timestamp = now or utc_now()
-        if sorted(keys) != _expected_keys(group_key, attempt_id):
-            raise StateConflict("payload write lease keys do not belong to this attempt")
         connection = self._transactions.connection_for(tx, access="write")
         try:
             connection.execute(
@@ -129,8 +110,6 @@ class SqlAlchemyPayloadLeaseStore:
         *,
         keys: list[str],
     ) -> None:
-        if sorted(keys) != _expected_keys(group_key, attempt_id):
-            raise StateConflict("payload registration keys do not belong to this attempt")
         connection = self._transactions.connection_for(tx, access="write")
         changed = connection.execute(
             update(payload_write_leases)
@@ -139,7 +118,6 @@ class SqlAlchemyPayloadLeaseStore:
                 payload_write_leases.c.attempt_id == attempt_id,
                 payload_write_leases.c.state == "pending",
                 payload_write_leases.c.keys_json == sorted(keys),
-                payload_write_leases.c.lease_expires_at > utc_now(),
             )
             .values(state="committed", committed_at=utc_now())
         ).rowcount
