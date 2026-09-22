@@ -83,9 +83,7 @@ class SqlAlchemyPayloadLeaseStore:
                 )
             )
         except IntegrityError as exc:
-            raise StateConflict(
-                f"payload write lease already held for {group_key}"
-            ) from exc
+            raise StateConflict(f"payload write lease already held for {group_key}") from exc
 
     def release(self, tx, group_key: str, attempt_id: str) -> None:
         connection = self._transactions.connection_for(tx, access="write")

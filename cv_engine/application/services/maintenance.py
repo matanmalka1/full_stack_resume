@@ -128,11 +128,13 @@ class MaintenanceService:
         now = utc_now()
         with self.transactions.read() as tx:
             expired = [
-                entry for entry in self.leases.expired_pending(tx, now)
+                entry
+                for entry in self.leases.expired_pending(tx, now)
                 if entry["group_key"] == group_key
             ]
             stale = [
-                entry for entry in self.leases.stale_reclaiming(tx, now)
+                entry
+                for entry in self.leases.stale_reclaiming(tx, now)
                 if entry["group_key"] == group_key
             ]
         removed: set[str] = set()

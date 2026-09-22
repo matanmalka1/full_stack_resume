@@ -57,13 +57,15 @@ SELECTION_CONTEXT = SelectionPlanContext(
     job_analysis={"track": "sales"},
     allowed_facts=[{"fact_id": "a.b"}],
     deterministic_selection={"selected_fact_ids": ["a.b"], "non_excludable_fact_ids": []},
-    sections=[{
-        "section": "Professional Summary",
-        "fact_ids": ["a.b"],
-        "max_claims": 1,
-        "fixed_fact_ids": [],
-        "max_additional_pins": 1,
-    }],
+    sections=[
+        {
+            "section": "Professional Summary",
+            "fact_ids": ["a.b"],
+            "max_claims": 1,
+            "fixed_fact_ids": [],
+            "max_additional_pins": 1,
+        }
+    ],
 )
 DRAFT_CONTEXT = DraftResumeContext(
     job_analysis={"track": "sales"},
