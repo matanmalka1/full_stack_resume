@@ -45,9 +45,6 @@ ARTIFACT_MEDIA_TYPES: dict[str, str] = {
     "working_draft_snapshot": "application/json",
     "job_snapshot": "text/plain; charset=utf-8",
     "provider_response": "application/json",
-    # Historical immutable records remain downloadable after new renders stop
-    # producing this retired artifact type.
-    "visual_evidence": "image/png",
 }
 
 DEFAULT_MEDIA_TYPE = "application/octet-stream"
@@ -59,7 +56,6 @@ _MEDIA_TYPE_SUFFIXES: dict[str, str] = {
     "application/pdf": ".pdf",
     "text/html; charset=utf-8": ".html",
     "text/markdown; charset=utf-8": ".md",
-    "image/png": ".png",
     "application/json": ".json",
     "text/plain; charset=utf-8": ".txt",
     DEFAULT_MEDIA_TYPE: "",

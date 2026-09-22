@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -17,15 +17,19 @@ def lease_transactions(services):
 
 
 def _past(seconds: int = 600) -> str:
-    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+    return (datetime.now(UTC) - timedelta(seconds=seconds)).isoformat()
 
 
 def _lease_row(transactions, group_key: str):
     with transactions.read() as tx:
         connection = transactions.connection_for(tx)
-        return connection.execute(
-            payload_write_leases.select().where(payload_write_leases.c.group_key == group_key)
-        ).mappings().one_or_none()
+        return (
+            connection.execute(
+                payload_write_leases.select().where(payload_write_leases.c.group_key == group_key)
+            )
+            .mappings()
+            .one_or_none()
+        )
 
 
 def test_lease_registration_requires_matching_attempt_and_keys(
@@ -87,15 +91,11 @@ def test_renewed_lease_cannot_be_fenced_from_an_old_expiry_snapshot(
     with lease_transactions.write() as tx:
         leases.renew(tx, key, key, ttl_seconds=300, now=_past(5))
     with lease_transactions.write() as tx:
-        assert not leases.fence(
-            tx, key, key, now=_past(5), reclaim_deadline=_past(1)
-        )
+        assert not leases.fence(tx, key, key, now=_past(5), reclaim_deadline=_past(1))
     assert _lease_row(lease_transactions, key)["state"] == "pending"
 
 
-def test_revision_group_commit_rolls_back_as_one_transaction(
-    services, lease_transactions
-) -> None:
+def test_revision_group_commit_rolls_back_as_one_transaction(services, lease_transactions) -> None:
     leases = services.maintenance.leases
     group = "revision:app:revision"
     keys = [
@@ -130,9 +130,7 @@ def test_revision_retry_cannot_claim_or_register_a_prior_attempts_keys(
 
     def keys_for(attempt: str) -> list[str]:
         return [
-            payloads.reference_for(
-                payloads.revision_path("app", "revision", attempt, format=fmt)
-            )
+            payloads.reference_for(payloads.revision_path("app", "revision", attempt, format=fmt))
             for fmt in ("json", "md")
         ]
 
@@ -171,17 +169,13 @@ def test_render_group_binds_both_artifact_keys(services, lease_transactions) -> 
     assert _lease_row(lease_transactions, group)["state"] == "committed"
 
 
-def test_retry_reclaims_only_its_expired_revision_group(
-    services, lease_transactions
-) -> None:
+def test_retry_reclaims_only_its_expired_revision_group(services, lease_transactions) -> None:
     leases = services.maintenance.leases
     payloads = services.payloads
     group = "revision:app:revision"
     old_path = payloads.revision_path("app", "revision", "old", format="json")
     old_keys = [
-        payloads.reference_for(
-            payloads.revision_path("app", "revision", "old", format=fmt)
-        )
+        payloads.reference_for(payloads.revision_path("app", "revision", "old", format=fmt))
         for fmt in ("json", "md")
     ]
     with lease_transactions.write() as tx:
@@ -191,9 +185,7 @@ def test_retry_reclaims_only_its_expired_revision_group(
     assert old_keys[0] in services.maintenance.reclaim_group(group).removed
     assert not old_path.exists()
     new_keys = [
-        payloads.reference_for(
-            payloads.revision_path("app", "revision", "new", format=fmt)
-        )
+        payloads.reference_for(payloads.revision_path("app", "revision", "new", format=fmt))
         for fmt in ("json", "md")
     ]
     with lease_transactions.write() as tx:
@@ -208,8 +200,7 @@ def test_reclaim_expired_revision_group_and_late_leaseless_write(
     payloads = services.payloads
     group = "revision:app:revision"
     paths = [
-        payloads.revision_path("app", "revision", "attempt", format=fmt)
-        for fmt in ("json", "md")
+        payloads.revision_path("app", "revision", "attempt", format=fmt) for fmt in ("json", "md")
     ]
     keys = [payloads.reference_for(path) for path in paths]
     with lease_transactions.write() as tx:

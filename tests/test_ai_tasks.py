@@ -1017,9 +1017,7 @@ def test_selection_context_carries_the_profile_pool_and_not_every_fact(
     summary = next(section for section in sections if section["section"] == "Professional Summary")
     assert summary["max_claims"] == 1
     assert summary["max_additional_pins"] == 1 - len(summary["fixed_fact_ids"])
-    assert {
-        fact_id for section in sections for fact_id in section["fixed_fact_ids"]
-    } <= supplied
+    assert {fact_id for section in sections for fact_id in section["fixed_fact_ids"]} <= supplied
 
 
 def test_the_analysis_context_carries_canonical_facts_and_nothing_else_about_them(

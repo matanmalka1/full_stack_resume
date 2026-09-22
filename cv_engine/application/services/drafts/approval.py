@@ -34,8 +34,8 @@ from ...ports import (
 from ...ports.drafts import DraftApprovalContext, DraftApprovalSourceReader, DraftLifecycleStore
 from ...ports.idempotency import IdempotencyStore
 from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
-from ..maintenance import MaintenanceService
 from ..analysis.service import load_analysis_knowledge
+from ..maintenance import MaintenanceService
 from .approval_commit import ApprovalCommitter, PreparedApproval
 from .inputs import require_working_version
 

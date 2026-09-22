@@ -76,7 +76,6 @@ class PayloadStore:
     """Immutable v2 payload storage, independent of database registration."""
 
     _OUTPUT_SUFFIXES = {".html", ".pdf"}
-    _READABLE_LEGACY_OUTPUT_SUFFIXES = {".png"}
     #: Read size for streaming a payload outward. Bounded so a download
     #: never holds a whole artifact in memory the way a `read_bytes` would.
     _STREAM_CHUNK_BYTES = 64 * 1024
@@ -387,8 +386,7 @@ class PayloadStore:
             and parts[4] in {"resume.json", "resume.md"}
             or len(parts) == 4
             and parts[0] == "outputs"
-            and Path(parts[3]).suffix
-            in self._OUTPUT_SUFFIXES | self._READABLE_LEGACY_OUTPUT_SUFFIXES
+            and Path(parts[3]).suffix in self._OUTPUT_SUFFIXES
             or len(parts) == 4
             and parts[0] == "provider"
             and parts[3].endswith(".json")

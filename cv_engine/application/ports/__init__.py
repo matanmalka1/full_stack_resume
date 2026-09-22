@@ -25,8 +25,8 @@ from .outbound import (
     RegenerateSectionContext,
     Renderer,
     RevisionPayloadStore,
-    SelectionSectionContext,
     SelectionPlanContext,
+    SelectionSectionContext,
     SnapshotPayloadStore,
 )
 from .settings import SettingsStore

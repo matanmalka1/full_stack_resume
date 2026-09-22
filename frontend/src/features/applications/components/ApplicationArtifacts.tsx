@@ -138,10 +138,7 @@ export const ApplicationArtifacts = ({ applicationId }: { applicationId: string 
   const [showInternal, setShowInternal] = useState(false);
   /* Newest first, which is the order the reader is asking about. The server's answer is
      never narrowed here - both groups below are rendered, one behind a press. */
-  // Old records are immutable, but the retired render image is no longer part
-  // of the product surface and must not reappear for historical revisions.
   const ordered = [...(query.data?.items ?? [])]
-    .filter((artifact) => artifact.artifact_type !== "visual_evidence")
     // The copied array is safe to mutate; the runtime target is ES2022.
     // oxlint-disable-next-line unicorn/no-array-sort
     .sort((left, right) => right.created_at.localeCompare(left.created_at));

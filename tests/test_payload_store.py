@@ -38,8 +38,7 @@ def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
         "resume.json",
     )
     assert (
-        payload_store.revision_path("app", "revision", "attempt", format="md").name
-        == "resume.md"
+        payload_store.revision_path("app", "revision", "attempt", format="md").name == "resume.md"
     )
     for suffix in ("html", ".pdf"):
         assert (
@@ -149,6 +148,10 @@ def test_revision_attempts_use_distinct_immutable_keys(payload_store: PayloadSto
 def test_traversal_and_unapproved_destinations_are_refused(
     payload_store: PayloadStore, tmp_path: Path
 ) -> None:
+    assert (
+        payload_store.verify_payload("artifacts/outputs/app/revision/retired.png", "0" * 64)
+        == "unresolvable"
+    )
     with pytest.raises(ValueError, match="invalid application_id path component"):
         payload_store.snapshot_path("../outside", "snapshot")
     with pytest.raises(ValueError, match="contains traversal"):
