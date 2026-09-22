@@ -16,6 +16,7 @@ from sqlalchemy import and_, delete, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from ...application.errors import StateConflict
+from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import utc_now
 from .connection import SqlAlchemyTransactionManager
 from .tables import payload_write_leases
@@ -41,7 +42,7 @@ class SqlAlchemyPayloadLeaseStore:
 
     def acquire(
         self,
-        tx,
+        tx: WriteTransaction,
         group_key: str,
         attempt_id: str,
         *,
@@ -66,7 +67,7 @@ class SqlAlchemyPayloadLeaseStore:
         except IntegrityError as exc:
             raise StateConflict(f"payload write lease already held for {group_key}") from exc
 
-    def release(self, tx, group_key: str, attempt_id: str) -> None:
+    def release(self, tx: WriteTransaction, group_key: str, attempt_id: str) -> None:
         connection = self._transactions.connection_for(tx, access="write")
         connection.execute(
             delete(payload_write_leases).where(
@@ -78,7 +79,7 @@ class SqlAlchemyPayloadLeaseStore:
 
     def renew(
         self,
-        tx,
+        tx: WriteTransaction,
         group_key: str,
         attempt_id: str,
         *,
@@ -102,7 +103,7 @@ class SqlAlchemyPayloadLeaseStore:
 
     def mark_committed(
         self,
-        tx,
+        tx: WriteTransaction,
         group_key: str,
         attempt_id: str,
         *,
@@ -125,7 +126,7 @@ class SqlAlchemyPayloadLeaseStore:
                 f"{attempt_id} with the keys being registered"
             )
 
-    def live_physical_keys(self, tx) -> set[str]:
+    def live_physical_keys(self, tx: ReadTransaction) -> set[str]:
         connection = self._transactions.connection_for(tx)
         rows = connection.execute(
             select(payload_write_leases.c.keys_json).where(
@@ -143,7 +144,7 @@ class SqlAlchemyPayloadLeaseStore:
             result.update(keys)
         return result
 
-    def expired_pending(self, tx, now: str) -> list[dict]:
+    def expired_pending(self, tx: ReadTransaction, now: str) -> list[dict]:
         connection = self._transactions.connection_for(tx)
         rows = (
             connection.execute(
@@ -159,7 +160,7 @@ class SqlAlchemyPayloadLeaseStore:
 
     def fence(
         self,
-        tx,
+        tx: WriteTransaction,
         group_key: str,
         attempt_id: str,
         *,
@@ -179,7 +180,7 @@ class SqlAlchemyPayloadLeaseStore:
         ).rowcount
         return changed == 1
 
-    def stale_reclaiming(self, tx, now: str) -> list[dict]:
+    def stale_reclaiming(self, tx: ReadTransaction, now: str) -> list[dict]:
         connection = self._transactions.connection_for(tx)
         rows = (
             connection.execute(
@@ -193,7 +194,7 @@ class SqlAlchemyPayloadLeaseStore:
         )
         return [_row_to_entry(row) for row in rows]
 
-    def delete_row(self, tx, group_key: str, attempt_id: str) -> None:
+    def delete_row(self, tx: WriteTransaction, group_key: str, attempt_id: str) -> None:
         connection = self._transactions.connection_for(tx, access="write")
         connection.execute(
             delete(payload_write_leases).where(

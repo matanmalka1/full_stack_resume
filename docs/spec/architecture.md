@@ -250,8 +250,8 @@ The key layout is the same either way:
 ```text
 {artifacts_root}/ or {bucket}/{prefix}/
   snapshots/{application_id}/{snapshot_id}.txt
-  revisions/{application_id}/{revision_id}/resume.json
-  revisions/{application_id}/{revision_id}/resume.md
+  revisions/{application_id}/{revision_id}/{attempt_id}/resume.json
+  revisions/{application_id}/{revision_id}/{attempt_id}/resume.md
   drafts/{application_id}/{working_draft_id}-v{edit_version}.json
   outputs/{application_id}/{revision_id}/{artifact_id}.html
   outputs/{application_id}/{revision_id}/{artifact_id}.pdf
@@ -263,8 +263,10 @@ The key layout is the same either way:
 including `job_snapshots.payload_path`, the ApprovedRevision resume paths, and
 `artifact_versions.path`, store project-relative strings such as
 `artifacts/snapshots/{app}/{id}.txt`; an object key is the same string without the
-`artifacts/` prefix. A row is identical under either backend, so storage can change
-without rewriting database rows.
+`artifacts/` prefix. ApprovedRevision resume references include the write attempt ID as
+shown above, so a retry can never overwrite or resurrect an earlier attempt's object. A
+row is identical under either backend, so storage can change without rewriting database
+rows.
 
 Key validation is shared by both implementations rather than delegated to each. A
 crafted key - traversal, absolute, empty segment, backslash, drive prefix - is refused

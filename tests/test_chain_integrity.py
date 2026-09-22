@@ -357,12 +357,14 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         "client": "web",
         "command": "approve_draft",
     }
-    assert revision.resume_json_reference == (
-        f"artifacts/revisions/{app_id}/{revision.id}/resume.json"
-    )
-    assert revision.resume_markdown_reference == (
-        f"artifacts/revisions/{app_id}/{revision.id}/resume.md"
-    )
+    revision_root = Path("artifacts/revisions") / app_id / revision.id
+    json_reference = Path(revision.resume_json_reference)
+    markdown_reference = Path(revision.resume_markdown_reference)
+    assert json_reference.parent.parent == revision_root
+    assert markdown_reference.parent == json_reference.parent
+    assert json_reference.name == "resume.json"
+    assert markdown_reference.name == "resume.md"
+    assert uuid.UUID(json_reference.parent.name).version == 4
     assert sha256_file(project_root / revision.resume_json_reference) == revision.resume_json_hash
     assert (
         sha256_file(project_root / revision.resume_markdown_reference)

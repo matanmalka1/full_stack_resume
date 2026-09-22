@@ -130,19 +130,24 @@ def locate(quote: str, source_text: str) -> RequirementSource:
 
 def _merge(first: ProposedRequirement, second: ProposedRequirement) -> ProposedRequirement:
     coverage = min((first.coverage, second.coverage), key=_COVERAGE_ORDER.index)
+    # Severity describes the surviving (lower) coverage claim.  A more
+    # flattering reading's default ``unknown`` must not erase the explicit
+    # severity attached to the reading we actually keep.
+    surviving_readings = tuple(
+        item for item in (first, second) if item.coverage == coverage
+    )
     if coverage == "matched":
         shortfall_severity = "none"
     elif coverage == "unsupported":
         shortfall_severity = "material"
-    elif coverage == "unknown" or "unknown" in (
-        first.shortfall_severity,
-        second.shortfall_severity,
+    elif coverage == "unknown" or any(
+        item.shortfall_severity == "unknown" for item in surviving_readings
     ):
         shortfall_severity = "unknown"
     else:
         shortfall_severity = (
             "material"
-            if "material" in (first.shortfall_severity, second.shortfall_severity)
+            if any(item.shortfall_severity == "material" for item in surviving_readings)
             else "minor"
         )
     shortfall_reason = next(

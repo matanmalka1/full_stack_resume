@@ -71,6 +71,7 @@ from cv_engine.infrastructure.persistence.tables import (
     OPERATION_FAILURE_CODES,
     operation_resource_leases,
     operations,
+    payload_write_leases,
 )
 from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.runtime.execution import OperationWorker
@@ -188,6 +189,21 @@ def _read_receipt(services, command_type, idempotency_key):
     with services.draft_approval.transactions.read() as tx:
         return services.draft_approval.receipts.idempotency_receipt(
             tx, command_type, idempotency_key
+        )
+
+
+def _payload_lease(services, group_key: str):
+    transactions = services.draft_approval.transactions
+    with transactions.read() as tx:
+        return (
+            transactions.connection_for(tx)
+            .execute(
+                select(payload_write_leases).where(
+                    payload_write_leases.c.group_key == group_key
+                )
+            )
+            .mappings()
+            .one()
         )
 
 
@@ -1515,10 +1531,11 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
     assert calls == (2 if failure_stage == "artifact_registration" else 1)
     receipt = _read_receipt(setup.services, "approve_draft", "approval-retry")
     assert receipt["status"] == ("completed" if failure_stage == "after_commit" else "pending")
-    references = [
-        f"artifacts/revisions/{setup.application_id}/{receipt['reserved_entity_id']}/resume.json",
-        f"artifacts/revisions/{setup.application_id}/{receipt['reserved_entity_id']}/resume.md",
-    ]
+    lease = _payload_lease(
+        setup.services,
+        f"revision:{setup.application_id}:{receipt['reserved_entity_id']}",
+    )
+    references = lease["keys_json"]
     published = [setup.services.payloads.read_payload_text(reference) for reference in references]
     revisions = _approved_revisions(setup.services, setup.application_id)
     if failure_stage in {"artifact_registration", "receipt_completion"}:
@@ -1554,8 +1571,14 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
     assert completed["id"] == receipt["id"]
     assert completed["payload"] == receipt["payload"]
     assert completed["status"] == "completed"
+    revision = _approved_revisions(setup.services, setup.application_id)[0]
+    committed_references = [
+        revision.resume_json_reference,
+        revision.resume_markdown_reference,
+    ]
     assert [
-        setup.services.payloads.read_payload_text(reference) for reference in references
+        setup.services.payloads.read_payload_text(reference)
+        for reference in committed_references
     ] == published
 
 

@@ -500,6 +500,7 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     """
     exempt = {
         "operation_execution.py:lease_seconds must be positive",
+        "payload_leases.py:ttl_seconds must be positive",
     }
     offenders: list[str] = []
     seen: set[str] = set()
