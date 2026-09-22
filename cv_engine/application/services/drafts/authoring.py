@@ -350,6 +350,9 @@ class DraftAuthoringService:
                 sections=[
                     {
                         "section": section.name,
+                        "allowed_fact_ids": sorted(
+                            {fact_id for claim in section.claims for fact_id in claim.fact_ids}
+                        ),
                         "claims": [
                             {
                                 "claim_id": claim.claim_id,

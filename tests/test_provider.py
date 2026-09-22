@@ -36,7 +36,6 @@ from cv_engine.application.ports import (
     RegenerateSectionContext,
     SelectionPlanContext,
 )
-from cv_engine.domain.analysis import normalize as normalization
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.providers import (
     ClaimProposal,
@@ -58,13 +57,20 @@ SELECTION_CONTEXT = SelectionPlanContext(
     job_analysis={"track": "sales"},
     allowed_facts=[{"fact_id": "a.b"}],
     deterministic_selection={"selected_fact_ids": ["a.b"], "non_excludable_fact_ids": []},
+    sections=[{
+        "section": "Professional Summary",
+        "fact_ids": ["a.b"],
+        "max_claims": 1,
+        "fixed_fact_ids": [],
+        "max_additional_pins": 1,
+    }],
 )
 DRAFT_CONTEXT = DraftResumeContext(
     job_analysis={"track": "sales"},
     job_text="Account manager role",
     requirements=[],
     language="en",
-    sections=[{"section": "Experience", "claims": []}],
+    sections=[{"section": "Experience", "allowed_fact_ids": ["a.b"], "claims": []}],
     allowed_facts=[{"fact_id": "a.b"}],
 )
 REVIEW_CONTEXT = AssessClaimSupportContext(
@@ -253,10 +259,6 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     assert context.task_contract_version == contract.version
     assert context.input_schema_version == contract.input_schema_version
     assert context.output_schema_version == contract.output_schema_version
-    # `normalize.py`'s own `PROMPT_VERSION` is a documentary constant naming the
-    # same prompt version - it isn't read anywhere in the runtime call path, so
-    # nothing else catches it going stale after a prompt bump. This is what does.
-    assert normalization.PROMPT_VERSION == task_contracts.prompt_version
     # The declared version is a label; the hash is derived from the schema that
     # actually governed the boundary, so the two cannot silently disagree.
     #
@@ -295,6 +297,15 @@ def test_analysis_prompt_requires_self_contained_quotes_when_splitting(
     assert "return each as its own requirement only if every one of them can be quoted" in prompt
     assert "Keep any qualifier that applies to a given piece" in prompt
     assert "keep the sentence as one requirement instead" in prompt
+
+
+def test_selection_prompt_respects_section_pin_capacity(task_contracts) -> None:
+    prompt = task_contracts.prompt_text
+    assert "max_additional_pins" in prompt
+    assert "Count each proposed pin not already" in prompt
+    assert "The engine still validates the complete overlay" in prompt
+    assert "Each supplied section names its" in prompt
+    assert "A fact absent from this section's `allowed_fact_ids`" in prompt
 
 
 def test_analysis_prompt_assesses_qualitative_requirements_semantically(task_contracts) -> None:

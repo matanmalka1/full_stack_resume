@@ -281,6 +281,16 @@ class AnalysisContext(StrictModel):
     overrides: dict[str, str] = {}
 
 
+class SelectionSectionContext(StrictModel):
+    """One Profile section's candidate pool and pin capacity."""
+
+    section: str
+    fact_ids: list[str]
+    max_claims: int
+    fixed_fact_ids: list[str]
+    max_additional_pins: int
+
+
 class SelectionPlanContext(StrictModel):
     """`propose_selection_plan`: the analysis, and only the allowed facts.
 
@@ -292,6 +302,7 @@ class SelectionPlanContext(StrictModel):
     job_analysis: dict[str, Any]
     allowed_facts: list[dict[str, Any]]
     deterministic_selection: dict[str, Any]
+    sections: list[SelectionSectionContext]
 
 
 class DraftResumeContext(StrictModel):

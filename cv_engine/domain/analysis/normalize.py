@@ -35,17 +35,8 @@ from .requirements.concepts import RequirementConceptStore
 from .requirements.evidence import boundary_facts_for_quote
 from .requirements.identity import normalize_span, requirement_id
 
-#: Three versions, deliberately separate, because they answer three questions
-#: that used to be one string answering all of them at once.
-#:
-#: `EXTRACTION_VERSION` is what produced the record. `PROMPT_VERSION` is how the
-#: provider was asked, and belongs with the provider provenance; it is recorded
-#: and it is *not* an input to identity, because rewording a prompt into a new version
-#: would otherwise turn every unchanged requirement in an unchanged posting into
-#: a new entity. `REQUIREMENT_ID_VERSION` names the identity algorithm itself, so that a
-#: change to how identity is computed can still be stated as one.
-EXTRACTION_VERSION = "analysis-v1"
-PROMPT_VERSION = "system-v10"
+#: The prompt version is recorded with provider provenance and does not determine
+#: requirement identity. Only a change to the identity algorithm moves this version.
 REQUIREMENT_ID_VERSION = "v1"
 
 #: Least claim first. Merging duplicates and resolving conflicts both take the

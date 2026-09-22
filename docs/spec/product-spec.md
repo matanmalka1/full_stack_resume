@@ -307,7 +307,9 @@ initial deterministic SelectionPlan for that exact analysis. The plan is produce
 the deterministic selection policy and freezes its own policy/candidate-context
 versions. An AI `propose_selection_plan` task is an optional, separate Operation that
 may propose a replacement plan; it is never required to make the no-review path
-draftable.
+draftable. Its input includes each Profile section's allowed fact IDs, claim budget,
+facts already occupying that budget, and remaining pin capacity. The deterministic
+selection policy still validates every proposed overlay before activation.
 
 A change to the meaning or classification of a requirement creates a JobAnalysis. A
 change only to which facts will address an already understood requirement creates a
@@ -331,6 +333,10 @@ The editor primarily works with sections and bullets. Each claim exposes its tex
 linked facts, claim status, warnings, and edit/regenerate/remove controls. Section order
 is policy-controlled. The editor may offer simple up/down bullet controls if needed but
 does not include drag-and-drop.
+
+AI draft wording receives the facts permitted for each composed section. A selected fact
+may support a claim only in a section that permits it; deterministic validation remains
+authoritative over fact placement.
 
 For reviewed wording, the read model exposes a safe explanation containing the review
 policy version and assertion-to-source excerpts. Provider artifact identifiers and input

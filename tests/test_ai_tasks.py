@@ -414,7 +414,16 @@ def test_draft_resume_commits_wording_its_facts_support(
         assert actual.edit_version == working.edit_version
         return
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    assert fake_openai.calls_for("draft_resume")
+    draft_call = fake_openai.calls_for("draft_resume")[-1]
+    for section in draft_call.payload["sections"]:
+        assert set(section["allowed_fact_ids"]) == {
+            fact_id for claim in section["claims"] for fact_id in claim["fact_ids"]
+        }
+    assert any(
+        fact_id not in section["allowed_fact_ids"]
+        for section in draft_call.payload["sections"]
+        for fact_id in working.source.selected_fact_ids
+    )
     with transaction_manager.read() as tx:
         actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
     assert actual.source.sections == working.source.sections
@@ -1003,6 +1012,14 @@ def test_selection_context_carries_the_profile_pool_and_not_every_fact(
     protected = set(payload["deterministic_selection"]["non_excludable_fact_ids"])
     assert protected <= set(payload["deterministic_selection"]["selected_fact_ids"])
     assert protected
+    sections = payload["sections"]
+    assert {fact_id for section in sections for fact_id in section["fact_ids"]} == supplied
+    summary = next(section for section in sections if section["section"] == "Professional Summary")
+    assert summary["max_claims"] == 1
+    assert summary["max_additional_pins"] == 1 - len(summary["fixed_fact_ids"])
+    assert {
+        fact_id for section in sections for fact_id in section["fixed_fact_ids"]
+    } <= supplied
 
 
 def test_the_analysis_context_carries_canonical_facts_and_nothing_else_about_them(

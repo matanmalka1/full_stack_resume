@@ -9,7 +9,6 @@ about the candidate, and none of them discards the rest of the reading.
 
 from __future__ import annotations
 
-from cv_engine.domain.analysis import normalize as normalization
 from cv_engine.domain.analysis.normalize import normalize_analysis_proposal
 from cv_engine.domain.analysis.projection import gaps
 from cv_engine.domain.contracts.analysis import Coverage
@@ -565,15 +564,3 @@ def test_an_unexplained_material_partial_shortfall_becomes_unknown(
 
     assert analysis.requirements[0].shortfall_severity == "unknown"
     assert "shortfall_inconsistent" in {issue.code for issue in analysis.issues}
-
-
-def test_prompt_version_does_not_change_requirement_identity(
-    fact_store, profile_store, requirement_concepts, monkeypatch
-) -> None:
-    proposed = _proposal(ProposedRequirement(text="- Comfortable presenting to customers."))
-    before = _normalize(proposed, fact_store, profile_store, requirement_concepts)
-
-    monkeypatch.setattr(normalization, "PROMPT_VERSION", "system-v999")
-    after = _normalize(proposed, fact_store, profile_store, requirement_concepts)
-
-    assert before.requirements[0].requirement_id == after.requirements[0].requirement_id

@@ -6,18 +6,49 @@ from dataclasses import asdict
 
 from ....domain.analysis.projection import gaps as project_gaps
 from ....domain.contracts.analysis import JobAnalysis
+from ....domain.contracts.knowledge import Profile
 from ....domain.contracts.taxonomy import Emphasis
+from ....domain.facts import FactStore
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import allowed_fact_pool
+from ....domain.selection import STRUCTURAL_STYLES
 from ...commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand
 from ...errors import PreconditionFailed, ProposalRejected
-from ...ports import SelectionPlanContext
+from ...ports import SelectionPlanContext, SelectionSectionContext
 from ...ports.analysis_plans import SelectionSource
 from ..proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
 from .selection_policy import AnalysisSelection, PreparedSelectionPlan, PreparedSelectionProposal
 
 
 class AnalysisSelectionService:
+    @staticmethod
+    def _section_constraints(profile: Profile, facts: FactStore) -> list[SelectionSectionContext]:
+        """Describe the same per-section pin capacity that selection enforces.
+
+        Structural facts and Profile pins consume the section budget before an
+        AI overlay is considered. The full selection policy still validates the
+        proposal, including role floors and required-tag coverage.
+        """
+        sections: list[SelectionSectionContext] = []
+        for spec in profile.sections:
+            fixed = [
+                fact_id
+                for fact_id in spec.fact_ids
+                if fact_id in spec.pinned_fact_ids
+                or facts.get(fact_id, canonical_only=True).resume_style in STRUCTURAL_STYLES
+            ]
+            budget = spec.max_claims if spec.max_claims is not None else len(spec.fact_ids)
+            sections.append(
+                SelectionSectionContext(
+                    section=spec.name_en,
+                    fact_ids=list(spec.fact_ids),
+                    max_claims=budget,
+                    fixed_fact_ids=fixed,
+                    max_additional_pins=budget - len(fixed),
+                )
+            )
+        return sections
+
     @staticmethod
     def _non_excludable_selected_facts(
         analysis: JobAnalysis,
@@ -186,6 +217,7 @@ class AnalysisSelectionService:
                     "non_excludable_fact_ids": non_excludable,
                     "emphasis_policy_version": manifest.emphasis_policy_version,
                 },
+                sections=AnalysisSelectionService._section_constraints(profile, knowledge.facts),
             ),
             model=command.model,
             reasoning_effort=command.reasoning_effort,
