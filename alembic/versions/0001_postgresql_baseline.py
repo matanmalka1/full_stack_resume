@@ -1,8 +1,8 @@
-"""initial PostgreSQL schema baseline
+"""squashed PostgreSQL schema baseline
 
 Revision ID: 0001
 Revises:
-Create Date: 2026-09-03
+Create Date: 2026-09-22
 """
 
 from collections.abc import Sequence
@@ -228,9 +228,6 @@ def upgrade() -> None:
         sa.Column("track", sa.Text(), nullable=True),
         sa.Column("profile", sa.Text(), nullable=True),
         sa.Column("emphasis", sa.Text(), nullable=True),
-        sa.Column("classification_confidence", sa.Float(), nullable=True),
-        sa.Column("fit_level", sa.Text(), nullable=True),
-        sa.Column("fit_score", sa.Float(), nullable=True),
         sa.Column("current_status", sa.Text(), nullable=False),
         sa.Column("last_contact_date", sa.Text(), nullable=True),
         sa.Column("next_action", sa.Text(), nullable=True),
@@ -253,10 +250,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "terminal_outcome IS NULL OR terminal_outcome IN ('accepted', 'rejected', 'withdrawn')",
             name=op.f("ck_applications_terminal_outcome"),
-        ),
-        sa.CheckConstraint(
-            "fit_score IS NULL OR (fit_score >= 0 AND fit_score <= 1)",
-            name=op.f("ck_applications_fit_score"),
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_applications")),
     )
@@ -614,7 +607,7 @@ def upgrade() -> None:
             name=op.f("ck_operations_terminal_finished_at"),
         ),
         sa.CheckConstraint(
-            "failure_code IS NULL OR failure_code IN ('SOURCE_CHANGED', 'PROVIDER_TIMEOUT', 'PROVIDER_RATE_LIMITED', 'PROVIDER_UNAVAILABLE', 'PROVIDER_REFUSED', 'INVALID_OUTPUT', 'SCHEMA_VIOLATION', 'RENDER_FAILED', 'BROWSER_START_FAILED', 'MISSING_FACT_RENDERING', 'VALIDATION_EXECUTION_FAILED', 'CANCELLED_BEFORE_ACTIVATION')",
+            "failure_code IS NULL OR failure_code IN ('SOURCE_CHANGED', 'PROVIDER_TIMEOUT', 'PROVIDER_RATE_LIMITED', 'PROVIDER_UNAVAILABLE', 'PROVIDER_REFUSED', 'INVALID_OUTPUT', 'SCHEMA_VIOLATION', 'RENDER_FAILED', 'BROWSER_START_FAILED', 'MISSING_FACT_RENDERING', 'VALIDATION_EXECUTION_FAILED', 'CANCELLED_BEFORE_ACTIVATION', 'CLAIM_REVIEW_UNCERTAIN', 'CLAIM_REVIEW_UNSUPPORTED')",
             name=op.f("ck_operations_failure_code"),
         ),
         sa.CheckConstraint(
@@ -871,12 +864,6 @@ def upgrade() -> None:
         sa.Column(
             "track_emphasis_dependencies_json",
             postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-        ),
-        sa.Column(
-            "accepted_gaps_json",
-            postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'[]'::jsonb"),
             nullable=False,
         ),
         sa.Column("created_at", sa.Text(), nullable=False),
