@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 import { applicationDetailQueryOptions } from "@/api/applications";
@@ -22,7 +23,7 @@ import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
    it is about the request that made the record rather than about the record. */
 interface CreatedApplicationState {
   analysisProblem?: ProblemDetails | null;
-  analysisQueued?: unknown;
+  operationId?: string | null;
 }
 
 /* The wait before this screen holds an Operation to report, in the one shape every later
@@ -86,8 +87,19 @@ export const ApplicationPage = () => {
 
   const createdApplication = (location.state as { createdApplication?: CreatedApplicationState } | null)
     ?.createdApplication;
+  const createdOperationId = createdApplication?.operationId ?? null;
+
+  /* Layout, not passive: it settles before the browser paints, so a creation redirect
+     that already knows its Operation id never paints the placeholder card first. Without
+     it the watch would open a tick late - after `useWatchedOperation`'s own effect ran -
+     and the reader would see `PendingWorkCard` flash before `ActiveOperationPanel` took
+     over, for a record already sitting in cache. */
+  useLayoutEffect(() => {
+    if (createdOperationId !== null) watch(createdOperationId);
+  }, [createdOperationId, watch]);
+
   const viewState = analysisViewState({
-    analysisWasQueuedOnCreate: createdApplication?.analysisQueued === true,
+    analysisWasQueuedOnCreate: createdOperationId !== null,
     detail,
     operation: watched,
   });
@@ -123,11 +135,22 @@ export const ApplicationPage = () => {
       }
       stage="analysis"
     >
+      {/* Live analysis work is reported the moment this screen knows about it, whether that
+          knowledge came from the projection or - on the redirect straight from creation -
+          from the Operation id handed over in route state and seeded into cache before the
+          navigate. Placed above `QueryState` on purpose: the projection fetch it gates is a
+          second, independent read, and work already known must not wait on it. */}
+      {watched !== undefined ? (
+        <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={watched} />
+      ) : viewState === "processing" || viewState === "analysis_failed" ? (
+        analysisPending
+      ) : null}
+
       <QueryState
         error={query.error}
         fallbackTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={detail === undefined}
-        loadingState={viewState === "processing" ? analysisPending : preparationLoading}
+        loadingState={preparationLoading}
       >
         {detail === undefined ? null : detail.application.deleted_at ? (
           /* A deleted Application stays reachable by ID (product-spec.md invariant #20) so
@@ -142,12 +165,13 @@ export const ApplicationPage = () => {
           </Callout>
         ) : (
           <div className="space-y-6">
-            {/* A successfully queued analysis is reported by the Operation panel below,
+            {/* A successfully queued analysis is reported by the Operation panel above,
                 which follows the run through its current and terminal states. Route state
                 only owns the exceptional creation outcome where no Operation exists to
                 report; keeping its success message would freeze "running" beside the
                 Operation's later "completed" state. */}
-            {createdApplication?.analysisQueued !== false ||
+            {createdApplication === undefined ||
+            createdOperationId !== null ||
             detail.preparation_state !== "needs_analysis" ||
             watched !== undefined ? null : (
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
@@ -156,18 +180,6 @@ export const ApplicationPage = () => {
               </Callout>
             )}
 
-            {/* Live analysis work and preparation content are mutually exclusive: the
-                projection can still say `needs_analysis` for a poll after the Operation
-                starts, and rendering both then exposed the internal state machine as a
-                flash of an obsolete call to action. One Operation panel call site covers
-                every viewState - it is the same report whether analysis is still running
-                or already history. */}
-            {(viewState === "processing" || viewState === "analysis_failed") && watched === undefined
-              ? analysisPending
-              : null}
-            {watched === undefined ? null : (
-              <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={watched} />
-            )}
             {/* A failed run is not the live-work exclusion above: it is history, and the
                 projection's own `available_actions`/`recommended_action` do not collapse
                 just because the last run failed - "analyze" is still there, and still

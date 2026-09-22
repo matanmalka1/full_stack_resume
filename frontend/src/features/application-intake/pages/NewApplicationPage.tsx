@@ -39,7 +39,7 @@ export const NewApplicationPage = () => {
       void navigate(routePaths.application(result.applicationId), {
         replace: true,
         state: {
-          createdApplication: { analysisProblem: result.analysisProblem, analysisQueued: result.analysisQueued },
+          createdApplication: { analysisProblem: result.analysisProblem, operationId: result.operation?.id ?? null },
         },
       });
     },

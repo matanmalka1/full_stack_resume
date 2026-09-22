@@ -102,15 +102,15 @@ const CreatedApplicationDestination = () => {
   const location = useLocation();
   const createdApplication = (
     location.state as {
-      createdApplication?: { analysisProblem?: { detail?: unknown } | null; analysisQueued?: unknown };
+      createdApplication?: { analysisProblem?: { detail?: unknown } | null; operationId?: unknown };
     } | null
   )?.createdApplication;
-  const analysisQueued = createdApplication?.analysisQueued;
+  const operationId = createdApplication?.operationId;
 
   return (
     <>
       <h1>פרטי משרה</h1>
-      <p>{analysisQueued === true ? "הניתוח הופעל" : "הניתוח לא הופעל"}</p>
+      <p>{typeof operationId === "string" ? "הניתוח הופעל" : "הניתוח לא הופעל"}</p>
       {typeof createdApplication?.analysisProblem?.detail === "string" ? (
         <p>{createdApplication.analysisProblem.detail}</p>
       ) : null}

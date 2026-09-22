@@ -217,7 +217,7 @@ describe("ApplicationPage at the preparation route", () => {
     );
 
     renderPage(deterministicSettings, {
-      createdApplication: { analysisProblem: null, analysisQueued: true },
+      createdApplication: { analysisProblem: null, operationId: "op-1" },
     });
 
     expect((await screen.findAllByText("הושלמה")).length).toBeGreaterThan(0);
@@ -840,7 +840,7 @@ describe("ApplicationPage at the preparation route", () => {
         Promise.resolve(String(input).includes("/settings") ? jsonResponse(aiSettings) : jsonResponse(detail())),
       ),
     );
-    const { client } = renderPage(aiSettings, { createdApplication: { analysisQueued: false } });
+    const { client } = renderPage(aiSettings, { createdApplication: { operationId: null } });
     expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeEnabled();
     act(() =>

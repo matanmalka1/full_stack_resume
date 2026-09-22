@@ -1,12 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { createApplication, invalidateApplicationViews, startAnalysis } from "@/api/applications";
-import type { ApplicationIntake } from "@/api/contracts";
+import type { ApplicationIntake, Operation } from "@/api/contracts";
 import { ApiProblem, type ProblemDetails } from "@/api/client";
+import { operationQueryKey } from "@/api/operations";
 
 export interface CreatedIntakeApplication {
   applicationId: string;
-  analysisQueued: boolean;
+  operation: Operation | null;
   analysisProblem: ProblemDetails | null;
 }
 
@@ -22,17 +23,22 @@ export const createIntakeApplication = async (
   void invalidateApplicationViews(queryClient, created.application_id);
 
   try {
-    await startAnalysis(
+    const { operation } = await startAnalysis(
       created.application_id,
       created.job_snapshot_id,
       `create:${created.application_id}:${created.job_snapshot_id}`,
     );
 
-    return { applicationId: created.application_id, analysisQueued: true, analysisProblem: null };
+    /* Seeded here, the same way `useAnalyzeCommand` seeds a re-analysis: the Application
+       screen reads this id from route state and finds the record already in cache, so it
+       can show the real Operation panel on first paint instead of a placeholder card. */
+    queryClient.setQueryData(operationQueryKey(operation.id), operation);
+
+    return { applicationId: created.application_id, operation, analysisProblem: null };
   } catch (error) {
     return {
       applicationId: created.application_id,
-      analysisQueued: false,
+      operation: null,
       analysisProblem: error instanceof ApiProblem ? error.problem : null,
     };
   }
