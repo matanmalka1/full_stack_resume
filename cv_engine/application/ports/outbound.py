@@ -35,7 +35,6 @@ from ..knowledge_mutations import (
 )
 from .values import (
     ArtifactStream,
-    DraftPaths,
     RenderTargets,
     RevisionPayloads,
     SnapshotPayload,
@@ -45,21 +44,13 @@ from .values import (
 
 
 class ArtifactStore(Protocol):
-    """Mutable working projections and local diagnostic path access.
+    """Publish mutable working projections after authoritative state changes.
 
     Immutable payload publication belongs to SnapshotPayloadStore and
     RevisionPayloadStore, never to this working-projection capability.
     """
 
-    def working_paths(self, application_id: str) -> DraftPaths: ...
-
     def write_working_draft(self, draft: Any) -> StoredDraft: ...
-
-    def load_working_draft(self, application_id: str) -> Any: ...
-
-    def resolve(self, stored_path: str) -> Path: ...
-
-    def relative(self, path: Path) -> str: ...
 
 
 class SnapshotPayloadStore(Protocol):

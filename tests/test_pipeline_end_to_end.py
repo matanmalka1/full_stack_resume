@@ -2,11 +2,10 @@
 
 `existing analysis -> draft -> validate -> approve -> render -> ready ->
 reconcile`, with no AI key and no HTTP server. This is the check CLAUDE.md
-names as the one that has caught real defects here - approval silently
-destroying unimported manual edits - and it belongs to the engine rather than
-to any one client. Driving it through `application/` is what makes it prove
-the engine works, instead of proving that a particular client knows how to
-call it.
+names as the proof that everything downstream of an existing analysis reaches
+Ready without AI. It belongs to the engine rather than to any one client:
+driving it through `application/` proves the engine works instead of proving
+that a particular client knows how to call it.
 
 Every step names the exact source record it consumes, the way the use-cases
 require: no step resolves "the latest" for itself.

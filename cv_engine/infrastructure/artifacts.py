@@ -6,7 +6,6 @@ from typing import Protocol
 from ..application.ports import DraftPaths, StoredDraft
 from ..application.transactions import assert_external_io_allowed
 from ..domain.contracts.drafts import DraftDocument
-from ..domain.draft_markdown import parse_draft
 from ..domain.drafts import seal_draft
 
 
@@ -58,10 +57,6 @@ class FilesystemArtifactStore:
         paths.markdown.write_text(markdown, encoding="utf-8")
         paths.manifest.write_text(manifest, encoding="utf-8")
         return StoredDraft(paths, markdown)
-
-    def load_working_draft(self, application_id: str) -> DraftDocument:
-        manifest = self.working_paths(application_id).manifest
-        return parse_draft(manifest.read_text(encoding="utf-8"))
 
     def resolve(self, stored_path: str) -> Path:
         return self._paths.root / stored_path
