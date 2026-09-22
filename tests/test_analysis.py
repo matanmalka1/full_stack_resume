@@ -74,24 +74,42 @@ def test_an_unstated_importance_is_weighted_as_a_preference() -> None:
 
 
 @pytest.mark.parametrize(
-    ("importance", "coverage", "severity"),
+    ("importance", "coverage", "shortfall_severity", "severity"),
     [
-        ("mandatory", "unsupported", "hard"),
-        # Partial means relevant evidence exists, not that the demand is met.
-        ("mandatory", "partial", "hard"),
+        ("mandatory", "unsupported", "material", "hard"),
+        ("mandatory", "partial", "material", "hard"),
+        ("mandatory", "partial", "minor", "warning"),
+        ("mandatory", "partial", "unknown", "warning"),
         # "We could not tell" is not "you lack this", so it is never hard -
         # asking the user to accept a deficiency nobody established is the
         # question this rule exists to stop asking.
-        ("mandatory", "unknown", "warning"),
-        ("preferred", "unsupported", "warning"),
-        ("unknown", "unsupported", "warning"),
+        ("mandatory", "unknown", "unknown", "warning"),
+        ("preferred", "unsupported", "material", "warning"),
+        ("unknown", "unsupported", "material", "warning"),
     ],
 )
 def test_only_an_established_failure_of_a_demand_is_a_hard_gap(
-    fact_store, importance, coverage, severity
+    fact_store, importance, coverage, shortfall_severity, severity
 ) -> None:
-    projected = gaps([_requirement(importance=importance, coverage=coverage)], fact_store)
+    projected = gaps(
+        [
+            _requirement(
+                importance=importance,
+                coverage=coverage,
+                shortfall_severity=shortfall_severity,
+            )
+        ],
+        fact_store,
+    )
     assert [gap.severity for gap in projected] == [severity]
+
+
+def test_a_pre_severity_partial_demand_keeps_its_historical_hard_gap(fact_store) -> None:
+    projected = gaps(
+        [_requirement(coverage="partial", shortfall_severity=None)],
+        fact_store,
+    )
+    assert [gap.severity for gap in projected] == ["hard"]
 
 
 def test_a_matched_requirement_projects_no_gap(fact_store) -> None:
@@ -110,6 +128,36 @@ def test_a_hard_gap_caps_the_level_however_well_the_rest_scored(fact_store) -> N
     assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
     assert fit_level(requirements) is FitLevel.LOW
     assert [gap.requirement_id for gap in hard_gaps(requirements, fact_store)] == ["gap"]
+
+
+def test_a_minor_partial_demand_does_not_cap_an_otherwise_high_fit() -> None:
+    requirements = [_requirement(requirement_id=f"r{index}") for index in range(9)]
+    requirements.append(
+        _requirement(
+            requirement_id="minor-gap",
+            coverage="partial",
+            shortfall_severity="minor",
+        )
+    )
+
+    assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
+    assert fit_level(requirements) is FitLevel.HIGH
+
+
+def test_a_gap_exposes_the_analysis_shortfall_reason(fact_store) -> None:
+    reason = "The verified duration is slightly below the requested threshold."
+    projected = gaps(
+        [
+            _requirement(
+                coverage="partial",
+                shortfall_severity="minor",
+                shortfall_reason=reason,
+            )
+        ],
+        fact_store,
+    )
+
+    assert projected[0].reason == reason
 
 
 def test_a_boundary_fact_explains_the_gap_in_the_candidates_own_words(fact_store) -> None:

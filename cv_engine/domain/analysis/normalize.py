@@ -44,7 +44,7 @@ from .requirements.identity import normalize_span, requirement_id
 #: a new entity. `REQUIREMENT_ID_VERSION` names the identity algorithm itself, so that a
 #: change to how identity is computed can still be stated as one.
 EXTRACTION_VERSION = "analysis-v1"
-PROMPT_VERSION = "system-v7"
+PROMPT_VERSION = "system-v8"
 REQUIREMENT_ID_VERSION = "v1"
 
 #: Least claim first. Merging duplicates and resolving conflicts both take the
@@ -137,6 +137,30 @@ def locate(quote: str, source_text: str) -> RequirementSource:
 
 
 def _merge(first: ProposedRequirement, second: ProposedRequirement) -> ProposedRequirement:
+    coverage = min((first.coverage, second.coverage), key=_COVERAGE_ORDER.index)
+    if coverage == "matched":
+        shortfall_severity = "none"
+    elif coverage == "unsupported":
+        shortfall_severity = "material"
+    elif coverage == "unknown" or "unknown" in (
+        first.shortfall_severity,
+        second.shortfall_severity,
+    ):
+        shortfall_severity = "unknown"
+    else:
+        shortfall_severity = (
+            "material"
+            if "material" in (first.shortfall_severity, second.shortfall_severity)
+            else "minor"
+        )
+    shortfall_reason = next(
+        (
+            item.shortfall_reason
+            for item in (first, second)
+            if item.shortfall_severity == shortfall_severity and item.shortfall_reason
+        ),
+        first.shortfall_reason or second.shortfall_reason,
+    )
     return first.model_copy(
         update={
             # Upward, unlike coverage. Coverage is a claim about the
@@ -145,7 +169,9 @@ def _merge(first: ProposedRequirement, second: ProposedRequirement) -> ProposedR
             # quietly relieve the candidate of a requirement the posting
             # stated - lightening the Fit weighting and dissolving hard gaps.
             "importance": max((first.importance, second.importance), key=_IMPORTANCE_ORDER.index),
-            "coverage": min((first.coverage, second.coverage), key=_COVERAGE_ORDER.index),
+            "coverage": coverage,
+            "shortfall_severity": shortfall_severity,
+            "shortfall_reason": shortfall_reason,
             "fact_ids": list(dict.fromkeys([*first.fact_ids, *second.fact_ids])),
         }
     )
@@ -244,11 +270,15 @@ def normalize_requirement(
     issues += fact_issues
 
     coverage = proposed.coverage
+    shortfall_severity = proposed.shortfall_severity
+    shortfall_reason = proposed.shortfall_reason
     if coverage in ("matched", "partial") and not supporting:
         # The reading was positive and nothing canonical was left to show for
         # it. `unknown`, not `unsupported`: the evidence failed, which is not
         # the same as the candidate lacking the thing.
         coverage = "unknown"
+        shortfall_severity = "unknown"
+        shortfall_reason = "Positive coverage could not be verified from canonical evidence."
         issues.append(AnalysisIssue(code="coverage_without_evidence", requirement_index=index))
 
     boundaries = boundary_facts_for_quote(proposed.text, concepts, facts)
@@ -256,6 +286,29 @@ def normalize_requirement(
         # A canonical boundary fact is the candidate's own statement that this
         # is not verified. It caps a match and never lifts one.
         coverage = "partial"
+        shortfall_severity = "material"
+
+    expected_severity = {
+        "matched": "none",
+        "unsupported": "material",
+        "unknown": "unknown",
+    }.get(coverage)
+    if expected_severity is not None and shortfall_severity != expected_severity:
+        shortfall_severity = expected_severity
+        issues.append(AnalysisIssue(code="shortfall_inconsistent", requirement_index=index))
+    elif coverage == "partial" and shortfall_severity == "none":
+        shortfall_severity = "unknown"
+        issues.append(AnalysisIssue(code="shortfall_inconsistent", requirement_index=index))
+    elif (
+        coverage == "partial"
+        and shortfall_severity in ("minor", "material")
+        and not boundaries
+        and not (shortfall_reason or "").strip()
+    ):
+        shortfall_severity = "unknown"
+        issues.append(AnalysisIssue(code="shortfall_inconsistent", requirement_index=index))
+    if coverage == "matched":
+        shortfall_reason = None
 
     requirement = Requirement(
         requirement_id=requirement_id(
@@ -269,6 +322,8 @@ def normalize_requirement(
         text=text,
         importance=proposed.importance,
         coverage=coverage,
+        shortfall_severity=shortfall_severity,
+        shortfall_reason=shortfall_reason,
         supporting_fact_ids=supporting,
         boundary_fact_ids=boundaries,
         source=source,

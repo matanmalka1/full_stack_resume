@@ -223,6 +223,12 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
             assert {"fit", "fit_score", "gaps", "approval_reasons", "issues"}.isdisjoint(
                 output_format["schema"]["properties"]
             )
+            requirement_schema = output_format["schema"]["$defs"]["ProposedRequirement"]
+            assert {
+                "coverage",
+                "shortfall_severity",
+                "shortfall_reason",
+            } <= requirement_schema["properties"].keys()
 
 
 def test_the_system_prompt_and_versions_come_from_the_contract_file(

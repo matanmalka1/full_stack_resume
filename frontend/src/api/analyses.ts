@@ -108,6 +108,7 @@ export const applyAnalysisDecisions = async (
 
 export type RequirementCoverage = "matched" | "partial" | "unsupported" | "unknown";
 export type RequirementImportance = "mandatory" | "preferred" | "unknown";
+export type ShortfallSeverity = "none" | "minor" | "material" | "unknown";
 
 /* One thing the employer asked for, and what the canonical facts can truthfully show for
    it - the mirror of the backend's `Requirement`. `coverage` is whether it is met;
@@ -120,6 +121,9 @@ export interface Requirement {
   text: string;
   importance: RequirementImportance;
   coverage: RequirementCoverage;
+  /* Missing only on immutable analyses created before this field existed. */
+  shortfallSeverity?: ShortfallSeverity | null;
+  shortfallReason?: string | null;
   supportingFactIds: string[];
   boundaryFactIds: string[];
 }
@@ -181,6 +185,9 @@ const isRequirementCoverage = (value: unknown): value is RequirementCoverage =>
 const isRequirementImportance = (value: unknown): value is RequirementImportance =>
   value === "mandatory" || value === "preferred" || value === "unknown";
 
+const isShortfallSeverity = (value: unknown): value is ShortfallSeverity =>
+  value === "none" || value === "minor" || value === "material" || value === "unknown";
+
 const requirementsFrom = (value: unknown): { items: Requirement[]; unreadableCount: number } => {
   if (!Array.isArray(value)) {
     return { items: [], unreadableCount: 0 };
@@ -208,6 +215,11 @@ const requirementsFrom = (value: unknown): { items: Requirement[]; unreadableCou
         text: requirement.text,
         importance: requirement.importance,
         coverage: requirement.coverage,
+        shortfallSeverity: isShortfallSeverity(requirement.shortfall_severity)
+          ? requirement.shortfall_severity
+          : null,
+        shortfallReason:
+          typeof requirement.shortfall_reason === "string" ? requirement.shortfall_reason : null,
         supportingFactIds: stringsFrom(requirement.supporting_fact_ids),
         boundaryFactIds: stringsFrom(requirement.boundary_fact_ids),
       },

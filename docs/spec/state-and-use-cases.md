@@ -440,8 +440,9 @@ exempt for a deleted fact.
 Asynchronous and idempotent. Creating a new analysis requires the configured AI provider.
 `analyze_job` runs the one provider task named in product-spec §12,
 `propose_analysis`, and supplies its structured Proposal: the posting's requirements with
-their importance and evidence-linked coverage, and the Track/Profile/Emphasis/language
-classification. The raw response is preserved. Deterministic policy locates each quoted
+their importance, evidence-linked coverage, shortfall severity and reason, and the
+Track/Profile/Emphasis/language classification. The raw response is preserved.
+Deterministic policy locates each quoted
 requirement in the snapshot, validates canonical-fact eligibility, refuses a positive
 coverage left without evidence, applies canonical boundary facts, checks profile
 legality, and derives requirement identity, gaps, Fit, and review reasons. A check that
@@ -510,6 +511,11 @@ assessed posting must not outscore a fully assessed one. `fit` (`high`/`medium`/
 is derived from `fit_score` against fixed thresholds, with any hard gap still forcing
 `low` outright regardless of the score. This remains diagnostic. `fit_score` is `null`
 only when nothing at all could be scored.
+
+A mandatory `unsupported` requirement is a hard gap. A mandatory `partial` requirement
+is hard only when its uncovered condition has `material` shortfall severity; `minor` and
+`unknown` partial shortfalls are warnings. Coverage values and their numeric Fit credit
+do not change: every `partial` still earns one half of its requirement weight.
 
 ### `create_selection_plan`
 

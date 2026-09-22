@@ -34,6 +34,11 @@ Importance = Literal["mandatory", "preferred", "unknown"]
 #: is a claim that the candidate lacks it.
 ProposedRequirementCoverage = Literal["matched", "partial", "unsupported", "unknown"]
 
+#: How consequential the uncovered part of a requirement is. This is distinct
+#: from coverage: two requirements may both be partially covered while only
+#: one is missing something material to the employer's demand.
+ShortfallSeverity = Literal["none", "minor", "material", "unknown"]
+
 ProposalLanguage = Literal["en", "he"]
 
 
@@ -54,6 +59,8 @@ class ProposedRequirement(StrictModel):
     text: str
     importance: Importance = "unknown"
     coverage: ProposedRequirementCoverage = "unknown"
+    shortfall_severity: ShortfallSeverity = "unknown"
+    shortfall_reason: str | None = None
     fact_ids: list[str] = []
     rationale: str | None = None
 
@@ -118,6 +125,7 @@ IssueCode = Literal[
     "coverage_without_evidence",
     "duplicate_requirement",
     "requirement_unusable",
+    "shortfall_inconsistent",
 ]
 
 

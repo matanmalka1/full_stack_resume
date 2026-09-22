@@ -55,4 +55,31 @@ describe("AnalysisPanel", () => {
     expect(screen.getByRole("heading", { name: "Experience selling AWS-based solutions" })).toBeInTheDocument();
     expect(screen.getAllByText("Experience selling AWS-based solutions")).toHaveLength(1);
   });
+
+  it("shows a minor mandatory shortfall as attention rather than a hard gap", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const minor: Classification = {
+      ...classification,
+      fit: "high",
+      gaps: [{ ...classification.gaps[0], severity: "warning" }],
+      requirements: [
+        {
+          ...classification.requirements[0],
+          coverage: "partial",
+          shortfallSeverity: "minor",
+          shortfallReason: "The verified duration is slightly below the requested threshold.",
+        },
+      ],
+    };
+
+    render(
+      <QueryClientProvider client={client}>
+        <AnalysisPanel classification={minor} detail={detail()} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("1 דרישות חובה דורשות תשומת לב, ללא פער קשיח.")).toBeInTheDocument();
+    expect(screen.getByText(/פער קטן:/)).toBeInTheDocument();
+    expect(screen.getByText(/verified duration is slightly below/)).toBeInTheDocument();
+  });
 });

@@ -120,14 +120,17 @@ def _bare_gaps(requirements: Sequence[Requirement]) -> list[Gap]:
 
 
 def _severity(requirement: Requirement) -> str:
-    """`partial` on a demanded requirement is still hard.
-
-    Partial means relevant evidence exists, not that the requirement is
-    satisfied, so it still demands an explicit decision.
-    """
+    """Only an established material shortfall in a demand is hard."""
     if requirement.importance != "mandatory":
         return "warning"
-    return "hard" if requirement.coverage in ("partial", "unsupported") else "warning"
+    if requirement.coverage == "unsupported":
+        return "hard"
+    if requirement.coverage != "partial":
+        return "warning"
+    # Immutable analyses created before this field existed retain their former
+    # conservative projection. New uncertain assessments do not become a hard
+    # gap merely because the provider could not determine materiality.
+    return "hard" if requirement.shortfall_severity in (None, "material") else "warning"
 
 
 def gaps(requirements: Sequence[Requirement], facts: FactStore) -> list[Gap]:
@@ -154,7 +157,11 @@ def gaps(requirements: Sequence[Requirement], facts: FactStore) -> list[Gap]:
                 requirement_id=requirement.requirement_id,
                 requirement=requirement.text,
                 severity=_severity(requirement),
-                reason=authoritative or _COVERAGE_REASON[requirement.coverage],
+                reason=(
+                    authoritative
+                    or requirement.shortfall_reason
+                    or _COVERAGE_REASON[requirement.coverage]
+                ),
                 substitute_fact_ids=list(requirement.supporting_fact_ids),
             )
         )

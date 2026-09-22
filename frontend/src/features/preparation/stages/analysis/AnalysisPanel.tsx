@@ -53,6 +53,7 @@ export const AnalysisPanel = ({
         <RequirementCoverageSummary
           requirements={classification.requirements}
           unreadableRequirementCount={classification.unreadableRequirementCount}
+          hardGapCount={classification.gaps.filter((gap) => gap.severity === "hard").length}
         />
       )}
 

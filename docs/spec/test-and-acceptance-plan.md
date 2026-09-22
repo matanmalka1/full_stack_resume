@@ -324,6 +324,10 @@ Extend the nearest existing tests for these material distinctions:
   granularity are covered explicitly.
 - Analysis issues, hard gaps, and low Fit survive as visible diagnostics without an
   acknowledgement command.
+- A partial mandatory requirement is hard only for a material shortfall. Minor and
+  unresolved partial shortfalls remain warnings, while unsupported mandatory
+  requirements remain hard. Inconsistent coverage/severity combinations are narrowed
+  and disclosed rather than accepted.
 - Requirement identity remains stable across prompt versions; historical records are
   never reconstructed with a newer identity algorithm.
 - Classification uncertainty alone does not force a professional choice;

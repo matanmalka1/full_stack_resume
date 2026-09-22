@@ -12,6 +12,7 @@ from .analysis_proposal import (
     Importance,
     ProposedRequirementCoverage,
     RequirementSource,
+    ShortfallSeverity,
 )
 from .base import StrictModel
 from .taxonomy import Emphasis, ProfileName, Track
@@ -58,6 +59,11 @@ class Requirement(StrictModel):
     text: str
     importance: Importance = "unknown"
     coverage: Coverage = "unknown"
+    #: Absent only on immutable analyses created before shortfall severity was
+    #: part of the contract. Projection preserves their former conservative
+    #: meaning rather than silently reinterpreting history.
+    shortfall_severity: ShortfallSeverity | None = None
+    shortfall_reason: str | None = None
     supporting_fact_ids: list[str] = []
     boundary_fact_ids: list[str] = []
     #: How the posting was found to carry this text, when it was found at all.

@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, CircleAlert, FileCheck2, ShieldAlert } from "lucide-react";
 import { useMemo } from "react";
 
-import type { Requirement, RequirementCoverage, RequirementImportance } from "@/api/analyses";
+import type {
+  Requirement,
+  RequirementCoverage,
+  RequirementImportance,
+  ShortfallSeverity,
+} from "@/api/analyses";
 import { factsQueryOptions } from "@/api/facts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
@@ -17,6 +22,13 @@ const importanceLabels: Record<RequirementImportance, string> = {
   mandatory: "דרישת חובה",
   preferred: "דרישה מועדפת",
   unknown: "חשיבות לא צוינה",
+};
+
+const shortfallLabels: Record<ShortfallSeverity, string> = {
+  none: "אין פער",
+  minor: "פער קטן",
+  material: "פער מהותי",
+  unknown: "חומרת הפער לא הוכרעה",
 };
 
 /* `unknown` sits between `partial` and `matched`: it is not evidence of a
@@ -42,9 +54,11 @@ const orderedRequirements = (requirements: Requirement[]): Requirement[] =>
 export const RequirementCoverageSummary = ({
   requirements,
   unreadableRequirementCount,
+  hardGapCount,
 }: {
   requirements: Requirement[];
   unreadableRequirementCount: number;
+  hardGapCount: number;
 }) => {
   const counts = requirements.reduce(
     (result, requirement) => {
@@ -56,7 +70,6 @@ export const RequirementCoverageSummary = ({
   const uncoveredMandatory = requirements.filter(
     (requirement) => requirement.importance === "mandatory" && requirement.coverage !== "matched",
   ).length;
-
   const metrics = [
     { label: "מכוסות", value: counts.matched },
     { label: "חלקיות", value: counts.partial },
@@ -86,13 +99,15 @@ export const RequirementCoverageSummary = ({
       <Callout
         className="mt-3"
         title={
-          uncoveredMandatory === 0
+          hardGapCount === 0 && uncoveredMandatory === 0
             ? "אין דרישות חובה ללא כיסוי מלא."
-            : uncoveredMandatory === 1
-              ? "דרישת חובה אחת עדיין אינה מכוסה במלואה."
-              : `${uncoveredMandatory} דרישות חובה עדיין אינן מכוסות במלואן.`
+            : hardGapCount === 0
+              ? `${uncoveredMandatory} דרישות חובה דורשות תשומת לב, ללא פער קשיח.`
+              : hardGapCount === 1
+                ? "נמצא פער קשיח אחד בדרישות החובה."
+                : `נמצאו ${hardGapCount} פערים קשיחים בדרישות החובה.`
         }
-        tone={uncoveredMandatory === 0 ? "success" : "blocker"}
+        tone={hardGapCount > 0 ? "blocker" : uncoveredMandatory > 0 ? "warning" : "success"}
       />
       {unreadableRequirementCount === 0 ? null : (
         <p className="mt-2 text-support text-cv-text-muted">לא ניתנות להצגה: {unreadableRequirementCount}</p>
@@ -166,6 +181,15 @@ export const RequirementCoverageSection = ({
           <p className="mt-0.5 text-caption font-semibold text-cv-text-muted">
             {importanceLabels[requirement.importance]}
           </p>
+          {requirement.coverage === "matched" ? null : (
+            <p className="mt-1 text-support text-cv-text-muted" dir="auto">
+              <span className="font-bold text-cv-text">
+                {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:
+                {" "}
+              </span>
+              {requirement.shortfallReason ?? "לא סופק הסבר מפורט לפער."}
+            </p>
+          )}
 
           {factsQuery.data === undefined ||
           (requirement.supportingFactIds.length === 0 && requirement.boundaryFactIds.length === 0) ? null : (

@@ -441,9 +441,10 @@ protocol.
 The AI task catalog has six implemented tasks. Task names
 are the provider's; `analyze_job` is the application command that calls the first:
 
-- `propose_analysis` — the posting's requirements with their importance and
-  evidence-linked coverage, together with Track/Profile/Emphasis/language
-  classification, as one Proposal from one call.
+- `propose_analysis` — the posting's requirements with their importance,
+  evidence-linked coverage, and the severity and reason of any shortfall,
+  together with Track/Profile/Emphasis/language classification, as one Proposal
+  from one call.
 - `propose_selection_plan`
 - `draft_resume`
 - `regenerate_section`
@@ -457,6 +458,14 @@ rather than voiding the reading. A requirement whose text the engine cannot loca
 the posting is kept and marked unverified; an unresolvable citation is dropped and any
 positive coverage resting on it falls to unknown. Uncertainty is recorded as unknown and
 never as an absence of experience.
+
+Coverage and shortfall severity answer different questions. `partial` says that
+canonical facts answer only part of a requirement; it does not by itself say that the
+uncovered part is material. A partial mandatory requirement is a hard gap only when its
+shortfall severity is `material`. A `minor` or `unknown` shortfall remains a warning.
+An `unsupported` mandatory requirement remains a hard gap. The provider proposes
+shortfall severity and an explicit reason; deterministic policy normalizes inconsistent
+combinations and remains authoritative over numeric and canonical boundary checks.
 
 - `assess_claim_support` — separate semantic review of wording against supplied
   canonical sources and contextual attribution, returning evidence proposals only.

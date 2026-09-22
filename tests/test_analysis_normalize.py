@@ -399,6 +399,8 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
                 text="-  Comfortable presenting to customers. ",
                 importance="preferred",
                 coverage="partial",
+                shortfall_severity="material",
+                shortfall_reason="A material part of the demand is not verified.",
                 fact_ids=["sales.cycle.account_management"],
             ),
         ),
@@ -410,6 +412,7 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
     requirement = analysis.requirements[0]
     assert len(analysis.requirements) == 1
     assert requirement.coverage == "partial"
+    assert requirement.shortfall_severity == "material"
     assert requirement.importance == "mandatory"
     assert set(requirement.supporting_fact_ids) == {
         CANONICAL_FACT,
@@ -493,6 +496,75 @@ def test_a_canonical_boundary_still_caps_a_match(
     requirement = analysis.requirements[0]
     assert requirement.boundary_fact_ids
     assert requirement.coverage == "partial"
+    assert requirement.shortfall_severity == "material"
+
+
+def test_a_minor_partial_shortfall_survives_normalization(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    reason = "The verified duration is slightly below the requested threshold."
+    analysis = _normalize(
+        _proposal(
+            ProposedRequirement(
+                text="- Comfortable presenting to customers.",
+                importance="mandatory",
+                coverage="partial",
+                shortfall_severity="minor",
+                shortfall_reason=reason,
+                fact_ids=[CANONICAL_FACT],
+            )
+        ),
+        fact_store,
+        profile_store,
+        requirement_concepts,
+    )
+
+    requirement = analysis.requirements[0]
+    assert requirement.shortfall_severity == "minor"
+    assert requirement.shortfall_reason == reason
+    assert "shortfall_inconsistent" not in {issue.code for issue in analysis.issues}
+
+
+def test_an_inconsistent_shortfall_is_narrowed_and_disclosed(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    analysis = _normalize(
+        _proposal(
+            ProposedRequirement(
+                text="- Comfortable presenting to customers.",
+                coverage="matched",
+                shortfall_severity="minor",
+                fact_ids=[CANONICAL_FACT],
+            )
+        ),
+        fact_store,
+        profile_store,
+        requirement_concepts,
+    )
+
+    assert analysis.requirements[0].shortfall_severity == "none"
+    assert "shortfall_inconsistent" in {issue.code for issue in analysis.issues}
+
+
+def test_an_unexplained_material_partial_shortfall_becomes_unknown(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    analysis = _normalize(
+        _proposal(
+            ProposedRequirement(
+                text="- Comfortable presenting to customers.",
+                coverage="partial",
+                shortfall_severity="material",
+                fact_ids=[CANONICAL_FACT],
+            )
+        ),
+        fact_store,
+        profile_store,
+        requirement_concepts,
+    )
+
+    assert analysis.requirements[0].shortfall_severity == "unknown"
+    assert "shortfall_inconsistent" in {issue.code for issue in analysis.issues}
 
 
 def test_prompt_version_does_not_change_requirement_identity(

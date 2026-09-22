@@ -498,7 +498,8 @@ state.
 
 The `analyze_job` command calls one of those tasks, `propose_analysis`: a stateless
 structured response proposing the requirements, their importance, evidence-linked
-coverage, and the classification together. Its raw output is preserved.
+coverage, shortfall severity and reason, and the classification together. Its raw output
+is preserved.
 
 What the engine validates before deterministic Fit/gap calculation is what it can
 establish itself: that the posting carries each quoted requirement, which it locates in
@@ -507,6 +508,12 @@ canonical; that a positive reading keeps evidence after that check; and that a c
 boundary fact still caps a match. A check that fails narrows that requirement and
 records an `AnalysisIssue` on the analysis. It does not discard the reading: a response
 that cannot be parsed is the one failure that fails the Operation.
+
+Coverage and shortfall materiality remain separate fields. The provider may propose that
+a partial shortfall is `minor`, `material`, or `unknown`, but deterministic normalization
+forces matched/unsupported/unknown coverage to none/material/unknown severity
+respectively. A canonical boundary that caps a match produces a material shortfall. Only
+a material partial shortfall can make a mandatory requirement a hard gap.
 
 Requirement identity is the snapshot and the requirement's own normalized text under a
 stated identity-algorithm version. The prompt version is recorded as provenance and is
