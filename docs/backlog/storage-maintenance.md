@@ -16,16 +16,20 @@ the database holds no reference to that attempt's keys. Deletion follows only fr
 check, not from fencing alone; fencing rules out a *future* registration, the check
 rules out one that already happened. A second key with no lease row at all - including
 one an old attempt's late `put` produces after an earlier call already deleted its lease
-and files - gets the same pre-deletion check and is removed the same way. Together these
-replace the grace-period approach this backlog item originally ruled out, which could
-not distinguish an abandoned writer from a slow one.
+and files - gets the same pre-deletion check and is removed the same way. A group key
+found already `reclaiming` past its own deadline - a prior call fenced it but stopped
+before finishing - is resumed rather than left stuck: the same check, deletion, and
+lease-row removal repeat safely. Together these replace the grace-period approach this
+backlog item originally ruled out, which could not distinguish an abandoned writer from
+a slow one.
 
 The accepted remaining limitation: the object-store write itself is not fenced, only its
 registration is. An attempt whose lease was reclaimed can still complete its `put` after
 the fact, producing a transient orphan with no lease row of its own - the second case
-above. Such an orphan can never be registered, because registration requires a live
-lease row for its group key under the exact attempt_id that produced it, and none
-exists, so it is always safe for a later `reclaim_orphans` call to remove.
+above. Such an orphan can never be registered: registration requires both a live lease
+row for its group key under the exact attempt_id that produced it, and that the key
+being registered is itself derived from that attempt_id - neither holds once the lease
+is gone - so it is always safe for a later `reclaim_orphans` call to remove.
 `reclaim_orphans` is specified as a repeatable operation rather than a single exhaustive
 pass for exactly this reason. A guarantee that one call removes every orphan would
 require the object store itself to refuse a write once its lease is gone - a fenced or

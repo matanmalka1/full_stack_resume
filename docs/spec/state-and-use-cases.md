@@ -907,15 +907,19 @@ reconciliation's `passed` verdict nor deletes anything.
 
 - One whose group key still holds a `pending` lease, now expired. Reclaim fences it
   first (`pending -> reclaiming`, conditioned on the same attempt_id - the same
-  condition a genuine registration needs, so the two serialize against each other).
-  Only after fencing succeeds does reclaim check, once more and *before deleting
-  anything*, that the database holds no reference to any physical key that attempt
-  produced - a check made before deletion because one made only afterward cannot
-  prevent removing a payload that turns out to be referenced. A "yes" at this point is
-  an integrity failure, not a candidate to skip quietly, and reclaim stops rather than
-  deletes. A "no" allows deletion of every physical key the attempt produced, after
-  which the lease row is removed last. A second check after deletion may run as
-  additional verification; it is not what makes the deletion safe.
+  condition a genuine registration needs, so the two serialize against each other), and
+  the same update stamps a bounded reclaim deadline on the row. Only after fencing
+  succeeds does reclaim check, once more and *before deleting anything*, that the
+  database holds no reference to any physical key that attempt produced - a check made
+  before deletion because one made only afterward cannot prevent removing a payload
+  that turns out to be referenced. A "yes" at this point is an integrity failure, not a
+  candidate to skip quietly, and reclaim stops rather than deletes. A "no" allows
+  deletion of every physical key the attempt produced, after which the lease row is
+  removed last. A second check after deletion may run as additional verification; it is
+  not what makes the deletion safe. A group key already found in `reclaiming` past its
+  own deadline - a prior call fenced it but stopped before finishing - is resumed, not
+  re-fenced: the same reference check, deletion, and lease-row removal repeat, safely,
+  since deleting an already-absent key is a no-op (architecture.md §7.1).
 - One whose group key holds no lease row at all. No fencing is needed, because a
   missing lease row already makes registration for that key impossible. Reclaim makes
   the same pre-deletion reference check and, finding none, deletes it directly. This is
