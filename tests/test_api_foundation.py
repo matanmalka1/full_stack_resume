@@ -168,6 +168,17 @@ def test_orphan_inventory_reports_candidates_without_changing_evidence(api, serv
     assert ingested.job_snapshot_id
 
 
+def test_orphan_reclaim_endpoint_removes_leaseless_payload(api, services) -> None:
+    orphan = services.payloads.commit_snapshot("unregistered", "snapshot", "orphan")
+    response = api.post(
+        f"{API_PREFIX}/maintenance/orphans/reclaim",
+        headers={"Origin": ALLOWED_ORIGIN},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"removed": [orphan.reference]}
+    assert services.maintenance.inspect_orphans().candidates == []
+
+
 # --- refusals ---------------------------------------------------------------
 
 

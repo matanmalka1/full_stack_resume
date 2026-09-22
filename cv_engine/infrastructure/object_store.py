@@ -147,6 +147,17 @@ class ObjectStore(Protocol):
         """
         ...
 
+    def delete(self, key: str) -> None:
+        """Remove the object under `key`, or do nothing if it is not there.
+
+        Idempotent on purpose: `reclaim_orphans` (architecture.md §7.1) may
+        observe the same leaseless key on more than one call - a late write
+        that lands after an earlier reclaim already removed it once - and
+        deleting an already-absent key must stay a safe no-op rather than an
+        error.
+        """
+        ...
+
 
 def validate_key(key: str) -> str:
     """Refuse any key that could become a traversal, then return it unchanged.
@@ -324,6 +335,15 @@ class LocalObjectStore:
         for path in sorted(base.rglob("*")):
             if is_regular_file_within(self._root, path):
                 yield path.relative_to(self._root).as_posix()
+
+    def delete(self, key: str) -> None:
+        path = self._path(key)
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise InfrastructureFailure(f"object could not be removed: {key}") from exc
 
 
 class S3ObjectStore:
@@ -509,3 +529,10 @@ class S3ObjectStore:
             if not next_token or next_token == continuation:
                 raise InfrastructureFailure("object inventory pagination did not advance")
             continuation = next_token
+
+    def delete(self, key: str) -> None:
+        object_key = self._object_key(key)
+        try:
+            self._client.delete_object(Bucket=self._bucket, Key=object_key)  # type: ignore[attr-defined]
+        except Exception as exc:
+            raise InfrastructureFailure(f"object could not be removed: {key}") from exc

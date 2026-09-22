@@ -2,17 +2,37 @@
 
 ## Safe orphan deletion
 
-Status: OPEN — separate from the completed persistence architecture refactor.
+Status: DESIGNED, 2026-09-22 — coordination contract specified in
+[`../spec/architecture.md`](../spec/architecture.md) §7.1 (mechanism) and
+[`../spec/state-and-use-cases.md`](../spec/state-and-use-cases.md) §19b
+(`inspect_orphans`/`reclaim_orphans` command contracts); implementation pending.
 
-Approved scope clarification, 2026-09-17: read-only orphan inspection closes the
-persistence refactor; deletion is a separate task. The inspection contract lives in
-[`../spec/state-and-use-cases.md`](../spec/state-and-use-cases.md), section 19b.
+A write lease now reserves a payload's destination (a group key, such as one
+ApprovedRevision's JSON+Markdown pair) before any bytes are written, under physical keys
+scoped to that specific attempt_id. `reclaim_orphans` fences an expired lease first
+(`pending -> reclaiming`, the same conditional update a genuine registration needs, so
+the two serialize against each other), then checks - before deleting anything - that
+the database holds no reference to that attempt's keys. Deletion follows only from that
+check, not from fencing alone; fencing rules out a *future* registration, the check
+rules out one that already happened. A second key with no lease row at all - including
+one an old attempt's late `put` produces after an earlier call already deleted its lease
+and files - gets the same pre-deletion check and is removed the same way. A group key
+found already `reclaiming` past its own deadline - a prior call fenced it but stopped
+before finishing - is resumed rather than left stuck: the same check, deletion, and
+lease-row removal repeat safely. Together these replace the grace-period approach this
+backlog item originally ruled out, which could not distinguish an abandoned writer from
+a slow one.
 
-A payload is written before database registration. An inspection candidate may belong
-to an active writer awaiting registration, including one that registers after the
-inspection snapshot. A grace period alone cannot establish safe deletion.
-
-Before implementing deletion, specify coordination with active writers and evidence
-that a payload is not awaiting registration. Preserve every registered snapshot,
-revision, historical artifact, and inactive output. Do not add leases, tombstones,
-registration intents, or another coordination mechanism without that design.
+The accepted remaining limitation: the object-store write itself is not fenced, only its
+registration is. An attempt whose lease was reclaimed can still complete its `put` after
+the fact, producing a transient orphan with no lease row of its own - the second case
+above. Such an orphan can never be registered: registration requires both a live lease
+row for its group key under the exact attempt_id that produced it, and that the key
+being registered is itself derived from that attempt_id - neither holds once the lease
+is gone - so it is always safe for a later `reclaim_orphans` call to remove.
+`reclaim_orphans` is specified as a repeatable operation rather than a single exhaustive
+pass for exactly this reason. A guarantee that one call removes every orphan would
+require the object store itself to refuse a write once its lease is gone - a fenced or
+conditional write keyed to lease validity, which `ObjectStore` does not implement today
+(it refuses only an already-occupied key). That stays open as possible future work, not
+a requirement this design fails to meet.

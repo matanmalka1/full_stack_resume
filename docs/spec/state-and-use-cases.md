@@ -888,17 +888,53 @@ failure.
 ### `inspect_orphans()`
 
 `GET /api/v1/maintenance/orphans` returns `candidates`, a sorted list of managed
-immutable payload references observed in storage but absent from the captured database
-snapshot. References include JobSnapshots, ApprovedRevision JSON/Markdown, and every
-artifact version, including historical and inactive evidence. Mutable working
-projections and files outside managed immutable layouts are excluded.
+immutable payload references observed in storage whose group key (architecture.md §7.1)
+is absent from the database snapshot **and** holds no live lease row (`pending` or
+`reclaiming`). A key still covered by an unexpired lease is never listed - the lease
+check is what excludes it. References include JobSnapshots, ApprovedRevision
+JSON/Markdown, and every artifact version, including historical and inactive evidence.
+Mutable working projections and files outside managed immutable layouts are excluded.
 
 The database read scope closes before storage enumeration. This is a read-only,
-non-atomic observation: candidates may belong to active writers awaiting registration
-or may have been registered after the snapshot. Listing neither changes reconciliation's
-`passed` verdict nor proves abandonment. It never repairs or deletes payloads. Deletion
-requires a separately specified coordination contract with writers; a grace period alone
-is insufficient.
+non-atomic observation: between this call's several reads, a candidate's lease could be
+newly acquired, committed, or reclaimed by other activity. Listing neither changes
+reconciliation's `passed` verdict nor deletes anything.
+
+### `reclaim_orphans()`
+
+`POST /api/v1/maintenance/orphans/reclaim` removes two kinds of candidate
+`inspect_orphans` would list (architecture.md §7.1 defines both in full):
+
+- One whose group key still holds a `pending` lease, now expired. Reclaim fences it
+  first (`pending -> reclaiming`, conditioned on the same attempt_id - the same
+  condition a genuine registration needs, so the two serialize against each other), and
+  the same update stamps a bounded reclaim deadline on the row. Only after fencing
+  succeeds does reclaim check, once more and *before deleting anything*, that the
+  database holds no reference to any physical key that attempt produced - a check made
+  before deletion because one made only afterward cannot prevent removing a payload
+  that turns out to be referenced. A "yes" at this point is an integrity failure, not a
+  candidate to skip quietly, and reclaim stops rather than deletes. A "no" allows
+  deletion of every physical key the attempt produced, after which the lease row is
+  removed last. A second check after deletion may run as additional verification; it is
+  not what makes the deletion safe. A group key already found in `reclaiming` past its
+  own deadline - a prior call fenced it but stopped before finishing - is resumed, not
+  re-fenced: the same reference check, deletion, and lease-row removal repeat, safely,
+  since deleting an already-absent key is a no-op (architecture.md §7.1).
+- One whose group key holds no lease row at all. No fencing is needed, because a
+  missing lease row already makes registration for that key impossible. Reclaim makes
+  the same pre-deletion reference check and, finding none, deletes it directly. This is
+  the path that removes a key an old attempt's `put` wrote *after* the first case
+  already deleted that same attempt's files and lease row on an earlier call - such a
+  key can never be registered, so removing it whenever it is next observed is always
+  safe.
+
+It guarantees exactly two things: it never removes a payload a database record
+references, and it never lets a reclaimed attempt's registration succeed afterward. It
+does not guarantee one call removes every orphan, for the reason the second case exists:
+an object-store write behind an already-fenced lease is not itself prevented, so it can
+still land after that call finished, and only a later call observes it.
+`reclaim_orphans` is idempotent and safe to call repeatedly, including concurrently with
+itself; operators run it on a schedule rather than once.
 
 ## 20. Queries
 

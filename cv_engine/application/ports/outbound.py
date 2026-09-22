@@ -54,6 +54,18 @@ class ArtifactStore(Protocol):
 
 
 class SnapshotPayloadStore(Protocol):
+    def snapshot_path(self, application_id: str, snapshot_id: str) -> Path:
+        """Where a JobSnapshot payload would land, without writing it.
+
+        Lets a caller compute the reference for a payload write lease
+        (architecture.md §7.1) before any bytes are written.
+        """
+        ...
+
+    def reference_for(self, destination: Path) -> str:
+        """The stored reference `destination` would receive, without writing anything."""
+        ...
+
     def commit_snapshot(
         self,
         application_id: str,
@@ -88,17 +100,43 @@ class SnapshotPayloadStore(Protocol):
 
 
 class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
+    def output_path(
+        self, application_id: str, revision_id: str, artifact_id: str, *, suffix: str
+    ) -> Path:
+        """Canonical storage destination for a rendered artifact."""
+        ...
+
     def payload_inventory(self) -> list[str]:
         """Read-only observation of managed immutable payload references."""
+        ...
+
+    def delete_payload(self, reference: str) -> None:
+        """Remove one stored payload `reclaim_orphans` has decided is safe to remove.
+
+        Idempotent: a reference already absent from storage is not an error.
+        """
+        ...
+
+    def revision_path(
+        self, application_id: str, revision_id: str, attempt_id: str, *, format: str
+    ) -> Path:
+        """Where one approval attempt's revision payload would land, without writing it."""
         ...
 
     def commit_revision(
         self,
         application_id: str,
         revision_id: str,
+        attempt_id: str,
         structured_json: str,
         markdown: str,
     ) -> RevisionPayloads: ...
+
+    def draft_snapshot_path(
+        self, application_id: str, working_draft_id: str, edit_version: int
+    ) -> Path:
+        """Where one archived WorkingDraft version's payload would land, without writing it."""
+        ...
 
     def commit_draft_snapshot(
         self,

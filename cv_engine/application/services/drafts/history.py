@@ -19,6 +19,7 @@ from ...ports.application_intake import AuditLogWriter
 from ...ports.artifact_catalog import ArtifactCatalog
 from ...ports.decision_store import DecisionStore
 from ...ports.drafts import DraftHistoryApplicationReader, DraftLifecycleStore
+from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
 from ...ports.transactions import WriteTransaction
 from .inputs import require_working_version
 
@@ -33,6 +34,7 @@ class DraftHistoryService:
         decisions: DecisionStore,
         audit: AuditLogWriter,
         payloads: RevisionPayloadStore,
+        leases: PayloadWriteLeaseStore,
         applications: DraftHistoryApplicationReader,
     ):
         self.transactions = transactions
@@ -41,6 +43,7 @@ class DraftHistoryService:
         self.decisions = decisions
         self.audit = audit
         self.revision_payloads = payloads
+        self.leases = leases
         self.applications = applications
 
     def _working(self, working_draft_id: str, expected_version: int) -> WorkingDraft:
@@ -65,24 +68,43 @@ class DraftHistoryService:
         Filesystem first, registration second, exactly as approval does: a
         registration that fails afterwards leaves a reconcilable orphan, whereas
         a pointer written before its payload would name content that does not
-        exist.
+        exist. The reference is single-file and already unique per (working
+        draft, edit version) - a retry at the same version is refused outright,
+        not silently reused - so it serves as its own group key and attempt_id
+        (architecture.md §7.1).
         """
         _sealed, _markdown, structured_json = seal_draft(working.source)
+        reference = self.revision_payloads.reference_for(
+            self.revision_payloads.draft_snapshot_path(
+                working.application_id, working.id, working.edit_version
+            )
+        )
+        with self.transactions.write() as tx:
+            self.leases.acquire(
+                tx, reference, reference, keys=[reference], ttl_seconds=DEFAULT_LEASE_TTL_SECONDS
+            )
         try:
             return self.revision_payloads.commit_draft_snapshot(
                 working.application_id, working.id, working.edit_version, structured_json
             )
         except FileExistsError as exc:
+            with self.transactions.write() as tx:
+                self.leases.release(tx, reference, reference)
             raise StateConflict(
                 f"working draft {working.id} version {working.edit_version} is already archived: {exc}"
             ) from exc
         except (OSError, ValueError) as exc:
+            with self.transactions.write() as tx:
+                self.leases.release(tx, reference, reference)
             raise InfrastructureFailure(f"could not archive the working draft: {exc}") from exc
 
     def register_draft_snapshot(
         self, working: WorkingDraft, payload: SnapshotPayload, tx: WriteTransaction
     ) -> str:
         """Register one archived draft payload as an immutable artifact version."""
+        self.leases.mark_committed(
+            tx, payload.reference, payload.reference, keys=[payload.reference]
+        )
         draft = working.source
         return self.catalog.register_artifact_version(
             tx,

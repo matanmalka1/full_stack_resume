@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from ...application.commands import ReconciliationResult
-from ...application.maintenance import OrphanInventory
+from ...application.maintenance import OrphanInventory, ReclaimResult
 from .health import HttpSchema
 
-__all__ = ["FactLifecycleReportResponse", "ReconciliationResponse", "OrphanInventoryResponse"]
+__all__ = [
+    "FactLifecycleReportResponse",
+    "ReconciliationResponse",
+    "OrphanInventoryResponse",
+    "ReclaimResultResponse",
+]
 
 
 class FactLifecycleReportResponse(HttpSchema):
@@ -47,10 +52,20 @@ class ReconciliationResponse(HttpSchema):
 
 
 class OrphanInventoryResponse(HttpSchema):
-    """Observed candidates may still be awaiting registration by active writers."""
+    """Observed candidates hold no database reference and no live write lease."""
 
     candidates: list[str]
 
     @classmethod
     def of(cls, result: OrphanInventory) -> OrphanInventoryResponse:
         return cls(candidates=list(result.candidates))
+
+
+class ReclaimResultResponse(HttpSchema):
+    """What one reclaim call removed. Not exhaustive - see architecture.md §7.1."""
+
+    removed: list[str]
+
+    @classmethod
+    def of(cls, result: ReclaimResult) -> ReclaimResultResponse:
+        return cls(removed=list(result.removed))

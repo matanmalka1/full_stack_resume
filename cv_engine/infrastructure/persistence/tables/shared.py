@@ -296,6 +296,25 @@ Index(
     operation_resource_leases.c.operation_id,
 )
 
+payload_write_leases = Table(
+    "payload_write_leases",
+    metadata,
+    Column("group_key", Text, primary_key=True),
+    Column("attempt_id", String, nullable=False),
+    Column("state", Text, nullable=False),
+    Column("owner", Text, nullable=False),
+    Column("keys_json", JSONB, nullable=False),
+    Column("claimed_at", Text, nullable=False),
+    Column("lease_expires_at", Text, nullable=False),
+    Column("reclaim_deadline_at", Text),
+    Column("committed_at", Text),
+    CheckConstraint("state IN ('pending', 'reclaiming', 'committed')", name="state"),
+    CheckConstraint("(state = 'committed') = (committed_at IS NOT NULL)", name="committed_at"),
+    CheckConstraint(
+        "(state = 'reclaiming') = (reclaim_deadline_at IS NOT NULL)", name="reclaim_deadline_at"
+    ),
+)
+
 operation_outputs = Table(
     "operation_outputs",
     metadata,

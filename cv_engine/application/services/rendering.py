@@ -39,6 +39,7 @@ from ..ports import (
 )
 from ..ports.artifact_catalog import ArtifactCatalog
 from ..ports.drafts import DraftLifecycleStore
+from ..ports.payload_leases import RENDER_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
 from ..ports.ready import ReadyEvidenceReader
 from ..ports.rendering import RenderContextReader
 from ..ports.transactions import TransactionManager, WriteTransaction
@@ -82,6 +83,7 @@ class RenderingService:
         knowledge: KnowledgeStore,
         renderer: Renderer,
         payloads: RevisionPayloadStore,
+        leases: PayloadWriteLeaseStore,
     ):
         self._transactions = transactions
         self._catalog = catalog
@@ -93,6 +95,7 @@ class RenderingService:
         self.renderer = renderer
         self.revision_payloads = payloads
         self.snapshot_payloads = payloads
+        self.leases = leases
 
     def load_knowledge(self) -> Knowledge:
         try:
@@ -263,29 +266,88 @@ class RenderingService:
         candidate = prepared.knowledge.candidate
         targets = prepared.targets
         html_path, pdf_path = targets.html, targets.pdf
-        try:
-            self.renderer.render_html(draft, html_path, candidate)
-            geometry = self.renderer.render_pdf(html_path, pdf_path)
-            report = self.renderer.validate_rendered(
-                draft,
-                prepared.profile,
-                html_path,
-                pdf_path,
-                geometry,
-                candidate,
-                targets.recruiter_pdf_filename,
+        # A render attempt is its own group: unlike a revision retry, nothing
+        # hands the same artifact_ids back to a retried render, so the group
+        # key needs no identity stabler than one fresh id per attempt
+        # (architecture.md §7.1). Chromium is about to write real bytes to
+        # html_path/pdf_path, so the lease is acquired before that, not after.
+        # The two artifact IDs were minted together in prepare(). They are
+        # also the physical output names, so the lease can verify both keys
+        # belong to this exact render attempt at registration.
+        render_attempt_id = ":".join(prepared.artifact_ids)
+        group_key = (
+            f"render:{prepared.command.application_id}:"
+            f"{prepared.command.approved_revision_id}:{render_attempt_id}"
+        )
+        html_reference = self.revision_payloads.reference_for(
+            self.revision_payloads.output_path(
+                prepared.command.application_id,
+                prepared.command.approved_revision_id,
+                prepared.artifact_ids[0],
+                suffix="html",
             )
-        except FileExistsError as exc:
-            raise StateConflict(str(exc)) from exc
-        except ApplicationError:
+        )
+        pdf_reference = self.revision_payloads.reference_for(
+            self.revision_payloads.output_path(
+                prepared.command.application_id,
+                prepared.command.approved_revision_id,
+                prepared.artifact_ids[1],
+                suffix="pdf",
+            )
+        )
+        with self._transactions.write() as tx:
+            self.leases.acquire(
+                tx,
+                group_key,
+                render_attempt_id,
+                keys=[html_reference, pdf_reference],
+                ttl_seconds=RENDER_LEASE_TTL_SECONDS,
+            )
+
+        def renew() -> None:
+            with self._transactions.write() as tx:
+                self.leases.renew(
+                    tx,
+                    group_key,
+                    render_attempt_id,
+                    ttl_seconds=RENDER_LEASE_TTL_SECONDS,
+                )
+
+        try:
+            try:
+                self.renderer.render_html(draft, html_path, candidate)
+                renew()
+                geometry = self.renderer.render_pdf(html_path, pdf_path)
+                renew()
+                report = self.renderer.validate_rendered(
+                    draft,
+                    prepared.profile,
+                    html_path,
+                    pdf_path,
+                    geometry,
+                    candidate,
+                    targets.recruiter_pdf_filename,
+                )
+                renew()
+            except FileExistsError as exc:
+                raise StateConflict(str(exc)) from exc
+            except ApplicationError:
+                raise
+            except (OSError, RuntimeError) as exc:
+                raise InfrastructureFailure(f"rendering failed: {exc}") from exc
+        except Exception:
+            with self._transactions.write() as tx:
+                self.leases.release(tx, group_key, render_attempt_id)
             raise
-        except (OSError, RuntimeError) as exc:
-            raise InfrastructureFailure(f"rendering failed: {exc}") from exc
-        artifact_ids = self._register_outputs(prepared, report)
+        artifact_ids = self._register_outputs(prepared, report, group_key, render_attempt_id)
         return ExecutedRender(prepared=prepared, report=report, artifact_ids=artifact_ids)
 
     def _register_outputs(
-        self, prepared: PreparedRender, report: ValidationReport
+        self,
+        prepared: PreparedRender,
+        report: ValidationReport,
+        group_key: str,
+        render_attempt_id: str,
     ) -> tuple[str, str]:
         """Register the two rendered artifacts, in the execute phase.
 
@@ -344,6 +406,16 @@ class RenderingService:
                 )
             )
         with self._transactions.write() as tx:
+            # Same atomicity boundary as approval's revision group
+            # (architecture.md §7.1): a StateConflict here means this attempt
+            # was reclaimed as abandoned, and must abort before either
+            # artifact row is written, not after.
+            self.leases.mark_committed(
+                tx,
+                group_key,
+                render_attempt_id,
+                keys=[stored.reference for _, _, stored in stored_outputs],
+            )
             final_ids = []
             for artifact_version_id, artifact_type, stored in stored_outputs:
                 existing = self._contexts.matching_render_artifact(

@@ -30,13 +30,17 @@ def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
         "app",
         "snapshot.txt",
     )
-    assert payload_store.revision_path("app", "revision", format="json").parts[-4:] == (
+    assert payload_store.revision_path("app", "revision", "attempt", format="json").parts[-5:] == (
         "revisions",
         "app",
         "revision",
+        "attempt",
         "resume.json",
     )
-    assert payload_store.revision_path("app", "revision", format="md").name == "resume.md"
+    assert (
+        payload_store.revision_path("app", "revision", "attempt", format="md").name
+        == "resume.md"
+    )
     for suffix in ("html", ".pdf"):
         assert (
             payload_store.output_path("app", "revision", "artifact", suffix=suffix).suffix
@@ -93,8 +97,8 @@ def test_commit_validates_before_storing_and_returns_registration_metadata(
 
 def test_commit_supports_every_approved_payload_family(payload_store: PayloadStore) -> None:
     destinations = [
-        payload_store.revision_path("app", "revision", format="json"),
-        payload_store.revision_path("app", "revision", format="md"),
+        payload_store.revision_path("app", "revision", "attempt", format="json"),
+        payload_store.revision_path("app", "revision", "attempt", format="md"),
         payload_store.output_path("app", "revision", "html", suffix="html"),
         payload_store.output_path("app", "revision", "pdf", suffix="pdf"),
         payload_store.provider_path("app", "operation", "response"),
@@ -130,13 +134,16 @@ def test_existing_immutable_payload_is_never_overwritten(
     assert destination.read_bytes() == b"original"
 
 
-def test_revision_commit_reuses_only_exact_recovery_orphans(payload_store: PayloadStore) -> None:
-    first = payload_store.commit_revision("app", "revision", '{"value":1}', "markdown")
-    recovered = payload_store.commit_revision("app", "revision", '{"value":1}', "markdown")
-    assert recovered == first
+def test_revision_attempts_use_distinct_immutable_keys(payload_store: PayloadStore) -> None:
+    first = payload_store.commit_revision("app", "revision", "attempt-1", '{"value":1}', "markdown")
+    second = payload_store.commit_revision(
+        "app", "revision", "attempt-2", '{"value":1}', "markdown"
+    )
+    assert first.structured.reference != second.structured.reference
+    assert first.markdown.reference != second.markdown.reference
 
-    with pytest.raises(FileExistsError, match="different content"):
-        payload_store.commit_revision("app", "revision", '{"value":2}', "markdown")
+    with pytest.raises(FileExistsError, match="immutable payload already exists"):
+        payload_store.commit_revision("app", "revision", "attempt-1", '{"value":2}', "markdown")
 
 
 def test_traversal_and_unapproved_destinations_are_refused(
