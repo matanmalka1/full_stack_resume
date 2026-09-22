@@ -36,6 +36,7 @@ from cv_engine.application.ports import (
     RegenerateSectionContext,
     SelectionPlanContext,
 )
+from cv_engine.domain.analysis import normalize as normalization
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.providers import (
     ClaimProposal,
@@ -252,6 +253,10 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     assert context.task_contract_version == contract.version
     assert context.input_schema_version == contract.input_schema_version
     assert context.output_schema_version == contract.output_schema_version
+    # `normalize.py`'s own `PROMPT_VERSION` is a documentary constant naming the
+    # same prompt version - it isn't read anywhere in the runtime call path, so
+    # nothing else catches it going stale after a prompt bump. This is what does.
+    assert normalization.PROMPT_VERSION == task_contracts.prompt_version
     # The declared version is a label; the hash is derived from the schema that
     # actually governed the boundary, so the two cannot silently disagree.
     #
@@ -280,6 +285,19 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     assert len(answered.provenance.input_hash) == 64
     assert len(answered.provenance.output_hash) == 64
     assert len(answered.provenance.raw_output_hash) == 64
+
+
+def test_analysis_prompt_requires_self_contained_quotes_when_splitting(
+    task_contracts,
+) -> None:
+    prompt = task_contracts.prompt_text
+
+    assert (
+        "return each as its own requirement only if every one of them can be quoted"
+        in prompt
+    )
+    assert "Keep any qualifier that applies to a given piece" in prompt
+    assert "keep the sentence as one requirement instead" in prompt
 
 
 def test_analysis_prompt_assesses_qualitative_requirements_semantically(task_contracts) -> None:
