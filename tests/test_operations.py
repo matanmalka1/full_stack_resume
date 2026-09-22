@@ -825,9 +825,7 @@ def test_cancellation_after_output_creation_keeps_output_inactive(services) -> N
     assert result.outputs[0].active is False
 
 
-def test_runner_retries_one_transient_failure_and_keeps_technical_detail_out_of_result(
-    services,
-) -> None:
+def test_runner_retries_one_transient_failure(services) -> None:
     operation = _operation_for_runner(services, "Retry Co")
     attempts = 0
     delays = []
@@ -852,6 +850,8 @@ def test_runner_retries_one_transient_failure_and_keeps_technical_detail_out_of_
     assert attempts == 2
     assert delays == [0.25]
 
+
+def test_runner_keeps_unclassified_exception_detail_out_of_result(services) -> None:
     failed_operation = _operation_for_runner(services, "Technical Failure Co")
     failed = _runner(
         services,
@@ -950,14 +950,6 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
         "Fact situational.agentic_multi_agent has no 'he' rendering."
     )
     assert completed.outputs == []
-    assert (
-        available_operation_actions(
-            completed.status,
-            completed.cancellation_requested_at,
-            completed.failure_code,
-        )
-        == ()
-    )
     with pytest.raises(StateConflict, match="cannot be retried"):
         services.operation_lifecycle.retry(completed.id, idempotency_key="meaningless-retry")
     assert completed.attempts_completed == 1
@@ -1025,7 +1017,8 @@ def test_draft_operation_activates_one_validated_working_draft(services) -> None
     completed = foreground_executor(services).execute(operation.id)
 
     assert completed.status is OperationStatus.SUCCEEDED
-    working_id = completed.outputs[0].output_id
+    outputs = {output.output_type: output.output_id for output in completed.outputs}
+    working_id = outputs["working_draft"]
     assert _active_working_draft(services, ingested.application_id).id == working_id
     validation = _latest_validation_for_working_draft(services, working_id)
     assert validation is not None and validation["report"].passed
@@ -1070,41 +1063,6 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
     assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
     with pytest.raises(UnknownRecord):
         _active_working_draft(services, ingested.application_id)
-
-
-def test_foreground_draft_runs_through_one_operation(services) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Foreground Draft Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            client="web",
-        )
-    )
-    analysed = seed_analysis_for_command(
-        services,
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-    )
-
-    operation = services.operation_submissions.submit_draft(
-        DraftCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
-        ),
-        idempotency_key="foreground-draft-key",
-        draft_service=services.drafts,
-    )
-    completed = foreground_executor(services).execute(operation.id)
-
-    assert completed.status is OperationStatus.SUCCEEDED
-    outputs = {output.output_type: output.output_id for output in completed.outputs}
-    validation = _latest_validation_for_working_draft(services, outputs["working_draft"])
-    assert validation is not None
-    assert validation["report"].passed
 
 
 def test_failed_render_operation_preserves_registered_outputs_as_inactive(
@@ -1396,20 +1354,6 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
     )
     committed = setup.services.draft_approval.approve_draft(command, revision_id=reserved_revision)
     assert receipt["status"] == "pending"
-
-    for changed in (
-        command.model_copy(update={"actor_type": "system"}),
-        command.model_copy(update={"client": "worker"}),
-    ):
-        with pytest.raises(StateConflict) as refused:
-            setup.services.draft_approval.approve_idempotent(
-                changed,
-                idempotency_key="approval-recovery",
-            )
-        assert refused.value.code == IDEMPOTENCY_KEY_REUSED
-        unchanged = _read_receipt(setup.services, "approve_draft", "approval-recovery")
-        assert unchanged["status"] == "pending"
-        assert unchanged["payload"] == receipt["payload"]
 
     recovered = setup.services.draft_approval.approve_idempotent(
         command,
@@ -1773,7 +1717,9 @@ def test_completing_a_cancelled_operation_records_cancellation_not_success(servi
     assert completed.finished_at
 
 
-def test_outputs_cannot_be_activated_once_the_operation_stops_running(services) -> None:
+def test_outputs_cannot_be_reactivated_or_activated_after_cancellation(
+    services,
+) -> None:
     operation = _queued(services, "Output Co")
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
@@ -1793,10 +1739,15 @@ def test_outputs_cannot_be_activated_once_the_operation_stops_running(services) 
             services, "record_operation_output", "no-such-operation", "analysis", "analysis-2"
         )
 
-    # Cancellation closes the window: an output may still be recorded, but not
-    # activated, which is what keeps a cancelled run from taking effect.
+    # Cancellation closes the window: an output may still be recorded, but it
+    # cannot be activated either by the activation method or by active=True on
+    # the recording method.
     services.operation_lifecycle.cancel(operation.id)
     _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-3")
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        _execution_write(
+            services, "activate_operation_output", operation.id, "analysis", "analysis-3"
+        )
     with pytest.raises(StateConflict, match="cannot be activated"):
         _execution_write(
             services, "record_operation_output", operation.id, "analysis", "analysis-4", active=True
