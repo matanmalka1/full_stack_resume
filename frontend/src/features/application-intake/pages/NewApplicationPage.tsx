@@ -72,7 +72,7 @@ export const NewApplicationPage = () => {
        it is. The spine carries the way back to the board, so the trail that used to sit
        above it is gone with the ones the other three steps drew. */
     <WizardStepShell
-      description="הזנת פרטי המשרה יוצרת תצלום מקור קבוע ומתחילה ניתוח התאמה מול העובדות הקנוניות."
+      description="הזנת פרטי המשרה שומרת עותק של המודעה ומתחילה לבדוק עד כמה הניסיון והכישורים שלך מתאימים לדרישות התפקיד."
       stage="intake"
     >
       {/* The wizard frame carries the spine; the single-column form takes a shorter reading

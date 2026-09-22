@@ -67,7 +67,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
     </div>
     <Field
       error={errors.source_url?.message}
-      hint="נשמרת כתיעוד מקור בלבד, המערכת אינה פותחת את הכתובת או מייבאת ממנה טקסט."
+      hint="הכתובת נשמרת לצורך תיעוד בלבד. תוכן המשרה לא מיובא ממנה אוטומטית."
       label="כתובת המשרה"
       optional
     >

@@ -39,7 +39,7 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
 
   return (
     <FormSection
-      description="הטקסט יישמר בתצלום המשרה בדיוק כפי שהוזן."
+      description="הטקסט יישמר בדיוק כפי שהוזן."
       divided={false}
       title={
         <span className="inline-flex items-center gap-2">

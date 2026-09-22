@@ -75,7 +75,7 @@ export const PreparationView = ({
           basis split `DraftWorkspace` uses: what this step changes stays wide enough to
           use, and what explains it stays in view beside that work instead of pushed below
           a long checklist. */}
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8 xl:gap-10">
+      <div className="flex flex-col gap-6 lg:flex-row-reverse lg:items-start lg:gap-8 xl:gap-10">
         <div className="flex min-w-0 flex-col gap-6 lg:flex-1 lg:basis-7/12">
           {/* The one thing to do now: run the analysis, resolve the open decisions, or
               generate the draft and move to the editor. */}
