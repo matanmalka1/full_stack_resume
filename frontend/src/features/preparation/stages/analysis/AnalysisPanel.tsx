@@ -64,6 +64,7 @@ export const AnalysisPanel = ({
       {/* The full requirement picture, including matched requirements. */}
       {classification.requirements.length > 0 || classification.unreadableRequirementCount > 0 ? (
         <RequirementCoverageSection
+          gaps={classification.gaps}
           requirements={classification.requirements}
           unreadableRequirementCount={classification.unreadableRequirementCount}
         />

@@ -466,6 +466,13 @@ shortfall severity is `material`. A `minor` or `unknown` shortfall remains a war
 An `unsupported` mandatory requirement remains a hard gap. The provider proposes
 shortfall severity and an explicit reason; deterministic policy normalizes inconsistent
 combinations and remains authoritative over numeric and canonical boundary checks.
+Qualitative wording such as strong, deep, excellent, high-quality, maintainable, or
+large-scale is assessed semantically from the breadth, complexity, responsibility,
+context, and demonstrated outcomes of canonical facts. A fact need not repeat the
+modifier, provide a self-assessment, or attach a numeric proficiency level. Their absence
+alone is not a shortfall. `partial` requires an identifiable substantive condition that
+the evidence does not establish; when the facts do not permit a semantic determination,
+the result is `unknown` rather than an invented gap.
 
 - `assess_claim_support` — separate semantic review of wording against supplied
   canonical sources and contextual attribution, returning evidence proposals only.

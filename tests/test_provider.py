@@ -282,6 +282,15 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     assert len(answered.provenance.raw_output_hash) == 64
 
 
+def test_analysis_prompt_assesses_qualitative_requirements_semantically(task_contracts) -> None:
+    prompt = task_contracts.prompt_text
+
+    assert "Judge qualitative wording" in prompt
+    assert "Do not require a fact to" in prompt
+    assert "Absence of that wording or quantification is not by itself" in prompt
+    assert "identifiable substantive condition" in prompt
+
+
 def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
     fake_openai: FakeOpenAI, task_contracts
 ) -> None:

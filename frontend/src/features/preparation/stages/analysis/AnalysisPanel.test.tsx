@@ -54,6 +54,8 @@ describe("AnalysisPanel", () => {
     expect(screen.getByRole("list", { name: "דורשות תשומת לב (1)" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Experience selling AWS-based solutions" })).toBeInTheDocument();
     expect(screen.getAllByText("Experience selling AWS-based solutions")).toHaveLength(1);
+    expect(screen.getByText("Canonical facts do not verify this requirement.")).toBeInTheDocument();
+    expect(screen.queryByText("לא סופק הסבר מפורט לפער.")).not.toBeInTheDocument();
   });
 
   it("shows a minor mandatory shortfall as attention rather than a hard gap", () => {

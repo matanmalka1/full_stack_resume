@@ -3,6 +3,7 @@ import { Check, CircleAlert, FileCheck2, ShieldAlert } from "lucide-react";
 import { useMemo } from "react";
 
 import type {
+  AnalysisGap,
   Requirement,
   RequirementCoverage,
   RequirementImportance,
@@ -127,9 +128,11 @@ export const RequirementCoverageSummary = ({
    list, the same defensively-narrow way the rest of this screen reads the analysis: an
    id nothing resolves is named as such rather than hidden. */
 export const RequirementCoverageSection = ({
+  gaps,
   requirements,
   unreadableRequirementCount,
 }: {
+  gaps: AnalysisGap[];
   requirements: Requirement[];
   unreadableRequirementCount: number;
 }) => {
@@ -144,6 +147,10 @@ export const RequirementCoverageSection = ({
     }
     return meanings;
   }, [factsQuery.data]);
+  const gapReasons = useMemo(
+    () => new Map(gaps.map((gap) => [gap.requirementId, gap.reason])),
+    [gaps],
+  );
 
   if (requirements.length === 0 && unreadableRequirementCount === 0) {
     return null;
@@ -187,7 +194,9 @@ export const RequirementCoverageSection = ({
                 {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:
                 {" "}
               </span>
-              {requirement.shortfallReason ?? "לא סופק הסבר מפורט לפער."}
+              {requirement.shortfallReason ??
+                gapReasons.get(requirement.requirementId) ??
+                "לא סופק הסבר מפורט לפער."}
             </p>
           )}
 

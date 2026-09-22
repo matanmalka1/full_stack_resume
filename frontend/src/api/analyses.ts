@@ -131,7 +131,7 @@ export interface Requirement {
 /* A requirement the facts do not fully answer, as the backend projected it at read time.
    Shown to the user and gating nothing: a hard gap marks a demanded requirement the facts
    do not support, and the user may still draft, approve and submit. */
-interface AnalysisGap {
+export interface AnalysisGap {
   requirementId: string;
   requirement: string;
   severity: "hard" | "warning";
