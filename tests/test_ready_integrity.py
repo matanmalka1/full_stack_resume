@@ -27,10 +27,6 @@ from cv_engine.infrastructure.persistence.application_projections import (
 )
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
 from cv_engine.infrastructure.persistence.draft_lifecycle import (
     SqlAlchemyDraftLifecycleRepository,
 )
@@ -40,23 +36,13 @@ from cv_engine.infrastructure.rendering import validate_rendered as real_validat
 from cv_engine.util import normalized_text, sha256_file, sha256_text, utc_now, verify_payload
 
 
-def _txs(services):
-    return SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-
-
-def _raw(services):
-    return create_database_engine(services.database_url)
-
-
-def _submission_command(services, application_id: str) -> SubmissionCommand:
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        revision = SqlAlchemyDraftLifecycleRepository(transactions).latest_approved_revision(
+def _submission_command(services, transaction_manager, application_id: str) -> SubmissionCommand:
+    with transaction_manager.read() as tx:
+        revision = SqlAlchemyDraftLifecycleRepository(transaction_manager).latest_approved_revision(
             tx, application_id
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        pdf = SqlAlchemyArtifactCatalog(transactions).artifact_version_for_revision(
+    with transaction_manager.read() as tx:
+        pdf = SqlAlchemyArtifactCatalog(transaction_manager).artifact_version_for_revision(
             tx, revision.id, "resume_pdf", "rendered"
         )
     return SubmissionCommand(
@@ -68,10 +54,9 @@ def _submission_command(services, application_id: str) -> SubmissionCommand:
     )
 
 
-def _reanalyze(services, application_id: str):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        snapshot_id = SqlAlchemyApplicationProjectionReader(transactions).latest_snapshot(
+def _reanalyze(services, transaction_manager, application_id: str):
+    with transaction_manager.read() as tx:
+        snapshot_id = SqlAlchemyApplicationProjectionReader(transaction_manager).latest_snapshot(
             tx, application_id
         )["id"]
     return seed_analysis_for_command(
@@ -83,17 +68,14 @@ def _reanalyze(services, application_id: str):
     )
 
 
-def _start_new_draft(services, application_id: str):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        analysis_record = SqlAlchemyApplicationProjectionReader(transactions).analyses(
+def _start_new_draft(services, transaction_manager, application_id: str):
+    with transaction_manager.read() as tx:
+        analysis_record = SqlAlchemyApplicationProjectionReader(transaction_manager).analyses(
             tx, application_id
         )[-1]
     analysis_id = analysis_record["id"]
-    _analysis = analysis_record["analysis"]
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        plan = SqlAlchemyApplicationProjectionReader(transactions).latest_selection_plan(
+    with transaction_manager.read() as tx:
+        plan = SqlAlchemyApplicationProjectionReader(transaction_manager).latest_selection_plan(
             tx, application_id
         )
     return services.drafts.draft(
@@ -118,24 +100,25 @@ def test_payload_verification_classifies_ok_missing_and_tampered(tmp_path: Path)
 # --- READY ownership ---------------------------------------------------
 
 
-def test_repository_cannot_manually_set_ready(analyzed_application) -> None:
+def test_repository_cannot_manually_set_ready(analyzed_application, transaction_manager) -> None:
     services, app_id = analyzed_application("Repo Ready")
-    assert not hasattr(SqlAlchemyApplicationStore(_txs(services)), "transition_status")
+    assert not hasattr(SqlAlchemyApplicationStore(transaction_manager), "transition_status")
     with pytest.raises(WorkflowError):
         services.recruitment.transition_status(
             RecruitmentStatusCommand(application_id=app_id, target_status="ready", client="web")
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
+                "current_status"
+            ]
             == "saved"
         )
 
 
 @pytest.mark.browser
 def test_failed_post_render_validation_does_not_set_ready(
-    approved_application, monkeypatch: pytest.MonkeyPatch
+    approved_application, monkeypatch: pytest.MonkeyPatch, transaction_manager
 ) -> None:
     services, app_id = approved_application("Render Failure")
 
@@ -151,17 +134,18 @@ def test_failed_post_render_validation_does_not_set_ready(
     monkeypatch.setattr(rendering_module, "validate_rendered", failing_validate_rendered)
     rendered = services.rendering.render(app_id)
     assert not rendered.validation.passed
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
+                "current_status"
+            ]
             == "saved"
         )
     assert not services.rendering.ready_qualification(app_id).ready_qualified
 
 
 def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
-    project_root: Path, approved_application
+    project_root: Path, approved_application, transaction_manager
 ) -> None:
     """Ready has no write primitive and exact stored proof is always re-derived."""
     services, app_id = approved_application("Set Ready Bypass")
@@ -171,12 +155,11 @@ def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
     directory = manifest_path.parent
     fake_pdf = directory / "fake.pdf"
     fake_pdf.write_bytes(b"%PDF-1.4 fake")
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.write() as tx:
-        revision = SqlAlchemyDraftLifecycleRepository(transactions).latest_approved_revision(
+    with transaction_manager.write() as tx:
+        revision = SqlAlchemyDraftLifecycleRepository(transaction_manager).latest_approved_revision(
             tx, app_id
         )
-        fake_version_id = SqlAlchemyArtifactCatalog(transactions).register_artifact_version(
+        fake_version_id = SqlAlchemyArtifactCatalog(transaction_manager).register_artifact_version(
             tx,
             app_id,
             "resume_pdf",
@@ -186,8 +169,8 @@ def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
             "rendered",
             revision_id=revision.id,
         )
-    assert not hasattr(SqlAlchemyApplicationStore(_txs(services)), "set_ready")
-    assert not hasattr(SqlAlchemyApplicationStore(_txs(services)), "_set_ready")
+    assert not hasattr(SqlAlchemyApplicationStore(transaction_manager), "set_ready")
+    assert not hasattr(SqlAlchemyApplicationStore(transaction_manager), "_set_ready")
     qualification = services.rendering.ready_qualification(
         app_id,
         pdf_artifact_version_id=fake_version_id,
@@ -196,40 +179,43 @@ def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
     assert any(
         issue.code == "no-post-render-validation" for issue in qualification.validation.issues
     )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
+                "current_status"
+            ]
             == "saved"
         )
 
 
 def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
-    project_root: Path, ready_application
+    project_root: Path, ready_application, transaction_manager
 ) -> None:
     """Stored validation alone cannot qualify a tampered immutable artifact."""
     services, app_id = ready_application("No Stale Restore")
     pdf_version, path = artifact_version_and_path(services, app_id, "resume_pdf", "rendered")
     path.write_bytes(path.read_bytes() + b"tampered")
 
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
+                "current_status"
+            ]
             == "saved"
         )
     assert not services.rendering.ready_qualification(app_id).ready_qualified
     with pytest.raises(WorkflowError, match="tampered Ready evidence"):
-        services.submission.submit_application(_submission_command(services, app_id))
+        services.submission.submit_application(
+            _submission_command(services, transaction_manager, app_id)
+        )
     # A new revision and render create new immutable evidence; the old PDF is
     # never reused or relinked.
-    _start_new_draft(services, app_id)
+    _start_new_draft(services, transaction_manager, app_id)
     approve_active_draft(services, app_id)
     rendered = services.rendering.render(app_id)
     assert rendered.validation.passed
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        new_pdf_version = SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+    with transaction_manager.read() as tx:
+        new_pdf_version = SqlAlchemyArtifactCatalog(transaction_manager).latest_artifact_version(
             tx, app_id, "resume_pdf", "rendered"
         )
     assert new_pdf_version["id"] != pdf_version["id"]
@@ -270,19 +256,19 @@ def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
         assert report.groups[issue_group] is False
 
 
-def test_ready_qualification_is_independent_of_active_context(ready_application) -> None:
+def test_ready_qualification_is_independent_of_active_context(
+    ready_application, transaction_manager
+) -> None:
     services, app_id = ready_application("Superseded")
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        old_revision = SqlAlchemyDraftLifecycleRepository(transactions).latest_approved_revision(
-            tx, app_id
-        )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        old_pdf = SqlAlchemyArtifactCatalog(transactions).artifact_version_for_revision(
+    with transaction_manager.read() as tx:
+        old_revision = SqlAlchemyDraftLifecycleRepository(
+            transaction_manager
+        ).latest_approved_revision(tx, app_id)
+    with transaction_manager.read() as tx:
+        old_pdf = SqlAlchemyArtifactCatalog(transaction_manager).artifact_version_for_revision(
             tx, old_revision.id, "resume_pdf", "rendered"
         )
-    _start_new_draft(services, app_id)
+    _start_new_draft(services, transaction_manager, app_id)
     new_revision = approve_active_draft(services, app_id)
     assert not services.rendering.ready_qualification(app_id).ready_qualified
     old_qualification = services.rendering.ready_qualification(
@@ -293,9 +279,8 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
     new_text = ACCOUNT_MANAGER_JOB + " Updated requirements."
     snapshot_id = str(uuid.uuid4())
     payload = services.payloads.commit_snapshot(app_id, snapshot_id, new_text)
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.write() as tx:
-        SqlAlchemyJobSnapshotStore(transactions).insert_next_snapshot(
+    with transaction_manager.write() as tx:
+        SqlAlchemyJobSnapshotStore(transaction_manager).insert_next_snapshot(
             tx,
             application_id=app_id,
             payload_path=payload.reference,
@@ -306,14 +291,15 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
             source_metadata={},
             captured_at=utc_now(),
         )
-    _reanalyze(services, app_id)
+    _reanalyze(services, transaction_manager, app_id)
     assert services.rendering.ready_qualification(
         app_id, old_revision.id, old_pdf["id"]
     ).ready_qualified
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyDraftLifecycleRepository(transactions).latest_approved_revision(tx, app_id).id
+            SqlAlchemyDraftLifecycleRepository(transaction_manager)
+            .latest_approved_revision(tx, app_id)
+            .id
             == new_revision.revision_id
         )
     submitted = services.submission.submit_application(
@@ -337,27 +323,24 @@ def test_ready_qualification_is_independent_of_active_context(ready_application)
 
 
 def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions(
-    ready_application,
+    ready_application, transaction_manager, database_engine
 ) -> None:
     services, app_id = ready_application("Two Cycles")
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        first_pdf = SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+    with transaction_manager.read() as tx:
+        first_pdf = SqlAlchemyArtifactCatalog(transaction_manager).latest_artifact_version(
             tx, app_id, "resume_pdf", "rendered"
         )
-    _start_new_draft(services, app_id)
+    _start_new_draft(services, transaction_manager, app_id)
     approve_active_draft(services, app_id)
     second_render = services.rendering.render(app_id)
     assert second_render.validation.passed, second_render.validation.model_dump()
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        second_pdf = SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+    with transaction_manager.read() as tx:
+        second_pdf = SqlAlchemyArtifactCatalog(transaction_manager).latest_artifact_version(
             tx, app_id, "resume_pdf", "rendered"
         )
     assert second_pdf["id"] != first_pdf["id"]
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        revision = SqlAlchemyDraftLifecycleRepository(transactions).latest_approved_revision(
+    with transaction_manager.read() as tx:
+        revision = SqlAlchemyDraftLifecycleRepository(transaction_manager).latest_approved_revision(
             tx, app_id
         )
     result = services.submission.submit_application(
@@ -371,7 +354,7 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     )
     assert result.pdf_artifact_version_id == second_pdf["id"]
     submitted_pdf_id = result.pdf_artifact_version_id
-    with _raw(services).connect() as connection:
+    with database_engine.connect() as connection:
         before = (
             connection.execute(
                 select(submissions.c.artifact_version_id).where(
@@ -384,9 +367,9 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
     assert before == [submitted_pdf_id]
 
     # A later approved version must not rewrite or relink the existing submission.
-    _start_new_draft(services, app_id)
+    _start_new_draft(services, transaction_manager, app_id)
     approve_active_draft(services, app_id)
-    with _raw(services).connect() as connection:
+    with database_engine.connect() as connection:
         after = (
             connection.execute(
                 select(submissions.c.artifact_version_id).where(
@@ -400,7 +383,10 @@ def test_submission_binds_current_pdf_and_remains_immutable_after_later_versions
 
 
 def test_submission_and_applied_transition_roll_back_together(
-    ready_application, monkeypatch: pytest.MonkeyPatch
+    ready_application,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction_manager,
+    database_engine,
 ) -> None:
     from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 
@@ -411,24 +397,29 @@ def test_submission_and_applied_transition_roll_back_together(
 
     monkeypatch.setattr(SqlAlchemyRecruitmentRepository, "insert_event", fail_status_write)
     with pytest.raises(RuntimeError, match="injected status failure"):
-        services.submission.submit_application(_submission_command(services, app_id))
+        services.submission.submit_application(
+            _submission_command(services, transaction_manager, app_id)
+        )
 
-    with _raw(services).connect() as connection:
+    with database_engine.connect() as connection:
         count = connection.execute(
             select(func.count())
             .select_from(submissions)
             .where(submissions.c.application_id == app_id)
         ).scalar_one()
     assert count == 0
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
+                "current_status"
+            ]
             == "saved"
         )
 
 
-def test_generic_status_transition_to_applied_is_always_blocked(ready_application) -> None:
+def test_generic_status_transition_to_applied_is_always_blocked(
+    ready_application, transaction_manager
+) -> None:
     """The generic transition rejects applied unconditionally -- even supplying
     a real, currently-valid rendered PDF artifact version id must not work,
     because the generic transition has no way to perform the fresh integrity
@@ -444,15 +435,18 @@ def test_generic_status_transition_to_applied_is_always_blocked(ready_applicatio
                 client="web",
             )
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
+                "current_status"
+            ]
             == "saved"
         )
 
 
-def test_external_submission_never_fabricates_revision_or_artifact(analyzed_application) -> None:
+def test_external_submission_never_fabricates_revision_or_artifact(
+    analyzed_application, transaction_manager
+) -> None:
     services, app_id = analyzed_application("External Submission")
     first = services.submission.record_external_submission(
         ExternalSubmissionCommand(
@@ -470,27 +464,27 @@ def test_external_submission_never_fabricates_revision_or_artifact(analyzed_appl
         )
     )
     assert first.current_status == second.current_status == "applied"
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        submissions = SqlAlchemyApplicationProjectionReader(transactions).submissions(tx, app_id)
+    with transaction_manager.read() as tx:
+        submissions = SqlAlchemyApplicationProjectionReader(transaction_manager).submissions(
+            tx, app_id
+        )
     assert len(submissions) == 2
     assert all(row["submission_type"] == "external" for row in submissions)
     assert all(row["approved_revision_id"] is None for row in submissions)
     assert all(row["artifact_version_id"] is None for row in submissions)
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         applied_events = [
             row
-            for row in SqlAlchemyApplicationProjectionReader(transactions).recruitment_events(
-                tx, app_id
-            )
+            for row in SqlAlchemyApplicationProjectionReader(
+                transaction_manager
+            ).recruitment_events(tx, app_id)
             if row["to_status"] == "applied"
         ]
     assert len(applied_events) == 1
 
 
 def test_correction_is_append_only_and_terminal_outcome_survives_closed(
-    analyzed_application,
+    analyzed_application, transaction_manager
 ) -> None:
     services, app_id = analyzed_application("Correction History")
     withdrawn = services.recruitment.transition_status(
@@ -525,9 +519,10 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
     )
     assert corrected.current_status == "interview"
     assert corrected.terminal_outcome is None
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        events = SqlAlchemyApplicationProjectionReader(transactions).recruitment_events(tx, app_id)
+    with transaction_manager.read() as tx:
+        events = SqlAlchemyApplicationProjectionReader(transaction_manager).recruitment_events(
+            tx, app_id
+        )
     original = next(row for row in events if row["id"] == withdrawn.event_id)
     correction = next(row for row in events if row["id"] == corrected.event_id)
     assert original["to_status"] == "withdrawn"
@@ -542,7 +537,9 @@ def test_correction_is_append_only_and_terminal_outcome_survives_closed(
     assert closed.terminal_outcome == "accepted"
 
 
-def test_approval_audit_and_decision_markdown_are_exact(approved_application) -> None:
+def test_approval_audit_and_decision_markdown_are_exact(
+    approved_application, transaction_manager
+) -> None:
     setup = approved_application("Decision Export")
     revision_id = setup.approved.revision_id
     exported = setup.services.draft_history.export_decision_markdown(
@@ -552,9 +549,8 @@ def test_approval_audit_and_decision_markdown_are_exact(approved_application) ->
     assert f"`{revision_id}`" in exported.content
     assert "## Exact lineage" in exported.content
     assert sha256_text(exported.content) == exported.content_hash
-    transactions = SqlAlchemyTransactionManager(create_database_engine(setup.services.database_url))
-    with transactions.read() as tx:
-        audits = SqlAlchemyApplicationProjectionReader(transactions).audit_records(
+    with transaction_manager.read() as tx:
+        audits = SqlAlchemyApplicationProjectionReader(transaction_manager).audit_records(
             tx, setup.application_id
         )
     approval = next(row for row in audits if row["action"] == "approve_draft")

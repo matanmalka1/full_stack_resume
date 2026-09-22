@@ -9,7 +9,11 @@ from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.drafts import DraftDocument, WorkingDraft
 from cv_engine.domain.contracts.records import ValidationRunLineage
 from cv_engine.domain.contracts.selection import SelectionManifest, SelectionPlan
-from cv_engine.domain.contracts.validation import ReadyQualification, ValidationIssue, ValidationReport
+from cv_engine.domain.contracts.validation import (
+    ReadyQualification,
+    ValidationIssue,
+    ValidationReport,
+)
 
 
 def test_a_draft_cannot_rewrite_the_provenance_it_is_judged_against(draft_factory) -> None:

@@ -28,7 +28,6 @@ from cv_engine.api.app import API_PREFIX, create_app
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
-    ApproveDraftCommand,
     DraftCommand,
     IngestCommand,
 )
@@ -45,10 +44,6 @@ from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
 from cv_engine.infrastructure.persistence.decision_store import SqlAlchemyDecisionRepository
 from cv_engine.infrastructure.persistence.draft_lifecycle import (
     SqlAlchemyDraftLifecycleRepository,
@@ -65,20 +60,19 @@ from cv_engine.runtime.paths import AppPaths
 from cv_engine.util import normalized_text, sha256_file, sha256_text, utc_now
 
 
-def _rows(services: Services, table) -> list[dict]:
-    with create_database_engine(services.database_url).connect() as connection:
+def _rows(database_engine, table) -> list[dict]:
+    with database_engine.connect() as connection:
         return [dict(row) for row in connection.execute(select(table)).mappings()]
 
 
-def _register(services: Services, *args, **kwargs):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.write() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).register_artifact_version(
+def _register(transaction_manager, *args, **kwargs):
+    with transaction_manager.write() as tx:
+        return SqlAlchemyArtifactCatalog(transaction_manager).register_artifact_version(
             tx, *args, **kwargs
         )
 
 
-def _persisted(services: Services) -> dict[str, int]:
+def _persisted(database_engine) -> dict[str, int]:
     """Row counts for every product table, discovered rather than listed.
 
     A rejected command must leave nothing behind anywhere, so this counts the whole
@@ -88,17 +82,16 @@ def _persisted(services: Services) -> dict[str, int]:
     next table automatically: a list would have gone on passing while a new table
     quietly gained a row.
     """
-    with create_database_engine(services.database_url).connect() as connection:
+    with database_engine.connect() as connection:
         return {
             table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
             for table in metadata.sorted_tables
         }
 
 
-def _analyze(services: Services, application_id: str, **overrides):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        snapshot_id = SqlAlchemyApplicationProjectionReader(transactions).latest_snapshot(
+def _analyze(services: Services, transaction_manager, application_id: str, **overrides):
+    with transaction_manager.read() as tx:
+        snapshot_id = SqlAlchemyApplicationProjectionReader(transaction_manager).latest_snapshot(
             tx, application_id
         )["id"]
     analysis_values = {
@@ -120,10 +113,9 @@ def _analyze(services: Services, application_id: str, **overrides):
     )
 
 
-def _draft(services: Services, application_id: str, analysis_id: str):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        plan = SqlAlchemyApplicationProjectionReader(transactions).latest_selection_plan(
+def _draft(services: Services, transaction_manager, application_id: str, analysis_id: str):
+    with transaction_manager.read() as tx:
+        plan = SqlAlchemyApplicationProjectionReader(transaction_manager).latest_selection_plan(
             tx, application_id
         )
     assert plan is not None
@@ -140,22 +132,20 @@ def _draft(services: Services, application_id: str, analysis_id: str):
 
 
 def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafting(
-    project_root: Path, analyzed_application
+    project_root: Path, analyzed_application, transaction_manager, database_engine
 ) -> None:
     services, app_id = analyzed_application("Snapshot Race")
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        analysis_record = SqlAlchemyApplicationProjectionReader(transactions).analyses(tx, app_id)[
-            -1
-        ]
+    with transaction_manager.read() as tx:
+        analysis_record = SqlAlchemyApplicationProjectionReader(transaction_manager).analyses(
+            tx, app_id
+        )[-1]
     analysis_id = analysis_record["id"]
     stale_analysis_id = analysis_id
     new_text = ACCOUNT_MANAGER_JOB + " The role also covers quarterly portfolio reviews."
     new_snapshot_id = str(uuid.uuid4())
     payload = services.payloads.commit_snapshot(app_id, new_snapshot_id, new_text)
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.write() as tx:
-        SqlAlchemyJobSnapshotStore(transactions).insert_next_snapshot(
+    with transaction_manager.write() as tx:
+        SqlAlchemyJobSnapshotStore(transaction_manager).insert_next_snapshot(
             tx,
             application_id=app_id,
             payload_path=payload.reference,
@@ -166,19 +156,19 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
             source_metadata={},
             captured_at=utc_now(),
         )
-    before = _persisted(services)
+    before = _persisted(database_engine)
 
     with pytest.raises(WorkflowError, match="snapshot"):
-        _draft(services, app_id, stale_analysis_id)
+        _draft(services, transaction_manager, app_id, stale_analysis_id)
 
     assert not (project_root / "artifacts/working" / app_id).exists()
-    assert _persisted(services) == before
+    assert _persisted(database_engine) == before
 
     # Analyzing the new snapshot unblocks drafting, and the draft binds both ends
     # of the chain exactly rather than inheriting a "latest" of either kind.
-    analysed = _analyze(services, app_id)
+    analysed = _analyze(services, transaction_manager, app_id)
     assert analysed.analysis_id != stale_analysis_id
-    drafted = _draft(services, app_id, analysed.analysis_id)
+    drafted = _draft(services, transaction_manager, app_id, analysed.analysis_id)
     manifest = working_draft_paths(services, app_id).manifest
     assert drafted.validation.passed, drafted.validation.model_dump()
     draft = parse_draft(manifest.read_text(encoding="utf-8"))
@@ -191,9 +181,10 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
     # rather than the "1.0.0" label the policy files declare and the manifest
     # carries, which no policy edit touches.
     versions = services.knowledge_queries.knowledge_versions()
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        plan = SqlAlchemyApplicationProjectionReader(transactions).latest_selection_plan(tx, app_id)
+    with transaction_manager.read() as tx:
+        plan = SqlAlchemyApplicationProjectionReader(transaction_manager).latest_selection_plan(
+            tx, app_id
+        )
     assert plan.profile_version == versions.profiles
     assert plan.selection_policy_version == versions.emphasis_policies
     assert plan.selection_policy_version != plan.plan.policy_version
@@ -206,22 +197,21 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
     policy = json.loads(original_policy)
     policy["emphases"]["development-balanced"]["tag_weights"]["testing"] += 1
     policy_file.write_text(json.dumps(policy, ensure_ascii=False), encoding="utf-8")
-    before_policy_edit = _persisted(services)
+    before_policy_edit = _persisted(database_engine)
 
     with pytest.raises(StateConflict, match="selection policy"):
-        _draft(services, app_id, analysed.analysis_id)
+        _draft(services, transaction_manager, app_id, analysed.analysis_id)
 
-    assert _persisted(services) == before_policy_edit
+    assert _persisted(database_engine) == before_policy_edit
     # Analyzing again freezes the edited policy, and drafting proceeds.
-    reanalysed = _analyze(services, app_id)
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        replanned = SqlAlchemyApplicationProjectionReader(transactions).latest_selection_plan(
-            tx, app_id
-        )
+    reanalysed = _analyze(services, transaction_manager, app_id)
+    with transaction_manager.read() as tx:
+        replanned = SqlAlchemyApplicationProjectionReader(
+            transaction_manager
+        ).latest_selection_plan(tx, app_id)
     assert replanned.selection_policy_version != plan.selection_policy_version
     assert replanned.plan.policy_version == plan.plan.policy_version
-    assert _draft(services, app_id, reanalysed.analysis_id).validation.passed
+    assert _draft(services, transaction_manager, app_id, reanalysed.analysis_id).validation.passed
     policy_file.write_text(original_policy, encoding="utf-8")
 
 
@@ -229,33 +219,32 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
 
 
 def test_newer_material_analysis_invalidates_the_working_draft(
-    project_root: Path, drafted_application
+    project_root: Path, drafted_application, transaction_manager, database_engine
 ) -> None:
     setup = drafted_application("Emphasis Drift")
     services, app_id = setup.services, setup.application_id
     drafted_analysis_id = parse_draft(setup.manifest.read_text(encoding="utf-8")).job_analysis_id
-    newer = _analyze(services, app_id, emphasis="balanced-sales")
+    newer = _analyze(services, transaction_manager, app_id, emphasis="balanced-sales")
     assert newer.analysis.emphasis.value == "balanced-sales"
     assert newer.analysis_id != drafted_analysis_id
-    before = _persisted(services)
+    before = _persisted(database_engine)
 
     with pytest.raises(WorkflowError, match="analysis"):
         approve_active_draft(services, app_id)
 
     assert not (project_root / "artifacts" / app_id).exists()
-    assert _persisted(services) == before
+    assert _persisted(database_engine) == before
 
     # Re-drafting under the newer analysis is the way forward, and the decision
     # record then binds that analysis.
-    drafted = _draft(services, app_id, newer.analysis_id)
+    drafted = _draft(services, transaction_manager, app_id, newer.analysis_id)
     manifest = working_draft_paths(services, app_id).manifest
     assert drafted.validation.passed, drafted.validation.model_dump()
     assert parse_draft(manifest.read_text(encoding="utf-8")).job_analysis_id == newer.analysis_id
     approve_active_draft(services, app_id)
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationProjectionReader(transactions).latest_decision(tx, app_id)[
+            SqlAlchemyApplicationProjectionReader(transaction_manager).latest_decision(tx, app_id)[
                 "job_analysis_id"
             ]
             == newer.analysis_id
@@ -263,16 +252,19 @@ def test_newer_material_analysis_invalidates_the_working_draft(
 
 
 def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registration(
-    drafted_application, monkeypatch: pytest.MonkeyPatch, project_root: Path
+    drafted_application,
+    monkeypatch: pytest.MonkeyPatch,
+    project_root: Path,
+    transaction_manager,
+    database_engine,
 ) -> None:
     """A re-run that changes nothing material leaves the draft valid -- and the
     approval still records the analysis the draft was actually built from."""
     setup = drafted_application("Rerun Analysis")
     services, app_id = setup.services, setup.application_id
     bound_analysis_id = parse_draft(setup.manifest.read_text(encoding="utf-8")).job_analysis_id
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        bound_analysis = SqlAlchemyApplicationProjectionReader(transactions).analysis(
+    with transaction_manager.read() as tx:
+        bound_analysis = SqlAlchemyApplicationProjectionReader(transaction_manager).analysis(
             tx, bound_analysis_id
         )["analysis"]
     # A re-run that reproduces the same classification changes nothing
@@ -282,6 +274,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
     # a same-classification re-run instead of a materially different one.
     rerun = _analyze(
         services,
+        transaction_manager,
         app_id,
         requirements=bound_analysis.requirements,
         user_override=bound_analysis.user_override,
@@ -289,14 +282,12 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         keywords=bound_analysis.keywords,
     )
     assert rerun.analysis_id != bound_analysis_id
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        working = SqlAlchemyApplicationProjectionReader(transactions).active_working_draft(
+    with transaction_manager.read() as tx:
+        working = SqlAlchemyApplicationProjectionReader(transaction_manager).active_working_draft(
             tx, app_id
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        plan = SqlAlchemyApplicationProjectionReader(transactions).selection_plan(
+    with transaction_manager.read() as tx:
+        plan = SqlAlchemyApplicationProjectionReader(transaction_manager).selection_plan(
             tx, working.selection_plan_id
         )
 
@@ -304,7 +295,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
     # sequence. It remains unbound, while revision 1's markdown is artifact
     # version 2 for the existing logical artifact.
     _register(
-        services,
+        transaction_manager,
         app_id,
         "resume_markdown",
         "resume",
@@ -331,21 +322,20 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
 
     approved = approve_active_draft(services, app_id)
 
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        decision = SqlAlchemyApplicationProjectionReader(transactions).latest_decision(tx, app_id)
+    with transaction_manager.read() as tx:
+        decision = SqlAlchemyApplicationProjectionReader(transaction_manager).latest_decision(
+            tx, app_id
+        )
     assert decision["job_analysis_id"] == bound_analysis_id
     assert json.loads(decision["structured_json"])["job_analysis_id"] == bound_analysis_id
     assert observed == {"payloads_precede_row": True}
     assert approved.version == 1
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        revision = SqlAlchemyApplicationProjectionReader(transactions).approved_revision(
+    with transaction_manager.read() as tx:
+        revision = SqlAlchemyApplicationProjectionReader(transaction_manager).approved_revision(
             tx, approved.revision_id
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        lineage = SqlAlchemyValidationRepository(transactions).validation_lineage(
+    with transaction_manager.read() as tx:
+        lineage = SqlAlchemyValidationRepository(transaction_manager).validation_lineage(
             tx, revision.validation_run_id
         )
     assert revision.application_id == app_id
@@ -383,9 +373,10 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         == working.source
     )
 
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        versions = SqlAlchemyApplicationProjectionReader(transactions).artifact_versions(tx, app_id)
+    with transaction_manager.read() as tx:
+        versions = SqlAlchemyApplicationProjectionReader(transaction_manager).artifact_versions(
+            tx, app_id
+        )
     current = [row for row in versions if row["revision_id"] == revision.id]
     assert {row["artifact_type"] for row in current} == {
         "resume_markdown",
@@ -399,16 +390,16 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         next(row for row in current if row["artifact_type"] == "claim_manifest")["path"]
         == revision.resume_json_reference
     )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationProjectionReader(transactions).working_draft(tx, working.id).active
+            SqlAlchemyApplicationProjectionReader(transaction_manager)
+            .working_draft(tx, working.id)
+            .active
             is False
         )
     with pytest.raises(UnknownRecord, match="active working draft"):
-        transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-        with transactions.read() as tx:
-            SqlAlchemyDraftLifecycleRepository(transactions).active_working_draft(tx, app_id)
+        with transaction_manager.read() as tx:
+            SqlAlchemyDraftLifecycleRepository(transaction_manager).active_working_draft(tx, app_id)
 
     for statement in (
         update(approved_revisions)
@@ -417,12 +408,12 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
         delete(approved_revisions).where(approved_revisions.c.id == revision.id),
     ):
         with pytest.raises(ProgrammingError, match="immutable record"):
-            with create_database_engine(services.database_url).begin() as connection:
+            with database_engine.begin() as connection:
                 connection.execute(statement)
 
 
 def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
-    drafted_application, monkeypatch: pytest.MonkeyPatch
+    drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager
 ) -> None:
     """The record explains one document, so it names that document's language.
 
@@ -444,9 +435,8 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
         # By revision, never `latest`: `utc_now` is second-resolution, so two
         # approvals inside one second tie on `created_at` and `latest_decision`
         # answers with whichever row the ordering happens to reach first.
-        transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-        with transactions.read() as tx:
-            record = SqlAlchemyDecisionRepository(transactions).decision_for_revision(
+        with transaction_manager.read() as tx:
+            record = SqlAlchemyDecisionRepository(transaction_manager).decision_for_revision(
                 tx, revision_id
             )
         return json.loads(record["structured_json"])["language"]
@@ -461,8 +451,8 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
     ).content
     assert "- Language: en" in first_export
 
-    hebrew_analysis = _analyze(services, app_id, language="he")
-    _draft(services, app_id, hebrew_analysis.analysis_id)
+    hebrew_analysis = _analyze(services, transaction_manager, app_id, language="he")
+    _draft(services, transaction_manager, app_id, hebrew_analysis.analysis_id)
     hebrew = parse_draft(setup.manifest.read_text(encoding="utf-8"))
     assert hebrew.language == "he"
     second = approve_active_draft(services, app_id)
@@ -473,21 +463,20 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
     ).content
     assert "- Language: he" in second_export
 
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        first_record = SqlAlchemyDecisionRepository(transactions).decision_for_revision(
+    with transaction_manager.read() as tx:
+        first_record = SqlAlchemyDecisionRepository(transaction_manager).decision_for_revision(
             tx, first.revision_id
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        second_record = SqlAlchemyDecisionRepository(transactions).decision_for_revision(
+    with transaction_manager.read() as tx:
+        second_record = SqlAlchemyDecisionRepository(transaction_manager).decision_for_revision(
             tx, second.revision_id
         )
     assert first_record["created_at"] == second_record["created_at"] == fixed_approval_time
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationProjectionReader(transactions).latest_decision(tx, app_id)["id"]
+            SqlAlchemyApplicationProjectionReader(transaction_manager).latest_decision(tx, app_id)[
+                "id"
+            ]
             == second_record["id"]
         )
 
@@ -499,10 +488,9 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
 
     # Re-read the first record with the latest analysis and the newest revision
     # both in Hebrew: the export renders what was stored, not what is current.
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert (
-            SqlAlchemyApplicationProjectionReader(transactions)
+            SqlAlchemyApplicationProjectionReader(transaction_manager)
             .analyses(tx, app_id)[-1]["analysis"]
             .language
             == "he"
@@ -519,7 +507,10 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
 
 
 def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
-    drafted_application, monkeypatch: pytest.MonkeyPatch
+    drafted_application,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction_manager,
+    database_engine,
 ) -> None:
     owner = drafted_application("Owner Co")
     stranger = drafted_application("Stranger Co", role="Key Account Manager")
@@ -534,24 +525,20 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
 
     monkeypatch.setattr(SqlAlchemyDecisionRepository, "insert_decision", capture_insert)
     approved = approve_active_draft(services, owner.application_id)
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        owner_markdown = SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+    with transaction_manager.read() as tx:
+        owner_markdown = SqlAlchemyArtifactCatalog(transaction_manager).latest_artifact_version(
             tx, owner.application_id, "resume_markdown", "approved"
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        stranger_snapshot_id = SqlAlchemyApplicationProjectionReader(transactions).latest_snapshot(
-            tx, stranger.application_id
-        )["id"]
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        owner_snapshot_id = SqlAlchemyApplicationProjectionReader(transactions).latest_snapshot(
-            tx, owner.application_id
-        )["id"]
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        owner_analysis_id = SqlAlchemyApplicationProjectionReader(transactions).analyses(
+    with transaction_manager.read() as tx:
+        stranger_snapshot_id = SqlAlchemyApplicationProjectionReader(
+            transaction_manager
+        ).latest_snapshot(tx, stranger.application_id)["id"]
+    with transaction_manager.read() as tx:
+        owner_snapshot_id = SqlAlchemyApplicationProjectionReader(
+            transaction_manager
+        ).latest_snapshot(tx, owner.application_id)["id"]
+    with transaction_manager.read() as tx:
+        owner_analysis_id = SqlAlchemyApplicationProjectionReader(transaction_manager).analyses(
             tx, owner.application_id
         )[-1]["id"]
     assert len(inserted) == 1
@@ -561,11 +548,11 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
     assert decision.job_snapshot_id == owner_snapshot_id
     assert decision.job_analysis_id == owner_analysis_id
     assert decision.id == approved.decision_record_id
-    before = _persisted(services)
+    before = _persisted(database_engine)
 
     with pytest.raises(LineageBroken, match="application"):
         _register(
-            services,
+            transaction_manager,
             owner.application_id,
             "resume_markdown",
             "cross-owner",
@@ -575,8 +562,8 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
             job_snapshot_id=stranger_snapshot_id,
         )
 
-    assert _persisted(services) == before
-    assert [row["application_id"] for row in _rows(services, decision_records)] == [
+    assert _persisted(database_engine) == before
+    assert [row["application_id"] for row in _rows(database_engine, decision_records)] == [
         owner.application_id
     ]
 
@@ -584,7 +571,9 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
 # --- 4. an invalid Track/Profile/Emphasis pair mutates nothing -------------
 
 
-def test_invalid_classifications_are_rejected_before_any_persistence(services: Services) -> None:
+def test_invalid_classifications_are_rejected_before_any_persistence(
+    services: Services, transaction_manager, database_engine
+) -> None:
     cases = [
         ({"track": "development", "profile": "account-manager"}, "Track"),
         ({"profile": "account-manager", "emphasis": "leadership"}, "mphasis"),
@@ -600,41 +589,40 @@ def test_invalid_classifications_are_rejected_before_any_persistence(services: S
             )
         )
         app_id = ingested.application_id
-        transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-        with transactions.read() as tx:
-            before_application = SqlAlchemyApplicationProjectionReader(transactions).application(
-                tx, app_id
-            )
-        before = _persisted(services)
+        with transaction_manager.read() as tx:
+            before_application = SqlAlchemyApplicationProjectionReader(
+                transaction_manager
+            ).application(tx, app_id)
+        before = _persisted(database_engine)
         with pytest.raises(WorkflowError, match=match):
-            _analyze(services, app_id, **overrides)
-        transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-        with transactions.read() as tx:
+            _analyze(services, transaction_manager, app_id, **overrides)
+        with transaction_manager.read() as tx:
             assert (
-                SqlAlchemyApplicationProjectionReader(transactions).application(tx, app_id)
+                SqlAlchemyApplicationProjectionReader(transaction_manager).application(tx, app_id)
                 == before_application
             )
-        assert _persisted(services) == before
-        transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-        with transactions.read() as tx:
-            assert SqlAlchemyApplicationProjectionReader(transactions).analyses(tx, app_id) == []
+        assert _persisted(database_engine) == before
+        with transaction_manager.read() as tx:
+            assert (
+                SqlAlchemyApplicationProjectionReader(transaction_manager).analyses(tx, app_id)
+                == []
+            )
 
 
 # --- the chain is validated as one unit ------------------------------------
 
 
 def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
-    project_root: Path, drafted_application
+    project_root: Path, drafted_application, transaction_manager
 ) -> None:
     setup = drafted_application("Tampered Chain")
     services, app_id = setup.services, setup.application_id
     manifest = project_root / "artifacts/working" / app_id / "resume.claims.json"
     original = manifest.read_text(encoding="utf-8")
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
-        authoritative = SqlAlchemyApplicationProjectionReader(transactions).active_working_draft(
-            tx, app_id
-        )
+    with transaction_manager.read() as tx:
+        authoritative = SqlAlchemyApplicationProjectionReader(
+            transaction_manager
+        ).active_working_draft(tx, app_id)
     cases = [
         ("track", "development"),
         ("emphasis", "balanced-sales"),
@@ -648,10 +636,11 @@ def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
         manifest.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         assert validate_active_draft(services, app_id).passed
         assert not (project_root / "artifacts" / app_id).exists()
-        transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-        with transactions.read() as tx:
+        with transaction_manager.read() as tx:
             assert (
-                SqlAlchemyApplicationProjectionReader(transactions).active_working_draft(tx, app_id)
+                SqlAlchemyApplicationProjectionReader(transaction_manager).active_working_draft(
+                    tx, app_id
+                )
                 == authoritative
             )
     manifest.write_text(original, encoding="utf-8")
@@ -661,40 +650,41 @@ def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
 
 
 def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
-    app_paths: AppPaths, ready_application
+    app_paths: AppPaths, ready_application, transaction_manager
 ) -> None:
     services, app_id = ready_application("Chain Recheck")
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         revision_id = (
-            SqlAlchemyDraftLifecycleRepository(transactions).latest_approved_revision(tx, app_id).id
+            SqlAlchemyDraftLifecycleRepository(transaction_manager)
+            .latest_approved_revision(tx, app_id)
+            .id
         )
     assert services.rendering.ready_qualification(app_id).ready_qualified
 
-    _analyze(services, app_id, emphasis="balanced-sales")
+    _analyze(services, transaction_manager, app_id, emphasis="balanced-sales")
 
     qualification = services.rendering.ready_qualification(app_id, revision_id)
     assert qualification.ready_qualified, qualification.validation.model_dump()
 
 
 def test_ready_integrity_holds_through_an_immaterial_reanalysis(
-    app_paths: AppPaths, ready_application
+    app_paths: AppPaths, ready_application, transaction_manager
 ) -> None:
     """A re-run that changes nothing material is not a reason to fail integrity."""
     services, app_id = ready_application("Immaterial Rerun")
-    _analyze(services, app_id)
+    _analyze(services, transaction_manager, app_id)
     qualification = services.rendering.ready_qualification(app_id)
     assert qualification.ready_qualified, qualification.validation.model_dump()
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         revision_id = (
-            SqlAlchemyDraftLifecycleRepository(transactions).latest_approved_revision(tx, app_id).id
+            SqlAlchemyDraftLifecycleRepository(transaction_manager)
+            .latest_approved_revision(tx, app_id)
+            .id
         )
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
-    with transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert {
             row["artifact_type"]
-            for row in SqlAlchemyApplicationProjectionReader(transactions).artifact_versions(
+            for row in SqlAlchemyApplicationProjectionReader(transaction_manager).artifact_versions(
                 tx, app_id
             )
             if row["revision_id"] == revision_id
@@ -766,7 +756,7 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
 
 
 def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
-    services: Services,
+    services: Services, database_engine
 ) -> None:
     """The refusal narrowed to what it was actually about.
 
@@ -788,7 +778,7 @@ def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
             job_snapshot_id=ingested.job_snapshot_id,
         ),
     )
-    before = _persisted(services)
+    before = _persisted(database_engine)
     with pytest.raises(PreconditionFailed, match="fact overlay"):
         services.analysis.apply_analysis_decisions(
             ApplyAnalysisDecisionsCommand(
@@ -800,4 +790,4 @@ def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
                 excluded_fact_ids=["sales.company.activity"],
             )
         )
-    assert _persisted(services) == before
+    assert _persisted(database_engine) == before

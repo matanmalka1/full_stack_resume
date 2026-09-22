@@ -29,14 +29,6 @@ from helpers import ACCOUNT_MANAGER_JOB, artifact_path, artifact_reference
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import CreateJobSnapshotCommand
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
-from cv_engine.infrastructure.persistence.draft_lifecycle import (
-    SqlAlchemyDraftLifecycleRepository,
-)
 from cv_engine.util import sha256_bytes, sha256_file
 
 #: Several spellings of the same intent, because the layers that could decode
@@ -50,34 +42,24 @@ TRAVERSAL_IDS = [
 ]
 
 
-def _transactions(services):
-    return SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+def _revision(transaction_manager, draft_lifecycle_store, revision_id):
+    with transaction_manager.read() as tx:
+        return draft_lifecycle_store.approved_revision(tx, revision_id)
 
 
-def _revision(services, revision_id):
-    transactions = _transactions(services)
-    with transactions.read() as tx:
-        return SqlAlchemyDraftLifecycleRepository(transactions).approved_revision(tx, revision_id)
+def _artifact(transaction_manager, artifact_catalog, artifact_version_id):
+    with transaction_manager.read() as tx:
+        return artifact_catalog.artifact_version(tx, artifact_version_id)
 
 
-def _artifact(services, artifact_version_id):
-    transactions = _transactions(services)
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).artifact_version(tx, artifact_version_id)
+def _register(transaction_manager, artifact_catalog, *args, **kwargs):
+    with transaction_manager.write() as tx:
+        return artifact_catalog.register_artifact_version(tx, *args, **kwargs)
 
 
-def _register(services, *args, **kwargs):
-    transactions = _transactions(services)
-    with transactions.write() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).register_artifact_version(
-            tx, *args, **kwargs
-        )
-
-
-def _latest(services, application_id, artifact_type):
-    transactions = _transactions(services)
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+def _latest(transaction_manager, artifact_catalog, application_id, artifact_type):
+    with transaction_manager.read() as tx:
+        return artifact_catalog.latest_artifact_version(
             tx, application_id, artifact_type
         )
 
@@ -122,7 +104,11 @@ def _rendered(api_worker, artifact_approved_application, company: str = "Render 
 
 
 def test_a_failed_render_leaves_the_approved_revision_exactly_as_it_was(
-    api_worker, artifact_approved_application, monkeypatch
+    api_worker,
+    artifact_approved_application,
+    monkeypatch,
+    transaction_manager,
+    draft_lifecycle_store,
 ) -> None:
     """§16: "Render failure leaves ApprovedRevision approved."
 
@@ -138,12 +124,12 @@ def test_a_failed_render_leaves_the_approved_revision_exactly_as_it_was(
 
     monkeypatch.setattr("cv_engine.infrastructure.rendering.render_pdf", explode)
 
-    before = _revision(setup.services, setup.approved.revision_id)
+    before = _revision(transaction_manager, draft_lifecycle_store, setup.approved.revision_id)
     finished = _render_over_http(api_worker, setup.application_id, setup.approved.revision_id)
 
     assert finished["status"] == "failed", finished
     assert finished["failure_code"] in {"RENDER_FAILED", "BROWSER_START_FAILED"}
-    after = _revision(setup.services, setup.approved.revision_id)
+    after = _revision(transaction_manager, draft_lifecycle_store, setup.approved.revision_id)
     assert after == before
 
     detail = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}")
@@ -152,11 +138,18 @@ def test_a_failed_render_leaves_the_approved_revision_exactly_as_it_was(
 
 
 def test_retrying_a_failed_render_creates_a_new_operation(
-    api_worker, artifact_approved_application, deterministic_renderer, monkeypatch
+    api_worker,
+    artifact_approved_application,
+    deterministic_renderer,
+    monkeypatch,
+    transaction_manager,
+    draft_lifecycle_store,
 ) -> None:
     """§5.4: retry is new work and only its exact artifacts establish Ready."""
     setup = artifact_approved_application("Retry Co")
-    revision_before = _revision(setup.services, setup.approved.revision_id)
+    revision_before = _revision(
+        transaction_manager, draft_lifecycle_store, setup.approved.revision_id
+    )
 
     def explode(*_args, **_kwargs):
         raise OSError("no browser here")
@@ -165,7 +158,10 @@ def test_retrying_a_failed_render_creates_a_new_operation(
         failure_patch.setattr("cv_engine.infrastructure.rendering.render_pdf", explode)
         failed = _render_over_http(api_worker, setup.application_id, setup.approved.revision_id)
     assert failed["status"] == "failed", failed
-    assert _revision(setup.services, setup.approved.revision_id) == revision_before
+    assert (
+        _revision(transaction_manager, draft_lifecycle_store, setup.approved.revision_id)
+        == revision_before
+    )
 
     retried = _post(api_worker, f"/operations/{failed['id']}/retry")
     assert retried.status_code == 202, retried.text
@@ -185,7 +181,11 @@ def test_retrying_a_failed_render_creates_a_new_operation(
 
 
 def test_every_rendered_artifact_type_downloads_as_what_it_is(
-    api_worker, artifact_approved_application, deterministic_renderer
+    api_worker,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     """The media type comes from the registered type, never from the filename."""
     setup, outputs = _rendered(api_worker, artifact_approved_application)
@@ -204,20 +204,24 @@ def test_every_rendered_artifact_type_downloads_as_what_it_is(
         # it.
         stored = artifact_path(
             setup.services,
-            _artifact(setup.services, artifact_version_id)["path"]
+            _artifact(transaction_manager, artifact_catalog, artifact_version_id)["path"],
         )
         assert response.content == stored.read_bytes(), artifact_type
         assert int(response.headers["content-length"]) == len(response.content)
 
 
 def test_approved_html_preview_streams_the_exact_bound_artifact_inline(
-    api_worker, artifact_approved_application, deterministic_renderer
+    api_worker,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     setup, outputs = _rendered(api_worker, artifact_approved_application, "Approved Preview Co")
     html_id = outputs["resume_html"]
     stored = artifact_path(
         setup.services,
-        _artifact(setup.services, html_id)["path"]
+        _artifact(transaction_manager, artifact_catalog, html_id)["path"],
     ).read_bytes()
 
     detail = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}")
@@ -260,7 +264,11 @@ def test_approved_html_preview_refuses_an_artifact_from_another_revision(
 
 
 def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
-    api_worker, artifact_approved_application, deterministic_renderer
+    api_worker,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     missing_setup, missing_outputs = _rendered(
         api_worker, artifact_approved_application, "Missing Preview Co"
@@ -268,7 +276,7 @@ def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
     missing_id = missing_outputs["resume_html"]
     artifact_path(
         missing_setup.services,
-        _artifact(missing_setup.services, missing_id)["path"]
+        _artifact(transaction_manager, artifact_catalog, missing_id)["path"],
     ).unlink()
     missing = _get(
         api_worker,
@@ -284,7 +292,7 @@ def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
     changed_id = changed_outputs["resume_html"]
     artifact_path(
         changed_setup.services,
-        _artifact(changed_setup.services, changed_id)["path"]
+        _artifact(transaction_manager, artifact_catalog, changed_id)["path"],
     ).write_bytes(b"<!doctype html><title>tampered</title>")
     changed = _get(
         api_worker,
@@ -296,7 +304,8 @@ def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
 
     escaped_setup = artifact_approved_application("Escaped Preview Co")
     escaped_id = _register(
-        escaped_setup.services,
+        transaction_manager,
+        artifact_catalog,
         escaped_setup.application_id,
         "resume_html",
         "escaped-preview",
@@ -353,7 +362,11 @@ def test_a_traversal_string_is_only_an_id_that_names_nothing(
 
 
 def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
-    api_worker, artifact_approved_application, deterministic_renderer
+    api_worker,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     """Two different findings, two different statuses.
 
@@ -368,9 +381,9 @@ def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
     assert missing.json()["code"] == "UNKNOWN_RECORD"
 
     pdf_id = outputs["resume_pdf"]
-    artifact_path(setup.services, _artifact(setup.services, pdf_id)["path"]).write_bytes(
-        b"%PDF-1.4\ntampered\n"
-    )
+    artifact_path(
+        setup.services, _artifact(transaction_manager, artifact_catalog, pdf_id)["path"]
+    ).write_bytes(b"%PDF-1.4\ntampered\n")
     tampered = _get(api_worker, f"/artifacts/{pdf_id}/download")
     assert tampered.status_code == 412, tampered.text
     assert tampered.json()["code"] == "ARTIFACT_HASH_MISMATCH"
@@ -382,11 +395,17 @@ def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
 
 
 def test_a_deleted_payload_is_reported_as_missing_rather_than_as_a_server_error(
-    api_worker, artifact_approved_application, deterministic_renderer
+    api_worker,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     setup, outputs = _rendered(api_worker, artifact_approved_application)
     pdf_id = outputs["resume_pdf"]
-    artifact_path(setup.services, _artifact(setup.services, pdf_id)["path"]).unlink()
+    artifact_path(
+        setup.services, _artifact(transaction_manager, artifact_catalog, pdf_id)["path"]
+    ).unlink()
 
     response = _get(api_worker, f"/artifacts/{pdf_id}/download")
     assert response.status_code == 412, response.text
@@ -394,7 +413,7 @@ def test_a_deleted_payload_is_reported_as_missing_rather_than_as_a_server_error(
 
 
 def test_a_registration_pointing_outside_the_artifact_root_is_refused(
-    api_worker, artifact_approved_application
+    api_worker, artifact_approved_application, transaction_manager, artifact_catalog
 ) -> None:
     """The containment check, reached the only way a client could reach it.
 
@@ -405,7 +424,8 @@ def test_a_registration_pointing_outside_the_artifact_root_is_refused(
     """
     setup = artifact_approved_application("Escape Co")
     escaped_id = _register(
-        setup.services,
+        transaction_manager,
+        artifact_catalog,
         setup.application_id,
         "resume_pdf",
         "resume",
@@ -420,7 +440,11 @@ def test_a_registration_pointing_outside_the_artifact_root_is_refused(
 
 
 def test_a_symlink_out_of_the_artifact_root_is_refused_by_the_same_check(
-    api_worker, artifact_approved_application, tmp_path
+    api_worker,
+    artifact_approved_application,
+    tmp_path,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     """Architecture §14: "Artifact access prevents traversal and symlink escape."
 
@@ -438,7 +462,8 @@ def test_a_symlink_out_of_the_artifact_root_is_refused_by_the_same_check(
     link.symlink_to(outside)
 
     linked_id = _register(
-        setup.services,
+        transaction_manager,
+        artifact_catalog,
         setup.application_id,
         "resume_pdf",
         "resume",
@@ -520,7 +545,7 @@ def test_a_pdf_from_another_revision_is_refused_before_qualification_runs(
 
 
 def test_an_unqualified_revision_refuses_its_export(
-    api_worker, artifact_approved_application
+    api_worker, artifact_approved_application, transaction_manager, artifact_catalog
 ) -> None:
     """§16 requires `ready_qualified`, and this reaches that check rather than an earlier one.
 
@@ -543,7 +568,8 @@ def test_an_unqualified_revision_refuses_its_export(
     payload.write_bytes(b"%PDF-1.4\nnever rendered\n")
 
     unrendered_pdf_id = _register(
-        setup.services,
+        transaction_manager,
+        artifact_catalog,
         setup.application_id,
         "resume_pdf",
         "resume",
@@ -567,14 +593,22 @@ def test_an_unqualified_revision_refuses_its_export(
 # --- the verified bytes are the delivered bytes -------------------------------
 
 
-def _rendered_pdf(services, artifact_approved_application, company: str):
+def _rendered_pdf(
+    services, artifact_approved_application, transaction_manager, artifact_catalog, company: str
+):
     setup = artifact_approved_application(company)
     services.rendering.render(setup.application_id)
-    return setup, _latest(services, setup.application_id, "resume_pdf")
+    return setup, _latest(
+        transaction_manager, artifact_catalog, setup.application_id, "resume_pdf"
+    )
 
 
 def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(
-    services, artifact_approved_application, deterministic_renderer
+    services,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     """The time-of-check/time-of-use window, closed and proved closed.
 
@@ -590,7 +624,13 @@ def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(
     substitution. This substitutes exactly that way, deliberately, because it is
     the case a descriptor-based fix would silently fail.
     """
-    setup, pdf = _rendered_pdf(services, artifact_approved_application, "TOCTOU Co")
+    setup, pdf = _rendered_pdf(
+        services,
+        artifact_approved_application,
+        transaction_manager,
+        artifact_catalog,
+        "TOCTOU Co",
+    )
     stored = artifact_path(services, pdf["path"])
     original = stored.read_bytes()
 
@@ -609,7 +649,11 @@ def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(
 
 
 def test_a_delivery_survives_the_payload_being_deleted_in_the_same_window(
-    services, artifact_approved_application, deterministic_renderer
+    services,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     """Deleting after verification must not fail after `200` has gone out.
 
@@ -618,7 +662,13 @@ def test_a_delivery_survives_the_payload_being_deleted_in_the_same_window(
     status line and headers were already on the wire, where nothing can be
     reported to the client.
     """
-    setup, pdf = _rendered_pdf(services, artifact_approved_application, "Vanishing Co")
+    setup, pdf = _rendered_pdf(
+        services,
+        artifact_approved_application,
+        transaction_manager,
+        artifact_catalog,
+        "Vanishing Co",
+    )
     stored = artifact_path(services, pdf["path"])
     original = stored.read_bytes()
 

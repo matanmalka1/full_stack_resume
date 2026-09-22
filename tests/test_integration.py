@@ -11,16 +11,7 @@ from cv_engine.application.commands import (
 from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
 from cv_engine.runtime.paths import AppPaths
-
-
-def _transactions(services):
-    return SqlAlchemyTransactionManager(create_database_engine(services.database_url))
 
 
 def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> None:
@@ -127,7 +118,9 @@ def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application
     )
 
 
-def test_render_revalidates_approved_markdown_before_browser(approved_application) -> None:
+def test_render_revalidates_approved_markdown_before_browser(
+    approved_application, transaction_manager, artifact_catalog
+) -> None:
     setup = approved_application(
         "Acme",
         "Developer",
@@ -137,9 +130,8 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
         "- Media industry experience is preferred.",
     )
     services, app_id = setup
-    transactions = _transactions(services)
-    with transactions.read() as tx:
-        markdown_record = SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
+    with transaction_manager.read() as tx:
+        markdown_record = artifact_catalog.latest_artifact_version(
             tx, app_id, "resume_markdown", "approved"
         )
     markdown = artifact_path(services, markdown_record["path"])
