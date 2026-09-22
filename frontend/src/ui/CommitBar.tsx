@@ -66,20 +66,36 @@ const CommitBarSurface = ({ back, children, inline, label, primary, result }: Co
     {/* Two sides only where there is room for two. The action column is `max-content`, so
         on a phone it took the width of "רישום הגשת הגרסה הזו" plus "הורדת PDF" and left
         the sentence beside it about ninety pixels - one word per line, for four lines.
-        Below `sm` the bar is one column: what the step is waiting on, then what to do. */}
-    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_max-content] sm:items-center">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
-        {back}
-        {label === undefined ? (
-          children
-        ) : (
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-caption font-bold text-cv-text-muted">{label}</span>
-            {children}
+
+        Below `sm` the sentence takes the first row and the way back shares the second
+        with the command. Stacked one per row - back, label, sentence, command - the
+        pinned bar covered a quarter of a phone's screen over the form it closes. */}
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_max-content] sm:gap-4">
+      <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+        {/* The two wrappers exist for the phone grid only; from `sm` they dissolve and
+            their contents flow in the opening side's row as they always have. */}
+        {back === undefined ? null : <div className="col-start-1 row-start-2 min-w-0 sm:contents">{back}</div>}
+        {label === undefined && children === undefined ? null : (
+          <div className="col-span-2 min-w-0 sm:contents">
+            {label === undefined ? (
+              children
+            ) : (
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-caption font-bold text-cv-text-muted">{label}</span>
+                {children}
+              </div>
+            )}
           </div>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-3 sm:justify-self-end">{primary}</div>
+      <div
+        className={cx(
+          "flex flex-wrap items-center gap-3 sm:col-start-auto sm:row-start-auto sm:justify-self-end",
+          back === undefined ? "col-span-2" : "col-start-2 row-start-2 justify-self-end",
+        )}
+      >
+        {primary}
+      </div>
     </div>
     {result === undefined ? null : (
       <LiveRegion

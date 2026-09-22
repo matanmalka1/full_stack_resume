@@ -1,5 +1,6 @@
 import { type ReactElement, useState } from "react";
 import { Link } from "react-router-dom";
+import { routePaths } from "@/app/routePaths";
 
 import { aiRegenerationAvailable } from "@/api/settings";
 import type { ApplicationDetail } from "@/api/contracts";
@@ -211,10 +212,20 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
           than presenting an execution-mode switch. */}
           {plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? null : (
             <div className="flex flex-col gap-2">
+              {/* The unavailable case names where it is fixed and goes there: a disabled
+                  button whose only explanation points at another screen, with no way to
+                  reach it, left the reader to find Settings on their own. */}
               <p className="text-support leading-6 text-cv-text-muted">
-                {aiRegenerationAvailable(settings)
-                  ? "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."
-                  : "כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות."}
+                {aiRegenerationAvailable(settings) ? (
+                  "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."
+                ) : (
+                  <>
+                    כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.{" "}
+                    <Link className="font-semibold text-cv-accent hover:underline" to={routePaths.settings}>
+                      פתיחת ההגדרות
+                    </Link>
+                  </>
+                )}
               </p>
             </div>
           )}

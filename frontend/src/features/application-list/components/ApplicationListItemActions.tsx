@@ -59,6 +59,13 @@ export const ApplicationRecommendedAction = ({
       </Link>
     );
 
+  /* Nothing to report draws nothing. The row's cell owns its one empty-cell dash, so a
+     row with neither a recruitment task nor a recommendation reads as one blank cell
+     rather than a stack of dashes, one per component that had nothing to say. */
+  if (operation === null && item.recommended_action == null && readyRevisionLink === null) {
+    return null;
+  }
+
   return (
     <div className={variant === "row" ? "flex flex-col items-start gap-1" : "flex flex-col items-end gap-1.5"}>
       {operationFailed && operation !== null ? (
@@ -86,8 +93,6 @@ export const ApplicationRecommendedAction = ({
           <ArrowLeft aria-hidden="true" className="size-icon-md" />
           {actionLabel(item.recommended_action)}
         </Link>
-      ) : readyRevisionLink === null && variant === "row" ? (
-        <span className="text-support text-cv-text-muted">—</span>
       ) : null}
       {operation === null ? readyRevisionLink : null}
     </div>

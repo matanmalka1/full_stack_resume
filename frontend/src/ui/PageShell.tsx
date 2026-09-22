@@ -32,7 +32,6 @@ interface PageShellProps {
      a document beside the evidence for each of its lines, and a split of two readable
      columns needs the room. */
   measure?: "wide" | "wizard" | "form";
-  navigation?: ReactNode;
   title: ReactNode;
 }
 
@@ -48,7 +47,6 @@ export const PageShell = ({
   eyebrowTone,
   landmark,
   measure = "wide",
-  navigation,
   title,
 }: PageShellProps) => {
   return (
@@ -60,7 +58,6 @@ export const PageShell = ({
         measure === "wizard" ? "[--page-measure:64rem]" : undefined,
       )}
     >
-      {navigation === undefined ? null : <div className="mb-5">{navigation}</div>}
       <div
         className={cx(
           landmark === undefined ? undefined : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-page-gap",
