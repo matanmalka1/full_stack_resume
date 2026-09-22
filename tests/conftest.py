@@ -24,7 +24,9 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     analysis_proposal,
     approve_active_draft,
+    artifact_path,
     seed_existing_analysis,
+    working_draft_paths,
 )
 from seed import V2_IDENTITY_FACT, write_canonical_sources
 from sqlalchemy import text
@@ -645,7 +647,7 @@ def drafted_application(analyzed_application):
                 selection_plan_id=setup.selection_plan_id,
             )
         )
-        paths = setup.services.artifacts.working_paths(setup.application_id)
+        paths = working_draft_paths(setup.services, setup.application_id)
         return replace(
             setup,
             markdown=paths.markdown,
@@ -712,7 +714,7 @@ def artifact_approved_application(services: Services):
                 selection_plan_id=activated.selection_plan_id,
             )
         )
-        paths = services.artifacts.working_paths(ingested.application_id)
+        paths = working_draft_paths(services, ingested.application_id)
         approved = approve_active_draft(services, ingested.application_id)
         return WorkflowSetup(
             services=services,
@@ -833,7 +835,7 @@ def ready_application(
             current_status = application_store.get_application(tx, setup.application_id)[
                 "current_status"
             ]
-        pdf = setup.services.artifacts.resolve(pdf_record["path"])
+        pdf = artifact_path(setup.services, pdf_record["path"])
         assert rendered.validation.passed, rendered.validation.model_dump()
         assert current_status == "saved"
         assert setup.services.rendering.ready_qualification(setup.application_id).ready_qualified

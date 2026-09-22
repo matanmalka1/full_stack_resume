@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cv_engine.application.commands import AnalyzeCommand, ApproveDraftCommand, ValidateDraftCommand
+from cv_engine.application.ports import DraftPaths
 from cv_engine.application.services.analysis.preparation import PreparedAnalysis
 from cv_engine.application.services.analysis.selection_policy import AnalysisSelection
 from cv_engine.domain.contracts.analysis import JobAnalysis
@@ -35,6 +36,22 @@ def store_draft(root: Path, draft):
     """Write a working draft and return its Markdown path and exact text."""
     stored = artifact_store(root).write_working_draft(draft)
     return stored.paths.markdown, stored.markdown
+
+
+def working_draft_paths(services: Services, application_id: str) -> DraftPaths:
+    """Paths for one mutable working projection in the local test store."""
+    directory = services.paths.artifacts_root / "working" / application_id
+    return DraftPaths(directory / "resume.md", directory / "resume.claims.json")
+
+
+def artifact_path(services: Services, stored_path: str) -> Path:
+    """Resolve a trusted stored reference so an integrity test can mutate its bytes."""
+    return services.paths.root / stored_path
+
+
+def artifact_reference(services: Services, path: Path) -> str:
+    """Create the project-relative reference used by a synthetic artifact row."""
+    return services.paths.relative(path)
 
 
 def seed_existing_analysis(
@@ -200,7 +217,7 @@ def approve_active_draft(services: Services, application_id: str, *, revision_id
 
 
 def working_claim(services: Services, application_id: str, fact_id: str):
-    manifest = services.artifacts.working_paths(application_id).manifest
+    manifest = working_draft_paths(services, application_id).manifest
     draft = parse_draft(manifest.read_text(encoding="utf-8"))
     return next(
         claim for section in draft.sections for claim in section.claims if fact_id in claim.fact_ids
@@ -228,4 +245,4 @@ def artifact_version_and_path(
         version = catalog.latest_artifact_version(
             tx, application_id, artifact_type, lifecycle_status
         )
-    return version, services.artifacts.resolve(version["path"])
+    return version, artifact_path(services, version["path"])

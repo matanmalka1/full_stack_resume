@@ -13,20 +13,11 @@ class ArtifactPaths(Protocol):
     """The application paths this store uses.
 
     Declared here, as `PayloadStore` declares `PayloadPaths`, so an adapter
-    does not import the composition layer that builds it. `relative` stays on
-    the protocol rather than being replaced by a direct `relative_within` call:
-    it carries the "must be absolute" containment check that
-    artifact rows depend on, and `relative_within` alone would raise
-    `ValueError`.
+    does not import the composition layer that builds it.
     """
 
     @property
-    def root(self) -> Path: ...
-
-    @property
     def artifacts_root(self) -> Path: ...
-
-    def relative(self, path: Path) -> str: ...
 
 
 class FilesystemArtifactStore:
@@ -40,26 +31,19 @@ class FilesystemArtifactStore:
     MANIFEST = "resume.claims.json"
 
     def __init__(self, paths: ArtifactPaths):
-        self._paths = paths
         self._root = paths.artifacts_root
 
     def _pair(self, directory: Path) -> DraftPaths:
         return DraftPaths(directory / self.MARKDOWN, directory / self.MANIFEST)
 
-    def working_paths(self, application_id: str) -> DraftPaths:
+    def _working_paths(self, application_id: str) -> DraftPaths:
         return self._pair(self._root / "working" / application_id)
 
     def write_working_draft(self, draft: DraftDocument) -> StoredDraft:
         assert_external_io_allowed("working projection write")
         sealed, markdown, manifest = seal_draft(draft)
-        paths = self.working_paths(sealed.application_id)
+        paths = self._working_paths(sealed.application_id)
         paths.markdown.parent.mkdir(parents=True, exist_ok=True)
         paths.markdown.write_text(markdown, encoding="utf-8")
         paths.manifest.write_text(manifest, encoding="utf-8")
         return StoredDraft(paths, markdown)
-
-    def resolve(self, stored_path: str) -> Path:
-        return self._paths.root / stored_path
-
-    def relative(self, path: Path) -> str:
-        return self._paths.relative(path)

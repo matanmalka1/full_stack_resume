@@ -9,6 +9,7 @@ from foreground import ForegroundOperationExecutor, foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     analysis_proposal,
+    artifact_path,
     seed_analysis_for_command,
     validate_active_draft,
 )
@@ -1197,7 +1198,7 @@ def _move_the_source_after_render(setup, _operation_id: str):
         manifest = _artifact_version_for_revision(
             setup.services, setup.approved.revision_id, "claim_manifest", "approved"
         )
-        path = setup.services.artifacts.resolve(manifest["path"])
+        path = artifact_path(setup.services, manifest["path"])
         path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
 
     return interfere

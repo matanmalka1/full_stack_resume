@@ -25,7 +25,7 @@ different facts.
 from __future__ import annotations
 
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB
+from helpers import ACCOUNT_MANAGER_JOB, artifact_path, artifact_reference
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import CreateJobSnapshotCommand
@@ -202,7 +202,8 @@ def test_every_rendered_artifact_type_downloads_as_what_it_is(
         # and an empty body is exactly what the body-limit middleware produced
         # before `1de0b4f`, and a header-only assertion passed straight through
         # it.
-        stored = setup.services.artifacts.resolve(
+        stored = artifact_path(
+            setup.services,
             _artifact(setup.services, artifact_version_id)["path"]
         )
         assert response.content == stored.read_bytes(), artifact_type
@@ -214,7 +215,8 @@ def test_approved_html_preview_streams_the_exact_bound_artifact_inline(
 ) -> None:
     setup, outputs = _rendered(api_worker, artifact_approved_application, "Approved Preview Co")
     html_id = outputs["resume_html"]
-    stored = setup.services.artifacts.resolve(
+    stored = artifact_path(
+        setup.services,
         _artifact(setup.services, html_id)["path"]
     ).read_bytes()
 
@@ -264,7 +266,8 @@ def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
         api_worker, artifact_approved_application, "Missing Preview Co"
     )
     missing_id = missing_outputs["resume_html"]
-    missing_setup.services.artifacts.resolve(
+    artifact_path(
+        missing_setup.services,
         _artifact(missing_setup.services, missing_id)["path"]
     ).unlink()
     missing = _get(
@@ -279,7 +282,8 @@ def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
         api_worker, artifact_approved_application, "Changed Preview Co"
     )
     changed_id = changed_outputs["resume_html"]
-    changed_setup.services.artifacts.resolve(
+    artifact_path(
+        changed_setup.services,
         _artifact(changed_setup.services, changed_id)["path"]
     ).write_bytes(b"<!doctype html><title>tampered</title>")
     changed = _get(
@@ -364,7 +368,7 @@ def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
     assert missing.json()["code"] == "UNKNOWN_RECORD"
 
     pdf_id = outputs["resume_pdf"]
-    setup.services.artifacts.resolve(_artifact(setup.services, pdf_id)["path"]).write_bytes(
+    artifact_path(setup.services, _artifact(setup.services, pdf_id)["path"]).write_bytes(
         b"%PDF-1.4\ntampered\n"
     )
     tampered = _get(api_worker, f"/artifacts/{pdf_id}/download")
@@ -382,7 +386,7 @@ def test_a_deleted_payload_is_reported_as_missing_rather_than_as_a_server_error(
 ) -> None:
     setup, outputs = _rendered(api_worker, artifact_approved_application)
     pdf_id = outputs["resume_pdf"]
-    setup.services.artifacts.resolve(_artifact(setup.services, pdf_id)["path"]).unlink()
+    artifact_path(setup.services, _artifact(setup.services, pdf_id)["path"]).unlink()
 
     response = _get(api_worker, f"/artifacts/{pdf_id}/download")
     assert response.status_code == 412, response.text
@@ -543,7 +547,7 @@ def test_an_unqualified_revision_refuses_its_export(
         setup.application_id,
         "resume_pdf",
         "resume",
-        setup.services.artifacts.relative(payload),
+        artifact_reference(setup.services, payload),
         sha256_file(payload),
         "rendered",
         revision_id=setup.approved.revision_id,
@@ -587,7 +591,7 @@ def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(
     the case a descriptor-based fix would silently fail.
     """
     setup, pdf = _rendered_pdf(services, artifact_approved_application, "TOCTOU Co")
-    stored = services.artifacts.resolve(pdf["path"])
+    stored = artifact_path(services, pdf["path"])
     original = stored.read_bytes()
 
     delivery = services.rendering.download_artifact(pdf["id"])
@@ -615,7 +619,7 @@ def test_a_delivery_survives_the_payload_being_deleted_in_the_same_window(
     reported to the client.
     """
     setup, pdf = _rendered_pdf(services, artifact_approved_application, "Vanishing Co")
-    stored = services.artifacts.resolve(pdf["path"])
+    stored = artifact_path(services, pdf["path"])
     original = stored.read_bytes()
 
     delivery = services.rendering.download_artifact(pdf["id"])

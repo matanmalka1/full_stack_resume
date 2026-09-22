@@ -23,7 +23,7 @@ from html.parser import HTMLParser
 
 import pytest
 from api_harness import MUTATION_HEADERS, analyze_offline
-from helpers import ACCOUNT_MANAGER_JOB, working_claim
+from helpers import ACCOUNT_MANAGER_JOB, artifact_path, working_claim, working_draft_paths
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import ApplySelectionChangeCommand, IngestCommand
@@ -681,7 +681,7 @@ def test_selection_change_rolls_back_plan_and_draft_when_the_draft_write_fails(
     application_id, working_draft_id, sources = _drafted(ai_api_worker, "Reselection Rollback Co")
     before = _read(ai_api_worker, working_draft_id).json()
     services = ai_api_worker.services
-    markdown_path = services.artifacts.working_paths(application_id).markdown
+    markdown_path = working_draft_paths(services, application_id).markdown
     markdown = markdown_path.read_text(encoding="utf-8")
     original = SqlAlchemySelectionDraftStore.update_selection
 
@@ -768,7 +768,7 @@ def test_archiving_registers_the_snapshot_before_clearing_the_pointer(
         artifact_version = application_projection_reader.artifact_version(
             tx, body["artifact_version_id"]
         )
-    stored = ai_api_worker.services.artifacts.resolve(artifact_version["path"])
+    stored = artifact_path(ai_api_worker.services, artifact_version["path"])
     assert json.loads(stored.read_text(encoding="utf-8"))["application_id"] == application_id
     state = _state(ai_api_worker, application_id)
     assert state["active_working_draft_id"] is None
@@ -1116,7 +1116,7 @@ def test_a_registered_snapshot_whose_payload_is_gone_refuses_the_replacement(
     snapshot = _snapshots(ai_api_paused, application_id)[0]
     with transaction_manager.read() as tx:
         stored = application_projection_reader.artifact_version(tx, snapshot["id"])
-    ai_api_paused.services.artifacts.resolve(stored["path"]).write_text(
+    artifact_path(ai_api_paused.services, stored["path"]).write_text(
         "tampered", encoding="utf-8"
     )
 

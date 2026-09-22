@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
+from helpers import ACCOUNT_MANAGER_JOB, artifact_path, validate_active_draft
 from helpers import working_claim as _working_claim
 
 from cv_engine.application.commands import (
@@ -142,7 +142,7 @@ def test_render_revalidates_approved_markdown_before_browser(approved_applicatio
         markdown_record = SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(
             tx, app_id, "resume_markdown", "approved"
         )
-    markdown = services.artifacts.resolve(markdown_record["path"])
+    markdown = artifact_path(services, markdown_record["path"])
     markdown.write_text(
         markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8"
     )

@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, seed_existing_analysis
+from helpers import ACCOUNT_MANAGER_JOB, artifact_path, seed_existing_analysis
 
 import cv_engine.application.services.drafts.activation as draft_activation_module
 import cv_engine.application.services.drafts.validation as draft_validation_module
@@ -162,7 +162,7 @@ def test_reconcile_reports_a_tampered_artifact(
     transactions, _drafts, catalog = _persistence(services)
     with transactions.read() as tx:
         pdf_record = catalog.latest_artifact_version(tx, setup.application_id, "resume_pdf")
-    services.artifacts.resolve(pdf_record["path"]).write_bytes(
+    artifact_path(services, pdf_record["path"]).write_bytes(
         b"%PDF-1.4\n% not the approved bytes\n"
     )
 

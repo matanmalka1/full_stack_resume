@@ -19,6 +19,7 @@ from helpers import (
     approve_active_draft,
     seed_analysis_for_command,
     validate_active_draft,
+    working_draft_paths,
 )
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import ProgrammingError
@@ -178,7 +179,7 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
     analysed = _analyze(services, app_id)
     assert analysed.analysis_id != stale_analysis_id
     drafted = _draft(services, app_id, analysed.analysis_id)
-    manifest = services.artifacts.working_paths(app_id).manifest
+    manifest = working_draft_paths(services, app_id).manifest
     assert drafted.validation.passed, drafted.validation.model_dump()
     draft = parse_draft(manifest.read_text(encoding="utf-8"))
     assert draft.job_analysis_id == analysed.analysis_id
@@ -247,7 +248,7 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     # Re-drafting under the newer analysis is the way forward, and the decision
     # record then binds that analysis.
     drafted = _draft(services, app_id, newer.analysis_id)
-    manifest = services.artifacts.working_paths(app_id).manifest
+    manifest = working_draft_paths(services, app_id).manifest
     assert drafted.validation.passed, drafted.validation.model_dump()
     assert parse_draft(manifest.read_text(encoding="utf-8")).job_analysis_id == newer.analysis_id
     approve_active_draft(services, app_id)
