@@ -702,6 +702,47 @@ def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(
     assert _operation(services, operation.id).status is OperationStatus.INTERRUPTED
 
 
+def test_startup_reclaims_a_previous_runners_claim_before_its_lease_expires(
+    services, database_engine
+) -> None:
+    """A fast restart must not leave a dead predecessor's claim stuck.
+
+    `interrupt_expired_operations` deliberately waits out the TTL, which is
+    right for a periodic sweep that must not disturb another live claimant.
+    A process's one-time startup sweep has no such claimant to protect - it
+    hasn't claimed anything yet - so it must reclaim unconditionally instead
+    of leaving the row stuck until some later restart happens to land after
+    the original lease's TTL.
+    """
+    operation = _operation_for_runner(services, "Fast Restart Co")
+    with database_engine.begin() as connection:
+        connection.execute(
+            update(operations)
+            .where(operations.c.id == operation.id)
+            .values(
+                status="running",
+                lease_owner="dead-runner",
+                heartbeat_at="2026-08-19T08:00:00+00:00",
+                lease_expires_at="2026-08-19T08:00:30+00:00",
+            )
+        )
+
+    # The lease has not expired yet; a TTL-respecting sweep would skip it.
+    assert (
+        _execution_write(services, "interrupt_expired_operations", now="2026-08-19T08:00:05+00:00")
+        == []
+    )
+
+    interrupted = _execution_write(
+        services,
+        "interrupt_claims_from_previous_runners",
+        now="2026-08-19T08:00:05+00:00",
+    )
+
+    assert interrupted == [operation.id]
+    assert _operation(services, operation.id).status is OperationStatus.INTERRUPTED
+
+
 class _Handler:
     def __init__(self, *, execute=None, check=None, activate=None):
         self._execute = execute or (lambda _operation, _cancelled: PreparedOperation())
