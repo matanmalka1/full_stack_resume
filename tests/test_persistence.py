@@ -60,6 +60,7 @@ MUTABLE_TABLES = frozenset(
         "idempotency_receipts",  # permits exactly one pending-to-completed transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
+        "payload_write_leases",  # pending/committed/reclaiming coordination state
     }
 )
 DELETE_ONLY_TABLES = frozenset(
