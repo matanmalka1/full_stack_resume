@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-from ...domain.contracts.drafts import ClaimReviewEvidence, DraftDocument
+from ...domain.contracts.drafts import ClaimReviewAssertion, ClaimReviewEvidence, DraftDocument
 from ...domain.contracts.knowledge import FactStatus
 from ...domain.contracts.providers import (
     ClaimSupportProposal,
@@ -323,7 +323,14 @@ def authorize_semantically_reviewed_claims(
                 policy_version="semantic-claim-support-v1",
                 provider_artifact_version_id=evidence.artifact_version_id,
                 input_hash=evidence.provenance.input_hash,
-                assertions=[item.model_dump(mode="json") for item in assessment.assertions],
+                assertions=[
+                    ClaimReviewAssertion(
+                        claim_quote=item.claim_quote,
+                        fact_ids=item.fact_ids,
+                        source_quotes=item.source_quotes,
+                    )
+                    for item in assessment.assertions
+                ],
             ),
         )
     if unsupported:

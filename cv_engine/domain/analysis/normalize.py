@@ -27,6 +27,7 @@ from ..contracts.analysis_proposal import (
     Importance,
     ProposedRequirement,
     RequirementSource,
+    ShortfallSeverity,
 )
 from ..facts import FactStore, FactStoreError
 from ..profiles import ProfileStore, classification_mismatch
@@ -288,11 +289,12 @@ def normalize_requirement(
         coverage = "partial"
         shortfall_severity = "material"
 
-    expected_severity = {
+    expected_severities: dict[str, ShortfallSeverity] = {
         "matched": "none",
         "unsupported": "material",
         "unknown": "unknown",
-    }.get(coverage)
+    }
+    expected_severity = expected_severities.get(coverage)
     if expected_severity is not None and shortfall_severity != expected_severity:
         shortfall_severity = expected_severity
         issues.append(AnalysisIssue(code="shortfall_inconsistent", requirement_index=index))

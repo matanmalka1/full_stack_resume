@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.operations import (
@@ -240,7 +241,7 @@ class SqlAlchemyOperationExecutionStore:
     ) -> list[str]:
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
-        conditions = [
+        conditions: list[ColumnElement[bool]] = [
             operations.c.status.in_(("queued", "running")),
             operations.c.lease_expires_at.is_not(None),
         ]
