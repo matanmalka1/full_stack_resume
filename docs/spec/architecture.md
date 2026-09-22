@@ -355,41 +355,71 @@ not required: failed registration leaves no active database state referencing th
 payload, and orphan inspection preserves that evidence for reconciliation.
 
 A write claims its destination through a `payload_write_leases` row before any bytes are
-stored: the owner claims a group key - one immutable payload, or the small file set one
-registration depends on, such as an ApprovedRevision's JSON and Markdown together - in
-`pending` state with a bounded, renewable expiry. `acquire` refuses a group key that
-already holds a live row, in `pending` (unexpired) or `reclaiming` state. Storage happens
-under a key scoped to that specific attempt; a later attempt against the same group key,
-including a legitimate retry, always gets a fresh attempt key and never reuses or
-overwrites a prior attempt's key. Registration and the lease's flip to `committed` happen
-in the same transaction, for every file the group key covers, gated on the lease still
-being `pending` under that owner. A lease reclaimed out from under a writer makes that
-writer's own registration attempt affect zero rows, so nothing is ever registered after
-its write was declared abandoned.
+stored. The row is keyed by a *group key* - one immutable payload, or the small file set
+one registration depends on, such as an ApprovedRevision's JSON and Markdown together -
+and records the current *attempt* claiming it: an `attempt_id` minted fresh each time the
+group key is acquired, an owner, and a bounded, renewable expiry, in `pending` state.
+`acquire` refuses a group key that already holds a live row, in `pending` (unexpired) or
+`reclaiming` state.
+
+Every physical object key a write produces is derived from its group key **and** its
+attempt_id together (for example
+`revisions/{application_id}/{revision_id}/{attempt_id}/resume.json`), never from the
+group key alone. A later attempt against the same group key, including a legitimate
+retry, mints a new attempt_id and therefore new physical keys; it never reuses or
+overwrites a prior attempt's keys. Registration and the lease's flip to `committed`
+happen in one transaction, for every physical key the winning attempt produced, gated on
+the group key's lease row still being `pending` under that exact attempt_id and owner.
+An attempt whose lease was reclaimed - the row's attempt_id or state has moved on - has
+its own registration transition affect zero rows, so nothing is ever registered under an
+attempt already declared abandoned. The guarantee is entirely about the lease row still
+matching the attempt trying to commit; nothing about a physical key itself is checked at
+registration time.
 
 Maintenance inventories registered snapshot, revision, and artifact references in one
 read scope, closes it, then enumerates managed immutable object keys through the same
-backend-neutral Port on local and S3 stores. `inspect_orphans` lists candidates absent
-from both the database and a live lease. `reclaim_orphans` additionally fences an expired
-`pending` lease (`pending -> reclaiming`, which blocks both a new acquire on that group
-key and the original owner's registration), deletes every stored payload that attempt
-produced, re-checks that the database still holds no reference to any of them, then
-removes the lease row.
+backend-neutral Port on local and S3 stores. `inspect_orphans` lists an object key whose
+group key is absent from the database snapshot **and** holds no live lease row (`pending`
+or `reclaiming`) - the lease check is what removes an active writer's key from the list,
+so a listed candidate is never one still covered by an unexpired lease.
+
+`reclaim_orphans` removes two kinds of candidate:
+
+1. One whose group key still holds a `pending` lease, now expired. Reclaim fences it
+   first - a conditional update from `pending` to `reclaiming`, matched on the same
+   attempt_id, which is the same conditional update a genuine registration would need
+   and therefore serializes against one: whichever transaction's update lands first wins
+   the row, and the other affects zero rows and fails. Only after fencing succeeds does
+   reclaim query the database, once more, for a reference to any of that attempt's
+   physical keys - a check made *before* any deletion, because a check made only
+   afterward cannot prevent removing a payload that turns out to be referenced, only
+   report it too late. Fencing already makes that query's answer "no" by construction;
+   the query is still made explicitly rather than assumed, and deletion is gated on its
+   answer. Finding a reference at this point is an integrity failure - fencing should
+   have made it impossible - and reclaim stops and raises rather than deleting. Finding
+   none, reclaim deletes every physical key the attempt produced, then removes the lease
+   row. A second reference check after deletion may run as additional verification; it
+   is not what makes deletion safe, since by then it is too late to prevent anything.
+2. One whose group key holds **no** lease row at all. This needs no fencing: the absence
+   of a lease row already makes registration for that key impossible, since registration
+   is gated on a live lease row exactly as case 1 describes, and there is none to satisfy
+   that gate. Reclaim makes the same pre-deletion reference check and, finding none,
+   deletes the key directly. This is how a key an old attempt's `put` writes *after* case
+   1 already deleted that attempt's files and lease row - on an earlier `reclaim_orphans`
+   call - gets found and removed: such a key can never become registered, so it is always
+   safe to remove, whenever a later call happens to observe it.
 
 This guarantees exactly two things: a registration can never point at a payload
 `reclaim_orphans` has removed, and a reclaimed attempt can never complete registration
-afterward. It does not guarantee one `reclaim_orphans` call removes every orphan. The
-object-store write itself is not fenced, only its registration is - `ObjectStore`
-refuses only an already-occupied key, not an invalid lease - so a `put` already in
-flight when its lease was reclaimed can still land afterward, producing a new orphan
-under that same attempt-scoped key with no lease of its own. Such an orphan can never be
-registered, since no code path registers a payload without first winning its lease for
-that exact key, so removing it is always safe; it is simply invisible to a sweep that ran
-before it existed. `reclaim_orphans` is specified as a repeatable operation, not a fixed
-point: operators call it on a schedule, and each call removes whatever qualifies as of
-that call. A guarantee that a single call is exhaustive, or that no transient orphan can
-ever appear, would require the object store itself to refuse a write once its lease is
-gone - a fenced or conditional write keyed to lease validity - which is not implemented.
+afterward. It does not guarantee one `reclaim_orphans` call removes every orphan - case 2
+exists precisely because a `put` already in flight when case 1 fenced its lease can still
+land afterward, producing exactly the key case 2 is defined to catch, but only on a call
+that runs after that `put` lands. `reclaim_orphans` is specified as a repeatable
+operation, not a fixed point: operators call it on a schedule, and each call removes
+whatever qualifies as of that call. A guarantee that a single call is exhaustive, or that
+no transient orphan can ever appear, would require the object store itself to refuse a
+write once its lease is gone - a fenced or conditional write keyed to lease validity -
+which is not implemented.
 
 ### 7.2 Knowledge mutation journal
 
