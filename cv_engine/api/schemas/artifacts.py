@@ -70,6 +70,12 @@ class ApprovedRevisionResponse(HttpSchema):
     ready_validation: ValidationReportResponse
 
 
+class ApprovedRevisionsResponse(HttpSchema):
+    """Every immutable ApprovedRevision belonging to one Application."""
+
+    items: list[ApprovedRevisionResponse]
+
+
 class DecisionMarkdownResponse(HttpSchema):
     """One revision's provenance as a human-readable document.
 

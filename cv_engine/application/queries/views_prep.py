@@ -341,6 +341,12 @@ class ApprovedRevisionView(BoundaryDTO):
     ready_validation: ValidationReport
 
 
+class ApprovedRevisionsView(BoundaryDTO):
+    """Every immutable revision for one Application, in version order."""
+
+    items: list[ApprovedRevisionView]
+
+
 class DecisionRecordView(BoundaryDTO):
     id: str
     application_id: str

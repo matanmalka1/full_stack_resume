@@ -209,11 +209,11 @@ describe("ApplicationPage", () => {
       ),
     );
 
-    const artifactsSummary = (await screen.findAllByText("גרסאות וקבצים"))[0];
+    const artifactsSummary = (await screen.findAllByText("קבצים ותוצרים"))[0];
     expect(artifactsSummary.closest("details")).not.toHaveAttribute("open");
     fireEvent.click(artifactsSummary);
-    expect(await screen.findByText("הגרסה האחרונה")).toBeInTheDocument();
-    expect(screen.queryByText("גרסה קודמת")).not.toBeInTheDocument();
+    expect(await screen.findByText("הקבצים האחרונים שנוצרו")).toBeInTheDocument();
+    expect(screen.queryByText("קבצים קודמים")).not.toBeInTheDocument();
     expect(screen.queryByText("קובץ PDF של קורות החיים")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (2)" }));
@@ -221,8 +221,8 @@ describe("ApplicationPage", () => {
     expect(screen.getByText("קובץ HTML של קורות החיים")).toBeInTheDocument();
     expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "הצגת גרסאות קודמות (1)" }));
-    expect(screen.getByText("גרסה קודמת")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "הצגת קבצים מגרסאות קודמות (1)" }));
+    expect(screen.getByText("קבצים קודמים")).toBeInTheDocument();
     expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (1)" }));

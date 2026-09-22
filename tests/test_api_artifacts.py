@@ -135,6 +135,21 @@ def test_a_failed_render_leaves_the_approved_revision_exactly_as_it_was(
     assert detail.json()["ready_qualified"] is False
 
 
+def test_application_lists_its_approved_revisions_with_qualification(
+    api_worker,
+    artifact_approved_application,
+) -> None:
+    setup = artifact_approved_application("Revision History Co")
+
+    response = _get(api_worker, f"/applications/{setup.application_id}/approved-revisions")
+
+    assert response.status_code == 200, response.text
+    assert [
+        (item["id"], item["version_number"], item["ready_qualified"])
+        for item in response.json()["items"]
+    ] == [(setup.approved.revision_id, 1, False)]
+
+
 def test_retrying_a_failed_render_creates_a_new_operation(
     api_worker,
     artifact_approved_application,

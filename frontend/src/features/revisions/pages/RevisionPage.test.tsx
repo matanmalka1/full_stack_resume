@@ -1,7 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { detail, json, operation, renderRoute, revision } from "@/test/fixtures";
 import { RevisionPage } from "./RevisionPage";
@@ -12,6 +10,77 @@ afterEach(() => {
 });
 
 describe("RevisionPage", () => {
+  it("switches between immutable revisions and offers one clear next-draft action", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith("/approved-revisions")) {
+          return Promise.resolve(
+            json({
+              items: [
+                revision({ id: "revision-1", version_number: 1, approved_at: "2026-08-20T09:00:00Z" }),
+                revision({ id: "revision-2", version_number: 2, approved_at: "2026-08-25T09:00:00Z" }),
+              ],
+            }),
+          );
+        }
+        const displayedRevision = url.includes("/approved-revisions/revision-2")
+          ? revision({ id: "revision-2", version_number: 2, approved_at: "2026-08-25T09:00:00Z" })
+          : revision();
+        return Promise.resolve(
+          json(
+            url.includes("applications")
+              ? detail({
+                  active_working_draft_id: null,
+                  available_actions: ["create_draft"],
+                  preparation_state: "ready",
+                  latest_ready_revision_id: "revision-2",
+                  working_draft_state: "none",
+                })
+              : displayedRevision,
+          ),
+        );
+      }),
+    );
+
+    renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
+
+    const selector = await screen.findByLabelText("הגרסה המוצגת");
+    expect(selector).toHaveValue("revision-1");
+    expect(screen.getByText("גרסה היסטורית")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "יצירת טיוטה חדשה מגרסה 1" })).toBeInTheDocument();
+    fireEvent.change(selector, { target: { value: "revision-2" } });
+    await waitFor(() => expect(screen.getByLabelText("הגרסה המוצגת")).toHaveValue("revision-2"));
+  });
+
+  it("routes to the active draft instead of offering to create another one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) =>
+        Promise.resolve(
+          json(
+            String(input).includes("applications")
+              ? detail({
+                  active_working_draft_id: "draft-2",
+                  newer_draft_in_progress: true,
+                  working_draft_state: "editing",
+                })
+              : revision(),
+          ),
+        ),
+      ),
+    );
+
+    renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
+
+    expect(await screen.findByRole("link", { name: "המשך עבודה על הטיוטה החדשה" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/draft",
+    );
+    expect(screen.queryByRole("button", { name: /יצירת טיוטה חדשה/ })).not.toBeInTheDocument();
+  });
+
   it("shows the route not-found frame without presenting a missing revision as completed", async () => {
     vi.stubGlobal(
       "fetch",
@@ -58,7 +127,7 @@ describe("RevisionPage", () => {
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
     const frame = await screen.findByTitle("תצוגה מאושרת של קורות החיים");
     expect(await screen.findByRole("button", { name: "רישום הגשת הגרסה הזו" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "גרסה מוכנה למסירה" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "מוכן למסירה" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "פרטי הגרסה והאימות" })).toBeInTheDocument();
     const technicalDetails = screen.getByText("פרטים טכניים וביקורת");
     expect(screen.getByText("draft-hash")).not.toBeVisible();
@@ -75,7 +144,7 @@ describe("RevisionPage", () => {
     );
   });
 
-  it("returns an approved but unrendered revision to the draft step", async () => {
+  it("keeps an approved revision without qualified files visible in history", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: string | URL | Request) =>
@@ -97,22 +166,11 @@ describe("RevisionPage", () => {
       ),
     );
 
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false, refetchInterval: false, gcTime: 0 } },
-    });
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/revisions/revision-1"]}>
-          <Routes>
-            <Route element={<RevisionPage />} path="/revisions/:revisionId" />
-            <Route element={<p>עורך הטיוטה</p>} path="/applications/:applicationId/draft" />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
-    expect(await screen.findByText("עורך הטיוטה")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "גרסה מאושרת" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "גרסה מאושרת" })).toBeInTheDocument();
+    expect(screen.getByText("עדיין אין קובץ HTML לתצוגה")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "הורדת PDF" })).not.toBeInTheDocument();
   });
 
   it("shows the revision decision record and preserves its server-suggested filename", async () => {
@@ -287,15 +345,19 @@ describe("RevisionPage", () => {
         : Promise.resolve(
             json(
               String(input).includes("applications")
-                ? detail({ preparation_state: "ready", working_draft_state: "none" })
+                ? detail({
+                    active_working_draft_id: null,
+                    available_actions: ["create_draft"],
+                    preparation_state: "ready",
+                    working_draft_state: "none",
+                  })
                 : revision(),
             ),
           ),
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
-    fireEvent.click(await screen.findByText("אפשרויות נוספות"));
-    const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה" });
+    const newDraft = await screen.findByRole("button", { name: "יצירת טיוטה חדשה מגרסה 1" });
     expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "מעבר לשלב ניתוח והתאמה" })).toHaveAttribute("href", "/applications/app-1");
     expect(screen.getByRole("heading", { name: "מוכן למסירה" })).toBeInTheDocument();

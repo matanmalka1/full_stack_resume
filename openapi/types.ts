@@ -161,6 +161,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/approved-revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List immutable approved revisions for an application */
+        get: operations["approved_revisions_api_v1_applications__application_id__approved_revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/artifacts": {
         parameters: {
             query?: never;
@@ -1774,6 +1791,14 @@ export interface components {
             version_number: number;
             /** Working Draft Id */
             working_draft_id: string;
+        };
+        /**
+         * ApprovedRevisionsResponse
+         * @description Every immutable ApprovedRevision belonging to one Application.
+         */
+        ApprovedRevisionsResponse: {
+            /** Items */
+            items: components["schemas"]["ApprovedRevisionResponse"][];
         };
         /** ArchivedWorkingDraftResponse */
         ArchivedWorkingDraftResponse: {
@@ -4005,6 +4030,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    approved_revisions_api_v1_applications__application_id__approved_revisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovedRevisionsResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

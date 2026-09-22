@@ -1,7 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { type ApiPath, apiRequest } from "./client";
-import type { ApprovedRevision, DecisionMarkdown, Operation, RenderRevisionRequest } from "./contracts";
+import type {
+  ApprovedRevision,
+  ApprovedRevisions,
+  DecisionMarkdown,
+  Operation,
+  RenderRevisionRequest,
+} from "./contracts";
 import { type QueuedOperation, queuedOperation } from "./operations";
 
 const revisionPath = (approvedRevisionId: string): ApiPath =>
@@ -18,6 +24,18 @@ export const approvedRevisionQueryOptions = (approvedRevisionId: string) =>
       });
       return response.data;
     },
+  });
+
+export const approvedRevisionsQueryOptions = (applicationId: string) =>
+  queryOptions({
+    queryKey: ["approved-revisions", applicationId] as const,
+    queryFn: async ({ signal }) =>
+      (
+        await apiRequest<ApprovedRevisions>(
+          `/api/v1/applications/${encodeURIComponent(applicationId)}/approved-revisions` as ApiPath,
+          { signal },
+        )
+      ).data,
   });
 
 export interface DecisionMarkdownDownload extends DecisionMarkdown {

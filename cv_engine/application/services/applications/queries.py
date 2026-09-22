@@ -23,6 +23,7 @@ from ...queries import (
     ApplicationListQuery,
     ApplicationListView,
     ApprovedRevisionView,
+    ApprovedRevisionsView,
     ArtifactVersionDetailView,
     ArtifactVersionsView,
     DecisionRecordView,
@@ -331,6 +332,34 @@ class ApplicationQueryService:
             self.revision_payloads, evidence, revision.application_id
         )
         return approved_revision_view(revision, qualification)
+
+    def approved_revisions(self, application_id: str) -> ApprovedRevisionsView:
+        """All immutable revisions for one Application, each with its own qualification."""
+        try:
+            with self._transactions.read() as tx:
+                self._projections.application(tx, application_id)
+                revisions = self._projections.approved_revisions(tx, application_id)
+                evidence = [
+                    self._ready_evidence.load(tx, application_id, revision.id)
+                    for revision in revisions
+                ]
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown application: {application_id}") from exc
+
+        try:
+            return ApprovedRevisionsView(
+                items=[
+                    approved_revision_view(
+                        revision,
+                        qualify_ready_revision(self.revision_payloads, item, application_id),
+                    )
+                    for revision, item in zip(revisions, evidence, strict=True)
+                ]
+            )
+        except (TypeError, ValueError) as exc:
+            raise InfrastructureFailure(
+                f"stored approved revision projection is invalid: {exc}"
+            ) from exc
 
     def working_draft(self, working_draft_id: str) -> WorkingDraftView:
         """§20: one WorkingDraft by ID, with the token a client conditions on.

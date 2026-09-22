@@ -28,6 +28,7 @@ from ..dependencies import Services
 from ..headers import IdempotencyKey
 from ..responses import accepted_operation
 from ..schemas.analyses import CreateAnalysisRequest
+from ..schemas.artifacts import ApprovedRevisionsResponse
 from ..schemas.applications import (
     ApplicationDetailResponse,
     ApplicationListResponse,
@@ -162,6 +163,16 @@ def update_application_notes(
 def artifact_versions(application_id: str, services: Services) -> ArtifactVersionsResponse:
     result = services.queries.artifact_versions(application_id)
     return ArtifactVersionsResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.get(
+    "/{application_id}/approved-revisions",
+    response_model=ApprovedRevisionsResponse,
+    summary="List immutable approved revisions for an application",
+)
+def approved_revisions(application_id: str, services: Services) -> ApprovedRevisionsResponse:
+    result = services.queries.approved_revisions(application_id)
+    return ApprovedRevisionsResponse.model_validate(result.model_dump(mode="json"))
 
 
 @router.get(

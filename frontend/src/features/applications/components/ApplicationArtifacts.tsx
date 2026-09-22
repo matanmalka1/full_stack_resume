@@ -48,8 +48,8 @@ const ArtifactGroupCard = ({ group, latest }: { group: ArtifactGroup; latest: bo
     group.revisionId === null
       ? artifactTypeLabel(firstArtifact?.artifact_type ?? "")
       : latest
-        ? "הגרסה האחרונה"
-        : "גרסה קודמת";
+        ? "הקבצים האחרונים שנוצרו"
+        : "קבצים קודמים";
 
   return (
     <li className="rounded-control border border-cv-border bg-cv-surface">
@@ -111,10 +111,10 @@ const ArtifactGroupList = ({ artifacts, internal = false }: { artifacts: Artifac
             {showPrevious
               ? internal
                 ? "הסתרת תוצרים קודמים"
-                : "הסתרת גרסאות קודמות"
+                : "הסתרת קבצים מגרסאות קודמות"
               : internal
                 ? `הצגת תוצרים קודמים (${previousCount})`
-                : `הצגת גרסאות קודמות (${previousCount})`}
+                : `הצגת קבצים מגרסאות קודמות (${previousCount})`}
           </Button>
         </div>
       )}
@@ -149,12 +149,12 @@ export const ApplicationArtifacts = ({ applicationId }: { applicationId: string 
     <Card aria-labelledby="artifacts-heading" className="bg-cv-surface p-4 shadow-surface">
       <SectionHeader
         align="baseline"
-        description="גרסאות קורות החיים והקבצים שנשמרו עבורן. פרטי שלמות זמינים לפי דרישה."
+        description="קבצי המסירה ותוצרי המנוע שנשמרו עבור הגרסאות המאושרות. פרטי שלמות זמינים לפי דרישה."
         gap="wide-compact"
         headingId="artifacts-heading"
         headingSize="body"
         spacing="compact"
-        title="גרסאות וקבצים"
+        title="קבצים ותוצרים"
       />
 
       <QueryState

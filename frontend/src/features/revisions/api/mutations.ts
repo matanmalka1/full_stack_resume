@@ -14,7 +14,10 @@ export const useRevisionDraftGeneration = (
 ) => {
   const queryClient = useQueryClient();
   const { operation, watch } = useWatchedOperation(revision?.application_id ?? "", detail);
-  const canCreate = detail?.active_analysis_id != null && detail.active_selection_plan_id != null;
+  const canCreate =
+    detail?.active_analysis_id != null &&
+    detail.active_selection_plan_id != null &&
+    detail.available_actions.includes("create_draft");
 
   const createDraft = useMutation({
     mutationFn: async () => {

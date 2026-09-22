@@ -20,6 +20,7 @@ from .narrowing import (
 )
 from .views_prep import (
     ApprovedRevisionView,
+    ApprovedRevisionsView,
     ArtifactVersionDetailView,
     ArtifactVersionsView,
     ArtifactVersionView,
@@ -66,6 +67,7 @@ __all__ = (
     "ApplicationStateView",
     "ApplicationView",
     "ApprovedRevisionView",
+    "ApprovedRevisionsView",
     "ArtifactVersionDetailView",
     "ArtifactVersionsView",
     "ArtifactVersionView",

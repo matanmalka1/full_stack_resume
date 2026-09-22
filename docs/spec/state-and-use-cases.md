@@ -953,7 +953,7 @@ Initial query contracts include:
 - SelectionPlan detail and candidate accounting
 - WorkingDraft plus ETag
 - ValidationRun detail
-- ApprovedRevision and Ready qualification detail
+- ApprovedRevision and Ready qualification detail, plus per-Application immutable revision history
 - artifact metadata/download eligibility
 - Operation status
 - contextual fact detail/history

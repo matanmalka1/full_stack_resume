@@ -1,6 +1,6 @@
-import { ArrowRight, Download, FilePlus2, Send } from "lucide-react";
+import { ArrowRight, Download, Send } from "lucide-react";
 import { useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
@@ -18,8 +18,8 @@ import { applicationLabel } from "@/features/applications";
 import { WizardStepShell } from "@/features/preparation";
 import { warningDetail, warningTitle } from "@/features/preparation";
 import { RevisionRecord } from "../components/RevisionRecord";
+import { RevisionSelector } from "../components/RevisionSelector";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
-import { RevisionSummary } from "../components/RevisionSummary";
 import { useRevisionData } from "../api/queries";
 import { useRevisionDraftGeneration } from "../api/mutations";
 
@@ -50,19 +50,11 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
     otherWarnings,
     revision,
     revisionQuery,
+    revisionsQuery,
     submittedAt,
   } = useRevisionData(approvedRevisionId);
   const { canCreate, createDraft, operation, watch } = useRevisionDraftGeneration(revision, detail);
   const pageQueryError = revisionQuery.error ?? applicationQuery.error;
-
-  /* An ApprovedRevision is still the immutable recovery boundary between approval and
-     artifact generation, but it is not a user-facing workflow destination until its
-     exact artifacts qualify it as Ready. Direct and historical links can still name an
-     unrendered revision; send those back to the draft step that owns rendering and its
-     retry instead of presenting a second, apparently completed revision screen. */
-  if (revision?.ready_qualified === false) {
-    return <Navigate replace to={routePaths.draft(revision.application_id)} />;
-  }
 
   /* One step back from "מוכן" is the draft it was approved from - the editor where a
      correction is actually made. With no draft to return to, the step behind it is the
@@ -87,19 +79,6 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
      repeats it. */
   const recruiterPdfArtifactId = revision?.ready_qualified === true ? (revision.pdf_artifact_version_id ?? null) : null;
   const submissionExists = submittedAt !== null || submissionRecorded;
-  const newDraftButton = !canCreate ? null : (
-    <Button
-      disabled={detail?.working_draft_state !== "none"}
-      key="new-draft"
-      onClick={() => createDraft.mutate()}
-      pending={createDraft.isPending}
-      pendingLabel="יוצר טיוטה…"
-      variant="secondary"
-    >
-      <FilePlus2 aria-hidden="true" className="size-icon-md" />
-      יצירת טיוטה חדשה
-    </Button>
-  );
   /* Download is a secondary action beside recording the submission, never a gate in front
      of it. It used to be the primary until it had been pressed once, and only then did the
      submit button appear - so the step's actual conclusion, recording that the CV was sent,
@@ -121,9 +100,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
     revision === undefined
       ? null
       : recruiterPdfArtifactId == null
-        ? newDraftButton === null
-          ? null
-          : { note: "הגרסה אינה עומדת בתנאי המסירה. דוח האימות מפרט את החסימות.", primary: newDraftButton }
+        ? null
         : submissionExists
           ? {
               note: "הגרסה נרשמה כמוגשת. תהליך הכנת קורות החיים הושלם.",
@@ -165,6 +142,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       measure="wide"
       queryError={pageQueryError}
       stage="ready"
+      title={revision?.ready_qualified === false ? "גרסה מאושרת" : undefined}
     >
       <QueryState
         error={pageQueryError}
@@ -196,10 +174,25 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
                 היא אינה משנה את הגרסה המוכנה המוצגת כאן.
               </Callout>
             ) : null}
-            <RevisionSummary detail={detail} revision={revision} submittedAt={submittedAt} />
+            {revisionsQuery.error === null ? null : (
+              <ErrorCallout
+                error={revisionsQuery.error}
+                fallbackDetail="הגרסה המוצגת עדיין זמינה, אך לא ניתן לטעון כרגע את שאר היסטוריית הגרסאות."
+                fallbackTitle="לא ניתן לטעון את היסטוריית הגרסאות"
+              />
+            )}
+            <RevisionSelector
+              canCreateDraft={canCreate && detail?.working_draft_state === "none"}
+              createPending={createDraft.isPending}
+              currentRevisionId={revision.id}
+              detail={detail}
+              onCreateDraft={() => createDraft.mutate()}
+              revisions={revisionsQuery.data?.items ?? [revision]}
+              submittedAt={submittedAt}
+            />
             <RevisionRecord
               additionalOptions={
-                revision.ready_qualified && (newDraftButton !== null || submittedAt !== null) ? (
+                revision.ready_qualified && submittedAt !== null ? (
                   <Disclosure summary="אפשרויות נוספות">
                     <div className="pt-2">
                       <p className="mb-3 text-support text-cv-text-muted">
@@ -212,7 +205,6 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
                             רישום הגשה נוספת
                           </Button>
                         ) : null}
-                        {newDraftButton}
                       </div>
                     </div>
                   </Disclosure>

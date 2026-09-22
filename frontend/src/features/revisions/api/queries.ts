@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { applicationDetailQueryOptions } from "@/api/applications";
-import { approvedRevisionQueryOptions, decisionMarkdownQueryOptions } from "@/api/revisions";
+import {
+  approvedRevisionQueryOptions,
+  approvedRevisionsQueryOptions,
+  decisionMarkdownQueryOptions,
+} from "@/api/revisions";
 
 export const useRevisionData = (revisionId: string) => {
   const revisionQuery = useQuery(approvedRevisionQueryOptions(revisionId));
@@ -9,6 +13,10 @@ export const useRevisionData = (revisionId: string) => {
   const applicationId = revision?.application_id;
   const applicationQuery = useQuery({
     ...applicationDetailQueryOptions(applicationId ?? ""),
+    enabled: applicationId !== undefined,
+  });
+  const revisionsQuery = useQuery({
+    ...approvedRevisionsQueryOptions(applicationId ?? ""),
     enabled: applicationId !== undefined,
   });
   const decisionQuery = useQuery({
@@ -44,6 +52,7 @@ export const useRevisionData = (revisionId: string) => {
     otherWarnings,
     revision,
     revisionQuery,
+    revisionsQuery,
     submittedAt,
   };
 };

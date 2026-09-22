@@ -35,6 +35,7 @@ export type ValidationRunDetail = ApiSchemas["ValidationRunDetailResponse"];
 export type ValidationReport = ApiSchemas["ValidationReportResponse"];
 export type Approval = ApiSchemas["ApprovalResponse"];
 export type ApprovedRevision = ApiSchemas["ApprovedRevisionResponse"];
+export type ApprovedRevisions = ApiSchemas["ApprovedRevisionsResponse"];
 export type DecisionMarkdown = ApiSchemas["DecisionMarkdownResponse"];
 /* §20 the artifact registry, read by ID. The list carries the registration; the detail
    adds the three answers only a verification can give, so the two are separate types
