@@ -31,10 +31,6 @@ const problemMessages: Record<string, ErrorMessage> = {
   },
   IDEMPOTENCY_KEY_REUSED: { title: "הבקשה כבר שימשה לפעולה אחרת", detail: "יש לרענן את העמוד ולנסות שוב." },
   SOURCE_CHANGED: { title: "המקור השתנה", detail: "התוצאה לא הופעלה. יש לחזור למצב העדכני ולנסות שוב." },
-  WORKING_PROJECTION_DIVERGED: {
-    title: "הטיוטה אינה תואמת למצב העדכני",
-    detail: "יש לרענן את העמוד ולהמשיך מהטיוטה העדכנית.",
-  },
   DEPENDENCY_UNAVAILABLE: { title: "שירות נדרש אינו זמין", detail: "אפשר לנסות שוב מאוחר יותר." },
   INFRASTRUCTURE_FAILURE: { title: "אירעה תקלה בשירות", detail: "המידע הקיים נשמר. אפשר לנסות שוב." },
   NETWORK_UNAVAILABLE: { title: "לא ניתן להגיע לשרת", detail: "יש לבדוק שהשרת פועל ולנסות שוב." },

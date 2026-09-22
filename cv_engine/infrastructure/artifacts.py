@@ -63,11 +63,6 @@ class FilesystemArtifactStore:
         manifest = self.working_paths(application_id).manifest
         return parse_draft(manifest.read_text(encoding="utf-8"))
 
-    def working_markdown(self, application_id: str) -> str:
-        """Return the derived Markdown, or empty for validation to refuse."""
-        markdown = self.working_paths(application_id).markdown
-        return markdown.read_text(encoding="utf-8") if markdown.is_file() else ""
-
     def resolve(self, stored_path: str) -> Path:
         return self._paths.root / stored_path
 

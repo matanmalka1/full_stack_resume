@@ -681,7 +681,8 @@ def test_selection_change_rolls_back_plan_and_draft_when_the_draft_write_fails(
     application_id, working_draft_id, sources = _drafted(ai_api_worker, "Reselection Rollback Co")
     before = _read(ai_api_worker, working_draft_id).json()
     services = ai_api_worker.services
-    markdown = services.artifacts.working_markdown(application_id)
+    markdown_path = services.artifacts.working_paths(application_id).markdown
+    markdown = markdown_path.read_text(encoding="utf-8")
     original = SqlAlchemySelectionDraftStore.update_selection
 
     def fail_after_update(*args, **kwargs):
@@ -703,7 +704,7 @@ def test_selection_change_rolls_back_plan_and_draft_when_the_draft_write_fails(
             application_projection_reader.latest_selection_plan(tx, application_id).id
             == sources["selection_plan"]
         )
-    assert services.artifacts.working_markdown(application_id) == markdown
+    assert markdown_path.read_text(encoding="utf-8") == markdown
 
 
 def test_a_selection_change_refuses_a_draft_carrying_manual_wording(ai_api_worker) -> None:
@@ -1317,34 +1318,6 @@ def test_an_edit_after_validation_makes_that_run_unusable_for_approval(
 
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "VALIDATION_STALE"
-    with transaction_manager.read() as tx:
-        assert application_projection_reader.approved_revisions(tx, application_id) == []
-
-
-def test_approval_preserves_a_diverged_working_projection_and_returns_a_specific_code(
-    ai_api_worker,
-    transaction_manager,
-    application_projection_reader,
-) -> None:
-    """An edit outside the Web editor is evidence to preserve, not output to overwrite."""
-    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Diverged Projection Co")
-    validated = _validated(ai_api_worker, working_draft_id)
-    markdown_path = ai_api_worker.services.artifacts.working_paths(application_id).markdown
-    edited_projection = markdown_path.read_text(encoding="utf-8") + "\nmanual edit\n"
-    markdown_path.write_text(edited_projection, encoding="utf-8")
-
-    response = _post(
-        ai_api_worker,
-        f"/working-drafts/{working_draft_id}/approve",
-        {
-            "expected_edit_version": validated["edit_version"],
-            "validation_run_id": validated["validation_run_id"],
-        },
-    )
-
-    assert response.status_code == 409, response.text
-    assert response.json()["code"] == "WORKING_PROJECTION_DIVERGED"
-    assert markdown_path.read_text(encoding="utf-8") == edited_projection
     with transaction_manager.read() as tx:
         assert application_projection_reader.approved_revisions(tx, application_id) == []
 

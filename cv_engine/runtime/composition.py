@@ -324,7 +324,6 @@ def build_services(
         sources=SqlAlchemyDraftApprovalSourceReader(transactions),
         receipts=draft_receipts,
         knowledge=resolved_knowledge,
-        artifacts=resolved_artifacts,
         renderer=resolved_renderer,
         payloads=resolved_payloads,
         committer=ApprovalCommitter(
