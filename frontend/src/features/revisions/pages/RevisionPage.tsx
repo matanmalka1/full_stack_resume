@@ -1,6 +1,6 @@
 import { ArrowRight, Download, FilePlus2, Send } from "lucide-react";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 
 import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
@@ -53,6 +53,15 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
   } = useRevisionData(approvedRevisionId);
   const { canCreate, createDraft, operation, watch } = useRevisionDraftGeneration(revision, detail);
   const pageQueryError = revisionQuery.error ?? applicationQuery.error;
+
+  /* An ApprovedRevision is still the immutable recovery boundary between approval and
+     artifact generation, but it is not a user-facing workflow destination until its
+     exact artifacts qualify it as Ready. Direct and historical links can still name an
+     unrendered revision; send those back to the draft step that owns rendering and its
+     retry instead of presenting a second, apparently completed revision screen. */
+  if (revision?.ready_qualified === false) {
+    return <Navigate replace to={routePaths.draft(revision.application_id)} />;
+  }
 
   /* One step back from "מוכן" is the draft it was approved from - the editor where a
      correction is actually made. With no draft to return to, the step behind it is the
@@ -155,10 +164,6 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
       measure="wide"
       queryError={pageQueryError}
       stage="ready"
-      /* The stage's own name everywhere except where the record does not actually meet it:
-         a revision that is approved but not deliverable is not "מוכן למסירה", and saying so
-         in the heading is the difference between the two the summary below also draws. */
-      title={revision?.ready_qualified === false ? "גרסה מאושרת" : undefined}
     >
       <QueryState
         error={pageQueryError}
@@ -190,12 +195,6 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
                 היא אינה משנה את הגרסה המוכנה המוצגת כאן.
               </Callout>
             ) : null}
-            {!revision.ready_qualified ? (
-              <Callout title="הגרסה עדיין אינה מוכנה למסירה" tone="blocker">
-                דוח האימות שמתחת מפרט את החסימות.
-              </Callout>
-            ) : null}
-
             <RevisionSummary detail={detail} revision={revision} submittedAt={submittedAt} />
             <RevisionRecord
               additionalOptions={

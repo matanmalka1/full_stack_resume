@@ -1,5 +1,7 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { detail, json, operation, renderRoute, revision } from "@/test/fixtures";
 import { RevisionPage } from "./RevisionPage";
@@ -71,6 +73,46 @@ describe("RevisionPage", () => {
       "href",
       "/api/v1/approved-revisions/revision-1/recruiter-pdf?pdf_artifact_version_id=pdf-1",
     );
+  });
+
+  it("returns an approved but unrendered revision to the draft step", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) =>
+        Promise.resolve(
+          json(
+            String(input).includes("applications")
+              ? detail({
+                  preparation_state: "approved",
+                  active_working_draft_id: null,
+                  latest_approved_revision_id: "revision-1",
+                })
+              : revision({
+                  ready_qualified: false,
+                  html_artifact_version_id: null,
+                  pdf_artifact_version_id: null,
+                }),
+          ),
+        ),
+      ),
+    );
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, refetchInterval: false, gcTime: 0 } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/revisions/revision-1"]}>
+          <Routes>
+            <Route element={<RevisionPage />} path="/revisions/:revisionId" />
+            <Route element={<p>עורך הטיוטה</p>} path="/applications/:applicationId/draft" />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("עורך הטיוטה")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "גרסה מאושרת" })).not.toBeInTheDocument();
   });
 
   it("shows the revision decision record and preserves its server-suggested filename", async () => {
