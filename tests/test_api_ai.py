@@ -13,7 +13,6 @@ which is what makes a `202` mean anything.
 
 from __future__ import annotations
 
-import pytest
 from api_harness import MUTATION_HEADERS, analyze_offline
 from fake_provider import FakeOpenAI
 from helpers import ACCOUNT_MANAGER_JOB
@@ -79,27 +78,25 @@ def _canonical_claim(working):
     raise AssertionError("the drafted document has no canonical single-fact claim")
 
 
-def test_deterministic_selection_plan_mode_is_still_201_with_the_plan_itself(
-    ai_api_worker,
-) -> None:
-    application_id = _application(ai_api_worker.services, "Deterministic Plan Co")
-    sources = _analyze(ai_api_worker, application_id)
-    response = _post(
-        ai_api_worker,
-        f"/analyses/{sources['job_analysis']}/selection-plans",
-        {"application_id": application_id, "mode": "deterministic"},
-    )
-    assert response.status_code == 201, response.text
-    assert "Location" not in response.headers
-    assert response.json()["plan"]["id"] == response.json()["selection_plan_id"]
-
-
-def test_ai_selection_plan_mode_is_202_with_a_location_on_the_same_route(
+def test_the_selection_plan_route_answers_201_or_202_by_mode(
     ai_api_worker, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
 ) -> None:
-    """§13 and architecture §12: one route, two statuses, decided per request."""
-    application_id = _application(ai_api_worker.services, "AI Plan Co")
+    """§13 and architecture §12: one route, two statuses, decided per request.
+
+    AI mode is `202` with a `Location` and refuses a user decision in the same
+    request; deterministic mode is still `201` with the plan itself.
+    """
+    application_id = _application(ai_api_worker.services, "Plan Modes Co")
     sources = _analyze(ai_api_worker, application_id)
+    path = f"/analyses/{sources['job_analysis']}/selection-plans"
+
+    both_answers = _post(
+        ai_api_worker,
+        path,
+        {"application_id": application_id, "mode": "ai", "pinned_fact_ids": ["a.b"]},
+    )
+    assert both_answers.status_code == 412, both_answers.text
+
     with transaction_manager.read() as tx:
         plan = application_projection_reader.selection_plan(tx, sources["selection_plan"])
     fake_openai.script(
@@ -110,45 +107,49 @@ def test_ai_selection_plan_mode_is_202_with_a_location_on_the_same_route(
             rationale="r",
         ),
     )
-
-    response = _post(
-        ai_api_worker,
-        f"/analyses/{sources['job_analysis']}/selection-plans",
-        {"application_id": application_id, "mode": "ai"},
-    )
-    assert response.status_code == 202, response.text
-    assert response.headers["Location"].endswith(response.json()["id"])
-    finished = ai_api_worker.wait_for_operation(response.json()["id"])
+    queued = _post(ai_api_worker, path, {"application_id": application_id, "mode": "ai"})
+    assert queued.status_code == 202, queued.text
+    assert queued.headers["Location"].endswith(queued.json()["id"])
+    finished = ai_api_worker.wait_for_operation(queued.json()["id"])
     assert finished["status"] == "succeeded", finished
     assert any(output["output_type"] == "selection_plan" for output in finished["outputs"])
 
-
-@pytest.mark.parametrize(
-    "user_decision",
-    [
-        {"pinned_fact_ids": ["a.b"]},
-    ],
-)
-def test_ai_selection_plan_mode_refuses_a_user_decision_in_the_same_request(
-    ai_api_worker, user_decision: dict
-) -> None:
-    application_id = _application(ai_api_worker.services, "Both Answers Co")
-    sources = _analyze(ai_api_worker, application_id)
-    response = _post(
-        ai_api_worker,
-        f"/analyses/{sources['job_analysis']}/selection-plans",
-        {"application_id": application_id, "mode": "ai", **user_decision},
+    deterministic = _post(
+        ai_api_worker, path, {"application_id": application_id, "mode": "deterministic"}
     )
-    assert response.status_code == 412, response.text
+    assert deterministic.status_code == 201, deterministic.text
+    assert "Location" not in deterministic.headers
+    assert deterministic.json()["plan"]["id"] == deterministic.json()["selection_plan_id"]
 
 
-def test_regenerate_claim_is_accepted_at_the_specified_path(
+def test_regenerate_claim_is_accepted_at_the_specified_path_only_on_a_current_etag(
     ai_api_worker, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
 ) -> None:
+    """The lost-update rule, on the route rather than only in the service.
+
+    A stale version is a conflict that calls no provider; the current one is
+    accepted as an Operation.
+    """
     application_id, sources, working = _drafted(
         ai_api_worker, "Claim Route Co", transaction_manager, application_projection_reader
     )
     _section, claim = _canonical_claim(working)
+    request = {
+        "application_id": application_id,
+        "expected_edit_version": working.edit_version,
+        "expected_content_hash": working.content_hash,
+        "job_analysis_id": sources["job_analysis"],
+        "selection_plan_id": sources["selection_plan"],
+        "claim_id": claim.claim_id,
+    }
+    path = f"/working-drafts/{working.id}/regenerate-claim"
+
+    stale = _post(
+        ai_api_worker, path, {**request, "expected_edit_version": working.edit_version + 3}
+    )
+    assert stale.status_code == 409, stale.text
+    assert fake_openai.calls_for("regenerate_claim") == []
+
     fake_openai.script(
         "regenerate_claim",
         ClaimProposal(
@@ -158,42 +159,7 @@ def test_regenerate_claim_is_accepted_at_the_specified_path(
             rationale="r",
         ),
     )
-    response = _post(
-        ai_api_worker,
-        f"/working-drafts/{working.id}/regenerate-claim",
-        {
-            "application_id": application_id,
-            "expected_edit_version": working.edit_version,
-            "expected_content_hash": working.content_hash,
-            "job_analysis_id": sources["job_analysis"],
-            "selection_plan_id": sources["selection_plan"],
-            "claim_id": claim.claim_id,
-        },
-    )
+    response = _post(ai_api_worker, path, request)
     assert response.status_code == 202, response.text
     finished = ai_api_worker.wait_for_operation(response.json()["id"])
     assert finished["status"] == "succeeded", finished
-
-
-def test_a_stale_etag_on_regeneration_is_a_conflict_and_calls_no_provider(
-    ai_api_worker, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
-) -> None:
-    """The lost-update rule, on the route rather than only in the service."""
-    application_id, sources, working = _drafted(
-        ai_api_worker, "Stale Route Co", transaction_manager, application_projection_reader
-    )
-    _section, claim = _canonical_claim(working)
-    response = _post(
-        ai_api_worker,
-        f"/working-drafts/{working.id}/regenerate-claim",
-        {
-            "application_id": application_id,
-            "expected_edit_version": working.edit_version + 3,
-            "expected_content_hash": working.content_hash,
-            "job_analysis_id": sources["job_analysis"],
-            "selection_plan_id": sources["selection_plan"],
-            "claim_id": claim.claim_id,
-        },
-    )
-    assert response.status_code == 409, response.text
-    assert fake_openai.calls_for("regenerate_claim") == []

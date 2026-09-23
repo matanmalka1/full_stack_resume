@@ -290,33 +290,26 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     assert len(answered.provenance.output_hash) == 64
     assert len(answered.provenance.raw_output_hash) == 64
 
-
-def test_analysis_prompt_requires_self_contained_quotes_when_splitting(
-    task_contracts,
-) -> None:
+    # The rules the tasks rely on are in that one prompt. Analysis splits a
+    # sentence only into self-contained quotes and judges qualitative wording
+    # semantically; selection respects each section's pin capacity and allowed
+    # facts.
     prompt = task_contracts.prompt_text
-
-    assert "return each as its own requirement only if every one of them can be quoted" in prompt
-    assert "Keep any qualifier that applies to a given piece" in prompt
-    assert "keep the sentence as one requirement instead" in prompt
-
-
-def test_selection_prompt_respects_section_pin_capacity(task_contracts) -> None:
-    prompt = task_contracts.prompt_text
-    assert "max_additional_pins" in prompt
-    assert "Count each proposed pin not already" in prompt
-    assert "The engine still validates the complete overlay" in prompt
-    assert "Each supplied section names its" in prompt
-    assert "A fact absent from this section's `allowed_fact_ids`" in prompt
-
-
-def test_analysis_prompt_assesses_qualitative_requirements_semantically(task_contracts) -> None:
-    prompt = task_contracts.prompt_text
-
-    assert "Judge qualitative wording" in prompt
-    assert "Do not require a fact to" in prompt
-    assert "Absence of that wording or quantification is not by itself" in prompt
-    assert "identifiable substantive condition" in prompt
+    for rule in (
+        "return each as its own requirement only if every one of them can be quoted",
+        "Keep any qualifier that applies to a given piece",
+        "keep the sentence as one requirement instead",
+        "Judge qualitative wording",
+        "Do not require a fact to",
+        "Absence of that wording or quantification is not by itself",
+        "identifiable substantive condition",
+        "max_additional_pins",
+        "Count each proposed pin not already",
+        "The engine still validates the complete overlay",
+        "Each supplied section names its",
+        "A fact absent from this section's `allowed_fact_ids`",
+    ):
+        assert rule in prompt, rule
 
 
 def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
@@ -338,13 +331,14 @@ def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
 
 
 def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
-    fake_openai: FakeOpenAI, task_contracts
+    fake_openai: FakeOpenAI, task_contracts, monkeypatch
 ) -> None:
     """§6: invalid-output handling.
 
     Including the case that matters most: an answer that adds a policy field.
     The Proposal model forbids extras, so a provider cannot smuggle `fit` in
-    beside the fields it is allowed to send.
+    beside the fields it is allowed to send. A body that is not a Responses
+    envelope at all - a gateway's HTML page - is the same violation.
     """
     texts = [
         '{"track": "sales"}',
@@ -362,10 +356,6 @@ def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
         assert raised.value.provenance is not None, text
         assert raised.value.provenance.sanitized_response, text
 
-
-def test_a_response_that_is_not_json_at_all_is_a_schema_violation(
-    fake_openai: FakeOpenAI, task_contracts, monkeypatch
-) -> None:
     class _Raw:
         def __enter__(self):
             return self

@@ -38,7 +38,6 @@ from cv_engine.application.errors import StateConflict
 from cv_engine.application.operations import OperationFailureCode
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.projection import fit_level, fit_score
-from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
 from cv_engine.domain.contracts.providers import (
     ClaimProposal,
     ClaimSupportAssessment,
@@ -165,18 +164,57 @@ def _analysis_operation(
 # --------------------------------------------------------------------------
 
 
-def test_propose_analysis_commits_an_analysis_and_its_initial_plan(
-    ai_services, fake_openai: FakeOpenAI
+@pytest.mark.parametrize("task", ["propose_analysis", "propose_selection_plan"])
+def test_a_proposal_commits_through_its_operation(
+    ai_services,
+    fake_openai: FakeOpenAI,
+    transaction_manager,
+    application_projection_reader,
+    task,
 ) -> None:
-    fake_openai.script("propose_analysis", analysis_proposal())
-    ingested = _ingested(ai_services, "Analysis Co")
-    completed = _run(
-        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    """§13: the Proposal becomes the deterministic command, and is validated by it.
+
+    An analysis commits with its initial plan; a selection proposal commits one
+    replacement plan carrying the proposed overlay.
+    """
+    if task == "propose_analysis":
+        fake_openai.script("propose_analysis", analysis_proposal())
+        ingested = _ingested(ai_services, "Analysis Co")
+        completed = _run(
+            ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+        )
+
+        assert completed.status.value == "succeeded", completed.safe_failure_detail
+        outputs = {output.output_type for output in completed.outputs}
+        assert {"job_analysis", "selection_plan"} <= outputs
+        return
+
+    ingested, analysed = _analyzed(ai_services, "Plan Co")
+    with transaction_manager.read() as tx:
+        plan = application_projection_reader.selection_plan(tx, analysed.selection_plan_id)
+    pinned = plan.plan.selected_fact_ids[:1]
+    fake_openai.script(
+        "propose_selection_plan",
+        SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r"),
     )
 
+    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
+        ProposeSelectionPlanCommand(
+            application_id=ingested.application_id,
+            job_analysis_id=analysed.analysis_id,
+        ),
+        idempotency_key=new_id(),
+        analysis_service=ai_services.analysis,
+    )
+    completed = _run(ai_services, queued)
+
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    outputs = {output.output_type for output in completed.outputs}
-    assert {"job_analysis", "selection_plan"} <= outputs
+    plans = [output for output in completed.outputs if output.output_type == "selection_plan"]
+    assert len(plans) == 1
+    with transaction_manager.read() as tx:
+        committed = application_projection_reader.selection_plan(tx, plans[0].output_id)
+    assert committed.id != analysed.selection_plan_id
+    assert set(pinned) <= set(committed.plan.selected_fact_ids)
 
 
 def test_ai_preferences_are_frozen_before_settings_can_change(
@@ -227,38 +265,6 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     assert completed.output_tokens == 22
     assert completed.total_tokens == 33
     assert completed.cost_usd == "0.00002806"
-
-
-def test_propose_selection_plan_commits_the_proposed_overlay(
-    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
-) -> None:
-    """§13: the Proposal becomes the deterministic command, and is validated by it."""
-    ingested, analysed = _analyzed(ai_services, "Plan Co")
-    with transaction_manager.read() as tx:
-        plan = application_projection_reader.selection_plan(tx, analysed.selection_plan_id)
-    pinned = plan.plan.selected_fact_ids[:1]
-    fake_openai.script(
-        "propose_selection_plan",
-        SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r"),
-    )
-
-    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
-        ProposeSelectionPlanCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-        ),
-        idempotency_key=new_id(),
-        analysis_service=ai_services.analysis,
-    )
-    completed = _run(ai_services, queued)
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    plans = [output for output in completed.outputs if output.output_type == "selection_plan"]
-    assert len(plans) == 1
-    with transaction_manager.read() as tx:
-        committed = application_projection_reader.selection_plan(tx, plans[0].output_id)
-    assert committed.id != analysed.selection_plan_id
-    assert set(pinned) <= set(committed.plan.selected_fact_ids)
 
 
 def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
@@ -565,58 +571,47 @@ def _regenerate_claim(services, ingested, analysed, working, claim):
     )
 
 
-def test_regenerate_section_commits_against_the_exact_frozen_version(
-    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
+@pytest.mark.parametrize("scope", ["section", "claim"])
+def test_regeneration_commits_against_the_exact_frozen_version(
+    ai_services,
+    fake_openai: FakeOpenAI,
+    transaction_manager,
+    application_projection_reader,
+    scope,
 ) -> None:
     ingested, analysed, working = _drafted(
-        ai_services, "Section Co", transaction_manager, application_projection_reader
+        ai_services, f"{scope.title()} Co", transaction_manager, application_projection_reader
     )
     section, claim = _canonical_claim(working)
-    fake_openai.script(
-        "regenerate_section",
-        SectionProposal(
-            section=section.name,
-            claims=[
-                ProposedClaim(
-                    section=section.name,
-                    claim_id=claim.claim_id,
-                    text=claim.text,
-                    fact_ids=list(claim.fact_ids),
-                )
-            ],
-            rationale="r",
-        ),
-    )
-    completed = _run(
-        ai_services,
-        _regenerate_section(ai_services, ingested, analysed, working, section, [claim]),
-    )
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    with transaction_manager.read() as tx:
-        updated = application_projection_reader.active_working_draft(tx, ingested.application_id)
-    assert updated.edit_version == working.edit_version + 1
-
-
-def test_regenerate_claim_commits_against_the_exact_frozen_version(
-    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
-) -> None:
-    ingested, analysed, working = _drafted(
-        ai_services, "Claim Co", transaction_manager, application_projection_reader
-    )
-    _section, claim = _canonical_claim(working)
-    fake_openai.script(
-        "regenerate_claim",
-        ClaimProposal(
-            claim_id=claim.claim_id,
-            text=claim.text,
-            fact_ids=list(claim.fact_ids),
-            rationale="r",
-        ),
-    )
-    completed = _run(
-        ai_services, _regenerate_claim(ai_services, ingested, analysed, working, claim)
-    )
+    if scope == "section":
+        fake_openai.script(
+            "regenerate_section",
+            SectionProposal(
+                section=section.name,
+                claims=[
+                    ProposedClaim(
+                        section=section.name,
+                        claim_id=claim.claim_id,
+                        text=claim.text,
+                        fact_ids=list(claim.fact_ids),
+                    )
+                ],
+                rationale="r",
+            ),
+        )
+        queued = _regenerate_section(ai_services, ingested, analysed, working, section, [claim])
+    else:
+        fake_openai.script(
+            "regenerate_claim",
+            ClaimProposal(
+                claim_id=claim.claim_id,
+                text=claim.text,
+                fact_ids=list(claim.fact_ids),
+                rationale="r",
+            ),
+        )
+        queued = _regenerate_claim(ai_services, ingested, analysed, working, claim)
+    completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     with transaction_manager.read() as tx:
@@ -649,7 +644,7 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
     The fact is real, it is in the pool, and it is the one this claim was built
     from. The wording is not derivable from it, so the Proposal is refused - not
     saved as a pending claim, which is what a *person's* unsupported text
-    becomes.
+    becomes - and kept only as inactive evidence.
     """
     ingested, analysed, working = _drafted(
         ai_services, "Strengthened Co", transaction_manager, application_projection_reader
@@ -688,6 +683,22 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
     assert unchanged.edit_version == working.edit_version
     assert unchanged.content_hash == working.content_hash
 
+    # §6 invariant 15: the refused output exists, and never becomes current.
+    # One lifecycle status for every provider response. Whether the answer was
+    # used is recorded by the Operation's status and by its output's `active`
+    # flag; a third copy in the artifact row would be a third thing that can
+    # disagree with the other two.
+    artifacts = _provider_artifacts(
+        ai_services, ingested.application_id, transaction_manager, application_projection_reader
+    )
+    assert artifacts
+    assert all(artifact["lifecycle_status"] == "provider-output" for artifact in artifacts)
+    references = [
+        output for output in completed.outputs if output.output_type == "provider_response"
+    ]
+    assert {output.output_id for output in references} == {artifact["id"] for artifact in artifacts}
+    assert all(not output.active for output in references)
+
 
 def test_a_fact_outside_the_claims_own_support_is_refused(
     ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
@@ -714,52 +725,24 @@ def test_a_fact_outside_the_claims_own_support_is_refused(
     assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
 
 
-def test_a_refused_proposal_is_kept_as_inactive_immutable_evidence(
-    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
-) -> None:
-    """§6 invariant 15: a rejected output exists, and never becomes current."""
-    ingested, analysed, working = _drafted(
-        ai_services, "Evidence Co", transaction_manager, application_projection_reader
-    )
-    _section, claim = _canonical_claim(working)
-    fake_openai.script(
-        "regenerate_claim",
-        ClaimProposal(
-            claim_id=claim.claim_id,
-            text="An achievement no supplied fact mentions at all.",
-            fact_ids=list(claim.fact_ids),
-            rationale="r",
-        ),
-    )
-    completed = _run(
-        ai_services, _regenerate_claim(ai_services, ingested, analysed, working, claim)
-    )
-    assert completed.status.value == "failed"
-
-    artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert len(artifacts) == 1
-    # One lifecycle status for every provider response. Whether the answer was
-    # used is recorded by the Operation's status and by its output's `active`
-    # flag; a third copy in the artifact row would be a third thing that can
-    # disagree with the other two.
-    assert artifacts[0]["lifecycle_status"] == "provider-output"
-    references = [
-        output for output in completed.outputs if output.output_type == "provider_response"
-    ]
-    assert references and all(not output.active for output in references)
-
-
 # --------------------------------------------------------------------------
 # No silent fallback
 # --------------------------------------------------------------------------
 
 
-def test_a_provider_failure_never_produces_a_deterministic_result(
-    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
+def test_a_provider_failure_or_absence_never_produces_a_deterministic_result(
+    ai_services,
+    services,
+    fake_openai: FakeOpenAI,
+    monkeypatch,
+    transaction_manager,
+    application_projection_reader,
 ) -> None:
-    """Invariant 14. The Operation fails; nothing is committed in its place."""
+    """Invariant 14. The Operation fails; nothing is committed in its place.
+
+    Neither a provider that refuses nor a provider that is not configured at
+    all - `services` has none, and no key - yields a quiet deterministic answer.
+    """
     fake_openai.script("propose_analysis", HTTPStatus(400))
     ingested = _ingested(ai_services, "Fallback Co")
     completed = _run(
@@ -779,15 +762,12 @@ def test_a_provider_failure_never_produces_a_deterministic_result(
     with transaction_manager.read() as tx:
         assert application_projection_reader.analyses(tx, ingested.application_id) == []
 
-
-def test_ai_mode_with_no_provider_configured_is_an_explicit_refusal(services, monkeypatch) -> None:
-    """No key, no quiet deterministic answer. `services` has no provider at all."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    ingested = _ingested(services, "Unconfigured Co")
-    completed = _run(services, _analysis_operation(services, ingested))
+    unconfigured = _ingested(services, "Unconfigured Co")
+    refused = _run(services, _analysis_operation(services, unconfigured))
 
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.PROVIDER_REFUSED
+    assert refused.status.value == "failed"
+    assert refused.failure_code is OperationFailureCode.PROVIDER_REFUSED
 
 
 # --------------------------------------------------------------------------
@@ -978,9 +958,24 @@ def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_eviden
     assert len(fake_openai.calls_for("propose_analysis")) == 1
 
 
-def test_selection_context_carries_the_profile_pool_and_not_every_fact(
-    ai_services, fake_openai: FakeOpenAI
+def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
+    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
 ) -> None:
+    """Selection is given the Profile's pool; analysis the canonical store.
+
+    Analysis proposes coverage, so it is given the facts to propose it from.
+    That pool is the canonical fact store rather than a Profile's allowed
+    facts: which requirements the candidate meets is decided before and
+    independently of which Profile presents them. What each fact carries is
+    still the minimum the task needs - meaning, tags, and the one structured
+    field a threshold can be traced to. No rendering, because analysis writes
+    no wording, and nothing about lifecycle, provenance, or where a fact is
+    stored.
+
+    A reading with no requirements has said nothing about the candidate, so it
+    commits with no requirements and no issues rather than a Fit nobody
+    assessed.
+    """
     ingested, analysed = _analyzed(ai_services, "Pool Co")
     fake_openai.script(
         "propose_selection_plan",
@@ -1019,20 +1014,6 @@ def test_selection_context_carries_the_profile_pool_and_not_every_fact(
     assert summary["max_additional_pins"] == 1 - len(summary["fixed_fact_ids"])
     assert {fact_id for section in sections for fact_id in section["fixed_fact_ids"]} <= supplied
 
-
-def test_the_analysis_context_carries_canonical_facts_and_nothing_else_about_them(
-    ai_services, fake_openai: FakeOpenAI
-) -> None:
-    """Analysis proposes coverage, so it is given the facts to propose it from.
-
-    The pool is the canonical fact store rather than a Profile's allowed
-    facts: which requirements the candidate meets is decided before and
-    independently of which Profile presents them. What each fact carries is
-    still the minimum the task needs - meaning, tags, and the one structured
-    field a threshold can be traced to. No rendering, because analysis writes
-    no wording, and nothing about lifecycle, provenance, or where a fact is
-    stored.
-    """
     job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
     completed = _analysis_run(ai_services, fake_openai, job_text, analysis_proposal())
     assert completed.status.value == "succeeded", completed.safe_failure_detail
@@ -1051,6 +1032,13 @@ def test_the_analysis_context_carries_canonical_facts_and_nothing_else_about_the
         "tags",
         "effective_dates",
     }
+    analysis = _analysis_of(
+        completed, ai_services, transaction_manager, application_projection_reader
+    )
+    assert analysis.requirements == []
+    assert fit_level(analysis.requirements).value == "unknown"
+    assert fit_score(analysis.requirements) is None
+    assert analysis.issues == []
 
 
 # --------------------------------------------------------------------------
@@ -1147,119 +1135,6 @@ def _analysis_of(completed, ai_services, transaction_manager, application_projec
     )
     with transaction_manager.read() as tx:
         return application_projection_reader.analysis(tx, analysis_id)["analysis"]
-
-
-def test_a_reading_with_no_requirements_does_not_become_a_fit(
-    ai_services, fake_openai, transaction_manager, application_projection_reader
-) -> None:
-    """Nothing read is not a good match.
-
-    A provider that returns no requirements has said nothing about the
-    candidate, and `fit` stays unknown rather than defaulting to a score no
-    assessment produced.
-    """
-    job_text = "Account Manager.\nRequirements:\n- Must have enterprise sales experience."
-    completed = _analysis_run(ai_services, fake_openai, job_text, analysis_proposal())
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(
-        completed, ai_services, transaction_manager, application_projection_reader
-    )
-    assert analysis.requirements == []
-    assert fit_level(analysis.requirements).value == "unknown"
-    assert fit_score(analysis.requirements) is None
-    assert analysis.issues == []
-
-
-def test_a_fact_the_store_does_not_have_does_not_fell_the_reading(
-    ai_services, fake_openai, transaction_manager, application_projection_reader
-) -> None:
-    """The live path narrows one requirement instead of refusing the analysis.
-
-    This is the service's proof that it runs the normalizer: the unknown id is
-    dropped, the coverage that rested on it falls to `unknown`, the reason
-    is on the record, and the requirement the provider read correctly survives
-    beside it.
-    """
-    job_text = (
-        "Account Manager.\n"
-        "Requirements:\n"
-        "- Must have led a sales team.\n"
-        "- Must have enterprise sales experience."
-    )
-    completed = _analysis_run(
-        ai_services,
-        fake_openai,
-        job_text,
-        analysis_proposal(
-            requirements=[
-                ProposedRequirement(
-                    text="Must have led a sales team.",
-                    importance="mandatory",
-                    coverage="matched",
-                    fact_ids=["sales.summary.leadership"],
-                ),
-                ProposedRequirement(
-                    text="Must have enterprise sales experience.",
-                    importance="mandatory",
-                    coverage="matched",
-                    fact_ids=["fact.nobody.declared"],
-                ),
-            ],
-        ),
-    )
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(
-        completed, ai_services, transaction_manager, application_projection_reader
-    )
-    read, invented = analysis.requirements
-    assert read.coverage == "matched"
-    assert read.supporting_fact_ids == ["sales.summary.leadership"]
-    assert invented.supporting_fact_ids == []
-    assert invented.coverage == "unknown"
-    assert {"unknown_fact", "coverage_without_evidence"} <= {
-        issue.code for issue in analysis.issues
-    }
-
-
-def test_a_requirement_proposed_twice_is_one_requirement(
-    ai_services, fake_openai, transaction_manager, application_projection_reader
-) -> None:
-    """One demand stated twice is one requirement, carrying one id.
-
-    Two entries under a single id counted the demand twice in `fit_score`, and
-    nothing holding that id - an acceptance, a correction - could say which of
-    the two it named.
-    """
-    job_text = (
-        "Account Manager.\n"
-        "Requirements:\n"
-        "- Must have enterprise sales experience.\n"
-        "About the team:\n"
-        "- Must have enterprise sales experience."
-    )
-    quote = "Must have enterprise sales experience."
-    completed = _analysis_run(
-        ai_services,
-        fake_openai,
-        job_text,
-        analysis_proposal(
-            requirements=[
-                ProposedRequirement(text=quote, importance="mandatory"),
-                ProposedRequirement(text=quote, importance="mandatory"),
-            ],
-        ),
-    )
-
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    analysis = _analysis_of(
-        completed, ai_services, transaction_manager, application_projection_reader
-    )
-    identifiers = [requirement.requirement_id for requirement in analysis.requirements]
-    assert len(analysis.requirements) == 1
-    assert len(identifiers) == len(set(identifiers))
-    assert "duplicate_requirement" in {issue.code for issue in analysis.issues}
 
 
 def test_an_override_reaches_the_provider_and_is_applied_to_the_result(
@@ -1498,63 +1373,73 @@ def test_selection_cancelled_before_activation_registers_no_new_plan(
             assert count == 1
 
 
-@pytest.mark.parametrize("same_response", [True, False])
 def test_retry_reuses_the_same_provider_output_without_rewriting_evidence(
     ai_services,
     fake_openai,
     monkeypatch,
-    same_response,
     transaction_manager,
     application_projection_reader,
 ) -> None:
-    ingested = _ingested(ai_services, "Evidence Retry Co")
-    queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    """A retry that gets the same response reuses its evidence; a new one adds one.
+
+    Either way the cancelled attempt's evidence is left byte-for-byte as it was
+    and stays inactive, and only the retry's output is active.
+    """
     prepare = ai_services.analysis.prepare
+    for same_response in (True, False):
+        ingested = _ingested(ai_services, f"Evidence Retry {same_response} Co")
+        queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
 
-    def prepare_then_cancel(command, *, operation_id=None):
-        value = prepare(command, operation_id=operation_id)
-        # Idempotent re-registration within one Operation also keeps one output.
-        repeated = ai_services.analysis.preserve(
+        def prepare_then_cancel(command, *, operation_id=None, ingested=ingested, queued=queued):
+            value = prepare(command, operation_id=operation_id)
+            # Idempotent re-registration within one Operation also keeps one output.
+            repeated = ai_services.analysis.preserve(
+                ingested.application_id,
+                queued.id,
+                value.evidence.task,
+                value.evidence.provenance,
+            )
+            assert repeated.artifact_version_id == value.evidence.artifact_version_id
+            ai_services.operation_lifecycle.cancel(queued.id)
+            return value
+
+        monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
+        cancelled = _run(ai_services, queued)
+        assert cancelled.status.value == "cancelled"
+        original_artifacts = _provider_artifacts(
+            ai_services,
             ingested.application_id,
-            queued.id,
-            value.evidence.task,
-            value.evidence.provenance,
+            transaction_manager,
+            application_projection_reader,
         )
-        assert repeated.artifact_version_id == value.evidence.artifact_version_id
-        ai_services.operation_lifecycle.cancel(queued.id)
-        return value
-
-    monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
-    cancelled = _run(ai_services, queued)
-    assert cancelled.status.value == "cancelled"
-    original_artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert len(original_artifacts) == 1
-    monkeypatch.setattr(ai_services.analysis, "prepare", prepare)
-    if not same_response:
-        fake_openai.scripts["propose_analysis"] = [
-            envelope(analysis_proposal(), id="resp_distinct_retry")
-        ]
-    retried = ai_services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
-    completed = _run(ai_services, retried)
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    after = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert len(after) == (1 if same_response else 2)
-    assert (
-        next(row for row in after if row["id"] == original_artifacts[0]["id"])
-        == original_artifacts[0]
-    )
-    first = next(
-        output for output in cancelled.outputs if output.output_type == "provider_response"
-    )
-    second = next(
-        output for output in completed.outputs if output.output_type == "provider_response"
-    )
-    assert (first.output_id == second.output_id) is same_response
-    assert not first.active and second.active
-    original_operation = ai_services.operation_lifecycle.get(queued.id)
-    assert original_operation.status.value == "cancelled"
-    assert all(not output.active for output in original_operation.outputs)
+        assert len(original_artifacts) == 1
+        monkeypatch.setattr(ai_services.analysis, "prepare", prepare)
+        if not same_response:
+            fake_openai.scripts["propose_analysis"] = [
+                envelope(analysis_proposal(), id="resp_distinct_retry")
+            ]
+        retried = ai_services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
+        completed = _run(ai_services, retried)
+        assert completed.status.value == "succeeded", completed.safe_failure_detail
+        after = _provider_artifacts(
+            ai_services,
+            ingested.application_id,
+            transaction_manager,
+            application_projection_reader,
+        )
+        assert len(after) == (1 if same_response else 2), same_response
+        assert (
+            next(row for row in after if row["id"] == original_artifacts[0]["id"])
+            == original_artifacts[0]
+        )
+        first = next(
+            output for output in cancelled.outputs if output.output_type == "provider_response"
+        )
+        second = next(
+            output for output in completed.outputs if output.output_type == "provider_response"
+        )
+        assert (first.output_id == second.output_id) is same_response
+        assert not first.active and second.active
+        original_operation = ai_services.operation_lifecycle.get(queued.id)
+        assert original_operation.status.value == "cancelled"
+        assert all(not output.active for output in original_operation.outputs)
