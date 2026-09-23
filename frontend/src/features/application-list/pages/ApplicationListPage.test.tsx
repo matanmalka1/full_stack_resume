@@ -250,6 +250,9 @@ describe("ApplicationListPage", () => {
        disappearing and leaving the reader to wonder whether it loaded. */
     const quietHub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(quietHub).getByText("אין פעולות ממתינות.")).toBeInTheDocument();
+    /* Each row places its CV state along the way to Ready. */
+    expect(await screen.findByText("שלב 1 מתוך 7")).toBeInTheDocument();
+    expect(screen.getByText("שלב 7 מתוך 7")).toBeInTheDocument();
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();

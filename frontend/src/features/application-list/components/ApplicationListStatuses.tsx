@@ -9,6 +9,7 @@ import { confidenceText, fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/fea
 import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
+import { preparationProgress } from "../model/applicationListPresentation";
 
 const quietToneClasses: Record<Tone, string> = {
   success: "text-cv-success",
@@ -111,18 +112,52 @@ export const ApplicationRecruitmentStatus = ({
   );
 };
 
+/* Discrete segments rather than a continuous bar: the states are positions, not a
+   percentage, and a smooth fill would claim a precision the projection does not have.
+   The words under it carry the fact; the segments are decoration for the eye. */
+const PreparationSteps = ({ state }: { state: ApplicationListItem["preparation_state"] }) => {
+  const { step, total } = preparationProgress(state);
+
+  return (
+    <span className="flex w-full max-w-40 flex-col gap-1">
+      <span aria-hidden="true" className="grid grid-flow-col auto-cols-fr gap-0.5">
+        {Array.from({ length: total }, (_, index) => (
+          <span
+            className={cx("h-1 rounded-pill", index < step ? "bg-cv-accent" : "bg-cv-border")}
+            key={index}
+          />
+        ))}
+      </span>
+      <span className="text-support text-cv-text-muted tabular-nums">{`שלב ${step} מתוך ${total}`}</span>
+    </span>
+  );
+};
+
 export const ApplicationPreparationStatus = ({
   item,
   variant,
 }: {
   item: ApplicationListItem;
   variant: ApplicationListViewVariant;
-}) => (
-  <StatusBadge
-    className={variant === "row" ? "gap-1.5 px-2.5 text-start" : variant === "card" ? "px-2.5 py-0.5" : "px-2 py-0.5"}
-    icon={preparationStateIcons[item.preparation_state]}
-    tone={preparationStateTones[item.preparation_state]}
-  >
-    {preparationStateLabels[item.preparation_state]}
-  </StatusBadge>
-);
+}) => {
+  const badge = (
+    <StatusBadge
+      className={variant === "row" ? "gap-1.5 px-2.5 text-start" : variant === "card" ? "px-2.5 py-0.5" : "px-2 py-0.5"}
+      icon={preparationStateIcons[item.preparation_state]}
+      tone={preparationStateTones[item.preparation_state]}
+    >
+      {preparationStateLabels[item.preparation_state]}
+    </StatusBadge>
+  );
+
+  if (variant !== "row") {
+    return badge;
+  }
+
+  return (
+    <span className="flex w-full flex-col items-start gap-1.5">
+      {badge}
+      <PreparationSteps state={item.preparation_state} />
+    </span>
+  );
+};

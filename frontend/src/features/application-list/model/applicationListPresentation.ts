@@ -1,10 +1,27 @@
 import { routePaths } from "@/app/routePaths";
-import type { ApplicationListItem } from "@/api/contracts";
-import { preparationResumeDestination, reasonTitle, warningTitle } from "@/features/preparation";
+import type { ApplicationListItem, PreparationState } from "@/api/contracts";
+import {
+  preparationResumeDestination,
+  preparationStateLabels,
+  reasonTitle,
+  warningTitle,
+} from "@/features/preparation";
 import type { Tone } from "@/ui/tone";
 import { formatDateTime } from "@/utils/formatDateTime";
 
 export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");
+
+/* Where a CV state sits along the way to Ready, for the row's step bar. The order is the
+   one the specification lists the values in (§4) and the one the board's "stage" sort
+   already ranks by; it is read from the exhaustive label map rather than restated, so a
+   new state cannot be left out of the bar. It is a position, not a promise of forward
+   motion: a stale draft that needs a decision projects back to `needs_review`. */
+const preparationOrder = Object.keys(preparationStateLabels) as PreparationState[];
+
+export const preparationProgress = (state: PreparationState): { step: number; total: number } => ({
+  step: preparationOrder.indexOf(state) + 1,
+  total: preparationOrder.length,
+});
 
 /* A visual hint only: records with the same company and role need their dates exposed
    so two distinct Applications do not read as one repeated row. */
