@@ -43,7 +43,15 @@ def _body(draft) -> str:
     return serialize_markdown(draft).split("---", 2)[2]
 
 
-def test_emphasis_changes_the_selected_facts(draft_factory) -> None:
+def test_emphasis_changes_the_selected_facts_and_irrelevant_metadata_does_not(
+    draft_factory,
+) -> None:
+    """Emphasis is an input to selection; identifiers and repetition are not.
+
+    Every Emphasis yields a different selection and a different body, while the
+    same inputs rebuilt - or rebuilt under another application and snapshot
+    id - select exactly the same facts.
+    """
     drafts = {
         emphasis: draft_factory(
             ACCOUNT_MANAGER_JOB,
@@ -64,8 +72,6 @@ def test_emphasis_changes_the_selected_facts(draft_factory) -> None:
     assert len(set(selections.values())) == len(selections)
     assert len(set(bodies.values())) == len(bodies)
 
-
-def test_selection_is_deterministic_and_ignores_irrelevant_metadata(draft_factory) -> None:
     first = draft_factory(ACCOUNT_MANAGER_JOB, profile_override="account-manager").draft
     again = draft_factory(ACCOUNT_MANAGER_JOB, profile_override="account-manager").draft
     other_ids = draft_factory(
@@ -235,7 +241,7 @@ def test_every_role_block_reaches_its_floor(
                     assert len(block) >= floor, label
 
 
-def test_payme_tech_sales_selection_uses_job_evidence_and_business_presentations(
+def test_a_tech_sales_new_business_build_seats_substitute_evidence_and_business_vocabulary(
     draft_factory,
 ) -> None:
     boundary_quote = "inside Sales experience in a SaaS or tech-related industry"
@@ -393,46 +399,33 @@ def _summary_selection(
     return selected["Professional Summary"], manifest
 
 
-@pytest.mark.parametrize("rank", [-1, 3, 99])
-def test_a_manifest_cannot_record_a_tier_the_ranking_has_no_meaning_for(rank: int) -> None:
+def test_a_manifest_records_only_a_tier_the_ranking_has_meaning_for() -> None:
     """The tier is an enumeration, not a score.
 
     Mandatory, preferred and unasked are the whole vocabulary. A value outside
     them would still sort - above every real tier, or below all of them - while
-    describing nothing a reader of the manifest could interpret.
+    describing nothing a reader of the manifest could interpret. Policy 1.0.0
+    wrote no tier at all, and those manifests are records, so they still read.
     """
-    with pytest.raises(ValidationError):
-        SelectionCandidate(
-            fact_id="sales.summary.tech",
-            section="Professional Summary",
-            pool_index=0,
-            profile_score=0,
-            emphasis_score=0,
-            semantic_score=0,
-            keyword_hits=0,
-            gap_substitute=False,
-            requirement_rank=rank,
-            outcome="selected",
-        )
+    fields = {
+        "fact_id": "sales.summary.tech",
+        "section": "Professional Summary",
+        "pool_index": 0,
+        "profile_score": 0,
+        "emphasis_score": 0,
+        "semantic_score": 0,
+        "keyword_hits": 0,
+        "outcome": "selected",
+    }
+    for rank in (-1, 3, 99):
+        with pytest.raises(ValidationError):
+            SelectionCandidate(**fields, gap_substitute=False, requirement_rank=rank)
+
+    legacy = SelectionCandidate(**fields, gap_substitute=True)
+    assert legacy.requirement_rank == 0
 
 
-def test_a_manifest_written_before_the_tier_existed_still_reads() -> None:
-    """Policy 1.0.0 wrote no tier, and those manifests are records."""
-    candidate = SelectionCandidate(
-        fact_id="sales.summary.tech",
-        section="Professional Summary",
-        pool_index=0,
-        profile_score=0,
-        emphasis_score=0,
-        semantic_score=0,
-        keyword_hits=0,
-        gap_substitute=True,
-        outcome="selected",
-    )
-    assert candidate.requirement_rank == 0
-
-
-def test_a_mandatory_requirement_outranks_a_stronger_semantic_score(
+def test_evidence_for_a_met_mandatory_requirement_outranks_a_stronger_semantic_score(
     profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
     """What the employer demanded decides before what the Profile prefers.
@@ -441,11 +434,18 @@ def test_a_mandatory_requirement_outranks_a_stronger_semantic_score(
     0. Naming `sales.summary.tech` as evidence for a mandatory requirement has
     to be enough to reverse that, or the authority order is not an authority
     order.
+
+    It is also the widening `gap_substitute` could not express. A substitute
+    stands in for something the candidate lacks, so under policy 1.0.0 the only
+    facts with authority in this slot were the ones answering a failure.
+    Evidence that a demanded thing is genuinely held ranked level with a fact
+    the posting never mentioned - even though it is the better thing to put on
+    the page.
     """
     baseline, _ = _summary_selection(profile_store, policy_store, fact_store, analysis_document)
     assert baseline == ["sales.summary.account"]
 
-    selected, _ = _summary_selection(
+    selected, manifest = _summary_selection(
         profile_store,
         policy_store,
         fact_store,
@@ -457,35 +457,21 @@ def test_a_mandatory_requirement_outranks_a_stronger_semantic_score(
         ],
     )
     assert selected == ["sales.summary.tech"]
-
-
-def test_evidence_for_a_met_requirement_carries_authority_a_substitute_never_had(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
-) -> None:
-    """The widening `gap_substitute` could not express.
-
-    A substitute stands in for something the candidate lacks, so under policy
-    1.0.0 the only facts with authority in this slot were the ones answering a
-    failure. Evidence that a demanded thing is genuinely held ranked level with
-    a fact the posting never mentioned - even though it is the better thing to
-    put on the page.
-    """
-    matched = _requirement(
-        "r-met", mandatory=True, coverage="matched", supports=["sales.summary.tech"]
-    )
-    selected, manifest = _summary_selection(
-        profile_store, policy_store, fact_store, analysis_document, requirements=[matched]
-    )
-    assert selected == ["sales.summary.tech"]
     winner = next(c for c in manifest.candidates if c.fact_id == "sales.summary.tech")
     assert (winner.requirement_rank, winner.gap_substitute) == (2, False)
 
 
-def test_a_mandatory_requirement_outranks_a_preferred_one(
+def test_a_mandatory_requirement_outranks_a_preferred_one_whether_met_or_a_gap(
     profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
 ) -> None:
-    """Between two answered asks, the one the employer made a condition wins."""
-    selected, _ = _summary_selection(
+    """Between two asks, the one the employer made a condition wins.
+
+    That holds for answered asks and for gaps alike: a gap's substitutes are
+    the supporting facts of the unmet requirement it projects, so each
+    substitute takes that requirement's necessity directly - it is ranked by
+    what it stands in for, not by being a substitute.
+    """
+    answered, _ = _summary_selection(
         profile_store,
         policy_store,
         fact_store,
@@ -502,34 +488,27 @@ def test_a_mandatory_requirement_outranks_a_preferred_one(
             ),
         ],
     )
-    assert selected == ["sales.summary.new_business"]
+    assert answered == ["sales.summary.new_business"]
 
-
-def test_a_gap_takes_the_necessity_of_the_requirement_it_projects(
-    profile_store: ProfileStore, policy_store, fact_store: FactStore, analysis_document
-) -> None:
-    """A substitute is ranked by what it stands in for, not by being a substitute.
-
-    A gap's substitutes are the supporting facts of the unmet requirement it
-    projects, so each substitute takes that requirement's necessity directly.
-    """
-    requirements = [
-        _requirement(
-            "r-mand", mandatory=True, coverage="unsupported", supports=["sales.summary.tech"]
-        ),
-        _requirement(
-            "r-pref", mandatory=False, coverage="unsupported", supports=["sales.summary.account"]
-        ),
-    ]
-    selected, _ = _summary_selection(
+    unmet, _ = _summary_selection(
         profile_store,
         policy_store,
         fact_store,
         analysis_document,
-        requirements=requirements,
+        requirements=[
+            _requirement(
+                "r-mand", mandatory=True, coverage="unsupported", supports=["sales.summary.tech"]
+            ),
+            _requirement(
+                "r-pref",
+                mandatory=False,
+                coverage="unsupported",
+                supports=["sales.summary.account"],
+            ),
+        ],
     )
     # `sales.summary.account` substitutes too, and outscores the winner 200 to 0.
-    assert selected == ["sales.summary.tech"]
+    assert unmet == ["sales.summary.tech"]
 
 
 # --- M3 Stage D: one user's pin/exclude overlay -----------------------------
@@ -700,96 +679,78 @@ def test_an_excluded_fact_leaves_the_document_and_the_manifest_says_who_removed_
     )
 
 
-def test_an_overlay_naming_a_fact_the_profile_never_offered_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, analysis_document
+@pytest.mark.parametrize(
+    ("overlays", "refusal"),
+    [
+        pytest.param(
+            [{"pinned_fact_ids": frozenset({"development.stack.python"})}],
+            "offers no candidate named",
+            id="fact-the-profile-never-offered",
+        ),
+        # Neither reading is safe, so neither is chosen.
+        pytest.param(
+            [
+                {
+                    "pinned_fact_ids": frozenset({"sales.achievement.retention"}),
+                    "excluded_fact_ids": frozenset({"sales.achievement.retention"}),
+                }
+            ],
+            "pinned and excluded",
+            id="fact-on-both-sides",
+        ),
+        # Removing a heading does not shorten a CV; it orphans what is under it.
+        pytest.param(
+            [
+                {"excluded_fact_ids": frozenset({"sales.role.leader.title"})},
+                {"excluded_fact_ids": frozenset({"sales.role.leader.dates"})},
+            ],
+            "structure, not evidence",
+            id="structure-excluded-as-evidence",
+        ),
+        # `sales.metric.new_customers` is the only verified-quantitative claim
+        # under the field-sales role. Honouring the exclusion silently would
+        # leave that role described in duties alone, which is exactly the shape
+        # `min_quantitative_per_role` exists to prevent.
+        pytest.param(
+            [{"excluded_fact_ids": frozenset({"sales.metric.new_customers"})}],
+            "cannot reach its floors without",
+            id="role-block-loses-quantitative-floor",
+        ),
+        # The rescue refills a required tag from the pool; it cannot refill
+        # nothing. An Account Manager CV that can evidence no account management
+        # is not that Profile, whatever the user asked for.
+        pytest.param(
+            [
+                {
+                    "excluded_fact_ids": frozenset(
+                        {
+                            "sales.summary.account",
+                            "sales.metric.recurring_customers",
+                            "sales.cycle.account_management",
+                        }
+                    )
+                }
+            ],
+            "'account-management' would be left uncovered",
+            id="required-tag-emptied",
+        ),
+    ],
+)
+def test_an_overlay_the_engine_cannot_honour_is_refused(
+    profile_store: ProfileStore,
+    policy_store,
+    fact_store,
+    analysis_document,
+    overlays,
+    refusal,
 ) -> None:
-    with pytest.raises(SelectionError, match="offers no candidate named"):
-        _account_manager_selection(
-            profile_store,
-            policy_store,
-            fact_store,
-            analysis_document,
-            pinned_fact_ids=frozenset({"development.stack.python"}),
-        )
-
-
-def test_a_fact_named_on_both_sides_of_the_overlay_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, analysis_document
-) -> None:
-    """Neither reading is safe, so neither is chosen."""
-    with pytest.raises(SelectionError, match="pinned and excluded"):
-        _account_manager_selection(
-            profile_store,
-            policy_store,
-            fact_store,
-            analysis_document,
-            pinned_fact_ids=frozenset({"sales.achievement.retention"}),
-            excluded_fact_ids=frozenset({"sales.achievement.retention"}),
-        )
-
-
-def test_structure_cannot_be_excluded_as_if_it_were_evidence(
-    profile_store: ProfileStore, policy_store, fact_store, analysis_document
-) -> None:
-    """Removing a heading does not shorten a CV; it orphans what is under it."""
-    for fact_id in ("sales.role.leader.title", "sales.role.leader.dates"):
-        with pytest.raises(SelectionError, match="structure, not evidence"):
+    """The invariant is not traded for the user's choice, and neither is dropped."""
+    assert profile_store.get("account-manager").required_tags == ["account-management"]
+    for overlay in overlays:
+        with pytest.raises(SelectionError, match=refusal):
             _account_manager_selection(
-                profile_store,
-                policy_store,
-                fact_store,
-                analysis_document,
-                excluded_fact_ids=frozenset({fact_id}),
+                profile_store, policy_store, fact_store, analysis_document, **overlay
             )
-
-
-def test_an_exclusion_that_costs_a_role_block_its_quantitative_floor_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, analysis_document
-) -> None:
-    """The invariant is not traded for the user's choice, and neither is dropped.
-
-    `sales.metric.new_customers` is the only verified-quantitative claim under
-    the field-sales role. Honouring the exclusion silently would leave that role
-    described in duties alone, which is exactly the shape
-    `min_quantitative_per_role` exists to prevent.
-    """
-    with pytest.raises(SelectionError, match="cannot reach its floors without"):
-        _account_manager_selection(
-            profile_store,
-            policy_store,
-            fact_store,
-            analysis_document,
-            excluded_fact_ids=frozenset({"sales.metric.new_customers"}),
-        )
-
-
-def test_an_exclusion_that_empties_a_required_tag_is_refused(
-    profile_store: ProfileStore, policy_store, fact_store, analysis_document
-) -> None:
-    """The rescue refills a required tag from the pool; it cannot refill nothing.
-
-    An Account Manager CV that can evidence no account management is not that
-    Profile, whatever the user asked for, so the command is refused and names
-    the exclusions that caused it.
-    """
-    profile = profile_store.get("account-manager")
-    assert profile.required_tags == ["account-management"]
-    carriers = frozenset(
-        {
-            "sales.summary.account",
-            "sales.metric.recurring_customers",
-            "sales.cycle.account_management",
-        }
-    )
-
-    with pytest.raises(SelectionError, match="'account-management' would be left uncovered"):
-        _account_manager_selection(
-            profile_store,
-            policy_store,
-            fact_store,
-            analysis_document,
-            excluded_fact_ids=carriers,
-        )
 
 
 def test_acceptance_is_not_an_input_to_selection(
