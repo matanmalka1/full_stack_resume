@@ -242,7 +242,7 @@ export const DraftEditorPage = () => {
     try {
       // Confirmation has committed. Preserve edits made during that request before
       // refreshing its consequences or choosing a version for validation.
-      const settled = await editing.settle();
+      const editsSaved = await editing.settle();
       await invalidateApplicationViews(queryClient, applicationId);
       const currentDetail = await queryClient.fetchQuery({
         ...applicationDetailQueryOptions(applicationId),
@@ -261,7 +261,7 @@ export const DraftEditorPage = () => {
       ]);
       // A stale context may refuse saving. Still show that context, keep the local
       // buffer, and report the unfinished follow-up rather than undoing confirmation.
-      if (!settled)
+      if (!editsSaved)
         throw new Error("מצב הטיוטה רוענן, אך יש לפתור את שגיאת השמירה או הקונפליקט. העריכות המקומיות נשמרו.");
       if (currentDetail.working_draft_state === "stale" || !currentDetail.available_actions.includes("validate"))
         return;

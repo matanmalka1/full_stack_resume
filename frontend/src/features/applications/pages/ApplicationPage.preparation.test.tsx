@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -657,7 +657,12 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage();
 
     expect(await screen.findByText("5 years of Python")).toBeInTheDocument();
-    expect(screen.getByText("מכוסה")).toBeInTheDocument();
+    /* A matched requirement is listed under the covered group rather than badged: the
+       group's heading already says "covered", so a badge would repeat the verdict. */
+    expect(
+      within(screen.getByRole("list", { name: "מכוסות במלואן (1)" })).getByText("5 years of Python"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("מכוסה")).not.toBeInTheDocument();
     expect(screen.getByText("מכוסות")).toBeInTheDocument();
     expect(screen.getByText("חלקיות")).toBeInTheDocument();
     expect(screen.getByText("לא מכוסות")).toBeInTheDocument();

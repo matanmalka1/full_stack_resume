@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -120,7 +120,7 @@ describe("Dialog", () => {
     const dialog = dialogOf("כותרת");
     /* A browser closes a cancelled modal itself; the shim's close stands in for it. */
     escape(dialog);
-    dialog.close();
+    act(() => dialog.close());
     expect(screen.getByRole("button", { name: "פתיחה" })).toHaveFocus();
 
     fireEvent.click(screen.getByRole("button", { name: "פתיחה" }));

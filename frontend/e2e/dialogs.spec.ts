@@ -213,10 +213,18 @@ test.describe("dialogs", () => {
     await expect(overlay).toBeHidden();
     const chip = page.getByRole("button", { name: /פירוט ההרצה/ });
     await expect(chip).toBeFocused();
-    await expect(chip).toContainText("מתבצעת");
+    /* The run's own progress sentence, which for draft generation names its phase. */
+    await expect(chip).toContainText("מנסחת ובודקת את הטענות");
 
+    /* The form opens - reading and drafting a new posting is harmless - but the command
+       that would replace the snapshot the run is working from waits for it. */
     await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
-    await expect(page.getByRole("button", { name: "עדכון נוסח המשרה" })).toBeDisabled();
+    await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
+    const postingForm = page.getByRole("dialog", { name: "יצירת תצלום משרה חדש" });
+    await expect(postingForm.getByRole("button", { name: "יצירת התצלום החדש" })).toBeDisabled();
+    await expect(postingForm.getByText(/פעולה מתבצעת כעת על המועמדות/)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(postingForm).toBeHidden();
 
     await chip.click();
     await expect(overlay).toBeVisible();
