@@ -19,8 +19,8 @@ from .narrowing import (
     narrow_application_list,
 )
 from .views_prep import (
-    ApprovedRevisionView,
     ApprovedRevisionsView,
+    ApprovedRevisionView,
     ArtifactVersionDetailView,
     ArtifactVersionsView,
     ArtifactVersionView,

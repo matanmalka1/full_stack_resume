@@ -28,7 +28,6 @@ from ..dependencies import Services
 from ..headers import IdempotencyKey
 from ..responses import accepted_operation
 from ..schemas.analyses import CreateAnalysisRequest
-from ..schemas.artifacts import ApprovedRevisionsResponse
 from ..schemas.applications import (
     ApplicationDetailResponse,
     ApplicationListResponse,
@@ -46,6 +45,7 @@ from ..schemas.applications import (
     UpdateApplicationNotesRequest,
     UpdateApplicationNotesResponse,
 )
+from ..schemas.artifacts import ApprovedRevisionsResponse
 from ..schemas.drafts import GenerateWorkingDraftRequest, ReplaceWorkingDraftRequest
 from ..schemas.operations import OperationResponse
 
