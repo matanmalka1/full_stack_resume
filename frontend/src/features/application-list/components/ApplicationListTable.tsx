@@ -5,15 +5,17 @@ import { cx } from "@/ui/cx";
 import { duplicatedApplicationIdentityIds } from "../model/applicationListPresentation";
 import { ApplicationListRow } from "./ApplicationListRow";
 
-/* Recruitment and preparation remain adjacent but independent: the former says where
-   the employer process stands, the latter what the CV still needs. The final column
-   gathers links and commands so the row has one predictable action edge. */
+/* Six columns, laid out after demo_re: who, how far, what next, how well it fits, when
+   it last moved, and the menu. Preparation and recruitment share the progress column
+   but stay two separate lines - one says what the CV still needs, the other where the
+   employer process stands - so neither reads as a step of the other. The final column
+   gathers commands so the row has one predictable action edge. */
 const columns = [
-  { key: "identity", label: "משרה", width: "w-[25%]" },
-  { key: "recruitment", label: "סטטוס", width: "w-[15%]" },
-  { key: "preparation", label: "הכנת קורות חיים", width: "w-[22%]" },
-  { key: "next-action", label: "המשך טיפול", width: "w-[24%]" },
-  { key: "activity", label: "עודכן", width: "w-[10%]" },
+  { key: "identity", label: "חברה ותפקיד", width: "w-[26%]" },
+  { key: "progress", label: "התקדמות הכנה וגיוס", width: "w-[25%]" },
+  { key: "next-action", label: "פעולה הבאה", width: "w-[25%]" },
+  { key: "fit", label: "התאמה", width: "w-[11%]" },
+  { key: "activity", label: "עודכן", width: "w-[9%]" },
   /* The column holds one icon-sized menu trigger. Its name stays for assistive tech but is
      not drawn: at the trigger's width a visible label was clipped by the table edge. */
   { key: "actions", label: "פעולות", width: "w-12", visuallyHidden: true },
@@ -44,7 +46,7 @@ export const ApplicationListTable = ({
             {columns.map(({ key, label, width, ...column }) => (
               <th
                 className={cx(
-                  "px-2.5 py-2.5 text-start text-support font-semibold text-cv-text-muted first:ps-4 last:pe-4",
+                  "px-3 py-3 text-start text-support font-semibold text-cv-text-muted first:ps-4 last:pe-4",
                   width,
                 )}
                 key={key}
@@ -90,7 +92,7 @@ export const ApplicationListTableSkeleton = () => (
     <div className="divide-y divide-cv-border">
       {skeletonRows.map((key) => (
         <div
-          className="grid min-h-32 grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 lg:grid-cols-[25%_15%_22%_24%_10%_3rem] lg:items-start lg:py-3"
+          className="grid min-h-32 grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 lg:grid-cols-[26%_25%_25%_11%_9%_3rem] lg:items-start lg:py-3"
           key={key}
         >
           <div className="flex gap-2">
@@ -101,9 +103,9 @@ export const ApplicationListTableSkeleton = () => (
             </span>
           </div>
           <Skeleton className="block size-9 lg:order-last" />
-          <Skeleton className="col-span-2 block h-4 w-24 lg:col-span-1" />
           <Skeleton className="col-span-2 block h-7 w-36 lg:col-span-1" />
           <Skeleton className="col-span-2 block h-4 w-2/3 lg:col-span-1" />
+          <Skeleton className="col-span-2 block h-4 w-20 lg:col-span-1" />
           <Skeleton className="hidden h-4 w-16 lg:block" />
         </div>
       ))}

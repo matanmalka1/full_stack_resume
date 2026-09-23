@@ -13,10 +13,12 @@ export const CompanyMark = ({ company, variant }: { company: string; variant: "c
     aria-hidden="true"
     className={cx(
       "flex shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-support text-cv-accent",
-      variant === "row" ? "size-9 font-bold" : "size-11 border border-cv-accent/20 font-extrabold shadow-surface",
+      variant === "row"
+        ? "size-9 border border-cv-border font-bold"
+        : "size-11 border border-cv-accent/20 font-extrabold shadow-surface",
     )}
   >
-    {variant === "row" ? ([...company][0] ?? "?") : [...company].slice(0, 2).join("").toLocaleUpperCase() || "?"}
+    {[...company].slice(0, 2).join("").toLocaleUpperCase() || "?"}
   </span>
 );
 
@@ -81,9 +83,11 @@ export const ApplicationIdentity = ({
     );
   }
 
+  /* The row and the card both lead with the company, beside its mark, and name the role
+     under it: the mark is the company's, so the line next to it should be too. */
   const row = variant === "row";
   return (
-    <div className={row ? "flex min-w-0 items-start gap-2" : "flex min-w-0 items-center gap-3"}>
+    <div className={row ? "flex min-w-0 items-start gap-3" : "flex min-w-0 items-center gap-3"}>
       <CompanyMark company={item.company} variant={variant} />
       <div className={cx("min-w-0 text-left", row && "flex-1")}>
         <Link
@@ -93,17 +97,17 @@ export const ApplicationIdentity = ({
               : "block truncate font-extrabold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
           }
           dir="auto"
-          title={row ? item.target_role : item.company}
+          title={item.company}
           to={href}
         >
-          {row ? item.target_role : item.company}
+          {item.company}
         </Link>
         <p
-          className="truncate text-support font-medium text-cv-text-muted"
+          className={cx("truncate text-support font-medium", row ? "text-cv-text" : "text-cv-text-muted")}
           dir="auto"
-          title={row ? item.company : item.target_role}
+          title={item.target_role}
         >
-          {row ? item.company : item.target_role}
+          {item.target_role}
         </p>
         <ApplicationProvenance item={item} linkSource={row} />
         {row && ambiguous ? (

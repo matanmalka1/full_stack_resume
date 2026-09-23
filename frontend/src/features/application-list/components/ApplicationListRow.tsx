@@ -99,28 +99,26 @@ export const ApplicationListRow = ({
       onKeyDown={openRowFromKeyboard}
       tabIndex={0}
     >
-      <td className="col-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3">
+      <td className="col-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3.5">
         <ApplicationIdentity ambiguous={ambiguous} item={item} variant="row" />
       </td>
-      <td className="col-span-2 border-t border-cv-border px-0 py-3 align-top lg:border-0 lg:px-3">
-        <div className="flex flex-wrap items-start gap-x-4 gap-y-2 lg:flex-col">
-          <ApplicationRecruitmentStatus item={item} variant="row" />
-          <ApplicationFitStatus item={item} variant="row" />
-        </div>
-      </td>
-      <td className="col-span-2 px-0 pb-3 align-top lg:px-3 lg:py-3">
-        <div className="flex flex-col items-start gap-1.5">
+      <td className="col-span-2 border-t border-cv-border px-0 py-3 align-top lg:border-0 lg:px-3 lg:py-3.5">
+        <div className="flex flex-col items-start gap-2">
           <ApplicationPreparationStatus item={item} variant="row" />
+          <ApplicationRecruitmentStatus item={item} variant="row" />
           {attentionLink}
         </div>
       </td>
-      <td className="col-span-2 border-t border-cv-border px-0 pt-3 align-top lg:border-0 lg:px-3 lg:py-3">
+      <td className="col-span-2 border-t border-cv-border px-0 py-3 align-top lg:border-0 lg:px-3 lg:py-3.5">
         <div className="flex flex-col items-start gap-2 empty:after:text-support empty:after:text-cv-text-muted empty:after:content-['—']">
-          <ApplicationNextAction item={item} variant="row" />
           <ApplicationRecommendedAction item={item} variant="row" />
+          <ApplicationNextAction item={item} variant="row" />
         </div>
       </td>
-      <td className="col-start-2 row-start-5 whitespace-nowrap px-0 pt-3 align-bottom text-support text-cv-text-muted lg:px-3 lg:py-3 lg:align-top">
+      <td className="col-start-1 row-start-4 border-t border-cv-border px-0 pt-3 align-top lg:border-0 lg:px-3 lg:py-3.5">
+        <ApplicationFitStatus item={item} variant="row" />
+      </td>
+      <td className="col-start-2 row-start-4 whitespace-nowrap border-t border-cv-border px-0 pt-3 align-top text-support text-cv-text-muted lg:border-0 lg:px-3 lg:py-3.5">
         <span
           className="inline-flex items-center gap-1.5"
           title={`עודכנה ב־${formatApplicationDate(item.updated_at)} · נפתחה ב־${formatApplicationDate(item.created_at)}`}
@@ -129,7 +127,7 @@ export const ApplicationListRow = ({
           <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
         </span>
       </td>
-      <td className="col-start-2 row-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3">
+      <td className="col-start-2 row-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3.5">
         <ApplicationRecordActions
           item={item}
           onRequestClose={onRequestClose}
