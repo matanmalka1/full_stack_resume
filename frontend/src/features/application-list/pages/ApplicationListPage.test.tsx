@@ -726,6 +726,8 @@ describe("ApplicationListPage", () => {
     });
 
     expect(screen.getByRole("status")).toHaveTextContent("המועמדות של Acme נסגרה");
+    /* The offer has no timer, so it can be put away by hand. */
+    expect(screen.getByRole("button", { name: "סגירת ההודעה" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ביטול הסגירה" }));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(

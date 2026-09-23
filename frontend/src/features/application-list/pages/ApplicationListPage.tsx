@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
@@ -6,6 +7,7 @@ import { routePaths } from "@/app/routePaths";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
+import { IconButton } from "@/ui/IconButton";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
@@ -123,22 +125,31 @@ export const ApplicationListPage = () => {
       measure="wide"
       title="לוח מועמדויות"
     >
+      {/* The closed row leaves the board, so the way back floats where the reader's eye
+          already is rather than at the top of a list they may have scrolled away from.
+          It has no timer: the correction stays valid, so the offer stays until the
+          reader takes it or puts it away. */}
       {closedResult === null ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-success/20 bg-cv-success-soft px-3.5 py-2.5 text-support text-cv-text">
-          <LiveRegion visuallyHidden={false}>
+        <div className="fixed inset-x-4 bottom-4 z-(--cv-z-toast) mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface-raised px-3.5 py-2.5 text-support text-cv-text shadow-floating">
+          <LiveRegion className="min-w-0 flex-1" visuallyHidden={false}>
             <span dir="auto">המועמדות של {closedResult.label} נסגרה והועברה למועמדויות הסגורות.</span>
           </LiveRegion>
-          {closedResult.eventId === null ? null : (
-            <Button
-              onClick={undoClose}
-              pending={undoCloseMutation.isPending}
-              pendingLabel="מבטל סגירה…"
-              size="compact"
-              variant="secondary"
-            >
-              ביטול הסגירה
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {closedResult.eventId === null ? null : (
+              <Button
+                onClick={undoClose}
+                pending={undoCloseMutation.isPending}
+                pendingLabel="מבטל סגירה…"
+                size="compact"
+                variant="secondary"
+              >
+                ביטול הסגירה
+              </Button>
+            )}
+            <IconButton aria-label="סגירת ההודעה" onClick={() => setClosedResult(null)}>
+              <X aria-hidden="true" className="size-icon-md" />
+            </IconButton>
+          </div>
         </div>
       )}
       {deletedLabel === null ? null : (
