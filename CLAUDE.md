@@ -55,7 +55,7 @@ Three kinds of change need additional focused evidence:
   relevant browser tests.
 - **A change to a stored value's meaning, a public application/API signature, or a projection field**
   also needs the pipeline test against a fresh PostgreSQL database
-  (`tests/test_pipeline_end_to_end.py`) — `ingest → analyze → draft → validate → approve
+  (`tests/e2e/test_pipeline_end_to_end.py`) — `ingest → analyze → draft → validate → approve
   → render → ready → reconcile`, `OPENAI_API_KEY` unset. It drives the application
   services directly, so it proves the engine works rather than that one client knows how
   to call it. Analysis is the one step that needs a provider (see Facts and AI

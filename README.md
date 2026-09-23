@@ -237,7 +237,7 @@ state-changing request from the app's own UI.
 
 `openapi/openapi.json` and `openapi/types.ts` are both generated and both committed, so
 a change to a request or response schema arrives as a reviewable diff instead of as a
-silent rebuild. `tests/test_api_foundation.py` checks the first; `git diff --exit-code`
+silent rebuild. `tests/platform/test_api_foundation.py` checks the first; `git diff --exit-code`
 after regeneration checks the second. Regenerate after any API change and state the
 diff in the commit message:
 
