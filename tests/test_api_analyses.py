@@ -12,9 +12,9 @@ import pytest
 from api_harness import MUTATION_HEADERS
 from helpers import (
     ACCOUNT_MANAGER_JOB,
-    AMBIGUOUS_HEBREW_JOB,
     REVIEW_DECISION_JOB,
     analysis_proposal,
+    persisted_counts,
     seed_existing_analysis,
 )
 
@@ -122,18 +122,36 @@ def test_post_analysis_uses_ai_operation_and_commits_both_records(
     assert plan.job_analysis_id == outputs["job_analysis"]
 
 
-def test_an_existing_analysis_commits_its_analysis_and_initial_plan_together(
-    api_worker, transaction_manager, application_projection_reader
+def test_an_analysis_commits_its_analysis_and_initial_plan_together_or_not_at_all(
+    api_paused, monkeypatch, transaction_manager, application_projection_reader
 ) -> None:
     """§13: both records, one activation, and the plan bound to that analysis.
 
-    This lets the no-review path draft with explicit source IDs and no separate
-    selection command.
+    Atomic means atomic: only a failure part-way through shows the two rows
+    arrive together, a passing happy path cannot. An Application left
+    classified by an analysis with no plan would project
+    `FACT_SELECTION_UNRESOLVED` forever, with no command able to reach the
+    analysis that caused it. The success then lets the no-review path draft
+    with explicit source IDs and no separate selection command.
     """
-    application_id = _application(api_worker.services, "Atomic Analysis Co")
+    application_id = _application(api_paused.services, "Atomic Analysis Co")
+    with transaction_manager.read() as tx:
+        before = len(application_projection_reader.analyses(tx, application_id))
 
+    def refuse_plan(*_args, **_kwargs):
+        raise RuntimeError("selection plan insert failed")
+
+    monkeypatch.setattr(analysis_sql, "_insert_selection_plan", refuse_plan)
+    with pytest.raises(RuntimeError):
+        _existing_analysis(
+            api_paused, application_id, transaction_manager, application_projection_reader
+        )
+    with transaction_manager.read() as tx:
+        assert len(application_projection_reader.analyses(tx, application_id)) == before
+
+    monkeypatch.undo()
     outputs = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
+        api_paused, application_id, transaction_manager, application_projection_reader
     )
     assert set(outputs) == {"job_analysis", "selection_plan"}
 
@@ -142,71 +160,58 @@ def test_an_existing_analysis_commits_its_analysis_and_initial_plan_together(
     assert plan.job_analysis_id == outputs["job_analysis"]
     assert plan.application_id == application_id
 
-    state = _state(api_worker, application_id)
+    state = _state(api_paused, application_id)
     assert state["active_analysis_id"] == outputs["job_analysis"]
     assert state["active_selection_plan_id"] == outputs["selection_plan"]
     assert state["preparation_state"] == "ready_to_draft"
 
 
-def test_an_analysis_whose_plan_cannot_be_written_leaves_no_analysis_behind(
-    services, monkeypatch, transaction_manager, application_projection_reader
-) -> None:
-    """Atomic means atomic: the failure proves it, the success cannot.
-
-    A passing happy path only shows both rows arrive. Only a failure part-way
-    through shows they arrive together - and an Application left classified by
-    an analysis with no plan would project `FACT_SELECTION_UNRESOLVED` forever,
-    with no command able to reach the analysis that caused it.
-    """
-
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Rollback Analysis Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            acknowledged_duplicates=True,
-            client="web",
-        )
-    )
-    with transaction_manager.read() as tx:
-        before = len(application_projection_reader.analyses(tx, ingested.application_id))
-
-    def refuse_plan(*_args, **_kwargs):
-        raise RuntimeError("selection plan insert failed")
-
-    monkeypatch.setattr(analysis_sql, "_insert_selection_plan", refuse_plan)
-
-    with pytest.raises(RuntimeError):
-        seed_existing_analysis(services, ingested)
-
-    with transaction_manager.read() as tx:
-        after = len(application_projection_reader.analyses(tx, ingested.application_id))
-    assert after == before
-
-
-# --- POST /applications/{id}/analyses ----------------------------------------
-
-
 # --- POST /analyses/{id}/apply-decisions -------------------------------------------
 
 
-def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
-    api_worker, transaction_manager, application_projection_reader
+@pytest.mark.parametrize("decision", ["classification", "fact_overlay", "emphasis"])
+def test_a_decision_writes_new_records_and_leaves_the_decided_against_ones_untouched(
+    api_worker, transaction_manager, application_projection_reader, decision
 ) -> None:
-    """The meaning branch, and the history it does not touch."""
-    application_id = _application(
-        api_worker.services, "Decided Classification Co", job_text=REVIEW_DECISION_JOB
-    )
-    outputs = _existing_analysis(
-        api_worker,
-        application_id,
-        transaction_manager,
-        application_projection_reader,
-        **REVIEW_ANALYSIS,
-    )
+    """Three branches, one history rule.
+
+    A classification decision is the meaning branch: a new analysis with its own
+    initial plan. A fact overlay or an emphasis decision is the selection
+    branch: a replacement plan for the same analysis, since emphasis selects
+    policy and does not rewrite analysis meaning. In every branch the analysis
+    and plan the user decided against are untouched history.
+    """
+    if decision == "classification":
+        application_id = _application(
+            api_worker.services, "Decided Classification Co", job_text=REVIEW_DECISION_JOB
+        )
+        outputs = _existing_analysis(
+            api_worker,
+            application_id,
+            transaction_manager,
+            application_projection_reader,
+            **REVIEW_ANALYSIS,
+        )
+    else:
+        application_id = _application(api_worker.services, f"Decided {decision} Co")
+        outputs = _existing_analysis(
+            api_worker, application_id, transaction_manager, application_projection_reader
+        )
     with transaction_manager.read() as tx:
         original_analysis = application_projection_reader.analysis(tx, outputs["job_analysis"])
         original_plan = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
+    removed = None
+    if decision == "classification":
+        submitted = {"profile_override": "account-manager"}
+    elif decision == "fact_overlay":
+        removed = next(
+            candidate.fact_id
+            for candidate in original_plan.plan.candidates
+            if candidate.section == "Core Skills" and candidate.outcome == "selected"
+        )
+        submitted = {"excluded_fact_ids": [removed]}
+    else:
+        submitted = {"emphasis_override": "new-business"}
 
     response = api_worker.client.post(
         f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
@@ -214,20 +219,19 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
             "application_id": application_id,
             "expected_analysis_id": outputs["job_analysis"],
             "expected_selection_plan_id": outputs["selection_plan"],
-            "profile_override": "account-manager",
+            **submitted,
         },
         headers=MUTATION_HEADERS,
     )
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["created_analysis"] is True
-    assert body["job_analysis_id"] != outputs["job_analysis"]
+    creates_analysis = decision == "classification"
+    assert body["created_analysis"] is creates_analysis
+    assert (body["job_analysis_id"] != outputs["job_analysis"]) is creates_analysis
     assert body["selection_plan_id"] != outputs["selection_plan"]
-    assert body["analysis"]["user_override"] == {"profile": "account-manager"}
     assert body["plan"]["job_analysis_id"] == body["job_analysis_id"]
 
-    # The analysis and plan the user decided against are untouched history.
     with transaction_manager.read() as tx:
         assert (
             application_projection_reader.analysis(tx, outputs["job_analysis"]) == original_analysis
@@ -245,200 +249,200 @@ def test_a_classification_decision_creates_a_new_analysis_and_its_initial_plan(
     assert body["state"]["available_actions"] == state["available_actions"]
     assert body["state"]["recommended_action"] == state["recommended_action"]
 
-    # The hard gap is still there and still hard. It is information for the
-    # user, not a question they must answer before the document exists.
-    assert state["review_reasons"] == []
-    assert state["preparation_state"] == "ready_to_draft"
+    if decision == "classification":
+        assert body["analysis"]["user_override"] == {"profile": "account-manager"}
+        # The hard gap is still there and still hard. It is information for the
+        # user, not a question they must answer before the document exists.
+        assert state["review_reasons"] == []
+        assert state["preparation_state"] == "ready_to_draft"
+    elif decision == "fact_overlay":
+        assert body["plan"]["version_number"] == original_plan.version_number + 1
+        assert removed not in body["plan"]["plan"]["selected_fact_ids"]
+        assert {
+            candidate["fact_id"]: candidate["reason"]
+            for candidate in body["plan"]["plan"]["candidates"]
+        }[removed] == "excluded_by_user"
+    else:
+        assert body["plan"]["plan"]["emphasis"] == "new-business"
+        assert body["plan"]["plan"]["emphasis_override"] == "new-business"
+        assert state["application"]["emphasis"] == "new-business"
+        drafted = api_worker.services.drafts.draft(
+            DraftCommand(
+                application_id=application_id,
+                job_analysis_id=outputs["job_analysis"],
+                selection_plan_id=body["selection_plan_id"],
+            )
+        )
+        with transaction_manager.read() as tx:
+            working = application_projection_reader.working_draft(tx, drafted.working_draft_id)
+        assert working.source.emphasis.value == "new-business"
+        assert working.source.selection is not None
+        assert working.source.selection.emphasis_override is not None
 
 
-def test_a_fact_overlay_alone_creates_a_replacement_plan_for_the_same_analysis(
-    api_worker, transaction_manager, application_projection_reader
+RIVERSIDE_POSTING = (
+    "About the job\n"
+    "Riverside built an AI-powered platform for content creators.\n\n"
+    "Requirements:\n\n"
+    "1+ years of sales closing experience in the market at a technology company, "
+    "with a track record of top performance (must).\n"
+    "Native English speaker (multiple languages are a plus).\n"
+)
+
+
+RIVERSIDE_ANALYSIS = {
+    "requirements": [
+        _unmet_requirement(
+            "1+ years of sales closing experience in the market at a technology company",
+            "riverside-tech-sales",
+        ),
+        _unmet_requirement("Native English speaker", "riverside-native-english"),
+    ],
+}
+
+
+def test_the_api_refuses_decisions_it_cannot_act_on_without_writing(
+    api_paused, database_engine, transaction_manager, application_projection_reader
 ) -> None:
-    """The selection branch: a new plan, and the analysis left exactly as it was."""
-    application_id = _application(api_worker.services, "Replacement Plan Co")
-    outputs = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )
-    with transaction_manager.read() as tx:
-        original = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
-        original_analysis = application_projection_reader.analysis(tx, outputs["job_analysis"])
-    removed = next(
-        candidate.fact_id
-        for candidate in original.plan.candidates
-        if candidate.section == "Core Skills" and candidate.outcome == "selected"
-    )
+    """Every refusal of a decision or plan request, none of which is a 500.
 
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_analysis_id": outputs["job_analysis"],
-            "expected_selection_plan_id": outputs["selection_plan"],
-            "excluded_fact_ids": [removed],
-        },
-        headers=MUTATION_HEADERS,
-    )
-
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["created_analysis"] is False
-    assert body["job_analysis_id"] == outputs["job_analysis"]
-    assert body["selection_plan_id"] != outputs["selection_plan"]
-    assert body["plan"]["version_number"] == original.version_number + 1
-    assert removed not in body["plan"]["plan"]["selected_fact_ids"]
-    assert {
-        candidate["fact_id"]: candidate["reason"]
-        for candidate in body["plan"]["plan"]["candidates"]
-    }[removed] == "excluded_by_user"
-
-    with transaction_manager.read() as tx:
-        assert (
-            application_projection_reader.analysis(tx, outputs["job_analysis"]) == original_analysis
-        )
-        assert (
-            application_projection_reader.selection_plan(tx, outputs["selection_plan"]) == original
-        )
-
-
-def test_an_emphasis_decision_replaces_only_the_selection_plan(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    """Emphasis selects policy; it does not rewrite analysis meaning."""
-    application_id = _application(api_worker.services, "Emphasis Plan Co")
-    outputs = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )
-    with transaction_manager.read() as tx:
-        original_analysis = application_projection_reader.analysis(tx, outputs["job_analysis"])
-        original_plan = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
-
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_analysis_id": outputs["job_analysis"],
-            "expected_selection_plan_id": outputs["selection_plan"],
-            "emphasis_override": "new-business",
-        },
-        headers=MUTATION_HEADERS,
-    )
-
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["created_analysis"] is False
-    assert body["job_analysis_id"] == outputs["job_analysis"]
-    assert body["selection_plan_id"] != outputs["selection_plan"]
-    assert body["plan"]["plan"]["emphasis"] == "new-business"
-    assert body["plan"]["plan"]["emphasis_override"] == "new-business"
-    assert body["state"]["active_analysis_id"] == outputs["job_analysis"]
-    assert body["state"]["active_selection_plan_id"] == body["selection_plan_id"]
-    with transaction_manager.read() as tx:
-        assert (
-            application_projection_reader.analysis(tx, outputs["job_analysis"]) == original_analysis
-        )
-        assert (
-            application_projection_reader.selection_plan(tx, outputs["selection_plan"])
-            == original_plan
-        )
-    assert _state(api_worker, application_id)["application"]["emphasis"] == "new-business"
-    drafted = api_worker.services.drafts.draft(
-        DraftCommand(
-            application_id=application_id,
-            job_analysis_id=outputs["job_analysis"],
-            selection_plan_id=body["selection_plan_id"],
-        )
-    )
-    with transaction_manager.read() as tx:
-        working = application_projection_reader.working_draft(tx, drafted.working_draft_id)
-    assert working.source.emphasis.value == "new-business"
-    assert working.source.selection is not None
-    assert working.source.selection.emphasis_override is not None
-
-
-def test_the_api_refuses_decision_submissions_it_cannot_act_on(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    """Three refusals of a classification submission, none of which is a 500.
-
-    Both kinds at once: the new analysis has its own initial plan, built from
-    accounting the user has not seen. Carrying the overlay across would attach
-    their decision to a different candidate set, so the client is told to send
-    it separately.
+    Both kinds at once: a fact overlay is decided against candidate accounting
+    the new analysis has not produced yet, so riding it on a classification
+    decision would attach the user's decision to a different candidate set. It
+    stays a second command, and the refusal leaves no row anywhere.
 
     Nothing at all: an empty form would create a second identical plan, putting
     a decision in the history that nobody made.
 
     A value outside its closed set: refused as a request error before a command
-    is built. Untyped, it reached `ProfileName(...)` as a bare `ValueError` that
-    no handler catches, so ordinary user input answered with a 500.
+    is built, on both routes that accept a classification override. Untyped, it
+    reached `ProfileName(...)` as a bare `ValueError`, so ordinary input
+    answered with a 500.
+
+    Knowledge that moved: the candidate accounting the user decided against is
+    no longer the one the plan would contain.
+
+    Unnamed or moved sources: a decision names the analysis and plan it was
+    made against, or it would be applied to whatever is active when it
+    arrives. A missing plan token is a malformed request (412); a token naming
+    a plan or analysis that has since moved is the lost race (409), and the
+    refused analysis write leaves the replacement active.
     """
     application_id = _application(
-        api_worker.services, "Both Branches Co", job_text=AMBIGUOUS_HEBREW_JOB
+        api_paused.services, "Refused Decisions Co", job_text=RIVERSIDE_POSTING
     )
     outputs = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
+        api_paused,
+        application_id,
+        transaction_manager,
+        application_projection_reader,
+        **RIVERSIDE_ANALYSIS,
     )
+    analysis_id = outputs["job_analysis"]
+    decisions_path = f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions"
+    plans_path = f"{API_PREFIX}/analyses/{analysis_id}/selection-plans"
+    named = {
+        "application_id": application_id,
+        "expected_analysis_id": analysis_id,
+        "expected_selection_plan_id": outputs["selection_plan"],
+    }
 
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_analysis_id": outputs["job_analysis"],
-            "expected_selection_plan_id": outputs["selection_plan"],
+    def post(path: str, payload: dict):
+        return api_paused.client.post(path, json=payload, headers=MUTATION_HEADERS)
+
+    before = persisted_counts(database_engine)
+    both = post(
+        decisions_path,
+        {
+            **named,
             "profile_override": "account-manager",
             "excluded_fact_ids": ["sales.achievement.retention"],
         },
-        headers=MUTATION_HEADERS,
     )
+    assert both.status_code == 412, both.text
+    assert both.json()["code"] == "PRECONDITION_FAILED"
+    assert "fact overlay" in both.json()["detail"]
+    assert persisted_counts(database_engine) == before
 
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "PRECONDITION_FAILED"
-
-    empty_application_id = _application(api_worker.services, "Empty Decision Co")
-    empty_outputs = _existing_analysis(
-        api_worker, empty_application_id, transaction_manager, application_projection_reader
-    )
-
-    empty = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{empty_outputs['job_analysis']}/apply-decisions",
-        json={
-            "application_id": empty_application_id,
-            "expected_analysis_id": empty_outputs["job_analysis"],
-            "expected_selection_plan_id": empty_outputs["selection_plan"],
-        },
-        headers=MUTATION_HEADERS,
-    )
-
+    empty = post(decisions_path, named)
     assert empty.status_code == 412, empty.text
 
-    # Both routes that accept a classification override, so neither can be
-    # typed and the other left open.
-    snapshot_id = _state(api_worker, application_id)["active_job_snapshot_id"]
-    outside_the_set = [
-        (
-            f"{API_PREFIX}/analyses/{outputs['job_analysis']}/apply-decisions",
-            {
-                "application_id": application_id,
-                "expected_analysis_id": outputs["job_analysis"],
-                "expected_selection_plan_id": outputs["selection_plan"],
-                "profile_override": "not-a-profile",
-            },
-        ),
+    snapshot_id = _state(api_paused, application_id)["active_job_snapshot_id"]
+    for path, payload in [
+        (decisions_path, {**named, "profile_override": "not-a-profile"}),
         (
             f"{API_PREFIX}/applications/{application_id}/analyses",
             {"job_snapshot_id": snapshot_id, "profile_override": "not-a-profile"},
         ),
-    ]
-    for path, payload in outside_the_set:
-        refused = api_worker.client.post(path, json=payload, headers=MUTATION_HEADERS)
-
+    ]:
+        refused = post(path, payload)
         assert refused.status_code == 422, (path, refused.text)
+
+    for expected_field, expected_source in [
+        ("expected_facts_version", "Facts store"),
+        ("expected_profile_version", "Profile store"),
+    ]:
+        moved = post(
+            plans_path,
+            {"application_id": application_id, expected_field: "a-version-that-never-existed"},
+        )
+        assert moved.status_code == 412, moved.text
+        assert expected_source in moved.json()["detail"]
+
+    unnamed_plan = post(
+        decisions_path,
+        {
+            "application_id": application_id,
+            "expected_analysis_id": analysis_id,
+            "pinned_fact_ids": ["sales.summary.new_business"],
+        },
+    )
+    assert unnamed_plan.status_code == 412, unnamed_plan.text
+    assert "expected_selection_plan_id" in unnamed_plan.text
+
+    unnamed_analysis = post(
+        decisions_path,
+        {
+            "application_id": application_id,
+            "expected_selection_plan_id": outputs["selection_plan"],
+            "profile_override": "account-manager",
+        },
+    )
+    assert unnamed_analysis.status_code == 422, unnamed_analysis.text
+
+    # A selection overlay naming both sources goes through; it is what moves
+    # the plan the next request still names.
+    pinned = post(decisions_path, {**named, "pinned_fact_ids": ["sales.summary.new_business"]})
+    assert pinned.status_code == 201, pinned.text
+
+    stale_plan = post(decisions_path, {**named, "pinned_fact_ids": ["sales.summary.account"]})
+    assert stale_plan.status_code == 409, stale_plan.text
+    assert "moved since this decision was made" in stale_plan.text
+
+    replacement = _existing_analysis(
+        api_paused, application_id, transaction_manager, application_projection_reader
+    )
+    with transaction_manager.read() as tx:
+        analyses_before = len(application_projection_reader.analyses(tx, application_id))
+    stale_analysis = post(
+        decisions_path,
+        {
+            **named,
+            "expected_selection_plan_id": pinned.json()["selection_plan_id"],
+            "emphasis_override": "new-business",
+        },
+    )
+    assert stale_analysis.status_code == 409, stale_analysis.text
+    assert "active JobAnalysis moved" in stale_analysis.text
+    with transaction_manager.read() as tx:
+        assert len(application_projection_reader.analyses(tx, application_id)) == analyses_before
+    assert _state(api_paused, application_id)["active_analysis_id"] == replacement["job_analysis"]
 
 
 # --- POST /analyses/{id}/selection-plans -------------------------------------
 
 
-def test_the_deterministic_plan_endpoint_returns_the_plan_itself(
+def test_the_deterministic_plan_endpoint_returns_the_plan_and_its_readable_accounting(
     api_worker, transaction_manager, application_projection_reader
 ) -> None:
     """`201`, synchronously, with no provider anywhere near it (§13)."""
@@ -446,6 +450,17 @@ def test_the_deterministic_plan_endpoint_returns_the_plan_itself(
     outputs = _existing_analysis(
         api_worker, application_id, transaction_manager, application_projection_reader
     )
+
+    initial = api_worker.client.get(f"{API_PREFIX}/selection-plans/{outputs['selection_plan']}")
+    assert initial.status_code == 200, initial.text
+    initial_body = initial.json()
+    assert initial_body["id"] == outputs["selection_plan"]
+    assert initial_body["job_analysis_id"] == outputs["job_analysis"]
+    assert initial_body["candidates"]
+    assert all(candidate["text"] for candidate in initial_body["candidates"])
+    assert any(candidate["user_selectable"] for candidate in initial_body["candidates"])
+    assert any(not candidate["user_selectable"] for candidate in initial_body["candidates"])
+
     with transaction_manager.read() as tx:
         original = application_projection_reader.selection_plan(tx, outputs["selection_plan"])
     pinned = next(
@@ -477,60 +492,6 @@ def test_the_deterministic_plan_endpoint_returns_the_plan_itself(
         _state(api_worker, application_id)["active_selection_plan_id"]
         == (body["selection_plan_id"])
     )
-
-
-def test_selection_plan_detail_returns_readable_candidate_accounting(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    application_id = _application(api_worker.services, "Selection Detail Co")
-    outputs = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )
-
-    response = api_worker.client.get(f"{API_PREFIX}/selection-plans/{outputs['selection_plan']}")
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["id"] == outputs["selection_plan"]
-    assert body["job_analysis_id"] == outputs["job_analysis"]
-    assert body["candidates"]
-    assert all(candidate["text"] for candidate in body["candidates"])
-    assert any(candidate["user_selectable"] for candidate in body["candidates"])
-    assert any(not candidate["user_selectable"] for candidate in body["candidates"])
-
-
-@pytest.mark.parametrize(
-    ("expected_field", "expected_source"),
-    [
-        ("expected_facts_version", "Facts store"),
-        ("expected_profile_version", "Profile store"),
-    ],
-)
-def test_a_plan_built_against_knowledge_that_has_moved_is_refused(
-    api_worker,
-    expected_field: str,
-    expected_source: str,
-    transaction_manager,
-    application_projection_reader,
-) -> None:
-    """The optimistic check: the candidate accounting the user decided against
-    is no longer the one this plan would contain."""
-    application_id = _application(api_worker.services, "Moved Knowledge Co")
-    analysis_id = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )["job_analysis"]
-
-    response = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{analysis_id}/selection-plans",
-        json={
-            "application_id": application_id,
-            expected_field: "a-version-that-never-existed",
-        },
-        headers=MUTATION_HEADERS,
-    )
-
-    assert response.status_code == 412, response.text
-    assert expected_source in response.json()["detail"]
 
 
 def test_a_selection_plan_cannot_make_a_historical_analysis_active_by_accident(
@@ -580,204 +541,6 @@ def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(
 
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "PRECONDITION_FAILED"
-
-
-def _active_plan_id(
-    api_worker, application_id: str, transaction_manager, application_projection_reader
-) -> str:
-    with transaction_manager.read() as tx:
-        return application_projection_reader.latest_selection_plan(tx, application_id).id
-
-
-RIVERSIDE_POSTING = (
-    "About the job\n"
-    "Riverside built an AI-powered platform for content creators.\n\n"
-    "Requirements:\n\n"
-    "1+ years of sales closing experience in the market at a technology company, "
-    "with a track record of top performance (must).\n"
-    "Native English speaker (multiple languages are a plus).\n"
-)
-
-
-RIVERSIDE_ANALYSIS = {
-    "requirements": [
-        _unmet_requirement(
-            "1+ years of sales closing experience in the market at a technology company",
-            "riverside-tech-sales",
-        ),
-        _unmet_requirement("Native English speaker", "riverside-native-english"),
-    ],
-}
-
-
-def _pin(
-    api_worker,
-    application_id,
-    analysis_id,
-    fact_ids,
-    transaction_manager,
-    application_projection_reader,
-    **extra,
-):
-    """A plan-replacing decision the way a client must send it: naming the plan shown.
-
-    A pin replaces the SelectionPlan without touching the analysis, which is
-    exactly the write the optimistic check guards. Gap acceptances used to be
-    the vehicle for these tests; the check they exercised is unchanged.
-    """
-    body = {
-        "application_id": application_id,
-        "expected_analysis_id": analysis_id,
-        "pinned_fact_ids": list(fact_ids),
-        **extra,
-    }
-    body.setdefault(
-        "expected_selection_plan_id",
-        _active_plan_id(
-            api_worker, application_id, transaction_manager, application_projection_reader
-        ),
-    )
-    return api_worker.client.post(
-        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
-        json=body,
-        headers=MUTATION_HEADERS,
-    )
-
-
-def test_deciding_without_naming_both_active_sources_is_refused(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    """A decision has to name the analysis and plan it was made against.
-
-    Without it the decision is applied to whatever plan is active at the
-    moment it arrives, which is the silent rebase the field exists to prevent.
-    The plan is conditional only on one existing; normal analyses always create
-    an initial plan, so omitting it is a stale-context conflict even for an
-    overlay that replaces nothing else.
-    """
-    application_id = _application(
-        api_worker.services, "Unnamed Plan Co", job_text=RIVERSIDE_POSTING
-    )
-    outputs = _existing_analysis(
-        api_worker,
-        application_id,
-        transaction_manager,
-        application_projection_reader,
-        **RIVERSIDE_ANALYSIS,
-    )
-    analysis_id = outputs["job_analysis"]
-
-    refused = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_analysis_id": analysis_id,
-            "pinned_fact_ids": ["sales.summary.new_business"],
-        },
-        headers=MUTATION_HEADERS,
-    )
-    # A missing token is a malformed request, not a lost race: 412. A token
-    # naming a plan that has since moved is the race, and that is the 409
-    # `test_naming_a_plan_that_has_been_replaced_is_refused` asserts.
-    assert refused.status_code == 412, refused.text
-    assert "expected_selection_plan_id" in refused.text
-
-    missing_analysis = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_selection_plan_id": outputs["selection_plan"],
-            "profile_override": "account-manager",
-        },
-        headers=MUTATION_HEADERS,
-    )
-    assert missing_analysis.status_code == 422, missing_analysis.text
-
-    # A selection overlay names both sources too.
-    with transaction_manager.read() as tx:
-        first_selected_fact_id = application_projection_reader.selection_plan(
-            tx, outputs["selection_plan"]
-        ).plan.selected_fact_ids[0]
-    overlay = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{analysis_id}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_analysis_id": analysis_id,
-            "expected_selection_plan_id": outputs["selection_plan"],
-            "pinned_fact_ids": [first_selected_fact_id],
-        },
-        headers=MUTATION_HEADERS,
-    )
-    assert overlay.status_code == 201, overlay.text
-
-
-def test_naming_a_plan_that_has_been_replaced_is_refused(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    """The decision was made against a plan that is no longer active."""
-    application_id = _application(api_worker.services, "Moved Plan Co", job_text=RIVERSIDE_POSTING)
-    outputs = _existing_analysis(
-        api_worker,
-        application_id,
-        transaction_manager,
-        application_projection_reader,
-        **RIVERSIDE_ANALYSIS,
-    )
-    analysis_id = outputs["job_analysis"]
-
-    first = _pin(
-        api_worker,
-        application_id,
-        analysis_id,
-        ["sales.summary.new_business"],
-        transaction_manager,
-        application_projection_reader,
-    )
-    assert first.status_code == 201, first.text
-
-    stale = _pin(
-        api_worker,
-        application_id,
-        analysis_id,
-        ["sales.summary.account"],
-        transaction_manager,
-        application_projection_reader,
-        expected_selection_plan_id=outputs["selection_plan"],
-    )
-    assert stale.status_code == 409, stale.text
-    assert "moved since this decision was made" in stale.text
-
-
-def test_naming_an_analysis_that_has_been_replaced_is_refused_without_writing(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    application_id = _application(api_worker.services, "Moved Analysis Co")
-    first = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )
-    second = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )
-    with transaction_manager.read() as tx:
-        before = len(application_projection_reader.analyses(tx, application_id))
-
-    stale = api_worker.client.post(
-        f"{API_PREFIX}/analyses/{first['job_analysis']}/apply-decisions",
-        json={
-            "application_id": application_id,
-            "expected_analysis_id": first["job_analysis"],
-            "expected_selection_plan_id": first["selection_plan"],
-            "emphasis_override": "new-business",
-        },
-        headers=MUTATION_HEADERS,
-    )
-
-    assert stale.status_code == 409, stale.text
-    assert "active JobAnalysis moved" in stale.text
-    with transaction_manager.read() as tx:
-        after = len(application_projection_reader.analyses(tx, application_id))
-    assert after == before
-    assert _state(api_worker, application_id)["active_analysis_id"] == second["job_analysis"]
 
 
 def test_a_context_operation_blocks_voluntary_editing_and_the_command(

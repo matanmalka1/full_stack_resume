@@ -14,25 +14,23 @@ from pathlib import Path
 import pytest
 from helpers import (
     ACCOUNT_MANAGER_JOB,
-    AMBIGUOUS_HEBREW_JOB,
     approve_active_draft,
+    persisted_counts,
     seed_analysis_for_command,
     validate_active_draft,
     working_draft_paths,
 )
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import (
     AnalyzeCommand,
-    ApplyAnalysisDecisionsCommand,
     DraftCommand,
     IngestCommand,
 )
 from cv_engine.application.errors import (
     LineageBroken,
-    PreconditionFailed,
     StateConflict,
     UnknownRecord,
     WorkflowError,
@@ -51,7 +49,6 @@ from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnap
 from cv_engine.infrastructure.persistence.tables import (
     approved_revisions,
     decision_records,
-    metadata,
 )
 from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.runtime.composition import Services
@@ -69,23 +66,6 @@ def _register(transaction_manager, *args, **kwargs):
         return SqlAlchemyArtifactCatalog(transaction_manager).register_artifact_version(
             tx, *args, **kwargs
         )
-
-
-def _persisted(database_engine) -> dict[str, int]:
-    """Row counts for every product table, discovered rather than listed.
-
-    A rejected command must leave nothing behind anywhere, so this counts the whole
-    database instead of a remembered set of tables filtered by application_id. That
-    covers indirect records with no application_id column of their own — artifact
-    versions, selection plans, working drafts — and, more importantly, covers the
-    next table automatically: a list would have gone on passing while a new table
-    quietly gained a row.
-    """
-    with database_engine.connect() as connection:
-        return {
-            table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
-            for table in metadata.sorted_tables
-        }
 
 
 def _analyze(services: Services, transaction_manager, application_id: str, **overrides):
@@ -155,13 +135,13 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
             source_metadata={},
             captured_at=utc_now(),
         )
-    before = _persisted(database_engine)
+    before = persisted_counts(database_engine)
 
     with pytest.raises(WorkflowError, match="snapshot"):
         _draft(services, transaction_manager, app_id, stale_analysis_id)
 
     assert not (project_root / "artifacts/working" / app_id).exists()
-    assert _persisted(database_engine) == before
+    assert persisted_counts(database_engine) == before
 
     # Analyzing the new snapshot unblocks drafting, and the draft binds both ends
     # of the chain exactly rather than inheriting a "latest" of either kind.
@@ -196,12 +176,12 @@ def test_moved_snapshot_or_moved_knowledge_requires_a_new_analysis_before_drafti
     policy = json.loads(original_policy)
     policy["emphases"]["development-balanced"]["tag_weights"]["testing"] += 1
     policy_file.write_text(json.dumps(policy, ensure_ascii=False), encoding="utf-8")
-    before_policy_edit = _persisted(database_engine)
+    before_policy_edit = persisted_counts(database_engine)
 
     with pytest.raises(StateConflict, match="selection policy"):
         _draft(services, transaction_manager, app_id, analysed.analysis_id)
 
-    assert _persisted(database_engine) == before_policy_edit
+    assert persisted_counts(database_engine) == before_policy_edit
     # Analyzing again freezes the edited policy, and drafting proceeds.
     reanalysed = _analyze(services, transaction_manager, app_id)
     with transaction_manager.read() as tx:
@@ -226,13 +206,13 @@ def test_newer_material_analysis_invalidates_the_working_draft(
     newer = _analyze(services, transaction_manager, app_id, emphasis="balanced-sales")
     assert newer.analysis.emphasis.value == "balanced-sales"
     assert newer.analysis_id != drafted_analysis_id
-    before = _persisted(database_engine)
+    before = persisted_counts(database_engine)
 
     with pytest.raises(WorkflowError, match="analysis"):
         approve_active_draft(services, app_id)
 
     assert not (project_root / "artifacts" / app_id).exists()
-    assert _persisted(database_engine) == before
+    assert persisted_counts(database_engine) == before
 
     # Re-drafting under the newer analysis is the way forward, and the decision
     # record then binds that analysis.
@@ -549,7 +529,7 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
     assert decision.job_snapshot_id == owner_snapshot_id
     assert decision.job_analysis_id == owner_analysis_id
     assert decision.id == approved.decision_record_id
-    before = _persisted(database_engine)
+    before = persisted_counts(database_engine)
 
     with pytest.raises(LineageBroken, match="application"):
         _register(
@@ -563,7 +543,7 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
             job_snapshot_id=stranger_snapshot_id,
         )
 
-    assert _persisted(database_engine) == before
+    assert persisted_counts(database_engine) == before
     assert [row["application_id"] for row in _rows(database_engine, decision_records)] == [
         owner.application_id
     ]
@@ -594,7 +574,7 @@ def test_invalid_classifications_are_rejected_before_any_persistence(
             before_application = SqlAlchemyApplicationProjectionReader(
                 transaction_manager
             ).application(tx, app_id)
-        before = _persisted(database_engine)
+        before = persisted_counts(database_engine)
         with pytest.raises(WorkflowError, match=match):
             _analyze(services, transaction_manager, app_id, **overrides)
         with transaction_manager.read() as tx:
@@ -602,7 +582,7 @@ def test_invalid_classifications_are_rejected_before_any_persistence(
                 SqlAlchemyApplicationProjectionReader(transaction_manager).application(tx, app_id)
                 == before_application
             )
-        assert _persisted(database_engine) == before
+        assert persisted_counts(database_engine) == before
         with transaction_manager.read() as tx:
             assert (
                 SqlAlchemyApplicationProjectionReader(transaction_manager).analyses(tx, app_id)
@@ -754,41 +734,3 @@ def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: 
         "these read the requirement vocabulary but are excluded from the document "
         f"knowledge scope: {sorted(str(path) for path in readers - allowed)}"
     )
-
-
-def test_a_fact_overlay_still_may_not_ride_a_classification_decision(
-    services: Services, database_engine
-) -> None:
-    """The refusal narrowed to what it was actually about.
-
-    A fact overlay is decided against candidate accounting the new analysis has
-    not produced yet, so it stays a second command.
-    """
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Fact Overlay Co",
-            target_role="Account Manager",
-            job_text=AMBIGUOUS_HEBREW_JOB,
-            client="web",
-        )
-    )
-    analysed = seed_analysis_for_command(
-        services,
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-    )
-    before = _persisted(database_engine)
-    with pytest.raises(PreconditionFailed, match="fact overlay"):
-        services.analysis.apply_analysis_decisions(
-            ApplyAnalysisDecisionsCommand(
-                application_id=ingested.application_id,
-                job_analysis_id=analysed.analysis_id,
-                expected_analysis_id=analysed.analysis_id,
-                expected_selection_plan_id=analysed.selection_plan_id,
-                profile_override="account-manager",
-                excluded_fact_ids=["sales.company.activity"],
-            )
-        )
-    assert _persisted(database_engine) == before

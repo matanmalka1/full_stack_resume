@@ -33,23 +33,20 @@ def _requirement(**changes) -> Requirement:
     )
 
 
-def test_a_posting_nothing_was_read_from_has_no_fit() -> None:
-    """`None`, not zero and not 1.0.
+def test_an_unread_requirement_earns_no_credit_but_stays_in_the_denominator() -> None:
+    """Nothing read is `None`; something unread still counts against the score.
 
-    A score claims an assessment happened. Nothing was assessed here, and both
-    a flattering default and a punishing one would assert something about the
-    candidate that no reading produced.
+    A posting nothing was read from has no fit - not zero and not 1.0. A score
+    claims an assessment happened, and both a flattering default and a
+    punishing one would assert something no reading produced.
+
+    Once something was read, dropping `unknown` from the denominator would make
+    "we could not tell" score exactly like "we checked and it is met", and an
+    incompletely read posting would outscore a fully read one.
     """
     assert fit_score([]) is None
     assert fit_level([]) is FitLevel.UNKNOWN
 
-
-def test_an_unread_requirement_earns_no_credit_but_stays_in_the_denominator() -> None:
-    """Otherwise an incompletely read posting outscores a fully read one.
-
-    Dropping `unknown` from the denominator would make "we could not tell"
-    score exactly like "we checked and it is met".
-    """
     one_of_two = [_requirement(), _requirement(requirement_id="r2", coverage="unknown")]
     assert fit_score(one_of_two) == 0.5
     assert fit_score([_requirement()]) == 1.0
@@ -116,49 +113,40 @@ def test_a_matched_requirement_projects_no_gap(fact_store) -> None:
     assert gaps([_requirement()], fact_store) == []
 
 
-def test_a_single_hard_gap_caps_the_level_at_medium_however_well_the_rest_scored(
-    fact_store,
+@pytest.mark.parametrize(
+    ("matched_count", "shortfalls", "level", "hard_gap_ids"),
+    [
+        (9, [("gap", "unsupported", None)], FitLevel.MEDIUM, ["gap"]),
+        (
+            18,
+            [("gap-1", "unsupported", None), ("gap-2", "unsupported", None)],
+            FitLevel.LOW,
+            ["gap-1", "gap-2"],
+        ),
+        (9, [("minor-gap", "partial", "minor")], FitLevel.HIGH, []),
+    ],
+    ids=["one-hard-gap-caps-at-medium", "two-hard-gaps-cap-at-low", "minor-partial-no-cap"],
+)
+def test_hard_gaps_cap_the_level_however_well_the_rest_scored(
+    fact_store, matched_count, shortfalls, level, hard_gap_ids
 ) -> None:
-    """One demanded requirement the facts contradict deducts, but not to LOW.
+    """Every case scores above the high threshold; only hard gaps cap the level.
 
-    Nine matched requirements and one unsupported demand still score above the
-    high threshold; the level caps at MEDIUM because the posting asked for
-    something the candidate cannot show - a single failure is not yet the
-    compounding pattern that would write the candidate off entirely.
+    One demanded requirement the facts contradict caps at MEDIUM, not LOW: a
+    single failure is not yet the compounding pattern that would write the
+    candidate off. Two do cap at LOW. A minor partial shortfall is not a hard
+    gap and caps nothing.
     """
-    requirements = [_requirement(requirement_id=f"r{index}") for index in range(9)]
-    requirements.append(_requirement(requirement_id="gap", coverage="unsupported"))
-    assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
-    assert fit_level(requirements) is FitLevel.MEDIUM
-    assert [gap.requirement_id for gap in hard_gaps(requirements, fact_store)] == ["gap"]
-
-
-def test_two_hard_gaps_cap_the_level_at_low_however_well_the_rest_scored() -> None:
-    """Compounding failures, not just one, justify writing the candidate off.
-
-    Eighteen matched requirements and two unsupported demands still score
-    above the high threshold; the level is LOW because the posting asked for
-    several things the candidate cannot show.
-    """
-    requirements = [_requirement(requirement_id=f"r{index}") for index in range(18)]
-    requirements.append(_requirement(requirement_id="gap-1", coverage="unsupported"))
-    requirements.append(_requirement(requirement_id="gap-2", coverage="unsupported"))
-    assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
-    assert fit_level(requirements) is FitLevel.LOW
-
-
-def test_a_minor_partial_demand_does_not_cap_an_otherwise_high_fit() -> None:
-    requirements = [_requirement(requirement_id=f"r{index}") for index in range(9)]
-    requirements.append(
-        _requirement(
-            requirement_id="minor-gap",
-            coverage="partial",
-            shortfall_severity="minor",
-        )
-    )
+    requirements = [_requirement(requirement_id=f"r{index}") for index in range(matched_count)]
+    for requirement_id, coverage, shortfall_severity in shortfalls:
+        changes = {"requirement_id": requirement_id, "coverage": coverage}
+        if shortfall_severity is not None:
+            changes["shortfall_severity"] = shortfall_severity
+        requirements.append(_requirement(**changes))
 
     assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
-    assert fit_level(requirements) is FitLevel.HIGH
+    assert fit_level(requirements) is level
+    assert [gap.requirement_id for gap in hard_gaps(requirements, fact_store)] == hard_gap_ids
 
 
 def test_a_gap_exposes_the_analysis_shortfall_reason(fact_store) -> None:

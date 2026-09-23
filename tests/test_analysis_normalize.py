@@ -9,6 +9,8 @@ about the candidate, and none of them discards the rest of the reading.
 
 from __future__ import annotations
 
+import pytest
+
 from cv_engine.domain.analysis.normalize import normalize_analysis_proposal
 from cv_engine.domain.analysis.projection import gaps
 from cv_engine.domain.contracts.analysis import Coverage
@@ -164,125 +166,68 @@ def test_a_noncanonical_fact_is_dropped_and_positive_coverage_becomes_unknown(
     }
 
 
-def test_one_exact_quote_has_verified_source_and_snapshot_offsets(
-    fact_store, profile_store, requirement_concepts
+# Five spellings of a quote against a posting, each a distinct outcome:
+# exact carries offsets; not found keeps the requirement unattested and
+# disclosed; a repeat stays verified without asserting which occurrence;
+# different whitespace is not two occurrences; and a quote wrapped *and*
+# repeated is ambiguous in either spelling. Matching is case-sensitive by
+# design, which is why the repeated postings keep one case.
+@pytest.mark.parametrize(
+    ("posting", "quote", "match", "quote_issues"),
+    [
+        (JOB, "- Comfortable presenting to customers.", "exact", set()),
+        (JOB, "Willingness to relocate to Mars.", "not_found", {"quote_not_found"}),
+        (
+            "Requirements:\n- required\n- Something else, required\n",
+            "required",
+            "ambiguous",
+            {"quote_ambiguous"},
+        ),
+        (JOB, "Comfortable presenting    to customers.", "normalized", set()),
+        (
+            "Requirements:\n- presenting   to customers.\n- Also: presenting to\n  customers.\n",
+            "presenting to customers.",
+            "ambiguous",
+            {"quote_ambiguous"},
+        ),
+    ],
+    ids=["exact", "not-found", "repeated", "wrapped", "wrapped-and-repeated"],
+)
+def test_quote_attestation_matrix(
+    fact_store, profile_store, requirement_concepts, posting, quote, match, quote_issues
 ) -> None:
-    quote = "- Comfortable presenting to customers."
+    """A requirement the engine could not locate is still a requirement.
+
+    Failing to match wording is a statement about the match, not about the
+    requirement, so every case keeps it. Only `exact` carries offsets; the
+    other verified answers deliberately assert no span, and still count toward
+    source coverage - the missing span is not the question.
+    """
     analysis = _normalize(
         _proposal(ProposedRequirement(text=quote)),
         fact_store,
         profile_store,
         requirement_concepts,
-    )
-
-    source = analysis.requirements[0].source
-    assert source is not None
-    assert source.verified is True
-    assert source.match == "exact"
-    assert (source.start, source.end) == (JOB.index(quote), JOB.index(quote) + len(quote))
-    assert JOB[source.start : source.end] == quote
-
-
-def test_a_quote_the_posting_does_not_carry_is_kept_as_a_warning(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    """A requirement the engine could not locate is still a requirement.
-
-    The posting is what the engine can check, and failing to match wording is a
-    statement about the match, not about the requirement. It is kept, left
-    without an attestation, and disclosed.
-    """
-    analysis = _normalize(
-        _proposal(ProposedRequirement(text="Willingness to relocate to Mars.")),
-        fact_store,
-        profile_store,
-        requirement_concepts,
+        source_text=posting,
     )
 
     assert len(analysis.requirements) == 1
     source = analysis.requirements[0].source
     assert source is not None
-    assert source.verified is False
-    assert source.match == "not_found"
-    assert source.start is None and source.end is None
-    assert {issue.code for issue in analysis.issues} == {"quote_not_found"}
-
-
-def test_a_quote_the_posting_repeats_stays_verified_without_offsets(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    """Repetition does not make the text less present.
-
-    The old gate refused a repeated quote outright. Here the claim the engine
-    can prove - the posting says this - is kept, and the one it cannot - which
-    occurrence - is simply not asserted.
-    """
-    posting = "Requirements:\n- required\n- Something else, required\n"
-    analysis = _normalize(
-        _proposal(ProposedRequirement(text="required")),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-        source_text=posting,
-    )
-
-    assert analysis.requirements[0].source is not None
-    assert "quote_ambiguous" in {issue.code for issue in analysis.issues}
-    assert "quote_not_found" not in {issue.code for issue in analysis.issues}
-    # Verified, and counted as verified: the missing span is not the question.
-    assert analysis.requirements[0].source.match == "ambiguous"
-    assert analysis.requirements[0].source.verified is True
-    assert analysis.source_coverage == 1.0
-
-
-def test_a_posting_that_wraps_the_quote_is_matched_without_being_called_ambiguous(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    """Different whitespace is not two occurrences.
-
-    Both answers come back without offsets, and inferring the reason from that
-    absence reported a wrapped line as an ambiguous one and, worse, counted it
-    as unanchored.
-    """
-    analysis = _normalize(
-        _proposal(ProposedRequirement(text="Comfortable presenting    to customers.")),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-    )
-
-    assert analysis.requirements[0].source.match == "normalized"
-    assert analysis.requirements[0].source.verified is True
-    assert "quote_ambiguous" not in {issue.code for issue in analysis.issues}
-    assert "quote_not_found" not in {issue.code for issue in analysis.issues}
-    assert analysis.source_coverage == 1.0
-
-
-def test_a_wrapped_quote_that_repeats_is_ambiguous_not_merely_normalized(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    """Repetition is repetition in either spelling.
-
-    Matching after collapsing whitespace used to ask only whether the text was
-    in there. A quote the posting wraps *and* states twice answered yes on its
-    first occurrence and came back as a clean single match, so the analysis
-    claimed a definite source for a requirement stated in two places.
-    """
-    # Same wording twice, wrapped differently, and in the same case: matching
-    # is case-sensitive by design, so a capital would have made these two
-    # different strings rather than one repeated one.
-    posting = "Requirements:\n- presenting   to customers.\n- Also: presenting to\n  customers.\n"
-    analysis = _normalize(
-        _proposal(ProposedRequirement(text="presenting to customers.")),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-        source_text=posting,
-    )
-
-    assert analysis.requirements[0].source is not None
-    assert analysis.requirements[0].source.match == "ambiguous"
-    assert "quote_ambiguous" in {issue.code for issue in analysis.issues}
+    assert source.match == match
+    verified = match != "not_found"
+    assert source.verified is verified
+    assert analysis.source_coverage == (1.0 if verified else 0.0)
+    issue_codes = {issue.code for issue in analysis.issues}
+    assert {code for code in issue_codes if code.startswith("quote_")} == quote_issues
+    if match == "not_found":
+        assert issue_codes == {"quote_not_found"}
+    if match == "exact":
+        start = posting.index(quote)
+        assert (source.start, source.end) == (start, start + len(quote))
+        assert posting[source.start : source.end] == quote
+    else:
+        assert source.start is None and source.end is None
 
 
 def test_the_record_carries_why_the_reading_was_narrowed(
@@ -317,7 +262,7 @@ def test_the_record_carries_why_the_reading_was_narrowed(
     assert restored.requirements[0].source.match == "exact"
 
 
-def test_a_restated_requirement_keeps_the_stronger_demand(
+def test_duplicate_merge_uses_the_full_importance_and_coverage_orders(
     fact_store, profile_store, requirement_concepts
 ) -> None:
     """Importance merges upward while coverage merges downward.
@@ -327,7 +272,7 @@ def test_a_restated_requirement_keeps_the_stronger_demand(
     weighting dropped and a hard gap disappeared, and the analysis got more
     flattering for no reason but a restatement.
     """
-    analysis = _normalize(
+    restated = _normalize(
         _proposal(
             ProposedRequirement(
                 text="- Experience working with Web-based systems - required.",
@@ -345,84 +290,10 @@ def test_a_restated_requirement_keeps_the_stronger_demand(
         profile_store,
         requirement_concepts,
     )
+    assert restated.requirements[0].importance == "mandatory"
+    assert restated.requirements[0].coverage == "unsupported"
+    assert [gap.severity for gap in gaps(restated.requirements, fact_store)] == ["hard"]
 
-    requirement = analysis.requirements[0]
-    assert requirement.importance == "mandatory"
-    assert requirement.coverage == "unsupported"
-    assert [gap.severity for gap in gaps(analysis.requirements, fact_store)] == ["hard"]
-
-
-def test_a_duplicate_issue_points_at_the_proposal_the_provider_sent(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    """`requirement_index` addresses the provider's list, not a merged one.
-
-    The preserved response is the only list a reader can open, so an index into
-    the post-merge list would name entries that exist nowhere.
-    """
-    analysis = _normalize(
-        _proposal(
-            ProposedRequirement(text="- Comfortable presenting to customers."),
-            ProposedRequirement(text="- Sales experience in the software industry."),
-            ProposedRequirement(text="- Comfortable presenting to customers."),
-        ),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-    )
-
-    duplicate = next(issue for issue in analysis.issues if issue.code == "duplicate_requirement")
-    assert duplicate.requirement_index == 2
-    assert duplicate.details["merged_into_index"] == "0"
-
-
-def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    """A provider restating a requirement is one requirement.
-
-    Merging takes the lower coverage, because two readings that disagree are
-    not evidence for the more flattering one; the higher importance, because
-    that disagreement is about what the employer demanded; and the union of the
-    evidence, because both citations were offered for the same sentence.
-    """
-    analysis = _normalize(
-        _proposal(
-            ProposedRequirement(
-                text="- Comfortable presenting to customers.",
-                importance="mandatory",
-                coverage="matched",
-                fact_ids=[CANONICAL_FACT],
-            ),
-            ProposedRequirement(
-                text="-  Comfortable presenting to customers. ",
-                importance="preferred",
-                coverage="partial",
-                shortfall_severity="material",
-                shortfall_reason="A material part of the demand is not verified.",
-                fact_ids=["sales.cycle.account_management"],
-            ),
-        ),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-    )
-
-    requirement = analysis.requirements[0]
-    assert len(analysis.requirements) == 1
-    assert requirement.coverage == "partial"
-    assert requirement.shortfall_severity == "material"
-    assert requirement.importance == "mandatory"
-    assert set(requirement.supporting_fact_ids) == {
-        CANONICAL_FACT,
-        "sales.cycle.account_management",
-    }
-    assert "duplicate_requirement" in {issue.code for issue in analysis.issues}
-
-
-def test_duplicate_merge_uses_the_full_importance_and_coverage_orders(
-    fact_store, profile_store, requirement_concepts
-) -> None:
     quote = "- Comfortable presenting to customers."
     importance_cases: list[tuple[Importance, Importance, Importance]] = [
         ("unknown", "preferred", "preferred"),
@@ -469,6 +340,58 @@ def test_duplicate_merge_uses_the_full_importance_and_coverage_orders(
         assert analysis.requirements[0].coverage == expected
 
 
+def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
+    fact_store, profile_store, requirement_concepts
+) -> None:
+    """A provider restating a requirement is one requirement.
+
+    Merging takes the lower coverage, because two readings that disagree are
+    not evidence for the more flattering one; the higher importance, because
+    that disagreement is about what the employer demanded; and the union of the
+    evidence, because both citations were offered for the same sentence.
+
+    The duplicate issue's `requirement_index` addresses the provider's list,
+    not the merged one: the preserved response is the only list a reader can
+    open, so an index into the post-merge list would name entries that exist
+    nowhere.
+    """
+    analysis = _normalize(
+        _proposal(
+            ProposedRequirement(
+                text="- Comfortable presenting to customers.",
+                importance="mandatory",
+                coverage="matched",
+                fact_ids=[CANONICAL_FACT],
+            ),
+            ProposedRequirement(text="- Sales experience in the software industry."),
+            ProposedRequirement(
+                text="-  Comfortable presenting to customers. ",
+                importance="preferred",
+                coverage="partial",
+                shortfall_severity="material",
+                shortfall_reason="A material part of the demand is not verified.",
+                fact_ids=["sales.cycle.account_management"],
+            ),
+        ),
+        fact_store,
+        profile_store,
+        requirement_concepts,
+    )
+
+    requirement = analysis.requirements[0]
+    assert len(analysis.requirements) == 2
+    assert requirement.coverage == "partial"
+    assert requirement.shortfall_severity == "material"
+    assert requirement.importance == "mandatory"
+    assert set(requirement.supporting_fact_ids) == {
+        CANONICAL_FACT,
+        "sales.cycle.account_management",
+    }
+    duplicate = next(issue for issue in analysis.issues if issue.code == "duplicate_requirement")
+    assert duplicate.requirement_index == 2
+    assert duplicate.details["merged_into_index"] == "0"
+
+
 def test_a_canonical_boundary_still_caps_a_match(
     fact_store, profile_store, requirement_concepts
 ) -> None:
@@ -498,18 +421,39 @@ def test_a_canonical_boundary_still_caps_a_match(
     assert requirement.shortfall_severity == "material"
 
 
-def test_a_minor_partial_shortfall_survives_normalization(
-    fact_store, profile_store, requirement_concepts
+@pytest.mark.parametrize(
+    ("coverage", "shortfall_severity", "shortfall_reason", "expected_severity", "inconsistent"),
+    [
+        (
+            "partial",
+            "minor",
+            "The verified duration is slightly below the requested threshold.",
+            "minor",
+            False,
+        ),
+        ("matched", "minor", None, "none", True),
+        ("partial", "material", None, "unknown", True),
+    ],
+    ids=["explained-minor-partial", "matched-with-shortfall", "unexplained-material-partial"],
+)
+def test_a_shortfall_survives_only_when_consistent_with_its_coverage(
+    fact_store,
+    profile_store,
+    requirement_concepts,
+    coverage,
+    shortfall_severity,
+    shortfall_reason,
+    expected_severity,
+    inconsistent,
 ) -> None:
-    reason = "The verified duration is slightly below the requested threshold."
     analysis = _normalize(
         _proposal(
             ProposedRequirement(
                 text="- Comfortable presenting to customers.",
                 importance="mandatory",
-                coverage="partial",
-                shortfall_severity="minor",
-                shortfall_reason=reason,
+                coverage=coverage,
+                shortfall_severity=shortfall_severity,
+                shortfall_reason=shortfall_reason,
                 fact_ids=[CANONICAL_FACT],
             )
         ),
@@ -519,48 +463,8 @@ def test_a_minor_partial_shortfall_survives_normalization(
     )
 
     requirement = analysis.requirements[0]
-    assert requirement.shortfall_severity == "minor"
-    assert requirement.shortfall_reason == reason
-    assert "shortfall_inconsistent" not in {issue.code for issue in analysis.issues}
-
-
-def test_an_inconsistent_shortfall_is_narrowed_and_disclosed(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    analysis = _normalize(
-        _proposal(
-            ProposedRequirement(
-                text="- Comfortable presenting to customers.",
-                coverage="matched",
-                shortfall_severity="minor",
-                fact_ids=[CANONICAL_FACT],
-            )
-        ),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-    )
-
-    assert analysis.requirements[0].shortfall_severity == "none"
-    assert "shortfall_inconsistent" in {issue.code for issue in analysis.issues}
-
-
-def test_an_unexplained_material_partial_shortfall_becomes_unknown(
-    fact_store, profile_store, requirement_concepts
-) -> None:
-    analysis = _normalize(
-        _proposal(
-            ProposedRequirement(
-                text="- Comfortable presenting to customers.",
-                coverage="partial",
-                shortfall_severity="material",
-                fact_ids=[CANONICAL_FACT],
-            )
-        ),
-        fact_store,
-        profile_store,
-        requirement_concepts,
-    )
-
-    assert analysis.requirements[0].shortfall_severity == "unknown"
-    assert "shortfall_inconsistent" in {issue.code for issue in analysis.issues}
+    assert requirement.shortfall_severity == expected_severity
+    if shortfall_reason is not None:
+        assert requirement.shortfall_reason == shortfall_reason
+    issue_codes = {issue.code for issue in analysis.issues}
+    assert ("shortfall_inconsistent" in issue_codes) is inconsistent

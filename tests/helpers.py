@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sqlalchemy import func, select
+
 from cv_engine.application.commands import AnalyzeCommand, ApproveDraftCommand, ValidateDraftCommand
 from cv_engine.application.ports import DraftPaths
 from cv_engine.application.services.analysis.preparation import PreparedAnalysis
@@ -16,6 +18,7 @@ from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactio
 from cv_engine.infrastructure.persistence.draft_lifecycle import (
     SqlAlchemyDraftLifecycleRepository,
 )
+from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.paths import AppPaths
 
@@ -252,3 +255,20 @@ def artifact_version_and_path(
             tx, application_id, artifact_type, lifecycle_status
         )
     return version, artifact_path(services, version["path"])
+
+
+def persisted_counts(database_engine) -> dict[str, int]:
+    """Row counts for every product table, discovered rather than listed.
+
+    A rejected command must leave nothing behind anywhere, so this counts the whole
+    database instead of a remembered set of tables filtered by application_id. That
+    covers indirect records with no application_id column of their own — artifact
+    versions, selection plans, working drafts — and, more importantly, covers the
+    next table automatically: a list would have gone on passing while a new table
+    quietly gained a row.
+    """
+    with database_engine.connect() as connection:
+        return {
+            table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
+            for table in metadata.sorted_tables
+        }
