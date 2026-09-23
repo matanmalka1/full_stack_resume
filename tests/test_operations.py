@@ -210,7 +210,13 @@ def _complete_receipt(services, receipt_id, result):
         return services.draft_approval.receipts.complete_idempotency_receipt(tx, receipt_id, result)
 
 
-def test_operation_lifecycle_accepts_only_forward_transitions() -> None:
+def test_operation_lifecycle_transitions_are_forward_only_and_terminal_is_final() -> None:
+    """The domain transition table: forward only, terminal is final, actions derived.
+
+    Queued and running move forward to their listed targets; every terminal status
+    refuses every transition; and the actions a status offers are derived from the
+    lifecycle, including the terminal failures no retry can fix.
+    """
     transitions = [
         (OperationStatus.QUEUED, OperationStatus.RUNNING),
         (OperationStatus.QUEUED, OperationStatus.CANCELLED),
@@ -223,27 +229,12 @@ def test_operation_lifecycle_accepts_only_forward_transitions() -> None:
     for current, target in transitions:
         require_operation_transition(current, target)
 
-
-def test_terminal_operations_are_immutable() -> None:
     for terminal in list(OperationStatus)[2:]:
         assert is_terminal_operation(terminal)
         for target in OperationStatus:
             with pytest.raises(OperationContractError):
                 require_operation_transition(terminal, target)
 
-
-_OPERATION_ACTION_CASES = [
-    (OperationStatus.QUEUED, None, None, (OperationAction.CANCEL,)),
-    (OperationStatus.RUNNING, None, None, (OperationAction.CANCEL,)),
-    (OperationStatus.RUNNING, "2026-08-24T07:01:00Z", None, ()),
-    (OperationStatus.FAILED, None, None, (OperationAction.RETRY,)),
-    (OperationStatus.SUCCEEDED, None, None, (OperationAction.RETRY,)),
-    (OperationStatus.CANCELLED, None, None, (OperationAction.RETRY,)),
-    (OperationStatus.INTERRUPTED, None, None, (OperationAction.RETRY,)),
-]
-
-
-def test_operation_actions_are_derived_by_the_lifecycle() -> None:
     assert {case[0] for case in _OPERATION_ACTION_CASES} == set(OperationStatus)
     for status, cancellation_requested_at, failure_code, expected in _OPERATION_ACTION_CASES:
         assert (
@@ -267,6 +258,17 @@ def test_operation_actions_are_derived_by_the_lifecycle() -> None:
     )
 
 
+_OPERATION_ACTION_CASES = [
+    (OperationStatus.QUEUED, None, None, (OperationAction.CANCEL,)),
+    (OperationStatus.RUNNING, None, None, (OperationAction.CANCEL,)),
+    (OperationStatus.RUNNING, "2026-08-24T07:01:00Z", None, ()),
+    (OperationStatus.FAILED, None, None, (OperationAction.RETRY,)),
+    (OperationStatus.SUCCEEDED, None, None, (OperationAction.RETRY,)),
+    (OperationStatus.CANCELLED, None, None, (OperationAction.RETRY,)),
+    (OperationStatus.INTERRUPTED, None, None, (OperationAction.RETRY,)),
+]
+
+
 def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> None:
     common = {
         "application_id": "application-id",
@@ -285,7 +287,19 @@ def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> 
         CreateOperation(payload={"provider": {"api-key": "must-not-persist"}}, **common)
 
 
-def test_only_one_automatic_retry_is_allowed_for_transient_failures() -> None:
+def test_failure_classification_and_retry_budget(
+    services,
+    monkeypatch,
+) -> None:
+    """Failure classification and the retry budget, from the policy to the runner.
+
+    Only the four transient codes earn one automatic retry. The runner takes it
+    after a transient failure; an unclassified exception keeps its detail out of
+    the result; and an unclassified infrastructure failure is the default arm,
+    `VALIDATION_EXECUTION_FAILED`, and stops on the first attempt - which is what
+    stops a message that merely *reads* like a timeout from buying a second
+    provider call.
+    """
     assert tuple(code.value for code in OperationFailureCode) == OPERATION_FAILURE_CODES
     transient_codes = [
         OperationFailureCode.PROVIDER_TIMEOUT,
@@ -300,6 +314,79 @@ def test_only_one_automatic_retry_is_allowed_for_transient_failures() -> None:
 
         with pytest.raises(OperationContractError):
             allows_automatic_retry(code, attempts_completed=0)
+
+    operation = _operation_for_runner(services, "Retry Co")
+    attempts = 0
+    delays = []
+
+    def execute(_operation, _cancelled):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OperationExecutionError(
+                OperationFailureCode.PROVIDER_TIMEOUT, "Provider timed out."
+            )
+        return PreparedOperation()
+
+    result = _runner(
+        services,
+        {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
+        runner_id="runner-retry",
+        sleeper=delays.append,
+    ).run(operation.id)
+    assert result.status is OperationStatus.SUCCEEDED
+    assert result.attempts_completed == 2
+    assert attempts == 2
+    assert delays == [0.25]
+
+    failed_operation = _operation_for_runner(services, "Technical Failure Co")
+    failed = _runner(
+        services,
+        {
+            OperationType.ANALYZE_JOB: _Handler(
+                execute=lambda *_args: (_ for _ in ()).throw(RuntimeError("secret traceback"))
+            )
+        },
+        runner_id="runner-failure",
+        technical_logger=lambda _error: "logs/operation-failure.jsonl",
+    ).run(failed_operation.id)
+    assert failed.status is OperationStatus.FAILED
+    assert failed.safe_failure_detail == "Operation execution failed."
+    assert "secret traceback" not in failed.safe_failure_detail
+    assert failed.technical_log_reference == "logs/operation-failure.jsonl"
+
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company="Unclassified Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
+        )
+    )
+    attempts = 0
+
+    def prepare_that_fails(_command, *, operation_id=None):
+        nonlocal attempts
+        attempts += 1
+        raise InfrastructureFailure("provider request timed out")
+
+    monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
+    operation = services.operation_submissions.submit_analysis(
+        AnalyzeCommand(
+            application_id=ingested.application_id,
+            job_snapshot_id=ingested.job_snapshot_id,
+            provider="openai",
+            model="gpt-5.6-luna",
+        ),
+        idempotency_key="unclassified-failure",
+        analysis_service=services.analysis,
+    )
+
+    completed = foreground_executor(services).execute(operation.id)
+
+    assert completed.status is OperationStatus.FAILED
+    assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
+    assert attempts == 1
 
 
 def _stored_request(application_id: str, key: str = "request-1") -> CreateOperation:
@@ -317,7 +404,18 @@ def _stored_request(application_id: str, key: str = "request-1") -> CreateOperat
     )
 
 
-def test_operation_creation_is_idempotent_and_projects_active_work(services) -> None:
+def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
+    services,
+    ai_services,
+    fake_openai,
+    requirement_concepts,
+) -> None:
+    """One idempotency key names one request, and replaying it is the same Operation.
+
+    Creation with the same key returns the stored Operation and projects it as the
+    active work; the same key with another payload is refused with the contracted
+    code rather than prose; and a foreground run reuses an explicit key end to end.
+    """
     ingested = services.applications.ingest(
         IngestCommand(
             company="Operation Co", target_role="Developer", job_text="Python role", client="web"
@@ -366,14 +464,16 @@ def test_operation_creation_is_idempotent_and_projects_active_work(services) -> 
     assert after_failure.active_operation is None
     assert after_failure.latest_operation == as_operation_view(failed)
 
-
-def test_operation_rejects_idempotency_key_with_another_payload(services) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
-            company="Conflict Co", target_role="Developer", job_text="Python role", client="web"
+            company="Conflict Co",
+            target_role="Developer",
+            job_text="Python role",
+            acknowledged_duplicates=True,
+            client="web",
         )
     )
-    request = _stored_request(ingested.application_id)
+    request = _stored_request(ingested.application_id, key="conflict-request")
     _enqueue_operation(
         services,
         request,
@@ -388,6 +488,34 @@ def test_operation_rejects_idempotency_key_with_another_payload(services) -> Non
             conflicting,
         )
     assert raised.value.code == IDEMPOTENCY_KEY_REUSED
+
+    ingested = ai_services.applications.ingest(
+        IngestCommand(
+            company="Foreground Operation Co",
+            target_role="Account Manager",
+            job_text=ACCOUNT_MANAGER_JOB,
+            client="web",
+        )
+    )
+    command = AnalyzeCommand(
+        application_id=ingested.application_id,
+        job_snapshot_id=ingested.job_snapshot_id,
+    )
+
+    def submit_and_run() -> str:
+        fake_openai.script("propose_analysis", analysis_proposal())
+        operation = ai_services.operation_submissions.submit_analysis(
+            command,
+            idempotency_key="analysis-idempotency-key",
+            analysis_service=ai_services.analysis,
+        )
+        return foreground_executor(ai_services).execute(operation.id).id
+
+    first = submit_and_run()
+    second = submit_and_run()
+
+    assert first == second
+    assert _operation(ai_services, first).status is OperationStatus.SUCCEEDED
 
 
 def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, database_engine) -> None:
@@ -421,7 +549,16 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, databa
             connection.execute(delete(operations).where(operations.c.id == created.id))
 
 
-def test_two_runners_racing_one_operation_produce_one_claim(services, database_engine) -> None:
+def test_racing_claimants_produce_one_claim_and_one_execution(
+    services,
+    database_engine,
+) -> None:
+    """Contending claimants produce one claim and one execution.
+
+    Two runners racing one Operation get one claim, and the loser releases only
+    what it took. The two concrete hosts - foreground executor and worker - contend
+    through the same durable claim contract and execute once.
+    """
     ingested = services.applications.ingest(
         IngestCommand(
             company="Claim Race Co", target_role="Developer", job_text="Python role", client="web"
@@ -466,11 +603,6 @@ def test_two_runners_racing_one_operation_produce_one_claim(services, database_e
         assert sorted(held) == sorted(resource.kind.value for resource in winner.resources)
     _execution_write(services, "heartbeat_operation", created.id, runner_id=str(winner.lease_owner))
 
-
-def test_foreground_executor_and_worker_race_one_operation_without_duplicate_execution(
-    services,
-) -> None:
-    """The two concrete hosts contend through the same durable claim contract."""
     operation = _operation_for_runner(services, "Foreground Worker Race Co")
     barrier = Barrier(2)
     execution_lock = Lock()
@@ -652,7 +784,15 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
     assert _operation(services, operations[2].id).phase.value == "waiting_for_ai_slot"
 
 
-def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) -> None:
+def test_heartbeat_extends_the_lease_and_skips_inflight_cancellation(
+    services,
+) -> None:
+    """A heartbeat extends the lease, and never fails an Operation being cancelled.
+
+    Interruption waits until the extended lease expires. A heartbeat that meets a
+    cancellation holding the row lock skips it rather than waiting and raising a
+    serialization error, and the Operation then completes as cancelled.
+    """
     ingested = services.applications.ingest(
         IngestCommand(
             company="Heartbeat Co", target_role="Developer", job_text="Python role", client="web"
@@ -692,10 +832,44 @@ def test_heartbeat_prevents_interruption_until_extended_lease_expires(services) 
     ) == [created.id]
     assert _operation(services, created.id).status is OperationStatus.INTERRUPTED
 
+    operation = _operation_for_runner(services, "Heartbeat Cancellation Co")
+    claimed = _claim_operation(services, operation.id, runner_id="owner")
+    assert claimed is not None
+    transactions = services.operation_runner.transactions
 
-def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(
-    services, database_engine
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with transactions.write() as tx:
+            services.operation_lifecycle.operations.request_cancellation(tx, operation.id)
+            # The cancellation update holds the row lock until this scope commits.
+            # A heartbeat on another connection must skip it rather than wait and
+            # raise a REPEATABLE READ serialization error after that commit.
+            future = pool.submit(
+                _execution_write,
+                services,
+                "heartbeat_operation",
+                operation.id,
+                runner_id="owner",
+            )
+            future.result(timeout=2)
+
+    result = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
+    assert result.status is OperationStatus.CANCELLED
+    assert result.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
+
+
+def test_startup_interrupts_work_held_by_previous_runners(
+    services,
+    database_engine,
 ) -> None:
+    """Startup interrupts dead runners' work, expired or not.
+
+    A queued Operation holding an expired runner lease is interrupted. A fast
+    restart must not leave a dead predecessor's claim stuck either:
+    `interrupt_expired_operations` deliberately waits out the TTL, which is right
+    for a periodic sweep that must not disturb another live claimant, but a
+    process's one-time startup sweep has no claimant to protect, so it reclaims
+    unconditionally.
+    """
     operation = _operation_for_runner(services, "Expired Queued Co")
     with database_engine.begin() as connection:
         connection.execute(
@@ -715,19 +889,6 @@ def test_startup_interrupts_a_queued_operation_with_an_expired_runner_lease(
     assert interrupted == [operation.id]
     assert _operation(services, operation.id).status is OperationStatus.INTERRUPTED
 
-
-def test_startup_reclaims_a_previous_runners_claim_before_its_lease_expires(
-    services, database_engine
-) -> None:
-    """A fast restart must not leave a dead predecessor's claim stuck.
-
-    `interrupt_expired_operations` deliberately waits out the TTL, which is
-    right for a periodic sweep that must not disturb another live claimant.
-    A process's one-time startup sweep has no such claimant to protect - it
-    hasn't claimed anything yet - so it must reclaim unconditionally instead
-    of leaving the row stuck until some later restart happens to land after
-    the original lease's TTL.
-    """
     operation = _operation_for_runner(services, "Fast Restart Co")
     with database_engine.begin() as connection:
         connection.execute(
@@ -856,7 +1017,16 @@ def test_source_changed_is_checked_before_execution_and_again_before_activation(
         assert checks == fail_on_check
 
 
-def test_cancellation_after_output_creation_keeps_output_inactive(services) -> None:
+def test_output_after_cancellation_stays_inactive_and_cannot_be_activated(
+    services,
+) -> None:
+    """Output after cancellation stays inactive and can never be activated later.
+
+    An output the runner created after cancellation is recorded inactive. At the
+    store, completing a cancelled Operation records cancellation rather than
+    success, and neither activation nor `active=True` on recording can bring an
+    output back once cancellation closed the window.
+    """
     operation = _operation_for_runner(services, "Cancel Output Co")
 
     def execute(_operation, _cancelled):
@@ -879,93 +1049,47 @@ def test_cancellation_after_output_creation_keeps_output_inactive(services) -> N
     assert result.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
     assert result.outputs[0].active is False
 
+    operation = _queued(services, "Cancel Co", key="cancel-request")
+    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+    services.operation_lifecycle.cancel(operation.id)
 
-def test_runner_retries_one_transient_failure(services) -> None:
-    operation = _operation_for_runner(services, "Retry Co")
-    attempts = 0
-    delays = []
+    completed = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
+    assert completed.status is OperationStatus.CANCELLED
+    assert completed.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
+    assert completed.finished_at
 
-    def execute(_operation, _cancelled):
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise OperationExecutionError(
-                OperationFailureCode.PROVIDER_TIMEOUT, "Provider timed out."
-            )
-        return PreparedOperation()
+    operation = _queued(services, "Output Co", key="output-request")
+    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
-    result = _runner(
-        services,
-        {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
-        runner_id="runner-retry",
-        sleeper=delays.append,
-    ).run(operation.id)
-    assert result.status is OperationStatus.SUCCEEDED
-    assert result.attempts_completed == 2
-    assert attempts == 2
-    assert delays == [0.25]
-
-
-def test_runner_keeps_unclassified_exception_detail_out_of_result(services) -> None:
-    failed_operation = _operation_for_runner(services, "Technical Failure Co")
-    failed = _runner(
-        services,
-        {
-            OperationType.ANALYZE_JOB: _Handler(
-                execute=lambda *_args: (_ for _ in ()).throw(RuntimeError("secret traceback"))
-            )
-        },
-        runner_id="runner-failure",
-        technical_logger=lambda _error: "logs/operation-failure.jsonl",
-    ).run(failed_operation.id)
-    assert failed.status is OperationStatus.FAILED
-    assert failed.safe_failure_detail == "Operation execution failed."
-    assert "secret traceback" not in failed.safe_failure_detail
-    assert failed.technical_log_reference == "logs/operation-failure.jsonl"
-
-
-def test_an_unclassified_infrastructure_failure_is_terminal_and_not_retried(
-    services, monkeypatch
-) -> None:
-    """The default arm of the classification, pinned rather than assumed.
-
-    Only the four transient codes get their one retry. A failure that names
-    nothing more specific is `VALIDATION_EXECUTION_FAILED` and stops on the
-    first attempt - which is what stops a message that merely *reads* like a
-    timeout from buying a second provider call.
-    """
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Unclassified Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            client="web",
+    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-1")
+    _execution_write(services, "activate_operation_output", operation.id, "analysis", "analysis-1")
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        _execution_write(
+            services, "activate_operation_output", operation.id, "analysis", "analysis-1"
         )
-    )
-    attempts = 0
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        _execution_write(
+            services, "activate_operation_output", operation.id, "analysis", "never-recorded"
+        )
 
-    def prepare_that_fails(_command, *, operation_id=None):
-        nonlocal attempts
-        attempts += 1
-        raise InfrastructureFailure("provider request timed out")
+    with pytest.raises(UnknownRecord):
+        _execution_write(
+            services, "record_operation_output", "no-such-operation", "analysis", "analysis-2"
+        )
 
-    monkeypatch.setattr(services.analysis, "prepare", prepare_that_fails)
-    operation = services.operation_submissions.submit_analysis(
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-            provider="openai",
-            model="gpt-5.6-luna",
-        ),
-        idempotency_key="unclassified-failure",
-        analysis_service=services.analysis,
-    )
-
-    completed = foreground_executor(services).execute(operation.id)
-
-    assert completed.status is OperationStatus.FAILED
-    assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
-    assert attempts == 1
+    # Cancellation closes the window: an output may still be recorded, but it
+    # cannot be activated either by the activation method or by active=True on
+    # the recording method.
+    services.operation_lifecycle.cancel(operation.id)
+    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-3")
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        _execution_write(
+            services, "activate_operation_output", operation.id, "analysis", "analysis-3"
+        )
+    with pytest.raises(StateConflict, match="cannot be activated"):
+        _execution_write(
+            services, "record_operation_output", operation.id, "analysis", "analysis-4", active=True
+        )
 
 
 def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context(
@@ -1009,38 +1133,6 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
         services.operation_lifecycle.retry(completed.id, idempotency_key="meaningless-retry")
     assert completed.attempts_completed == 1
     assert attempts == 1
-
-
-def test_foreground_analysis_reuses_an_explicit_idempotency_key(
-    ai_services, fake_openai, requirement_concepts
-) -> None:
-    ingested = ai_services.applications.ingest(
-        IngestCommand(
-            company="Foreground Operation Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            client="web",
-        )
-    )
-    command = AnalyzeCommand(
-        application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
-    )
-
-    def submit_and_run() -> str:
-        fake_openai.script("propose_analysis", analysis_proposal())
-        operation = ai_services.operation_submissions.submit_analysis(
-            command,
-            idempotency_key="analysis-idempotency-key",
-            analysis_service=ai_services.analysis,
-        )
-        return foreground_executor(ai_services).execute(operation.id).id
-
-    first = submit_and_run()
-    second = submit_and_run()
-
-    assert first == second
-    assert _operation(ai_services, first).status is OperationStatus.SUCCEEDED
 
 
 def test_draft_operation_activates_one_validated_working_draft(services) -> None:
@@ -1319,22 +1411,21 @@ def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
     assert post_render_writes == 0
 
 
-def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
-    ready_application, monkeypatch
+def test_render_registration_is_all_or_nothing(
+    ready_application,
+    monkeypatch,
 ) -> None:
     """Both artifacts are one render: both are registered, or neither is.
 
     The first repair moved registration into `execute` so the rows survive a
-    cancellation. Left as independent writes that would have bought the
-    opposite bug: a failure on the third leaves two rows committed while
-    `execute` raises, so the runner records no Operation output at all and the
-    Application carries registered artifacts belonging to a render that never
-    reported. That is the mirror of the orphan being repaired, and it is not
-    reachable through cancellation or `SOURCE_CHANGED`, which is why neither of
-    those tests would have found it.
-
-    The second registration is failed deliberately. What is asserted is that the
-    first two did not survive it.
+    cancellation. Left as independent writes that would have bought the opposite
+    bug: a failure partway leaves rows committed while `execute` raises, so the
+    runner records no Operation output and the Application carries registered
+    artifacts belonging to a render that never reported. That is not reachable
+    through cancellation or `SOURCE_CHANGED`, which is why neither of those tests
+    would have found it. It is driven here twice - a registry failure on the
+    second registration, and a failure ingesting the second payload - and what is
+    asserted is that nothing from the first survived.
     """
     setup = ready_application("Partial Registration Co")
     before = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
@@ -1349,26 +1440,27 @@ def test_a_failure_partway_through_registration_leaves_no_artifact_at_all(
             raise InfrastructureFailure("injected registry failure")
         return original(self, *args, **kwargs)
 
-    monkeypatch.setattr(SqlAlchemyArtifactCatalog, "register_artifact_version", fail_on_the_second)
-    monkeypatch.setattr(
-        SqlAlchemyRenderContextReader,
-        "matching_render_artifact",
-        lambda *_args, **_kwargs: None,
-    )
-    failed = foreground_executor(setup.services).execute(operation.id)
+    with pytest.MonkeyPatch.context() as scoped:
+        scoped.setattr(SqlAlchemyArtifactCatalog, "register_artifact_version", fail_on_the_second)
+        scoped.setattr(
+            SqlAlchemyRenderContextReader,
+            "matching_render_artifact",
+            lambda *_args, **_kwargs: None,
+        )
+        failed = foreground_executor(setup.services).execute(operation.id)
 
-    assert failed.status is OperationStatus.FAILED
-    assert calls == 2, "the injected failure never reached the code under test"
-    after = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
-    assert after == before, "a partial render registration survived"
-    assert not [
-        output for output in failed.outputs if output.output_type in {"resume_html", "resume_pdf"}
-    ]
+        assert failed.status is OperationStatus.FAILED
+        assert calls == 2, "the injected failure never reached the code under test"
+        after = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
+        assert after == before, "a partial render registration survived"
+        assert not [
+            output
+            for output in failed.outputs
+            if output.output_type in {"resume_html", "resume_pdf"}
+        ]
 
+        # The registry and matching patches above must not reach the second render.
 
-def test_a_failure_ingesting_the_second_render_payload_registers_neither(
-    ready_application, monkeypatch
-) -> None:
     setup = ready_application("Partial Render Ingest Co")
     before = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
     original = PayloadStore.ingest_render_output
@@ -1437,12 +1529,13 @@ def test_pending_approval_receipt_recovers_a_committed_revision(drafted_applicat
 
 
 @pytest.mark.parametrize("receipt_status", ["pending", "completed"])
-@pytest.mark.parametrize(
-    "changed_input", ["expected_edit_version", "validation_run_id", "actor_type", "client"]
-)
-def test_approval_recovery_refuses_changed_inputs(
-    drafted_application, receipt_status, changed_input
-) -> None:
+def test_approval_recovery_refuses_changed_inputs(drafted_application, receipt_status) -> None:
+    """Every frozen input is part of the reservation, in either receipt state.
+
+    The four inputs are one invariant - a change to any of them is key reuse -
+    so they are looped rather than parametrized; the receipt state is the
+    distinct recovery path.
+    """
     setup = drafted_application("Approval Frozen Inputs Co")
     command = _approve_command(setup.services, setup.application_id)
     working = _working_draft(setup.services, command.working_draft_id)
@@ -1464,19 +1557,20 @@ def test_approval_recovery_refuses_changed_inputs(
         "actor_type": "system",
         "client": "worker",
     }
-    changed = command.model_copy(update={changed_input: changed_values[changed_input]})
-    with pytest.raises(StateConflict) as refused:
-        setup.services.draft_approval.approve_idempotent(
-            changed,
-            idempotency_key="approval-frozen-inputs",
-        )
-    assert refused.value.code == IDEMPOTENCY_KEY_REUSED
-    after = _read_receipt(setup.services, "approve_draft", "approval-frozen-inputs")
-    assert after["status"] == receipt_status
-    assert after["payload"] == receipt["payload"]
-    assert _approved_revisions(setup.services, setup.application_id) == [
-        _approved_revision(setup.services, committed.revision_id)
-    ]
+    for changed_input, changed_value in changed_values.items():
+        changed = command.model_copy(update={changed_input: changed_value})
+        with pytest.raises(StateConflict) as refused:
+            setup.services.draft_approval.approve_idempotent(
+                changed,
+                idempotency_key="approval-frozen-inputs",
+            )
+        assert refused.value.code == IDEMPOTENCY_KEY_REUSED, changed_input
+        after = _read_receipt(setup.services, "approve_draft", "approval-frozen-inputs")
+        assert after["status"] == receipt_status, changed_input
+        assert after["payload"] == receipt["payload"], changed_input
+        assert _approved_revisions(setup.services, setup.application_id) == [
+            _approved_revision(setup.services, committed.revision_id)
+        ], changed_input
     replayed = setup.services.draft_approval.approve_idempotent(
         command,
         idempotency_key="approval-frozen-inputs",
@@ -1649,32 +1743,6 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     assert len(cancellation_attempts) == 2
 
 
-def test_heartbeat_skips_inflight_cancellation_without_failing_operation(services) -> None:
-    operation = _operation_for_runner(services, "Heartbeat Cancellation Co")
-    claimed = _claim_operation(services, operation.id, runner_id="owner")
-    assert claimed is not None
-    transactions = services.operation_runner.transactions
-
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        with transactions.write() as tx:
-            services.operation_lifecycle.operations.request_cancellation(tx, operation.id)
-            # The cancellation update holds the row lock until this scope commits.
-            # A heartbeat on another connection must skip it rather than wait and
-            # raise a REPEATABLE READ serialization error after that commit.
-            future = pool.submit(
-                _execution_write,
-                services,
-                "heartbeat_operation",
-                operation.id,
-                runner_id="owner",
-            )
-            future.result(timeout=2)
-
-    result = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
-    assert result.status is OperationStatus.CANCELLED
-    assert result.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
-
-
 # --- execution-store methods against real PostgreSQL -------------------------
 #
 # The tests above drive Operations through the runner and the services, which is
@@ -1776,51 +1844,3 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
         _execution_write(services, "record_operation_attempt", operation.id, runner_id="owner") == 1
     )
     assert _operation(services, operation.id).phase is OperationPhase.RETRY_WAIT
-
-
-def test_completing_a_cancelled_operation_records_cancellation_not_success(services) -> None:
-    operation = _queued(services, "Cancel Co")
-    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
-    services.operation_lifecycle.cancel(operation.id)
-
-    completed = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
-    assert completed.status is OperationStatus.CANCELLED
-    assert completed.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
-    assert completed.finished_at
-
-
-def test_outputs_cannot_be_reactivated_or_activated_after_cancellation(
-    services,
-) -> None:
-    operation = _queued(services, "Output Co")
-    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
-
-    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-1")
-    _execution_write(services, "activate_operation_output", operation.id, "analysis", "analysis-1")
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "analysis", "analysis-1"
-        )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "analysis", "never-recorded"
-        )
-
-    with pytest.raises(UnknownRecord):
-        _execution_write(
-            services, "record_operation_output", "no-such-operation", "analysis", "analysis-2"
-        )
-
-    # Cancellation closes the window: an output may still be recorded, but it
-    # cannot be activated either by the activation method or by active=True on
-    # the recording method.
-    services.operation_lifecycle.cancel(operation.id)
-    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-3")
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "analysis", "analysis-3"
-        )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "record_operation_output", operation.id, "analysis", "analysis-4", active=True
-        )

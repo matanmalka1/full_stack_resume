@@ -39,13 +39,26 @@ def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-
 # --- cancel -----------------------------------------------------------------
 
 
-def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(
+def test_cancel_and_retry_steer_the_durable_row_without_executing_it(
     api_paused, services, transaction_manager, application_projection_reader
 ) -> None:
-    """No worker here on purpose: queued work must be cancelled before it starts."""
-    operation = _queued_analysis(services, "Cancel Co")
+    """The operations HTTP contract on one queued analysis, with no worker on purpose.
 
+    Retrying work that is not terminal is a conflict. Queued work is cancelled
+    before it starts and never runs. A retry is accepted with a `Location`, is a
+    new Operation, and leaves the original immutable. Replaying the retry's
+    idempotency key returns the same Operation - replay safety is what the
+    header buys - while a retry without the header is a new attempt.
+    """
+    operation = _queued_analysis(services, "Cancel Retry Co")
+    original_record = services.operation_runner.operation(operation.id)
     api = api_paused.client
+
+    live = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=MUTATION_HEADERS)
+    assert live.status_code == 409
+    assert live.json()["code"] == "STATE_CONFLICT"
+    assert live.json()["type"] == "about:blank#state_conflict"
+
     cancelled = api.post(
         f"{API_PREFIX}/operations/{operation.id}/cancel",
         headers=MUTATION_HEADERS,
@@ -61,22 +74,8 @@ def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(
     with transaction_manager.read() as tx:
         assert application_projection_reader.analyses(tx, operation.application_id) == []
 
-
-# --- retry ------------------------------------------------------------------
-
-
-def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(
-    api_paused, services
-) -> None:
-    operation = _queued_analysis(services, "Retry Co")
-    original_record = services.operation_runner.operation(operation.id)
-
-    api = api_paused.client
-    api.post(f"{API_PREFIX}/operations/{operation.id}/cancel", headers=MUTATION_HEADERS)
-    retried = api.post(
-        f"{API_PREFIX}/operations/{operation.id}/retry",
-        headers={**MUTATION_HEADERS, "Idempotency-Key": "stage-c-retry"},
-    )
+    headers = {**MUTATION_HEADERS, "Idempotency-Key": "stage-c-retry"}
+    retried = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)
     followed = api.get(retried.headers["Location"])
 
     assert retried.status_code == 202
@@ -91,17 +90,6 @@ def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(
     assert services.operation_lifecycle.get(operation.id).status.value == "cancelled"
     assert services.operation_runner.operation(operation.id).payload == original_record.payload
 
-
-def test_retry_replaying_a_used_idempotency_key_returns_the_same_operation(
-    api_paused, services
-) -> None:
-    """Replay safety is what the header buys; without it every call is a new attempt."""
-    operation = _queued_analysis(services, "Replay Co")
-
-    api = api_paused.client
-    api.post(f"{API_PREFIX}/operations/{operation.id}/cancel", headers=MUTATION_HEADERS)
-    headers = {**MUTATION_HEADERS, "Idempotency-Key": "stage-c-replay"}
-    first = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)
     replayed = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)
     generated = api.post(
         f"{API_PREFIX}/operations/{operation.id}/retry",
@@ -109,25 +97,14 @@ def test_retry_replaying_a_used_idempotency_key_returns_the_same_operation(
     )
 
     assert replayed.status_code == 202
-    assert replayed.json() == first.json()
+    assert replayed.json() == retried.json()
     # No header means the boundary generates a key, so this is a second attempt
     # rather than a replay of the first.
     assert generated.status_code == 202
-    assert generated.json()["id"] not in {first.json()["id"], operation.id}
+    assert generated.json()["id"] not in {queued_id, operation.id}
 
 
-def test_retrying_work_that_is_not_terminal_is_a_conflict(api_paused, services) -> None:
-    operation = _queued_analysis(services, "Live Retry Co")
-
-    api = api_paused.client
-    refused = api.post(
-        f"{API_PREFIX}/operations/{operation.id}/retry",
-        headers=MUTATION_HEADERS,
-    )
-
-    assert refused.status_code == 409
-    assert refused.json()["code"] == "STATE_CONFLICT"
-    assert refused.json()["type"] == "about:blank#state_conflict"
+# --- retry ------------------------------------------------------------------
 
 
 def test_source_changed_operation_withholds_and_refuses_retry(api_paused, services) -> None:

@@ -857,23 +857,21 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     assert {"api_key", "authorization", "headers", "reasoning"}.isdisjoint(metadata)
 
 
-def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
+def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_evidence(
     ai_services,
     fake_openai: FakeOpenAI,
     monkeypatch,
     transaction_manager,
     application_projection_reader,
 ) -> None:
-    """§18: "a completed output after cancellation is recorded as inactive evidence".
+    """§18: an Operation stopped between the phases keeps its answer as inactive evidence.
 
-    The provider answered and the response was preserved; the user then
-    cancelled before activation. The payload must not be left on disk with
-    nothing naming it - the row exists, the Operation output refers to it, and
-    the reference is inactive because nothing was committed.
-
-    Cancellation is requested from inside `execute`, which is the only window in
-    which this can happen: after the provider call, before the runner's
-    pre-activation check.
+    Two ways to reach the window after the provider answered and before
+    activation: the user cancels (requested from inside `execute`, the only
+    window in which this can happen), or a newer job snapshot arrives so the
+    pre-activation source check fails. Either way the payload must not be left
+    on disk with nothing naming it - the row exists, the Operation output refers
+    to it, and the reference is inactive because nothing was committed.
     """
     ingested = _ingested(ai_services, "Cancelled Co")
     queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
@@ -885,44 +883,33 @@ def test_a_cancelled_run_keeps_its_completed_output_as_inactive_evidence(
         return prepared
 
     fake_openai.script("propose_analysis", ANALYSIS)
-    monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
-    completed = _run(ai_services, queued)
+    with pytest.MonkeyPatch.context() as scoped:
+        scoped.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
+        completed = _run(ai_services, queued)
 
-    assert completed.status.value == "cancelled"
-    # One call, so one preserved response - registered, and referenced
-    # inactive.
-    artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert len(artifacts) == 1, "a preserved response was left unregistered"
-    references = [
-        output for output in completed.outputs if output.output_type == "provider_response"
-    ]
-    assert {output.output_id for output in references} == {row["id"] for row in artifacts}
-    assert all(not output.active for output in references)
-    assert len(fake_openai.calls_for("propose_analysis")) == 1
-    # Cancellation prevents activation, so nothing was committed.
-    assert not any(output.output_type == "job_analysis" for output in completed.outputs)
-    with transaction_manager.read() as tx:
-        assert application_projection_reader.analyses(tx, ingested.application_id) == []
-        assert (
-            application_projection_reader.latest_selection_plan(tx, ingested.application_id) is None
+        assert completed.status.value == "cancelled"
+        # One call, so one preserved response - registered, and referenced
+        # inactive.
+        artifacts = _provider_artifacts(
+            ai_services, ingested.application_id, transaction_manager, application_projection_reader
         )
+        assert len(artifacts) == 1, "a preserved response was left unregistered"
+        references = [
+            output for output in completed.outputs if output.output_type == "provider_response"
+        ]
+        assert {output.output_id for output in references} == {row["id"] for row in artifacts}
+        assert all(not output.active for output in references)
+        assert len(fake_openai.calls_for("propose_analysis")) == 1
+        # Cancellation prevents activation, so nothing was committed.
+        assert not any(output.output_type == "job_analysis" for output in completed.outputs)
+        with transaction_manager.read() as tx:
+            assert application_projection_reader.analyses(tx, ingested.application_id) == []
+            assert (
+                application_projection_reader.latest_selection_plan(tx, ingested.application_id)
+                is None
+            )
 
-
-def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_evidence(
-    ai_services,
-    fake_openai: FakeOpenAI,
-    monkeypatch,
-    transaction_manager,
-    application_projection_reader,
-) -> None:
-    """The same rule for the other way an Operation stops between the phases.
-
-    A newer job snapshot arrives while the provider is answering, so the
-    pre-activation source check fails. The answer still happened, and it is
-    still evidence.
-    """
+    calls_before = len(fake_openai.calls_for("propose_analysis"))
     ingested = _ingested(ai_services, "Raced Co")
     queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     original = ai_services.analysis.prepare
@@ -955,7 +942,7 @@ def test_a_source_that_moves_after_execution_keeps_the_output_as_inactive_eviden
     ]
     assert {output.output_id for output in references} == {row["id"] for row in artifacts}
     assert all(not output.active for output in references)
-    assert len(fake_openai.calls_for("propose_analysis")) == 1
+    assert len(fake_openai.calls_for("propose_analysis")) - calls_before == 1
 
 
 def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
