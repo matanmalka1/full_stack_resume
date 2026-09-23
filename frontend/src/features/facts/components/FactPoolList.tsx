@@ -141,28 +141,31 @@ export const FactPoolList = ({
 }) => (
   <div
     aria-label="רשימת העובדות"
-    className="max-h-[70dvh] min-h-64 overflow-y-auto rounded-control border border-cv-border lg:max-h-[calc(100dvh-9rem)]"
+    className="max-h-[70dvh] min-h-64 overflow-y-auto rounded-control border border-cv-border lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)]"
+    dir="ltr"
     // A named region rather than one long list: the groups below carry the lists.
     // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
     role="group"
   >
-    {groupBySource(entries).map(({ entries: grouped, source }) => (
-      <section key={source}>
-        <h3 className="sticky top-0 z-(--cv-z-content-raised) flex items-baseline justify-between gap-control-gap border-b border-cv-border bg-cv-surface-sunken px-3 py-1.5 text-support font-semibold text-cv-text-muted">
-          <span dir="auto">{factSourceLabel(source)}</span>
-          <span className="font-normal">{grouped.length}</span>
-        </h3>
-        <ul className="divide-y divide-cv-border">
-          {grouped.map((entry) => (
-            <FactPoolRow
-              entry={entry}
-              key={entry.fact.fact_id}
-              selected={entry.fact.fact_id === selectedFactId}
-              to={factHref(entry.fact.fact_id)}
-            />
-          ))}
-        </ul>
-      </section>
-    ))}
+    <div dir="rtl">
+      {groupBySource(entries).map(({ entries: grouped, source }) => (
+        <section key={source}>
+          <h3 className="sticky top-0 z-(--cv-z-content-raised) flex items-baseline justify-between gap-control-gap border-b border-cv-border bg-cv-surface-sunken px-3 py-1.5 text-support font-semibold text-cv-text-muted">
+            <span dir="auto">{factSourceLabel(source)}</span>
+            <span className="font-normal">{grouped.length}</span>
+          </h3>
+          <ul className="divide-y divide-cv-border">
+            {grouped.map((entry) => (
+              <FactPoolRow
+                entry={entry}
+                key={entry.fact.fact_id}
+                selected={entry.fact.fact_id === selectedFactId}
+                to={factHref(entry.fact.fact_id)}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
   </div>
 );

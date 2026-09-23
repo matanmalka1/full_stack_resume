@@ -58,7 +58,9 @@ export const ApplicationListToolbar = ({
   <div className="flex flex-col gap-3">
     <search
       aria-label="סינון וחיפוש מועמדויות"
-      className={flatSurfaceClasses("flex flex-wrap items-center gap-2 bg-cv-surface px-3 py-2.5")}
+      className={flatSurfaceClasses(
+        "cv-fields-compact flex flex-wrap items-center gap-2 rounded-control bg-cv-surface px-3 py-2.5",
+      )}
     >
       <Field className="w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1" label="חיפוש במועמדויות">
         {(control) => (
@@ -69,7 +71,7 @@ export const ApplicationListToolbar = ({
             />
             <Input
               {...control}
-              className="ps-9"
+              className="!ps-9"
               dir="rtl"
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="חברה או תפקיד"

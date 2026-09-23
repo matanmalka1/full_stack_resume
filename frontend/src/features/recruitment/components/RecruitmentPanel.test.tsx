@@ -111,7 +111,7 @@ describe("RecruitmentManagerButton", () => {
     renderPanel(value);
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
-    expect(screen.getByText("המועמדות נפתחה במצב נשמר")).toBeInTheDocument();
+    expect(screen.getByText("המועמדות נפתחה במצב טרם הוגש")).toBeInTheDocument();
     expect(screen.queryByText(/עבר מ־טרם הוגש ל־טרם הוגש/)).not.toBeInTheDocument();
   });
 

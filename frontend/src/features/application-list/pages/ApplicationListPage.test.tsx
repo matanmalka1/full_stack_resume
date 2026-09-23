@@ -254,7 +254,7 @@ describe("ApplicationListPage", () => {
     expect(await screen.findByText("1/7")).toBeInTheDocument();
     expect(screen.getByText("7/7")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "הכנת קורות החיים: קורות החיים מוכנים" })).toHaveAttribute(
-      "aria-valuenow",
+      "value",
       "7",
     );
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
