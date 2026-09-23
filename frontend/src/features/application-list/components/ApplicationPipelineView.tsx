@@ -15,6 +15,11 @@ import { AttentionLink, nextActionHeading } from "./ApplicationRowNextAction";
 
 interface ApplicationPipelineViewProps {
   items: readonly ApplicationListItem[];
+  /* The server's count per recruitment status across every page of the current query,
+     ignoring only the recruitment-stage filter itself, and the statuses that filter
+     selects (none: no filter). Together they give each column its whole size. */
+  recruitmentStatusCounts: Readonly<Record<string, number>>;
+  recruitmentStatusFilter: readonly string[] | undefined;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
@@ -142,13 +147,31 @@ const PipelineCard = ({
   );
 };
 
-export const ApplicationPipelineView = ({ items, onRequestUpdate }: ApplicationPipelineViewProps) => {
+export const ApplicationPipelineView = ({
+  items,
+  recruitmentStatusCounts,
+  recruitmentStatusFilter,
+  onRequestUpdate,
+}: ApplicationPipelineViewProps) => {
+  /* A column holds only this page's Applications, but the board is paged. Its size is
+     therefore the server's count over every page - limited to the statuses the stage
+     filter lets through, since the others cannot be on any page - and never less than
+     what this page actually holds. */
+  const columnTotal = (column: PipelineColumn, onPage: number): number =>
+    Math.max(
+      onPage,
+      column.statuses
+        .filter((status) => recruitmentStatusFilter === undefined || recruitmentStatusFilter.includes(status))
+        .reduce((sum, status) => sum + (recruitmentStatusCounts[status] ?? 0), 0),
+    );
+
   const knownStatuses = new Set(pipelineColumns.flatMap((column) => column.statuses));
   const unknownStatuses = [...new Set(items.map((item) => item.recruitment_status))].filter(
     (status) => !knownStatuses.has(status),
   );
+  /* The closed column appears once there is anything closed on any page, not just this one. */
   const populatedOrActiveColumns = pipelineColumns.filter(
-    (column) => column.id !== "closed" || items.some((item) => column.statuses.includes(item.recruitment_status)),
+    (column) => column.id !== "closed" || columnTotal(column, 0) > 0,
   );
   const columns: readonly PipelineColumn[] =
     unknownStatuses.length === 0
@@ -159,6 +182,7 @@ export const ApplicationPipelineView = ({ items, onRequestUpdate }: ApplicationP
     <ul aria-label="מועמדויות לפי שלב גיוס" className="flex items-start gap-3.5 overflow-x-auto pt-1 pb-4">
       {columns.map((column) => {
         const stageItems = items.filter((item) => column.statuses.includes(item.recruitment_status));
+        const total = columnTotal(column, stageItems.length);
 
         return (
           <li
@@ -171,7 +195,7 @@ export const ApplicationPipelineView = ({ items, onRequestUpdate }: ApplicationP
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
               <h2 className="text-support font-bold text-cv-text">{column.title}</h2>
               <span className="rounded-pill border border-cv-border bg-cv-surface px-2 py-0.5 text-support font-bold text-cv-text-muted tabular-nums shadow-surface">
-                {stageItems.length}
+                {total === stageItems.length ? stageItems.length : `${stageItems.length} מתוך ${total}`}
               </span>
             </div>
             <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto">

@@ -678,10 +678,11 @@ describe("ApplicationListPage", () => {
     const firstPage = Array.from({ length: 25 }, (_, index) =>
       item({ id: `app-${index + 1}`, company: `Company ${index + 1}` }),
     );
-    const firstPageBody = listBody(firstPage, { matched: 26, total: 26 });
+    const firstPageBody = listBody(firstPage, { matched: 26, total: 26, recruitmentStatusCounts: { saved: 26 } });
     const lastPageBody = listBody([item({ id: "app-26", company: "Last Company" })], {
       matched: 26,
       total: 26,
+      recruitmentStatusCounts: { saved: 26 },
     });
     const fetchMock = vi.fn(async (url: unknown) =>
       jsonResponse(String(url).includes("offset=25") ? lastPageBody : firstPageBody),
@@ -692,6 +693,10 @@ describe("ApplicationListPage", () => {
 
     expect(await screen.findByRole("navigation", { name: "ניווט בין דפי המועמדויות" })).toBeInTheDocument();
     expect(screen.getByText("1–25 מתוך 26")).toBeInTheDocument();
+    /* The stages view holds one page too, so a column says how much of its stage that is. */
+    fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
+    const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
+    expect(within(pipeline).getByText("25 מתוך 26")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "עמוד 1" })).toHaveAttribute("aria-current", "page");
 
     fireEvent.click(screen.getByRole("button", { name: "עמוד 2" }));

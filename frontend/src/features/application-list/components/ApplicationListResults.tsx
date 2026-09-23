@@ -14,6 +14,8 @@ interface ApplicationListResultsProps {
   matchedCount: number;
   offset: number;
   pageSize: number;
+  recruitmentStatusCounts: Readonly<Record<string, number>>;
+  recruitmentStatusFilter: readonly string[] | undefined;
   sort: ApplicationSort;
   viewMode: ViewMode;
   onClearFilters: () => void;
@@ -39,6 +41,8 @@ export const ApplicationListResults = ({
   matchedCount,
   offset,
   pageSize,
+  recruitmentStatusCounts,
+  recruitmentStatusFilter,
   sort,
   viewMode,
   onClearFilters,
@@ -77,7 +81,12 @@ export const ApplicationListResults = ({
           onRequestUpdate={onRequestUpdate}
         />
       ) : viewMode === "pipeline" ? (
-        <ApplicationPipelineView items={items} onRequestUpdate={onRequestUpdate} />
+        <ApplicationPipelineView
+          items={items}
+          onRequestUpdate={onRequestUpdate}
+          recruitmentStatusCounts={recruitmentStatusCounts}
+          recruitmentStatusFilter={recruitmentStatusFilter}
+        />
       ) : (
         <ApplicationListTable
           clearingApplicationId={clearingApplicationId}

@@ -260,6 +260,8 @@ export const ApplicationListPage = () => {
               onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
               onSortChange={(sort) => updateQuery({ ...query, sort })}
               pageSize={PAGE_SIZE}
+              recruitmentStatusCounts={page.recruitment_status_counts}
+              recruitmentStatusFilter={query.recruitmentStatuses}
               sort={query.sort ?? "updated"}
               viewMode={viewMode}
             />
