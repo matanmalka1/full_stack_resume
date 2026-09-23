@@ -55,6 +55,7 @@ const ApplicationCard = ({
           item={item}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
+          onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
         />
       </div>

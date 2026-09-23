@@ -290,6 +290,9 @@ describe("ApplicationListPage", () => {
     expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
     /* The menu also opens the record, as the demo's first item does. */
     expect(board.getByRole("menuitem", { name: "פתיחת המועמדות" })).toHaveAttribute("href", "/applications/app-1");
+    /* Every view reaches a record's details from its menu, which is the keyboard's way in. */
+    fireEvent.click(board.getByRole("menuitem", { name: "פרטי משרה" }));
+    expect(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).toBeInTheDocument();
   });
 
   /* The column is read to decide which row to open next, so it names what is waiting
@@ -375,15 +378,24 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
   });
 
-  it("opens a focused row from the keyboard", async () => {
-    stubList([item()]);
+  it("opens a focused row's details from the keyboard and hands on to the recruitment dialog", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) =>
+        String(url) === "/api/v1/applications/app-1" ? jsonResponse(detailBody()) : jsonResponse(listBody([item()])),
+      ),
+    );
 
     renderPage();
 
     const row = await screen.findByRole("row", { name: "Backend Engineer אצל Acme" });
     fireEvent.keyDown(row, { key: "Enter" });
 
-    expect(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).toBeInTheDocument();
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    fireEvent.click(within(details).getByRole("button", { name: "עדכון סטטוס גיוס" }));
+
+    expect(await screen.findByRole("dialog", { name: /ניהול מועמדות: Acme/ })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "פרטי משרה: Acme" })).not.toBeInTheDocument();
   });
 
   it("resumes a row at the step recommended by the server", async () => {
@@ -409,12 +421,29 @@ describe("ApplicationListPage", () => {
   });
 
   it("opens the exact ready revision when the workflow is complete", async () => {
-    stubList([item({ latest_ready_revision_id: "revision-1", preparation_state: "ready", recommended_action: null })]);
+    const ready = item({
+      latest_ready_revision_id: "revision-1",
+      preparation_state: "ready",
+      recommended_action: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) =>
+        String(url) === "/api/v1/approved-revisions/revision-1"
+          ? jsonResponse({ id: "revision-1", ready_qualified: true, pdf_artifact_version_id: "pdf-1" })
+          : jsonResponse(listBody([ready])),
+      ),
+    );
 
     renderPage();
 
     fireEvent.click(await screen.findByText("Backend Engineer"));
     const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    /* The finished CV's PDF is one press away, through the revision's recruiter delivery. */
+    expect(await within(details).findByRole("link", { name: "הורדת PDF" })).toHaveAttribute(
+      "href",
+      "/api/v1/approved-revisions/revision-1/recruiter-pdf?pdf_artifact_version_id=pdf-1",
+    );
     /* A finished CV is offered from the details, and the way on goes to the same revision. */
     expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute("href", "/revisions/revision-1");
     fireEvent.click(within(details).getByRole("link", { name: "פתיחת הגרסה המוכנה" }));
@@ -456,6 +485,8 @@ describe("ApplicationListPage", () => {
     /* Each stage card's main control is the step to take, named for its company. */
     expect(within(pipeline).getAllByRole("link", { name: /^ניתוח המשרה · / })).toHaveLength(4);
     expect(within(pipeline).getByRole("button", { name: "עדכון שלב הגיוס של Binat" })).toBeInTheDocument();
+    fireEvent.click(within(pipeline).getByRole("button", { name: "פרטי המשרה של Binat" }));
+    expect(screen.getByRole("dialog", { name: "פרטי משרה: Binat" })).toBeInTheDocument();
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
     /* Only the card with a projected reason carries the attention mark. */
     expect(within(pipeline).getAllByText("דורש טיפול")).toHaveLength(1);

@@ -1,8 +1,10 @@
-import { ExternalLink, FileCheck2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Download, ExternalLink, FileCheck2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
+import { approvedRevisionQueryOptions, recruiterPdfHref } from "@/api/revisions";
 import { routePaths } from "@/app/routePaths";
 import { sourceHostname } from "@/features/applications";
 import { preparationResumeDestination, preparationStateLabels, trackLabel } from "@/features/preparation";
@@ -28,14 +30,52 @@ const Fact = ({ children, label }: { children: ReactNode; label: string }) => (
   </div>
 );
 
+/* The finished CV, with its PDF one press away as demo_re offers it. The board row
+   names only the revision, so the PDF's artifact comes from the revision itself - the
+   same read, and the same recruiter-pdf delivery, the revision screen uses. A revision
+   that did not qualify, or whose read has not arrived, offers no download: the
+   revision screen stays one press away either way. */
+const ReadyCv = ({ onClose, revisionId }: { onClose: () => void; revisionId: string }) => {
+  const revision = useQuery(approvedRevisionQueryOptions(revisionId)).data;
+  const pdfArtifactId = revision?.ready_qualified === true ? (revision.pdf_artifact_version_id ?? null) : null;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border p-3.5">
+      <span className="inline-flex items-center gap-2 text-support text-cv-text">
+        <FileCheck2 aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+        קורות חיים מוכנים למשרה זו
+      </span>
+      <span className="flex flex-wrap items-center gap-2">
+        <Link
+          className={buttonClasses("secondary", undefined, "compact")}
+          onClick={onClose}
+          to={routePaths.revision(revisionId)}
+        >
+          פתיחת הגרסה המוכנה
+        </Link>
+        {pdfArtifactId === null ? null : (
+          <a
+            className={buttonClasses("primary", undefined, "compact")}
+            href={recruiterPdfHref(revisionId, pdfArtifactId)}
+          >
+            <Download aria-hidden="true" className="size-icon-sm" />
+            הורדת PDF
+          </a>
+        )}
+      </span>
+    </div>
+  );
+};
+
 /* One Application at a glance, laid out after demo_re's job-details modal: its four
    states side by side, what to do next, the finished CV, the posting, the reader's
    notes and when it was opened and last changed.
 
-   It is read from the board's own row - nothing is fetched - and every block is the
-   table's own component, so the modal cannot say something the row does not. It opens
-   from a click on a row or a card; the row's link icon, and this modal's primary
-   command, go straight to the work. */
+   It is read from the board's own row - only a finished CV's revision is fetched, for
+   its PDF - and every block is the table's own component, so the modal cannot say
+   something the row does not. It opens from a click on a row or a card, Enter on a row,
+   and the "פרטי משרה" control every record carries; the row's link icon, and this
+   modal's primary command, go straight to the work. */
 export const ApplicationDetailsDialog = ({
   application,
   clearing,
@@ -105,19 +145,7 @@ export const ApplicationDetailsDialog = ({
         </section>
 
         {application.latest_ready_revision_id == null ? null : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border p-3.5">
-            <span className="inline-flex items-center gap-2 text-support text-cv-text">
-              <FileCheck2 aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
-              קורות חיים מוכנים למשרה זו
-            </span>
-            <Link
-              className={buttonClasses("secondary", undefined, "compact")}
-              onClick={onClose}
-              to={routePaths.revision(application.latest_ready_revision_id)}
-            >
-              פתיחת הגרסה המוכנה
-            </Link>
-          </div>
+          <ReadyCv onClose={onClose} revisionId={application.latest_ready_revision_id} />
         )}
 
         {host === null || application.source_url == null ? null : (

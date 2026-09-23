@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Info, Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
@@ -134,6 +134,17 @@ const PipelineCard = ({
             <span className="truncate">{head.title}</span>
           </Link>
         )}
+        {/* The card body opens the details on a click; this is the same for the keyboard. */}
+        <Tooltip label="פרטי משרה">
+          <button
+            aria-label={`פרטי המשרה של ${item.company}`}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+            onClick={() => onRequestDetails(item)}
+            type="button"
+          >
+            <Info aria-hidden="true" className="size-icon-sm" />
+          </button>
+        </Tooltip>
         <Tooltip label="עדכון שלב הגיוס">
           <button
             aria-label={`עדכון שלב הגיוס של ${item.company}`}

@@ -75,6 +75,7 @@ export const ApplicationListRow = ({
           item={item}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
+          onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
         />
       </td>
