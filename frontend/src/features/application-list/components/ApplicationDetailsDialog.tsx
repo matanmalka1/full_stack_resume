@@ -121,6 +121,29 @@ export const ApplicationDetailsDialog = ({
   const withoutReadyCv: ApplicationListItem = { ...application, latest_ready_revision_id: null };
   const hasNextStep = nextActionHeading(withoutReadyCv, applicationAttention(application) !== null) !== null;
 
+  const description = (
+    <>
+      <span className="font-medium text-cv-text" dir="auto">
+        {application.target_role}
+      </span>
+      {application.track == null ? null : ` · ${trackLabel(application.track)}`}
+      {host === null || application.source_url == null ? null : (
+        <>
+          {" · "}
+          <a
+            className="inline-flex items-center gap-1 text-cv-accent hover:underline"
+            href={application.source_url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            מודעת המשרה
+            <ExternalLink aria-hidden="true" className="size-icon-sm" />
+          </a>
+        </>
+      )}
+    </>
+  );
+
   return (
     <Dialog
       footer={
@@ -140,6 +163,7 @@ export const ApplicationDetailsDialog = ({
           </Link>
         </>
       }
+      description={description}
       headingId="application-details-heading"
       onClose={onClose}
       open
@@ -147,27 +171,6 @@ export const ApplicationDetailsDialog = ({
       title={<span dir="auto">פרטי משרה: {application.company}</span>}
     >
       <div className="flex flex-col gap-4">
-        <p className="text-support text-cv-text-muted">
-          <span className="font-medium text-cv-text" dir="auto">
-            {application.target_role}
-          </span>
-          {application.track == null ? null : ` · ${trackLabel(application.track)}`}
-          {host === null || application.source_url == null ? null : (
-            <>
-              {" · "}
-              <a
-                className="inline-flex items-center gap-1 text-cv-accent hover:underline"
-                href={application.source_url}
-                rel="noreferrer"
-                target="_blank"
-              >
-                מודעת המשרה
-                <ExternalLink aria-hidden="true" className="size-icon-sm" />
-              </a>
-            </>
-          )}
-        </p>
-
         <div className="grid grid-cols-2 gap-4 rounded-control border border-cv-border bg-cv-canvas p-4 sm:grid-cols-4">
           <Fact label="סטטוס משרה">{application.is_closed ? "סגורה" : "פתוחה"}</Fact>
           <Fact detail={`שלב ${step} מתוך ${total}`} label="הכנת קו״ח">

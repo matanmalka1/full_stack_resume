@@ -27,6 +27,9 @@ const fieldState = (dialog: HTMLDialogElement): string =>
 
 interface DialogProps {
   children: ReactNode;
+  /* One line under the title, in the header: what the dialog is about, not its content.
+     It becomes the dialog's accessible description. */
+  description?: ReactNode;
   /* A.5: Escape cancels only when cancelling cannot approve, discard, or overwrite
      content. A conflict or approval dialog passes false and offers explicit choices. */
   dismissible?: boolean;
@@ -47,6 +50,7 @@ interface DialogProps {
    Tab wraps explicitly at the boundaries. Focus moves to the heading on open. */
 export const Dialog = ({
   children,
+  description,
   dismissible = true,
   footer,
   headingId,
@@ -82,6 +86,7 @@ export const Dialog = ({
 
   return (
     <dialog
+      aria-describedby={description === undefined ? undefined : `${headingId}-description`}
       aria-labelledby={headingId}
       className={surfaceClasses(
         `${heightClass} m-auto w-full ${
@@ -119,14 +124,21 @@ export const Dialog = ({
     >
       <div className={cx("flex flex-col", heightClass)} dir="rtl">
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-cv-border px-6 py-5">
-          <h2
-            className="text-heading-md font-semibold tracking-tight text-cv-text"
-            id={headingId}
-            ref={headingRef}
-            tabIndex={-1}
-          >
-            {title}
-          </h2>
+          <div className="min-w-0">
+            <h2
+              className="text-heading-md font-semibold tracking-tight text-cv-text"
+              id={headingId}
+              ref={headingRef}
+              tabIndex={-1}
+            >
+              {title}
+            </h2>
+            {description === undefined ? null : (
+              <p className="mt-1 text-support text-cv-text-muted" id={`${headingId}-description`}>
+                {description}
+              </p>
+            )}
+          </div>
           {dismissible ? (
             <IconButton
               aria-label="סגירה"
