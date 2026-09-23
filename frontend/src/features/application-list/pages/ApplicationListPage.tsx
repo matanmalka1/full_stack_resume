@@ -247,11 +247,15 @@ export const ApplicationListPage = () => {
               viewMode={viewMode}
             />
             <ApplicationListResults
+              clearingApplicationId={
+                clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null
+              }
               fetching={listQuery.isFetching && !listQuery.isPending}
               items={items}
               matchedCount={page.matched}
               offset={query.offset ?? 0}
               onClearFilters={clearFilters}
+              onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
               onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
               onRequestClose={(item) => setClosingApplicationId(item.id)}
               onRequestDelete={(item) => setDeletingApplicationId(item.id)}

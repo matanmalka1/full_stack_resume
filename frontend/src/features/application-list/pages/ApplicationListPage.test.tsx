@@ -250,9 +250,13 @@ describe("ApplicationListPage", () => {
        disappearing and leaving the reader to wonder whether it loaded. */
     const quietHub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(quietHub).getByText("אין פעולות ממתינות.")).toBeInTheDocument();
-    /* Each row places its CV state along the way to Ready. */
-    expect(await screen.findByText("שלב 1 מתוך 7")).toBeInTheDocument();
-    expect(screen.getByText("שלב 7 מתוך 7")).toBeInTheDocument();
+    /* Each row places its CV state along the way to Ready, as a position and a bar. */
+    expect(await screen.findByText("1/7")).toBeInTheDocument();
+    expect(screen.getByText("7/7")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "הכנת קורות החיים: קורות החיים מוכנים" })).toHaveAttribute(
+      "aria-valuenow",
+      "7",
+    );
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
@@ -266,7 +270,7 @@ describe("ApplicationListPage", () => {
     expect(board.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(board.getByText("קורות החיים מוכנים")).toBeInTheDocument();
     expect(board.getAllByText("נשמר")).toHaveLength(2);
-    for (const name of ["חברה ותפקיד", "התקדמות הכנה וגיוס", "פעולה הבאה", "התאמה", "עודכן"]) {
+    for (const name of ["חברה ותפקיד", "התקדמות הכנה וגיוס", "פעולה מומלצת הבאה", "ציון התאמה", "עדכון אחרון"]) {
       expect(board.getByRole("columnheader", { name })).toBeInTheDocument();
     }
     fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
@@ -359,6 +363,13 @@ describe("ApplicationListPage", () => {
 
     renderPage();
 
+    /* The row's command goes to the same step the row itself opens. */
+    const command = await screen.findByRole("link", { name: /· Acme$/ });
+    expect(command).toHaveTextContent("בצע");
+    expect(command.getAttribute("href")).toBe(
+      screen.getByRole("link", { name: "Acme" }).getAttribute("href"),
+    );
+
     fireEvent.click(await screen.findByText("Backend Engineer"));
 
     expect(screen.getByRole("heading", { name: "עורך הטיוטה" })).toBeInTheDocument();
@@ -421,6 +432,8 @@ describe("ApplicationListPage", () => {
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(hub).getByText("Follow up with recruiter")).toBeInTheDocument();
     expect(within(hub).getByText("פעולה אחת בעדיפות")).toBeInTheDocument();
+    /* The row offers the same dismissal beside its reminder. */
+    expect(within(screen.getByRole("table")).getByRole("button", { name: "הסרת התזכורת של Acme" })).toBeEnabled();
     fireEvent.click(within(hub).getByRole("button", { name: "הסרת תזכורת" }));
 
     await waitFor(() =>

@@ -11,25 +11,29 @@ import { ApplicationListRow } from "./ApplicationListRow";
    employer process stands - so neither reads as a step of the other. The final column
    gathers commands so the row has one predictable action edge. */
 const columns = [
-  { key: "identity", label: "חברה ותפקיד", width: "w-[26%]" },
-  { key: "progress", label: "התקדמות הכנה וגיוס", width: "w-[25%]" },
-  { key: "next-action", label: "פעולה הבאה", width: "w-[25%]" },
-  { key: "fit", label: "התאמה", width: "w-[11%]" },
-  { key: "activity", label: "עודכן", width: "w-[9%]" },
+  { key: "identity", label: "חברה ותפקיד", width: "w-[24%]" },
+  { key: "progress", label: "התקדמות הכנה וגיוס", width: "w-[22%]" },
+  { key: "next-action", label: "פעולה מומלצת הבאה", width: "w-[30%]" },
+  { key: "fit", label: "ציון התאמה", width: "w-[9%]", center: true },
+  { key: "activity", label: "עדכון אחרון", width: "w-[11%]" },
   /* The column holds one icon-sized menu trigger. Its name stays for assistive tech but is
      not drawn: at the trigger's width a visible label was clipped by the table edge. */
   { key: "actions", label: "פעולות", width: "w-12", visuallyHidden: true },
 ] as const;
 
 interface ApplicationListTableProps {
+  clearingApplicationId: string | null;
   items: readonly ApplicationListItem[];
+  onClearNextAction: (item: ApplicationListItem) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
 export const ApplicationListTable = ({
+  clearingApplicationId,
   items,
+  onClearNextAction,
   onRequestClose,
   onRequestDelete,
   onRequestUpdate,
@@ -46,7 +50,8 @@ export const ApplicationListTable = ({
             {columns.map(({ key, label, width, ...column }) => (
               <th
                 className={cx(
-                  "px-3 py-3 text-start text-support font-semibold text-cv-text-muted first:ps-4 last:pe-4",
+                  "px-4 py-3 text-support font-semibold text-cv-text-muted",
+                  "center" in column ? "text-center" : "text-start",
                   width,
                 )}
                 key={key}
@@ -61,8 +66,10 @@ export const ApplicationListTable = ({
           {items.map((item) => (
             <ApplicationListRow
               ambiguous={ambiguous.has(item.id)}
+              clearing={clearingApplicationId === item.id}
               item={item}
               key={item.id}
+              onClearNextAction={onClearNextAction}
               onRequestClose={onRequestClose}
               onRequestDelete={onRequestDelete}
               onRequestUpdate={onRequestUpdate}
@@ -92,7 +99,7 @@ export const ApplicationListTableSkeleton = () => (
     <div className="divide-y divide-cv-border">
       {skeletonRows.map((key) => (
         <div
-          className="grid min-h-32 grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 lg:grid-cols-[26%_25%_25%_11%_9%_3rem] lg:items-start lg:py-3"
+          className="grid min-h-32 grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 lg:grid-cols-[24%_22%_30%_9%_11%_3rem] lg:items-start lg:py-3"
           key={key}
         >
           <div className="flex gap-2">

@@ -8,6 +8,7 @@ import { ApplicationListTable } from "./ApplicationListTable";
 import { ApplicationPipelineView } from "./ApplicationPipelineView";
 
 interface ApplicationListResultsProps {
+  clearingApplicationId: string | null;
   fetching: boolean;
   items: readonly ApplicationListItem[];
   matchedCount: number;
@@ -15,6 +16,7 @@ interface ApplicationListResultsProps {
   pageSize: number;
   viewMode: ViewMode;
   onClearFilters: () => void;
+  onClearNextAction: (item: ApplicationListItem) => void;
   onOffsetChange: (offset: number) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
@@ -29,6 +31,7 @@ interface ApplicationListResultsProps {
    drawn is a presentation decision and stays here; what is in the page and how it was
    narrowed remain the page's. */
 export const ApplicationListResults = ({
+  clearingApplicationId,
   fetching,
   items,
   matchedCount,
@@ -36,6 +39,7 @@ export const ApplicationListResults = ({
   pageSize,
   viewMode,
   onClearFilters,
+  onClearNextAction,
   onOffsetChange,
   onRequestClose,
   onRequestDelete,
@@ -70,7 +74,9 @@ export const ApplicationListResults = ({
         <ApplicationPipelineView items={items} onRequestUpdate={onRequestUpdate} />
       ) : (
         <ApplicationListTable
+          clearingApplicationId={clearingApplicationId}
           items={items}
+          onClearNextAction={onClearNextAction}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
           onRequestUpdate={onRequestUpdate}

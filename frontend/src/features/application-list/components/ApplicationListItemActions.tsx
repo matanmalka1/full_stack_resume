@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, CircleAlert, Ellipsis, FileCheck2, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Archive, ArrowLeft, CircleAlert, EllipsisVertical, FileCheck2, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -28,7 +28,7 @@ const revisionLinkClasses: Record<ActionVariant, string> = {
 /* Terminal only means polling may stop. A failed or interrupted run remains the most
    important next-action fact until a newer run supersedes it; successful and deliberately
    cancelled work yield back to the projection's normal recommendation. */
-const reportedOperation = (item: ApplicationListItem) => {
+export const reportedOperation = (item: ApplicationListItem) => {
   const latest = item.active_operation ?? item.latest_operation;
 
   return latest != null &&
@@ -148,7 +148,7 @@ export const ApplicationRecordActions = ({
           ref={triggerRef}
           type="button"
         >
-          <Ellipsis aria-hidden="true" className="size-icon-md" />
+          <EllipsisVertical aria-hidden="true" className="size-icon-md" />
         </button>
       </Tooltip>
       {open ? (

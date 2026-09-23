@@ -32,10 +32,11 @@ export const pageWindow = (current: number, count: number): (number | "gap")[] =
 const localDayNumber = (date: Date): number =>
   Math.round(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 86_400_000);
 
-/* When an Application last changed, the way the board says it: by the reader's local
-   calendar day for the last week, then as a date. It is presentation only - the full
-   date stays in the element's title and `dateTime` - and a value that does not parse,
-   or one in the future, falls back to the absolute form rather than a guessed phrase. */
+/* When an Application last changed, the way the board says it (after demo_re): by the
+   hour today, by the reader's local calendar day for the rest of the week, then as a
+   date. It is presentation only - the full date stays in the element's title and
+   `dateTime` - and a value that does not parse, or one on a later day, falls back to the
+   absolute form rather than a guessed phrase. */
 export const formatRelativeUpdate = (value: string, now: Date = new Date()): string => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -43,10 +44,13 @@ export const formatRelativeUpdate = (value: string, now: Date = new Date()): str
   }
 
   const days = localDayNumber(now) - localDayNumber(parsed);
-  if (days === 0) return "היום";
-  if (days === 1) return "אתמול";
-  if (days === 2) return "לפני יומיים";
-  if (days > 2 && days < 7) return `לפני ${days} ימים`;
+  if (days === 0) {
+    const hours = Math.floor((now.getTime() - parsed.getTime()) / 3_600_000);
+    return hours < 1 ? "עודכן עכשיו" : `עודכן היום (לפני ${hours} שע׳)`;
+  }
+  if (days === 1) return "עודכן אתמול";
+  if (days === 2) return "עודכן לפני יומיים";
+  if (days > 2 && days < 7) return `עודכן לפני ${days} ימים`;
   return formatApplicationDate(value);
 };
 

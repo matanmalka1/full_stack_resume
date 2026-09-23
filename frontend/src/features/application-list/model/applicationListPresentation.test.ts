@@ -27,11 +27,12 @@ describe("relative update dates", () => {
   const now = new Date(2026, 8, 9, 10, 0);
   const daysAgo = (days: number, hour = 12) => new Date(2026, 8, 9 - days, hour).toISOString();
 
-  it("names the last week by the reader's local calendar day", () => {
-    expect(formatRelativeUpdate(daysAgo(0, 1), now)).toBe("היום");
-    expect(formatRelativeUpdate(daysAgo(1, 23), now)).toBe("אתמול");
-    expect(formatRelativeUpdate(daysAgo(2), now)).toBe("לפני יומיים");
-    expect(formatRelativeUpdate(daysAgo(6), now)).toBe("לפני 6 ימים");
+  it("names today by the hour and the rest of the week by the reader's local calendar day", () => {
+    expect(formatRelativeUpdate(new Date(2026, 8, 9, 9, 30).toISOString(), now)).toBe("עודכן עכשיו");
+    expect(formatRelativeUpdate(daysAgo(0, 1), now)).toBe("עודכן היום (לפני 9 שע׳)");
+    expect(formatRelativeUpdate(daysAgo(1, 23), now)).toBe("עודכן אתמול");
+    expect(formatRelativeUpdate(daysAgo(2), now)).toBe("עודכן לפני יומיים");
+    expect(formatRelativeUpdate(daysAgo(6), now)).toBe("עודכן לפני 6 ימים");
   });
 
   it("falls back to the absolute date beyond a week, in the future, and keeps unparseable values", () => {

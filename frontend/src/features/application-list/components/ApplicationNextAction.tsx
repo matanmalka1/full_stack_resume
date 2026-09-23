@@ -1,7 +1,6 @@
 import { Clock } from "lucide-react";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { formatApplicationDate, isNextActionOverdue } from "../model/applicationListPresentation";
@@ -28,29 +27,6 @@ export const ApplicationNextAction = ({
   }
 
   const overdue = !closed && isNextActionOverdue(item.next_action_date);
-  if (variant === "row") {
-    return (
-      <div className="flex flex-col items-start gap-1">
-        <span className="text-support text-cv-text" dir="auto">
-          {item.next_action}
-        </span>
-        {item.next_action_date == null ? null : (
-          <span className="flex items-center gap-1.5 text-support text-cv-text-muted">
-            {overdue ? (
-              <StatusBadge className="gap-1 px-2 py-0.5" tone="warning">
-                באיחור
-              </StatusBadge>
-            ) : null}
-            <span className="inline-flex items-center gap-1.5">
-              <Clock aria-hidden="true" className="size-icon-sm shrink-0" />
-              {formatApplicationDate(item.next_action_date)}
-            </span>
-          </span>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div
       className={cx(

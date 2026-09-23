@@ -1,27 +1,23 @@
-import { Clock, TriangleAlert } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { preparationResumeDestination } from "@/features/preparation";
-import { cx } from "@/ui/cx";
-import {
-  applicationAttention,
-  formatApplicationDate,
-  formatRelativeUpdate,
-} from "../model/applicationListPresentation";
-import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";
+import { formatApplicationDate, formatRelativeUpdate } from "../model/applicationListPresentation";
+import { ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
-import { ApplicationNextAction } from "./ApplicationNextAction";
 import {
   ApplicationFitStatus,
   ApplicationPreparationStatus,
   ApplicationRecruitmentStatus,
 } from "./ApplicationListStatuses";
+import { ApplicationRowNextAction, ApplicationRunningOperation } from "./ApplicationRowNextAction";
 
 interface ApplicationListRowProps {
   ambiguous: boolean;
+  clearing: boolean;
   item: ApplicationListItem;
+  onClearNextAction: (item: ApplicationListItem) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
@@ -29,14 +25,15 @@ interface ApplicationListRowProps {
 
 export const ApplicationListRow = ({
   ambiguous,
+  clearing,
   item,
+  onClearNextAction,
   onRequestClose,
   onRequestDelete,
   onRequestUpdate,
 }: ApplicationListRowProps) => {
   const navigate = useNavigate();
   const href = preparationResumeDestination(item);
-  const attention = applicationAttention(item);
 
   /* The row navigates as a whole but yields to real controls and text selection. The
      job-title link remains the native keyboard and screen-reader route into it. */
@@ -71,22 +68,6 @@ export const ApplicationListRow = ({
     }
   };
 
-  const attentionLink =
-    attention === null ? null : (
-      <Link
-        aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
-        className={cx(
-          "inline-flex max-w-full items-start gap-1.5 rounded-control text-support font-medium hover:underline",
-          attention.tone === "blocker" ? "text-cv-blocker" : "text-cv-warning",
-        )}
-        title={attention.items.map((entry) => entry.title).join(" · ")}
-        to={href}
-      >
-        <TriangleAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0" />
-        <span className="min-w-0 line-clamp-2 lg:line-clamp-1">{attention.label}</span>
-      </Link>
-    );
-
   return (
     <tr
       aria-label={`${item.target_role} אצל ${item.company}`}
@@ -99,35 +80,31 @@ export const ApplicationListRow = ({
       onKeyDown={openRowFromKeyboard}
       tabIndex={0}
     >
-      <td className="col-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3.5">
+      <td className="col-start-1 px-0 pb-3 align-top lg:px-4 lg:py-4 lg:align-middle">
         <ApplicationIdentity ambiguous={ambiguous} item={item} variant="row" />
       </td>
-      <td className="col-span-2 border-t border-cv-border px-0 py-3 align-top lg:border-0 lg:px-3 lg:py-3.5">
+      <td className="col-span-2 border-t border-cv-border px-0 py-3 align-top lg:border-0 lg:px-4 lg:py-4 lg:align-middle">
         <div className="flex flex-col items-start gap-2">
           <ApplicationPreparationStatus item={item} variant="row" />
-          <ApplicationRecruitmentStatus item={item} variant="row" />
-          {attentionLink}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ApplicationRecruitmentStatus item={item} variant="row" />
+            <ApplicationRunningOperation item={item} />
+          </div>
         </div>
       </td>
-      <td className="col-span-2 border-t border-cv-border px-0 py-3 align-top lg:border-0 lg:px-3 lg:py-3.5">
-        <div className="flex flex-col items-start gap-2 empty:after:text-support empty:after:text-cv-text-muted empty:after:content-['—']">
-          <ApplicationRecommendedAction item={item} variant="row" />
-          <ApplicationNextAction item={item} variant="row" />
-        </div>
+      <td className="col-span-2 border-t border-cv-border px-0 py-3 align-top lg:border-0 lg:px-4 lg:py-4 lg:align-middle">
+        <ApplicationRowNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
       </td>
-      <td className="col-start-1 row-start-4 border-t border-cv-border px-0 pt-3 align-top lg:border-0 lg:px-3 lg:py-3.5">
+      <td className="col-start-1 row-start-4 border-t border-cv-border px-0 pt-3 align-top lg:border-0 lg:px-4 lg:py-4 lg:text-center lg:align-middle">
         <ApplicationFitStatus item={item} variant="row" />
       </td>
-      <td className="col-start-2 row-start-4 whitespace-nowrap border-t border-cv-border px-0 pt-3 align-top text-support text-cv-text-muted lg:border-0 lg:px-3 lg:py-3.5">
-        <span
-          className="inline-flex items-center gap-1.5"
-          title={`עודכנה ב־${formatApplicationDate(item.updated_at)} · נפתחה ב־${formatApplicationDate(item.created_at)}`}
-        >
-          <Clock aria-hidden="true" className="size-icon-sm shrink-0" />
-          <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
-        </span>
+      <td
+        className="col-start-2 row-start-4 whitespace-nowrap border-t border-cv-border px-0 pt-3 align-top text-support text-cv-text-muted lg:border-0 lg:px-4 lg:py-4 lg:align-middle"
+        title={`עודכנה ב־${formatApplicationDate(item.updated_at)} · נפתחה ב־${formatApplicationDate(item.created_at)}`}
+      >
+        <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
       </td>
-      <td className="col-start-2 row-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3.5">
+      <td className="col-start-2 row-start-1 px-0 pb-3 align-top lg:px-4 lg:py-4 lg:text-center lg:align-middle">
         <ApplicationRecordActions
           item={item}
           onRequestClose={onRequestClose}
