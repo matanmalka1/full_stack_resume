@@ -11,6 +11,27 @@ import { formatDateTime } from "@/utils/formatDateTime";
 
 export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");
 
+const localDayNumber = (date: Date): number =>
+  Math.round(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 86_400_000);
+
+/* When an Application last changed, the way the board says it: by the reader's local
+   calendar day for the last week, then as a date. It is presentation only - the full
+   date stays in the element's title and `dateTime` - and a value that does not parse,
+   or one in the future, falls back to the absolute form rather than a guessed phrase. */
+export const formatRelativeUpdate = (value: string, now: Date = new Date()): string => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  const days = localDayNumber(now) - localDayNumber(parsed);
+  if (days === 0) return "היום";
+  if (days === 1) return "אתמול";
+  if (days === 2) return "לפני יומיים";
+  if (days > 2 && days < 7) return `לפני ${days} ימים`;
+  return formatApplicationDate(value);
+};
+
 /* Where a CV state sits along the way to Ready, for the row's step bar. The order is the
    one the specification lists the values in (§4) and the one the board's "stage" sort
    already ranks by; it is read from the exhaustive label map rather than restated, so a

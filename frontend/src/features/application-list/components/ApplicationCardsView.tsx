@@ -5,7 +5,11 @@ import type { ApplicationListItem } from "@/api/contracts";
 import { preparationResumeDestination } from "@/features/preparation";
 import { surfaceClasses } from "@/ui/surface";
 import { cx } from "@/ui/cx";
-import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
+import {
+  applicationAttention,
+  formatApplicationDate,
+  formatRelativeUpdate,
+} from "../model/applicationListPresentation";
 import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
 import { ApplicationNextAction } from "./ApplicationNextAction";
@@ -84,9 +88,12 @@ const ApplicationCard = ({
             onRequestDelete={onRequestDelete}
             onRequestUpdate={onRequestUpdate}
           />
-          <span className="ms-1 inline-flex items-center gap-1 text-support text-cv-text-muted">
+          <span
+            className="ms-1 inline-flex items-center gap-1 text-support text-cv-text-muted"
+            title={`עודכנה ב־${formatApplicationDate(item.updated_at)}`}
+          >
             <Clock aria-hidden="true" className="size-icon-sm" />
-            {formatApplicationDate(item.updated_at)}
+            <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
           </span>
         </div>
         <ApplicationRecommendedAction item={item} variant="card" />

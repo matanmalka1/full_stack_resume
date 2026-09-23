@@ -5,7 +5,11 @@ import { Link, useNavigate } from "react-router-dom";
 import type { ApplicationListItem } from "@/api/contracts";
 import { preparationResumeDestination } from "@/features/preparation";
 import { cx } from "@/ui/cx";
-import { applicationAttention, formatApplicationDate } from "../model/applicationListPresentation";
+import {
+  applicationAttention,
+  formatApplicationDate,
+  formatRelativeUpdate,
+} from "../model/applicationListPresentation";
 import { ApplicationRecommendedAction, ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
 import { ApplicationNextAction } from "./ApplicationNextAction";
@@ -117,9 +121,12 @@ export const ApplicationListRow = ({
         </div>
       </td>
       <td className="col-start-2 row-start-5 whitespace-nowrap px-0 pt-3 align-bottom text-support text-cv-text-muted lg:px-3 lg:py-3 lg:align-top">
-        <span className="inline-flex items-center gap-1.5" title={`נפתחה ב־${formatApplicationDate(item.created_at)}`}>
+        <span
+          className="inline-flex items-center gap-1.5"
+          title={`עודכנה ב־${formatApplicationDate(item.updated_at)} · נפתחה ב־${formatApplicationDate(item.created_at)}`}
+        >
           <Clock aria-hidden="true" className="size-icon-sm shrink-0" />
-          {formatApplicationDate(item.updated_at)}
+          <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
         </span>
       </td>
       <td className="col-start-2 row-start-1 px-0 pb-3 align-top lg:px-3 lg:py-3">
