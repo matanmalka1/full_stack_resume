@@ -12,12 +12,7 @@ interface FactPoolFiltersProps {
   tags: string[];
 }
 
-/* This screen fetches the pool once with no status filter and narrows it client-side
-   (`factFilters.ts`), and the unfiltered fetch itself excludes `deleted` facts by
-   default (state-and-use-cases.md §17) - so a "deleted" option here would always show
-   zero results rather than reaching them. A deleted fact stays reachable by its own
-   detail/history reads; browsing the deleted set from this list is left undone rather
-   than added as a filter that silently does nothing. */
+// Deleted facts are absent from the pool response, so they cannot be filtered here.
 const statuses: FactStatus[] = ["pending", "confirmed", "canonical"];
 
 export const FactPoolFilters = ({ filters, onChange, sources, tags }: FactPoolFiltersProps) => (

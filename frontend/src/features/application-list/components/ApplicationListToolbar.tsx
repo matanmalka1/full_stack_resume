@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import type { ActivityFilter, ApplicationSort, PreparationState } from "@/api/contracts";
 import { preparationStateLabels } from "@/features/preparation";
 import { Button } from "@/ui/Button";
+import { Field } from "@/ui/Field";
 import { Input } from "@/ui/Input";
 import { Select } from "@/ui/Select";
 import { flatSurfaceClasses } from "@/ui/surface";
@@ -23,11 +24,7 @@ const sortLabels: Record<ApplicationSort, string> = {
   stage: "לפי מצב קורות החיים",
 };
 
-/* Sized by the longest option rather than by a shared fixed width: "כל מצבי קורות
-   החיים" is a good deal longer than "פעילות", and one width for both either clipped
-   that label under the native arrow or padded the short menu out with empty space.
-   The bounds keep the row from turning ragged - nothing narrower than a real target,
-   nothing wide enough to push the rest of the bar off the line. */
+// Let each select fit its options without pushing the other controls off the row.
 const fieldClasses = "w-full min-w-0 sm:w-auto sm:min-w-36 sm:max-w-64";
 
 interface ApplicationListToolbarProps {
@@ -50,17 +47,6 @@ interface ApplicationListToolbarProps {
   onViewModeChange: (view: ViewMode) => void;
 }
 
-/* Everything that narrows the board and everything that decides how it is drawn, in
-   one bar. The named slices moved up beside the page title, where the reader picks a
-   slice before asking anything else; what is left here is one row - the question on
-   the reading side, the presentation controls pushed to the far end - inside a single
-   surface, so the controls read as one object above the board rather than as loose
-   fields on the page's ground.
-
-   A control that is set says so by showing its own value, so nothing is restated as a
-   removable chip: one control, one place, plus a single way to put every filter back to
-   its default. Sort survives that reset, because it orders the list rather than
-   narrowing it. The count of what matched sits under the bar, next to that reset. */
 export const ApplicationListToolbar = ({
   activity,
   filtered,
@@ -85,96 +71,84 @@ export const ApplicationListToolbar = ({
       aria-label="סינון וחיפוש מועמדויות"
       className={flatSurfaceClasses("flex flex-wrap items-center gap-2 bg-cv-surface px-3 py-2.5")}
     >
-      <label className="sr-only" htmlFor="list-search">
-        חיפוש במועמדויות
-      </label>
-      {/* The question grows into whatever the filters leave: the four controls are sized
-          by their own labels, so on a wide board they used to sit against the reading
-          edge with the rest of the surface empty beside them. */}
-      <div className="relative w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1">
-        <Search
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
-        />
-        <Input
-          className="ps-9"
-          dir="rtl"
-          id="list-search"
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="חברה או תפקיד"
-          type="search"
-          value={search}
-        />
-      </div>
+      <Field className="w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1" label="חיפוש במועמדויות">
+        {(control) => (
+          <div className="relative">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
+            />
+            <Input
+              {...control}
+              className="ps-9"
+              dir="rtl"
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="חברה או תפקיד"
+              type="search"
+              value={search}
+            />
+          </div>
+        )}
+      </Field>
 
-      <label className="sr-only" htmlFor="list-activity">
-        מועמדויות
-      </label>
-      <Select
-        className={fieldClasses}
-        id="list-activity"
-        onChange={(event) => onActivityChange(event.target.value as ActivityFilter)}
-        value={activity}
-      >
-        {(Object.keys(activityLabels) as ActivityFilter[]).map((key) => (
-          <option key={key} value={key}>
-            {activityLabels[key]}
-          </option>
-        ))}
-      </Select>
+      <Field className={fieldClasses} label="מועמדויות">
+        {(control) => (
+          <Select
+            {...control}
+            onChange={(event) => onActivityChange(event.target.value as ActivityFilter)}
+            value={activity}
+          >
+            {(Object.keys(activityLabels) as ActivityFilter[]).map((key) => (
+              <option key={key} value={key}>
+                {activityLabels[key]}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
 
-      <label className="sr-only" htmlFor="list-stage">
-        מצב קורות החיים
-      </label>
-      <Select
-        className={fieldClasses}
-        id="list-stage"
-        onChange={(event) =>
-          onPreparationStateChange(event.target.value === "" ? undefined : (event.target.value as PreparationState))
-        }
-        value={preparationState ?? ""}
-      >
-        <option value="">כל מצבי קורות החיים</option>
-        {/* The menu hides stages nothing is in, except the one the URL already selects:
-            dropping that option left the select falling back to its first - "הכול" -
-            while the filter was in fact still applied, so the control disagreed with
-            the results it produced. */}
-        {(Object.keys(preparationStateLabels) as PreparationState[])
-          .filter((stage) => (stageCounts[stage] ?? 0) > 0 || stage === preparationState)
-          .map((stage) => (
-            <option key={stage} value={stage}>
-              {preparationStateLabels[stage]} ({stageCounts[stage] ?? 0})
-            </option>
-          ))}
-      </Select>
+      <Field className={fieldClasses} label="מצב קורות החיים">
+        {(control) => (
+          <Select
+            {...control}
+            onChange={(event) =>
+              onPreparationStateChange(event.target.value === "" ? undefined : (event.target.value as PreparationState))
+            }
+            value={preparationState ?? ""}
+          >
+            <option value="">כל מצבי קורות החיים</option>
+            {/* Keep the selected URL value visible even when its current count is zero. */}
+            {(Object.keys(preparationStateLabels) as PreparationState[])
+              .filter((stage) => (stageCounts[stage] ?? 0) > 0 || stage === preparationState)
+              .map((stage) => (
+                <option key={stage} value={stage}>
+                  {preparationStateLabels[stage]} ({stageCounts[stage] ?? 0})
+                </option>
+              ))}
+          </Select>
+        )}
+      </Field>
 
-      <label className="sr-only" htmlFor="list-recruitment-stage">
-        שלב גיוס
-      </label>
-      <Select
-        className={fieldClasses}
-        id="list-recruitment-stage"
-        onChange={(event) =>
-          onRecruitmentStageChange(event.target.value === "" ? null : (event.target.value as RecruitmentStageId))
-        }
-        value={recruitmentStage ?? ""}
-      >
-        <option value="">כל שלבי הגיוס</option>
-        {recruitmentStages.map((stage) => (
-          <option key={stage.id} value={stage.id}>
-            {stage.label} ({recruitmentStageCounts[stage.id] ?? 0})
-          </option>
-        ))}
-      </Select>
+      <Field className={fieldClasses} label="שלב גיוס">
+        {(control) => (
+          <Select
+            {...control}
+            onChange={(event) =>
+              onRecruitmentStageChange(event.target.value === "" ? null : (event.target.value as RecruitmentStageId))
+            }
+            value={recruitmentStage ?? ""}
+          >
+            <option value="">כל שלבי הגיוס</option>
+            {recruitmentStages.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.label} ({recruitmentStageCounts[stage.id] ?? 0})
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
     </search>
 
-    {/* What matched, and how it is drawn, on one line under the bar. The presentation
-        controls used to sit inside the filter surface behind `ms-auto`, which held on a
-        very wide window and broke everywhere else: below about 1500px the group wrapped
-        to a second line of its own and left most of that line empty, so the bar drew a
-        blank band across the page. Reading the count and choosing the view are also two
-        different questions from narrowing the board, and the row they now share has no
-        width at which it goes ragged. */}
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
         {resultSummary}
@@ -185,22 +159,18 @@ export const ApplicationListToolbar = ({
         </Button>
       ) : null}
 
-      <div className="flex items-center gap-2 ms-auto">
-        <label className="sr-only" htmlFor="list-sort">
-          סדר
-        </label>
-        <Select
-          className="w-40"
-          id="list-sort"
-          onChange={(event) => onSortChange(event.target.value as ApplicationSort)}
-          value={sort}
-        >
-          {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
-            <option key={key} value={key}>
-              {sortLabels[key]}
-            </option>
-          ))}
-        </Select>
+      <div className="flex items-end gap-2 ms-auto">
+        <Field className="w-40" label="סדר">
+          {(control) => (
+            <Select {...control} onChange={(event) => onSortChange(event.target.value as ApplicationSort)} value={sort}>
+              {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
+                <option key={key} value={key}>
+                  {sortLabels[key]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
         <ViewSwitch
           label="בחירת תצוגת מועמדויות"
           onChange={onViewModeChange}
