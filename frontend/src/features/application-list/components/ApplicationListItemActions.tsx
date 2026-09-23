@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { Tooltip } from "@/ui/Tooltip";
+import { cx } from "@/ui/cx";
 import { sourceHostname } from "@/features/applications";
 import { preparationResumeDestination } from "@/features/preparation";
 
@@ -20,8 +21,11 @@ export const reportedOperation = (item: ApplicationListItem) => {
     : null;
 };
 
-const menuItemBase =
-  "flex min-h-9 w-full items-center gap-2 px-3.5 py-2 text-start text-support font-medium transition-colors";
+/* No font size here: the global `button { font: inherit }` rule is unlayered, so it beats
+   any text-size utility on a button, and the items that are buttons take the menu's
+   inherited size whatever their class says. The items that are links would take the
+   utility and read a size smaller. Every item inheriting keeps the menu one size. */
+const menuItemBase = "flex min-h-9 w-full items-center gap-2 px-3.5 py-2 text-start font-medium transition-colors";
 const menuItemClasses = `${menuItemBase} text-cv-text hover:bg-cv-surface-muted`;
 
 export const ApplicationRecordActions = ({
@@ -65,7 +69,12 @@ export const ApplicationRecordActions = ({
   }, [open]);
 
   return (
-    <div className="relative z-(--cv-z-content-raised) shrink-0" ref={containerRef}>
+    /* Open, the menu's container rises to the dropdown layer: every row's container
+       shares the raised layer, so a later row's trigger would otherwise paint over it. */
+    <div
+      className={cx("relative shrink-0", open ? "z-(--cv-z-sticky)" : "z-(--cv-z-content-raised)")}
+      ref={containerRef}
+    >
       <Tooltip label="פעולות נוספות">
         <button
           aria-controls={menuId}
