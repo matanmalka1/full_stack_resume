@@ -82,6 +82,19 @@ Use `surfaceClasses` only for genuinely floating UI such as dialogs, dropdowns a
 popovers. A normal table, form section or content panel should separate itself with a
 hairline or a background step, not border, radius and shadow together.
 
+The application board is the one deliberate exception. Its table, its cards and its
+stage lanes follow the `demo_re` reference board the product owner chose: the table is a
+rounded (`rounded-surface`), shadowed card with a `canvas`-toned header, and each card
+and stage lane is rounded as well. Because the table cannot clip its own corners - row
+menus open over its edge - its header and last-row corner cells take the radius
+themselves (`rounded-ss-surface` and its siblings). Other screens keep the flat default;
+the exception does not extend to them by example.
+
+Hover labels use the `Tooltip` component, never a native `title` attribute: the browser's
+own tooltip arrives late, cannot be styled, and never shows on keyboard focus. Pass
+`wrap` for a label longer than a control's name. Text that only repeats what is already
+visible gets no tooltip; clamp it to two lines instead of truncating it.
+
 Workflow routes place their stage spine beside the active content at desktop widths.
 The spine uses heading-weight labels, larger marks and a continuous vertical connector;
 below the large breakpoint it becomes one row of marks above the content, joined by
