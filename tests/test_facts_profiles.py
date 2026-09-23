@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import uuid
 from pathlib import Path
 
-import pytest
 from fixtures.knowledge import SOURCE_ROOT
 from seed import V2_IDENTITY_FACT, facts_in, source_texts
 
@@ -74,11 +74,36 @@ def profile_documents(project_root: Path) -> dict[str, dict]:
     }
 
 
-def test_every_dated_role_is_carried_or_declined(fact_store, profile_store) -> None:
-    """No Profile drops a dated role without saying so.
+def _assert_refused(label: str, documents: dict, store: FactStore, message: str) -> None:
+    try:
+        ProfileStore.from_documents(documents, store)
+    except ProfileStoreError as error:
+        assert re.search(message, str(error)), (label, str(error))
+    else:
+        raise AssertionError(f"{label}: accepted")
+
+
+def _profile(documents: dict, name: str) -> str:
+    return next(key for key in documents if key.endswith(f"{name}.yaml"))
+
+
+def test_dated_role_coverage(fact_store, profile_store, project_root: Path) -> None:
+    """No Profile drops a dated role without saying so, and no declaration excuses a lie.
 
     The two Profiles absent from `DECLARED_ROLE_OMISSIONS` carry all three roles,
     so between them the ten Profiles account for every dated role in the store.
+
+    Only canonical roles are owed an account: a role still moving through
+    `pending -> confirmed -> canonical` is not a fact a CV may be built from, so
+    requiring every Profile to carry or decline it would wedge the profile set.
+
+    Refused: dropping a role with no waiver; a waiver naming something that is not
+    a dated canonical role, or a role the Profile carries anyway; a waiver without
+    a reason, which leaves the omission as unexplained as never declaring it; and
+    a hole between two carried roles. Truncating either end of the history states
+    nothing about the months outside it, but dropping the role *between* two the
+    CV prints leaves them abutting, which their own dates deny - so declaring that
+    omission does not make it allowed.
     """
     dated = {
         fact.fact_id
@@ -107,61 +132,6 @@ def test_every_dated_role_is_carried_or_declined(fact_store, profile_store) -> N
             assert reason.strip(), name
     assert declared == DECLARED_ROLE_OMISSIONS
 
-
-def test_a_dated_role_cannot_be_dropped_silently(fact_store, project_root: Path) -> None:
-    documents = profile_documents(project_root)
-    target = next(key for key in documents if key.endswith("account-executive.yaml"))
-    documents[target].pop("omitted_roles")
-    with pytest.raises(ProfileStoreError, match="neither offers nor waives"):
-        ProfileStore.from_documents(documents, fact_store)
-
-
-def test_a_waiver_must_name_a_dated_role_the_profile_does_not_carry(
-    fact_store, project_root: Path
-) -> None:
-    documents = profile_documents(project_root)
-    account_executive = next(key for key in documents if key.endswith("account-executive.yaml"))
-    tech_sales = next(key for key in documents if key.endswith("tech-sales.yaml"))
-
-    stale = copy.deepcopy(documents)
-    stale[account_executive]["omitted_roles"]["sales.summary.tech"] = "not a role"
-    with pytest.raises(ProfileStoreError, match="not a dated canonical role"):
-        ProfileStore.from_documents(stale, fact_store)
-
-    contradictory = copy.deepcopy(documents)
-    contradictory[tech_sales]["omitted_roles"] = {"development.phdigital.role": "carried too"}
-    with pytest.raises(ProfileStoreError, match="both offers and waives"):
-        ProfileStore.from_documents(contradictory, fact_store)
-
-
-def test_no_waiver_clears_a_hole_between_two_carried_roles(fact_store, project_root: Path) -> None:
-    """The one omission the printed page misrepresents is refused outright.
-
-    Truncating either end of the history states nothing about the months outside
-    it. Dropping the role *between* two the CV prints leaves them abutting, which
-    their own dates deny - so declaring the omission does not make it allowed.
-    """
-    documents = profile_documents(project_root)
-    target = next(key for key in documents if key.endswith("tech-sales.yaml"))
-    for section in documents[target]["sections"]:
-        for key in ("fact_ids", "pinned_fact_ids"):
-            section[key] = [
-                fact_id for fact_id in section.get(key, []) if fact_id != "sales.role.leader.title"
-            ]
-    documents[target]["omitted_roles"] = {"sales.role.leader.title": "declared, and still refused"}
-    with pytest.raises(ProfileStoreError, match="unexplained gap"):
-        ProfileStore.from_documents(documents, fact_store)
-
-
-def test_a_pending_role_is_not_yet_the_history_a_profile_owes(
-    fact_store, project_root: Path
-) -> None:
-    """Only canonical roles are owed an account.
-
-    A role still moving through `pending -> confirmed -> canonical` is not a
-    fact a CV may be built from, so requiring every Profile to carry or decline
-    it would make creating one wedge the whole profile set.
-    """
     facts = dict(fact_store.facts)
     proposed = facts["sales.role.field.title"].model_copy(
         update={"fact_id": "sales.role.proposed.title", "status": FactStatus.PENDING}
@@ -173,74 +143,82 @@ def test_a_pending_role_is_not_yet_the_history_a_profile_owes(
         fact_id for profile in profiles.profiles.values() for fact_id in profile.omitted_roles
     }
 
+    def dropped(documents: dict) -> None:
+        documents[_profile(documents, "account-executive")].pop("omitted_roles")
 
-@pytest.mark.parametrize(
-    ("span", "message"),
-    [
-        ("2025-00/2025-06", "no readable span"),
-        ("2025-13/2026-01", "no readable span"),
-        ("2026-06/2025-02", "ends before it starts"),
-    ],
-)
-def test_a_span_must_be_a_real_forward_interval(
-    fact_store, project_root: Path, span: str, message: str
+    def stale(documents: dict) -> None:
+        documents[_profile(documents, "account-executive")]["omitted_roles"][
+            "sales.summary.tech"
+        ] = "not a role"
+
+    def contradictory(documents: dict) -> None:
+        documents[_profile(documents, "tech-sales")]["omitted_roles"] = {
+            "development.phdigital.role": "carried too"
+        }
+
+    def hole(documents: dict) -> None:
+        target = _profile(documents, "tech-sales")
+        for section in documents[target]["sections"]:
+            for key in ("fact_ids", "pinned_fact_ids"):
+                section[key] = [
+                    fact_id
+                    for fact_id in section.get(key, [])
+                    if fact_id != "sales.role.leader.title"
+                ]
+        documents[target]["omitted_roles"] = {
+            "sales.role.leader.title": "declared, and still refused"
+        }
+
+    def reasonless(documents: dict) -> None:
+        documents[_profile(documents, "account-executive")]["omitted_roles"][
+            "development.phdigital.role"
+        ] = "   "
+
+    for mutate, message in (
+        (dropped, "neither offers nor waives"),
+        (stale, "not a dated canonical role"),
+        (contradictory, "both offers and waives"),
+        (hole, "unexplained gap"),
+        (reasonless, "omitted roles need a reason"),
+    ):
+        documents = profile_documents(project_root)
+        mutate(documents)
+        _assert_refused(mutate.__name__, documents, fact_store, message)
+
+
+def test_a_role_title_is_a_dated_heading_with_a_real_forward_span(
+    fact_store, project_root: Path
 ) -> None:
-    """A numeric shape is not yet a date range.
+    """Coverage only proves a role is offered; its span and heading are what carry it.
 
-    Each of these parses under a bare `\\d{2}` reading and yields an ordinal the
-    gap sweep would compare in good faith, so a nonsense span could decide a
-    timeline is continuous.
-    """
-    facts = dict(fact_store.facts)
-    facts["sales.role.field.title"] = facts["sales.role.field.title"].model_copy(
-        update={"effective_dates": span}
-    )
-    store = FactStore(facts, fact_store.source_versions)
-    with pytest.raises(ProfileStoreError, match=message):
-        ProfileStore.from_documents(profile_documents(project_root), store)
-
-
-@pytest.mark.parametrize("style", ["bullet", "paragraph", "item", "date", "contact"])
-def test_a_role_title_must_be_styled_as_a_heading(
-    fact_store, project_root: Path, style: str
-) -> None:
-    """Coverage only proves a role is offered; the heading is what carries it.
+    A numeric shape is not yet a date range: each bad span parses under a bare
+    `\\d{2}` reading and yields an ordinal the gap sweep would compare in good
+    faith, so a nonsense span could decide a timeline is continuous. Losing the
+    dates must not be a way out of the coverage rule either.
 
     Selection treats a heading as structure and keeps it unconditionally, so
     offering a role is enough only while the role is one. Styled as evidence it
     is scored, competes for the section budget, and can be dropped below it -
-    passing this coverage rule and still vanishing from the page. `bullet`,
+    passing the coverage rule and still vanishing from the page. `bullet`,
     `paragraph` and `item` are the styles that would actually be dropped;
     `date` and `contact` survive selection but are not a title either.
     """
-    assert style == "date" or style == "contact" or style not in STRUCTURAL_STYLES
-    facts = dict(fact_store.facts)
-    facts["sales.role.field.title"] = facts["sales.role.field.title"].model_copy(
-        update={"resume_style": style}
-    )
-    store = FactStore(facts, fact_store.source_versions)
-    with pytest.raises(ProfileStoreError, match="not 'heading'"):
-        ProfileStore.from_documents(profile_documents(project_root), store)
+    cases: list[tuple[dict, str]] = [
+        ({"effective_dates": "2025-00/2025-06"}, "no readable span"),
+        ({"effective_dates": "2025-13/2026-01"}, "no readable span"),
+        ({"effective_dates": "2026-06/2025-02"}, "ends before it starts"),
+        ({"effective_dates": None}, "no readable span"),
+    ]
+    for style in ("bullet", "paragraph", "item", "date", "contact"):
+        assert style in {"date", "contact"} or style not in STRUCTURAL_STYLES
+        cases.append(({"resume_style": style}, "not 'heading'"))
 
-
-def test_a_waiver_without_a_reason_is_not_a_decision(fact_store, project_root: Path) -> None:
-    """An empty reason leaves the omission as unexplained as never declaring it."""
     documents = profile_documents(project_root)
-    target = next(key for key in documents if key.endswith("account-executive.yaml"))
-    documents[target]["omitted_roles"]["development.phdigital.role"] = "   "
-    with pytest.raises(ProfileStoreError, match="omitted roles need a reason"):
-        ProfileStore.from_documents(documents, fact_store)
-
-
-def test_a_role_without_a_readable_span_is_refused(fact_store, project_root: Path) -> None:
-    """Losing the dates must not be a way out of the coverage rule."""
-    undated = dict(fact_store.facts)
-    undated["sales.role.field.title"] = undated["sales.role.field.title"].model_copy(
-        update={"effective_dates": None}
-    )
-    store = FactStore(undated, fact_store.source_versions)
-    with pytest.raises(ProfileStoreError, match="no readable span"):
-        ProfileStore.from_documents(profile_documents(project_root), store)
+    for update, message in cases:
+        facts = dict(fact_store.facts)
+        facts["sales.role.field.title"] = facts["sales.role.field.title"].model_copy(update=update)
+        store = FactStore(facts, fact_store.source_versions)
+        _assert_refused(repr(update), copy.deepcopy(documents), store, message)
 
 
 def test_seed_and_repository_knowledge_hold_the_same_facts() -> None:

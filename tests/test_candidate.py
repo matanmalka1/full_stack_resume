@@ -30,7 +30,9 @@ def _write(root: Path, payload: dict) -> None:
 # --- identity resolves from canonical facts ---------------------------------
 
 
-def test_context_resolves_identity_filename_and_track_contact_policy(candidate_context) -> None:
+def test_context_resolves_identity_filename_track_contacts_and_dependency_hash(
+    candidate_context, project_root: Path, fact_store: FactStore
+) -> None:
     # New v2 facts carry UUIDv4 technical identity; the context references it.
     uuid.UUID(candidate_context.name_fact_id)
     assert candidate_context.display_name("en") == "Matan Malka"
@@ -54,18 +56,14 @@ def test_context_resolves_identity_filename_and_track_contact_policy(candidate_c
         candidate_context, "common.contact.linkedin", "linkedin.com/in/matanmalka1"
     ) == ("https://www.linkedin.com/in/matanmalka1")
 
-
-def test_filename_override_and_dependency_hash_follow_canonical_context(
-    project_root: Path, fact_store: FactStore
-) -> None:
     payload = _payload(project_root)
     payload["filename_name"] = "M. Malka"
     _write(project_root, payload)
-    context = load_candidate_context(project_root, fact_store)
-    assert context.resolved_filename_name == "M. Malka"
-    assert context.display_name("en") == "Matan Malka"
+    overridden = load_candidate_context(project_root, fact_store)
+    assert overridden.resolved_filename_name == "M. Malka"
+    assert overridden.display_name("en") == "Matan Malka"
 
-    before = context.version_hash
+    before = overridden.version_hash
     common = project_root / "base/common.json"
     text = common.read_text(encoding="utf-8")
     common.write_text(

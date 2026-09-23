@@ -6,9 +6,11 @@ from pathlib import Path
 import pytest
 from helpers import approve_active_draft, seed_analysis_for_command, services_transactions
 from helpers import working_claim as _working_claim
+from pydantic import ValidationError
 from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
 
+from cv_engine.api.schemas.facts import CaptureClaimFactRequest
 from cv_engine.application.commands import AnalyzeCommand, DraftCommand
 from cv_engine.application.errors import (
     KnowledgeRejected,
@@ -46,7 +48,9 @@ def _reload(services: Services) -> FactStore:
     return load_fact_store(services.paths.knowledge_root / "base")
 
 
-def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Services) -> None:
+def test_new_fact_is_pending_cannot_reach_a_cv_and_contextual_identity_is_generated(
+    services: Services,
+) -> None:
     result = services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
 
     assert result.fact.status is FactStatus.PENDING
@@ -56,12 +60,12 @@ def test_new_fact_is_persisted_as_pending_and_cannot_reach_a_cv(services: Servic
     with pytest.raises(FactStoreError, match="not canonical"):
         _reload(services).get("situational.postgres", canonical_only=True)
 
-
-def test_contextual_pending_fact_gets_a_generated_uuid(services: Services) -> None:
     payload = {key: value for key, value in NEW_FACT.items() if key != "fact_id"}
-    result = services.knowledge_lifecycle.create_pending_fact("situational_skills.json", payload)
-    assert uuid.UUID(result.fact.fact_id).version == 4
-    assert result.fact.status is FactStatus.PENDING
+    contextual = services.knowledge_lifecycle.create_pending_fact(
+        "situational_skills.json", payload
+    )
+    assert uuid.UUID(contextual.fact.fact_id).version == 4
+    assert contextual.fact.status is FactStatus.PENDING
     with pytest.raises(KnowledgeRejected, match="not user-editable"):
         services.knowledge_lifecycle.create_pending_fact("situational_skills.json", dict(NEW_FACT))
 
@@ -113,9 +117,12 @@ def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) 
     assert created.fact.status is FactStatus.PENDING
 
 
-def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
+def test_knowledge_file_mutation_is_staged_activated_restored_and_refuses_hash_changes(
     services: Services,
 ) -> None:
+    """The file adapter's own windows: a staged file activates, restores and is
+    discarded; activation refuses a source that changed (old hash) and a staged
+    file that changed (new hash)."""
     source = services.paths.knowledge_root / "base" / "situational_skills.json"
     before = source.read_bytes()
 
@@ -136,12 +143,7 @@ def test_knowledge_file_mutation_is_validated_staged_activated_and_restored(
     services.knowledge.discard_staged(staged)
     assert not (services.paths.temp_root / "knowledge" / "staged-create").exists()
 
-
-def test_knowledge_file_activation_refuses_source_or_staged_hash_changes(
-    services: Services,
-) -> None:
-    source = services.paths.knowledge_root / "base" / "situational_skills.json"
-    staged, _fact = services.knowledge.stage_create_fact(
+    changed, _fact = services.knowledge.stage_create_fact(
         "source-change",
         "situational_skills.json",
         dict(NEW_FACT),
@@ -149,9 +151,20 @@ def test_knowledge_file_activation_refuses_source_or_staged_hash_changes(
     original = source.read_text(encoding="utf-8")
     source.write_text(original + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="source changed"):
-        services.knowledge.activate_staged(staged)
+        services.knowledge.activate_staged(changed)
     source.write_text(original, encoding="utf-8")
-    services.knowledge.discard_staged(staged)
+    services.knowledge.discard_staged(changed)
+
+    tampered, _fact = services.knowledge.stage_create_fact(
+        "stage-change",
+        "situational_skills.json",
+        dict(NEW_FACT),
+    )
+    staged_path = services.paths.root / tampered.staged_reference
+    staged_path.write_text("tampered", encoding="utf-8")
+    with pytest.raises(ValueError, match="staged Knowledge file hash mismatch"):
+        services.knowledge.activate_staged(tampered)
+    services.knowledge.discard_staged(tampered)
 
 
 @pytest.mark.parametrize(
@@ -196,6 +209,8 @@ def test_prepared_knowledge_mutation_recovers_or_quarantines_from_hashes(
 def test_startup_finishes_crashes_before_and_after_file_activation(
     services: Services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Spec §8 windows 1 and 2, then a database mutation that committed while its
+    journal row stayed PREPARED: startup marks it committed without a duplicate event."""
     original_complete = services.knowledge_lifecycle._complete_prepared
 
     def interrupt_before(_mutation):
@@ -233,32 +248,31 @@ def test_startup_finishes_crashes_before_and_after_file_activation(
     assert _reload(recovered_again).get("situational.postgres.second").status is FactStatus.PENDING
     assert len(recovered_again.knowledge_queries.fact_history().events) == 2
 
-
-def test_startup_marks_committed_db_mutation_without_duplicate_event(
-    services: Services, monkeypatch: pytest.MonkeyPatch
-) -> None:
     def interrupt(_mutation):
         raise RuntimeError("before activation")
 
-    monkeypatch.setattr(services.knowledge_lifecycle, "_complete_prepared", interrupt)
+    third_payload = {**NEW_FACT, "fact_id": "situational.postgres.third"}
+    monkeypatch.setattr(recovered_again.knowledge_lifecycle, "_complete_prepared", interrupt)
     with pytest.raises(RuntimeError, match="before activation"):
-        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+        recovered_again.knowledge_lifecycle.add_fact("situational_skills.json", third_payload)
 
-    transactions, store = _knowledge_persistence(services)
+    transactions, store = _knowledge_persistence(recovered_again)
     with transactions.read() as tx:
         mutation = store.prepared_mutations(tx)[0]
-    services.knowledge.activate_staged(services.knowledge.staged_from_mutation(mutation))
+    recovered_again.knowledge.activate_staged(
+        recovered_again.knowledge.staged_from_mutation(mutation)
+    )
     action = mutation.db_mutation["actions"][0]
     with transactions.write() as tx:
         store.record_fact_event(
             tx, **{key: value for key, value in action.items() if key != "type"}
         )
 
-    recovered = build_services(services.paths)
-    transactions, store = _knowledge_persistence(recovered)
+    recovered_last = build_services(services.paths)
+    transactions, store = _knowledge_persistence(recovered_last)
     with transactions.read() as tx:
         assert store.prepared_mutations(tx) == []
-        assert len(store.fact_events(tx, "situational.postgres")) == 1
+        assert len(store.fact_events(tx, "situational.postgres.third")) == 1
 
 
 def test_audit_failure_restores_source_and_quarantines(
@@ -438,17 +452,6 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
     with transactions.read() as tx:
         assert len(store.quarantined_mutations(tx)) == 1
 
-    staged, _fact = services.knowledge.stage_create_fact(
-        "stage-change",
-        "situational_skills.json",
-        dict(NEW_FACT),
-    )
-    staged_path = services.paths.root / staged.staged_reference
-    staged_path.write_text("tampered", encoding="utf-8")
-    with pytest.raises(ValueError, match="staged Knowledge file hash mismatch"):
-        services.knowledge.activate_staged(staged)
-    services.knowledge.discard_staged(staged)
-
 
 def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
     services: Services,
@@ -476,9 +479,12 @@ def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
     assert _reload(services).version != before.version
 
 
-def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
+def test_lifecycle_refuses_unconfirmed_illegal_duplicate_and_repeated_deletion(
     services: Services,
 ) -> None:
+    """Promotion needs explicit confirmation and a legal transition; a fact ID is
+    unique across every source; and deletion is confirmed, one-way, excluded from
+    the default listing and targets, and keeps the lifecycle trail."""
     services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
@@ -491,12 +497,14 @@ def test_promotion_requires_explicit_confirmation_and_a_legal_transition(
         )
     assert _reload(services).get("situational.postgres").status is FactStatus.PENDING
 
+    with pytest.raises(KnowledgeRejected, match="fact already exists"):
+        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
+    with pytest.raises(KnowledgeRejected, match="fact already exists"):
+        services.knowledge_lifecycle.add_fact(
+            "common.json", {**NEW_FACT, "meaning": "different meaning"}
+        )
 
-def test_delete_fact_is_one_way_and_excluded_from_default_listing_and_targets(
-    services: Services,
-) -> None:
-    created = services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-    fact_id = created.fact.fact_id
+    fact_id = "situational.postgres"
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
         services.knowledge_lifecycle.delete_fact(fact_id, explicitly_confirmed=False)
@@ -533,7 +541,7 @@ def test_delete_fact_is_one_way_and_excluded_from_default_listing_and_targets(
 def test_lifecycle_survives_process_boundaries_over_http(
     live_api_server, project_root: Path
 ) -> None:
-    """Each step is a separate request against a separately started server.
+    """The HTTP fact journey, each step a separate request against a separately started server.
 
     The in-process API tests share one composition root, so they cannot show
     that a promotion is durable rather than held in a live object graph. Here
@@ -554,20 +562,34 @@ def test_lifecycle_survives_process_boundaries_over_http(
     assert created.status == 201, created.body
     fact_id = created.json["fact"]["fact_id"]
     assert created.json["fact"]["status"] == "pending"
+    assert created.json["fact"]["meaning"] == NEW_FACT["meaning"]
+    assert created.json["event_id"]
+    # Identity is generated, never supplied: the caller could not have chosen it.
+    assert fact_id and fact_id != "situational.postgres"
 
     # Confirmation is explicit: an unconfirmed transition is refused rather
     # than assumed, and the refusal must not advance the fact.
     unconfirmed = live_api_server.post(f"/facts/{fact_id}/confirm", {"confirm": False})
     assert unconfirmed.status == 412, unconfirmed.body
 
-    assert live_api_server.post(f"/facts/{fact_id}/confirm", {"confirm": True}).status == 200
-    assert live_api_server.post(f"/facts/{fact_id}/promote", {"confirm": True}).status == 200
+    confirmed = live_api_server.post(f"/facts/{fact_id}/confirm", {"confirm": True})
+    assert confirmed.status == 200, confirmed.body
+    assert confirmed.json["fact"]["status"] == "confirmed"
+    promoted = live_api_server.post(f"/facts/{fact_id}/promote", {"confirm": True})
+    assert promoted.status == 200, promoted.body
+    assert promoted.json["fact"]["status"] == "canonical"
+
+    detail = live_api_server.get(f"/facts/{fact_id}")
+    assert detail.status == 200, detail.body
+    assert detail.json["fact"]["fact_id"] == fact_id
+    assert detail.json["events"], "a created fact has at least its creation event"
 
     listed = live_api_server.get("/facts", params={"status": "canonical"})
     assert listed.status == 200, listed.body
     assert fact_id in {item["fact"]["fact_id"] for item in listed.json["items"]}
 
     history = live_api_server.get(f"/facts/{fact_id}/history")
+    assert history.status == 200, history.body
     transitions = [(event["from_status"], event["to_status"]) for event in history.json["events"]]
     assert transitions == [
         (None, "pending"),
@@ -577,17 +599,6 @@ def test_lifecycle_survives_process_boundaries_over_http(
 
     # The file on disk is the record, not the server's memory.
     assert load_fact_store(project_root / "base").get(fact_id).status is FactStatus.CANONICAL
-
-
-def test_duplicate_fact_ids_are_refused(services: Services) -> None:
-    services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-
-    with pytest.raises(KnowledgeRejected, match="fact already exists"):
-        services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
-    with pytest.raises(KnowledgeRejected, match="fact already exists"):
-        services.knowledge_lifecycle.add_fact(
-            "common.json", {**NEW_FACT, "meaning": "different meaning"}
-        )
 
 
 def test_lifecycle_events_are_immutable(services: Services) -> None:
@@ -613,6 +624,18 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     to it and validate. The draft is rebuilt after promotion because a new
     canonical fact changes the canonical surface the draft was built from.
     """
+    # Capture over HTTP names its provenance explicitly; it is never defaulted.
+    with pytest.raises(ValidationError):
+        CaptureClaimFactRequest.model_validate(
+            {
+                "application_id": "application",
+                "claim_id": "claim",
+                "source": "sales.json",
+                "meaning": "candidate introduced a weekly pipeline review",
+                "tags": ["sales", "pipeline"],
+            }
+        )
+
     setup = drafted_application("Lifecycle Co")
     services, app_id = setup
     claim = _working_claim(services, app_id, "sales.cycle.account_management")
