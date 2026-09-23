@@ -3,11 +3,7 @@ import { FilePlus2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import {
-  applicationDetailQueryOptions,
-  invalidateApplicationViews,
-  startDraftGeneration,
-} from "@/api/applications";
+import { applicationDetailQueryOptions, invalidateApplicationViews, startDraftGeneration } from "@/api/applications";
 import {
   workingDraftFactsQueryKey,
   workingDraftFactsQueryOptions,
@@ -113,11 +109,7 @@ export const DraftEditorPage = () => {
     operation?.operation_type === "render_revision" && operation.status === "succeeded" && renderRevisionId !== null;
   const resumeEditing = useMutation({
     mutationFn: async () => {
-      if (
-        renderRevisionId === null ||
-        detail?.active_analysis_id == null ||
-        detail.active_selection_plan_id == null
-      ) {
+      if (renderRevisionId === null || detail?.active_analysis_id == null || detail.active_selection_plan_id == null) {
         throw new Error("The approved content cannot be reopened against the active sources");
       }
       return startDraftGeneration(

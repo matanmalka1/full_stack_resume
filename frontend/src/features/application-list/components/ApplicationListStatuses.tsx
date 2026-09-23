@@ -81,15 +81,14 @@ const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_s
         </span>
         <span className="shrink-0 text-cv-text-muted tabular-nums" dir="ltr">{`${step}/${total}`}</span>
       </span>
-      <span
+      <progress
         aria-label={`הכנת קורות החיים: ${label}`}
-        aria-valuemax={total}
-        aria-valuemin={1}
-        aria-valuenow={step}
         aria-valuetext={`שלב ${step} מתוך ${total}`}
-        className="flex h-1.5 w-full overflow-hidden rounded-pill bg-cv-surface-muted"
-        role="progressbar"
-      >
+        className="sr-only"
+        max={total}
+        value={step}
+      />
+      <span aria-hidden="true" className="flex h-1.5 w-full overflow-hidden rounded-pill bg-cv-surface-muted">
         <span className="h-full rounded-pill bg-cv-accent" style={{ width: `${(step / total) * 100}%` }} />
       </span>
     </span>

@@ -25,7 +25,7 @@ export const reportedOperation = (item: ApplicationListItem) => {
    any text-size utility on a button, and the items that are buttons take the menu's
    inherited size whatever their class says. The items that are links would take the
    utility and read a size smaller. Every item inheriting keeps the menu one size. */
-const menuItemBase = "flex min-h-9 w-full items-center gap-2 px-3.5 py-2 text-start font-medium transition-colors";
+const menuItemBase = "flex min-h-8 w-full items-center gap-2 px-3 py-1.5 text-start font-normal transition-colors";
 const menuItemClasses = `${menuItemBase} text-cv-text hover:bg-cv-surface-muted`;
 
 export const ApplicationRecordActions = ({
@@ -91,7 +91,7 @@ export const ApplicationRecordActions = ({
       </Tooltip>
       {open ? (
         <div
-          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1.5 w-56 divide-y divide-cv-border rounded-surface border border-cv-border bg-cv-surface-raised py-1.5 text-start shadow-floating"
+          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1.5 w-52 divide-y divide-cv-border rounded-surface border border-cv-border bg-cv-surface-raised py-1 text-start text-support shadow-floating"
           id={menuId}
           onKeyDown={(event) => {
             if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -111,7 +111,7 @@ export const ApplicationRecordActions = ({
         >
           {/* Two groups, as in demo_re: the ways into the record, then the two that end
               it. The ending pair keeps the blocker tone; nothing else here is coloured. */}
-          <div className="py-1">
+          <div className="py-0.5">
             {/* The keyboard's way to a record's details: a click on the record's body opens
                 them, but only the table row is itself focusable, so every view reaches them
                 here too. */}
@@ -124,11 +124,11 @@ export const ApplicationRecordActions = ({
               role="menuitem"
               type="button"
             >
-              <Info aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              <Info aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
               פרטי משרה
             </button>
             <Link className={menuItemClasses} onClick={() => setOpen(false)} role="menuitem" to={href}>
-              <Eye aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              <Eye aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
               פתיחת המועמדות
             </Link>
             {host === null || item.source_url == null ? null : (
@@ -140,10 +140,10 @@ export const ApplicationRecordActions = ({
                 role="menuitem"
                 target="_blank"
               >
-                <ExternalLink aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+                <ExternalLink aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
                 <span className="flex min-w-0 flex-col">
                   מודעת המשרה המקורית
-                  <span className="truncate text-cv-text-muted" dir="ltr">
+                  <span className="truncate text-caption text-cv-text-muted" dir="ltr">
                     {host}
                   </span>
                 </span>
@@ -158,11 +158,11 @@ export const ApplicationRecordActions = ({
               role="menuitem"
               type="button"
             >
-              <SlidersHorizontal aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              <SlidersHorizontal aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
               עדכון סטטוס ומשימות
             </button>
           </div>
-          <div className="py-1">
+          <div className="py-0.5">
             {item.is_closed ? null : (
               <button
                 aria-label={`סגירת המועמדות ${item.company}`}
@@ -174,7 +174,7 @@ export const ApplicationRecordActions = ({
                 role="menuitem"
                 type="button"
               >
-                <Archive aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+                <Archive aria-hidden="true" className="size-icon-sm shrink-0 text-cv-text-muted" />
                 סגירת מועמדות
               </button>
             )}
@@ -188,7 +188,7 @@ export const ApplicationRecordActions = ({
               role="menuitem"
               type="button"
             >
-              <Trash2 aria-hidden="true" className="size-icon-md shrink-0" />
+              <Trash2 aria-hidden="true" className="size-icon-sm shrink-0" />
               מחיקת מועמדות לצמיתות
             </button>
           </div>

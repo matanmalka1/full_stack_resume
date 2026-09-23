@@ -32,6 +32,16 @@ export const ApplicationListPagination = ({
 
   const pageCount = Math.max(1, Math.ceil(matchedCount / pageSize));
   const currentPage = Math.floor(offset / pageSize) + 1;
+  const paginationItems = pageWindow(currentPage, pageCount).reduce<{
+    items: { key: string | number; page: number | "gap" }[];
+    previousPage: number;
+  }>(
+    ({ items, previousPage }, page) => ({
+      items: [...items, { key: page === "gap" ? `gap-after-${previousPage}` : page, page }],
+      previousPage: page === "gap" ? previousPage : page,
+    }),
+    { items: [], previousPage: 0 },
+  ).items;
 
   return (
     <nav aria-label="ניווט בין דפי המועמדויות" className="mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -45,12 +55,16 @@ export const ApplicationListPagination = ({
         >
           <ChevronRight aria-hidden="true" className="size-icon-md" />
         </IconButton>
-        {pageWindow(currentPage, pageCount).map((page, index) =>
-          page === "gap" ? (
-            <span aria-hidden="true" className="px-1 text-support text-cv-text-muted" key={`gap-${index}`}>
-              …
-            </span>
-          ) : (
+        {paginationItems.map(({ key, page }) => {
+          if (page === "gap") {
+            return (
+              <span aria-hidden="true" className="px-1 text-support text-cv-text-muted" key={key}>
+                …
+              </span>
+            );
+          }
+
+          return (
             <button
               aria-current={page === currentPage ? "page" : undefined}
               aria-label={`עמוד ${page}`}
@@ -59,14 +73,14 @@ export const ApplicationListPagination = ({
                 cx("min-w-11 tabular-nums", page === currentPage && "pointer-events-none"),
                 "icon",
               )}
-              key={page}
+              key={key}
               onClick={() => onOffsetChange((page - 1) * pageSize)}
               type="button"
             >
               {page}
             </button>
-          ),
-        )}
+          );
+        })}
         <IconButton
           aria-label="הבא"
           disabled={!hasMore}

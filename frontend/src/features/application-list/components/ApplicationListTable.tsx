@@ -4,6 +4,7 @@ import type { ApplicationListItem, ApplicationSort } from "@/api/contracts";
 import { Card } from "@/ui/Card";
 import { Skeleton } from "@/ui/Skeleton";
 import { cx } from "@/ui/cx";
+import { flatSurfaceClasses } from "@/ui/surface";
 import { duplicatedApplicationIdentityIds } from "../model/applicationListPresentation";
 import { ApplicationListRow } from "./ApplicationListRow";
 
@@ -139,12 +140,9 @@ export const ApplicationListTable = ({
 const skeletonRows = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"];
 
 export const ApplicationListTableSkeleton = () => (
-  // role="status" is a Card prop, not a DOM role; Card already renders an <output> for it.
-  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-  <Card
+  <output
     aria-label="טוען את המועמדויות"
-    className="overflow-hidden rounded-surface bg-cv-surface-raised shadow-surface"
-    role="status"
+    className={flatSurfaceClasses("overflow-hidden rounded-surface bg-cv-surface-raised shadow-surface")}
   >
     <div className="hidden h-11 border-b border-cv-border bg-cv-canvas lg:block" />
     {/* Drawn with the `Skeleton` primitive rather than by hand. The hand-rolled version
@@ -176,5 +174,5 @@ export const ApplicationListTableSkeleton = () => (
         </div>
       ))}
     </div>
-  </Card>
+  </output>
 );
