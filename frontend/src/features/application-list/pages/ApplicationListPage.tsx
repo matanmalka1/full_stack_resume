@@ -250,7 +250,7 @@ export const ApplicationListPage = () => {
             />
             <ApplicationListResults
               clearingApplicationId={clearingApplicationId}
-              fetching={listQuery.isFetching && !listQuery.isPending}
+              replacing={listQuery.isPlaceholderData}
               items={items}
               matchedCount={page.matched}
               offset={query.offset ?? 0}

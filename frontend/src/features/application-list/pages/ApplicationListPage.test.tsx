@@ -792,6 +792,36 @@ describe("ApplicationListPage", () => {
     );
   });
 
+  /* The board flashed every 1.5s while an Operation ran: every re-read dimmed it, when
+     only a changed query - a page being replaced - should. */
+  it("dims the board while a changed query replaces it, not while the same page is re-read", async () => {
+    let boardReads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown) => {
+        if (new URL(String(url), "http://localhost").searchParams.get("limit") !== "25") {
+          return Promise.resolve(jsonResponse(listBody([item()])));
+        }
+        boardReads += 1;
+        return boardReads === 1
+          ? Promise.resolve(jsonResponse(listBody([item()])))
+          : new Promise<Response>(() => undefined);
+      }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    renderPage({ queryClient });
+
+    const table = await screen.findByRole("table");
+    void queryClient.refetchQueries({ type: "active" });
+    await waitFor(() => expect(boardReads).toBe(2));
+    expect(table.closest('[aria-busy="true"]')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("חיפוש במועמדויות"), { target: { value: "Acme" } });
+    await waitFor(() => expect(boardReads).toBe(3));
+    expect(screen.getByRole("table").closest('[aria-busy="true"]')).not.toBeNull();
+  });
+
   it("invalidates every cached list and detail after closing an Application", async () => {
     const { fetchMock } = stubList([item()]);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

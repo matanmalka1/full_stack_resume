@@ -1,6 +1,7 @@
 import type { ApplicationListItem, ApplicationSort } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
+import { cx } from "@/ui/cx";
 import type { ViewMode } from "../model/applicationViews";
 import { ApplicationCardsView } from "./ApplicationCardsView";
 import { ApplicationListPagination } from "./ApplicationListPagination";
@@ -9,7 +10,8 @@ import { ApplicationPipelineView } from "./ApplicationPipelineView";
 
 interface ApplicationListResultsProps {
   clearingApplicationId: string | null;
-  fetching: boolean;
+  /* The page on screen is the previous query's, held while a changed query is read. */
+  replacing: boolean;
   items: readonly ApplicationListItem[];
   matchedCount: number;
   offset: number;
@@ -37,7 +39,7 @@ interface ApplicationListResultsProps {
    narrowed remain the page's. */
 export const ApplicationListResults = ({
   clearingApplicationId,
-  fetching,
+  replacing,
   items,
   matchedCount,
   offset,
@@ -69,10 +71,15 @@ export const ApplicationListResults = ({
   }
 
   return (
-    /* A refetch dims the page it is replacing instead of unmounting it, so a filter
-       change does not drop the reader back to a blank region. `QueryState` still owns
-       the first load and every failure. */
-    <div aria-busy={fetching ? true : undefined} className={fetching ? "opacity-60 transition-opacity" : undefined}>
+    /* A changed query dims the page it is replacing instead of unmounting it, so a filter
+       change does not drop the reader back to a blank region. A re-read of the same page
+       does not dim it: the board polls every 1.5s while an Operation runs and re-reads on
+       focus and after every action, and dimming on each of those made it flash for
+       nothing. `QueryState` still owns the first load and every failure. */
+    <div
+      aria-busy={replacing ? true : undefined}
+      className={cx("transition-opacity", replacing ? "opacity-60" : undefined)}
+    >
       {viewMode === "cards" ? (
         <ApplicationCardsView
           clearingApplicationId={clearingApplicationId}
