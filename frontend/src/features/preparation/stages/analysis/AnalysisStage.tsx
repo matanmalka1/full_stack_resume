@@ -11,11 +11,13 @@ export const AnalysisStage = ({
   classification,
   detail,
   onQueued,
+  operationLive,
   plan,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
+  operationLive: boolean;
   plan: WorkflowActionPlan;
 }) => (
   <AnalysisPanel
@@ -25,7 +27,9 @@ export const AnalysisStage = ({
        footer a band of its own, and a card that renders nothing would still have cost a
        divider and a band of padding at the foot of the panel. */
     footer={
-      plan.analyze?.reanalysis === true ? <ReanalyzeCard detail={detail} onQueued={onQueued} plan={plan} /> : undefined
+      plan.analyze?.reanalysis === true ? (
+        <ReanalyzeCard detail={detail} onQueued={onQueued} operationLive={operationLive} plan={plan} />
+      ) : undefined
     }
   />
 );

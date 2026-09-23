@@ -1148,6 +1148,14 @@ describe("DraftEditorPage regeneration", () => {
     expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
       "wd-1:4:c-headline",
     );
+
+    /* Hiding the run does not make the draft safe to change: every edit would be addressed
+       to the version the regeneration is replacing, so the commands wait for it. */
+    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
+    expect(screen.getByRole("button", { name: /פירוט ההרצה/ })).toBeInTheDocument();
+    for (const button of screen.getAllByRole("button", { name: "עריכת השורה" })) expect(button).toBeDisabled();
+    for (const button of screen.getAllByRole("button", { name: "יצירה מחדש של השורה" }))
+      expect(button).toBeDisabled();
   });
 
   it("refreshes the draft version when regeneration activates its output", async () => {

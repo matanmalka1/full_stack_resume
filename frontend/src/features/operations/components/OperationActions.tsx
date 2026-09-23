@@ -6,11 +6,6 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 
 interface OperationActionsProps {
-  /* Rendered beside a one-line summary of a run that already succeeded, where the row
-     is the report and not the screen's main content. The controls drop the separator and
-     the button chrome and read as links, so a settled run does not carry a call to action
-     louder than the result it produced. */
-  collapsed?: boolean;
   operation: Operation;
   /* Where a retry's new Operation goes. The host screen watches one Application's work,
      so it takes the id and keeps reporting in place.
@@ -34,7 +29,6 @@ interface OperationActionsProps {
 }
 
 export const OperationActions = ({
-  collapsed = false,
   onQueued,
   operation,
   reserve = false,
@@ -79,35 +73,6 @@ export const OperationActions = ({
         <div className="h-11" />
       </div>
     ) : null;
-  }
-
-  if (collapsed) {
-    if (!canRetry && error === null) {
-      return null;
-    }
-
-    return (
-      <>
-        {error === null ? null : (
-          <ErrorCallout
-            error={error}
-            fallbackDetail="לא ניתן להשלים את הפעולה. המצב הבטוח האחרון נשמר ואפשר לנסות שוב."
-            fallbackTitle="הפעולה לא בוצעה"
-          />
-        )}
-        {canRetry ? (
-          <Button
-            className="min-h-0 px-0 font-normal underline underline-offset-4 hover:bg-transparent hover:text-cv-text disabled:no-underline"
-            onClick={() => retry.mutate()}
-            pending={retry.isPending}
-            pendingLabel="יוצר ניסיון חדש…"
-            variant="ghost"
-          >
-            הרצה מחדש
-          </Button>
-        ) : null}
-      </>
-    );
   }
 
   return (

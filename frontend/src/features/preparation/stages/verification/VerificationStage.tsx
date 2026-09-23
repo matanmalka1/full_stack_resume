@@ -17,6 +17,7 @@ export const VerificationStage = ({
   detail,
   hasRecommendation,
   onQueued,
+  operationLive,
   plan,
 }: {
   detail: ApplicationDetail;
@@ -24,6 +25,7 @@ export const VerificationStage = ({
      several. Decides which visual weight the action surface below takes. */
   hasRecommendation: boolean;
   onQueued: (operationId: string) => void;
+  operationLive: boolean;
   plan: WorkflowActionPlan;
 }) => {
   return (
@@ -42,7 +44,13 @@ export const VerificationStage = ({
           to the shell's action slot, so a labelled landmark drawn around it from here was
           empty on every step that offers a route and nothing else. */}
       {hasWorkflowActionsContent(plan) ? (
-        <WorkflowActions detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
+        <WorkflowActions
+          detail={detail}
+          hasRecommendation={hasRecommendation}
+          onQueued={onQueued}
+          operationLive={operationLive}
+          plan={plan}
+        />
       ) : null}
     </>
   );

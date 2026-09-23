@@ -45,7 +45,15 @@ interface PostingFields {
    amended rather than rewritten. An unchanged text and URL are refused before the request
    is sent, as a field error rather than a round trip - the server would refuse the same
    content anyway, since it holds a snapshot per exact content. */
-export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
+export const JobPostingUpdate = ({
+  detail,
+  operationLive = false,
+}: {
+  detail: ApplicationDetail;
+  /* The host screen's own watch, which also knows about work the projection has not
+     reported yet - a run queued a moment ago - and about a success still being read. */
+  operationLive?: boolean;
+}) => {
   const queryClient = useQueryClient();
   const applicationId = detail.application.id;
   const snapshot = detail.latest_snapshot;
@@ -68,7 +76,8 @@ export const JobPostingUpdate = ({ detail }: { detail: ApplicationDetail }) => {
      a snapshot created mid-run is refused by the engine rather than silently swapping
      what that run is working from. The disabled control keeps the reader from walking
      into that refusal. */
-  const workInFlight = detail.active_operation != null && !isTerminalOperation(detail.active_operation);
+  const workInFlight =
+    operationLive || (detail.active_operation != null && !isTerminalOperation(detail.active_operation));
 
   const create = useMutation({
     mutationFn: (fields: PostingFields) => {

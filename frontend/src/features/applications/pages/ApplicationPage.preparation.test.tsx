@@ -746,6 +746,9 @@ describe("ApplicationPage at the preparation route", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
+    /* A run that had already failed when the screen read it is history: it does not pop
+       over the page, and its report - retry included - is a press on its chip away. */
+    fireEvent.click(await screen.findByRole("button", { name: /פירוט ההרצה/ }));
     fireEvent.click(await screen.findByRole("button", { name: "ניסיון חוזר" }));
     const pending = await screen.findByRole("button", { name: "יוצר ניסיון חדש…" });
     expect(pending).toBeDisabled();
@@ -764,7 +767,7 @@ describe("ApplicationPage at the preparation route", () => {
 
   /* QA report finding 2: `available_actions`/`recommended_action` still name a plain
      "analyze" after a terminal failure - the projection never withdrew it - but the
-     screen used to show only the Operation panel's own "retry", which can only ever
+     screen used to show only the Operation overlay's own "retry", which can only ever
      resend the failed run's own frozen execution. The fix renders this step's own action
      panel beside the failure, so its analyze button - wired to current Settings via
      `useAnalyzeCommand` - is reachable without leaving the screen or predicting the
@@ -795,7 +798,9 @@ describe("ApplicationPage at the preparation route", () => {
 
     /* Both ways forward are on screen at once. Neither is offered instead of the other;
        the projection permits both and the reader chooses. */
+    fireEvent.click(await screen.findByRole("button", { name: /פירוט ההרצה/ }));
     expect(await screen.findByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
     await clickEnabledButton("ניתוח המשרה");
 
     const request = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");

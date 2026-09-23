@@ -20,6 +20,7 @@ import { DraftApprovalBar } from "./DraftApprovalBar";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftValidationPanel } from "./DraftValidationPanel";
 import { useDraftValidation } from "../hooks/useDraftValidation";
+import { useRenderApprovedRevision } from "../hooks/useRenderApprovedRevision";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -72,7 +73,7 @@ const DraftFlow = () => {
         open={open}
         validationRunId={validation.exactPassingRunId}
       />
-      {approved === null ? null : <DraftRenderPanel approvedRevisionId={approved} onQueued={setQueued} />}
+      {approved === null ? null : <RenderStep approvedRevisionId={approved} onQueued={setQueued} />}
       {queued === null ? null : <p>{`בעבודה: ${queued}`}</p>}
     </>
   );
@@ -350,6 +351,20 @@ describe("DraftApprovalDialog", () => {
   });
 });
 
+/* The render step as the editor composes it: the command held by the host, the panel
+   drawing its state. No render Operation is being watched here, so `rendering` is false. */
+const RenderStep = ({
+  approvedRevisionId,
+  autoStart = false,
+  onQueued,
+}: {
+  approvedRevisionId: string;
+  autoStart?: boolean;
+  onQueued: (operationId: string) => void;
+}) => (
+  <DraftRenderPanel state={useRenderApprovedRevision({ approvedRevisionId, autoStart, onQueued, rendering: false })} />
+);
+
 describe("DraftRenderPanel", () => {
   /* Rendering reports the Operation it queued to the screen holding the panel rather
      than navigating to the Operation's own route: the approved draft stays on screen
@@ -374,7 +389,7 @@ describe("DraftRenderPanel", () => {
     renderRoute(
       "/applications/app-1/draft",
       "/applications/:applicationId/draft",
-      <DraftRenderPanel approvedRevisionId="revision-1" onQueued={onQueued} />,
+      <RenderStep approvedRevisionId="revision-1" onQueued={onQueued} />,
     );
     const renderButton = await screen.findByRole("button", { name: "יצירת HTML ו־PDF" });
     await waitFor(() => expect(renderButton).toBeEnabled());
@@ -404,7 +419,7 @@ describe("DraftRenderPanel", () => {
     renderRoute(
       "/applications/app-1/draft",
       "/applications/:applicationId/draft",
-      <DraftRenderPanel approvedRevisionId="revision-1" autoStart onQueued={onQueued} />,
+      <RenderStep approvedRevisionId="revision-1" autoStart onQueued={onQueued} />,
     );
 
     await waitFor(() => expect(onQueued).toHaveBeenCalledWith(operation().id));
@@ -430,7 +445,7 @@ describe("DraftRenderPanel", () => {
     renderRoute(
       "/applications/app-1/draft",
       "/applications/:applicationId/draft",
-      <DraftRenderPanel approvedRevisionId="revision-1" onQueued={vi.fn()} />,
+      <RenderStep approvedRevisionId="revision-1" onQueued={vi.fn()} />,
     );
 
     expect(await screen.findByRole("link", { name: "מעבר לגרסה המוכנה" })).toHaveAttribute(

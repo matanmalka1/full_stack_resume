@@ -16,7 +16,7 @@ import { useRequiredParam } from "@/app/useRequiredParam";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
-import { ActiveOperationPanel } from "@/features/operations";
+import { OperationOverlay, type PendingWork, isOperationLive, operationTypeLabels } from "@/features/operations";
 import { applicationLabel } from "@/features/applications";
 import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
@@ -34,6 +34,7 @@ import { DraftValidationPanel } from "../components/DraftValidationPanel";
 import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
 import { useDraftDocument } from "../api/queries";
 import { useDraftEditing } from "../hooks/useDraftEditing";
+import { useRenderApprovedRevision } from "../hooks/useRenderApprovedRevision";
 import { useDraftValidation } from "../hooks/useDraftValidation";
 
 /* The workspace's own shape, held while the document behind it is read.
@@ -69,26 +70,19 @@ export const DraftEditorPage = () => {
   const [resolutionError, setResolutionError] = useState<unknown>(null);
   const [resolving, setResolving] = useState(false);
   const [claimTarget, setClaimTarget] = useState<{ claimId: string } | null>(null);
-  const { applicationError, detail, draft, draftError, etag, facts, operation, watch, workingDraftId } =
-    useDraftDocument(applicationId);
-  const editing = useDraftEditing({
-    applicationId,
+  const {
+    applicationError,
+    awaitingRecord,
+    detail,
     draft,
+    draftError,
     etag,
     facts,
-    onOperationQueued: watch,
+    operation,
+    settled,
+    watch,
     workingDraftId,
-  });
-  const validation = useDraftValidation(
-    applicationId,
-    draft,
-    editing.dirty ||
-      resolving ||
-      resolutionError != null ||
-      applicationError != null ||
-      draftError != null ||
-      detail?.working_draft_state === "stale",
-  );
+  } = useDraftDocument(applicationId);
 
   /* The daily workspace opens with editing and the rendered document together. A focused
      full-width preview remains available, especially on narrow screens. */
@@ -160,6 +154,54 @@ export const DraftEditorPage = () => {
     : draftArriving
       ? "הטיוטה נוצרה. טוענים את העורך…"
       : undefined;
+
+  /* The render command is the editor's, so the one overlay below reports it from the
+     press - see `useRenderApprovedRevision`. */
+  const renderState = useRenderApprovedRevision({
+    approvedRevisionId: renderRevisionId,
+    autoStart: approvedRevisionId !== null,
+    onQueued: watch,
+    rendering: operation?.operation_type === "render_revision",
+  });
+  const pending: PendingWork | undefined = renderState.pending
+    ? {
+        heading: <>הרצת {operationTypeLabels.render_revision}</>,
+        note: "הגרסה אושרה. יצירת ה־HTML וה־PDF מתחילה.",
+      }
+    : undefined;
+  /* One answer, shared with the overlay, to whether the draft may be changed now. A
+     hidden overlay does not make it so: a regeneration rewriting the draft, or one that
+     finished and has not been read back, would have any edit addressed to the version it
+     replaces - refused as a conflict at best. */
+  const operationLive = isOperationLive({
+    awaitingRecord,
+    continuation,
+    operation,
+    pending: pending !== undefined,
+    settled,
+  });
+
+  const editing = useDraftEditing({
+    applicationId,
+    draft,
+    etag,
+    facts,
+    onOperationQueued: watch,
+    operationLive,
+    workingDraftId,
+  });
+  const validation = useDraftValidation(
+    applicationId,
+    draft,
+    operationLive ||
+      editing.dirty ||
+      resolving ||
+      resolutionError != null ||
+      applicationError != null ||
+      draftError != null ||
+      detail?.working_draft_state === "stale",
+  );
+
 
   /* Hiding the rows must not strand text still sitting in the buffer, so the document
      view settles it first. */
@@ -261,6 +303,7 @@ export const DraftEditorPage = () => {
     (detail?.stale_reasons ?? []).some((reason) => reason.code !== "DRAFT_EDITED_AFTER_VALIDATION");
 
   const approvalUnavailable =
+    operationLive ||
     editing.dirty ||
     resolving ||
     resolutionError != null ||
@@ -339,11 +382,17 @@ export const DraftEditorPage = () => {
               saveState={workingDraftId === null ? null : editing.saveState}
             />
 
-            {/* Live work, reported beside the draft it is rewriting rather than on a screen
-              the user has to leave the text for. */}
-            {operation === undefined ? null : (
-              <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={operation} />
-            )}
+            {/* Live work, over the draft it is rewriting rather than on a screen the user
+              has to leave the text for; once it is over, a chip here reopens its report.
+              One overlay for every run this screen watches, the render's wait included. */}
+            <OperationOverlay
+              awaitingRecord={awaitingRecord}
+              continuation={continuation}
+              onQueued={watch}
+              operation={operation}
+              pending={pending}
+              settled={settled}
+            />
 
             {/* The projection's own blockers, reported by the one region that reports them.
               A claim with no fact behind it raises PENDING_FACT_REQUIRES_RESOLUTION there,
@@ -367,17 +416,10 @@ export const DraftEditorPage = () => {
         )}
 
         {renderRevisionId !== null ? (
-          <DraftRenderPanel
-            approvedRevisionId={renderRevisionId}
-            autoStart={approvedRevisionId !== null}
-            onQueued={watch}
-            /* The render is reported once, by `ActiveOperationPanel` above. This tells the
-             render panel whether that is happening, so the approved box and its "create the
-             files" CTA never appear beside the operation already creating them - and so the
-             render panel knows to report the wait itself in the window before there is an
-             Operation to report. */
-            rendering={operation?.operation_type === "render_revision"}
-          />
+          /* The render is reported once, by the overlay above: while it is, the panel
+             steps aside, so the approved box and its "create the files" CTA never appear
+             beside the operation already creating them. */
+          <DraftRenderPanel state={renderState} />
         ) : null}
 
         {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftError === null ? (
@@ -404,8 +446,8 @@ export const DraftEditorPage = () => {
               editor={
                 <>
                   <DraftHistoryControls
-                    canRedo={editing.history.canRedo}
-                    canUndo={editing.history.canUndo}
+                    canRedo={!operationLive && editing.history.canRedo}
+                    canUndo={!operationLive && editing.history.canUndo}
                     onRedo={editing.history.redo}
                     onUndo={editing.history.undo}
                   />
@@ -434,7 +476,11 @@ export const DraftEditorPage = () => {
                     selectionError={editing.selectionError}
                   />
 
-                  <DraftFactPanel busy={editing.selectionPending} facts={facts} onInclude={editing.includeFact} />
+                  <DraftFactPanel
+                    busy={operationLive || editing.selectionPending}
+                    facts={facts}
+                    onInclude={editing.includeFact}
+                  />
                 </>
               }
               mode={mode}

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Dialog } from "./Dialog";
@@ -98,6 +98,35 @@ describe("Dialog", () => {
     fireEvent.click(dialogOf("כותרת"));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns focus to a named control after Escape and after the close button", () => {
+    const Host = () => {
+      const [open, setOpen] = useState(true);
+      const reopen = useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button onClick={() => setOpen(true)} ref={reopen} type="button">
+            פתיחה
+          </button>
+          <Dialog headingId="heading" onClose={() => setOpen(false)} open={open} restoreFocusTo={reopen} title="כותרת">
+            תוכן
+          </Dialog>
+        </>
+      );
+    };
+    render(<Host />);
+
+    const dialog = dialogOf("כותרת");
+    /* A browser closes a cancelled modal itself; the shim's close stands in for it. */
+    escape(dialog);
+    dialog.close();
+    expect(screen.getByRole("button", { name: "פתיחה" })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "פתיחה" }));
+    expect(screen.getByRole("heading", { name: "כותרת" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
+    expect(screen.getByRole("button", { name: "פתיחה" })).toHaveFocus();
   });
 
   it("keeps the owning dialog open when a dialog inside it closes", () => {

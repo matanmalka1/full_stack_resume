@@ -24,14 +24,18 @@ interface WorkflowActionsProps {
      at all. The accepted `202` is the earliest and most certain answer, so it is handed
      straight to the screen that shows it. */
   onQueued: (operationId: string) => void;
+  /* Whether this Application's work is under way, by `isOperationLive`. It holds the
+     commands whether or not the run's overlay is showing: hiding the overlay does not make
+     it safe to queue work over the run the page is waiting on. */
+  operationLive: boolean;
   /* Read once by the view that owns this screen and handed down, so the plan every
      control on the screen is drawn from is literally the same object. */
   plan: WorkflowActionPlan;
 }
 
-export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: WorkflowActionsProps) => {
+export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operationLive, plan }: WorkflowActionsProps) => {
   const { analyze, archive, commandsBlocked, draft, editVersion, error, provider, replace, settings, workInFlight } =
-    useWorkflowCommands(detail, plan, onQueued);
+    useWorkflowCommands(detail, plan, onQueued, operationLive);
 
   /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
      draft carries manual wording that nothing regenerates, so the reader opts out of
@@ -61,7 +65,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
   const analyzeButton =
     plan.analyze === null || plan.analyze.reanalysis ? null : (
       <Button
-        disabled={settings === undefined || !aiRegenerationAvailable(settings)}
+        disabled={workInFlight || settings === undefined || !aiRegenerationAvailable(settings)}
         key="analyze"
         onClick={() => analyze.mutate()}
         pending={analyze.isPending}
@@ -75,7 +79,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, plan }: W
   const draftButton =
     plan.createDraft === null ? null : (
       <Button
-        disabled={settings === undefined}
+        disabled={workInFlight || settings === undefined}
         key="draft"
         onClick={() => draft.mutate()}
         pending={draft.isPending}

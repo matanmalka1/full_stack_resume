@@ -7,6 +7,8 @@ import { useWatchedOperation } from "@/features/operations";
 
 export interface DraftDocument {
   applicationError: unknown;
+  /* See `useWatchedOperation`. */
+  awaitingRecord: boolean;
   detail: ApplicationDetail | undefined;
   draft: WorkingDraft | undefined;
   draftError: unknown;
@@ -14,8 +16,9 @@ export interface DraftDocument {
      Autosave sends it and never one captured elsewhere. */
   etag: string | null;
   facts: WorkingDraftFacts | undefined;
-  /* Live work on this Application, reported beside the draft it is rewriting. */
+  /* Live work on this Application, reported over the draft it is rewriting. */
   operation: Operation | undefined;
+  settled: boolean;
   watch: (operationId: string) => void;
   workingDraftId: string | null;
 }
@@ -34,7 +37,7 @@ export const useDraftDocument = (applicationId: string): DraftDocument => {
 
   /* The same watch the Application screen keeps, on the other screen that queues durable
      work against one Application. */
-  const { operation, watch } = useWatchedOperation(applicationId, detail);
+  const { awaitingRecord, operation, settled, watch } = useWatchedOperation(applicationId, detail);
 
   const workingDraftId = detail?.active_working_draft_id ?? null;
   const draftQuery = useQuery({
@@ -48,12 +51,14 @@ export const useDraftDocument = (applicationId: string): DraftDocument => {
 
   return {
     applicationError: applicationQuery.error,
+    awaitingRecord,
     detail,
     draft: draftQuery.data?.draft,
     draftError: draftQuery.error,
     etag: draftQuery.data?.etag ?? null,
     facts: factsQuery.data,
     operation,
+    settled,
     watch,
     workingDraftId,
   };

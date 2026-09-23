@@ -18,7 +18,14 @@ import { sourceHostname } from "../model/applicationPresentation";
    the same source reads the same way under both conclusions.
 
    `latest_snapshot` is the newest immutable snapshot of the Application. */
-export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
+export const JobSnapshotPanel = ({
+  detail,
+  operationLive = false,
+}: {
+  detail: ApplicationDetail;
+  /* The host screen's answer to whether this Application's work is under way. */
+  operationLive?: boolean;
+}) => {
   const snapshot = detail.latest_snapshot;
 
   return (
@@ -33,7 +40,7 @@ export const JobSnapshotPanel = ({ detail }: { detail: ApplicationDetail }) => {
         title="מודעת המשרה"
       />
 
-      <JobPostingUpdate detail={detail} />
+      <JobPostingUpdate detail={detail} operationLive={operationLive} />
 
       <div className="mt-4 flex flex-col gap-4">
         <SummaryList

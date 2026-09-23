@@ -29,6 +29,8 @@ interface UseDraftEditingOptions {
   /* Regeneration is a durable Operation. The accepted `202` goes to the screen's own
      watch rather than to a route of its own. */
   onOperationQueued: (operationId: string) => void;
+  /* This Application's work is under way (`isOperationLive`). See `DraftClaimActions.locked`. */
+  operationLive: boolean;
   workingDraftId: string | null;
 }
 
@@ -83,6 +85,7 @@ export const useDraftEditing = ({
   etag,
   facts,
   onOperationQueued,
+  operationLive,
   workingDraftId,
 }: UseDraftEditingOptions): DraftEditing => {
   const queryClient = useQueryClient();
@@ -212,7 +215,8 @@ export const useDraftEditing = ({
       onAdd: (section, text) => autosave.queueAddition({ section, text }),
       onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
       onRemove: removeClaim,
-      regenerationDisabled: dirty || regeneration.isPending || !regenerationAvailable,
+      regenerationDisabled: operationLive || dirty || regeneration.isPending || !regenerationAvailable,
+      locked: operationLive,
     },
     conflict: {
       discardLocal: () => {

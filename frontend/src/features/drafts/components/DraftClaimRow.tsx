@@ -86,6 +86,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
               className="min-h-16 resize-y border-transparent bg-transparent px-2 py-1.5 shadow-none"
               dir="auto"
               onBlur={actions.onCommit}
+              readOnly={actions.locked}
               onChange={(event) => {
                 setText(event.target.value);
                 actions.onEdit(claim, event.target.value);
@@ -105,6 +106,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
           <Callout
             action={
               <Button
+                disabled={actions.locked}
                 onClick={() => {
                   setText(revertTarget);
                   actions.onEdit(claim, revertTarget);
@@ -186,7 +188,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
             <Button
               aria-label="הזזת השורה למעלה"
               className={rowActionClasses}
-              disabled={!move.canMoveUp}
+              disabled={actions.locked || !move.canMoveUp}
               onClick={() => move.onMove(-1)}
               title="הזזת השורה למעלה"
               variant="ghost"
@@ -196,7 +198,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
             <Button
               aria-label="הזזת השורה למטה"
               className={rowActionClasses}
-              disabled={!move.canMoveDown}
+              disabled={actions.locked || !move.canMoveDown}
               onClick={() => move.onMove(1)}
               title="הזזת השורה למטה"
               variant="ghost"
@@ -208,6 +210,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
         <Button
           aria-label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
           className={rowActionClasses}
+          disabled={actions.locked && !editing}
           onClick={() => {
             if (editing) {
               actions.onCommit();
@@ -240,6 +243,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
           <Button
             aria-label="הסרת השורה"
             className={rowActionClasses}
+            disabled={actions.locked}
             onClick={() => setConfirmingRemoval(true)}
             title={
               removal.route === "selection"

@@ -140,7 +140,7 @@ const renderPanel = (value: ApplicationDetail, ai: boolean, onQueued = vi.fn()) 
   }
   render(
     <QueryClientProvider client={client}>
-      <SelectionPlanPanel action={action} detail={value} onQueued={onQueued} />
+      <SelectionPlanPanel action={action} detail={value} onQueued={onQueued} operationLive={false} />
     </QueryClientProvider>,
   );
   return onQueued;

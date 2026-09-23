@@ -175,4 +175,53 @@ test.describe("dialogs", () => {
     await expect(palette).toBeHidden();
     await expect(trigger).toBeFocused();
   });
+
+  /* Work in flight sits over the page. Hiding it with Escape hands focus to the chip that
+     reopens it - not to whatever held focus when the screen opened the overlay by itself -
+     and does not make the page safe to change: the commands that conflict with the run
+     stay locked while it is live. */
+  test("hides a live run on Escape, keeps conflicting actions locked, and reopens from its chip", async ({
+    page,
+  }) => {
+    const running = {
+      id: "op-1",
+      application_id: "app-1",
+      operation_type: "create_draft",
+      status: "running",
+      phase: "executing",
+      is_terminal: false,
+      available_actions: [],
+      outputs: [],
+      message: "",
+      created_at: "2026-08-24T07:00:00Z",
+    };
+    await page.route("**/api/v1/applications/app-1", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        json: { ...detail, active_operation: running, latest_operation: running },
+      });
+    });
+    await page.route("**/api/v1/operations/op-1", async (route) => {
+      await route.fulfill({ contentType: "application/json", json: running });
+    });
+
+    await page.goto("/applications/app-1");
+    const overlay = page.getByRole("dialog", { name: "הרצת יצירת הטיוטה" });
+    await expect(overlay).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(overlay).toBeHidden();
+    const chip = page.getByRole("button", { name: /פירוט ההרצה/ });
+    await expect(chip).toBeFocused();
+    await expect(chip).toContainText("מתבצעת");
+
+    await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
+    await expect(page.getByRole("button", { name: "עדכון נוסח המשרה" })).toBeDisabled();
+
+    await chip.click();
+    await expect(overlay).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(overlay).toBeHidden();
+    await expect(chip).toBeFocused();
+  });
 });

@@ -245,6 +245,10 @@ export const useWorkflowCommands = (
   detail: ApplicationDetail,
   plan: WorkflowActionPlan,
   onQueued: (operationId: string) => void,
+  /* The screen's own answer, from the watch it keeps: it also covers work this hook did
+     not queue - a retry from the run's overlay, the automatic draft - and the moment
+     between a success and the refreshed read of what it produced. */
+  operationLive = false,
 ) => {
   const queryClient = useQueryClient();
   const { mark } = usePreparationContinuation(detail.application.id);
@@ -321,7 +325,7 @@ export const useWorkflowCommands = (
     enabled: queuedId !== null,
   });
   const queuedStillRunning = queuedId !== null && !isTerminalOperation(queuedOperationQuery.data);
-  const workInFlight = queuedStillRunning || detail.active_operation != null;
+  const workInFlight = operationLive || queuedStillRunning || detail.active_operation != null;
 
   /* One key per replaced version: a resent answer for the same version is the same
      command, and a new version is a different one. */
