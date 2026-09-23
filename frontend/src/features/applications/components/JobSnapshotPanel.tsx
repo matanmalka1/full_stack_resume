@@ -20,11 +20,11 @@ import { sourceHostname } from "../model/applicationPresentation";
    `latest_snapshot` is the newest immutable snapshot of the Application. */
 export const JobSnapshotPanel = ({
   detail,
-  operationLive = false,
+  operationLive,
 }: {
   detail: ApplicationDetail;
   /* The host screen's answer to whether this Application's work is under way. */
-  operationLive?: boolean;
+  operationLive: boolean;
 }) => {
   const snapshot = detail.latest_snapshot;
 

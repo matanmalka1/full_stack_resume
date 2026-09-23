@@ -51,7 +51,7 @@ export const OperationActions = ({
     mutationFn: () => retryOperation(operation.id, retryKey),
     onSuccess: ({ operation: queued }) => {
       queryClient.setQueryData(operationQueryKey(queued.id), queued);
-      /* The host screen's watch takes the new run and the panel keeps reporting without
+      /* The host screen's watch takes the new run and the overlay keeps reporting without
          the reader going anywhere. */
       onQueued(queued.id);
     },
@@ -64,7 +64,7 @@ export const OperationActions = ({
      supersedes it, so it is offered without being recommended: the loud control on the
      screen must never be the one that discards what the reader is looking at. The way on
      from a finished run is the host screen's own next action, which is on the page around
-     this panel. */
+     this overlay. */
   if (!canCancel && !canRetry && error === null) {
     /* The row's own chrome around a slot the height of the button that is coming, so the
        reveal fills a space that was already there rather than making one. */

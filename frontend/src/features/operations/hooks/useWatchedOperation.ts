@@ -9,9 +9,9 @@ import { isTerminalOperation, operationQueryOptions } from "@/api/operations";
 
    It cannot simply be the projection's `active_operation`, because that field is only
    ever a `queued` or `running` record: the moment work finishes it becomes null. Read
-   straight, a panel driven by it would vanish at the instant the Operation had something
-   to say - a failure code, its guidance, the retry offer - and a failed run would leave
-   no trace on the screen that started it.
+   straight, an overlay driven by it would lose the run at the instant the Operation had
+   something to say - a failure code, its guidance, the retry offer - and a failed run
+   would leave no trace on the screen that started it.
 
    The latest lifecycle record also opens the watch on a direct link or reload.
    So the projection opens the watch and a query of the Operation's own closes it. The id
@@ -20,7 +20,7 @@ import { isTerminalOperation, operationQueryOptions } from "@/api/operations";
 
    `watch` is called directly by whatever queued the work, from the accepted `202`: the
    projection reports an Operation only on its next read, so waiting for it would put the
-   panel on screen a poll after the press that caused it.
+   overlay on screen a poll after the press that caused it.
 
    Presentation remains with the owning page; this hook returns only watched data. */
 export const useWatchedOperation = (
@@ -68,7 +68,7 @@ export const useWatchedOperation = (
      or running and the projection lets go the moment work ends.
 
      The projection's copy is the fallback, and it earns its place at the other end of the
-     Operation's life: it arrives with the page, so a reload mid-run paints the panel from
+     Operation's life: it arrives with the page, so a reload mid-run paints the overlay from
      the first render instead of after a second round trip. */
   const candidate = watchedQuery.data?.id === watchedId ? watchedQuery.data : projectedOperation;
   const operation = candidate?.application_id === applicationId ? candidate : undefined;

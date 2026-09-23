@@ -147,8 +147,8 @@ export const DraftEditorPage = () => {
 
   /* Both windows where this screen's work is finished but the screen is not stopping here:
      it is loading the draft that was just written, or leaving for the ready step. Either
-     way the run's card holds its shape and says what is happening, instead of collapsing
-     to "הושלמה" for the tick before the next thing replaces it. */
+     way the run's overlay stays open and says what is happening, instead of closing on
+     "הושלמה" for the tick before the next thing replaces it. */
   const continuation = renderFinished
     ? "הקבצים נוצרו. מעבר לגרסה המוכנה…"
     : draftArriving

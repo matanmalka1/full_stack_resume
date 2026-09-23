@@ -168,7 +168,7 @@ export const useDraftEditing = ({
     },
     /* §14 regeneration is an Operation, reported beside the draft it is rewriting rather
        than followed to a screen of its own. The accepted `202` seeds the Operation's own
-       query so the panel appears with the press rather than a poll later. */
+       query so the overlay appears with the press rather than a poll later. */
     onSuccess: ({ operation }: QueuedOperation) => {
       queryClient.setQueryData(operationQueryKey(operation.id), operation);
       onOperationQueued(operation.id);

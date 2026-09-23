@@ -473,7 +473,7 @@ describe("ApplicationPage at the preparation route", () => {
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen
        watches the Operation it queued, so a fixed queue of answers would leave that read
-       unanswered and the panel would never settle. */
+       unanswered and the overlay would never settle. */
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") {
         return Promise.resolve(acceptedResponse(queued()));
@@ -491,7 +491,7 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage(aiSettings);
     await clickEnabledButton("ניתוח המשרה");
 
-    /* The accepted `202` is seeded as the panel's first state, so the queued Operation is
+    /* The accepted `202` is seeded as the overlay's first state, so the queued Operation is
        reported on this screen rather than on one the user was sent to. */
     expect(await screen.findByRole("heading", { name: "הרצת ניתוח המשרה", level: 2 })).toBeInTheDocument();
     expect(screen.queryByText("המשרה טרם נותחה")).not.toBeInTheDocument();

@@ -2,12 +2,11 @@ import type { Operation, OperationFailureCode, OperationPhase, OperationStatus, 
 import { type Tone } from "@/ui/tone";
 
 /* The Hebrew vocabulary of an Operation, in one module because two surfaces speak it: the
-   Operation screen, which a direct link still reaches, and the panel on the Application
-   screen, where work queued from that screen is now watched without leaving it.
+   overlay on the screen that queued the work, and the board's row for the Application.
 
    They have to say the same thing about the same Operation - a status, a phase, and a
    failure are not worth two translations that can drift - so the maps live here and the
-   two screens differ only in how much of the record they lay out. */
+   two surfaces differ only in how much of the record they lay out. */
 /* Keyed by the generated unions, so a status or phase added to the backend lifecycle
    fails the frontend build instead of reaching the screen untranslated. */
 export const statusLabels: Record<OperationStatus, string> = {

@@ -1123,7 +1123,7 @@ describe("DraftEditorPage regeneration", () => {
   /* The regeneration is reported in place. It used to navigate to the Operation's own
      route, which took the draft off the screen at the moment the user was waiting to see
      what became of one of its lines - and the way back from there led to the Application
-     screen rather than to the editor they had left. The panel that appears here is the
+     screen rather than to the editor they had left. The overlay that opens here is the
      same one the Application screen uses. */
   it("freezes the exact saved version and reports the queued Operation in place", async () => {
     const fetchMock = stubReads({ regenerate: () => accepted() });
@@ -1131,7 +1131,7 @@ describe("DraftEditorPage regeneration", () => {
     renderPage();
     fireEvent.click((await screen.findAllByRole("button", { name: "יצירה מחדש של השורה" }))[0]!);
 
-    /* The panel, not the route: the editor's own heading is still on screen beside it. */
+    /* The overlay, not the route: the editor's own heading is still on screen under it. */
     expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "טיוטה ואימות" })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));

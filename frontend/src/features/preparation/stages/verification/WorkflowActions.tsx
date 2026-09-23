@@ -19,7 +19,7 @@ interface WorkflowActionsProps {
      several. Only the notes region's name depends on it. */
   hasRecommendation: boolean;
   /* What this component just queued. The projection reports an Operation only on its next
-     read, so without this the panel would appear a poll later than the press that caused
+     read, so without this the overlay would appear a poll later than the press that caused
      it - and a command that failed before the worker picked it up might never be reported
      at all. The accepted `202` is the earliest and most certain answer, so it is handed
      straight to the screen that shows it. */

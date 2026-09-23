@@ -47,12 +47,12 @@ interface PostingFields {
    content anyway, since it holds a snapshot per exact content. */
 export const JobPostingUpdate = ({
   detail,
-  operationLive = false,
+  operationLive,
 }: {
   detail: ApplicationDetail;
   /* The host screen's own watch, which also knows about work the projection has not
      reported yet - a run queued a moment ago - and about a success still being read. */
-  operationLive?: boolean;
+  operationLive: boolean;
 }) => {
   const queryClient = useQueryClient();
   const applicationId = detail.application.id;
