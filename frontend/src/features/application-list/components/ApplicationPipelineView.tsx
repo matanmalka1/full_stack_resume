@@ -1,5 +1,6 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { cx } from "@/ui/cx";
+import { applicationAttention } from "../model/applicationListPresentation";
 import { ApplicationIdentity } from "./ApplicationIdentity";
 import { ApplicationNextAction } from "./ApplicationNextAction";
 import {
@@ -40,6 +41,28 @@ const pipelineToneClasses: Record<PipelineColumn["tone"], string> = {
   success: "border-cv-success/30 bg-cv-success-soft",
 };
 
+/* The stage columns sort by recruitment, so a card that needs the reader would
+   otherwise look like its neighbours. A mark beside the company says so at a glance;
+   the words ride with it for anyone who cannot see the mark, and the reasons
+   themselves stay on the table and the cards, which have room to name them. */
+const AttentionMark = ({ item }: { item: ApplicationListItem }) => {
+  const attention = applicationAttention(item);
+  if (attention === null) return null;
+
+  return (
+    <span className="mt-1.5 inline-flex shrink-0" title={attention.label}>
+      <span
+        aria-hidden="true"
+        className={cx(
+          "size-2 rounded-pill",
+          attention.tone === "blocker" ? "bg-cv-blocker" : "bg-cv-warning",
+        )}
+      />
+      <span className="sr-only">דורש טיפול</span>
+    </span>
+  );
+};
+
 const PipelineCard = ({
   item,
   onRequestUpdate,
@@ -50,7 +73,12 @@ const PipelineCard = ({
   <article className="group flex flex-col gap-2.5 rounded-control border border-cv-border bg-cv-surface p-3 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating">
     <div>
       <ApplicationIdentity
-        afterCompany={<ApplicationFitStatus item={item} variant="pipeline" />}
+        afterCompany={
+          <span className="flex shrink-0 items-start gap-2">
+            <AttentionMark item={item} />
+            <ApplicationFitStatus item={item} variant="pipeline" />
+          </span>
+        }
         item={item}
         variant="pipeline"
       />

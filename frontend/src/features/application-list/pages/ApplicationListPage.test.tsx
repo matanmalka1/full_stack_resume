@@ -380,6 +380,7 @@ describe("ApplicationListPage", () => {
       item({ next_action: "Follow up", next_action_date: "2020-01-01" }),
       item({ id: "app-2", company: "Binat", notes: "Referral from Dana", recruitment_status: "interview" }),
       item({ id: "app-3", company: "ClosedCo", recruitment_status: "rejected" }),
+      item({ id: "app-4", company: "Delta", review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] }),
     ]);
 
     renderPage();
@@ -403,8 +404,13 @@ describe("ApplicationListPage", () => {
     expect(within(pipeline).getByRole("heading", { name: "תהליכים סגורים" })).toBeInTheDocument();
     expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(3);
     expect(within(pipeline).getByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
-    expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(3);
+    expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(4);
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
+    /* Only the card with a projected reason carries the attention mark. */
+    expect(within(pipeline).getAllByText("דורש טיפול")).toHaveLength(1);
+    expect(
+      within(pipeline).getByText("דורש טיפול").closest("article")?.querySelector("a")?.textContent,
+    ).toBe("Delta");
     expect(boardReadCount(fetchMock)).toBe(1);
   });
 
