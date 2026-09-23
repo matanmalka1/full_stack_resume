@@ -23,6 +23,7 @@ interface ApplicationListResultsProps {
   onOffsetChange: (offset: number) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
   onSortChange: (sort: ApplicationSort) => void;
 }
@@ -50,6 +51,7 @@ export const ApplicationListResults = ({
   onOffsetChange,
   onRequestClose,
   onRequestDelete,
+  onRequestDetails,
   onRequestUpdate,
   onSortChange,
 }: ApplicationListResultsProps) => {
@@ -78,11 +80,13 @@ export const ApplicationListResults = ({
           onClearNextAction={onClearNextAction}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
+          onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
         />
       ) : viewMode === "pipeline" ? (
         <ApplicationPipelineView
           items={items}
+          onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
           recruitmentStatusCounts={recruitmentStatusCounts}
           recruitmentStatusFilter={recruitmentStatusFilter}
@@ -96,6 +100,7 @@ export const ApplicationListResults = ({
           sort={sort}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
+          onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
         />
       )}

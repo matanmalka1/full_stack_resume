@@ -1,5 +1,5 @@
 import type { ApplicationListItem } from "@/api/contracts";
-import { fitLevelLabel, preparationResumeDestination } from "@/features/preparation";
+import { fitLevelLabel } from "@/features/preparation";
 import { Tooltip } from "@/ui/Tooltip";
 import { surfaceClasses } from "@/ui/surface";
 import { useOpenRecord } from "../hooks/useOpenRecord";
@@ -16,6 +16,7 @@ interface ApplicationCardsViewProps {
   onClearNextAction: (item: ApplicationListItem) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
@@ -29,17 +30,18 @@ const ApplicationCard = ({
   onClearNextAction,
   onRequestClose,
   onRequestDelete,
+  onRequestDetails,
   onRequestUpdate,
 }: Omit<ApplicationCardsViewProps, "clearingApplicationId" | "items"> & {
   clearing: boolean;
   item: ApplicationListItem;
 }) => {
-  const open = useOpenRecord(preparationResumeDestination(item));
+  const open = useOpenRecord(() => onRequestDetails(item));
   const hasNext = nextActionHeading(item, applicationAttention(item) !== null) !== null;
   const score = fitScoreText(item);
 
   return (
-    // The card opens on a click like the row does; its link icon stays the keyboard route.
+    // The card opens its details on a click like the row does; its link icon stays the keyboard route.
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <article
       className={surfaceClasses(
@@ -104,6 +106,7 @@ export const ApplicationCardsView = ({
   onClearNextAction,
   onRequestClose,
   onRequestDelete,
+  onRequestDetails,
   onRequestUpdate,
 }: ApplicationCardsViewProps) => (
   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -115,6 +118,7 @@ export const ApplicationCardsView = ({
         onClearNextAction={onClearNextAction}
         onRequestClose={onRequestClose}
         onRequestDelete={onRequestDelete}
+        onRequestDetails={onRequestDetails}
         onRequestUpdate={onRequestUpdate}
       />
     ))}

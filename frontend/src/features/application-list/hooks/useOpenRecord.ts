@@ -1,21 +1,18 @@
 import type { KeyboardEvent, MouseEvent } from "react";
-import { useNavigate } from "react-router-dom";
 
 /* A board record - a table row, a card, a stage card - opens as a whole but yields to
-   real controls and to text selection. Its own anchor stays the native keyboard and
-   screen-reader route into it; this only makes the rest of its surface a target. */
-export const useOpenRecord = (href: string) => {
-  const navigate = useNavigate();
-
+   real controls and to text selection. What opening does is the caller's: the board
+   opens the record's details. Its own link icon stays the native route straight to the
+   work, for the keyboard, screen readers and a new tab. */
+export const useOpenRecord = (onOpen: () => void) => {
   const onClick = (event: MouseEvent<HTMLElement>) => {
     if (event.defaultPrevented || event.target instanceof Element === false) {
       return;
     }
 
-    /* The record looks and behaves like a link, so it yields to the gestures that open
-       a link somewhere else. Without this, Cmd- or Ctrl-clicking the body navigated in
-       place - the one thing the reader was asking it not to do - while the same gesture
-       on the anchor inside it opened a tab. */
+    /* Modified clicks are the reader asking for a link somewhere else, which only the
+       record's own anchor can give; the body leaves them alone rather than answer with
+       something else in place. */
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
       return;
     }
@@ -29,13 +26,13 @@ export const useOpenRecord = (href: string) => {
       return;
     }
 
-    navigate(href);
+    onOpen();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
       event.preventDefault();
-      navigate(href);
+      onOpen();
     }
   };
 

@@ -1,5 +1,4 @@
 import type { ApplicationListItem } from "@/api/contracts";
-import { preparationResumeDestination } from "@/features/preparation";
 import { Tooltip } from "@/ui/Tooltip";
 import { useOpenRecord } from "../hooks/useOpenRecord";
 import { formatApplicationDate, formatRelativeUpdate } from "../model/applicationListPresentation";
@@ -13,6 +12,7 @@ interface ApplicationListRowProps {
   clearing: boolean;
   item: ApplicationListItem;
   onClearNextAction: (item: ApplicationListItem) => void;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
@@ -34,9 +34,10 @@ export const ApplicationListRow = ({
   onClearNextAction,
   onRequestClose,
   onRequestDelete,
+  onRequestDetails,
   onRequestUpdate,
 }: ApplicationListRowProps) => {
-  const open = useOpenRecord(preparationResumeDestination(item));
+  const open = useOpenRecord(() => onRequestDetails(item));
 
   return (
     <tr

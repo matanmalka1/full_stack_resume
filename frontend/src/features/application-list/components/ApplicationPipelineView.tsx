@@ -2,7 +2,6 @@ import { Pencil } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { preparationResumeDestination } from "@/features/preparation";
 import { buttonClasses } from "@/ui/Button";
 import { Tooltip } from "@/ui/Tooltip";
 import { cx } from "@/ui/cx";
@@ -20,6 +19,7 @@ interface ApplicationPipelineViewProps {
      selects (none: no filter). Together they give each column its whole size. */
   recruitmentStatusCounts: Readonly<Record<string, number>>;
   recruitmentStatusFilter: readonly string[] | undefined;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
@@ -77,17 +77,19 @@ const AttentionMark = ({ item }: { item: ApplicationListItem }) => {
    recruitment record - beside a pencil for the stage itself. */
 const PipelineCard = ({
   item,
+  onRequestDetails,
   onRequestUpdate,
 }: {
   item: ApplicationListItem;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
-  const open = useOpenRecord(preparationResumeDestination(item));
+  const open = useOpenRecord(() => onRequestDetails(item));
   const attention = applicationAttention(item);
   const head = nextActionHeading(item, attention !== null);
 
   return (
-    // The card opens on a click like the row does; its company link stays the keyboard route.
+    // The card opens its details on a click like the row does; its company link stays the keyboard route.
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <article
       className="group flex cursor-pointer flex-col gap-2.5 rounded-control border border-cv-border bg-cv-surface p-3.5 shadow-surface transition-all hover:border-cv-border-strong"
@@ -151,6 +153,7 @@ export const ApplicationPipelineView = ({
   items,
   recruitmentStatusCounts,
   recruitmentStatusFilter,
+  onRequestDetails,
   onRequestUpdate,
 }: ApplicationPipelineViewProps) => {
   /* A column holds only this page's Applications, but the board is paged. Its size is
@@ -204,7 +207,14 @@ export const ApplicationPipelineView = ({
                   אין מועמדויות בשלב זה
                 </p>
               ) : (
-                stageItems.map((item) => <PipelineCard item={item} key={item.id} onRequestUpdate={onRequestUpdate} />)
+                stageItems.map((item) => (
+                  <PipelineCard
+                    item={item}
+                    key={item.id}
+                    onRequestDetails={onRequestDetails}
+                    onRequestUpdate={onRequestUpdate}
+                  />
+                ))
               )}
             </div>
           </li>

@@ -46,6 +46,7 @@ interface ApplicationListTableProps {
   items: readonly ApplicationListItem[];
   sort: ApplicationSort;
   onClearNextAction: (item: ApplicationListItem) => void;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onSortChange: (sort: ApplicationSort) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
@@ -59,6 +60,7 @@ export const ApplicationListTable = ({
   onClearNextAction,
   onRequestClose,
   onRequestDelete,
+  onRequestDetails,
   onRequestUpdate,
   onSortChange,
 }: ApplicationListTableProps) => {
@@ -124,6 +126,7 @@ export const ApplicationListTable = ({
               onClearNextAction={onClearNextAction}
               onRequestClose={onRequestClose}
               onRequestDelete={onRequestDelete}
+              onRequestDetails={onRequestDetails}
               onRequestUpdate={onRequestUpdate}
             />
           ))}

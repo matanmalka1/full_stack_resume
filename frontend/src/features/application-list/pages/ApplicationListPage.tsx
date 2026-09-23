@@ -13,6 +13,7 @@ import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
+import { ApplicationDetailsDialog } from "../components/ApplicationDetailsDialog";
 import { ApplicationListResults } from "../components/ApplicationListResults";
 import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
@@ -54,6 +55,7 @@ export const ApplicationListPage = () => {
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
   const [deletedLabel, setDeletedLabel] = useState<string | null>(null);
   const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
+  const [detailsApplicationId, setDetailsApplicationId] = useState<string | null>(null);
   const { clearNextActionMutation, closeMutation, deleteMutation, undoCloseMutation } = useApplicationListMutations({
     onApplicationClosed: (applicationId, eventId) => {
       const application = findApplication(items, applicationId);
@@ -83,6 +85,8 @@ export const ApplicationListPage = () => {
   const closingApplication = findApplication(items, closingApplicationId);
   const deletingApplication = findApplication(items, deletingApplicationId);
   const updatingApplication = findApplication(items, updatingApplicationId);
+  const detailsApplication = findApplication(items, detailsApplicationId);
+  const clearingApplicationId = clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null;
   const recruitmentStageCounts = Object.fromEntries(
     recruitmentStages.map((stage) => [
       stage.id,
@@ -161,7 +165,7 @@ export const ApplicationListPage = () => {
       )}
       <ApplicationAttentionSummary
         boardHasApplications={page !== undefined && page.total > 0}
-        clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
+        clearingApplicationId={clearingApplicationId}
         filterActive={query.preset === "needs_attention"}
         onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
         onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
@@ -245,9 +249,7 @@ export const ApplicationListPage = () => {
               viewMode={viewMode}
             />
             <ApplicationListResults
-              clearingApplicationId={
-                clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null
-              }
+              clearingApplicationId={clearingApplicationId}
               fetching={listQuery.isFetching && !listQuery.isPending}
               items={items}
               matchedCount={page.matched}
@@ -257,6 +259,7 @@ export const ApplicationListPage = () => {
               onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
               onRequestClose={(item) => setClosingApplicationId(item.id)}
               onRequestDelete={(item) => setDeletingApplicationId(item.id)}
+              onRequestDetails={(item) => setDetailsApplicationId(item.id)}
               onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
               onSortChange={(sort) => updateQuery({ ...query, sort })}
               pageSize={PAGE_SIZE}
@@ -279,6 +282,13 @@ export const ApplicationListPage = () => {
         onCancel={() => setDeletingApplicationId(null)}
         onConfirm={() => deletingApplicationId && deleteMutation.mutate(deletingApplicationId)}
         pending={deleteMutation.isPending}
+      />
+      <ApplicationDetailsDialog
+        application={detailsApplication}
+        clearing={detailsApplication !== null && clearingApplicationId === detailsApplication.id}
+        onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
+        onClose={() => setDetailsApplicationId(null)}
+        onRequestUpdate={(application) => setUpdatingApplicationId(application.id)}
       />
       <RecruitmentUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplicationId(null)} />
     </PageShell>

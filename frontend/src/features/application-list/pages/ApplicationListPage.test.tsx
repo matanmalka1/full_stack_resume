@@ -355,12 +355,22 @@ describe("ApplicationListPage", () => {
   });
 
   /* The row was painted on hover while only three of its cells were clickable. */
-  it("opens the Application from a click anywhere the row carries no control of its own", async () => {
-    stubList([item()]);
+  /* A click on the row opens its details, as demo_re's job modal does; the modal's
+     primary command is the way on to the work. */
+  it("opens the details from a click anywhere the row carries no control of its own", async () => {
+    stubList([item({ notes: "Referral from Dana" })]);
 
     renderPage();
 
     fireEvent.click(await screen.findByText("Backend Engineer"));
+
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    expect(within(details).getByText("פתוחה")).toBeInTheDocument();
+    expect(within(details).getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(within(details).getByText("Referral from Dana")).toBeInTheDocument();
+    expect(within(details).getByText("פעולה מומלצת הבאה")).toBeInTheDocument();
+
+    fireEvent.click(within(details).getByRole("link", { name: "המשך בהכנה" }));
 
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
   });
@@ -373,7 +383,7 @@ describe("ApplicationListPage", () => {
     const row = await screen.findByRole("row", { name: "Backend Engineer אצל Acme" });
     fireEvent.keyDown(row, { key: "Enter" });
 
-    expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).toBeInTheDocument();
   });
 
   it("resumes a row at the step recommended by the server", async () => {
@@ -391,6 +401,9 @@ describe("ApplicationListPage", () => {
     );
 
     fireEvent.click(await screen.findByText("Backend Engineer"));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).getByRole("link", { name: "המשך בהכנה" }),
+    );
 
     expect(screen.getByRole("heading", { name: "עורך הטיוטה" })).toBeInTheDocument();
   });
@@ -401,6 +414,10 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     fireEvent.click(await screen.findByText("Backend Engineer"));
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    /* A finished CV is offered from the details, and the way on goes to the same revision. */
+    expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute("href", "/revisions/revision-1");
+    fireEvent.click(within(details).getByRole("link", { name: "פתיחת הגרסה המוכנה" }));
 
     expect(screen.getByRole("heading", { name: "גרסה מוכנה" })).toBeInTheDocument();
   });
