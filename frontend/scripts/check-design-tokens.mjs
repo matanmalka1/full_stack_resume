@@ -147,6 +147,13 @@ for (const file of collectFiles(sourceRoot)) {
         continue;
       }
 
+      /* A side or corner radius - `rounded-t-surface`, `rounded-ss-surface` - names the
+         same token after its position prefix; the token is what is checked. */
+      const positioned = prefix === "rounded" ? /^(?:ss|se|es|ee|tl|tr|br|bl|s|e|t|r|b|l)-(.+)$/.exec(name) : null;
+      if (positioned !== null && (builtin.has(positioned[1]) || tokens.has(positioned[1]))) {
+        continue;
+      }
+
       const line = source.slice(0, match.index).split("\n").length;
       errors.push(`${relativePath}:${line} unknown ${prefix} token (${match[0]})`);
     }

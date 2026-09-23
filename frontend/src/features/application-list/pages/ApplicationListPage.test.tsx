@@ -245,10 +245,23 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
+    expect(screen.getByText("איפה עומד כל תהליך גיוס, ומה עוד צריך לקורות החיים.")).toBeInTheDocument();
+    /* Neither row has anything waiting, so the hub says so in one line rather than
+       disappearing and leaving the reader to wonder whether it loaded. */
+    const quietHub = await screen.findByRole("region", { name: "מוקד פעולות" });
+    expect(within(quietHub).getByText("אין פעולות ממתינות.")).toBeInTheDocument();
+    /* Each row places its CV state along the way to Ready, as a position and a bar. */
+    expect(await screen.findByText("1/7")).toBeInTheDocument();
+    expect(screen.getByText("7/7")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "הכנת קורות החיים: קורות החיים מוכנים" })).toHaveAttribute(
+      "aria-valuenow",
+      "7",
+    );
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: "Backend Engineer" })).toHaveAttribute(
+    /* The row leads with the company as text; the icon beside it is the row's link. */
+    expect(await screen.findByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveAttribute(
       "href",
       "/applications/app-1",
     );
@@ -259,11 +272,27 @@ describe("ApplicationListPage", () => {
     const board = within(screen.getByRole("table"));
     expect(board.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(board.getByText("קורות החיים מוכנים")).toBeInTheDocument();
-    expect(board.getAllByText("נשמר")).toHaveLength(2);
-    expect(board.getByRole("columnheader", { name: "המשך טיפול" })).toBeInTheDocument();
-    expect(board.queryByRole("columnheader", { name: "התאמה" })).not.toBeInTheDocument();
+    expect(board.getAllByText("טרם הוגש")).toHaveLength(2);
+    for (const name of ["חברה ותפקיד", "התקדמות הכנה וגיוס", "פעולה מומלצת הבאה", "ציון התאמה", "עדכון אחרון"]) {
+      expect(board.getByRole("columnheader", { name })).toBeInTheDocument();
+    }
+    /* The headers of the columns the server can order by are the board's only sort
+       control; the order they set goes to the server query. */
+    expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).toHaveAttribute("aria-sort", "descending");
+    expect(board.queryByRole("button", { name: "ציון התאמה" })).not.toBeInTheDocument();
+    fireEvent.click(board.getByRole("button", { name: "חברה ותפקיד" }));
+    await waitFor(() =>
+      expect(board.getByRole("columnheader", { name: "חברה ותפקיד" })).toHaveAttribute("aria-sort", "ascending"),
+    );
+    expect(screen.queryByLabelText("סדר")).not.toBeInTheDocument();
+    expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).not.toHaveAttribute("aria-sort");
     fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
     expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
+    /* The menu also opens the record, as the demo's first item does. */
+    expect(board.getByRole("menuitem", { name: "פתיחת המועמדות" })).toHaveAttribute("href", "/applications/app-1");
+    /* Every view reaches a record's details from its menu, which is the keyboard's way in. */
+    fireEvent.click(board.getByRole("menuitem", { name: "פרטי משרה" }));
+    expect(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).toBeInTheDocument();
   });
 
   /* The column is read to decide which row to open next, so it names what is waiting
@@ -302,7 +331,7 @@ describe("ApplicationListPage", () => {
     renderPage({ entries: ["/?stage=needs_analysis"] });
 
     await screen.findByText("אין מועמדות שמתאימה לסינון.");
-    expect(screen.getByLabelText("מצב קורות החיים")).toHaveValue("needs_analysis");
+    expect(screen.getByLabelText("שלב הכנת קו״ח")).toHaveValue("needs_analysis");
   });
 
   /* Clearing restores the board's default slice while preserving its ordering. */
@@ -314,7 +343,6 @@ describe("ApplicationListPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "ניקוי הסינון" }));
 
     expect(screen.getByLabelText("מועמדויות")).toHaveValue("open");
-    expect(screen.getByLabelText("סדר")).toHaveValue("company");
     expect(screen.getByLabelText("חיפוש במועמדויות")).toHaveValue("");
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
@@ -322,29 +350,52 @@ describe("ApplicationListPage", () => {
         expect.objectContaining({ method: "GET" }),
       ),
     );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("sort=company"),
+      expect.objectContaining({ method: "GET" }),
+    );
     expect(screen.getByRole("button", { name: /הכל/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   /* The row was painted on hover while only three of its cells were clickable. */
-  it("opens the Application from a click anywhere the row carries no control of its own", async () => {
-    stubList([item()]);
+  /* A click on the row opens its details, as demo_re's job modal does; the modal's
+     primary command is the way on to the work. */
+  it("opens the details from a click anywhere the row carries no control of its own", async () => {
+    stubList([item({ notes: "Referral from Dana" })]);
 
     renderPage();
 
     fireEvent.click(await screen.findByText("Backend Engineer"));
 
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    expect(within(details).getByText("פתוחה")).toBeInTheDocument();
+    expect(within(details).getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(within(details).getByText("Referral from Dana")).toBeInTheDocument();
+    expect(within(details).getByText("פעולה מומלצת הבאה")).toBeInTheDocument();
+
+    fireEvent.click(within(details).getByRole("link", { name: "המשך בהכנה" }));
+
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
   });
 
-  it("opens a focused row from the keyboard", async () => {
-    stubList([item()]);
+  it("opens a focused row's details from the keyboard and hands on to the recruitment dialog", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) =>
+        String(url) === "/api/v1/applications/app-1" ? jsonResponse(detailBody()) : jsonResponse(listBody([item()])),
+      ),
+    );
 
     renderPage();
 
     const row = await screen.findByRole("row", { name: "Backend Engineer אצל Acme" });
     fireEvent.keyDown(row, { key: "Enter" });
 
-    expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    fireEvent.click(within(details).getByRole("button", { name: "עדכון סטטוס גיוס" }));
+
+    expect(await screen.findByRole("dialog", { name: /ניהול מועמדות: Acme/ })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "פרטי משרה: Acme" })).not.toBeInTheDocument();
   });
 
   it("resumes a row at the step recommended by the server", async () => {
@@ -352,17 +403,55 @@ describe("ApplicationListPage", () => {
 
     renderPage();
 
+    /* The row's command goes to the same step the row itself opens. */
+    const command = await screen.findByRole("link", { name: /· Acme$/ });
+    expect(command).toHaveTextContent("בצע");
+    /* The recommended step carries its fixed one-line description. */
+    expect(screen.getByText("הטיוטה עברה אימות וממתינה לאישור שלך.")).toBeInTheDocument();
+    expect(command.getAttribute("href")).toBe(
+      screen.getByRole("link", { name: "פתיחת המועמדות של Acme" }).getAttribute("href"),
+    );
+
     fireEvent.click(await screen.findByText("Backend Engineer"));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).getByRole("link", { name: "המשך בהכנה" }),
+    );
 
     expect(screen.getByRole("heading", { name: "עורך הטיוטה" })).toBeInTheDocument();
   });
 
   it("opens the exact ready revision when the workflow is complete", async () => {
-    stubList([item({ latest_ready_revision_id: "revision-1", preparation_state: "ready", recommended_action: null })]);
+    const ready = item({
+      latest_ready_revision_id: "revision-1",
+      preparation_state: "ready",
+      recommended_action: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: unknown) =>
+        String(url) === "/api/v1/approved-revisions/revision-1"
+          ? jsonResponse({ id: "revision-1", ready_qualified: true, pdf_artifact_version_id: "pdf-1" })
+          : jsonResponse(listBody([ready])),
+      ),
+    );
 
     renderPage();
 
     fireEvent.click(await screen.findByText("Backend Engineer"));
+    const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
+    /* The finished CV's PDF is one press away, through the revision's recruiter delivery. */
+    expect(await within(details).findByRole("link", { name: "הורדת PDF" })).toHaveAttribute(
+      "href",
+      "/api/v1/approved-revisions/revision-1/recruiter-pdf?pdf_artifact_version_id=pdf-1",
+    );
+    /* The finished CV is said once: the footer's way on is the one link to the revision,
+       and there is no separate next-action block repeating that the CV is ready. */
+    expect(within(details).queryByRole("link", { name: "המשך בהכנה" })).not.toBeInTheDocument();
+    expect(within(details).queryByText("פעולה מומלצת הבאה")).not.toBeInTheDocument();
+    const toRevision = within(details).getAllByRole("link", { name: "פתיחת הגרסה המוכנה" });
+    expect(toRevision).toHaveLength(1);
+    expect(toRevision[0]).toHaveAttribute("href", "/revisions/revision-1");
+    fireEvent.click(toRevision[0]);
 
     expect(screen.getByRole("heading", { name: "גרסה מוכנה" })).toBeInTheDocument();
   });
@@ -372,6 +461,7 @@ describe("ApplicationListPage", () => {
       item({ next_action: "Follow up", next_action_date: "2020-01-01" }),
       item({ id: "app-2", company: "Binat", notes: "Referral from Dana", recruitment_status: "interview" }),
       item({ id: "app-3", company: "ClosedCo", recruitment_status: "rejected" }),
+      item({ id: "app-4", company: "Delta", review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] }),
     ]);
 
     renderPage();
@@ -381,22 +471,31 @@ describe("ApplicationListPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "כרטיסים" }));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Acme" })).toHaveLength(1);
-    expect(screen.getAllByRole("link", { name: "Binat" })).toHaveLength(1);
+    /* A card is linked by the same icon as the row, and carries the row's blocks. */
+    expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Binat" })).toHaveLength(1);
     expect(screen.getAllByText("Follow up")).toHaveLength(2);
     expect(screen.getAllByText(/באיחור/)).toHaveLength(2);
-    expect(screen.getByText(/Referral from Dana/)).toBeInTheDocument();
+    expect(screen.getAllByText("פעולה מומלצת הבאה")).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: "ניהול גיוס" })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "פעולות נוספות עבור Acme" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
     const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
-    expect(within(pipeline).getByRole("heading", { name: "נשמר" })).toBeInTheDocument();
+    expect(within(pipeline).getByRole("heading", { name: "טרם הוגש" })).toBeInTheDocument();
     expect(within(pipeline).getByRole("heading", { name: "ראיונות ומטלות" })).toBeInTheDocument();
     expect(within(pipeline).getByRole("heading", { name: "תהליכים סגורים" })).toBeInTheDocument();
     expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(3);
     expect(within(pipeline).getByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
-    expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(3);
+    /* Each stage card's main control is the step to take, named for its company. */
+    expect(within(pipeline).getAllByRole("link", { name: /^ניתוח המשרה · / })).toHaveLength(4);
+    expect(within(pipeline).getByRole("button", { name: "עדכון שלב הגיוס של Binat" })).toBeInTheDocument();
+    fireEvent.click(within(pipeline).getByRole("button", { name: "פרטי המשרה של Binat" }));
+    expect(screen.getByRole("dialog", { name: "פרטי משרה: Binat" })).toBeInTheDocument();
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
+    /* Only the card with a projected reason carries the attention mark. */
+    expect(within(pipeline).getAllByText("דורש טיפול")).toHaveLength(1);
+    expect(within(pipeline).getByText("דורש טיפול").closest("article")?.querySelector("a")?.textContent).toBe("Delta");
     expect(boardReadCount(fetchMock)).toBe(1);
   });
 
@@ -408,6 +507,8 @@ describe("ApplicationListPage", () => {
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(hub).getByText("Follow up with recruiter")).toBeInTheDocument();
     expect(within(hub).getByText("פעולה אחת בעדיפות")).toBeInTheDocument();
+    /* The row offers the same dismissal beside its reminder. */
+    expect(within(screen.getByRole("table")).getByRole("button", { name: "הסרת התזכורת של Acme" })).toBeEnabled();
     fireEvent.click(within(hub).getByRole("button", { name: "הסרת תזכורת" }));
 
     await waitFor(() =>
@@ -419,6 +520,15 @@ describe("ApplicationListPage", () => {
         }),
       ),
     );
+
+    /* The hub offers the whole preset on the board, and withdraws the offer once the
+       board is showing it. */
+    fireEvent.click(within(hub).getByRole("button", { name: "הצגת כל הדורשות טיפול בלוח" }));
+    const presets = screen.getByRole("group", { name: "סינון מהיר לפי מצב" });
+    await waitFor(() =>
+      expect(within(presets).getByRole("button", { name: /דורש טיפול/ })).toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(within(hub).queryByRole("button", { name: "הצגת כל הדורשות טיפול בלוח" })).not.toBeInTheDocument();
   });
 
   it("keeps duplicate attention rows distinguishable and disables only the reminder being cleared", async () => {
@@ -489,6 +599,10 @@ describe("ApplicationListPage", () => {
     expect(await within(interviews).findByText("3")).toBeInTheDocument();
     expect(await within(ready).findByText("2")).toBeInTheDocument();
     expect(await within(attention).findByText("4")).toBeInTheDocument();
+    /* Only the slice that asks for the reader is drawn louder, and only while it holds
+       anything and is not already the one on screen. */
+    expect(attention).toHaveAttribute("data-emphasis", "waiting");
+    expect(interviews).not.toHaveAttribute("data-emphasis");
     const interviewStage = screen.getByLabelText("שלב גיוס");
     expect(within(interviewStage).getByRole("option", { name: "ראיונות ומטלות (2)" })).toBeInTheDocument();
 
@@ -558,7 +672,7 @@ describe("ApplicationListPage", () => {
        until then - so the form's fields exist only once that resolves. */
     const status = await screen.findByLabelText("עדכון שלב");
     expect(within(status).getByRole("option", { name: "סגור" })).toBeInTheDocument();
-    expect(within(status).queryByRole("option", { name: "הוגש" })).not.toBeInTheDocument();
+    expect(within(status).queryByRole("option", { name: "הוגשה מועמדות" })).not.toBeInTheDocument();
 
     fireEvent.change(status, { target: { value: "closed" } });
     fireEvent.change(screen.getByLabelText("הפעולה הבאה"), { target: { value: "Send follow-up" } });
@@ -605,6 +719,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByText("עוד לא נוצרה אף מועמדות.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "מוקד פעולות" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("חיפוש במועמדויות")).not.toBeInTheDocument();
     expect(screen.queryByText("אין מועמדות שמתאימה לסינון.")).not.toBeInTheDocument();
   });
@@ -616,10 +731,11 @@ describe("ApplicationListPage", () => {
     const firstPage = Array.from({ length: 25 }, (_, index) =>
       item({ id: `app-${index + 1}`, company: `Company ${index + 1}` }),
     );
-    const firstPageBody = listBody(firstPage, { matched: 26, total: 26 });
+    const firstPageBody = listBody(firstPage, { matched: 26, total: 26, recruitmentStatusCounts: { saved: 26 } });
     const lastPageBody = listBody([item({ id: "app-26", company: "Last Company" })], {
       matched: 26,
       total: 26,
+      recruitmentStatusCounts: { saved: 26 },
     });
     const fetchMock = vi.fn(async (url: unknown) =>
       jsonResponse(String(url).includes("offset=25") ? lastPageBody : firstPageBody),
@@ -630,8 +746,13 @@ describe("ApplicationListPage", () => {
 
     expect(await screen.findByRole("navigation", { name: "ניווט בין דפי המועמדויות" })).toBeInTheDocument();
     expect(screen.getByText("1–25 מתוך 26")).toBeInTheDocument();
+    /* The stages view holds one page too, so a column says how much of its stage that is. */
+    fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
+    const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
+    expect(within(pipeline).getByText("25 מתוך 26")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "עמוד 1" })).toHaveAttribute("aria-current", "page");
 
-    fireEvent.click(screen.getByRole("button", { name: "הבא" }));
+    fireEvent.click(screen.getByRole("button", { name: "עמוד 2" }));
 
     /* A page-boundary navigation starts a fresh server query. Under the full parallel
        suite, scheduling that query can exceed Testing Library's one-second default even
@@ -645,6 +766,7 @@ describe("ApplicationListPage", () => {
     );
     expect(screen.getByRole("button", { name: "הבא" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "הקודם" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "עמוד 2" })).toHaveAttribute("aria-current", "page");
   }, 10_000);
 
   it("updates the field from browser history immediately and delays only the server read", async () => {
@@ -668,6 +790,36 @@ describe("ApplicationListPage", () => {
       expect.stringContaining("search=first"),
       expect.objectContaining({ method: "GET" }),
     );
+  });
+
+  /* The board flashed every 1.5s while an Operation ran: every re-read dimmed it, when
+     only a changed query - a page being replaced - should. */
+  it("dims the board while a changed query replaces it, not while the same page is re-read", async () => {
+    let boardReads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown) => {
+        if (new URL(String(url), "http://localhost").searchParams.get("limit") !== "25") {
+          return Promise.resolve(jsonResponse(listBody([item()])));
+        }
+        boardReads += 1;
+        return boardReads === 1
+          ? Promise.resolve(jsonResponse(listBody([item()])))
+          : new Promise<Response>(() => undefined);
+      }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    renderPage({ queryClient });
+
+    const table = await screen.findByRole("table");
+    void queryClient.refetchQueries({ type: "active" });
+    await waitFor(() => expect(boardReads).toBe(2));
+    expect(table.closest('[aria-busy="true"]')).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("חיפוש במועמדויות"), { target: { value: "Acme" } });
+    await waitFor(() => expect(boardReads).toBe(3));
+    expect(screen.getByRole("table").closest('[aria-busy="true"]')).not.toBeNull();
   });
 
   it("invalidates every cached list and detail after closing an Application", async () => {
@@ -696,6 +848,8 @@ describe("ApplicationListPage", () => {
     });
 
     expect(screen.getByRole("status")).toHaveTextContent("המועמדות של Acme נסגרה");
+    /* The offer has no timer, so it can be put away by hand. */
+    expect(screen.getByRole("button", { name: "סגירת ההודעה" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "ביטול הסגירה" }));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(

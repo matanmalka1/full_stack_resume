@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
@@ -6,11 +7,13 @@ import { routePaths } from "@/app/routePaths";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
+import { IconButton } from "@/ui/IconButton";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
+import { ApplicationDetailsDialog } from "../components/ApplicationDetailsDialog";
 import { ApplicationListResults } from "../components/ApplicationListResults";
 import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
@@ -52,6 +55,7 @@ export const ApplicationListPage = () => {
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
   const [deletedLabel, setDeletedLabel] = useState<string | null>(null);
   const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
+  const [detailsApplicationId, setDetailsApplicationId] = useState<string | null>(null);
   const { clearNextActionMutation, closeMutation, deleteMutation, undoCloseMutation } = useApplicationListMutations({
     onApplicationClosed: (applicationId, eventId) => {
       const application = findApplication(items, applicationId);
@@ -81,6 +85,8 @@ export const ApplicationListPage = () => {
   const closingApplication = findApplication(items, closingApplicationId);
   const deletingApplication = findApplication(items, deletingApplicationId);
   const updatingApplication = findApplication(items, updatingApplicationId);
+  const detailsApplication = findApplication(items, detailsApplicationId);
+  const clearingApplicationId = clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null;
   const recruitmentStageCounts = Object.fromEntries(
     recruitmentStages.map((stage) => [
       stage.id,
@@ -117,23 +123,37 @@ export const ApplicationListPage = () => {
     );
 
   return (
-    <PageShell actions={presetTabs} measure="wide" title="לוח מועמדויות">
+    <PageShell
+      actions={presetTabs}
+      description="איפה עומד כל תהליך גיוס, ומה עוד צריך לקורות החיים."
+      measure="wide"
+      title="לוח מועמדויות"
+    >
+      {/* The closed row leaves the board, so the way back floats where the reader's eye
+          already is rather than at the top of a list they may have scrolled away from.
+          It has no timer: the correction stays valid, so the offer stays until the
+          reader takes it or puts it away. */}
       {closedResult === null ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-success/20 bg-cv-success-soft px-3.5 py-2.5 text-support text-cv-text">
-          <LiveRegion visuallyHidden={false}>
+        <div className="fixed inset-x-4 bottom-4 z-(--cv-z-toast) mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-surface border border-cv-border bg-cv-surface-raised px-3.5 py-2.5 text-support text-cv-text shadow-floating">
+          <LiveRegion className="min-w-0 flex-1" visuallyHidden={false}>
             <span dir="auto">המועמדות של {closedResult.label} נסגרה והועברה למועמדויות הסגורות.</span>
           </LiveRegion>
-          {closedResult.eventId === null ? null : (
-            <Button
-              onClick={undoClose}
-              pending={undoCloseMutation.isPending}
-              pendingLabel="מבטל סגירה…"
-              size="compact"
-              variant="secondary"
-            >
-              ביטול הסגירה
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {closedResult.eventId === null ? null : (
+              <Button
+                onClick={undoClose}
+                pending={undoCloseMutation.isPending}
+                pendingLabel="מבטל סגירה…"
+                size="compact"
+                variant="secondary"
+              >
+                ביטול הסגירה
+              </Button>
+            )}
+            <IconButton aria-label="סגירת ההודעה" onClick={() => setClosedResult(null)}>
+              <X aria-hidden="true" className="size-icon-md" />
+            </IconButton>
+          </div>
         </div>
       )}
       {deletedLabel === null ? null : (
@@ -144,9 +164,12 @@ export const ApplicationListPage = () => {
         </div>
       )}
       <ApplicationAttentionSummary
-        clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
+        boardHasApplications={page !== undefined && page.total > 0}
+        clearingApplicationId={clearingApplicationId}
+        filterActive={query.preset === "needs_attention"}
         onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
         onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
+        onShowAll={() => updateQuery({ ...query, preset: "needs_attention" })}
       />
       {clearNextActionMutation.error === null ? null : (
         <ErrorCallout
@@ -210,7 +233,6 @@ export const ApplicationListPage = () => {
                 updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
               }}
               onSearchChange={setSearchInput}
-              onSortChange={(sort) => updateQuery({ ...query, sort })}
               onViewModeChange={setViewMode}
               preparationState={query.stages?.[0]}
               recruitmentStage={selectedStage(query.recruitmentStatuses)}
@@ -223,21 +245,27 @@ export const ApplicationListPage = () => {
                     : `${page.matched} מתוך ${page.total} מועמדויות`
               }
               search={searchInput}
-              sort={query.sort ?? "updated"}
               stageCounts={page.stage_counts}
               viewMode={viewMode}
             />
             <ApplicationListResults
-              fetching={listQuery.isFetching && !listQuery.isPending}
+              clearingApplicationId={clearingApplicationId}
+              replacing={listQuery.isPlaceholderData}
               items={items}
               matchedCount={page.matched}
               offset={query.offset ?? 0}
               onClearFilters={clearFilters}
+              onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
               onOffsetChange={(offset) => updateQuery({ ...query, offset }, { replace: false, resetOffset: false })}
               onRequestClose={(item) => setClosingApplicationId(item.id)}
               onRequestDelete={(item) => setDeletingApplicationId(item.id)}
+              onRequestDetails={(item) => setDetailsApplicationId(item.id)}
               onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
+              onSortChange={(sort) => updateQuery({ ...query, sort })}
               pageSize={PAGE_SIZE}
+              recruitmentStatusCounts={page.recruitment_status_counts}
+              recruitmentStatusFilter={query.recruitmentStatuses}
+              sort={query.sort ?? "updated"}
               viewMode={viewMode}
             />
           </div>
@@ -254,6 +282,13 @@ export const ApplicationListPage = () => {
         onCancel={() => setDeletingApplicationId(null)}
         onConfirm={() => deletingApplicationId && deleteMutation.mutate(deletingApplicationId)}
         pending={deleteMutation.isPending}
+      />
+      <ApplicationDetailsDialog
+        application={detailsApplication}
+        clearing={detailsApplication !== null && clearingApplicationId === detailsApplication.id}
+        onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
+        onClose={() => setDetailsApplicationId(null)}
+        onRequestUpdate={(application) => setUpdatingApplicationId(application.id)}
       />
       <RecruitmentUpdateDialog application={updatingApplication} onClose={() => setUpdatingApplicationId(null)} />
     </PageShell>

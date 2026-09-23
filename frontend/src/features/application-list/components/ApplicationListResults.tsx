@@ -1,6 +1,7 @@
-import type { ApplicationListItem } from "@/api/contracts";
+import type { ApplicationListItem, ApplicationSort } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
+import { cx } from "@/ui/cx";
 import type { ViewMode } from "../model/applicationViews";
 import { ApplicationCardsView } from "./ApplicationCardsView";
 import { ApplicationListPagination } from "./ApplicationListPagination";
@@ -8,17 +9,25 @@ import { ApplicationListTable } from "./ApplicationListTable";
 import { ApplicationPipelineView } from "./ApplicationPipelineView";
 
 interface ApplicationListResultsProps {
-  fetching: boolean;
+  clearingApplicationId: string | null;
+  /* The page on screen is the previous query's, held while a changed query is read. */
+  replacing: boolean;
   items: readonly ApplicationListItem[];
   matchedCount: number;
   offset: number;
   pageSize: number;
+  recruitmentStatusCounts: Readonly<Record<string, number>>;
+  recruitmentStatusFilter: readonly string[] | undefined;
+  sort: ApplicationSort;
   viewMode: ViewMode;
   onClearFilters: () => void;
+  onClearNextAction: (item: ApplicationListItem) => void;
   onOffsetChange: (offset: number) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
+  onSortChange: (sort: ApplicationSort) => void;
 }
 
 /* The result region: one page of Applications in whichever view is chosen, the message
@@ -29,17 +38,24 @@ interface ApplicationListResultsProps {
    drawn is a presentation decision and stays here; what is in the page and how it was
    narrowed remain the page's. */
 export const ApplicationListResults = ({
-  fetching,
+  clearingApplicationId,
+  replacing,
   items,
   matchedCount,
   offset,
   pageSize,
+  recruitmentStatusCounts,
+  recruitmentStatusFilter,
+  sort,
   viewMode,
   onClearFilters,
+  onClearNextAction,
   onOffsetChange,
   onRequestClose,
   onRequestDelete,
+  onRequestDetails,
   onRequestUpdate,
+  onSortChange,
 }: ApplicationListResultsProps) => {
   if (items.length === 0) {
     return (
@@ -55,24 +71,43 @@ export const ApplicationListResults = ({
   }
 
   return (
-    /* A refetch dims the page it is replacing instead of unmounting it, so a filter
-       change does not drop the reader back to a blank region. `QueryState` still owns
-       the first load and every failure. */
-    <div aria-busy={fetching ? true : undefined} className={fetching ? "opacity-60 transition-opacity" : undefined}>
+    /* A changed query dims the page it is replacing instead of unmounting it, so a filter
+       change does not drop the reader back to a blank region. A re-read of the same page
+       does not dim it: the board polls every 1.5s while an Operation runs and re-reads on
+       focus and after every action, and dimming on each of those made it flash for
+       nothing. `QueryState` still owns the first load and every failure. */
+    <div
+      aria-busy={replacing ? true : undefined}
+      className={cx("transition-opacity", replacing ? "opacity-60" : undefined)}
+    >
       {viewMode === "cards" ? (
         <ApplicationCardsView
+          clearingApplicationId={clearingApplicationId}
           items={items}
+          onClearNextAction={onClearNextAction}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
+          onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
         />
       ) : viewMode === "pipeline" ? (
-        <ApplicationPipelineView items={items} onRequestUpdate={onRequestUpdate} />
+        <ApplicationPipelineView
+          items={items}
+          onRequestDetails={onRequestDetails}
+          onRequestUpdate={onRequestUpdate}
+          recruitmentStatusCounts={recruitmentStatusCounts}
+          recruitmentStatusFilter={recruitmentStatusFilter}
+        />
       ) : (
         <ApplicationListTable
+          clearingApplicationId={clearingApplicationId}
           items={items}
+          onClearNextAction={onClearNextAction}
+          onSortChange={onSortChange}
+          sort={sort}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
+          onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
         />
       )}

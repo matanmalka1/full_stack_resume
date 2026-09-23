@@ -1,10 +1,70 @@
 import { routePaths } from "@/app/routePaths";
-import type { ApplicationListItem } from "@/api/contracts";
-import { preparationResumeDestination, reasonTitle, warningTitle } from "@/features/preparation";
+import type { ApplicationListItem, PreparationState } from "@/api/contracts";
+import {
+  preparationResumeDestination,
+  preparationStateLabels,
+  reasonTitle,
+  warningTitle,
+} from "@/features/preparation";
 import type { Tone } from "@/ui/tone";
 import { formatDateTime } from "@/utils/formatDateTime";
 
 export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");
+
+/* Which page numbers the pager draws: the first and last, the current one and its
+   neighbours, and a gap wherever pages in between are left out. A gap never stands in
+   for a single page - that page is drawn instead, since a number is no wider. */
+export const pageWindow = (current: number, count: number): (number | "gap")[] => {
+  const shown = [...new Set([1, current - 1, current, current + 1, count])]
+    .filter((page) => page >= 1 && page <= count)
+    // ES2022 has no toSorted; this array is newly created and belongs only to this call.
+    // oxlint-disable-next-line unicorn/no-array-sort
+    .sort((left, right) => left - right);
+
+  return shown.flatMap((page, index) => {
+    const previous = shown[index - 1];
+    if (previous === undefined || page - previous === 1) return [page];
+    if (page - previous === 2) return [previous + 1, page];
+    return ["gap" as const, page];
+  });
+};
+
+const localDayNumber = (date: Date): number =>
+  Math.round(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 86_400_000);
+
+/* When an Application last changed, the way the board says it (after demo_re): by the
+   hour today, by the reader's local calendar day for the rest of the week, then as a
+   date. It is presentation only - the full date stays in the element's title and
+   `dateTime` - and a value that does not parse, or one on a later day, falls back to the
+   absolute form rather than a guessed phrase. */
+export const formatRelativeUpdate = (value: string, now: Date = new Date()): string => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  const days = localDayNumber(now) - localDayNumber(parsed);
+  if (days === 0) {
+    const hours = Math.floor((now.getTime() - parsed.getTime()) / 3_600_000);
+    return hours < 1 ? "עכשיו" : `היום (לפני ${hours} שע׳)`;
+  }
+  if (days === 1) return "אתמול";
+  if (days === 2) return "לפני יומיים";
+  if (days > 2 && days < 7) return `לפני ${days} ימים`;
+  return formatApplicationDate(value);
+};
+
+/* Where a CV state sits along the way to Ready, for the row's step bar. The order is the
+   one the specification lists the values in (§4) and the one the board's "stage" sort
+   already ranks by; it is read from the exhaustive label map rather than restated, so a
+   new state cannot be left out of the bar. It is a position, not a promise of forward
+   motion: a stale draft that needs a decision projects back to `needs_review`. */
+const preparationOrder = Object.keys(preparationStateLabels) as PreparationState[];
+
+export const preparationProgress = (state: PreparationState): { step: number; total: number } => ({
+  step: preparationOrder.indexOf(state) + 1,
+  total: preparationOrder.length,
+});
 
 /* A visual hint only: records with the same company and role need their dates exposed
    so two distinct Applications do not read as one repeated row. */

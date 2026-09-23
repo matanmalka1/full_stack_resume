@@ -1,34 +1,18 @@
-import { Archive, ArrowLeft, CircleAlert, Ellipsis, FileCheck2, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Archive, EllipsisVertical, ExternalLink, Eye, Info, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { routePaths } from "@/app/routePaths";
-import { Button } from "@/ui/Button";
-import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
-import { actionDestination } from "@/features/preparation";
-import { actionLabel } from "@/features/preparation";
-import { operationTypeLabels, statusLabels, statusTones } from "@/features/operations";
-import type { ApplicationListViewVariant } from "../model/applicationList.types";
-
-type ActionVariant = Exclude<ApplicationListViewVariant, "pipeline">;
-
-const actionClasses: Record<ActionVariant, string> = {
-  card: "inline-flex min-h-9 items-center gap-1.5 rounded-pill bg-cv-accent-soft px-3 text-support font-semibold text-cv-accent hover:bg-cv-accent hover:text-cv-on-accent",
-  row: "inline-flex min-h-9 items-center justify-center gap-2 rounded-pill bg-cv-accent-soft px-3 py-1 text-start text-support font-semibold text-cv-accent transition-colors duration-200 hover:bg-cv-accent hover:text-cv-on-accent",
-};
-
-const revisionLinkClasses: Record<ActionVariant, string> = {
-  card: "inline-flex items-center gap-1.5 text-support font-semibold text-cv-accent hover:underline",
-  row: "inline-flex items-center gap-1.5 rounded-pill text-support font-semibold text-cv-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus",
-};
+import { cx } from "@/ui/cx";
+import { sourceHostname } from "@/features/applications";
+import { preparationResumeDestination } from "@/features/preparation";
 
 /* Terminal only means polling may stop. A failed or interrupted run remains the most
    important next-action fact until a newer run supersedes it; successful and deliberately
    cancelled work yield back to the projection's normal recommendation. */
-const reportedOperation = (item: ApplicationListItem) => {
+export const reportedOperation = (item: ApplicationListItem) => {
   const latest = item.active_operation ?? item.latest_operation;
 
   return latest != null &&
@@ -37,80 +21,29 @@ const reportedOperation = (item: ApplicationListItem) => {
     : null;
 };
 
-export const ApplicationRecommendedAction = ({
-  item,
-  variant,
-}: {
-  item: ApplicationListItem;
-  variant: ActionVariant;
-}) => {
-  const operation = reportedOperation(item);
-  const operationFailed = operation?.status === "failed" || operation?.status === "interrupted";
-  /* A ready revision does not suppress newer recommended work: both can be valid when
-     the posting or policy changed after that revision was approved. */
-  const readyRevisionLink =
-    item.latest_ready_revision_id == null ? null : (
-      <Link className={revisionLinkClasses[variant]} to={routePaths.revision(item.latest_ready_revision_id)}>
-        <FileCheck2
-          aria-hidden="true"
-          className={variant === "row" ? "size-icon-sm shrink-0" : "size-icon-md shrink-0"}
-        />
-        הגרסה המוכנה
-      </Link>
-    );
-
-  /* Nothing to report draws nothing. The row's cell owns its one empty-cell dash, so a
-     row with neither a recruitment task nor a recommendation reads as one blank cell
-     rather than a stack of dashes, one per component that had nothing to say. */
-  if (operation === null && item.recommended_action == null && readyRevisionLink === null) {
-    return null;
-  }
-
-  return (
-    <div className={variant === "row" ? "flex flex-col items-start gap-1" : "flex flex-col items-end gap-1.5"}>
-      {operationFailed && operation !== null ? (
-        <span
-          className="inline-flex max-w-full items-start gap-1.5 text-start text-support font-medium text-cv-blocker"
-          title={`${operationTypeLabels[operation.operation_type]} · ${statusLabels[operation.status]}`}
-        >
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0" />
-          <span className="line-clamp-2">
-            {operationTypeLabels[operation.operation_type]} · {statusLabels[operation.status]}
-          </span>
-        </span>
-      ) : operation !== null ? (
-        <StatusBadge
-          className={variant === "row" ? "gap-1.5 px-2.5 text-start" : "px-2.5"}
-          tone={statusTones[operation.status]}
-        >
-          {operationTypeLabels[operation.operation_type]} · {statusLabels[operation.status]}
-        </StatusBadge>
-      ) : item.recommended_action != null ? (
-        <Link
-          className={actionClasses[variant]}
-          to={actionDestination(item.recommended_action, item.id) ?? routePaths.application(item.id)}
-        >
-          <ArrowLeft aria-hidden="true" className="size-icon-md" />
-          {actionLabel(item.recommended_action)}
-        </Link>
-      ) : null}
-      {operation === null ? readyRevisionLink : null}
-    </div>
-  );
-};
+/* No font size here: the global `button { font: inherit }` rule is unlayered, so it beats
+   any text-size utility on a button, and the items that are buttons take the menu's
+   inherited size whatever their class says. The items that are links would take the
+   utility and read a size smaller. Every item inheriting keeps the menu one size. */
+const menuItemBase = "flex min-h-9 w-full items-center gap-2 px-3.5 py-2 text-start font-medium transition-colors";
+const menuItemClasses = `${menuItemBase} text-cv-text hover:bg-cv-surface-muted`;
 
 export const ApplicationRecordActions = ({
   item,
   onRequestClose,
   onRequestDelete,
+  onRequestDetails,
   onRequestUpdate,
 }: {
   item: ApplicationListItem;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
+  onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
   const [open, setOpen] = useState(false);
+  const href = preparationResumeDestination(item);
+  const host = sourceHostname(item.source_url);
   const menuId = `application-actions-${item.id}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -118,7 +51,7 @@ export const ApplicationRecordActions = ({
   useEffect(() => {
     if (!open) return;
 
-    containerRef.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+    containerRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     const closeFromOutside = (event: PointerEvent) => {
       if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setOpen(false);
     };
@@ -136,7 +69,12 @@ export const ApplicationRecordActions = ({
   }, [open]);
 
   return (
-    <div className="relative z-(--cv-z-content-raised) shrink-0" ref={containerRef}>
+    /* Open, the menu's container rises to the dropdown layer: every row's container
+       shares the raised layer, so a later row's trigger would otherwise paint over it. */
+    <div
+      className={cx("relative shrink-0", open ? "z-(--cv-z-sticky)" : "z-(--cv-z-content-raised)")}
+      ref={containerRef}
+    >
       <Tooltip label="פעולות נוספות">
         <button
           aria-controls={menuId}
@@ -148,18 +86,18 @@ export const ApplicationRecordActions = ({
           ref={triggerRef}
           type="button"
         >
-          <Ellipsis aria-hidden="true" className="size-icon-md" />
+          <EllipsisVertical aria-hidden="true" className="size-icon-md" />
         </button>
       </Tooltip>
       {open ? (
         <div
-          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1 min-w-52 rounded-control border border-cv-border bg-cv-surface-raised p-1 shadow-floating"
+          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1.5 w-56 divide-y divide-cv-border rounded-surface border border-cv-border bg-cv-surface-raised py-1.5 text-start shadow-floating"
           id={menuId}
           onKeyDown={(event) => {
             if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
             event.preventDefault();
-            const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]")];
-            const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+            const items = [...event.currentTarget.querySelectorAll<HTMLElement>("[role=menuitem]")];
+            const currentIndex = items.indexOf(document.activeElement as HTMLElement);
             const nextIndex =
               event.key === "Home"
                 ? 0
@@ -171,46 +109,89 @@ export const ApplicationRecordActions = ({
           role="menu"
           tabIndex={-1}
         >
-          <button
-            className="flex min-h-9 w-full items-center gap-2 rounded-control px-3 text-start text-support font-medium text-cv-text hover:bg-cv-surface-muted"
-            onClick={() => {
-              setOpen(false);
-              onRequestUpdate(item);
-            }}
-            role="menuitem"
-            type="button"
-          >
-            <SlidersHorizontal aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-            עדכון סטטוס ומשימות
-          </button>
-          {item.is_closed ? null : (
-            <Button
-              aria-label={`סגירת המועמדות ${item.company}`}
-              className="min-h-9 w-full justify-start rounded-control px-3 text-cv-blocker hover:bg-cv-blocker-soft"
+          {/* Two groups, as in demo_re: the ways into the record, then the two that end
+              it. The ending pair keeps the blocker tone; nothing else here is coloured. */}
+          <div className="py-1">
+            {/* The keyboard's way to a record's details: a click on the record's body opens
+                them, but only the table row is itself focusable, so every view reaches them
+                here too. */}
+            <button
+              className={menuItemClasses}
               onClick={() => {
                 setOpen(false);
-                onRequestClose(item);
+                onRequestDetails(item);
               }}
               role="menuitem"
-              variant="ghost"
+              type="button"
             >
-              <Archive aria-hidden="true" className="size-icon-md" />
-              סגירת מועמדות
-            </Button>
-          )}
-          <Button
-            aria-label={`מחיקת המועמדות ${item.company}`}
-            className="min-h-9 w-full justify-start rounded-control px-3 text-cv-blocker hover:bg-cv-blocker-soft"
-            onClick={() => {
-              setOpen(false);
-              onRequestDelete(item);
-            }}
-            role="menuitem"
-            variant="ghost"
-          >
-            <Trash2 aria-hidden="true" className="size-icon-md" />
-            מחיקת מועמדות
-          </Button>
+              <Info aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              פרטי משרה
+            </button>
+            <Link className={menuItemClasses} onClick={() => setOpen(false)} role="menuitem" to={href}>
+              <Eye aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              פתיחת המועמדות
+            </Link>
+            {host === null || item.source_url == null ? null : (
+              <a
+                className={menuItemClasses}
+                href={item.source_url}
+                onClick={() => setOpen(false)}
+                rel="noreferrer"
+                role="menuitem"
+                target="_blank"
+              >
+                <ExternalLink aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+                <span className="flex min-w-0 flex-col">
+                  מודעת המשרה המקורית
+                  <span className="truncate text-cv-text-muted" dir="ltr">
+                    {host}
+                  </span>
+                </span>
+              </a>
+            )}
+            <button
+              className={menuItemClasses}
+              onClick={() => {
+                setOpen(false);
+                onRequestUpdate(item);
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <SlidersHorizontal aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              עדכון סטטוס ומשימות
+            </button>
+          </div>
+          <div className="py-1">
+            {item.is_closed ? null : (
+              <button
+                aria-label={`סגירת המועמדות ${item.company}`}
+                className={menuItemClasses}
+                onClick={() => {
+                  setOpen(false);
+                  onRequestClose(item);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <Archive aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+                סגירת מועמדות
+              </button>
+            )}
+            <button
+              aria-label={`מחיקת המועמדות ${item.company}`}
+              className={`${menuItemBase} text-cv-blocker hover:bg-cv-blocker-soft`}
+              onClick={() => {
+                setOpen(false);
+                onRequestDelete(item);
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <Trash2 aria-hidden="true" className="size-icon-md shrink-0" />
+              מחיקת מועמדות לצמיתות
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

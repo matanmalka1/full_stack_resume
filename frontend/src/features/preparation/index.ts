@@ -47,6 +47,7 @@ export {
   trackLabel,
 } from "./model/analysisLabels";
 export {
+  actionDescription,
   actionLabel,
   preparationStateIcons,
   preparationStateLabels,

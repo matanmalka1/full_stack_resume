@@ -112,7 +112,7 @@ describe("RecruitmentManagerButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     expect(screen.getByText("המועמדות נפתחה במצב נשמר")).toBeInTheDocument();
-    expect(screen.queryByText(/עבר מ־נשמר ל־נשמר/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/עבר מ־טרם הוגש ל־טרם הוגש/)).not.toBeInTheDocument();
   });
 
   it("sends the exact forward transition and next-action choices from one dialog", async () => {
@@ -278,7 +278,7 @@ describe("RecruitmentManagerButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "עדכון סטטוס ומשימות" }));
     const summary = screen.getByRole("region", { name: "מצב הגיוס" });
-    expect(within(summary).getByText("הצעה").closest("span")).toHaveClass("text-cv-success");
+    expect(within(summary).getByText("התקבלה הצעת שכר").closest("span")).toHaveClass("text-cv-success");
     /* The timeline states what the event was, not the bare value it carried, so the
        newest entry is matched inside its sentence. */
     expect(screen.getByText(/הפעולה הבאה נקבעה: Action 5/)).toBeInTheDocument();

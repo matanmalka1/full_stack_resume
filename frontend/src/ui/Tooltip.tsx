@@ -24,6 +24,9 @@ interface TooltipProps {
      a wide one, so the bubble has to hang down in the first and up in the second, or it
      leaves the viewport at whichever end it is pinned to. */
   placement?: "top" | "bottom" | "shell";
+  /* A label longer than a control's name - a list of reasons, a full date - wraps at a
+     reading measure instead of running off as one line. */
+  wrap?: boolean;
 }
 
 const alignClasses = {
@@ -37,12 +40,20 @@ const placementClasses = {
   top: "bottom-full mb-2",
 } as const;
 
-export const Tooltip = ({ align = "end", children, className, label, placement = "top" }: TooltipProps) => (
+export const Tooltip = ({
+  align = "end",
+  children,
+  className,
+  label,
+  placement = "top",
+  wrap = false,
+}: TooltipProps) => (
   <span className={cx("group/tooltip relative inline-flex", className)}>
     {children}
     <span
       className={cx(
-        "pointer-events-none absolute z-(--cv-z-content-raised) whitespace-nowrap rounded-control bg-cv-text px-2 py-1 text-support font-medium text-cv-on-accent opacity-0 shadow-floating transition-opacity delay-0 duration-150 group-hover/tooltip:delay-300 group-hover/tooltip:opacity-100 group-focus-within/tooltip:delay-300 group-focus-within/tooltip:opacity-100",
+        "pointer-events-none absolute z-(--cv-z-content-raised) rounded-control bg-cv-text px-2 py-1 text-support font-medium text-cv-on-accent opacity-0 shadow-floating transition-opacity delay-0 duration-150 group-hover/tooltip:delay-300 group-hover/tooltip:opacity-100 group-focus-within/tooltip:delay-300 group-focus-within/tooltip:opacity-100",
+        wrap ? "w-max max-w-72 whitespace-normal" : "whitespace-nowrap",
         alignClasses[align],
         placementClasses[placement],
       )}

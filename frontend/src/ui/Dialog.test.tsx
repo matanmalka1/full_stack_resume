@@ -20,13 +20,15 @@ const dialogOf = (title: string): HTMLDialogElement =>
 describe("Dialog", () => {
   it("opens with focus on its heading and offers an explicit close", () => {
     render(
-      <Dialog headingId="heading" onClose={vi.fn()} open title="כותרת">
+      <Dialog description="תיאור קצר" headingId="heading" onClose={vi.fn()} open title="כותרת">
         תוכן
       </Dialog>,
     );
 
     expect(screen.getByRole("heading", { name: "כותרת" })).toHaveFocus();
     expect(screen.getByRole("button", { name: "סגירה" })).toBeInTheDocument();
+    /* The line under the title describes the dialog as a whole. */
+    expect(dialogOf("כותרת")).toHaveAccessibleDescription("תיאור קצר");
   });
 
   it("refuses Escape and hides the close control when cancelling would decide an outcome", () => {
