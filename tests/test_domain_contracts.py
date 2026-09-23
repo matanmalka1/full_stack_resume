@@ -36,44 +36,42 @@ def test_a_draft_cannot_rewrite_the_provenance_it_is_judged_against(draft_factor
     draft.content_hash = "0" * 64
 
 
-def test_a_validation_report_cannot_claim_a_pass_it_did_not_earn() -> None:
-    cases = [
+def test_a_validation_reports_pass_is_derived_from_its_findings() -> None:
+    """`passed` gates approval and Ready on its own, so it may not contradict
+    the findings it summarizes.
+
+    A report may not claim a pass over a failed group or a hard issue; the
+    factory keeps a pass that only soft warnings accompany, and turns a hard
+    issue no group recorded into a failure without inventing the group.
+    """
+    for groups, issues in [
         ({"content": False}, []),
         ({"content": True}, [ValidationIssue(group="content", code="stale-claim", message="x")]),
-    ]
-    """`passed` gates approval and Ready on its own, so it may not contradict
-    the findings it summarizes."""
-    for groups, issues in cases:
+    ]:
         with pytest.raises(ValidationError, match="claims to have passed"):
             ValidationReport(passed=True, groups=groups, issues=issues)
 
-
-def test_validation_report_factory_preserves_a_soft_warning_pass() -> None:
-    issue = ValidationIssue(
-        group="profile",
-        code="emphasis-coverage-low",
-        message="x",
-        hard=False,
-    )
-
-    report = ValidationReport.from_findings(
+    soft = ValidationReport.from_findings(
         groups={"profile": True},
-        issues=[issue],
+        issues=[
+            ValidationIssue(
+                group="profile",
+                code="emphasis-coverage-low",
+                message="x",
+                hard=False,
+            )
+        ],
         evidence={"source": "characterization"},
     )
+    assert soft.passed
+    assert soft.evidence == {"source": "characterization"}
 
-    assert report.passed
-    assert report.evidence == {"source": "characterization"}
-
-
-def test_validation_report_factory_turns_an_unpaired_hard_issue_into_failure() -> None:
-    report = ValidationReport.from_findings(
+    unpaired = ValidationReport.from_findings(
         groups={"content": True},
         issues=[ValidationIssue(group="content", code="future-hard-finding", message="x")],
     )
-
-    assert not report.passed
-    assert report.groups == {"content": True}
+    assert not unpaired.passed
+    assert unpaired.groups == {"content": True}
 
 
 def test_ready_qualification_cannot_claim_a_result_its_evidence_did_not_earn() -> None:

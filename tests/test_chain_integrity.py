@@ -630,9 +630,15 @@ def test_projection_manifest_changes_do_not_mutate_the_working_draft_record(
 # --- ready integrity independently rechecks the chain ----------------------
 
 
-def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
+def test_ready_qualification_survives_material_and_immaterial_reanalysis(
     app_paths: AppPaths, ready_application, transaction_manager
 ) -> None:
+    """Ready integrity rechecks the chain the revision was built from, not the latest.
+
+    A re-run that changes nothing material is not a reason to fail integrity,
+    and the revision keeps its four artifacts. A material re-analysis does not
+    invalidate the revision's qualification either.
+    """
     services, app_id = ready_application("Chain Recheck")
     with transaction_manager.read() as tx:
         revision_id = (
@@ -642,26 +648,9 @@ def test_ready_qualification_is_not_invalidated_by_material_reanalysis(
         )
     assert services.rendering.ready_qualification(app_id).ready_qualified
 
-    _analyze(services, transaction_manager, app_id, emphasis="balanced-sales")
-
-    qualification = services.rendering.ready_qualification(app_id, revision_id)
-    assert qualification.ready_qualified, qualification.validation.model_dump()
-
-
-def test_ready_integrity_holds_through_an_immaterial_reanalysis(
-    app_paths: AppPaths, ready_application, transaction_manager
-) -> None:
-    """A re-run that changes nothing material is not a reason to fail integrity."""
-    services, app_id = ready_application("Immaterial Rerun")
     _analyze(services, transaction_manager, app_id)
     qualification = services.rendering.ready_qualification(app_id)
     assert qualification.ready_qualified, qualification.validation.model_dump()
-    with transaction_manager.read() as tx:
-        revision_id = (
-            SqlAlchemyDraftLifecycleRepository(transaction_manager)
-            .latest_approved_revision(tx, app_id)
-            .id
-        )
     with transaction_manager.read() as tx:
         assert {
             row["artifact_type"]
@@ -675,6 +664,11 @@ def test_ready_integrity_holds_through_an_immaterial_reanalysis(
             "resume_html",
             "resume_pdf",
         }
+
+    _analyze(services, transaction_manager, app_id, emphasis="balanced-sales")
+
+    qualification = services.rendering.ready_qualification(app_id, revision_id)
+    assert qualification.ready_qualified, qualification.validation.model_dump()
 
 
 def test_the_requirement_vocabulary_stales_an_analysis_and_nothing_after_it(
@@ -705,14 +699,11 @@ def test_the_requirement_vocabulary_stales_an_analysis_and_nothing_after_it(
     assert after.context_hash() != before_analysis, "the analysis must see the vocabulary move"
     assert after.document_context_hash() == before_document
 
-
-def test_no_stage_after_analysis_reads_the_requirement_vocabulary(project_root: Path) -> None:
-    """The exclusion is justified by consumption, so consumption is what is checked.
-
-    Derived from the package rather than from a list of stages: a module that
-    starts reading the vocabulary and is not registered here fails, because the
-    document scope would then be excluding a dependency that stage really has.
-    """
+    # The exclusion is justified by consumption, so consumption is what is
+    # checked. Derived from the package rather than from a list of stages: a
+    # module that starts reading the vocabulary and is not registered here
+    # fails, because the document scope would then be excluding a dependency
+    # that stage really has.
     allowed = {
         # Where the store is defined, loaded, and reported.
         Path("cv_engine/domain/knowledge.py"),

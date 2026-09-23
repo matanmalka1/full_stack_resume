@@ -25,7 +25,7 @@ from cv_engine.infrastructure.persistence.tables import applications
 from cv_engine.util import new_id, sha256_text, utc_now
 
 
-def test_application_projection_follows_the_preparation_lifecycle(services) -> None:
+def test_application_projection_follows_the_preparation_lifecycle(services, knowledge) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
             company="State Co",
@@ -81,6 +81,10 @@ def test_application_projection_follows_the_preparation_lifecycle(services) -> N
     assert detail.latest_approved_revision_id == approved.revision_id
     assert detail.recommended_action == "render"
     assert "edit_matching_configuration" in detail.available_actions
+
+    # An analysis with no plan offers the command that creates one.
+    reasons = _reasons_for(knowledge, _analysis_without_a_plan())
+    assert reasons["FACT_SELECTION_UNRESOLVED"] == ["create_selection_plan"]
 
 
 #: Requirements stated in prose that the scripted extractor does not read.
@@ -150,33 +154,6 @@ def _analysis_without_a_plan() -> JobAnalysis:
             "summary": "projection fixture",
         }
     )
-
-
-def test_a_missing_selection_plan_offers_the_command_that_creates_it(knowledge) -> None:
-    reasons = _reasons_for(knowledge, _analysis_without_a_plan())
-    assert reasons["FACT_SELECTION_UNRESOLVED"] == ["create_selection_plan"]
-
-
-def test_ready_milestone_survives_a_new_draft_for_the_same_context(ready_application) -> None:
-    setup = ready_application("Parallel Draft State Co")
-    before = setup.services.queries.application_detail(setup.application_id)
-    assert before.preparation_state is PreparationState.READY
-    assert before.latest_ready_revision_id == setup.approved.revision_id
-    assert before.newer_draft_in_progress is False
-    assert "edit_matching_configuration" in before.available_actions
-
-    setup.services.drafts.draft(
-        DraftCommand(
-            application_id=setup.application_id,
-            job_analysis_id=setup.analysis_id,
-            selection_plan_id=setup.selection_plan_id,
-        )
-    )
-    after = setup.services.queries.application_detail(setup.application_id)
-    assert after.preparation_state is PreparationState.READY
-    assert after.working_draft_state is WorkingDraftState.VALIDATED
-    assert after.latest_ready_revision_id == setup.approved.revision_id
-    assert after.newer_draft_in_progress is True
 
 
 def test_voluntary_matching_change_stales_the_existing_draft(drafted_application) -> None:
@@ -256,10 +233,18 @@ def test_new_snapshot_makes_ready_historical_and_requires_analysis(
     assert {warning.code for warning in detail.warnings} == {"READY_REVISION_FOR_OLDER_SNAPSHOT"}
 
 
-def test_new_analysis_makes_parallel_draft_stale_without_erasing_ready_history(
+def test_a_parallel_draft_keeps_ready_until_a_new_analysis_stales_it(
     ready_application,
 ) -> None:
+    """The Ready milestone survives a new draft for the same context, and a new
+    analysis stales that draft without erasing Ready history."""
     setup = ready_application("Historical Analysis State Co")
+    before = setup.services.queries.application_detail(setup.application_id)
+    assert before.preparation_state is PreparationState.READY
+    assert before.latest_ready_revision_id == setup.approved.revision_id
+    assert before.newer_draft_in_progress is False
+    assert "edit_matching_configuration" in before.available_actions
+
     setup.services.drafts.draft(
         DraftCommand(
             application_id=setup.application_id,
@@ -267,6 +252,12 @@ def test_new_analysis_makes_parallel_draft_stale_without_erasing_ready_history(
             selection_plan_id=setup.selection_plan_id,
         )
     )
+    parallel = setup.services.queries.application_detail(setup.application_id)
+    assert parallel.preparation_state is PreparationState.READY
+    assert parallel.working_draft_state is WorkingDraftState.VALIDATED
+    assert parallel.latest_ready_revision_id == setup.approved.revision_id
+    assert parallel.newer_draft_in_progress is True
+
     replacement = seed_analysis_for_command(
         setup.services,
         AnalyzeCommand(
@@ -350,27 +341,12 @@ def test_edit_after_validation_is_a_reason_but_not_source_staleness(
     assert detail.recommended_action == "validate"
 
 
-def test_profile_and_policy_versions_are_source_stale_reasons(
-    drafted_application, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    setup = drafted_application("Knowledge Policy State Co")
-    changed = setup.services.knowledge.load()
-    changed.profiles.version = "changed-profile-version"
-    changed.policies.version = "changed-policy-version"
-    monkeypatch.setattr(setup.services.knowledge, "load", lambda: changed)
-
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert detail.working_draft_state is WorkingDraftState.STALE
-    assert {reason.code for reason in detail.stale_reasons} >= {
-        "PROFILE_CHANGED",
-        "POLICY_CHANGED",
-    }
-
-
-def test_unrelated_canonical_fact_change_does_not_stale_the_draft(
+def test_only_knowledge_the_draft_depends_on_stales_it(
     drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager, draft_lifecycle_store
 ) -> None:
-    setup = drafted_application("Unrelated Fact State Co")
+    """A canonical fact the draft does not reference moves nothing; a changed
+    Profile or policy version is a source-stale reason."""
+    setup = drafted_application("Knowledge Change State Co")
     knowledge = setup.services.knowledge.load()
     with transaction_manager.read() as tx:
         working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
@@ -397,11 +373,22 @@ def test_unrelated_canonical_fact_change_does_not_stale_the_draft(
     assert "FACT_CHANGED" not in {reason.code for reason in detail.stale_reasons}
     assert detail.working_draft_state is WorkingDraftState.VALIDATED
 
+    moved = setup.services.knowledge.load()
+    moved.profiles.version = "changed-profile-version"
+    moved.policies.version = "changed-policy-version"
+
+    detail = setup.services.queries.application_detail(setup.application_id)
+    assert detail.working_draft_state is WorkingDraftState.STALE
+    assert {reason.code for reason in detail.stale_reasons} >= {
+        "PROFILE_CHANGED",
+        "POLICY_CHANGED",
+    }
+
 
 def test_deleted_fact_dependency_blocks_review_and_warns_the_active_draft(
     drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager, draft_lifecycle_store
 ) -> None:
-    """Mirrors `test_unrelated_canonical_fact_change_does_not_stale_the_draft`,
+    """Mirrors `test_only_knowledge_the_draft_depends_on_stales_it`,
     but the changed fact is one the active draft actually depends on: unlike a
     generic change, a deletion of a *referenced* fact must produce the
     dedicated blocking review reason (state-and-use-cases.md §7) and the

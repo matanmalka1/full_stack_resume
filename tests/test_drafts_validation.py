@@ -25,10 +25,17 @@ def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
     assert set(report.groups) == {"content", "profile", "structure", "headline_safety"}
 
 
-def test_unsafe_headline_fails_only_the_draft_side_headline_group(
+def test_an_unsafe_or_misplaced_headline_is_blocked(
     project_root: Path,
     draft_factory,
 ) -> None:
+    """Both headline failures, each on its own draft.
+
+    Unsafe headline text fails only the draft-side headline group. A
+    headline-typed claim injected outside the headline is blocked by the
+    deterministic validator on its own: the list mutation deliberately bypasses
+    the model-level guard.
+    """
     facts, profile, analysis, draft, _markdown = draft_factory(
         "Python backend developer API React",
         profile_override="development",
@@ -52,6 +59,22 @@ def test_unsafe_headline_fails_only_the_draft_side_headline_group(
     assert "filename" not in report.groups
     issue = next(issue for issue in report.issues if issue.code == "unsafe-headline")
     assert issue.group == "headline_safety"
+
+    facts, profile, analysis, draft, _markdown = draft_factory(
+        "Account Manager retention portfolio customer relationships",
+        write=True,
+    )
+    _inject_headline_typed_claim(draft)
+    tampered = draft.model_copy(update={"content_hash": draft_content_hash(draft)})
+    markdown, _text = store_draft(project_root, tampered)
+
+    report = validate_draft(
+        tampered, markdown.read_text(encoding="utf-8"), facts, profile, analysis
+    )
+
+    assert not report.passed
+    assert any(issue.code == "misplaced-headline-claim" for issue in report.issues)
+    assert any(issue.code == "unlinked-claim" for issue in report.issues)
 
 
 def test_manual_unlinked_change_blocks_approval(draft_factory) -> None:
@@ -191,33 +214,17 @@ def _inject_headline_typed_claim(draft, text: str = FABRICATED_HEADLINE_CLAIM) -
     return injected
 
 
-def test_headline_claim_type_outside_the_headline_is_blocked(
-    project_root: Path, draft_factory
+def test_historical_title_placement_blocks_a_demoted_title_and_spares_a_project_heading(
+    draft_factory,
 ) -> None:
-    facts, profile, analysis, draft, _markdown = draft_factory(
-        "Account Manager retention portfolio customer relationships",
-        write=True,
-    )
-    # list mutation deliberately bypasses the model-level guard, so this asserts the
-    # deterministic validator blocks the injection on its own.
-    _inject_headline_typed_claim(draft)
-    tampered = draft.model_copy(update={"content_hash": draft_content_hash(draft)})
-    markdown, _text = store_draft(project_root, tampered)
-
-    report = validate_draft(
-        tampered, markdown.read_text(encoding="utf-8"), facts, profile, analysis
-    )
-
-    assert not report.passed
-    assert any(issue.code == "misplaced-headline-claim" for issue in report.issues)
-    assert any(issue.code == "unlinked-claim" for issue in report.issues)
-
-
-def test_a_demoted_historical_title_is_blocked(draft_factory) -> None:
     """A job title that stops being a heading loses the prominence it is read by.
 
     This is the direction `historical-title-placement` exists to catch, and it
     had no test: the rule only ever failed incidentally, through a fixture.
+
+    The Projects section renders project names as headings. They carry no
+    `historical-title` tag on purpose - a project is not employment - so an
+    equality check would have forced them out of the document.
     """
     facts, profile, analysis, draft, markdown = draft_factory(
         "Sales Manager team leader coaching forecast", write=True
@@ -240,14 +247,6 @@ def test_a_demoted_historical_title_is_blocked(draft_factory) -> None:
     issue = next(i for i in report.issues if i.code == "historical-title-placement")
     assert demoted in issue.message
 
-
-def test_a_project_heading_is_not_mistaken_for_a_demoted_job_title(draft_factory) -> None:
-    """A heading that was never a job title must not trip the rule.
-
-    The Projects section renders project names as headings. They carry no
-    `historical-title` tag on purpose - a project is not employment - so an
-    equality check would have forced them out of the document.
-    """
     facts, profile, analysis, draft, markdown = draft_factory(
         "Python backend developer API React", profile_override="development", write=True
     )
