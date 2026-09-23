@@ -444,9 +444,14 @@ describe("ApplicationListPage", () => {
       "href",
       "/api/v1/approved-revisions/revision-1/recruiter-pdf?pdf_artifact_version_id=pdf-1",
     );
-    /* A finished CV is offered from the details, and the way on goes to the same revision. */
-    expect(within(details).getByRole("link", { name: "המשך בהכנה" })).toHaveAttribute("href", "/revisions/revision-1");
-    fireEvent.click(within(details).getByRole("link", { name: "פתיחת הגרסה המוכנה" }));
+    /* The finished CV is said once: the footer's way on is the one link to the revision,
+       and there is no separate next-action block repeating that the CV is ready. */
+    expect(within(details).queryByRole("link", { name: "המשך בהכנה" })).not.toBeInTheDocument();
+    expect(within(details).queryByText("פעולה מומלצת הבאה")).not.toBeInTheDocument();
+    const toRevision = within(details).getAllByRole("link", { name: "פתיחת הגרסה המוכנה" });
+    expect(toRevision).toHaveLength(1);
+    expect(toRevision[0]).toHaveAttribute("href", "/revisions/revision-1");
+    fireEvent.click(toRevision[0]);
 
     expect(screen.getByRole("heading", { name: "גרסה מוכנה" })).toBeInTheDocument();
   });
