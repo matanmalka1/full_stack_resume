@@ -65,7 +65,7 @@ export const FactsIntegrityCheck = () => {
           type="button"
           variant="secondary"
         >
-          {report === undefined ? "הפעלה" : "בדיקה מחדש"}
+          {report === undefined ? "הפעלת בדיקת סנכרון" : "בדיקה מחדש"}
         </Button>
       </div>
       {problems.length === 0 ? null : (
