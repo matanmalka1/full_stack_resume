@@ -1,14 +1,24 @@
-import { Archive, ArrowLeft, CircleAlert, EllipsisVertical, FileCheck2, SlidersHorizontal, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  CircleAlert,
+  EllipsisVertical,
+  ExternalLink,
+  Eye,
+  FileCheck2,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { routePaths } from "@/app/routePaths";
-import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
-import { actionDestination } from "@/features/preparation";
+import { sourceHostname } from "@/features/applications";
+import { actionDestination, preparationResumeDestination } from "@/features/preparation";
 import { actionLabel } from "@/features/preparation";
 import { operationTypeLabels, statusLabels, statusTones } from "@/features/operations";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
@@ -99,6 +109,9 @@ export const ApplicationRecommendedAction = ({
   );
 };
 
+const menuItemBase = "flex min-h-9 w-full items-center gap-2 px-3.5 py-2 text-start text-support font-medium transition-colors";
+const menuItemClasses = `${menuItemBase} text-cv-text hover:bg-cv-surface-muted`;
+
 export const ApplicationRecordActions = ({
   item,
   onRequestClose,
@@ -111,6 +124,8 @@ export const ApplicationRecordActions = ({
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
   const [open, setOpen] = useState(false);
+  const href = preparationResumeDestination(item);
+  const host = sourceHostname(item.source_url);
   const menuId = `application-actions-${item.id}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -118,7 +133,7 @@ export const ApplicationRecordActions = ({
   useEffect(() => {
     if (!open) return;
 
-    containerRef.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+    containerRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     const closeFromOutside = (event: PointerEvent) => {
       if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setOpen(false);
     };
@@ -153,13 +168,13 @@ export const ApplicationRecordActions = ({
       </Tooltip>
       {open ? (
         <div
-          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1 min-w-52 rounded-control border border-cv-border bg-cv-surface-raised p-1 shadow-floating"
+          className="absolute end-0 top-full z-(--cv-z-sticky) mt-1.5 w-56 divide-y divide-cv-border rounded-surface border border-cv-border bg-cv-surface-raised py-1.5 text-start shadow-floating"
           id={menuId}
           onKeyDown={(event) => {
             if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
             event.preventDefault();
-            const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=menuitem]")];
-            const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+            const items = [...event.currentTarget.querySelectorAll<HTMLElement>("[role=menuitem]")];
+            const currentIndex = items.indexOf(document.activeElement as HTMLElement);
             const nextIndex =
               event.key === "Home"
                 ? 0
@@ -171,46 +186,70 @@ export const ApplicationRecordActions = ({
           role="menu"
           tabIndex={-1}
         >
-          <button
-            className="flex min-h-9 w-full items-center gap-2 rounded-control px-3 text-start text-support font-medium text-cv-text hover:bg-cv-surface-muted"
-            onClick={() => {
-              setOpen(false);
-              onRequestUpdate(item);
-            }}
-            role="menuitem"
-            type="button"
-          >
-            <SlidersHorizontal aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-            עדכון סטטוס ומשימות
-          </button>
-          {item.is_closed ? null : (
-            <Button
-              aria-label={`סגירת המועמדות ${item.company}`}
-              className="min-h-9 w-full justify-start rounded-control px-3 text-cv-blocker hover:bg-cv-blocker-soft"
+          {/* Two groups, as in demo_re: the ways into the record, then the two that end
+              it. The ending pair keeps the blocker tone; nothing else here is coloured. */}
+          <div className="py-1">
+            <Link className={menuItemClasses} onClick={() => setOpen(false)} role="menuitem" to={href}>
+              <Eye aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              פתיחת המועמדות
+            </Link>
+            {host === null || item.source_url == null ? null : (
+              <a
+                className={menuItemClasses}
+                href={item.source_url}
+                onClick={() => setOpen(false)}
+                rel="noreferrer"
+                role="menuitem"
+                target="_blank"
+                title={item.source_url}
+              >
+                <ExternalLink aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+                <span className="min-w-0 truncate">מודעת המשרה המקורית</span>
+              </a>
+            )}
+            <button
+              className={menuItemClasses}
               onClick={() => {
                 setOpen(false);
-                onRequestClose(item);
+                onRequestUpdate(item);
               }}
               role="menuitem"
-              variant="ghost"
+              type="button"
             >
-              <Archive aria-hidden="true" className="size-icon-md" />
-              סגירת מועמדות
-            </Button>
-          )}
-          <Button
-            aria-label={`מחיקת המועמדות ${item.company}`}
-            className="min-h-9 w-full justify-start rounded-control px-3 text-cv-blocker hover:bg-cv-blocker-soft"
-            onClick={() => {
-              setOpen(false);
-              onRequestDelete(item);
-            }}
-            role="menuitem"
-            variant="ghost"
-          >
-            <Trash2 aria-hidden="true" className="size-icon-md" />
-            מחיקת מועמדות
-          </Button>
+              <SlidersHorizontal aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+              עדכון סטטוס ומשימות
+            </button>
+          </div>
+          <div className="py-1">
+            {item.is_closed ? null : (
+              <button
+                aria-label={`סגירת המועמדות ${item.company}`}
+                className={menuItemClasses}
+                onClick={() => {
+                  setOpen(false);
+                  onRequestClose(item);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <Archive aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+                סגירת מועמדות
+              </button>
+            )}
+            <button
+              aria-label={`מחיקת המועמדות ${item.company}`}
+              className={`${menuItemBase} text-cv-blocker hover:bg-cv-blocker-soft`}
+              onClick={() => {
+                setOpen(false);
+                onRequestDelete(item);
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <Trash2 aria-hidden="true" className="size-icon-md shrink-0" />
+              מחיקת מועמדות לצמיתות
+            </button>
+          </div>
         </div>
       ) : null}
     </div>

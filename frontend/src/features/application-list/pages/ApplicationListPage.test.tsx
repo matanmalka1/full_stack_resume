@@ -260,8 +260,11 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
-    /* The row leads with the company, beside its mark, and names the role under it. */
-    expect(await screen.findByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
+    /* The row leads with the company as text; the icon beside it is the row's link. */
+    expect(await screen.findByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveAttribute(
+      "href",
+      "/applications/app-1",
+    );
     /* Preparation and recruitment are independent axes and the board shows both: one says
        how far the CV has got, the other where the Application stands with the employer.
        Scoped to the table because the stage filter offers the same vocabulary as its
@@ -275,6 +278,8 @@ describe("ApplicationListPage", () => {
     }
     fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
     expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
+    /* The menu also opens the record, as the demo's first item does. */
+    expect(board.getByRole("menuitem", { name: "פתיחת המועמדות" })).toHaveAttribute("href", "/applications/app-1");
   });
 
   /* The column is read to decide which row to open next, so it names what is waiting
@@ -369,7 +374,7 @@ describe("ApplicationListPage", () => {
     /* The recommended step carries its fixed one-line description. */
     expect(screen.getByText("הטיוטה עברה אימות וממתינה לאישור שלך.")).toBeInTheDocument();
     expect(command.getAttribute("href")).toBe(
-      screen.getByRole("link", { name: "Acme" }).getAttribute("href"),
+      screen.getByRole("link", { name: "פתיחת המועמדות של Acme" }).getAttribute("href"),
     );
 
     fireEvent.click(await screen.findByText("Backend Engineer"));

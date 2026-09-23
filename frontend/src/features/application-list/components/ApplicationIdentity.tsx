@@ -109,56 +109,49 @@ export const ApplicationIdentity = ({
   );
 };
 
-/* The table row's identity, drawn after demo_re: the company and a link out to the
-   posting on the first line, the role and the track on the second. The posting's own
-   address is the icon's title and name rather than printed text, which is what kept the
-   old second line too wide to scan. */
-const RowIdentity = ({ ambiguous, href, item }: { ambiguous: boolean; href: string; item: ApplicationListItem }) => {
-  const host = sourceHostname(item.source_url);
+/* The table row's identity, drawn after demo_re: the company on the first line with
+   the row's link beside it, the role and the track on the second.
 
-  return (
-    <div className="flex min-w-0 items-center gap-3">
-      <CompanyMark company={item.company} variant="row" />
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Link
-            className="truncate text-body font-bold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
-            dir="auto"
-            title={item.company}
-            to={href}
-          >
-            {item.company}
-          </Link>
-          {host === null || item.source_url == null ? null : (
-            <a
-              aria-label={`מודעת המשרה של ${item.company} ב־${host}`}
-              className="inline-flex shrink-0 rounded-control p-0.5 text-cv-text-muted hover:text-cv-text"
-              href={item.source_url}
-              rel="noreferrer"
-              target="_blank"
-              title={item.source_url}
-            >
-              <ExternalLink aria-hidden="true" className="size-icon-sm" />
-            </a>
-          )}
-        </div>
-        <p className="flex min-w-0 items-center gap-1.5 text-support text-cv-text-muted">
-          <span className="truncate font-medium text-cv-text" dir="auto" title={item.target_role}>
-            {item.target_role}
-          </span>
-          {item.track == null ? null : (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="shrink-0">{trackLabel(item.track)}</span>
-            </>
-          )}
-        </p>
-        {ambiguous ? (
-          <p className="truncate text-support font-medium text-cv-text" title={DUPLICATE_IDENTITY_HINT}>
-            {DUPLICATE_IDENTITY_HINT} · נפתחה ב־{formatApplicationDate(item.created_at)}
-          </p>
-        ) : null}
+   The name is text; the icon is the link. It is on every row and is a real anchor, so it
+   stays the keyboard and screen-reader route into the Application and still opens a new
+   tab on Cmd/Ctrl-click. The posting's own address is in the row's menu. */
+const RowIdentity = ({ ambiguous, href, item }: { ambiguous: boolean; href: string; item: ApplicationListItem }) => (
+  <div className="flex min-w-0 items-center gap-3">
+    <CompanyMark company={item.company} variant="row" />
+    <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span
+          className="truncate text-body font-bold text-cv-text transition-colors group-hover:text-cv-accent"
+          dir="auto"
+          title={item.company}
+        >
+          {item.company}
+        </span>
+        <Link
+          aria-label={`פתיחת המועמדות של ${item.company}`}
+          className="inline-flex shrink-0 rounded-control p-0.5 text-cv-text-muted hover:text-cv-text"
+          title="פתיחת המועמדות"
+          to={href}
+        >
+          <ExternalLink aria-hidden="true" className="size-icon-sm" />
+        </Link>
       </div>
+      <p className="flex min-w-0 items-center gap-1.5 text-support text-cv-text-muted">
+        <span className="truncate font-medium text-cv-text" dir="auto" title={item.target_role}>
+          {item.target_role}
+        </span>
+        {item.track == null ? null : (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="shrink-0">{trackLabel(item.track)}</span>
+          </>
+        )}
+      </p>
+      {ambiguous ? (
+        <p className="truncate text-support font-medium text-cv-text" title={DUPLICATE_IDENTITY_HINT}>
+          {DUPLICATE_IDENTITY_HINT} · נפתחה ב־{formatApplicationDate(item.created_at)}
+        </p>
+      ) : null}
     </div>
-  );
-};
+  </div>
+);
