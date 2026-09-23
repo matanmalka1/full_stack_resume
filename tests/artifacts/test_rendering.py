@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from helpers import artifact_path
 from pypdf import PdfWriter
 
+from cv_engine.application.errors import WorkflowError
 from cv_engine.infrastructure.rendering import (
     _claim_recoverable,
     _launch_failure_message,
@@ -85,3 +87,31 @@ def test_render_findings_keep_their_existing_failed_groups(
     assert not final.passed
     assert final.issues
     assert all(final.groups[issue.group] is False for issue in final.issues)
+
+
+def test_render_revalidates_approved_markdown_before_browser(
+    approved_application, transaction_manager, artifact_catalog
+) -> None:
+    setup = approved_application(
+        "Acme",
+        "Developer",
+        "Python backend developer API React\n\n"
+        "Requirements:\n"
+        "- Fluent English.\n"
+        "- Media industry experience is preferred.",
+    )
+    services, app_id = setup
+    with transaction_manager.read() as tx:
+        markdown_record = artifact_catalog.latest_artifact_version(
+            tx, app_id, "resume_markdown", "approved"
+        )
+    markdown = artifact_path(services, markdown_record["path"])
+    markdown.write_text(
+        markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8"
+    )
+    try:
+        services.rendering.render(app_id)
+    except WorkflowError as exc:
+        assert "approved Markdown" in str(exc)
+    else:
+        raise AssertionError("modified approved source reached rendering")

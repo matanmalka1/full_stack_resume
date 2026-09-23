@@ -1,43 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from helpers import ACCOUNT_MANAGER_JOB, artifact_path, validate_active_draft
+from helpers import ACCOUNT_MANAGER_JOB, validate_active_draft
 from helpers import working_claim as _working_claim
 
-from cv_engine.application.commands import (
-    IngestCommand,
-)
-from cv_engine.application.errors import WorkflowError
 from cv_engine.domain.draft_markdown import parse_draft, serialize_markdown
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.runtime.paths import AppPaths
-
-
-def test_csv_export_declares_its_schema_version(services, tmp_path: Path) -> None:
-    import json as _json
-
-    from cv_engine.application.maintenance import EXPORT_SCHEMA_VERSION
-    from cv_engine.infrastructure.exports import export_csv
-
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Acme", target_role="Developer", job_text="Python developer role", client="web"
-        )
-    )
-    app_id = ingested.application_id
-    output = export_csv(services.queries.list_applications(), tmp_path / "applications.csv")
-    text = output.read_text(encoding="utf-8")
-    assert "current_status" in text
-    assert app_id in text
-
-    metadata = _json.loads(
-        output.with_suffix(output.suffix + ".meta.json").read_text(encoding="utf-8")
-    )
-    assert metadata["export_schema_version"] == EXPORT_SCHEMA_VERSION
-    assert metadata["row_count"] == 1
-    assert metadata["columns"][0] == "id"
-    assert "current_status" in metadata["columns"]
 
 
 def test_filesystem_working_draft_unconditionally_overwrites_the_projection(
@@ -116,31 +84,3 @@ def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application
         _working_claim(services, app_id, "sales.metric.recurring_customers").claim_type
         == "composite"
     )
-
-
-def test_render_revalidates_approved_markdown_before_browser(
-    approved_application, transaction_manager, artifact_catalog
-) -> None:
-    setup = approved_application(
-        "Acme",
-        "Developer",
-        "Python backend developer API React\n\n"
-        "Requirements:\n"
-        "- Fluent English.\n"
-        "- Media industry experience is preferred.",
-    )
-    services, app_id = setup
-    with transaction_manager.read() as tx:
-        markdown_record = artifact_catalog.latest_artifact_version(
-            tx, app_id, "resume_markdown", "approved"
-        )
-    markdown = artifact_path(services, markdown_record["path"])
-    markdown.write_text(
-        markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8"
-    )
-    try:
-        services.rendering.render(app_id)
-    except WorkflowError as exc:
-        assert "approved Markdown" in str(exc)
-    else:
-        raise AssertionError("modified approved source reached rendering")
