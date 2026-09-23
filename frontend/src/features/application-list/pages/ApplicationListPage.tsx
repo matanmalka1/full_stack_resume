@@ -149,9 +149,12 @@ export const ApplicationListPage = () => {
         </div>
       )}
       <ApplicationAttentionSummary
+        boardHasApplications={page !== undefined && page.total > 0}
         clearingApplicationId={clearNextActionMutation.isPending ? (clearNextActionMutation.variables ?? null) : null}
+        filterActive={query.preset === "needs_attention"}
         onClearNextAction={(application) => clearNextActionMutation.mutate(application.id)}
         onOpenStatusDialog={(application) => setUpdatingApplicationId(application.id)}
+        onShowAll={() => updateQuery({ ...query, preset: "needs_attention" })}
       />
       {clearNextActionMutation.error === null ? null : (
         <ErrorCallout

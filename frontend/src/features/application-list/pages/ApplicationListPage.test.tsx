@@ -246,6 +246,10 @@ describe("ApplicationListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
     expect(screen.getByText("איפה עומד כל תהליך גיוס, ומה עוד צריך לקורות החיים.")).toBeInTheDocument();
+    /* Neither row has anything waiting, so the hub says so in one line rather than
+       disappearing and leaving the reader to wonder whether it loaded. */
+    const quietHub = await screen.findByRole("region", { name: "מוקד פעולות" });
+    expect(within(quietHub).getByText("אין פעולות ממתינות.")).toBeInTheDocument();
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
@@ -420,6 +424,15 @@ describe("ApplicationListPage", () => {
         }),
       ),
     );
+
+    /* The hub offers the whole preset on the board, and withdraws the offer once the
+       board is showing it. */
+    fireEvent.click(within(hub).getByRole("button", { name: "הצגת כל הדורשות טיפול בלוח" }));
+    const presets = screen.getByRole("group", { name: "סינון מהיר לפי מצב" });
+    await waitFor(() =>
+      expect(within(presets).getByRole("button", { name: /דורש טיפול/ })).toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(within(hub).queryByRole("button", { name: "הצגת כל הדורשות טיפול בלוח" })).not.toBeInTheDocument();
   });
 
   it("keeps duplicate attention rows distinguishable and disables only the reminder being cleared", async () => {
@@ -606,6 +619,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByText("עוד לא נוצרה אף מועמדות.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "מוקד פעולות" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("חיפוש במועמדויות")).not.toBeInTheDocument();
     expect(screen.queryByText("אין מועמדות שמתאימה לסינון.")).not.toBeInTheDocument();
   });

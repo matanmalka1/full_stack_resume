@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { BellOff, ChevronDown, ChevronLeft, Sparkles } from "lucide-react";
+import { BellOff, ChevronDown, ChevronLeft, CircleCheck, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { applicationListQueryOptions } from "@/api/applications";
@@ -13,23 +13,53 @@ import {
 } from "../model/applicationListPresentation";
 
 interface ApplicationAttentionSummaryProps {
+  /* Whether the board has any Application at all. An empty database already says so in
+     its own empty state; a hub reporting "nothing waiting" above it would be noise. */
+  boardHasApplications: boolean;
   clearingApplicationId: string | null;
+  /* Whether the board below is already narrowed to the same preset. The offer to narrow
+     it is then withdrawn rather than shown as a control that does nothing. */
+  filterActive: boolean;
   onClearNextAction: (application: ApplicationListItem) => void;
   onOpenStatusDialog: (application: ApplicationListItem) => void;
+  onShowAll: () => void;
 }
 
 export const ApplicationAttentionSummary = ({
+  boardHasApplications,
   clearingApplicationId,
+  filterActive,
   onClearNextAction,
   onOpenStatusDialog,
+  onShowAll,
 }: ApplicationAttentionSummaryProps) => {
   const attentionQuery = useQuery(applicationListQueryOptions({ preset: "needs_attention", limit: 3 }));
   const sourceItems = attentionQuery.data?.items ?? [];
   const displayItems = attentionHubItems(sourceItems);
   const ambiguous = duplicatedApplicationIdentityIds(sourceItems);
+  /* The hub reads at most three; the server's match count is the whole preset, so the
+     badge says how much is waiting even when only the first three are drawn. */
+  const waitingCount = Math.max(attentionQuery.data?.matched ?? 0, displayItems.length);
 
   if (displayItems.length === 0) {
-    return null;
+    /* Only a successful read may say nothing is waiting. While loading, or after a
+       failure, the hub stays silent rather than claim a state it has not seen. */
+    if (!attentionQuery.isSuccess || !boardHasApplications) {
+      return null;
+    }
+
+    return (
+      <section
+        aria-labelledby="urgent-action-heading"
+        className="flex items-center gap-2 rounded-surface border border-cv-border bg-cv-surface px-3 py-2.5"
+      >
+        <CircleCheck aria-hidden="true" className="size-icon-md shrink-0 text-cv-success" />
+        <h2 className="text-support font-bold text-cv-text" id="urgent-action-heading">
+          מוקד פעולות
+        </h2>
+        <p className="truncate text-support text-cv-text-muted">אין פעולות ממתינות.</p>
+      </section>
+    );
   }
 
   return (
@@ -41,8 +71,16 @@ export const ApplicationAttentionSummary = ({
             <h2 className="text-support font-bold text-cv-text" id="urgent-action-heading">
               מוקד פעולות
             </h2>
+            <span className="shrink-0 self-center rounded-pill bg-cv-accent px-2 text-support font-bold text-cv-on-accent tabular-nums">
+              {waitingCount}
+              <span className="sr-only"> ממתינות</span>
+            </span>
             <span className="truncate text-support text-cv-text-muted">
-              {displayItems.length === 1 ? "פעולה אחת בעדיפות" : `${displayItems.length} פעולות בעדיפות`}
+              {waitingCount > displayItems.length
+                ? `${displayItems.length} הראשונות מוצגות`
+                : displayItems.length === 1
+                  ? "פעולה אחת בעדיפות"
+                  : `${displayItems.length} פעולות בעדיפות`}
             </span>
           </span>
           <ChevronDown
@@ -123,6 +161,14 @@ export const ApplicationAttentionSummary = ({
             </article>
           ))}
         </div>
+        {filterActive ? null : (
+          <div className="flex justify-end border-t border-cv-border px-3 py-2">
+            <Button className="gap-1" onClick={onShowAll} size="compact" variant="ghost">
+              הצגת כל הדורשות טיפול בלוח
+              <ChevronLeft aria-hidden="true" className="size-icon-sm" />
+            </Button>
+          </div>
+        )}
       </details>
     </section>
   );
