@@ -35,6 +35,11 @@ export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPr
     {presetTabs.map(({ id, label }) => {
       const active = id === value;
       const count = counts?.[id];
+      /* The one slice that asks for the reader, not just describes the board. While it
+         holds anything and is not already chosen, it is drawn a step louder: a mark, a
+         filled count, and a stronger edge. The count itself stays the accessible fact;
+         the emphasis adds nothing a screen reader would need. */
+      const waiting = id === "needs_attention" && !active && (count ?? 0) > 0;
 
       return (
         <button
@@ -43,17 +48,25 @@ export const ApplicationPresetTabs = ({ counts, onSelect, value }: ApplicationPr
             "inline-flex min-h-9 items-center gap-2 rounded-pill border px-3 text-support font-medium transition-colors",
             active
               ? "border-cv-accent bg-cv-accent text-cv-on-accent"
-              : "border-cv-border bg-cv-surface-muted text-cv-text-muted hover:border-cv-border-strong hover:text-cv-text",
+              : waiting
+                ? "border-cv-border-strong bg-cv-surface-muted font-semibold text-cv-text hover:border-cv-accent"
+                : "border-cv-border bg-cv-surface-muted text-cv-text-muted hover:border-cv-border-strong hover:text-cv-text",
           )}
+          data-emphasis={waiting ? "waiting" : undefined}
           key={id}
           onClick={() => onSelect(id)}
           type="button"
         >
+          {waiting ? <span aria-hidden="true" className="size-1.5 shrink-0 rounded-pill bg-cv-accent" /> : null}
           {label}
           <span
             className={cx(
               "text-support font-semibold tabular-nums",
-              active ? "text-cv-on-accent" : "text-cv-text-muted",
+              active
+                ? "text-cv-on-accent"
+                : waiting
+                  ? "rounded-pill bg-cv-accent px-1.5 text-cv-on-accent"
+                  : "text-cv-text-muted",
             )}
           >
             {count ?? "—"}

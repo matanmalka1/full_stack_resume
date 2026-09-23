@@ -503,6 +503,10 @@ describe("ApplicationListPage", () => {
     expect(await within(interviews).findByText("3")).toBeInTheDocument();
     expect(await within(ready).findByText("2")).toBeInTheDocument();
     expect(await within(attention).findByText("4")).toBeInTheDocument();
+    /* Only the slice that asks for the reader is drawn louder, and only while it holds
+       anything and is not already the one on screen. */
+    expect(attention).toHaveAttribute("data-emphasis", "waiting");
+    expect(interviews).not.toHaveAttribute("data-emphasis");
     const interviewStage = screen.getByLabelText("שלב גיוס");
     expect(within(interviewStage).getByRole("option", { name: "ראיונות ומטלות (2)" })).toBeInTheDocument();
 
