@@ -260,7 +260,9 @@ export const ApplicationListPage = () => {
               onRequestClose={(item) => setClosingApplicationId(item.id)}
               onRequestDelete={(item) => setDeletingApplicationId(item.id)}
               onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
+              onSortChange={(sort) => updateQuery({ ...query, sort })}
               pageSize={PAGE_SIZE}
+              sort={query.sort ?? "updated"}
               viewMode={viewMode}
             />
           </div>

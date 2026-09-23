@@ -276,6 +276,14 @@ describe("ApplicationListPage", () => {
     for (const name of ["חברה ותפקיד", "התקדמות הכנה וגיוס", "פעולה מומלצת הבאה", "ציון התאמה", "עדכון אחרון"]) {
       expect(board.getByRole("columnheader", { name })).toBeInTheDocument();
     }
+    /* The headers of the columns the server can order by apply that order, and stay in
+       step with the toolbar's select. */
+    expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).toHaveAttribute("aria-sort", "descending");
+    expect(board.queryByRole("button", { name: "ציון התאמה" })).not.toBeInTheDocument();
+    fireEvent.click(board.getByRole("button", { name: "חברה ותפקיד" }));
+    await waitFor(() => expect(screen.getByLabelText("סדר")).toHaveValue("company"));
+    expect(board.getByRole("columnheader", { name: "חברה ותפקיד" })).toHaveAttribute("aria-sort", "ascending");
+    expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).not.toHaveAttribute("aria-sort");
     fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
     expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
     /* The menu also opens the record, as the demo's first item does. */

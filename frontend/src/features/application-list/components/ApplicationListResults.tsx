@@ -1,4 +1,4 @@
-import type { ApplicationListItem } from "@/api/contracts";
+import type { ApplicationListItem, ApplicationSort } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import type { ViewMode } from "../model/applicationViews";
@@ -14,6 +14,7 @@ interface ApplicationListResultsProps {
   matchedCount: number;
   offset: number;
   pageSize: number;
+  sort: ApplicationSort;
   viewMode: ViewMode;
   onClearFilters: () => void;
   onClearNextAction: (item: ApplicationListItem) => void;
@@ -21,6 +22,7 @@ interface ApplicationListResultsProps {
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
+  onSortChange: (sort: ApplicationSort) => void;
 }
 
 /* The result region: one page of Applications in whichever view is chosen, the message
@@ -37,6 +39,7 @@ export const ApplicationListResults = ({
   matchedCount,
   offset,
   pageSize,
+  sort,
   viewMode,
   onClearFilters,
   onClearNextAction,
@@ -44,6 +47,7 @@ export const ApplicationListResults = ({
   onRequestClose,
   onRequestDelete,
   onRequestUpdate,
+  onSortChange,
 }: ApplicationListResultsProps) => {
   if (items.length === 0) {
     return (
@@ -79,6 +83,8 @@ export const ApplicationListResults = ({
           clearingApplicationId={clearingApplicationId}
           items={items}
           onClearNextAction={onClearNextAction}
+          onSortChange={onSortChange}
+          sort={sort}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
           onRequestUpdate={onRequestUpdate}

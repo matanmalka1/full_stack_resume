@@ -1,4 +1,6 @@
-import type { ApplicationListItem } from "@/api/contracts";
+import { ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
+
+import type { ApplicationListItem, ApplicationSort } from "@/api/contracts";
 import { Card } from "@/ui/Card";
 import { Skeleton } from "@/ui/Skeleton";
 import { cx } from "@/ui/cx";
@@ -10,21 +12,41 @@ import { ApplicationListRow } from "./ApplicationListRow";
    but stay two separate lines - one says what the CV still needs, the other where the
    employer process stands - so neither reads as a step of the other. The final column
    gathers commands so the row has one predictable action edge. */
-const columns = [
-  { key: "identity", label: "חברה ותפקיד", width: "w-[24%]" },
-  { key: "progress", label: "התקדמות הכנה וגיוס", width: "w-[22%]" },
+type Column = {
+  key: string;
+  label: string;
+  width: string;
+  center?: boolean;
+  /* The server-side order this column's header applies. Only the orders the list
+     endpoint has are offered, each in its one direction; a column without one has a
+     plain header. The toolbar's select stays the control for every view and for
+     "נוצר לאחרונה", which has no column. */
+  sort?: { value: ApplicationSort; direction: "ascending" | "descending" };
+  visuallyHidden?: boolean;
+};
+
+const columns: readonly Column[] = [
+  { key: "identity", label: "חברה ותפקיד", width: "w-[24%]", sort: { value: "company", direction: "ascending" } },
+  {
+    key: "progress",
+    label: "התקדמות הכנה וגיוס",
+    width: "w-[22%]",
+    sort: { value: "stage", direction: "descending" },
+  },
   { key: "next-action", label: "פעולה מומלצת הבאה", width: "w-[30%]" },
   { key: "fit", label: "ציון התאמה", width: "w-[9%]", center: true },
-  { key: "activity", label: "עדכון אחרון", width: "w-[11%]" },
+  { key: "activity", label: "עדכון אחרון", width: "w-[11%]", sort: { value: "updated", direction: "descending" } },
   /* The column holds one icon-sized menu trigger. Its name stays for assistive tech but is
      not drawn: at the trigger's width a visible label was clipped by the table edge. */
   { key: "actions", label: "פעולות", width: "w-12", visuallyHidden: true },
-] as const;
+];
 
 interface ApplicationListTableProps {
   clearingApplicationId: string | null;
   items: readonly ApplicationListItem[];
+  sort: ApplicationSort;
   onClearNextAction: (item: ApplicationListItem) => void;
+  onSortChange: (sort: ApplicationSort) => void;
   onRequestClose: (item: ApplicationListItem) => void;
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
@@ -33,10 +55,12 @@ interface ApplicationListTableProps {
 export const ApplicationListTable = ({
   clearingApplicationId,
   items,
+  sort,
   onClearNextAction,
   onRequestClose,
   onRequestDelete,
   onRequestUpdate,
+  onSortChange,
 }: ApplicationListTableProps) => {
   const ambiguous = duplicatedApplicationIdentityIds(items);
 
@@ -50,19 +74,44 @@ export const ApplicationListTable = ({
       <table className="block w-full border-collapse text-start lg:table lg:table-fixed">
         <thead className="hidden lg:table-header-group">
           <tr className="border-b border-cv-border">
-            {columns.map(({ key, label, width, ...column }) => (
-              <th
-                className={cx(
-                  "bg-cv-canvas px-4 py-3 text-support font-semibold text-cv-text-muted first:rounded-ss-surface last:rounded-se-surface",
-                  "center" in column ? "text-center" : "text-start",
-                  width,
-                )}
-                key={key}
-                scope="col"
-              >
-                {"visuallyHidden" in column ? <span className="sr-only">{label}</span> : label}
-              </th>
-            ))}
+            {columns.map((column) => {
+              const active = column.sort !== undefined && column.sort.value === sort;
+              const Arrow = !active ? ChevronsUpDown : column.sort?.direction === "ascending" ? ChevronUp : ChevronDown;
+
+              return (
+                <th
+                  aria-sort={active ? column.sort?.direction : undefined}
+                  className={cx(
+                    "bg-cv-canvas px-4 py-3 text-support font-semibold text-cv-text-muted first:rounded-ss-surface last:rounded-se-surface",
+                    column.center ? "text-center" : "text-start",
+                    column.width,
+                  )}
+                  key={column.key}
+                  scope="col"
+                >
+                  {column.visuallyHidden ? (
+                    <span className="sr-only">{column.label}</span>
+                  ) : column.sort === undefined ? (
+                    column.label
+                  ) : (
+                    <button
+                      className={cx(
+                        "group/sort inline-flex items-center gap-1 rounded-control font-semibold transition-colors hover:text-cv-text",
+                        active && "text-cv-text",
+                      )}
+                      onClick={() => column.sort && onSortChange(column.sort.value)}
+                      type="button"
+                    >
+                      {column.label}
+                      <Arrow
+                        aria-hidden="true"
+                        className={cx("size-icon-sm shrink-0", !active && "opacity-40 group-hover/sort:opacity-100")}
+                      />
+                    </button>
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="block divide-y divide-cv-border lg:table-row-group lg:divide-y-0">
