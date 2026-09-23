@@ -107,17 +107,24 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
     )
 
 
-def test_ai_enabled_is_derived_from_provider_until_an_override_is_stored(
-    ai_api_worker,
-) -> None:
-    initial = ai_api_worker.client.get(f"{API_PREFIX}/settings")
+def _assert_configured_provider_derivation(harness) -> None:
+    initial = harness.client.get(f"{API_PREFIX}/settings")
     assert initial.status_code == 200, initial.text
     assert initial.json()["provider_configured"] is True
     assert initial.json()["ai_enabled"] is True
     assert initial.json()["ai_enabled_override"] is None
 
+    refused_disabled = _patch(
+        harness,
+        initial.headers["ETag"],
+        _update_body(ai_enabled_override=False, default_execution_mode="ai"),
+    )
+    assert refused_disabled.status_code == 412, refused_disabled.text
+    assert refused_disabled.json()["code"] == "PRECONDITION_FAILED"
+    assert harness.client.get(f"{API_PREFIX}/settings").headers["ETag"] == initial.headers["ETag"]
+
     disabled = _patch(
-        ai_api_worker,
+        harness,
         initial.headers["ETag"],
         _update_body(ai_enabled_override=False),
     )
@@ -127,20 +134,41 @@ def test_ai_enabled_is_derived_from_provider_until_an_override_is_stored(
     assert disabled.json()["ai_enabled"] is False
 
 
-def test_stored_true_override_does_not_report_ai_enabled_without_a_provider(
-    api_worker,
-) -> None:
-    initial = api_worker.client.get(f"{API_PREFIX}/settings")
+def _assert_unconfigured_provider_derivation(harness) -> None:
+    initial = harness.client.get(f"{API_PREFIX}/settings")
+    refused_unconfigured = _patch(
+        harness,
+        initial.headers["ETag"],
+        _update_body(ai_enabled_override=True, default_execution_mode="ai"),
+    )
+    assert refused_unconfigured.status_code == 412, refused_unconfigured.text
+    assert refused_unconfigured.json()["code"] == "PRECONDITION_FAILED"
+
     stored = _patch(
-        api_worker,
+        harness,
         initial.headers["ETag"],
         _update_body(ai_enabled_override=True),
     )
-
     assert stored.status_code == 200, stored.text
     assert stored.json()["provider_configured"] is False
     assert stored.json()["ai_enabled_override"] is True
     assert stored.json()["ai_enabled"] is False
+
+
+@pytest.mark.parametrize(
+    ("harness_fixture", "assert_derivation"),
+    [
+        ("ai_api_worker", _assert_configured_provider_derivation),
+        ("api_worker", _assert_unconfigured_provider_derivation),
+    ],
+    ids=["provider-configured", "provider-unconfigured"],
+)
+def test_ai_enabled_and_ai_default_mode_derive_from_provider_and_override(
+    request, harness_fixture, assert_derivation
+) -> None:
+    """`ai_enabled` follows the provider until an override is stored, a stored `true`
+    never reports AI without a provider, and the AI default mode needs both."""
+    assert_derivation(request.getfixturevalue(harness_fixture))
 
 
 def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
@@ -172,33 +200,9 @@ def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
     assert after.json() == updated.json()
 
 
-def test_ai_default_mode_requires_a_configured_provider(api_worker) -> None:
-    unconfigured = api_worker.client.get(f"{API_PREFIX}/settings")
-    refused_unconfigured = _patch(
-        api_worker,
-        unconfigured.headers["ETag"],
-        _update_body(ai_enabled_override=True, default_execution_mode="ai"),
-    )
-    assert refused_unconfigured.status_code == 412, refused_unconfigured.text
-    assert refused_unconfigured.json()["code"] == "PRECONDITION_FAILED"
-
-
-def test_ai_default_mode_requires_effective_ai_to_remain_enabled(ai_api_worker) -> None:
-    configured = ai_api_worker.client.get(f"{API_PREFIX}/settings")
-    refused_disabled = _patch(
-        ai_api_worker,
-        configured.headers["ETag"],
-        _update_body(ai_enabled_override=False, default_execution_mode="ai"),
-    )
-    assert refused_disabled.status_code == 412, refused_disabled.text
-    assert refused_disabled.json()["code"] == "PRECONDITION_FAILED"
-    assert (
-        ai_api_worker.client.get(f"{API_PREFIX}/settings").headers["ETag"]
-        == configured.headers["ETag"]
-    )
-
-
-def test_settings_reject_arbitrary_models_and_reasoning_values(api_worker) -> None:
+def test_settings_round_trip_every_theme_and_reject_values_outside_their_catalogs(
+    api_worker,
+) -> None:
     initial = api_worker.client.get(f"{API_PREFIX}/settings")
     for body in (
         _update_body(default_ai_model="provider-model-not-in-catalog"),
@@ -206,18 +210,16 @@ def test_settings_reject_arbitrary_models_and_reasoning_values(api_worker) -> No
     ):
         refused = _patch(api_worker, initial.headers["ETag"], body)
         assert refused.status_code == 422, refused.text
-
     unchanged = api_worker.client.get(f"{API_PREFIX}/settings")
     assert unchanged.headers["ETag"] == initial.headers["ETag"]
 
-
-@pytest.mark.parametrize("theme", ["system", "light", "dark"])
-def test_theme_settings_round_trip_and_reject_unknown_mode(api_worker, theme) -> None:
-    current = api_worker.client.get(f"{API_PREFIX}/settings")
-    saved = _patch(api_worker, current.headers["ETag"], _update_body(ui_theme=theme))
-    assert saved.status_code == 200
-    assert saved.json()["ui_theme"] == theme
-    assert api_worker.client.get(f"{API_PREFIX}/settings").json()["ui_theme"] == theme
-    refused = _patch(api_worker, saved.headers["ETag"], _update_body(ui_theme="sepia"))
-    assert refused.status_code == 422
-    assert api_worker.client.get(f"{API_PREFIX}/settings").json() == saved.json()
+    etag = initial.headers["ETag"]
+    for theme in ("system", "light", "dark"):
+        saved = _patch(api_worker, etag, _update_body(ui_theme=theme))
+        assert saved.status_code == 200
+        assert saved.json()["ui_theme"] == theme
+        assert api_worker.client.get(f"{API_PREFIX}/settings").json()["ui_theme"] == theme
+        refused = _patch(api_worker, saved.headers["ETag"], _update_body(ui_theme="sepia"))
+        assert refused.status_code == 422
+        assert api_worker.client.get(f"{API_PREFIX}/settings").json() == saved.json()
+        etag = saved.headers["ETag"]

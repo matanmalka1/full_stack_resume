@@ -74,9 +74,11 @@ def test_health_reports_this_instance_and_its_version_surfaces(api, services) ->
     assert body["knowledge"] == services.knowledge_queries.knowledge_versions().model_dump()
 
 
-def test_server_logs_lifecycle_and_secret_free_request_summary(
+def test_logs_summarise_requests_keep_tracebacks_in_file_and_redact_secrets(
     services, caplog, tmp_path: Path
 ) -> None:
+    """The server log is secret-free, the structured file keeps a redacted
+    traceback, and the console keeps the message without the traceback."""
     caplog.set_level("INFO", logger="cv_engine.server")
     event_sink = StructuredRuntimeLogger(tmp_path, tmp_path / "logs", "server.jsonl")
     app = create_app(build_api_services(services), event_sink=event_sink)
@@ -107,17 +109,13 @@ def test_server_logs_lifecycle_and_secret_free_request_summary(
     assert request_entry["status"] == 200
     assert "must-not-be-logged" not in json.dumps(entries)
 
-
-def test_structured_runtime_log_keeps_full_traceback_but_redacts_credentials(
-    tmp_path: Path,
-) -> None:
-    event_sink = StructuredRuntimeLogger(tmp_path, tmp_path / "logs", "server.jsonl")
+    failure_sink = StructuredRuntimeLogger(tmp_path, tmp_path / "failures", "server.jsonl")
     try:
         raise RuntimeError("Authorization: Bearer token-value api_key=plain-value sk-live-secret")
     except RuntimeError as error:
-        event_sink.record("request.failed", "ERROR", {"path": "/api/v1/example"}, error)
+        failure_sink.record("request.failed", "ERROR", {"path": "/api/v1/example"}, error)
 
-    raw = (tmp_path / "logs" / "server.jsonl").read_text(encoding="utf-8")
+    raw = (tmp_path / "failures" / "server.jsonl").read_text(encoding="utf-8")
     entry = json.loads(raw)
     assert entry["exception_type"] == "RuntimeError"
     assert "Traceback" in entry["traceback"]
@@ -125,8 +123,6 @@ def test_structured_runtime_log_keeps_full_traceback_but_redacts_credentials(
     for secret in ("token-value", "plain-value", "live-secret"):
         assert secret not in raw
 
-
-def test_console_exception_filter_keeps_message_but_removes_traceback() -> None:
     try:
         raise RuntimeError("file-only detail")
     except RuntimeError:
@@ -208,6 +204,8 @@ def test_every_refusal_maps_to_one_status_and_one_code() -> None:
 def test_problem_details_carry_a_stable_code_and_leak_nothing(
     api, services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Unknown routes, internal failures, request validation and method errors all
+    answer in Problem Details with a stable code, and none reflects input or internals."""
     response = api.post(f"{API_PREFIX}/does-not-exist", headers={"Origin": ALLOWED_ORIGIN})
 
     assert response.status_code == 404
@@ -241,45 +239,53 @@ def test_problem_details_carry_a_stable_code_and_leak_nothing(
     for secret in ("private.db", "Traceback", "sk-live-secret", "provider wire message"):
         assert secret not in failed.text
 
-
-def test_request_validation_uses_safe_problem_details(api) -> None:
-    response = api.post(
+    invalid = api.post(
         f"{API_PREFIX}/applications",
         json={"company": {"must": "not be reflected"}},
         headers={"Origin": ALLOWED_ORIGIN},
     )
 
-    assert response.status_code == 422
-    assert response.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
-    body = response.json()
+    assert invalid.status_code == 422
+    assert invalid.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
+    body = invalid.json()
     assert body["code"] == "REQUEST_VALIDATION_FAILED"
     assert body["instance"] == f"{API_PREFIX}/applications"
     assert body["context"]["issues"]
     assert all(set(issue) == {"location", "type"} for issue in body["context"]["issues"])
-    assert "must not be reflected" not in response.text
+    assert "must not be reflected" not in invalid.text
 
-
-def test_method_errors_keep_protocol_headers_in_problem_details(api) -> None:
-    response = api.delete(
+    method = api.delete(
         f"{API_PREFIX}/health",
         headers={"Origin": ALLOWED_ORIGIN},
     )
 
-    assert response.status_code == 405
-    assert response.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
-    assert response.headers["allow"] == "GET"
-    assert response.json()["code"] == "METHOD_NOT_ALLOWED"
+    assert method.status_code == 405
+    assert method.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
+    assert method.headers["allow"] == "GET"
+    assert method.json()["code"] == "METHOD_NOT_ALLOWED"
 
 
 # --- transport limits -------------------------------------------------------
 
 
-def test_oversize_body_is_refused_before_routing(services) -> None:
-    """413 with a declared Content-Length, and 413 without one.
+def test_body_limit_refuses_oversize_bodies_and_preserves_what_it_allows(services) -> None:
+    """The limit refuses what it must and never eats what it allows.
 
-    The path does not exist. That is the point: the refusal comes from
-    middleware that runs before routing, so an oversize body is never read into
-    a route, and the response does not reveal whether the path was real.
+    Oversize: 413 before routing, on a path that does not exist, so an oversize
+    body is never read into a route and the response does not reveal whether the
+    path was real.
+
+    Allowed request body: reading a body inside `BaseHTTPMiddleware` exhausts the
+    receive channel and leaves the route with nothing. That is invisible against a
+    404, so the middleware is driven over a route that echoes what it received.
+
+    Streamed response: `StreamingResponse` runs `listen_for_disconnect(receive)`
+    concurrently with its send loop and cancels the task group the moment
+    `receive()` reports a disconnect. The replay channel used to fabricate one as
+    soon as the buffered body had been handed over, so every streamed response
+    came back `200` with an empty body. No JSON response listens for disconnect,
+    so this surfaced only with the first streaming route. The regression lives at
+    the middleware, not on an artifact route, so it outlives any one endpoint.
     """
     small = 512
     base = build_api_services(services)
@@ -297,39 +303,12 @@ def test_oversize_body_is_refused_before_routing(services) -> None:
     assert body["code"] == "BODY_LIMIT_EXCEEDED"
     assert body["context"]["max_body_bytes"] == small
 
-
-def test_a_body_within_the_limit_arrives_intact_at_the_route() -> None:
-    """The limit must not eat the body it allows.
-
-    Reading a request body inside `BaseHTTPMiddleware` exhausts the receive
-    channel and leaves the route with nothing. That failure is invisible against
-    a 404 - the status is the same either way - so this drives the middleware
-    over a route that echoes what it received. If the replay were dropped, the
-    echo would come back empty.
-    """
     with TestClient(_echo_app()) as client:
-        response = client.post("/echo", content=b"the exact bytes")
+        echoed = client.post("/echo", content=b"the exact bytes")
 
-    assert response.status_code == 200
-    assert response.json() == {"seen": "the exact bytes"}
+    assert echoed.status_code == 200
+    assert echoed.json() == {"seen": "the exact bytes"}
 
-
-def test_a_streaming_response_survives_the_body_limit_middleware() -> None:
-    """The limit must not eat the *response* either, and once it did.
-
-    `StreamingResponse` runs `listen_for_disconnect(receive)` concurrently with
-    its send loop and cancels the whole task group the moment `receive()`
-    reports a disconnect. The middleware's replay channel used to fabricate one
-    as soon as the buffered body had been handed over, so every streamed
-    response was cancelled before a single byte was written: `200`, correct
-    headers, empty body.
-
-    No JSON response listens for disconnect, so this was invisible from Stage A
-    through Stage E and only surfaced when Stage F added the first streaming
-    route. The regression lives here, at the middleware, rather than on an
-    artifact route - the defect is not about artifacts, and a test on the
-    download endpoint would stop covering it the day that endpoint changed.
-    """
     app = FastAPI()
 
     @app.get("/stream")
@@ -339,10 +318,10 @@ def test_a_streaming_response_survives_the_body_limit_middleware() -> None:
     app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=1024)
 
     with TestClient(app) as client:
-        response = client.get("/stream")
+        streamed = client.get("/stream")
 
-    assert response.status_code == 200
-    assert response.content == b"first-second"
+    assert streamed.status_code == 200
+    assert streamed.content == b"first-second"
 
 
 def _echo_app() -> FastAPI:
@@ -360,7 +339,9 @@ def _echo_app() -> FastAPI:
 # --- origin policy ----------------------------------------------------------
 
 
-def test_mutations_without_a_known_origin_are_refused(api) -> None:
+def test_origin_policy_guards_mutations_only_and_admits_the_configured_dev_origin(
+    api, services
+) -> None:
     foreign = "http://evil.example"
     for headers in ({}, {"Origin": foreign}):
         response = api.post(f"{API_PREFIX}/does-not-exist", json={}, headers=headers)
@@ -369,17 +350,13 @@ def test_mutations_without_a_known_origin_are_refused(api) -> None:
         assert response.json()["code"] == "ORIGIN_NOT_ALLOWED"
         assert foreign not in response.text
 
-
-def test_a_read_needs_no_origin(api) -> None:
     assert api.get(f"{API_PREFIX}/health").status_code == 200
-    response = api.get(f"{API_PREFIX}/health", headers={"Origin": ALLOWED_ORIGIN})
+    read = api.get(f"{API_PREFIX}/health", headers={"Origin": ALLOWED_ORIGIN})
 
-    assert response.headers.get("access-control-allow-origin") == ALLOWED_ORIGIN
-    for value in response.headers.values():
+    assert read.headers.get("access-control-allow-origin") == ALLOWED_ORIGIN
+    for value in read.headers.values():
         assert value != "*"
 
-
-def test_the_development_origin_is_one_origin_and_only_when_configured(services) -> None:
     vite = "http://127.0.0.1:5173"
     base = build_api_services(services)
     without = create_app(base)
@@ -396,7 +373,7 @@ def test_the_development_origin_is_one_origin_and_only_when_configured(services)
 # --- production frontend ---------------------------------------------------
 
 
-def test_the_production_frontend_serves_assets_and_browser_routes_without_shadowing_api(
+def test_the_production_frontend_serves_its_build_without_shadowing_api_or_escaping_it(
     services, tmp_path: Path
 ) -> None:
     dist = tmp_path / "dist"
@@ -427,36 +404,25 @@ def test_the_production_frontend_serves_assets_and_browser_routes_without_shadow
     assert missing_asset.status_code == 404
     assert "frontend-entry" not in missing_asset.text
 
-
-def test_the_production_frontend_refuses_a_missing_or_incomplete_build(
-    services, tmp_path: Path
-) -> None:
-    missing = tmp_path / "missing"
-    incomplete = tmp_path / "dist"
-    incomplete.mkdir()
-
-    for build in (missing, incomplete):
-        with pytest.raises(FrontendBuildError) as exc_info:
-            create_app(build_api_services(services), frontend_dist=build)
-        assert str(exc_info.value)
-
-
-def test_the_production_frontend_never_serves_a_symlink_outside_its_build_root(
-    services, tmp_path: Path
-) -> None:
-    dist = tmp_path / "dist"
-    dist.mkdir()
-    (dist / "index.html").write_text("<main>frontend-entry</main>", encoding="utf-8")
     secret = tmp_path / "secret.txt"
     secret.write_text("must-not-leak", encoding="utf-8")
     (dist / "leak.txt").symlink_to(secret)
 
     app = create_app(build_api_services(services), frontend_dist=dist)
     with TestClient(app) as client:
-        response = client.get("/leak.txt", headers={"Accept": "text/plain"})
+        leak = client.get("/leak.txt", headers={"Accept": "text/plain"})
 
-    assert response.status_code == 404
-    assert "must-not-leak" not in response.text
+    assert leak.status_code == 404
+    assert "must-not-leak" not in leak.text
+
+    missing = tmp_path / "missing"
+    incomplete = tmp_path / "incomplete"
+    incomplete.mkdir()
+
+    for build in (missing, incomplete):
+        with pytest.raises(FrontendBuildError) as exc_info:
+            create_app(build_api_services(services), frontend_dist=build)
+        assert str(exc_info.value)
 
 
 # --- contract drift ---------------------------------------------------------
@@ -551,16 +517,11 @@ def test_no_endpoint_accepts_or_exposes_a_filesystem_path() -> None:
     A prose check for the word "path" could not find that. Reading every schema
     property, query parameter, and request-body property can, and it fails here
     rather than arriving as an ad hoc exemption somewhere else.
-    """
-    assert _path_shaped_contract_names(build_schema()) == []
 
-
-def test_the_path_shaped_name_guard_actually_matches_something() -> None:
-    """A blind guard reporting zero is worse than no guard (M3 Stage A, lesson 3).
-
-    So the detector is run against a schema that does contain the shape it hunts
-    for. If this stops finding anything, the pattern has been broken and the
-    test above has quietly stopped proving anything.
+    A blind guard reporting zero is worse than no guard (M3 Stage A, lesson 3),
+    so the detector is first run against a planted schema that does contain the
+    shape it hunts for. If that stops finding anything, the pattern is broken and
+    the real check below has quietly stopped proving anything.
     """
     planted = {
         "components": {
@@ -581,3 +542,5 @@ def test_the_path_shaped_name_guard_actually_matches_something() -> None:
         "schema Planted.pdf_path",
         "schema Planted.resume_markdown_reference",
     ]
+
+    assert _path_shaped_contract_names(build_schema()) == []

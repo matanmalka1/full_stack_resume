@@ -28,56 +28,46 @@ def _application(application_id: str) -> dict[str, str]:
     }
 
 
-def test_write_scope_commits_on_success_and_closes_token(database_engine) -> None:
+def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_engine) -> None:
     transactions = SqlAlchemyTransactionManager(database_engine)
 
-    with transactions.write() as tx:
-        connection = transactions.connection_for(tx, access="write")
+    with transactions.write() as committed:
+        connection = transactions.connection_for(committed, access="write")
         connection.execute(insert(applications).values(**_application("committed")))
-        assert tx.active
+        assert committed.active
 
-    assert not tx.active
+    assert not committed.active
     assert active_transaction_for_tests() is None
-    with database_engine.connect() as connection:
-        count = connection.execute(
-            select(func.count()).select_from(applications).where(applications.c.id == "committed")
-        ).scalar_one()
-    assert count == 1
-
-
-def test_write_scope_rolls_back_on_exception(database_engine) -> None:
-    transactions = SqlAlchemyTransactionManager(database_engine)
 
     with pytest.raises(RuntimeError, match="stop"):
-        with transactions.write() as tx:
-            transactions.connection_for(tx, access="write").execute(
+        with transactions.write() as rolled_back:
+            transactions.connection_for(rolled_back, access="write").execute(
                 insert(applications).values(**_application("rolled-back"))
             )
             raise RuntimeError("stop")
 
-    assert not tx.active
+    assert not rolled_back.active
     assert active_transaction_for_tests() is None
     with database_engine.connect() as connection:
-        count = connection.execute(
-            select(func.count()).select_from(applications).where(applications.c.id == "rolled-back")
-        ).scalar_one()
-    assert count == 0
+        counts = {
+            application_id: connection.execute(
+                select(func.count())
+                .select_from(applications)
+                .where(applications.c.id == application_id)
+            ).scalar_one()
+            for application_id in ("committed", "rolled-back")
+        }
+    assert counts == {"committed": 1, "rolled-back": 0}
 
 
-def test_read_scope_rolls_back_and_cannot_write_through_repository_access(database_engine) -> None:
-    transactions = SqlAlchemyTransactionManager(database_engine)
-
-    with transactions.read() as tx:
-        transactions.connection_for(tx).execute(select(1)).scalar_one()
-        with pytest.raises(TypeError, match="write transaction"):
-            transactions.connection_for(tx, access="write")
-
-
-def test_closed_and_foreign_transactions_are_rejected(database_engine) -> None:
+def test_read_closed_and_foreign_tokens_are_rejected(database_engine) -> None:
     owner = SqlAlchemyTransactionManager(database_engine)
     foreign = SqlAlchemyTransactionManager(database_engine)
 
     with owner.read() as tx:
+        owner.connection_for(tx).execute(select(1)).scalar_one()
+        with pytest.raises(TypeError, match="write transaction"):
+            owner.connection_for(tx, access="write")
         with pytest.raises(TypeError, match="another transaction manager"):
             foreign.connection_for(tx)
 
@@ -85,7 +75,7 @@ def test_closed_and_foreign_transactions_are_rejected(database_engine) -> None:
         owner.connection_for(tx)
 
 
-def test_nested_transactions_are_forbidden_across_managers(database_engine) -> None:
+def test_scopes_cannot_nest_across_managers_or_be_reused(database_engine) -> None:
     first = SqlAlchemyTransactionManager(database_engine)
     second = SqlAlchemyTransactionManager(database_engine)
 
@@ -96,11 +86,7 @@ def test_nested_transactions_are_forbidden_across_managers(database_engine) -> N
 
     assert active_transaction_for_tests() is None
 
-
-def test_transaction_scope_cannot_be_reused(database_engine) -> None:
-    transactions = SqlAlchemyTransactionManager(database_engine)
-    scope = transactions.read()
-
+    scope = first.read()
     with scope:
         pass
     with pytest.raises(RuntimeError, match="cannot be reused"):
@@ -108,33 +94,8 @@ def test_transaction_scope_cannot_be_reused(database_engine) -> None:
             pass
 
 
-def test_payload_store_refuses_writes_inside_transaction(database_engine, app_paths) -> None:
-    transactions = SqlAlchemyTransactionManager(database_engine)
-    payloads = PayloadStore(app_paths)
-
-    with transactions.write():
-        with pytest.raises(RuntimeError, match="immutable payload write"):
-            payloads.commit_snapshot("application", "snapshot", "job text")
-
-    assert not payloads.snapshot_path("application", "snapshot").exists()
-    with transactions.read():
-        with pytest.raises(RuntimeError, match="object-store write"):
-            assert_external_io_allowed("object-store write")
-    assert_external_io_allowed("object-store write")
-
-
-@pytest.mark.parametrize("scope", ["read", "write"])
-@pytest.mark.parametrize("effect", ["stage", "activate", "restore", "discard"])
-def test_knowledge_store_refuses_staging_inside_transaction(
-    database_engine, app_paths, scope, effect
-) -> None:
-    transactions = SqlAlchemyTransactionManager(database_engine)
-    knowledge = FileKnowledge(
-        app_paths.knowledge_root,
-        project_root=app_paths.root,
-        temp_root=app_paths.temp_root,
-    )
-    payload = {
+def _knowledge_payload() -> dict:
+    return {
         "fact_id": "transaction.guard",
         "meaning": "Knowledge writes are kept outside database transactions.",
         "renderings": {"en": "Knowledge writes are kept outside database transactions."},
@@ -143,36 +104,46 @@ def test_knowledge_store_refuses_staging_inside_transaction(
         "resume_style": "bullet",
     }
 
-    staged = None
-    if effect != "stage":
-        staged, _fact = knowledge.stage_create_fact(
-            "guarded-mutation", "situational_skills.json", payload
-        )
-        before = knowledge.staged_file_state(staged)
+
+def _payloads_refuse(transactions, scope, app_paths, **_fixtures) -> None:
+    payloads = PayloadStore(app_paths)
+    with getattr(transactions, scope)():
+        with pytest.raises(RuntimeError, match="immutable payload write"):
+            payloads.commit_snapshot("application", "snapshot", "job text")
+        with pytest.raises(RuntimeError, match="payload inventory is forbidden"):
+            payloads.payload_inventory()
+        with pytest.raises(RuntimeError, match="object-store write"):
+            assert_external_io_allowed("object-store write")
+    assert not payloads.snapshot_path("application", "snapshot").exists()
+    assert_external_io_allowed("object-store write")
+
+
+def _knowledge_refuses(transactions, scope, app_paths, **_fixtures) -> None:
+    knowledge = FileKnowledge(
+        app_paths.knowledge_root,
+        project_root=app_paths.root,
+        temp_root=app_paths.temp_root,
+    )
+    staged, _fact = knowledge.stage_create_fact(
+        "guarded-mutation", "situational_skills.json", _knowledge_payload()
+    )
+    before = knowledge.staged_file_state(staged)
     with getattr(transactions, scope)():
         with pytest.raises(RuntimeError, match="Knowledge"):
-            if effect == "stage":
-                knowledge.stage_create_fact("guarded-mutation", "situational_skills.json", payload)
-            elif effect == "activate":
-                knowledge.activate_staged(staged)
-            elif effect == "restore":
-                knowledge.restore_staged(staged)
-            else:
-                knowledge.discard_staged(staged)
-    if staged is None:
-        assert not (app_paths.temp_root / "knowledge" / "guarded-mutation").exists()
-    else:
-        assert knowledge.staged_file_state(staged) == before
+            knowledge.stage_create_fact(
+                "refused-mutation", "situational_skills.json", _knowledge_payload()
+            )
+        with pytest.raises(RuntimeError, match="Knowledge"):
+            knowledge.activate_staged(staged)
+        with pytest.raises(RuntimeError, match="Knowledge"):
+            knowledge.restore_staged(staged)
+        with pytest.raises(RuntimeError, match="Knowledge"):
+            knowledge.discard_staged(staged)
+    assert not (app_paths.temp_root / "knowledge" / "refused-mutation").exists()
+    assert knowledge.staged_file_state(staged) == before
 
 
-@pytest.mark.parametrize("scope", ["read", "write"])
-def test_provider_and_transport_refuse_io_inside_transaction(
-    database_engine,
-    task_contracts,
-    fake_openai,
-    scope,
-) -> None:
-    transactions = SqlAlchemyTransactionManager(database_engine)
+def _provider_refuses(transactions, scope, task_contracts, fake_openai, **_fixtures) -> None:
     provider = fake_openai.provider(task_contracts)
     transport = OpenAIResponsesProvider(model="gpt-5.6-terra", api_key="test-key")
     with getattr(transactions, scope)():
@@ -183,3 +154,21 @@ def test_provider_and_transport_refuse_io_inside_transaction(
         with pytest.raises(RuntimeError, match="provider HTTP request"):
             transport._post({})
     assert fake_openai.calls == []
+
+
+@pytest.mark.parametrize("scope", ["read", "write"])
+@pytest.mark.parametrize(
+    "boundary",
+    [_payloads_refuse, _knowledge_refuses, _provider_refuses],
+    ids=["payloads", "knowledge", "provider"],
+)
+def test_outbound_io_is_refused_inside_either_scope(
+    database_engine, app_paths, task_contracts, fake_openai, boundary, scope
+) -> None:
+    boundary(
+        SqlAlchemyTransactionManager(database_engine),
+        scope,
+        app_paths=app_paths,
+        task_contracts=task_contracts,
+        fake_openai=fake_openai,
+    )

@@ -10,7 +10,9 @@ from cv_engine.runtime.config import CONFIG_NAME, ConfigError, parse_env_file, r
 from cv_engine.runtime.paths import AppPaths, PathConfigurationError
 
 
-def test_application_paths_are_fixed_below_the_project_root(tmp_path: Path) -> None:
+def test_application_paths_are_fixed_below_the_project_root_and_refuse_escapes(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "project"
     root.mkdir()
     paths = AppPaths.from_root(root)
@@ -22,19 +24,13 @@ def test_application_paths_are_fixed_below_the_project_root(tmp_path: Path) -> N
     assert paths.logs_root == root.resolve() / "logs"
     assert paths.relative(paths.artifacts_root / "a.pdf") == "artifacts/a.pdf"
 
-
-def test_application_paths_refuse_relative_and_external_paths(tmp_path: Path) -> None:
-    root = tmp_path / "project"
-    root.mkdir()
-    paths = AppPaths.from_root(root)
-
     with pytest.raises(PathConfigurationError, match="outside the project root"):
         paths.relative(Path("artifacts/a.pdf"))
     with pytest.raises(PathConfigurationError, match="outside the project root"):
         paths.relative(tmp_path / "elsewhere.pdf")
 
 
-def test_project_config_precedence_and_validation(tmp_path: Path) -> None:
+def test_config_precedence_secret_exclusion_and_parsing(tmp_path: Path) -> None:
     (tmp_path / CONFIG_NAME).write_text(json.dumps({"model": "stored-model"}), encoding="utf-8")
     (tmp_path / ".env").write_text("CV_MODEL=env-file-model\n", encoding="utf-8")
 
@@ -57,15 +53,15 @@ def test_project_config_precedence_and_validation(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="unknown project config settings"):
         resolve_config(env={}, project_root=tmp_path)
 
-
-def test_env_file_precedence_secrets_and_parsing(tmp_path: Path) -> None:
-    (tmp_path / ".env").write_text(
+    env_root = tmp_path / "env-only"
+    env_root.mkdir()
+    (env_root / ".env").write_text(
         "CV_DATABASE_URL=postgresql+psycopg://cv:filepw@127.0.0.1:5433/fromfile\n"
         "CV_MODEL=model-from-file\n"
         "OPENAI_API_KEY=must-not-load\n",
         encoding="utf-8",
     )
-    resolved = resolve_config(env={}, project_root=tmp_path)
+    resolved = resolve_config(env={}, project_root=env_root)
     assert (resolved.get("model"), resolved.source("model")) == (
         "model-from-file",
         "env-file",

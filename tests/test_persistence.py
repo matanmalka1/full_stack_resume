@@ -183,10 +183,10 @@ def _create_selection_plan(transactions_or_engine, *args, **kwargs):
         return plans.create_selection_plan(tx, *args, **kwargs)
 
 
-@pytest.mark.parametrize("document", [{"analysis_version": "2.0"}, {}])
-def test_non_3_analysis_documents_are_rejected_without_an_adapter(document) -> None:
-    with pytest.raises(UnknownRecord, match="only 3.0 can be read"):
-        _analysis_record({"id": "historical-analysis", "structured_json": document})
+def test_non_3_analysis_documents_are_rejected_without_an_adapter() -> None:
+    for document in ({"analysis_version": "2.0"}, {}):
+        with pytest.raises(UnknownRecord, match="only 3.0 can be read"):
+            _analysis_record({"id": "historical-analysis", "structured_json": document})
 
 
 def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
@@ -223,7 +223,9 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
                 connection.execute(insert(app_settings).values(**values))
 
 
-def test_app_settings_default_read_is_pure(database_engine) -> None:
+def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic(
+    database_engine, monkeypatch
+) -> None:
     transactions = SqlAlchemyTransactionManager(database_engine)
     settings = SqlAlchemySettingsStore(transactions)
     with transactions.read() as tx:
@@ -243,10 +245,6 @@ def test_app_settings_default_read_is_pure(database_engine) -> None:
     with database_engine.connect() as connection:
         assert connection.execute(select(func.count()).select_from(app_settings)).scalar_one() == 0
 
-
-def test_app_settings_updates_are_optimistic_and_atomic(database_engine, monkeypatch) -> None:
-    transactions = SqlAlchemyTransactionManager(database_engine)
-    settings = SqlAlchemySettingsStore(transactions)
     with transactions.write() as tx:
         first = settings.update_settings(
             tx,
@@ -748,7 +746,16 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
 def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
     database_engine, draft_factory, analysis_document, transaction_manager, draft_lifecycle_store
 ) -> None:
+    """Product invariant 3, enforced by storage rather than by a filesystem path.
+
+    Before this boundary "one active draft" was an accident of every draft living
+    at `working/{application_id}/`, which a second writer would simply overwrite.
+    The partial unique index is what makes the invariant real, so it is asserted
+    through SQLAlchemy Core: a repository method could satisfy it by convention while the
+    table underneath still allowed two.
+    """
     repository = transaction_manager
+    now = "2026-08-18T00:00:00+00:00"
     app_id, snapshot_id = _create_application(
         repository,
         company="Constraint Records",
@@ -756,7 +763,8 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
         text="Python backend developer API React",
     )
     analysis = analysis_document()
-    analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
+    analysis_id, initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
+    assert initial_plan.job_analysis_id == analysis_id
     document = draft_factory(
         "Python backend developer API React",
         profile_override="development",
@@ -789,30 +797,12 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
     with pytest.raises(ProgrammingError, match="immutable record"):
         with database_engine.begin() as connection:
             connection.execute(delete(selection_plans).where(selection_plans.c.id == plan.id))
-    with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
-        with transaction_manager.write() as tx:
-            draft_lifecycle_store.create_working_draft(tx, app_id, analysis_id, plan.id, document)
-
-
-def test_only_one_working_draft_per_application_can_be_active(
-    database_engine, analysis_document, transaction_manager
-) -> None:
-    """Product invariant 3, enforced by storage rather than by a filesystem path.
-
-    Before this boundary "one active draft" was an accident of every draft living
-    at `working/{application_id}/`, which a second writer would simply overwrite.
-    The partial unique index is what makes the invariant real, so it is asserted
-    through SQLAlchemy Core: a repository method could satisfy it by convention while the
-    table underneath still allowed two.
-    """
-    repository = transaction_manager
-    now = "2026-08-18T00:00:00+00:00"
 
     def insert_draft(connection, draft_id: str, *, active: bool) -> None:
         connection.execute(
             insert(working_drafts).values(
                 id=draft_id,
-                application_id="a",
+                application_id=app_id,
                 job_analysis_id=analysis_id,
                 selection_plan_id=plan.id,
                 source_json={},
@@ -824,43 +814,15 @@ def test_only_one_working_draft_per_application_can_be_active(
             )
         )
 
-    with database_engine.begin() as connection:
-        connection.execute(
-            insert(applications).values(
-                id="a",
-                company="C",
-                target_role="R",
-                current_status="saved",
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        connection.execute(
-            insert(job_snapshots).values(
-                id="s",
-                application_id="a",
-                version_number=1,
-                payload_path="p",
-                source_hash="h",
-                normalized_hash="n",
-                captured_at=now,
-                source_metadata_json={},
-                content_hash="h",
-            )
-        )
-    analysis = analysis_document()
-    analysis_id, plan = _save_analysis(repository, "a", "s", analysis)
-    assert analysis_id == plan.job_analysis_id
-    with database_engine.begin() as connection:
-        insert_draft(connection, "first", active=True)
-
     with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
         with database_engine.begin() as connection:
             insert_draft(connection, "second", active=True)
 
     with database_engine.begin() as connection:
         connection.execute(
-            update(working_drafts).where(working_drafts.c.id == "first").values(active=False)
+            update(working_drafts)
+            .where(working_drafts.c.application_id == app_id)
+            .values(active=False)
         )
         insert_draft(connection, "third", active=True)
     with database_engine.connect() as connection:
@@ -868,7 +830,7 @@ def test_only_one_working_draft_per_application_can_be_active(
             connection.execute(
                 select(func.count())
                 .select_from(working_drafts)
-                .where(working_drafts.c.application_id == "a")
+                .where(working_drafts.c.application_id == app_id)
             ).scalar_one()
             == 2
         )

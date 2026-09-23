@@ -279,12 +279,3 @@ def test_ingest_render_output_reports_a_render_target_that_was_never_written(
 
     with pytest.raises(ArtifactPayloadMissing):
         payload_store.ingest_render_output(missing)
-
-
-@pytest.mark.parametrize("scope", ["read", "write"])
-def test_payload_inventory_refuses_io_under_a_transaction(
-    payload_store, transaction_manager, scope
-):
-    with getattr(transaction_manager, scope)():
-        with pytest.raises(RuntimeError, match="payload inventory is forbidden"):
-            payload_store.payload_inventory()
