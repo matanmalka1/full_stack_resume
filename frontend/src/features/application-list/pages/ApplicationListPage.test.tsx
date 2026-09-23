@@ -658,8 +658,9 @@ describe("ApplicationListPage", () => {
 
     expect(await screen.findByRole("navigation", { name: "ניווט בין דפי המועמדויות" })).toBeInTheDocument();
     expect(screen.getByText("1–25 מתוך 26")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "עמוד 1" })).toHaveAttribute("aria-current", "page");
 
-    fireEvent.click(screen.getByRole("button", { name: "הבא" }));
+    fireEvent.click(screen.getByRole("button", { name: "עמוד 2" }));
 
     /* A page-boundary navigation starts a fresh server query. Under the full parallel
        suite, scheduling that query can exceed Testing Library's one-second default even
@@ -673,6 +674,7 @@ describe("ApplicationListPage", () => {
     );
     expect(screen.getByRole("button", { name: "הבא" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "הקודם" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "עמוד 2" })).toHaveAttribute("aria-current", "page");
   }, 10_000);
 
   it("updates the field from browser history immediately and delays only the server read", async () => {

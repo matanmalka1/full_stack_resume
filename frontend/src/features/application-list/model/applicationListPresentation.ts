@@ -11,6 +11,24 @@ import { formatDateTime } from "@/utils/formatDateTime";
 
 export const formatApplicationDate = (value: string): string => formatDateTime(value, "date");
 
+/* Which page numbers the pager draws: the first and last, the current one and its
+   neighbours, and a gap wherever pages in between are left out. A gap never stands in
+   for a single page - that page is drawn instead, since a number is no wider. */
+export const pageWindow = (current: number, count: number): (number | "gap")[] => {
+  const shown = [...new Set([1, current - 1, current, current + 1, count])]
+    .filter((page) => page >= 1 && page <= count)
+    // ES2022 has no toSorted; this array is newly created and belongs only to this call.
+    // oxlint-disable-next-line unicorn/no-array-sort
+    .sort((left, right) => left - right);
+
+  return shown.flatMap((page, index) => {
+    const previous = shown[index - 1];
+    if (previous === undefined || page - previous === 1) return [page];
+    if (page - previous === 2) return [previous + 1, page];
+    return ["gap" as const, page];
+  });
+};
+
 const localDayNumber = (date: Date): number =>
   Math.round(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 86_400_000);
 
