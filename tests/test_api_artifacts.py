@@ -101,40 +101,6 @@ def _rendered(api_worker, artifact_approved_application, company: str = "Render 
 # --- render ------------------------------------------------------------------
 
 
-def test_a_failed_render_leaves_the_approved_revision_exactly_as_it_was(
-    api_worker,
-    artifact_approved_application,
-    monkeypatch,
-    transaction_manager,
-    draft_lifecycle_store,
-) -> None:
-    """§16: "Render failure leaves ApprovedRevision approved."
-
-    The whole record is compared, not one status field. An ApprovedRevision is
-    immutable, so the claim being tested is that *nothing* about it moved - and
-    a test that checked one field would still pass if the failure had rewritten
-    another.
-    """
-    setup = artifact_approved_application("Failing Co")
-
-    def explode(*_args, **_kwargs):
-        raise OSError("no browser here")
-
-    monkeypatch.setattr("cv_engine.infrastructure.rendering.render_pdf", explode)
-
-    before = _revision(transaction_manager, draft_lifecycle_store, setup.approved.revision_id)
-    finished = _render_over_http(api_worker, setup.application_id, setup.approved.revision_id)
-
-    assert finished["status"] == "failed", finished
-    assert finished["failure_code"] in {"RENDER_FAILED", "BROWSER_START_FAILED"}
-    after = _revision(transaction_manager, draft_lifecycle_store, setup.approved.revision_id)
-    assert after == before
-
-    detail = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}")
-    assert detail.status_code == 200
-    assert detail.json()["ready_qualified"] is False
-
-
 def test_application_lists_its_approved_revisions_with_qualification(
     api_worker,
     artifact_approved_application,
@@ -150,7 +116,7 @@ def test_application_lists_its_approved_revisions_with_qualification(
     ] == [(setup.approved.revision_id, 1, False)]
 
 
-def test_retrying_a_failed_render_creates_a_new_operation(
+def test_a_failed_render_changes_nothing_and_its_retry_is_new_work(
     api_worker,
     artifact_approved_application,
     deterministic_renderer,
@@ -158,7 +124,14 @@ def test_retrying_a_failed_render_creates_a_new_operation(
     transaction_manager,
     draft_lifecycle_store,
 ) -> None:
-    """§5.4: retry is new work and only its exact artifacts establish Ready."""
+    """§16 "Render failure leaves ApprovedRevision approved", and §5.4's retry.
+
+    The whole record is compared, not one status field. An ApprovedRevision is
+    immutable, so the claim being tested is that *nothing* about it moved - and
+    a test that checked one field would still pass if the failure had rewritten
+    another. The retry is a new Operation, and only its exact artifacts
+    establish Ready.
+    """
     setup = artifact_approved_application("Retry Co")
     revision_before = _revision(
         transaction_manager, draft_lifecycle_store, setup.approved.revision_id
@@ -171,10 +144,14 @@ def test_retrying_a_failed_render_creates_a_new_operation(
         failure_patch.setattr("cv_engine.infrastructure.rendering.render_pdf", explode)
         failed = _render_over_http(api_worker, setup.application_id, setup.approved.revision_id)
     assert failed["status"] == "failed", failed
+    assert failed["failure_code"] in {"RENDER_FAILED", "BROWSER_START_FAILED"}
     assert (
         _revision(transaction_manager, draft_lifecycle_store, setup.approved.revision_id)
         == revision_before
     )
+    detail = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}")
+    assert detail.status_code == 200
+    assert detail.json()["ready_qualified"] is False
 
     retried = _post(api_worker, f"/operations/{failed['id']}/retry")
     assert retried.status_code == 202, retried.text
@@ -223,31 +200,42 @@ def test_every_rendered_artifact_type_downloads_as_what_it_is(
         assert int(response.headers["content-length"]) == len(response.content)
 
 
-def test_approved_html_preview_streams_the_exact_bound_artifact_inline(
+def test_approved_html_preview_streams_only_the_exact_verified_bound_artifact(
     api_worker,
     artifact_approved_application,
     deterministic_renderer,
     transaction_manager,
     artifact_catalog,
 ) -> None:
+    """The preview is the revision's own HTML, inline and safe to frame.
+
+    An artifact from another revision is broken lineage, and the preview
+    reuses every artifact-verification failure code: missing, changed, and a
+    registration escaping the artifact root.
+    """
     setup, outputs = _rendered(api_worker, artifact_approved_application, "Approved Preview Co")
+    other, other_outputs = _rendered(
+        api_worker, artifact_approved_application, "Preview Other Revision Co"
+    )
     html_id = outputs["resume_html"]
     stored = artifact_path(
         setup.services,
         _artifact(transaction_manager, artifact_catalog, html_id)["path"],
-    ).read_bytes()
+    )
+
+    def preview(revision_id: str, artifact_id: str):
+        return _get(
+            api_worker,
+            f"/approved-revisions/{revision_id}/preview?html_artifact_version_id={artifact_id}",
+        )
 
     detail = _get(api_worker, f"/approved-revisions/{setup.approved.revision_id}")
-    response = _get(
-        api_worker,
-        f"/approved-revisions/{setup.approved.revision_id}/preview"
-        f"?html_artifact_version_id={html_id}",
-    )
+    response = preview(setup.approved.revision_id, html_id)
 
     assert detail.status_code == 200, detail.text
     assert detail.json()["html_artifact_version_id"] == html_id
     assert response.status_code == 200, response.text
-    assert response.content == stored
+    assert response.content == stored.read_bytes()
     assert response.headers["Content-Type"].startswith("text/html")
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["Cache-Control"] == "no-store"
@@ -256,83 +244,38 @@ def test_approved_html_preview_streams_the_exact_bound_artifact_inline(
     assert "Content-Disposition" not in response.headers
     assert response.headers["ETag"].strip('"') == sha256_bytes(response.content)
 
+    borrowed = preview(setup.approved.revision_id, other_outputs["resume_html"])
+    assert borrowed.status_code == 412, borrowed.text
+    assert borrowed.json()["code"] == "LINEAGE_BROKEN"
+    assert setup.approved.revision_id != other.approved.revision_id
 
-def test_approved_html_preview_refuses_an_artifact_from_another_revision(
-    api_worker, artifact_approved_application, deterministic_renderer
-) -> None:
-    first, _first_outputs = _rendered(api_worker, artifact_approved_application, "Preview Owner Co")
-    second, second_outputs = _rendered(
-        api_worker, artifact_approved_application, "Preview Other Revision Co"
-    )
-
-    response = _get(
-        api_worker,
-        f"/approved-revisions/{first.approved.revision_id}/preview"
-        f"?html_artifact_version_id={second_outputs['resume_html']}",
-    )
-
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "LINEAGE_BROKEN"
-    assert first.approved.revision_id != second.approved.revision_id
-
-
-def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
-    api_worker,
-    artifact_approved_application,
-    deterministic_renderer,
-    transaction_manager,
-    artifact_catalog,
-) -> None:
-    missing_setup, missing_outputs = _rendered(
-        api_worker, artifact_approved_application, "Missing Preview Co"
-    )
-    missing_id = missing_outputs["resume_html"]
-    artifact_path(
-        missing_setup.services,
-        _artifact(transaction_manager, artifact_catalog, missing_id)["path"],
-    ).unlink()
-    missing = _get(
-        api_worker,
-        f"/approved-revisions/{missing_setup.approved.revision_id}/preview"
-        f"?html_artifact_version_id={missing_id}",
-    )
+    stored.unlink()
+    missing = preview(setup.approved.revision_id, html_id)
     assert missing.status_code == 412, missing.text
     assert missing.json()["code"] == "ARTIFACT_PAYLOAD_MISSING"
 
-    changed_setup, changed_outputs = _rendered(
-        api_worker, artifact_approved_application, "Changed Preview Co"
-    )
-    changed_id = changed_outputs["resume_html"]
+    changed_id = other_outputs["resume_html"]
     artifact_path(
-        changed_setup.services,
+        other.services,
         _artifact(transaction_manager, artifact_catalog, changed_id)["path"],
     ).write_bytes(b"<!doctype html><title>tampered</title>")
-    changed = _get(
-        api_worker,
-        f"/approved-revisions/{changed_setup.approved.revision_id}/preview"
-        f"?html_artifact_version_id={changed_id}",
-    )
+    changed = preview(other.approved.revision_id, changed_id)
     assert changed.status_code == 412, changed.text
     assert changed.json()["code"] == "ARTIFACT_HASH_MISMATCH"
 
-    escaped_setup = artifact_approved_application("Escaped Preview Co")
     escaped_id = _register(
         transaction_manager,
         artifact_catalog,
-        escaped_setup.application_id,
+        setup.application_id,
         "resume_html",
         "escaped-preview",
         "../../../../etc/passwd",
         "0" * 64,
         "rendered",
-        revision_id=escaped_setup.approved.revision_id,
-        job_snapshot_id=escaped_setup.snapshot_id,
+        revision_id=setup.approved.revision_id,
+        job_snapshot_id=setup.snapshot_id,
     )
-    escaped = _get(
-        api_worker,
-        f"/approved-revisions/{escaped_setup.approved.revision_id}/preview"
-        f"?html_artifact_version_id={escaped_id}",
-    )
+    escaped = preview(setup.approved.revision_id, escaped_id)
     assert escaped.status_code == 412, escaped.text
     assert escaped.json()["code"] == "ARTIFACT_CONTAINMENT_REFUSED"
     assert "etc/passwd" not in escaped.text
@@ -341,8 +284,12 @@ def test_approved_html_preview_reuses_all_artifact_verification_failure_codes(
 # --- security and failure paths ----------------------------------------------
 
 
-def test_a_traversal_string_is_only_an_id_that_names_nothing(
-    api_worker, artifact_approved_application
+def test_artifact_access_is_by_id_and_contained(
+    api_worker,
+    artifact_approved_application,
+    tmp_path,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
     """The endpoints take IDs, so traversal has nowhere to be interpreted.
 
@@ -350,6 +297,13 @@ def test_a_traversal_string_is_only_an_id_that_names_nothing(
     identifier. It matches no row, so it is `404`, and the response says nothing
     about the filesystem. `200` would mean a file was served; a `5xx` would mean
     something tried to open it.
+
+    Containment can then only be reached through a *registration* that holds a
+    path - what a tampered database or a hand-edited row would look like. One
+    escaping the artifact root is refused, naming the check rather than the
+    path. So is a symlink at a perfectly legal approved-layout location
+    (architecture §14): nothing but resolution can catch it, which is why
+    containment resolves before it compares.
     """
     for traversal in TRAVERSAL_IDS:
         for suffix in ("", "/download"):
@@ -373,6 +327,44 @@ def test_a_traversal_string_is_only_an_id_that_names_nothing(
 
             assert "/" not in response.text or "artifacts" in problem.get("instance", "")
 
+    setup = artifact_approved_application("Escape Co")
+    escaped_id = _register(
+        transaction_manager,
+        artifact_catalog,
+        setup.application_id,
+        "resume_pdf",
+        "resume",
+        "../../../../etc/passwd",
+        "0" * 64,
+        "rendered",
+    )
+    response = _get(api_worker, f"/artifacts/{escaped_id}/download")
+    assert response.status_code == 412, response.text
+    assert response.json()["code"] == "ARTIFACT_CONTAINMENT_REFUSED"
+    assert "etc/passwd" not in response.text
+
+    outside = tmp_path / "secret.pdf"
+    outside.write_bytes(b"%PDF-1.4\nsecret\n")
+    link_relative = f"artifacts/outputs/{setup.application_id}/linked/{'a' * 32}.pdf"
+    link = setup.services.paths.root / link_relative
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside)
+
+    linked_id = _register(
+        transaction_manager,
+        artifact_catalog,
+        setup.application_id,
+        "resume_pdf",
+        "linked-resume",
+        link_relative,
+        "0" * 64,
+        "rendered",
+    )
+    response = _get(api_worker, f"/artifacts/{linked_id}/download")
+    assert response.status_code == 412, response.text
+    assert response.json()["code"] == "ARTIFACT_CONTAINMENT_REFUSED"
+    assert b"secret" not in response.content
+
 
 def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
     api_worker,
@@ -384,8 +376,10 @@ def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
     """Two different findings, two different statuses.
 
     `404` means the client named nothing. `412` means the client named a record
-    that exists and whose stored payload failed verification. Collapsing them
-    would tell a client that tampered evidence and a typo are the same event.
+    that exists and whose stored payload failed verification - tampered, or
+    deleted, which is reported as missing rather than as a server error.
+    Collapsing them would tell a client that tampered evidence and a typo are
+    the same event.
     """
     setup, outputs = _rendered(api_worker, artifact_approved_application)
 
@@ -406,88 +400,13 @@ def test_an_unregistered_id_is_404_and_a_broken_registration_is_412(
     assert body["unavailable_reason"] == "ARTIFACT_HASH_MISMATCH"
     assert body["size"] is None
 
-
-def test_a_deleted_payload_is_reported_as_missing_rather_than_as_a_server_error(
-    api_worker,
-    artifact_approved_application,
-    deterministic_renderer,
-    transaction_manager,
-    artifact_catalog,
-) -> None:
-    setup, outputs = _rendered(api_worker, artifact_approved_application)
-    pdf_id = outputs["resume_pdf"]
+    html_id = outputs["resume_html"]
     artifact_path(
-        setup.services, _artifact(transaction_manager, artifact_catalog, pdf_id)["path"]
+        setup.services, _artifact(transaction_manager, artifact_catalog, html_id)["path"]
     ).unlink()
-
-    response = _get(api_worker, f"/artifacts/{pdf_id}/download")
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "ARTIFACT_PAYLOAD_MISSING"
-
-
-def test_a_registration_pointing_outside_the_artifact_root_is_refused(
-    api_worker, artifact_approved_application, transaction_manager, artifact_catalog
-) -> None:
-    """The containment check, reached the only way a client could reach it.
-
-    No endpoint accepts a path, so containment can only be exercised through a
-    *registration* that holds one. This registers a row whose path escapes the
-    artifact root, which is what a tampered database or a hand-edited row would
-    look like, and asserts the refusal names the check rather than the path.
-    """
-    setup = artifact_approved_application("Escape Co")
-    escaped_id = _register(
-        transaction_manager,
-        artifact_catalog,
-        setup.application_id,
-        "resume_pdf",
-        "resume",
-        "../../../../etc/passwd",
-        "0" * 64,
-        "rendered",
-    )
-    response = _get(api_worker, f"/artifacts/{escaped_id}/download")
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "ARTIFACT_CONTAINMENT_REFUSED"
-    assert "etc/passwd" not in response.text
-
-
-def test_a_symlink_out_of_the_artifact_root_is_refused_by_the_same_check(
-    api_worker,
-    artifact_approved_application,
-    tmp_path,
-    transaction_manager,
-    artifact_catalog,
-) -> None:
-    """Architecture §14: "Artifact access prevents traversal and symlink escape."
-
-    The link sits at a perfectly legal approved-layout location, so nothing but
-    resolution can catch it - which is the reason containment resolves before it
-    compares instead of checking the unresolved string.
-    """
-    setup = artifact_approved_application("Symlink Co")
-    outside = tmp_path / "secret.pdf"
-    outside.write_bytes(b"%PDF-1.4\nsecret\n")
-
-    link_relative = f"artifacts/outputs/{setup.application_id}/linked/{'a' * 32}.pdf"
-    link = setup.services.paths.root / link_relative
-    link.parent.mkdir(parents=True, exist_ok=True)
-    link.symlink_to(outside)
-
-    linked_id = _register(
-        transaction_manager,
-        artifact_catalog,
-        setup.application_id,
-        "resume_pdf",
-        "resume",
-        link_relative,
-        "0" * 64,
-        "rendered",
-    )
-    response = _get(api_worker, f"/artifacts/{linked_id}/download")
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "ARTIFACT_CONTAINMENT_REFUSED"
-    assert b"secret" not in response.content
+    deleted = _get(api_worker, f"/artifacts/{html_id}/download")
+    assert deleted.status_code == 412, deleted.text
+    assert deleted.json()["code"] == "ARTIFACT_PAYLOAD_MISSING"
 
 
 # --- Ready -------------------------------------------------------------------
@@ -541,10 +460,23 @@ def test_ready_is_the_active_preparation_state_only_while_the_context_matches(
 # --- the recruiter export ----------------------------------------------------
 
 
-def test_a_pdf_from_another_revision_is_refused_before_qualification_runs(
-    api_worker, artifact_approved_application, deterministic_renderer
+def test_the_recruiter_export_refuses_a_mixed_pair_and_an_unqualified_revision(
+    api_worker,
+    artifact_approved_application,
+    deterministic_renderer,
+    transaction_manager,
+    artifact_catalog,
 ) -> None:
-    """Both IDs are checked against each other, so the pair cannot be mixed."""
+    """Both IDs are checked against each other, and §16 requires `ready_qualified`.
+
+    A PDF from another revision is refused before qualification runs. The
+    second refusal reaches the qualification check rather than an earlier one:
+    a PDF row is registered against a revision that never rendered, so the type
+    check and the revision-binding check both pass and qualification is what
+    refuses - there is no rendered HTML, no visual evidence, and no post-render
+    validation for this revision. Naming the manifest instead would only have
+    proved the type check, a different guard.
+    """
     first, first_outputs = _rendered(api_worker, artifact_approved_application, company="Pair A")
     second, _second_outputs = _rendered(api_worker, artifact_approved_application, company="Pair B")
 
@@ -556,19 +488,6 @@ def test_a_pdf_from_another_revision_is_refused_before_qualification_runs(
     assert response.status_code == 412, response.text
     assert response.json()["code"] == "LINEAGE_BROKEN"
 
-
-def test_an_unqualified_revision_refuses_its_export(
-    api_worker, artifact_approved_application, transaction_manager, artifact_catalog
-) -> None:
-    """§16 requires `ready_qualified`, and this reaches that check rather than an earlier one.
-
-    A PDF row is registered against a revision that never rendered, so the type
-    check and the revision-binding check both pass and qualification is what
-    refuses: there is no rendered HTML, no visual evidence, and no post-render
-    validation for this revision. Naming the manifest instead would have been
-    easier and would only have proved the type check, which is a different
-    guard - the test would have passed while the qualification gate was absent.
-    """
     setup = artifact_approved_application("Unrendered Co")
     payload = (
         setup.services.paths.artifacts_root
@@ -634,6 +553,11 @@ def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(
     truncates and rewrites the *same inode*, so a held handle reads the
     substitution. This substitutes exactly that way, deliberately, because it is
     the case a descriptor-based fix would silently fail.
+
+    Deleting in the same window must not fail after `200` has gone out either:
+    the old factory opened the path when streaming began, so an unlink raised
+    `FileNotFoundError` from inside the response body, after the status line
+    and headers were already on the wire.
     """
     setup, pdf = _rendered_pdf(
         services,
@@ -658,31 +582,7 @@ def test_a_delivery_streams_the_bytes_it_verified_not_the_file_it_reopened(
     assert delivery.size == len(streamed)
     assert delivery.content_hash == pdf["content_hash"]
 
-
-def test_a_delivery_survives_the_payload_being_deleted_in_the_same_window(
-    services,
-    artifact_approved_application,
-    deterministic_renderer,
-    transaction_manager,
-    artifact_catalog,
-) -> None:
-    """Deleting after verification must not fail after `200` has gone out.
-
-    The old factory opened the path when streaming began, so an unlink in the
-    window raised `FileNotFoundError` from inside the response body - after the
-    status line and headers were already on the wire, where nothing can be
-    reported to the client.
-    """
-    setup, pdf = _rendered_pdf(
-        services,
-        artifact_approved_application,
-        transaction_manager,
-        artifact_catalog,
-        "Vanishing Co",
-    )
-    stored = artifact_path(services, pdf["path"])
-    original = stored.read_bytes()
-
+    stored.write_bytes(original)
     delivery = services.rendering.download_artifact(pdf["id"])
     stored.unlink()
 

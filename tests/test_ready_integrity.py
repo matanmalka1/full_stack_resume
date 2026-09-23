@@ -87,7 +87,14 @@ def _start_new_draft(services, transaction_manager, application_id: str):
     )
 
 
-def test_payload_verification_classifies_ok_missing_and_tampered(tmp_path: Path) -> None:
+def test_ready_verification_classifies_every_registered_artifact(
+    tmp_path: Path, ready_application
+) -> None:
+    """ok, missing and tampered, from the primitive up to the Ready report.
+
+    An untouched Ready application passes every group; each registered artifact
+    that goes missing or is tampered fails its own group with its own code.
+    """
     path = tmp_path / "payload"
     assert verify_payload(path, "unused") == "missing"
     path.write_bytes(b"original")
@@ -96,11 +103,49 @@ def test_payload_verification_classifies_ok_missing_and_tampered(tmp_path: Path)
     path.write_bytes(b"tampered")
     assert verify_payload(path, expected) == "tampered"
 
+    services, app_id = ready_application("Untouched")
+    report = services.rendering.ready_report(app_id)
+    assert report.passed, report.model_dump()
+    assert all(report.groups.values())
+
+    cases = [
+        ("resume_pdf", "rendered", "tamper", "pdf-tampered", "rendered_artifacts"),
+        ("resume_markdown", "approved", "tamper", "approved-markdown-tampered", "approved_source"),
+        ("claim_manifest", "approved", "tamper", "approved-manifest-tampered", "approved_source"),
+        ("resume_html", "rendered", "tamper", "html-tampered", "rendered_artifacts"),
+        ("resume_pdf", "rendered", "missing", "pdf-missing", "rendered_artifacts"),
+        ("resume_html", "rendered", "missing", "html-missing", "rendered_artifacts"),
+    ]
+    for index, (artifact_type, state, mutation, issue_code, issue_group) in enumerate(cases):
+        services, app_id = ready_application(f"Artifact Integrity {index}")
+        _version, path = artifact_version_and_path(services, app_id, artifact_type, state)
+        if mutation == "missing":
+            path.unlink()
+        else:
+            path.write_bytes(path.read_bytes() + b"tampered")
+        report = services.rendering.ready_report(app_id)
+        assert not report.passed, issue_code
+        issue = next(issue for issue in report.issues if issue.code == issue_code)
+        assert issue.group == issue_group
+        assert report.groups[issue_group] is False
+
 
 # --- READY ownership ---------------------------------------------------
 
 
-def test_repository_cannot_manually_set_ready(analyzed_application, transaction_manager) -> None:
+def test_nothing_sets_ready_by_hand(
+    project_root: Path,
+    analyzed_application,
+    approved_application,
+    ready_application,
+    transaction_manager,
+) -> None:
+    """Ready has no write primitive, and exact stored proof is always re-derived.
+
+    The repository offers no transition to it; a PDF registered without a render
+    does not qualify; and stored validation alone cannot qualify a tampered
+    immutable artifact - only a new revision and a fresh render can.
+    """
     services, app_id = analyzed_application("Repo Ready")
     assert not hasattr(SqlAlchemyApplicationStore(transaction_manager), "transition_status")
     with pytest.raises(WorkflowError):
@@ -115,39 +160,6 @@ def test_repository_cannot_manually_set_ready(analyzed_application, transaction_
             == "saved"
         )
 
-
-@pytest.mark.browser
-def test_failed_post_render_validation_does_not_set_ready(
-    approved_application, monkeypatch: pytest.MonkeyPatch, transaction_manager
-) -> None:
-    services, app_id = approved_application("Render Failure")
-
-    def failing_validate_rendered(*args, **kwargs):
-        report = real_validate_rendered(*args, **kwargs)
-        return report.model_copy(
-            update={
-                "passed": False,
-                "groups": {**report.groups, "ats": False},
-            }
-        )
-
-    monkeypatch.setattr(rendering_module, "validate_rendered", failing_validate_rendered)
-    rendered = services.rendering.render(app_id)
-    assert not rendered.validation.passed
-    with transaction_manager.read() as tx:
-        assert (
-            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
-                "current_status"
-            ]
-            == "saved"
-        )
-    assert not services.rendering.ready_qualification(app_id).ready_qualified
-
-
-def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
-    project_root: Path, approved_application, transaction_manager
-) -> None:
-    """Ready has no write primitive and exact stored proof is always re-derived."""
     services, app_id = approved_application("Set Ready Bypass")
     _manifest, manifest_path = artifact_version_and_path(
         services, app_id, "claim_manifest", "approved"
@@ -187,11 +199,6 @@ def test_no_repository_primitive_can_assert_ready_for_unlinked_pdf(
             == "saved"
         )
 
-
-def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
-    project_root: Path, ready_application, transaction_manager
-) -> None:
-    """Stored validation alone cannot qualify a tampered immutable artifact."""
     services, app_id = ready_application("No Stale Restore")
     pdf_version, path = artifact_version_and_path(services, app_id, "resume_pdf", "rendered")
     path.write_bytes(path.read_bytes() + b"tampered")
@@ -221,39 +228,35 @@ def test_public_workflow_cannot_restore_ready_after_tamper_without_fresh_render(
     assert new_pdf_version["id"] != pdf_version["id"]
 
 
-# --- Fresh ready verification -------------------------------------------
-
-
-def test_untouched_ready_application_passes(ready_application) -> None:
-    services, app_id = ready_application("Untouched")
-    report = services.rendering.ready_report(app_id)
-    assert report.passed, report.model_dump()
-    assert all(report.groups.values())
-
-
-def test_ready_integrity_rejects_missing_or_tampered_registered_artifacts(
-    project_root: Path, ready_application
+@pytest.mark.browser
+def test_failed_post_render_validation_does_not_set_ready(
+    approved_application, monkeypatch: pytest.MonkeyPatch, transaction_manager
 ) -> None:
-    cases = [
-        ("resume_pdf", "rendered", "tamper", "pdf-tampered", "rendered_artifacts"),
-        ("resume_markdown", "approved", "tamper", "approved-markdown-tampered", "approved_source"),
-        ("claim_manifest", "approved", "tamper", "approved-manifest-tampered", "approved_source"),
-        ("resume_html", "rendered", "tamper", "html-tampered", "rendered_artifacts"),
-        ("resume_pdf", "rendered", "missing", "pdf-missing", "rendered_artifacts"),
-        ("resume_html", "rendered", "missing", "html-missing", "rendered_artifacts"),
-    ]
-    for index, (artifact_type, state, mutation, issue_code, issue_group) in enumerate(cases):
-        services, app_id = ready_application(f"Artifact Integrity {index}")
-        _version, path = artifact_version_and_path(services, app_id, artifact_type, state)
-        if mutation == "missing":
-            path.unlink()
-        else:
-            path.write_bytes(path.read_bytes() + b"tampered")
-        report = services.rendering.ready_report(app_id)
-        assert not report.passed, issue_code
-        issue = next(issue for issue in report.issues if issue.code == issue_code)
-        assert issue.group == issue_group
-        assert report.groups[issue_group] is False
+    services, app_id = approved_application("Render Failure")
+
+    def failing_validate_rendered(*args, **kwargs):
+        report = real_validate_rendered(*args, **kwargs)
+        return report.model_copy(
+            update={
+                "passed": False,
+                "groups": {**report.groups, "ats": False},
+            }
+        )
+
+    monkeypatch.setattr(rendering_module, "validate_rendered", failing_validate_rendered)
+    rendered = services.rendering.render(app_id)
+    assert not rendered.validation.passed
+    with transaction_manager.read() as tx:
+        assert (
+            SqlAlchemyApplicationStore(transaction_manager).get_application(tx, app_id)[
+                "current_status"
+            ]
+            == "saved"
+        )
+    assert not services.rendering.ready_qualification(app_id).ready_qualified
+
+
+# --- Fresh ready verification -------------------------------------------
 
 
 def test_ready_qualification_is_independent_of_active_context(

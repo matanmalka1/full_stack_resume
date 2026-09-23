@@ -22,7 +22,7 @@ def payload_store(tmp_path: Path) -> PayloadStore:
     return PayloadStore(paths)
 
 
-def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
+def test_approved_payload_layouts_and_every_family_commits(payload_store: PayloadStore) -> None:
     manifest_id = str(uuid.uuid4())
 
     assert payload_store.snapshot_path("app", "snapshot").parts[-3:] == (
@@ -69,8 +69,26 @@ def test_approved_payload_layouts(payload_store: PayloadStore) -> None:
     with pytest.raises(ValueError, match="UUIDv4"):
         payload_store.manifest_path(str(uuid.uuid1()))
 
+    destinations = [
+        payload_store.revision_path("app", "revision", "attempt", format="json"),
+        payload_store.revision_path("app", "revision", "attempt", format="md"),
+        payload_store.output_path("app", "revision", "html", suffix="html"),
+        payload_store.output_path("app", "revision", "pdf", suffix="pdf"),
+        payload_store.provider_path("app", "operation", "response"),
+        payload_store.manifest_path(str(uuid.uuid4())),
+    ]
 
-def test_commit_validates_before_storing_and_returns_registration_metadata(
+    for number, destination in enumerate(destinations):
+        content = f"payload-{number}".encode()
+        stored = payload_store.commit(
+            destination,
+            payload=content,
+            validate=lambda _payload: True,
+        )
+        assert stored.path.read_bytes() == content
+
+
+def test_commit_validates_before_storing_and_keys_each_attempt_immutably(
     payload_store: PayloadStore,
 ) -> None:
     content = b"exact snapshot text\n"
@@ -93,47 +111,6 @@ def test_commit_validates_before_storing_and_returns_registration_metadata(
     assert stored.size == len(content)
     assert destination.read_bytes() == content
 
-
-def test_commit_supports_every_approved_payload_family(payload_store: PayloadStore) -> None:
-    destinations = [
-        payload_store.revision_path("app", "revision", "attempt", format="json"),
-        payload_store.revision_path("app", "revision", "attempt", format="md"),
-        payload_store.output_path("app", "revision", "html", suffix="html"),
-        payload_store.output_path("app", "revision", "pdf", suffix="pdf"),
-        payload_store.provider_path("app", "operation", "response"),
-        payload_store.manifest_path(str(uuid.uuid4())),
-    ]
-
-    for number, destination in enumerate(destinations):
-        content = f"payload-{number}".encode()
-        stored = payload_store.commit(
-            destination,
-            payload=content,
-            validate=lambda _payload: True,
-        )
-        assert stored.path.read_bytes() == content
-
-
-def test_existing_immutable_payload_is_never_overwritten(
-    payload_store: PayloadStore,
-) -> None:
-    destination = payload_store.snapshot_path("app", "snapshot")
-    payload_store.commit(
-        destination,
-        payload=b"original",
-        validate=lambda _payload: True,
-    )
-
-    with pytest.raises(FileExistsError, match="immutable payload already exists"):
-        payload_store.commit(
-            destination,
-            payload=b"replacement",
-            validate=lambda _payload: True,
-        )
-    assert destination.read_bytes() == b"original"
-
-
-def test_revision_attempts_use_distinct_immutable_keys(payload_store: PayloadStore) -> None:
     first = payload_store.commit_revision("app", "revision", "attempt-1", '{"value":1}', "markdown")
     second = payload_store.commit_revision(
         "app", "revision", "attempt-2", '{"value":1}', "markdown"
@@ -145,7 +122,7 @@ def test_revision_attempts_use_distinct_immutable_keys(payload_store: PayloadSto
         payload_store.commit_revision("app", "revision", "attempt-1", '{"value":2}', "markdown")
 
 
-def test_traversal_and_unapproved_destinations_are_refused(
+def test_traversal_symlink_and_unapproved_destinations_are_refused(
     payload_store: PayloadStore, tmp_path: Path
 ) -> None:
     assert (
@@ -186,14 +163,10 @@ def test_traversal_and_unapproved_destinations_are_refused(
             validate=lambda _payload: True,
         )
 
-
-def test_symlink_escapes_are_refused_before_a_write(
-    payload_store: PayloadStore, tmp_path: Path
-) -> None:
     artifacts = tmp_path / "project" / "artifacts"
     outside = tmp_path / "outside"
     outside.mkdir()
-    artifacts.mkdir(parents=True)
+    artifacts.mkdir(parents=True, exist_ok=True)
     (artifacts / "snapshots").symlink_to(outside, target_is_directory=True)
 
     with pytest.raises(ValueError, match="path escapes configured root"):
@@ -261,7 +234,7 @@ def test_ingest_render_output_matches_the_reference_the_registry_records(
     assert b"".join(stream.chunks()) == content
 
 
-def test_ingest_render_output_refuses_a_file_outside_the_approved_layout(
+def test_ingest_render_output_refuses_a_stray_file_and_reports_a_missing_target(
     payload_store: PayloadStore, tmp_path: Path
 ) -> None:
     stray = tmp_path / "project" / "artifacts" / "working" / "app" / "resume.html"
@@ -271,10 +244,6 @@ def test_ingest_render_output_refuses_a_file_outside_the_approved_layout(
     with pytest.raises(ValueError, match="not an approved layout"):
         payload_store.ingest_render_output(stray)
 
-
-def test_ingest_render_output_reports_a_render_target_that_was_never_written(
-    payload_store: PayloadStore,
-) -> None:
     missing = payload_store.output_path("app", "revision", "ghost", suffix="pdf")
 
     with pytest.raises(ArtifactPayloadMissing):

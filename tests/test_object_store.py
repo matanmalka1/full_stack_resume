@@ -157,7 +157,9 @@ def test_delete_is_idempotent_on_both_object_stores(local, s3) -> None:
         assert not store.exists(key)
 
 
-def test_inventory_is_backend_neutral_paginated_and_read_only(local, s3) -> None:
+def test_inventory_is_backend_neutral_paginated_and_read_only(local, s3, monkeypatch) -> None:
+    from cv_engine.application.errors import InfrastructureFailure
+
     keys = ["snapshots/app/one.txt", "snapshots/app/two.txt", "revisions/app/rev/resume.md"]
     for store in _stores(local, s3):
         for key in keys:
@@ -177,10 +179,7 @@ def test_inventory_is_backend_neutral_paginated_and_read_only(local, s3) -> None
     (local.root / "snapshots" / "link.txt").symlink_to(outside / "secret.txt")
     assert sorted(local.keys_under("")) == sorted(keys)
 
-
-def test_s3_inventory_failure_is_not_an_empty_success(s3, monkeypatch) -> None:
-    from cv_engine.application.errors import InfrastructureFailure
-
+    # A listing that could not be read is a failure, never an empty inventory.
     def unavailable(**kwargs):
         raise _ClientError("AccessDenied")
 

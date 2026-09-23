@@ -51,48 +51,39 @@ def test_lease_registration_requires_matching_attempt_and_keys(
     assert _lease_row(lease_transactions, first)["state"] == "committed"
 
 
-def test_an_expired_but_unfenced_lease_can_still_complete_registration(
-    services, lease_transactions
-) -> None:
+def test_only_fencing_is_authoritative_over_a_lease(services, lease_transactions) -> None:
     """Expiry alone is never authoritative - only fencing is (architecture.md §7.1).
 
     A write slower than its nominal TTL, but never actually reclaimed, must
     still be able to register: the alternative reintroduces "TTL proves
-    abandonment", which the design explicitly rejects.
+    abandonment", which the design explicitly rejects. A fenced lease cannot
+    register, and a renewed lease cannot be fenced from an old expiry snapshot.
     """
     leases = services.maintenance.leases
-    key = "artifacts/snapshots/app/slow.txt"
+    slow = "artifacts/snapshots/app/slow.txt"
     with lease_transactions.write() as tx:
-        leases.acquire(tx, key, key, keys=[key], ttl_seconds=1, now=_past())
+        leases.acquire(tx, slow, slow, keys=[slow], ttl_seconds=1, now=_past())
     with lease_transactions.write() as tx:
-        leases.mark_committed(tx, key, key, keys=[key])
-    assert _lease_row(lease_transactions, key)["state"] == "committed"
+        leases.mark_committed(tx, slow, slow, keys=[slow])
+    assert _lease_row(lease_transactions, slow)["state"] == "committed"
 
-
-def test_a_fenced_lease_cannot_complete_registration(services, lease_transactions) -> None:
-    leases = services.maintenance.leases
-    key = "artifacts/snapshots/app/fenced.txt"
+    fenced = "artifacts/snapshots/app/fenced.txt"
     with lease_transactions.write() as tx:
-        leases.acquire(tx, key, key, keys=[key], ttl_seconds=1, now=_past())
+        leases.acquire(tx, fenced, fenced, keys=[fenced], ttl_seconds=1, now=_past())
     with lease_transactions.write() as tx:
-        assert leases.fence(tx, key, key, now=_past(500), reclaim_deadline=_past())
+        assert leases.fence(tx, fenced, fenced, now=_past(500), reclaim_deadline=_past())
     with pytest.raises(StateConflict):
         with lease_transactions.write() as tx:
-            leases.mark_committed(tx, key, key, keys=[key])
+            leases.mark_committed(tx, fenced, fenced, keys=[fenced])
 
-
-def test_renewed_lease_cannot_be_fenced_from_an_old_expiry_snapshot(
-    services, lease_transactions
-) -> None:
-    leases = services.maintenance.leases
-    key = "artifacts/snapshots/app/snapshot.txt"
+    renewed = "artifacts/snapshots/app/snapshot.txt"
     with lease_transactions.write() as tx:
-        leases.acquire(tx, key, key, keys=[key], ttl_seconds=20, now=_past(10))
+        leases.acquire(tx, renewed, renewed, keys=[renewed], ttl_seconds=20, now=_past(10))
     with lease_transactions.write() as tx:
-        leases.renew(tx, key, key, ttl_seconds=300, now=_past(5))
+        leases.renew(tx, renewed, renewed, ttl_seconds=300, now=_past(5))
     with lease_transactions.write() as tx:
-        assert not leases.fence(tx, key, key, now=_past(5), reclaim_deadline=_past(1))
-    assert _lease_row(lease_transactions, key)["state"] == "pending"
+        assert not leases.fence(tx, renewed, renewed, now=_past(5), reclaim_deadline=_past(1))
+    assert _lease_row(lease_transactions, renewed)["state"] == "pending"
 
 
 def test_revision_group_commit_rolls_back_as_one_transaction(services, lease_transactions) -> None:
@@ -169,48 +160,60 @@ def test_render_group_binds_both_artifact_keys(services, lease_transactions) -> 
     assert _lease_row(lease_transactions, group)["state"] == "committed"
 
 
-def test_retry_reclaims_only_its_expired_revision_group(services, lease_transactions) -> None:
+def test_reclaim_removes_only_abandoned_unreferenced_payloads(services, lease_transactions) -> None:
+    """Each scenario uses its own application, so one sweep cannot answer for another.
+
+    A retry reclaims only its own expired revision group and then claims it
+    afresh. A sweep removes an expired group's payload, and a late leaseless
+    write from the fenced writer is removed by the next sweep. An unexpired
+    writer is hidden from inspection and left alone. A stale reclaiming row
+    cannot be renewed and is resumed.
+    """
     leases = services.maintenance.leases
     payloads = services.payloads
-    group = "revision:app:revision"
-    old_path = payloads.revision_path("app", "revision", "old", format="json")
-    old_keys = [
-        payloads.reference_for(payloads.revision_path("app", "revision", "old", format=fmt))
-        for fmt in ("json", "md")
-    ]
+
+    def revision_keys(app: str, attempt: str) -> list[str]:
+        return [
+            payloads.reference_for(payloads.revision_path(app, "revision", attempt, format=fmt))
+            for fmt in ("json", "md")
+        ]
+
+    group = "revision:retry:revision"
+    old_path = payloads.revision_path("retry", "revision", "old", format="json")
+    old_keys = revision_keys("retry", "old")
     with lease_transactions.write() as tx:
         leases.acquire(tx, group, "old", keys=old_keys, ttl_seconds=1, now=_past())
     payloads.commit(old_path, payload=b"{}", validate=lambda _: True)
 
     assert old_keys[0] in services.maintenance.reclaim_group(group).removed
     assert not old_path.exists()
-    new_keys = [
-        payloads.reference_for(payloads.revision_path("app", "revision", "new", format=fmt))
-        for fmt in ("json", "md")
-    ]
     with lease_transactions.write() as tx:
-        leases.acquire(tx, group, "new", keys=new_keys, ttl_seconds=300)
+        leases.acquire(tx, group, "new", keys=revision_keys("retry", "new"), ttl_seconds=300)
     assert _lease_row(lease_transactions, group)["attempt_id"] == "new"
 
+    writer_path = payloads.snapshot_path("writer", "snapshot")
+    writer_key = payloads.reference_for(writer_path)
+    with lease_transactions.write() as tx:
+        leases.acquire(tx, writer_key, writer_key, keys=[writer_key], ttl_seconds=300)
+    payloads.commit(writer_path, payload=b"still writing", validate=lambda _: True)
 
-def test_reclaim_expired_revision_group_and_late_leaseless_write(
-    services, lease_transactions
-) -> None:
-    leases = services.maintenance.leases
-    payloads = services.payloads
-    group = "revision:app:revision"
+    group = "revision:sweep:revision"
     paths = [
-        payloads.revision_path("app", "revision", "attempt", format=fmt) for fmt in ("json", "md")
+        payloads.revision_path("sweep", "revision", "attempt", format=fmt) for fmt in ("json", "md")
     ]
     keys = [payloads.reference_for(path) for path in paths]
     with lease_transactions.write() as tx:
         leases.acquire(tx, group, "attempt", keys=keys, ttl_seconds=1, now=_past())
     payloads.commit(paths[0], payload=b"{}", validate=lambda _: True)
-    assert keys[0] in services.maintenance.inspect_orphans().candidates
+    candidates = services.maintenance.inspect_orphans().candidates
+    assert keys[0] in candidates
+    assert writer_key not in candidates
 
     reclaimed = services.maintenance.reclaim_orphans()
     assert keys[0] in reclaimed.removed
+    assert writer_key not in reclaimed.removed
     assert not paths[0].exists()
+    assert writer_path.exists()
     assert _lease_row(lease_transactions, group) is None
 
     # The old writer can still finish a storage put after fencing. Its lease
@@ -219,38 +222,21 @@ def test_reclaim_expired_revision_group_and_late_leaseless_write(
     assert keys[1] in services.maintenance.reclaim_orphans().removed
     assert not paths[1].exists()
 
-
-def test_inspection_hides_an_unexpired_writer(services, lease_transactions) -> None:
-    leases = services.maintenance.leases
-    payloads = services.payloads
-    path = payloads.snapshot_path("app", "snapshot")
-    key = payloads.reference_for(path)
+    stale_path = payloads.snapshot_path("stale", "snapshot")
+    stale_key = payloads.reference_for(stale_path)
     with lease_transactions.write() as tx:
-        leases.acquire(tx, key, key, keys=[key], ttl_seconds=300)
-    payloads.commit(path, payload=b"still writing", validate=lambda _: True)
-
-    assert key not in services.maintenance.inspect_orphans().candidates
-    assert key not in services.maintenance.reclaim_orphans().removed
-    assert path.exists()
-
-
-def test_reclaim_resumes_stale_reclaiming_row(services, lease_transactions) -> None:
-    leases = services.maintenance.leases
-    payloads = services.payloads
-    path = payloads.snapshot_path("app", "snapshot")
-    key = payloads.reference_for(path)
+        leases.acquire(tx, stale_key, stale_key, keys=[stale_key], ttl_seconds=1, now=_past())
+    payloads.commit(stale_path, payload=b"snapshot", validate=lambda _: True)
     with lease_transactions.write() as tx:
-        leases.acquire(tx, key, key, keys=[key], ttl_seconds=1, now=_past())
-    payloads.commit(path, payload=b"snapshot", validate=lambda _: True)
-    with lease_transactions.write() as tx:
-        assert leases.fence(tx, key, key, now=_past(1), reclaim_deadline=_past(1))
+        assert leases.fence(tx, stale_key, stale_key, now=_past(1), reclaim_deadline=_past(1))
     with pytest.raises(StateConflict):
         with lease_transactions.write() as tx:
-            leases.renew(tx, key, key, ttl_seconds=300)
+            leases.renew(tx, stale_key, stale_key, ttl_seconds=300)
 
-    assert key in services.maintenance.reclaim_orphans().removed
-    assert not path.exists()
-    assert _lease_row(lease_transactions, key) is None
+    assert stale_key in services.maintenance.reclaim_orphans().removed
+    assert not stale_path.exists()
+    assert _lease_row(lease_transactions, stale_key) is None
+    assert writer_path.exists()
 
 
 def test_reclaim_refuses_to_delete_a_referenced_payload(

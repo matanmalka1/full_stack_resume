@@ -141,8 +141,14 @@ def test_logs_summarise_requests_keep_tracebacks_in_file_and_redact_secrets(
     assert record.exc_info is None
 
 
-def test_orphan_inventory_reports_candidates_without_changing_evidence(api, services) -> None:
-    # Ingest registers the snapshot without registering an artifact version.
+def test_orphan_inventory_reports_and_reclaim_removes_only_unregistered_payloads(
+    api, services
+) -> None:
+    """Inventory is read-only; reclaim removes exactly what it reported.
+
+    Ingest registers the snapshot without registering an artifact version, and a
+    derived working projection is not a payload, so neither is a candidate.
+    """
     from cv_engine.application.commands import IngestCommand
 
     ingested = services.applications.ingest(
@@ -163,9 +169,6 @@ def test_orphan_inventory_reports_candidates_without_changing_evidence(api, serv
     assert services.payloads.read_snapshot(orphan.reference, orphan.sha256) == "pending payload"
     assert ingested.job_snapshot_id
 
-
-def test_orphan_reclaim_endpoint_removes_leaseless_payload(api, services) -> None:
-    orphan = services.payloads.commit_snapshot("unregistered", "snapshot", "orphan")
     response = api.post(
         f"{API_PREFIX}/maintenance/orphans/reclaim",
         headers={"Origin": ALLOWED_ORIGIN},
