@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:mobile": "vite --host 0.0.0.0",
     "build": "npm run typecheck && npm run lint:tokens && vite build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -7,6 +7,16 @@ cd "$repo_root"
 
 python="$repo_root/.venv/bin/python"
 
+mobile=false
+case "$#:${1-}" in
+    0:) ;;
+    1:--mobile) mobile=true ;;
+    *)
+        echo "usage: ./scripts/dev.sh [--mobile]" >&2
+        exit 2
+        ;;
+esac
+
 if [ ! -x "$python" ]; then
     echo "development environment is missing; run ./scripts/bootstrap-worktree.sh first" >&2
     exit 1
@@ -22,7 +32,43 @@ if [ ! -d "$repo_root/frontend/node_modules" ]; then
     exit 1
 fi
 
-export CV_API_DEV_ORIGIN=http://localhost:5173
+frontend_command=dev
+web_url=http://localhost:5173
+
+if [ "$mobile" = true ]; then
+    mobile_host=${CV_DEV_MOBILE_HOST-}
+    if [ -z "$mobile_host" ]; then
+        mobile_host=$(
+            "$python" -c '
+import socket
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try:
+    sock.connect(("192.0.2.1", 80))
+    print(sock.getsockname()[0])
+finally:
+    sock.close()
+' 2>/dev/null
+        ) || true
+    fi
+
+    if ! "$python" -c '
+import ipaddress
+import sys
+
+address = ipaddress.ip_address(sys.argv[1])
+if address.version != 4 or address.is_loopback or address.is_unspecified:
+    raise SystemExit(1)
+' "$mobile_host" 2>/dev/null; then
+        echo "could not detect a usable LAN IPv4 address; set CV_DEV_MOBILE_HOST explicitly" >&2
+        exit 1
+    fi
+
+    frontend_command=dev:mobile
+    web_url="http://$mobile_host:5173"
+fi
+
+export CV_API_DEV_ORIGIN=$web_url
 
 api_pid=
 worker_pid=
@@ -113,11 +159,11 @@ api_pid=$started_pid
 start_in_process_group "$python" -m cv_engine.worker
 worker_pid=$started_pid
 
-start_in_process_group sh -c 'cd "$1" && exec npm run dev' sh "$repo_root/frontend"
+start_in_process_group sh -c 'cd "$1" && exec npm run "$2"' sh "$repo_root/frontend" "$frontend_command"
 frontend_pid=$started_pid
 
 echo "Development services started:"
-echo "  Web UI: http://localhost:5173"
+echo "  Web UI: $web_url"
 echo "  API:    http://127.0.0.1:8765"
 echo "Press Ctrl+C to stop all services."
 

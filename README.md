@@ -191,6 +191,27 @@ Vite binds `localhost:5173` with a strict port and never falls back to another o
 because a silent fallback would disagree with the backend's Origin allowlist — which is
 also why the backend needs `CV_API_DEV_ORIGIN` naming that exact origin.
 
+For the Vite frontend alone, bind it to the local network with:
+
+```bash
+cd frontend
+npm run dev:mobile
+```
+
+To start the API, worker, and the same mobile-accessible frontend together, run:
+
+```bash
+./scripts/dev.sh --mobile
+```
+
+The combined script prints the exact URL to open from a phone on the same network and
+configures it as the allowed development origin. If automatic address detection chooses
+the wrong interface, override it explicitly:
+
+```bash
+CV_DEV_MOBILE_HOST=192.168.1.23 ./scripts/dev.sh --mobile
+```
+
 **Running the product** — no Node process:
 
 ```bash
