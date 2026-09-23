@@ -245,6 +245,7 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
+    expect(screen.getByText("איפה עומד כל תהליך גיוס, ומה עוד צריך לקורות החיים.")).toBeInTheDocument();
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
