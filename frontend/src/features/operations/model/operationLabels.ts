@@ -95,14 +95,41 @@ export interface FailurePresentation {
 }
 
 /* Most backend failure details deliberately add no user-facing information beyond the
-   translated presentation below. MissingFactRendering is different: its safe detail
-   carries the exact canonical fact and target language the reader must repair. Keep the
+   translated presentation below. MissingFactRendering and deterministic render failures
+   are different: their safe details carry the exact repair the reader needs. Keep the
    parsing narrow so a future or malformed server sentence is not echoed as UI copy. */
 export const actionableFailureDetail = (
   code: OperationFailureCode | null | undefined,
   detail: string | null | undefined,
 ): string | null => {
-  if (code !== "MISSING_FACT_RENDERING" || detail == null) return null;
+  if (detail == null) return null;
+
+  if (code === "RENDER_FAILED") {
+    const pageCount = /^Rendered PDF has (\d+) pages; maximum (\d+)\.$/.exec(detail);
+    if (pageCount !== null) {
+      const [, actual, maximum] = pageCount;
+      return `קובץ ה־PDF כולל ${actual} עמודים, אך הפרופיל מאפשר לכל היותר ${maximum}. יש לקצר את התוכן לפני יצירה מחדש.`;
+    }
+    const renderMessages: Record<string, string> = {
+      "Rendered PDF text is not sufficiently recoverable by ATS readers.":
+        "לא ניתן לחלץ מספיק מהטקסט בקובץ ה־PDF. יש לבדוק את מבנה התוכן לפני יצירה מחדש.",
+      "Rendered PDF is missing one or more expected contact links.":
+        "בקובץ ה־PDF חסר לפחות קישור קשר צפוי אחד.",
+      "Rendered content exceeds the page boundaries.": "חלק מהתוכן חורג מגבולות העמוד.",
+      "Rendered document direction does not match its language.": "כיוון המסמך אינו מתאים לשפתו.",
+      "Rendered right-to-left content is missing direction isolation.":
+        "תוכן מימין לשמאל לא קיבל בידוד כיווניות תקין.",
+      "Rendered PDF filename does not match the required recruiter filename.":
+        "שם קובץ ה־PDF אינו תואם לשם הנדרש לשליחה.",
+      "Rendered HTML is missing or empty.": "קובץ ה־HTML שנוצר חסר או ריק.",
+      "Rendered PDF is missing or empty.": "קובץ ה־PDF שנוצר חסר או ריק.",
+      "Rendered PDF could not be read.": "לא ניתן לקרוא את קובץ ה־PDF שנוצר.",
+      "Rendered output did not pass validation.": "התוצר שנוצר לא עבר את בדיקות התקינות.",
+    };
+    return renderMessages[detail] ?? null;
+  }
+
+  if (code !== "MISSING_FACT_RENDERING") return null;
 
   const match = /^Fact (\S+) has no '([^']+)' rendering\.$/.exec(detail);
   if (match == null) return null;
@@ -160,7 +187,7 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
   },
   RENDER_FAILED: {
     title: "יצירת קובץ קורות החיים נכשלה",
-    guidance: "הגרסה שאושרה נשמרה. אפשר ליצור ניסיון חדש בלי לשנות אותה.",
+    guidance: "הגרסה שאושרה נשמרה והתוצר שנכשל לא הופעל. יש לתקן את הסיבה שמופיעה למעלה לפני יצירה מחדש.",
   },
   BROWSER_START_FAILED: {
     title: "מנוע יצירת הקובץ לא התחיל",

@@ -128,6 +128,25 @@ describe("ActiveOperationPanel progress", () => {
     expect(screen.queryByText("Operation execution failed.")).not.toBeInTheDocument();
   });
 
+  it("explains a deterministic render failure instead of suggesting a blind retry", () => {
+    renderPanel(
+      operation({
+        operation_type: "render_revision",
+        status: "failed",
+        phase: "completed",
+        is_terminal: true,
+        failure_code: "RENDER_FAILED",
+        safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
+      }),
+    );
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("קובץ ה־PDF כולל 2 עמודים");
+    expect(alert).toHaveTextContent("הפרופיל מאפשר לכל היותר 1");
+    expect(alert).toHaveTextContent("יש לתקן את הסיבה שמופיעה למעלה");
+    expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
+  });
+
   it.each([
     ["CLAIM_REVIEW_UNCERTAIN", "הבדיקה לא הצליחה לקבוע שהניסוח נתמך"],
     ["CLAIM_REVIEW_UNSUPPORTED", "הבדיקה מצאה טענה שאינה נתמכת בעובדות"],

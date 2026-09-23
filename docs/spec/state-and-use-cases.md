@@ -682,8 +682,10 @@ Local targets are the stored payloads; remote targets are scratch files uploaded
 cleanup. Render metadata is registered only after all required payloads exist.
 Both render artifacts are registered atomically before activation so cancellation or
 failed activation preserves inactive evidence. Activation rechecks the frozen sources,
-records the post-render ValidationRun bound to the exact PDF, and activates eligible
-outputs in the runner-owned transaction.
+records the post-render ValidationRun bound to the exact PDF even when that report fails,
+and activates only eligible outputs in the runner-owned transaction. A failed report is
+committed before the Operation is marked failed, so its safe actionable reason remains
+available without exposing artifact paths or browser internals.
 
 Render failure leaves ApprovedRevision approved and returns a failed Operation/report.
 Retry creates a new Operation. A successful result records the exact passing evidence

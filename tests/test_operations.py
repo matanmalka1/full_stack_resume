@@ -1125,15 +1125,16 @@ def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
 def test_failed_render_operation_preserves_registered_outputs_as_inactive(
     ready_application,
     monkeypatch,
+    transaction_manager,
 ) -> None:
     setup = ready_application("Invalid Render Operation Co")
     failed_report = ValidationReport.from_findings(
-        groups={"render": False},
+        groups={"page_count": False},
         issues=[
             ValidationIssue(
-                group="render",
-                code="injected-render-failure",
-                message="injected failure",
+                group="page_count",
+                code="page-count",
+                message="2 pages; maximum 1",
             )
         ],
     )
@@ -1155,6 +1156,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
 
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
+    assert failed.safe_failure_detail == "Rendered PDF has 2 pages; maximum 1."
     assert failed.technical_log_reference == "logs/operations.jsonl"
     log_path = setup.services.paths.root / failed.technical_log_reference
     assert log_path.is_file()
@@ -1179,6 +1181,17 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
             _artifact_version(setup.services, output.output_id)["lifecycle_status"]
             == "rendered-invalid"
         )
+    pdf_output = next(output for output in failed.outputs if output.output_type == "resume_pdf")
+    with transaction_manager.read() as tx:
+        stored_report = SqlAlchemyValidationRepository(
+            transaction_manager
+        ).validation_for_artifact(
+            tx,
+            setup.application_id,
+            "post-render",
+            pdf_output.output_id,
+        )
+    assert stored_report == failed_report
 
     retried = setup.services.operation_lifecycle.retry(
         failed.id, idempotency_key="invalid-render-operation-retry"

@@ -354,6 +354,7 @@ class OperationRunner:
         handler: OperationHandler,
     ) -> PersistedOperation:
         phase_events = []
+        terminal_failure: OperationExecutionError | None = None
         handler.verify_external_sources(operation)
         with self.transactions.write() as tx:
             store = self.execution_store
@@ -383,9 +384,16 @@ class OperationRunner:
                         store.record_operation_output(
                             tx, operation.id, output.output_type, output.output_id, active=True
                         )
-                if prepared.terminal_failure is not None:
-                    raise prepared.terminal_failure
-                result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
+                terminal_failure = prepared.terminal_failure
+                if terminal_failure is None:
+                    result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
+                else:
+                    # A terminal validation result is still immutable evidence.  The
+                    # handler has recorded it against the inactive output above; commit
+                    # that evidence before the runner moves the Operation to failed in
+                    # its own transaction.  Raising inside this scope used to roll the
+                    # ValidationRun back and leave the UI with only a generic code.
+                    result = store.operation(tx, operation.id)
         if result.status is OperationStatus.SUCCEEDED:
             try:
                 handler.after_activation(operation, prepared)
@@ -402,4 +410,6 @@ class OperationRunner:
             self.record_event(
                 "operation.phase_changed", "INFO", phase_operation, {"runner_id": self.runner_id}
             )
+        if terminal_failure is not None:
+            raise terminal_failure
         return result

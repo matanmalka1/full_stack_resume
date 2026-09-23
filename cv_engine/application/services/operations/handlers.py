@@ -7,9 +7,11 @@ root's handler table, and to nothing else.
 
 from __future__ import annotations
 
+import re
 from dataclasses import fields
 from typing import Any
 
+from ....domain.contracts.validation import ValidationReport
 from ...chain import draft_source_mismatch
 from ...commands import (
     AnalyzeCommand,
@@ -54,6 +56,29 @@ from .common import (
     document_knowledge_context_hash,
 )
 from .failures import failure_code_for, safe_failure_detail_for
+
+
+def _safe_render_failure_detail(report: ValidationReport) -> str:
+    """Return actionable render detail without exposing paths or browser internals."""
+    issue = next((item for item in report.issues if item.hard), None)
+    if issue is None:
+        return "Rendered output did not pass validation."
+    if issue.code == "page-count" and re.fullmatch(r"\d+ pages; maximum \d+", issue.message):
+        return f"Rendered PDF has {issue.message}."
+    safe_messages = {
+        "text-coverage": "Rendered PDF text is not sufficiently recoverable by ATS readers.",
+        "link-targets": "Rendered PDF is missing one or more expected contact links.",
+        "overflow": "Rendered content exceeds the page boundaries.",
+        "document-direction": "Rendered document direction does not match its language.",
+        "mixed-direction-isolation": (
+            "Rendered right-to-left content is missing direction isolation."
+        ),
+        "filename": "Rendered PDF filename does not match the required recruiter filename.",
+        "html-missing": "Rendered HTML is missing or empty.",
+        "pdf-missing": "Rendered PDF is missing or empty.",
+        "pdf-corrupt": "Rendered PDF could not be read.",
+    }
+    return safe_messages.get(issue.code, "Rendered output did not pass validation.")
 
 
 class AITaskHandler:
@@ -640,7 +665,7 @@ class RenderOperationHandler:
             if executed.report.passed
             else OperationExecutionError(
                 OperationFailureCode.RENDER_FAILED,
-                "Rendered output failed validation.",
+                _safe_render_failure_detail(executed.report),
             )
         )
         return PreparedOperation(
