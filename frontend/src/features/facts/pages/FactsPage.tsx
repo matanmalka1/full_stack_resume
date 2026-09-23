@@ -139,7 +139,7 @@ export const FactsPage = () => {
               Sitting in the filter row it was the one thing there with no label above it and
               no control below it, so it took a field's slot while looking like neither. */}
           <div className="flex flex-col gap-2">
-            <Card className="cv-fields-compact bg-cv-surface p-3 shadow-surface sm:p-4">
+            <Card className="cv-fields-compact rounded-control bg-cv-surface p-3 shadow-surface sm:p-4">
               <FactPoolFilters filters={filters} onChange={setFilters} sources={sources} tags={tags} />
             </Card>
             {/* Silent until there is something to count. While the read was in flight this
@@ -155,7 +155,7 @@ export const FactsPage = () => {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-            <Card className="bg-cv-surface p-3 shadow-surface sm:p-4 lg:sticky lg:top-20 lg:self-start">
+            <div className="lg:sticky lg:top-20 lg:self-start">
               <QueryState
                 empty={!poolQuery.isPending && poolQuery.error === null && visible.length === 0}
                 emptyState={
@@ -182,29 +182,32 @@ export const FactsPage = () => {
                   selectedFactId={selectedId}
                 />
               </QueryState>
-            </Card>
+            </div>
 
             <Card
               aria-live="polite"
-              className="bg-cv-surface p-4 shadow-surface sm:p-5 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:self-start lg:overflow-y-auto"
+              className="rounded-control bg-cv-surface p-4 shadow-surface sm:p-5 lg:sticky lg:top-20 lg:h-[calc(100dvh-9rem)] lg:max-h-[calc(100dvh-9rem)] lg:self-start lg:overflow-y-auto"
+              dir="ltr"
             >
-              <QueryState
-                error={detailQuery.error}
-                fallbackTitle="פרטי העובדה לא נטענו"
-                /* Also while the pool is in flight: nothing can be selected yet, so without
-                   this the detail half rendered an empty card beside the pool's skeleton and
-                   the two halves of one screen waited in two different ways. */
-                loading={poolQuery.isPending || (detailQuery.isPending && selectedId !== null)}
-                loadingState={factDetailLoading}
-              >
-                {detailQuery.data === undefined ? null : (
-                  <FactManagementDetail
-                    detail={detailQuery.data}
-                    mutationsBlocked={mutationsBlocked}
-                    onCreated={selectFact}
-                  />
-                )}
-              </QueryState>
+              <div dir="rtl">
+                <QueryState
+                  error={detailQuery.error}
+                  fallbackTitle="פרטי העובדה לא נטענו"
+                  /* Also while the pool is in flight: nothing can be selected yet, so without
+                     this the detail half rendered an empty card beside the pool's skeleton and
+                     the two halves of one screen waited in two different ways. */
+                  loading={poolQuery.isPending || (detailQuery.isPending && selectedId !== null)}
+                  loadingState={factDetailLoading}
+                >
+                  {detailQuery.data === undefined ? null : (
+                    <FactManagementDetail
+                      detail={detailQuery.data}
+                      mutationsBlocked={mutationsBlocked}
+                      onCreated={selectFact}
+                    />
+                  )}
+                </QueryState>
+              </div>
             </Card>
           </div>
         </>
