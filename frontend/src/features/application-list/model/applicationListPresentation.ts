@@ -46,11 +46,11 @@ export const formatRelativeUpdate = (value: string, now: Date = new Date()): str
   const days = localDayNumber(now) - localDayNumber(parsed);
   if (days === 0) {
     const hours = Math.floor((now.getTime() - parsed.getTime()) / 3_600_000);
-    return hours < 1 ? "עודכן עכשיו" : `עודכן היום (לפני ${hours} שע׳)`;
+    return hours < 1 ? "עכשיו" : `היום (לפני ${hours} שע׳)`;
   }
-  if (days === 1) return "עודכן אתמול";
-  if (days === 2) return "עודכן לפני יומיים";
-  if (days > 2 && days < 7) return `עודכן לפני ${days} ימים`;
+  if (days === 1) return "אתמול";
+  if (days === 2) return "לפני יומיים";
+  if (days > 2 && days < 7) return `לפני ${days} ימים`;
   return formatApplicationDate(value);
 };
 
