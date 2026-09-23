@@ -71,11 +71,15 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
       className="sticky top-0 z-(--cv-z-navigation) border-b border-cv-hairline bg-cv-canvas/90 backdrop-blur-xl lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-b-0 lg:border-e lg:bg-cv-canvas lg:backdrop-blur-none"
       id={SIDEBAR_ID}
     >
-      <div className={cx("page-gutter lg:flex lg:h-full lg:flex-col lg:py-5", collapsed ? "lg:px-3" : "lg:px-4")}>
+      {/* The rail drops `page-gutter`: that class is unlayered CSS, so its 2rem inline
+          padding outranks any padding utility and would leave a 4.5rem column 0.5rem of
+          room. It drops `flex-wrap` too - a wrapping column sizes its line to the widest
+          control and pins that line to the inline-start edge instead of centring it. */}
+      <div className={cx("lg:flex lg:h-full lg:flex-col lg:py-5", collapsed ? "w-full px-3" : "page-gutter lg:px-4")}>
         <div
           className={cx(
-            "page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-2 gap-y-2 py-2 sm:gap-x-4 lg:mx-0 lg:min-h-0 lg:w-full lg:flex-1 lg:flex-col lg:justify-start lg:gap-6 lg:py-0",
-            collapsed ? "lg:items-center" : "lg:items-stretch",
+            "page-frame flex min-h-16 items-center justify-between gap-x-2 gap-y-2 py-2 sm:gap-x-4 lg:mx-0 lg:min-h-0 lg:w-full lg:flex-1 lg:flex-col lg:justify-start lg:gap-6 lg:py-0",
+            collapsed ? "lg:items-center" : "flex-wrap lg:items-stretch",
           )}
         >
           <div
@@ -88,7 +92,12 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
                 exactly as before; on the sidebar it is the row the toggle shares. The
                 rail drops the wordmark - it cannot fit, and the board it links to is the
                 first navigation item anyway. */}
-            <div className="contents lg:flex lg:items-center lg:justify-between lg:gap-2">
+            <div
+              className={cx(
+                "contents lg:flex lg:items-center lg:gap-2",
+                collapsed ? "lg:justify-center" : "lg:justify-between",
+              )}
+            >
               {!collapsed && (
                 <Link className="group shrink-0 rounded-control" to={boardPath()}>
                   <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>

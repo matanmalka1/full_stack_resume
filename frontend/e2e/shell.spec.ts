@@ -54,7 +54,25 @@ test.describe("the application shell", () => {
 
     const expand = page.getByRole("button", { name: "הרחבת סרגל הניווט" });
     await expect(expand).toHaveAttribute("aria-expanded", "false");
-    expect((await sidebar.boundingBox())?.width ?? 0).toBeLessThan(expandedWidth / 2);
+    const rail = await sidebar.boundingBox();
+    expect(rail?.width ?? 0).toBeLessThan(expandedWidth / 2);
+
+    // Every rail control sits inside the rail and on its centre line.
+    const railCentre = (rail?.x ?? 0) + (rail?.width ?? 0) / 2;
+    for (const control of [
+      expand,
+      page.getByRole("link", { name: "לוח המועמדויות" }),
+      page.getByRole("link", { name: "מאגר העובדות" }),
+      page.getByRole("link", { name: "הגדרות" }),
+      page.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" }),
+      page.getByRole("link", { name: "קליטת משרה חדשה" }),
+      page.getByRole("button", { name: /^ערכת נושא:/ }),
+    ]) {
+      const box = await control.boundingBox();
+      expect(box?.x ?? 0).toBeGreaterThanOrEqual(rail?.x ?? 0);
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((rail?.x ?? 0) + (rail?.width ?? 0));
+      expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - railCentre)).toBeLessThanOrEqual(2);
+    }
 
     // The rail sits on the RTL inline-start (right) edge, so a label must open leftwards
     // into the page; one opening the other way would push the document sideways.
