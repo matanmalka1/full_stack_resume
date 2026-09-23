@@ -41,7 +41,7 @@ from cv_engine.infrastructure.runtime_logging import (
 from cv_engine.runtime.composition import build_api_services
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "openapi"))
 
 from generate_openapi import OUTPUT, build_schema, render  # noqa: E402

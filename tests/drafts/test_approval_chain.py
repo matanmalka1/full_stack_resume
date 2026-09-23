@@ -715,7 +715,7 @@ def test_the_requirement_vocabulary_stales_an_analysis_and_nothing_after_it(
         Path("cv_engine/application/services/analysis/preparation.py"),
         Path("cv_engine/application/services/analysis/correction.py"),
     }
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     readers = {
         path.relative_to(root)
         for path in (root / "cv_engine").rglob("*.py")

@@ -12,7 +12,7 @@ import ast
 import re
 from pathlib import Path
 
-ENGINE = Path(__file__).resolve().parent.parent / "cv_engine"
+ENGINE = Path(__file__).resolve().parents[2] / "cv_engine"
 
 FORBIDDEN_EXTERNAL = {
     "domain": {
@@ -626,7 +626,7 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
     Derived from the composition registry, so a new operation type is paired
     here the moment it is wired rather than when someone remembers to add it.
     """
-    root = Path(__file__).resolve().parents[1] / "cv_engine"
+    root = Path(__file__).resolve().parents[2] / "cv_engine"
     composition = (root / "runtime" / "composition.py").read_text(encoding="utf-8")
     handlers_source = (root / "application" / "services" / "operations" / "handlers.py").read_text(
         encoding="utf-8"

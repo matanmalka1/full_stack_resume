@@ -7,7 +7,7 @@ from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.infrastructure.rendering import normalized_role_filename, render_html
 from cv_engine.util import sha256_text
 
-GOLDEN_DIR = Path(__file__).parent / "golden"
+GOLDEN_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "golden"
 
 
 def _front_matter_and_body(markdown: str) -> tuple[str, str]:
