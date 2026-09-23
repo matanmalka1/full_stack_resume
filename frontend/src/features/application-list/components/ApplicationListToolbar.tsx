@@ -96,7 +96,7 @@ export const ApplicationListToolbar = ({
         )}
       </Field>
 
-      <Field className={fieldClasses} label="מצב קורות החיים">
+      <Field className={fieldClasses} label="שלב הכנת קו״ח">
         {(control) => (
           <Select
             {...control}
@@ -105,7 +105,7 @@ export const ApplicationListToolbar = ({
             }
             value={preparationState ?? ""}
           >
-            <option value="">כל מצבי קורות החיים</option>
+            <option value="">כל שלבי הכנת קו״ח</option>
             {/* Keep the selected URL value visible even when its current count is zero. */}
             {(Object.keys(preparationStateLabels) as PreparationState[])
               .filter((stage) => (stageCounts[stage] ?? 0) > 0 || stage === preparationState)

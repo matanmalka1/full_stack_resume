@@ -272,7 +272,7 @@ describe("ApplicationListPage", () => {
     const board = within(screen.getByRole("table"));
     expect(board.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(board.getByText("קורות החיים מוכנים")).toBeInTheDocument();
-    expect(board.getAllByText("נשמר")).toHaveLength(2);
+    expect(board.getAllByText("טרם הוגש")).toHaveLength(2);
     for (const name of ["חברה ותפקיד", "התקדמות הכנה וגיוס", "פעולה מומלצת הבאה", "ציון התאמה", "עדכון אחרון"]) {
       expect(board.getByRole("columnheader", { name })).toBeInTheDocument();
     }
@@ -331,7 +331,7 @@ describe("ApplicationListPage", () => {
     renderPage({ entries: ["/?stage=needs_analysis"] });
 
     await screen.findByText("אין מועמדות שמתאימה לסינון.");
-    expect(screen.getByLabelText("מצב קורות החיים")).toHaveValue("needs_analysis");
+    expect(screen.getByLabelText("שלב הכנת קו״ח")).toHaveValue("needs_analysis");
   });
 
   /* Clearing restores the board's default slice while preserving its ordering. */
@@ -482,7 +482,7 @@ describe("ApplicationListPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
     const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
-    expect(within(pipeline).getByRole("heading", { name: "נשמר" })).toBeInTheDocument();
+    expect(within(pipeline).getByRole("heading", { name: "טרם הוגש" })).toBeInTheDocument();
     expect(within(pipeline).getByRole("heading", { name: "ראיונות ומטלות" })).toBeInTheDocument();
     expect(within(pipeline).getByRole("heading", { name: "תהליכים סגורים" })).toBeInTheDocument();
     expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(3);
@@ -672,7 +672,7 @@ describe("ApplicationListPage", () => {
        until then - so the form's fields exist only once that resolves. */
     const status = await screen.findByLabelText("עדכון שלב");
     expect(within(status).getByRole("option", { name: "סגור" })).toBeInTheDocument();
-    expect(within(status).queryByRole("option", { name: "הוגש" })).not.toBeInTheDocument();
+    expect(within(status).queryByRole("option", { name: "הוגשה מועמדות" })).not.toBeInTheDocument();
 
     fireEvent.change(status, { target: { value: "closed" } });
     fireEvent.change(screen.getByLabelText("הפעולה הבאה"), { target: { value: "Send follow-up" } });

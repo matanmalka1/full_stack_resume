@@ -161,7 +161,7 @@ describe("ApplicationPage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "ניתוח והתאמה" })).toBeInTheDocument();
-    expect(screen.queryByText("שיחת מגייס")).not.toBeInTheDocument();
+    expect(screen.queryByText("סינון טלפוני / HR")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
   });
 

@@ -18,9 +18,9 @@ interface RecruitmentStageShape {
    with interviews and final_stage groups with offer/accepted - a product decision, not
    a default either screen is free to redraw locally. */
 export const recruitmentStages = [
-  { id: "saved", label: "נשמר", statuses: ["saved"], icon: Bookmark, tone: "neutral" },
-  { id: "applied", label: "הוגש", statuses: ["applied"], icon: Send, tone: "accent" },
-  { id: "screening", label: "סינון טלפוני", statuses: ["recruiter_screen"], icon: PhoneCall, tone: "warning" },
+  { id: "saved", label: "טרם הוגש", statuses: ["saved"], icon: Bookmark, tone: "neutral" },
+  { id: "applied", label: "הוגשה מועמדות", statuses: ["applied"], icon: Send, tone: "accent" },
+  { id: "screening", label: "סינון טלפוני / HR", statuses: ["recruiter_screen"], icon: PhoneCall, tone: "warning" },
   {
     id: "interviews",
     label: "ראיונות ומטלות",
