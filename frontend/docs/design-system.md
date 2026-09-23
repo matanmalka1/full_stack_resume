@@ -73,9 +73,15 @@ one of these roles. Raw spacing remains appropriate for local optical adjustment
 
 ## Shell and surfaces
 
-On desktop the application uses a persistent, text-first navigation sidebar on the RTL
-inline-start edge; smaller viewports collapse it back to a horizontal masthead. Active
-navigation is a flat background step, a heavier label and a 2px edge indicator.
+On desktop the application uses a text-first navigation sidebar on the RTL inline-start
+edge; smaller viewports collapse it back to a horizontal masthead. Active navigation is a
+flat background step, a heavier label and a 2px edge indicator.
+
+The reader can fold the desktop sidebar to an icon rail. The choice is a per-browser
+convenience kept in local storage, not a Setting, and it never reaches the narrow
+masthead. On the rail every control keeps its accessible name and gains a `Tooltip` with
+`placement="rail"`, which hangs beside the trigger and opens across the page rather than
+off the viewport edge.
 
 `Card` is flat by default: one hairline, no radius and no effective surface shadow.
 Use `surfaceClasses` only for genuinely floating UI such as dialogs, dropdowns and

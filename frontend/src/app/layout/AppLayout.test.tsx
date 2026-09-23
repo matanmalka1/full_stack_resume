@@ -75,3 +75,82 @@ it("applies the server theme even when local storage is blocked", () => {
   );
   expect(document.documentElement).toHaveAttribute("data-theme", "dark");
 });
+
+describe("AppLayout sidebar collapse", () => {
+  const stubViewport = (wide: boolean) =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(min-width: 64rem)" && wide,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+
+  const renderLayout = () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    client.setQueryData(settingsQueryKey, { settings: settings(), etag: '"settings-1"' });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route index element={<p>content</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("folds the wide sidebar to its rail, keeps every destination named, and remembers the choice", () => {
+    stubViewport(true);
+    const { container, unmount } = renderLayout();
+    const layout = container.firstElementChild;
+
+    const collapse = screen.getByRole("button", { name: "כיווץ סרגל הניווט" });
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+    expect(collapse).toHaveAttribute("aria-controls", "app-sidebar");
+    collapse.focus();
+    fireEvent.click(collapse);
+
+    expect(layout).toHaveAttribute("data-sidebar", "collapsed");
+    const expand = screen.getByRole("button", { name: "הרחבת סרגל הניווט" });
+    expect(expand).toHaveAttribute("aria-expanded", "false");
+    // The same element, not a remount: the reader who pressed it keeps focus.
+    expect(expand).toBe(collapse);
+    expect(expand).toHaveFocus();
+    for (const name of ["לוח המועמדויות", "מאגר העובדות", "הגדרות", "קליטת משרה חדשה"]) {
+      expect(screen.getByRole("link", { name })).toBeInTheDocument();
+    }
+    expect(screen.queryByText("קורות חיים")).not.toBeInTheDocument();
+    expect(localStorage.getItem("cv-sidebar-collapsed")).toBe("true");
+
+    unmount();
+    const remounted = renderLayout();
+    expect(remounted.container.firstElementChild).toHaveAttribute("data-sidebar", "collapsed");
+  });
+
+  it("keeps the narrow masthead expanded whatever a wide window saved", () => {
+    localStorage.setItem("cv-sidebar-collapsed", "true");
+    stubViewport(false);
+    const { container } = renderLayout();
+
+    expect(container.firstElementChild).toHaveAttribute("data-sidebar", "expanded");
+    expect(screen.getByText("קורות חיים")).toBeInTheDocument();
+  });
+
+  it("still collapses for the visit when local storage is blocked", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    stubViewport(true);
+    const { container } = renderLayout();
+
+    fireEvent.click(screen.getByRole("button", { name: "כיווץ סרגל הניווט" }));
+
+    expect(container.firstElementChild).toHaveAttribute("data-sidebar", "collapsed");
+  });
+});
