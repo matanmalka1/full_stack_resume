@@ -4,10 +4,12 @@ import threading
 import time
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import create_engine, delete, func, insert, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.pool import NullPool
 
+from cv_engine.application.commands import IngestCommand
 from cv_engine.application.errors import PreconditionFailed, StateConflict, UnknownRecord
 from cv_engine.application.knowledge_mutations import (
     KnowledgeMutationState,
@@ -16,6 +18,7 @@ from cv_engine.application.knowledge_mutations import (
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.contracts.drafts import WorkingDraft
 from cv_engine.domain.contracts.records import AuditRecord, ValidationRunLineage
+from cv_engine.domain.contracts.recruitment import ApplicationStatus
 from cv_engine.domain.contracts.selection import SelectionManifest, SelectionPlan
 from cv_engine.domain.contracts.validation import ValidationReport
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
@@ -25,6 +28,7 @@ from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
@@ -305,6 +309,124 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
     verification = SqlAlchemySettingsStore(transactions)
     with transactions.read() as tx:
         assert verification.settings(tx) == second
+
+
+def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> None:
+    """Every CHECK and uniqueness rule the recruitment trail depends on, over real rows.
+
+    `ready` and `preparing` are workflow projections, never stored statuses; the
+    removed `cli` client is refused by the command and record contracts and by the
+    event CHECK; an internal submission must name its revision; and one artifact
+    backs at most one submission, because the table is immutable and a duplicate
+    would permanently say a CV was sent twice. An external submission may carry no
+    artifact at all, and repeated NULLs stay legal under the same constraint.
+    """
+    for status in ("preparing", "ready"):
+        with pytest.raises(ValueError):
+            ApplicationStatus(status)
+    with pytest.raises(ValidationError):
+        IngestCommand(
+            company="Removed Client",
+            target_role="Developer",
+            job_text="Python role",
+            client="cli",  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValidationError):
+        AuditRecord(
+            id="removed-client-audit",
+            application_id="application",
+            action="test",
+            entity_type="application",
+            entity_id="application",
+            actor_type="user",
+            client="cli",  # type: ignore[arg-type]
+            occurred_at="2026-08-30T12:00:00+00:00",
+        )
+
+    transactions = SqlAlchemyTransactionManager(database_engine)
+    app_id, snapshot_id = _create_application(
+        transactions, company="Constraint Matrix", target_role="Developer", text="Python role"
+    )
+    recruitment = SqlAlchemyRecruitmentRepository(transactions)
+    catalog = SqlAlchemyArtifactCatalog(transactions)
+    with transactions.read() as tx:
+        history = [
+            (row["from_status"], row["to_status"], row["actor_type"], row["client"])
+            for row in SqlAlchemyApplicationProjectionReader(transactions).recruitment_events(
+                tx, app_id
+            )
+        ]
+    assert history == [(None, "saved", "user", "web")]
+    with transactions.write() as tx:
+        pdf_id = catalog.register_artifact_version(
+            tx,
+            app_id,
+            "resume_pdf",
+            "resume",
+            "artifacts/constraints/v001/resume.pdf",
+            "c" * 64,
+            "rendered",
+            job_snapshot_id=snapshot_id,
+        )
+        recruitment.insert_submission(
+            tx, "submission-1", app_id, "external", None, pdf_id, "2026-08-18T10:00:00+00:00", {}
+        )
+
+    def current_status_ready(tx) -> None:
+        transactions.connection_for(tx, access="write").execute(
+            update(applications).where(applications.c.id == app_id).values(current_status="ready")
+        )
+
+    def cli_client_event(tx) -> None:
+        recruitment.insert_next_action(
+            tx,
+            application_id=app_id,
+            next_action="Follow up",
+            next_action_date="2026-09-01",
+            actor_type="user",
+            client="cli",
+            occurred_at="2026-08-30T12:00:00+00:00",
+        )
+
+    def internal_without_revision(tx) -> None:
+        recruitment.insert_submission(
+            tx, "fake-internal", app_id, "internal", None, pdf_id, "2026-08-18T11:00:00+00:00", {}
+        )
+
+    def second_submission_for_one_artifact(tx) -> None:
+        recruitment.insert_submission(
+            tx, "duplicate", app_id, "external", None, pdf_id, "2026-08-18T12:00:00+00:00", {}
+        )
+
+    refused = [
+        (current_status_ready, "ck_applications_current_status"),
+        (cli_client_event, "ck_recruitment_events_client"),
+        (internal_without_revision, None),
+        (second_submission_for_one_artifact, None),
+    ]
+    for write, constraint in refused:
+        with pytest.raises(IntegrityError, match=constraint):
+            with transactions.write() as tx:
+                write(tx)
+
+    for index in (1, 2):
+        with transactions.write() as tx:
+            recruitment.insert_submission(
+                tx,
+                f"submission-no-artifact-{index}",
+                app_id,
+                "external",
+                None,
+                None,
+                f"2026-08-18T1{index}:30:00+00:00",
+                {},
+            )
+    projections = SqlAlchemyApplicationProjectionReader(transactions)
+    with transactions.read() as tx:
+        assert len(projections.submissions(tx, app_id)) == 3
+        application = SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)
+    assert application["current_status"] == "saved"
+    assert application["next_action"] is None
 
 
 def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -> None:

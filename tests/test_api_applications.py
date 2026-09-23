@@ -10,11 +10,12 @@ from cv_engine.application.commands import (
     IngestCommand,
 )
 from cv_engine.application.errors import (
-    DuplicateAcknowledgementRequired,
     InfrastructureFailure,
     StateConflict,
+    UnknownRecord,
 )
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
+from cv_engine.util import sha256_file, sha256_text
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
@@ -27,81 +28,50 @@ def _get_snapshot(transaction_manager, application_projection_reader, applicatio
     return next(snapshot for snapshot in snapshots if snapshot["id"] == snapshot_id)
 
 
-def test_duplicate_acknowledgement_precedes_every_write_and_retry_keeps_warnings(
-    services, transaction_manager, application_projection_reader
+def test_snapshot_write_is_exact_atomic_and_refuses_repeat(
+    services,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction_manager,
+    application_store,
+    application_projection_reader,
 ) -> None:
-    original = services.applications.ingest(
-        IngestCommand(
-            company="Duplicate Co",
-            target_role="Developer",
-            job_text="A duplicate-sensitive role",
-            source_url="https://jobs.example/duplicate",
-            client="web",
+    """A snapshot payload is committed exactly, before any row names it; the
+    database records roll back together; and a repeat is refused before a write.
+
+    A metadata row must never name a snapshot payload that was not committed, so
+    ingest is observed at the moment of the payload commit: the bytes are there,
+    and the Application is not yet. A replacement keeps the historical payload
+    and its lineage exact. A failed audit insert rolls the snapshot metadata back
+    and leaves only an unregistered payload. A failed initial event rolls back
+    the whole ingest.
+    """
+    initial_text = "Line one\r\nLine two\n"
+    original_commit = services.payloads.commit_snapshot
+
+    def assert_payload_exists_first(application_id: str, snapshot_id: str, text: str):
+        stored = original_commit(application_id, snapshot_id, text)
+        payload = services.paths.root / stored.reference
+        assert payload.read_bytes() == initial_text.encode("utf-8")
+        assert sha256_text(initial_text) == stored.sha256
+        with pytest.raises(UnknownRecord):
+            with transaction_manager.read() as tx:
+                application_store.get_application(tx, application_id)
+        return stored
+
+    with monkeypatch.context() as patch:
+        patch.setattr(services.payloads, "commit_snapshot", assert_payload_exists_first)
+        created = services.applications.ingest(
+            IngestCommand(
+                company="Snapshot Co", target_role="Developer", job_text=initial_text, client="web"
+            )
         )
-    )
-    snapshots = services.paths.artifacts_root / "snapshots"
-    files_before = sorted(snapshots.rglob("*.txt"))
-    with transaction_manager.read() as tx:
-        applications_before = application_projection_reader.applications(tx)
-    command = IngestCommand(
-        company=" duplicate  co ",
-        target_role="DEVELOPER",
-        job_text="A  duplicate-sensitive\nrole",
-        source_url="https://jobs.example/duplicate",
-        client="web",
-    )
-
-    try:
-        services.applications.ingest(command)
-    except DuplicateAcknowledgementRequired as error:
-        assert error.code == "DUPLICATE_ACKNOWLEDGEMENT_REQUIRED"
-        assert error.matches == [
-            {
-                "application_id": original.application_id,
-                "company": "Duplicate Co",
-                "target_role": "Developer",
-                "matched_on": ["source_url", "normalized_text", "company_title"],
-            }
-        ]
-    else:
-        raise AssertionError("unacknowledged duplicates must be refused")
-
-    with transaction_manager.read() as tx:
-        assert application_projection_reader.applications(tx) == applications_before
-    assert sorted(snapshots.rglob("*.txt")) == files_before
-
-    created = services.applications.ingest(
-        command.model_copy(update={"acknowledged_duplicates": True})
-    )
-    assert created.warnings == [
-        "DUPLICATE_SOURCE_URL",
-        "DUPLICATE_NORMALIZED_TEXT",
-        "DUPLICATE_COMPANY_TITLE",
-    ]
-    assert created.duplicate_matches[0].application_id == original.application_id
-    with transaction_manager.read() as tx:
-        creation_event = application_projection_reader.recruitment_events(
-            tx, created.application_id
-        )[0]
-    assert creation_event["actor_type"] == "user"
-    assert creation_event["client"] == "web"
-
-
-def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(
-    services, transaction_manager, application_projection_reader
-) -> None:
-    initial_text = "Initial line\n"
-    created = services.applications.ingest(
-        IngestCommand(
-            company="Snapshot Co", target_role="Developer", job_text=initial_text, client="web"
-        )
-    )
     initial = _get_snapshot(
         transaction_manager,
         application_projection_reader,
         created.application_id,
         created.job_snapshot_id,
     )
+    assert sha256_file(services.paths.root / initial["payload_path"]) == initial["source_hash"]
     replacement_text = "Replacement line one\r\nReplacement line two\n"
 
     replacement = services.applications.create_job_snapshot(
@@ -150,77 +120,64 @@ def test_create_job_snapshot_preserves_exact_historical_payload_and_lineage(
     assert audit[0]["client"] == "worker"
     assert audit[0]["occurred_at"] == latest["captured_at"]
 
+    def latest_version() -> int:
+        with transaction_manager.read() as tx:
+            return application_projection_reader.latest_snapshot(tx, created.application_id)[
+                "version_number"
+            ]
 
-def test_job_snapshot_metadata_rolls_back_when_its_audit_insert_fails(
-    services,
-    monkeypatch: pytest.MonkeyPatch,
-    transaction_manager,
-    application_projection_reader,
-) -> None:
-    created = services.applications.ingest(
-        IngestCommand(
-            company="Audit Rollback Co", target_role="Developer", job_text="Initial", client="web"
-        )
-    )
     snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
     files_before = sorted(snapshots.iterdir())
+    with pytest.raises(StateConflict, match="already has a snapshot"):
+        services.applications.create_job_snapshot(
+            CreateJobSnapshotCommand(
+                application_id=created.application_id,
+                job_text=replacement_text,
+                client="web",
+            )
+        )
+    assert sorted(snapshots.iterdir()) == files_before
+    assert latest_version() == 2
 
     def refuse_audit(_repository, _tx, _record) -> None:
         raise InfrastructureFailure("injected audit failure")
 
-    monkeypatch.setattr(SqlAlchemyAuditLog, "insert_audit", refuse_audit)
-    with pytest.raises(InfrastructureFailure, match="injected audit failure"):
-        services.applications.create_job_snapshot(
-            CreateJobSnapshotCommand(
-                application_id=created.application_id,
-                job_text="Replacement",
-                client="web",
+    with monkeypatch.context() as patch:
+        patch.setattr(SqlAlchemyAuditLog, "insert_audit", refuse_audit)
+        with pytest.raises(InfrastructureFailure, match="injected audit failure"):
+            services.applications.create_job_snapshot(
+                CreateJobSnapshotCommand(
+                    application_id=created.application_id,
+                    job_text="Replacement",
+                    client="web",
+                )
             )
-        )
-
+    assert latest_version() == 2
     with transaction_manager.read() as tx:
-        assert (
-            application_projection_reader.latest_snapshot(tx, created.application_id)[
-                "version_number"
-            ]
-            == 1
-        )
-        assert application_projection_reader.audit_records(tx, created.application_id) == []
+        assert len(application_projection_reader.audit_records(tx, created.application_id)) == 1
     assert len(list(snapshots.iterdir())) == len(files_before) + 1
 
+    def refuse_initial_event(*args, **kwargs):
+        raise RuntimeError("event refused")
 
-def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(
-    services, transaction_manager, application_projection_reader
-) -> None:
-    created = services.applications.ingest(
-        IngestCommand(
-            company="Repeat Co", target_role="Developer", job_text="Exact text", client="web"
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            services.applications._recruitment,
+            "insert_initial_saved_event",
+            refuse_initial_event,
         )
-    )
-    snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
-    files_before = sorted(snapshots.iterdir())
-
-    try:
-        services.applications.create_job_snapshot(
-            CreateJobSnapshotCommand(
-                application_id=created.application_id,
-                job_text="Exact text",
-                client="web",
+        with pytest.raises(RuntimeError, match="event refused"):
+            services.applications.ingest(
+                IngestCommand(
+                    company="Atomic Intake",
+                    target_role="Developer",
+                    job_text="Python and PostgreSQL",
+                    client="web",
+                )
             )
-        )
-    except StateConflict as error:
-        assert "already has a snapshot" in str(error)
-    else:
-        raise AssertionError("the immutable per-application content identity must be preserved")
-
-    assert sorted(snapshots.iterdir()) == files_before
     with transaction_manager.read() as tx:
-        assert (
-            application_projection_reader.latest_snapshot(tx, created.application_id)[
-                "version_number"
-            ]
-            == 1
-        )
+        rows = application_projection_reader.applications(tx)
+    assert all(row["company"] != "Atomic Intake" for row in rows)
 
 
 def test_application_http_create_read_snapshot_and_close_sequence(
@@ -353,11 +310,22 @@ def test_application_http_create_read_snapshot_and_close_sequence(
 def test_application_http_duplicate_precheck_and_acknowledgement_contract(
     api_paused, services
 ) -> None:
+    """Duplicate acknowledgement precedes every write, and the retry keeps its warnings.
+
+    The retry differs from the original only in whitespace and case, so each of the
+    three match reasons is found through normalisation rather than byte equality.
+    """
     payload = {
         "company": "HTTP Duplicate Co",
         "target_role": "Developer",
         "job_text": "Duplicate HTTP text",
         "source_url": "https://jobs.example/http-duplicate",
+    }
+    variant = {
+        **payload,
+        "company": " http duplicate  co ",
+        "target_role": "DEVELOPER",
+        "job_text": "Duplicate  HTTP\ntext",
     }
     api = api_paused.client
     original = api.post(
@@ -366,33 +334,42 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(
         json=payload,
     )
     assert original.status_code == 201
+    expected_matches = [
+        {
+            "application_id": original.json()["application_id"],
+            "company": "HTTP Duplicate Co",
+            "target_role": "Developer",
+            "matched_on": ["source_url", "normalized_text", "company_title"],
+        }
+    ]
 
     checked = api.post(
         f"{API_PREFIX}/applications/duplicate-check",
         headers=MUTATION_HEADERS,
-        json=payload,
+        json=variant,
     )
     assert checked.status_code == 200
-    assert checked.json()["matches"][0]["matched_on"] == [
-        "source_url",
-        "normalized_text",
-        "company_title",
-    ]
+    assert checked.json()["matches"] == expected_matches
 
+    snapshots = services.paths.artifacts_root / "snapshots"
+    files_before = sorted(snapshots.rglob("*.txt"))
+    listed_before = api.get(f"{API_PREFIX}/applications").json()["items"]
     refused = api.post(
         f"{API_PREFIX}/applications",
         headers=MUTATION_HEADERS,
-        json=payload,
+        json=variant,
     )
     assert refused.status_code == 412
     assert refused.json()["code"] == "DUPLICATE_ACKNOWLEDGEMENT_REQUIRED"
-    assert refused.json()["context"]["matches"] == checked.json()["matches"]
-    assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 1
+    assert refused.json()["context"]["matches"] == expected_matches
+    assert api.get(f"{API_PREFIX}/applications").json()["items"] == listed_before
+    assert len(listed_before) == 1
+    assert sorted(snapshots.rglob("*.txt")) == files_before
 
     accepted = api.post(
         f"{API_PREFIX}/applications",
         headers=MUTATION_HEADERS,
-        json={**payload, "acknowledged_duplicates": True},
+        json={**variant, "acknowledged_duplicates": True},
     )
     assert accepted.status_code == 201
     assert accepted.json()["warnings"] == [
@@ -401,6 +378,11 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(
         "DUPLICATE_COMPANY_TITLE",
     ]
     assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
+    creation_event = api.get(
+        f"{API_PREFIX}/applications/{accepted.json()['application_id']}"
+    ).json()["recruitment_timeline"][0]
+    assert creation_event["actor_type"] == "user"
+    assert creation_event["client"] == "web"
     base = {
         "company": "URL Safety Co",
         "target_role": "Developer",

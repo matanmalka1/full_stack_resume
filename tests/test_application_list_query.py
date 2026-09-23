@@ -127,25 +127,26 @@ def test_stages_narrow_to_the_named_states_and_an_empty_set_narrows_nothing() ->
     assert narrow_application_list(rows, ApplicationListQuery()).matched == 3
 
 
-def test_search_covers_identity_and_both_lifecycle_codes() -> None:
-    rows = [
+def test_query_matrix() -> None:
+    """Search, every sort, the stage tie-break and paging, one row per behaviour.
+
+    - Search covers identity and both lifecycle codes; whitespace is not a filter.
+    - Each sort orders by its own field. Created and updated disagree on purpose,
+      so a sort reading the wrong field is visible rather than passing by
+      coincidence; stage sorts furthest along first.
+    - The stage key sorts one field ascending-by-negation and the other
+      descending, which `reverse=True` cannot express: it would flip the tie-break.
+    - A page is a window on the ordering and the counts place it; paging windows
+      what the filter matched, not the whole list.
+    - An offset past the end is what a client holding a stale page number asks
+      for: an empty page rather than a refusal, with counts that say the page is gone.
+    """
+    searchable = [
         item("a", company="Acme"),
         item("b", company="Binat", target_role="Account Manager"),
         item("c", company="Cegal", preparation_state=PreparationState.READY),
     ]
-
-    def matched(search: str) -> list[str]:
-        return ids(narrow_application_list(rows, ApplicationListQuery(search=search)).items)
-
-    assert matched("binat") == ["b"]
-    assert matched("account") == ["b"]
-    assert matched("ready") == ["c"]
-    # Whitespace is not a filter.
-    assert sorted(matched("   ")) == ["a", "b", "c"]
-
-
-def test_each_sort_orders_by_its_own_field() -> None:
-    rows = [
+    sortable = [
         item(
             "zeta",
             company="Zeta",
@@ -160,44 +161,105 @@ def test_each_sort_orders_by_its_own_field() -> None:
             created_at="2026-08-02T00:00:00Z",
         ),
     ]
-
-    def ordered(sort: ApplicationSort) -> list[str]:
-        return ids(narrow_application_list(rows, ApplicationListQuery(sort=sort)).items)
-
-    assert ordered(ApplicationSort.UPDATED) == ["alpha", "zeta"]
-    # Created and updated disagree here on purpose, so a sort reading the wrong
-    # field is visible rather than passing by coincidence.
-    assert ordered(ApplicationSort.CREATED) == ["zeta", "alpha"]
-    assert ordered(ApplicationSort.COMPANY) == ["alpha", "zeta"]
-    # Furthest along first.
-    assert ordered(ApplicationSort.STAGE) == ["alpha", "zeta"]
-
-
-def test_stage_sort_breaks_ties_by_most_recently_updated() -> None:
-    """The stage key sorts one field ascending-by-negation and the other descending,
-    which `reverse=True` cannot express: it would flip the tie-break too."""
-    rows = [
+    tied = [
         item("early", preparation_state=PreparationState.READY, updated_at="2026-08-01T00:00:00Z"),
         item("late", preparation_state=PreparationState.READY, updated_at="2026-08-29T00:00:00Z"),
         item("behind", preparation_state=PreparationState.NEEDS_ANALYSIS),
     ]
-
-    result = narrow_application_list(rows, ApplicationListQuery(sort=ApplicationSort.STAGE))
-
-    assert ids(result.items) == ["late", "early", "behind"]
-
-
-def test_a_page_is_a_window_on_the_ordering_and_the_counts_place_it() -> None:
-    rows = [
+    paged = [
         item(f"app-{index}", updated_at=f"2026-08-{index + 10:02d}T00:00:00Z") for index in range(5)
     ]
+    filtered = [item("open-1"), item("open-2"), item("closed-1", recruitment_status="closed")]
 
-    page = narrow_application_list(rows, ApplicationListQuery(limit=2, offset=1))
-
-    # Most recently updated first, so the second and third of that ordering.
-    assert ids(page.items) == ["app-3", "app-2"]
-    assert (page.matched, page.total) == (5, 5)
-    assert (page.limit, page.offset) == (2, 1)
+    # (label, rows, query, expected ids, ordered?, expected (matched, total))
+    cases = [
+        ("search company", searchable, ApplicationListQuery(search="binat"), ["b"], True, (1, 3)),
+        ("search role", searchable, ApplicationListQuery(search="account"), ["b"], True, (1, 3)),
+        ("search state", searchable, ApplicationListQuery(search="ready"), ["c"], True, (1, 3)),
+        (
+            "blank search",
+            searchable,
+            ApplicationListQuery(search="   "),
+            ["a", "b", "c"],
+            False,
+            (3, 3),
+        ),
+        (
+            "sort updated",
+            sortable,
+            ApplicationListQuery(sort=ApplicationSort.UPDATED),
+            ["alpha", "zeta"],
+            True,
+            (2, 2),
+        ),
+        (
+            "sort created",
+            sortable,
+            ApplicationListQuery(sort=ApplicationSort.CREATED),
+            ["zeta", "alpha"],
+            True,
+            (2, 2),
+        ),
+        (
+            "sort company",
+            sortable,
+            ApplicationListQuery(sort=ApplicationSort.COMPANY),
+            ["alpha", "zeta"],
+            True,
+            (2, 2),
+        ),
+        (
+            "sort stage",
+            sortable,
+            ApplicationListQuery(sort=ApplicationSort.STAGE),
+            ["alpha", "zeta"],
+            True,
+            (2, 2),
+        ),
+        (
+            "stage tie-break",
+            tied,
+            ApplicationListQuery(sort=ApplicationSort.STAGE),
+            ["late", "early", "behind"],
+            True,
+            (3, 3),
+        ),
+        (
+            "page window",
+            paged,
+            ApplicationListQuery(limit=2, offset=1),
+            ["app-3", "app-2"],
+            True,
+            (5, 5),
+        ),
+        (
+            "page after filter",
+            filtered,
+            ApplicationListQuery(activity=ActivityFilter.OPEN, limit=1),
+            None,
+            True,
+            (2, 3),
+        ),
+        (
+            "offset past end",
+            [item("a")],
+            ApplicationListQuery(limit=10, offset=50),
+            [],
+            True,
+            (1, 1),
+        ),
+    ]
+    for label, rows, query, expected, ordered, counts in cases:
+        result = narrow_application_list(rows, query)
+        found = ids(result.items)
+        if expected is None:
+            assert len(found) == 1, label
+        elif ordered:
+            assert found == expected, label
+        else:
+            assert sorted(found) == expected, label
+        assert (result.matched, result.total) == counts, label
+        assert (result.limit, result.offset) == (query.limit, query.offset), label
 
 
 def test_stage_counts_are_over_every_application_not_the_narrowed_page() -> None:
@@ -254,27 +316,6 @@ def test_dashboard_facets_ignore_their_own_axis_and_keep_other_filters() -> None
         "interview": 1,
         "offer": 1,
     }
-
-
-def test_paging_windows_what_the_filter_matched_not_the_whole_list() -> None:
-    rows = [item("open-1"), item("open-2"), item("closed-1", recruitment_status="closed")]
-
-    page = narrow_application_list(
-        rows, ApplicationListQuery(activity=ActivityFilter.OPEN, limit=1)
-    )
-
-    assert len(page.items) == 1
-    assert page.matched == 2
-    assert page.total == 3
-
-
-def test_an_offset_past_the_end_is_an_empty_page_rather_than_a_refusal() -> None:
-    """What a client holding a stale page number asks for. The counts that come
-    back are what tell it the page is gone."""
-    result = narrow_application_list([item("a")], ApplicationListQuery(limit=10, offset=50))
-
-    assert result.items == []
-    assert result.matched == 1
 
 
 @pytest.mark.parametrize(("limit", "offset"), [(0, 0), (201, 0), (None, -1)])
