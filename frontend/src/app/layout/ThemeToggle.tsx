@@ -8,7 +8,7 @@ import { buttonClasses } from "@/ui/Button";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Tooltip } from "@/ui/Tooltip";
 
-export const ThemeToggle = () => {
+export const ThemeToggle = ({ tooltipPlacement = "shell" }: { tooltipPlacement?: "shell" | "rail" }) => {
   const client = useQueryClient();
   const query = useQuery(settingsQueryOptions);
   const theme = query.data?.settings.ui_theme ?? "system";
@@ -32,7 +32,10 @@ export const ThemeToggle = () => {
   });
   return (
     <>
-      <Tooltip label={`${label} — ${nextTheme === "light" ? "מעבר למצב בהיר" : "מעבר למצב כהה"}`} placement="shell">
+      <Tooltip
+        label={`${label} — ${nextTheme === "light" ? "מעבר למצב בהיר" : "מעבר למצב כהה"}`}
+        placement={tooltipPlacement}
+      >
         <button
           aria-label={label}
           className={buttonClasses("secondary", "shrink-0", "icon")}

@@ -22,8 +22,11 @@ interface TooltipProps {
   /* Which side of the trigger the bubble hangs on. "shell" is the shell's own case: the
      masthead's controls sit at the top of a narrow page and at the foot of the sidebar on
      a wide one, so the bubble has to hang down in the first and up in the second, or it
-     leaves the viewport at whichever end it is pinned to. */
-  placement?: "top" | "bottom" | "shell";
+     leaves the viewport at whichever end it is pinned to. "rail" is the collapsed
+     sidebar's: its controls are icons in a column pinned to the inline-start edge, so the
+     bubble hangs beside the trigger and opens across the page. It sets its own inline
+     position, so `align` does not apply to it. */
+  placement?: "top" | "bottom" | "shell" | "rail";
   /* A label longer than a control's name - a list of reasons, a full date - wraps at a
      reading measure instead of running off as one line. */
   wrap?: boolean;
@@ -36,6 +39,7 @@ const alignClasses = {
 
 const placementClasses = {
   bottom: "top-full mt-2",
+  rail: "start-full top-1/2 ms-2 -translate-y-1/2",
   shell: "top-full mt-2 lg:top-auto lg:bottom-full lg:mt-0 lg:mb-2",
   top: "bottom-full mb-2",
 } as const;
@@ -54,7 +58,7 @@ export const Tooltip = ({
       className={cx(
         "pointer-events-none absolute z-(--cv-z-content-raised) rounded-control bg-cv-text px-2 py-1 text-support font-medium text-cv-on-accent opacity-0 shadow-floating transition-opacity delay-0 duration-150 group-hover/tooltip:delay-300 group-hover/tooltip:opacity-100 group-focus-within/tooltip:delay-300 group-focus-within/tooltip:opacity-100",
         wrap ? "w-max max-w-72 whitespace-normal" : "whitespace-nowrap",
-        alignClasses[align],
+        placement !== "rail" && alignClasses[align],
         placementClasses[placement],
       )}
       role="tooltip"

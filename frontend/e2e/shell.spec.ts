@@ -42,6 +42,40 @@ test.describe("the application shell", () => {
 
     await expect(page.getByRole("heading", { level: 1, name: "לוח מועמדויות" })).toBeFocused();
   });
+
+  test("folds the desktop sidebar to a rail whose labels open across the page, and keeps it folded", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+    const sidebar = page.locator("#app-sidebar");
+    const expandedWidth = (await sidebar.boundingBox())?.width ?? 0;
+
+    await page.getByRole("button", { name: "כיווץ סרגל הניווט" }).click();
+
+    const expand = page.getByRole("button", { name: "הרחבת סרגל הניווט" });
+    await expect(expand).toHaveAttribute("aria-expanded", "false");
+    expect((await sidebar.boundingBox())?.width ?? 0).toBeLessThan(expandedWidth / 2);
+
+    // The rail sits on the RTL inline-start (right) edge, so a label must open leftwards
+    // into the page; one opening the other way would push the document sideways.
+    const link = page.getByRole("link", { name: "מאגר העובדות" });
+    await link.hover();
+    const tooltip = page.getByRole("tooltip").filter({ hasText: "מאגר העובדות" });
+    await expect(tooltip).toBeVisible();
+    const linkBox = await link.boundingBox();
+    const tooltipBox = await tooltip.boundingBox();
+    expect((tooltipBox?.x ?? 0) + (tooltipBox?.width ?? 0)).toBeLessThanOrEqual(linkBox?.x ?? 0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+
+    await page.reload();
+    await expect(page.getByRole("button", { name: "הרחבת סרגל הניווט" })).toBeVisible();
+
+    await page.setViewportSize({ width: 800, height: 720 });
+    await expect(page.getByRole("button", { name: "הרחבת סרגל הניווט" })).toBeHidden();
+    await expect(page.getByText("קורות חיים", { exact: true })).toBeVisible();
+  });
 });
 
 test("shares the saved theme between the shell and Settings and follows system changes", async ({ page }) => {
