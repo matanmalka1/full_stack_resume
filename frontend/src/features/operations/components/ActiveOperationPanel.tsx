@@ -1,5 +1,5 @@
 import { Activity, Check, Clock3 } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
@@ -65,6 +65,7 @@ const useCancelVisibility = (operation: Operation): boolean => {
    promising more detail that leads to less is worse than no link. */
 export const ActiveOperationPanel = ({
   continuation,
+  failureAction,
   onQueued,
   operation,
 }: {
@@ -80,6 +81,10 @@ export const ActiveOperationPanel = ({
      the Operation record cannot say that its success will be followed. Its presence keeps
      the full frame and its words say what is starting; absent, a finished run settles. */
   continuation?: string;
+  /* A host-owned recovery action for a failure whose repair belongs to the surrounding
+     workflow. The Operation panel explains the failure; the host knows the exact record
+     or editor that can repair it. */
+  failureAction?: ReactNode;
   /* Handed down to the retry inside: a re-queued Operation belongs to the same watch the
      host screen is already keeping, so it is reported here rather than followed. Required,
      because every screen that shows an Operation holds such a watch - a panel with
@@ -223,6 +228,7 @@ export const ActiveOperationPanel = ({
               {failure.guidance}
             </p>
           )}
+          {failureAction === undefined ? null : <div className="mt-3 flex flex-wrap gap-3">{failureAction}</div>}
         </Callout>
       )}
 

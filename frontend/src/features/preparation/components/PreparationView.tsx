@@ -99,12 +99,7 @@ export const PreparationView = ({
           <div className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:flex-1 lg:basis-2/5">
             {/* The one thing to do now: run the analysis, resolve the open decisions, or
                 generate the draft and move to the editor. */}
-            <VerificationStage
-              detail={detail}
-              hasRecommendation={hasRecommendation}
-              onQueued={onQueued}
-              plan={plan}
-            />
+            <VerificationStage detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
 
             {/* A voluntary configuration edit is a different intent from resolving a review
                 blocker even though both currently reach the same backend command. While this

@@ -4,7 +4,7 @@ from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.drafts import DraftDocument, WorkingDraft
 from ....domain.contracts.providers import ProposedClaim
 from ....domain.contracts.selection import SelectionPlan
-from ....domain.draft_markdown import serialize_markdown
+from ....domain.draft_markdown import parse_draft, serialize_markdown
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....domain.knowledge import Knowledge
 from ....domain.validation import validate_draft as run_draft_validation
@@ -237,6 +237,7 @@ class DraftAuthoringService:
             raise LineageBroken(
                 f"selection plan {plan.id} does not belong to application {command.application_id} and analysis {analysis_id}"
             )
+        parent = None
         if command.parent_revision_id is not None:
             try:
                 parent = self.approved_revision(command.parent_revision_id)
@@ -247,6 +248,10 @@ class DraftAuthoringService:
             if parent.application_id != command.application_id:
                 raise LineageBroken(
                     f"approved revision {parent.id} does not belong to application {command.application_id}"
+                )
+            if parent.job_analysis_id != analysis_id or parent.selection_plan_id != plan.id:
+                raise StateConflict(
+                    "approved revision does not match the analysis and selection plan named for editing"
                 )
         if plan.profile_version != profiles.version:
             raise StateConflict(
@@ -265,14 +270,38 @@ class DraftAuthoringService:
             raise StateConflict(
                 f"job snapshot {latest_snapshot['id']} is newer than the analysis in hand; analyze the new snapshot before drafting against it"
             )
-        draft = self._compose(
-            application_id=command.application_id,
-            job_snapshot_id=record["job_snapshot_id"],
-            job_analysis_id=analysis_id,
-            analysis=analysis,
-            plan=plan,
-            knowledge=knowledge,
-        )
+        if parent is None:
+            draft = self._compose(
+                application_id=command.application_id,
+                job_snapshot_id=record["job_snapshot_id"],
+                job_analysis_id=analysis_id,
+                analysis=analysis,
+                plan=plan,
+                knowledge=knowledge,
+            )
+        else:
+            if self.snapshot_payloads is None:
+                raise InfrastructureFailure("approved draft payload storage is unavailable")
+            integrity = self.snapshot_payloads.verify_payload(
+                parent.resume_json_reference,
+                parent.resume_json_hash,
+            )
+            if integrity != "ok":
+                raise InfrastructureFailure(
+                    f"approved draft payload failed integrity verification: {integrity}"
+                )
+            try:
+                draft = parse_draft(
+                    self.snapshot_payloads.read_payload_text(parent.resume_json_reference)
+                )
+            except (OSError, ValueError) as exc:
+                raise InfrastructureFailure("could not load the approved draft for editing") from exc
+            if (
+                draft.application_id != command.application_id
+                or draft.job_snapshot_id != parent.job_snapshot_id
+                or draft.job_analysis_id != parent.job_analysis_id
+            ):
+                raise LineageBroken("approved draft payload does not match its frozen lineage")
         evidence: ProviderEvidence | None = None
         review_evidence: ProviderEvidence | None = None
         if command.provider == "openai":

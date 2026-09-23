@@ -175,8 +175,11 @@ def _unsupported_edit(harness, application_id: str) -> dict:
 # --- E1: generation ----------------------------------------------------------
 
 
-def test_generation_records_the_explicit_parent_approved_revision(ai_api_worker) -> None:
+def test_generation_reopens_the_exact_parent_approved_revision(
+    ai_api_worker, monkeypatch
+) -> None:
     application_id, working_draft_id, sources = _drafted(ai_api_worker, "Parent Revision Co")
+    original = _read(ai_api_worker, working_draft_id).json()
     validated = _validated(ai_api_worker, working_draft_id)
     approved = _post(
         ai_api_worker,
@@ -187,6 +190,11 @@ def test_generation_records_the_explicit_parent_approved_revision(ai_api_worker)
         },
     )
     assert approved.status_code == 201, approved.text
+
+    def refuse_recomposition(**_kwargs):
+        raise AssertionError("reopening approved content must not recompose it from the plan")
+
+    monkeypatch.setattr(ai_api_worker.services.drafts, "_compose", refuse_recomposition)
 
     queued = _post(
         ai_api_worker,
@@ -205,10 +213,9 @@ def test_generation_records_the_explicit_parent_approved_revision(ai_api_worker)
         for output in finished["outputs"]
         if output["output_type"] == "working_draft"
     )
-    assert (
-        _read(ai_api_worker, draft_id).json()["parent_revision_id"]
-        == approved.json()["revision_id"]
-    )
+    reopened = _read(ai_api_worker, draft_id).json()
+    assert reopened["parent_revision_id"] == approved.json()["revision_id"]
+    assert reopened["outline"] == original["outline"]
 
 
 def test_generation_refuses_a_parent_revision_owned_by_another_application(

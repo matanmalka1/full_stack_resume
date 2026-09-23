@@ -28,7 +28,9 @@ export const RevisionSelector = ({
   submittedAt,
 }: RevisionSelectorProps) => {
   const navigate = useNavigate();
-  const ordered = [...revisions].sort((left, right) => right.version_number - left.version_number);
+  const ordered = [...revisions];
+  // oxlint-disable-next-line unicorn/no-array-sort -- local copy; toSorted needs ES2023.
+  ordered.sort((left, right) => right.version_number - left.version_number);
   const current = ordered.find((revision) => revision.id === currentRevisionId);
   const latestRevisionId = ordered[0]?.id;
   const activeDraft = detail?.active_working_draft_id != null;

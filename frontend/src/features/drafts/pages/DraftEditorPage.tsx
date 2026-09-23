@@ -1,24 +1,30 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { FilePlus2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
+import {
+  applicationDetailQueryOptions,
+  invalidateApplicationViews,
+  startDraftGeneration,
+} from "@/api/applications";
 import {
   workingDraftFactsQueryKey,
   workingDraftFactsQueryOptions,
   workingDraftQueryKey,
   workingDraftQueryOptions,
 } from "@/api/drafts";
-import { ErrorCallout } from "@/ui/ErrorCallout";
-import { DraftReviewPanel } from "../components/DraftReviewPanel";
+import { operationQueryKey } from "@/api/operations";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
+import { applicationLabel } from "@/features/applications";
+import { ActiveOperationPanel } from "@/features/operations";
+import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
+import { Button } from "@/ui/Button";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
-import { ActiveOperationPanel } from "@/features/operations";
-import { applicationLabel } from "@/features/applications";
-import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
 import { DraftConflictDialog } from "../components/DraftConflictDialog";
@@ -30,6 +36,7 @@ import { DraftHistoryControls } from "../components/DraftHistoryControls";
 import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
+import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
 import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
 import { useDraftDocument } from "../api/queries";
@@ -110,6 +117,44 @@ export const DraftEditorPage = () => {
 
   const renderFinished =
     operation?.operation_type === "render_revision" && operation.status === "succeeded" && renderRevisionId !== null;
+  const resumeEditing = useMutation({
+    mutationFn: async () => {
+      if (
+        renderRevisionId === null ||
+        detail?.active_analysis_id == null ||
+        detail.active_selection_plan_id == null
+      ) {
+        throw new Error("The approved content cannot be reopened against the active sources");
+      }
+      return startDraftGeneration(
+        applicationId,
+        detail.active_analysis_id,
+        detail.active_selection_plan_id,
+        `resume-editing:${renderRevisionId}:${detail.active_analysis_id}:${detail.active_selection_plan_id}`,
+        { parentRevisionId: renderRevisionId },
+      );
+    },
+    onSuccess: ({ operation: queuedOperation }) => {
+      queryClient.setQueryData(operationQueryKey(queuedOperation.id), queuedOperation);
+      watch(queuedOperation.id);
+    },
+  });
+  const renderFailureAction =
+    operation?.operation_type === "render_revision" && operation.status === "failed" && renderRevisionId !== null ? (
+      <Button
+        disabled={
+          detail?.active_analysis_id == null ||
+          detail.active_selection_plan_id == null
+        }
+        onClick={() => resumeEditing.mutate()}
+        pending={resumeEditing.isPending}
+        pendingLabel="מחזיר לעריכה…"
+        variant="secondary"
+      >
+        <FilePlus2 aria-hidden="true" className="size-icon-md" />
+        חזרה לעריכת הטיוטה
+      </Button>
+    ) : undefined;
 
   /* A regeneration activates a new version of the same WorkingDraft. The Operation
      query reaches terminal state before the application projection necessarily polls
@@ -342,7 +387,19 @@ export const DraftEditorPage = () => {
             {/* Live work, reported beside the draft it is rewriting rather than on a screen
               the user has to leave the text for. */}
             {operation === undefined ? null : (
-              <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={operation} />
+              <ActiveOperationPanel
+                continuation={continuation}
+                failureAction={renderFailureAction}
+                onQueued={watch}
+                operation={operation}
+              />
+            )}
+            {resumeEditing.error === null ? null : (
+              <ErrorCallout
+                error={resumeEditing.error}
+                fallbackDetail="הגרסה שאושרה נשמרה ללא שינוי. אפשר לנסות לחזור לעריכה שוב."
+                fallbackTitle="לא ניתן לחזור לעריכת הטיוטה"
+              />
             )}
 
             {/* The projection's own blockers, reported by the one region that reports them.

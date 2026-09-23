@@ -113,12 +113,10 @@ export const actionableFailureDetail = (
     const renderMessages: Record<string, string> = {
       "Rendered PDF text is not sufficiently recoverable by ATS readers.":
         "לא ניתן לחלץ מספיק מהטקסט בקובץ ה־PDF. יש לבדוק את מבנה התוכן לפני יצירה מחדש.",
-      "Rendered PDF is missing one or more expected contact links.":
-        "בקובץ ה־PDF חסר לפחות קישור קשר צפוי אחד.",
+      "Rendered PDF is missing one or more expected contact links.": "בקובץ ה־PDF חסר לפחות קישור קשר צפוי אחד.",
       "Rendered content exceeds the page boundaries.": "חלק מהתוכן חורג מגבולות העמוד.",
       "Rendered document direction does not match its language.": "כיוון המסמך אינו מתאים לשפתו.",
-      "Rendered right-to-left content is missing direction isolation.":
-        "תוכן מימין לשמאל לא קיבל בידוד כיווניות תקין.",
+      "Rendered right-to-left content is missing direction isolation.": "תוכן מימין לשמאל לא קיבל בידוד כיווניות תקין.",
       "Rendered PDF filename does not match the required recruiter filename.":
         "שם קובץ ה־PDF אינו תואם לשם הנדרש לשליחה.",
       "Rendered HTML is missing or empty.": "קובץ ה־HTML שנוצר חסר או ריק.",

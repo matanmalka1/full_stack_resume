@@ -951,6 +951,67 @@ describe("DraftEditorPage", () => {
     expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(true);
   });
 
+  it("reopens the approved content in the editor after render validation fails", async () => {
+    const failedRender: Operation = {
+      id: "op-render-failed",
+      application_id: "app-1",
+      operation_type: "render_revision",
+      status: "failed",
+      phase: "completed",
+      is_terminal: true,
+      available_actions: ["retry"],
+      outputs: [],
+      message: "",
+      failure_code: "RENDER_FAILED",
+      safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
+      created_at: "2026-08-24T07:00:00Z",
+    };
+    const approvedDetail = detail({
+      active_working_draft_id: null,
+      available_actions: ["create_draft"],
+      latest_approved_revision_id: "revision-1",
+      latest_operation: failedRender,
+      preparation_state: "approved",
+      working_draft_state: "none",
+    });
+    const queuedDraft = {
+      ...failedRender,
+      id: "op-correction",
+      operation_type: "create_draft",
+      status: "queued",
+    };
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/working-draft/generate") && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify(queuedDraft), {
+            status: 202,
+            headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-correction" },
+          }),
+        );
+      }
+      if (url.startsWith("/api/v1/operations/")) return Promise.resolve(jsonResponse(failedRender));
+      return Promise.resolve(jsonResponse(approvedDetail));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "חזרה לעריכת הטיוטה" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/working-draft/generate"))).toBe(true),
+    );
+    const request = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/working-draft/generate"));
+    expect(JSON.parse(String((request?.[1] as RequestInit | undefined)?.body))).toEqual({
+      job_analysis_id: "an-1",
+      selection_plan_id: "sp-1",
+      parent_revision_id: "revision-1",
+    });
+    expect(((request?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
+      "resume-editing:revision-1:an-1:sp-1",
+    );
+  });
+
   it("states why a structural line stays instead of offering a removal that would be refused", async () => {
     stubReads({});
 

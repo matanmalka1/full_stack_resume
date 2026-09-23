@@ -20,9 +20,9 @@ interface DraftRenderPanelProps {
   /* Whether the host screen's `ActiveOperationPanel` is reporting a render Operation for
      this revision, of any status. That panel is the single account of the render; while it
      is up, this panel must not also offer a "create the files" button - the file creation
-     is already under way or already failed with its own retry there, so the approved box
-     and its CTA are a second, contradictory account of the same moment. It is also what
-     says whether the wait below is already being reported by something else. */
+     is already under way or already failed with its own recovery action there, so the
+     approved box and its CTA are a second, contradictory account of the same moment. It
+     is also what says whether the wait below is already being reported by something else. */
   rendering?: boolean;
   /* What this panel just queued, handed to the editor that holds it. Rendering used to
      navigate to the Operation's own screen, which took the approved draft off the display
@@ -70,8 +70,9 @@ export const DraftRenderPanel = ({
   }, [autoStart, ready, render, revision]);
 
   /* While the render is under way, this panel steps aside for the one that is actually
-     reporting it. `ActiveOperationPanel` shows the live status and owns cancel and retry;
-     a failed run stays there with its retry, so this panel does not offer a second one.
+     reporting it. `ActiveOperationPanel` shows the live status and owns cancel, retry, and
+     the host-provided action that resumes editing; a failed run stays there, so this panel
+     does not offer a second account.
 
      `render.isPending` covers the moment before the accepted 202 has named an Operation to
      watch, and the auto-start branch covers the same window in the automatic path: with

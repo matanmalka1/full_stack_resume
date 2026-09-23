@@ -655,9 +655,11 @@ It writes and verifies immutable revision JSON/Markdown outside database scopes 
 registration. One approval transaction rechecks the exact sources, registers the
 ApprovedRevision and its artifacts, records decision/audit provenance, deactivates the
 WorkingDraft, completes the reserved idempotency receipt when present, and sets
-`active_working_draft_id=null`. The mutable draft is closed; the ApprovedRevision is its immutable content/lineage record. A later edit or New Draft
-action explicitly creates another WorkingDraft with `parent_revision_id`, analysis ID,
-and SelectionPlan ID. The same idempotency key/payload returns the same revision. A
+`active_working_draft_id=null`. The mutable draft is closed; the ApprovedRevision is its
+immutable content/lineage record. A later return to editing creates another WorkingDraft
+from the exact approved manifest, with `parent_revision_id`, analysis ID, and SelectionPlan
+ID. It does not recompose the content from the plan and therefore preserves manual edits.
+The same idempotency key/payload returns the same revision. A
 reused key with another payload fails. Frozen logical payload equality is checked
 before returning a committed revision or completing a pending receipt, including
 changes to the expected edit version or validation run for the same draft.
@@ -688,7 +690,11 @@ committed before the Operation is marked failed, so its safe actionable reason r
 available without exposing artifact paths or browser internals.
 
 Render failure leaves ApprovedRevision approved and returns a failed Operation/report.
-Retry creates a new Operation. A successful result records the exact passing evidence
+When correction is needed, the editor offers a direct return to editing: it creates the
+new mutable draft from the exact ApprovedRevision in place and keeps the revision-linkage
+detail out of the user workflow. It does not strand the user at a retry-only render error
+or route through the revision record. Retry creates a new Operation.
+A successful result records the exact passing evidence
 needed for the ApprovedRevision to project `ready_qualified`; it projects active Ready
 only when its JobSnapshot + JobAnalysis are compatible. It does not create a
 ReadyRevision row.
