@@ -232,9 +232,7 @@ class DraftApprovalService:
             except (OSError, ValueError) as exc:
                 with self.transactions.write() as tx:
                     self.leases.release(tx, group_key, attempt_id)
-                raise InfrastructureFailure(
-                    f"could not publish approved revision: {exc}"
-                ) from exc
+                raise InfrastructureFailure(f"could not publish approved revision: {exc}") from exc
             if (
                 published.structured.sha256 != structured_hash
                 or published.markdown.sha256 != markdown_hash

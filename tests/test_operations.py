@@ -198,9 +198,7 @@ def _payload_lease(services, group_key: str):
         return (
             transactions.connection_for(tx)
             .execute(
-                select(payload_write_leases).where(
-                    payload_write_leases.c.group_key == group_key
-                )
+                select(payload_write_leases).where(payload_write_leases.c.group_key == group_key)
             )
             .mappings()
             .one()
@@ -1183,9 +1181,7 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
         )
     pdf_output = next(output for output in failed.outputs if output.output_type == "resume_pdf")
     with transaction_manager.read() as tx:
-        stored_report = SqlAlchemyValidationRepository(
-            transaction_manager
-        ).validation_for_artifact(
+        stored_report = SqlAlchemyValidationRepository(transaction_manager).validation_for_artifact(
             tx,
             setup.application_id,
             "post-render",
@@ -1590,8 +1586,7 @@ def test_approval_identical_retry_reuses_reservation_after_failure(
         revision.resume_markdown_reference,
     ]
     assert [
-        setup.services.payloads.read_payload_text(reference)
-        for reference in committed_references
+        setup.services.payloads.read_payload_text(reference) for reference in committed_references
     ] == published
 
 

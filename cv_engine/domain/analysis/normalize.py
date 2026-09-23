@@ -133,9 +133,7 @@ def _merge(first: ProposedRequirement, second: ProposedRequirement) -> ProposedR
     # Severity describes the surviving (lower) coverage claim.  A more
     # flattering reading's default ``unknown`` must not erase the explicit
     # severity attached to the reading we actually keep.
-    surviving_readings = tuple(
-        item for item in (first, second) if item.coverage == coverage
-    )
+    surviving_readings = tuple(item for item in (first, second) if item.coverage == coverage)
     if coverage == "matched":
         shortfall_severity = "none"
     elif coverage == "unsupported":
