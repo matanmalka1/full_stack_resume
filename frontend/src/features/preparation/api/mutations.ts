@@ -211,9 +211,9 @@ export const useAutomaticDraft = ({
      The same two continuations the effects above own, asked one render earlier: between a
      succeeded analyze and the generate that follows it, and between a succeeded generate
      and the editor this hook navigates to. Both windows last a poll or an effect tick, and
-     in both the panel used to shrink to its one-line "הושלמה" and grow straight back for
-     what came next - announcing a stop the flow never made, at the one moment the reader
-     had been waiting to look at.
+     in both the Operation overlay must stay open rather than close on "הושלמה" and reopen
+     for what comes next - announcing a stop the flow never made, at the one moment the
+     reader had been waiting to look at.
 
      A dispatch that failed ends the first: with no continuation coming, the analysis has
      genuinely finished and its run settles like any other. The second is keyed on the
@@ -245,6 +245,10 @@ export const useWorkflowCommands = (
   detail: ApplicationDetail,
   plan: WorkflowActionPlan,
   onQueued: (operationId: string) => void,
+  /* The screen's own answer, from the watch it keeps: it also covers work this hook did
+     not queue - a retry from the run's overlay, the automatic draft - and the moment
+     between a success and the refreshed read of what it produced. */
+  operationLive: boolean,
 ) => {
   const queryClient = useQueryClient();
   const { mark } = usePreparationContinuation(detail.application.id);
@@ -321,7 +325,7 @@ export const useWorkflowCommands = (
     enabled: queuedId !== null,
   });
   const queuedStillRunning = queuedId !== null && !isTerminalOperation(queuedOperationQuery.data);
-  const workInFlight = queuedStillRunning || detail.active_operation != null;
+  const workInFlight = operationLive || queuedStillRunning || detail.active_operation != null;
 
   /* One key per replaced version: a resent answer for the same version is the same
      command, and a new version is a different one. */

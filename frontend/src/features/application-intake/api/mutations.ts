@@ -31,7 +31,7 @@ export const createIntakeApplication = async (
 
     /* Seeded here, the same way `useAnalyzeCommand` seeds a re-analysis: the Application
        screen reads this id from route state and finds the record already in cache, so it
-       can show the real Operation panel on first paint instead of a placeholder card. */
+       can show the real Operation on first paint instead of a pending placeholder. */
     queryClient.setQueryData(operationQueryKey(operation.id), operation);
 
     return { applicationId: created.application_id, operation, analysisProblem: null };

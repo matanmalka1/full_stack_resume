@@ -13,7 +13,7 @@ import { Disclosure } from "@/ui/Disclosure";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
-import { ActiveOperationPanel } from "@/features/operations";
+import { OperationOverlay, operationTypeLabels } from "@/features/operations";
 import { applicationLabel } from "@/features/applications";
 import { WizardStepShell } from "@/features/preparation";
 import { warningDetail, warningTitle } from "@/features/preparation";
@@ -53,7 +53,10 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
     revisionsQuery,
     submittedAt,
   } = useRevisionData(approvedRevisionId);
-  const { canCreate, createDraft, operation, watch } = useRevisionDraftGeneration(revision, detail);
+  const { awaitingRecord, canCreate, createDraft, operation, settled, watch } = useRevisionDraftGeneration(
+    revision,
+    detail,
+  );
   const pageQueryError = revisionQuery.error ?? applicationQuery.error;
 
   /* One step back from "מוכן" is the draft it was approved from - the editor where a
@@ -217,7 +220,17 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         )}
       </QueryState>
 
-      {operation === undefined ? null : <ActiveOperationPanel onQueued={watch} operation={operation} />}
+      <OperationOverlay
+        awaitingRecord={awaitingRecord}
+        onQueued={watch}
+        operation={operation}
+        pending={
+          createDraft.isPending
+            ? { heading: <>הרצת {operationTypeLabels.create_draft}</>, note: "יוצרים טיוטה חדשה מהגרסה הזו…" }
+            : undefined
+        }
+        settled={settled}
+      />
       {createDraft.error === null ? null : (
         <ErrorCallout
           error={createDraft.error}

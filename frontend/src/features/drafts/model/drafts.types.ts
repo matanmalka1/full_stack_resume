@@ -17,6 +17,12 @@ export interface DraftClaimActions {
   /* Regeneration freezes the saved version, so it is withheld while anything is unsaved
      or while a regeneration is already running, and when AI is unavailable. */
   regenerationDisabled: boolean;
+  /* This Application's work is under way (`isOperationLive`): a run is about to replace
+     the draft, or has just replaced it and the editor has not read it back yet. Any
+     change sent now is addressed to a version the run supersedes, so every command that
+     changes the draft waits - whether or not the run's overlay is showing. Reading, and
+     finishing a line already open, stay available: the typed text is kept locally. */
+  locked: boolean;
 }
 
 /* What turning an unsupported line into a confirmed fact needs from the Application,

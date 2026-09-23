@@ -48,7 +48,9 @@ describe("RevisionPage", () => {
 
     const selector = await screen.findByLabelText("הגרסה המוצגת");
     expect(selector).toHaveValue("revision-1");
-    expect(screen.getByText("גרסה היסטורית")).toBeInTheDocument();
+    /* The selector draws the displayed revision before the Application's list arrives;
+       whether it is historical is known only once the newer one is in that list. */
+    expect(await screen.findByText("גרסה היסטורית")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת טיוטה חדשה מגרסה 1" })).toBeInTheDocument();
     fireEvent.change(selector, { target: { value: "revision-2" } });
     await waitFor(() => expect(screen.getByLabelText("הגרסה המוצגת")).toHaveValue("revision-2"));

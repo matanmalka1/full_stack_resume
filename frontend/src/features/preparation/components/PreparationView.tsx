@@ -40,9 +40,13 @@ import { AutomaticDraftNotice } from "./AutomaticDraftNotice";
 export const PreparationView = ({
   detail,
   onQueued,
+  operationLive,
 }: {
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
+  /* Whether this Application's work is under way, by `isOperationLive`: the actions that
+     change what a run replaces wait for it, whether or not its overlay is showing. */
+  operationLive: boolean;
 }) => {
   const [matchingSaved, setMatchingSaved] = useState<AnalysisDecisions | null>(null);
   const matchingSaveInContext =
@@ -99,7 +103,13 @@ export const PreparationView = ({
           <div className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:flex-1 lg:basis-2/5">
             {/* The one thing to do now: run the analysis, resolve the open decisions, or
                 generate the draft and move to the editor. */}
-            <VerificationStage detail={detail} hasRecommendation={hasRecommendation} onQueued={onQueued} plan={plan} />
+            <VerificationStage
+              detail={detail}
+              hasRecommendation={hasRecommendation}
+              onQueued={onQueued}
+              operationLive={operationLive}
+              plan={plan}
+            />
 
             {/* A voluntary configuration edit is a different intent from resolving a review
                 blocker even though both currently reach the same backend command. While this
@@ -129,7 +139,12 @@ export const PreparationView = ({
             {/* Adjusting which facts the CV carries is a refinement of the generate step, not a
                 parallel destination - offered where it is done. */}
             {selectionPlanAction === null ? null : (
-              <SelectionPlanPanel action={selectionPlanAction} detail={detail} onQueued={onQueued} />
+              <SelectionPlanPanel
+                action={selectionPlanAction}
+                detail={detail}
+                onQueued={onQueued}
+                operationLive={operationLive}
+              />
             )}
           </div>
 
@@ -139,7 +154,13 @@ export const PreparationView = ({
               one, is the sticky side of the row. */}
           {classification === null ? null : (
             <div className="flex min-w-0 flex-col gap-6 lg:flex-1 lg:basis-3/5">
-              <AnalysisStage classification={classification} detail={detail} onQueued={onQueued} plan={plan} />
+              <AnalysisStage
+                classification={classification}
+                detail={detail}
+                onQueued={onQueued}
+                operationLive={operationLive}
+                plan={plan}
+              />
             </div>
           )}
         </div>

@@ -5,14 +5,19 @@ import { useLocation } from "react-router-dom";
 import { applicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
 import { useRequiredParam } from "@/app/useRequiredParam";
-import { useWatchedOperation } from "@/features/operations";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { QueryState } from "@/ui/QueryState";
 import { WideRow } from "@/ui/WideRow";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Skeleton } from "@/ui/Skeleton";
-import { ActiveOperationPanel, PendingWorkCard, operationTypeLabels } from "@/features/operations";
+import {
+  OperationOverlay,
+  type PendingWork,
+  isOperationLive,
+  operationTypeLabels,
+  useWatchedOperation,
+} from "@/features/operations";
 import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
 import { applicationLabel } from "../model/applicationPresentation";
 import { analysisViewState } from "../model/analysisViewState";
@@ -27,12 +32,6 @@ interface CreatedApplicationState {
   operationId?: string | null;
 }
 
-/* The wait before this screen holds an Operation to report, in the one shape every later
-   moment of the same work is reported in.
-
-   Two guards can reach it - the projection not yet resolved, and resolved with the watch
-   not yet opened - and they are two moments of one fact, so they render one card from one
-   copy rather than each writing its own line of text. */
 /* The step at its own size while the record is read: the verdict banner it opens with,
    and the collapsed rows under it. The screen is linked to directly from the board, so
    this is the reader's first sight of it - and the two wizard steps after it, the editor
@@ -47,14 +46,13 @@ const preparationLoading = (
   </div>
 );
 
-const analysisPending = (
-  <PendingWorkCard
-    /* The heading the panel that replaces this will carry, from the same table, so the
-       card keeps its title through the swap instead of renaming itself. */
-    heading={<>הרצת {operationTypeLabels.analyze_job}</>}
-    note="יוצרים את המועמדות ומנתחים את המשרה…"
-  />
-);
+/* The wait before this screen holds an Operation to report: the projection not yet
+   resolved on the redirect from creation. Its heading is the one the record that replaces
+   it will carry, from the same table, so the overlay keeps its title through the swap. */
+const analysisPending: PendingWork = {
+  heading: <>הרצת {operationTypeLabels.analyze_job}</>,
+  note: "יוצרים את המועמדות ומנתחים את המשרה…",
+};
 
 /* One step of the workflow wizard for one Application: preparing its CV.
 
@@ -76,7 +74,13 @@ export const ApplicationPage = () => {
 
   const query = useQuery(applicationDetailQueryOptions(applicationId));
   const detail = query.data;
-  const { operation: watched, watch, operationId: watchedId } = useWatchedOperation(applicationId, detail);
+  const {
+    awaitingRecord,
+    operation: watched,
+    operationId: watchedId,
+    settled,
+    watch,
+  } = useWatchedOperation(applicationId, detail);
 
   const { continuation } = useAutomaticDraft({
     applicationId,
@@ -93,8 +97,8 @@ export const ApplicationPage = () => {
   /* Layout, not passive: it settles before the browser paints, so a creation redirect
      that already knows its Operation id never paints the placeholder card first. Without
      it the watch would open a tick late - after `useWatchedOperation`'s own effect ran -
-     and the reader would see `PendingWorkCard` flash before `ActiveOperationPanel` took
-     over, for a record already sitting in cache. */
+     and the reader would see the pending wait flash before the record took over, for a
+     record already sitting in cache. */
   useLayoutEffect(() => {
     if (createdOperationId !== null) watch(createdOperationId);
   }, [createdOperationId, watch]);
@@ -103,6 +107,14 @@ export const ApplicationPage = () => {
     analysisWasQueuedOnCreate: createdOperationId !== null,
     detail,
     operation: watched,
+  });
+  const pending = watched === undefined && viewState === "processing" ? analysisPending : undefined;
+  const operationLive = isOperationLive({
+    awaitingRecord,
+    continuation,
+    operation: watched,
+    pending: pending !== undefined,
+    settled,
   });
 
   /* The files exist only after a revision is rendered, so their reference section is drawn
@@ -140,16 +152,21 @@ export const ApplicationPage = () => {
       }
       stage="analysis"
     >
-      {/* Live analysis work is reported the moment this screen knows about it, whether that
+      {/* Live work is reported the moment this screen knows about it, whether that
           knowledge came from the projection or - on the redirect straight from creation -
           from the Operation id handed over in route state and seeded into cache before the
           navigate. Placed above `QueryState` on purpose: the projection fetch it gates is a
-          second, independent read, and work already known must not wait on it. */}
-      {watched !== undefined ? (
-        <ActiveOperationPanel continuation={continuation} onQueued={watch} operation={watched} />
-      ) : viewState === "processing" || viewState === "analysis_failed" ? (
-        analysisPending
-      ) : null}
+          second, independent read, and work already known must not wait on it. One
+          overlay for the whole stretch: the creation wait, the analysis, and the draft the
+          screen continues into are one wait for the reader. */}
+      <OperationOverlay
+        awaitingRecord={awaitingRecord}
+        continuation={continuation}
+        onQueued={watch}
+        operation={watched}
+        pending={pending}
+        settled={settled}
+      />
 
       <QueryState
         error={query.error}
@@ -170,7 +187,7 @@ export const ApplicationPage = () => {
           </Callout>
         ) : (
           <div className="space-y-6">
-            {/* A successfully queued analysis is reported by the Operation panel above,
+            {/* A successfully queued analysis is reported by the Operation overlay above,
                 which follows the run through its current and terminal states. Route state
                 only owns the exceptional creation outcome where no Operation exists to
                 report; keeping its success message would freeze "running" beside the
@@ -190,11 +207,11 @@ export const ApplicationPage = () => {
                 just because the last run failed - "analyze" is still there, and still
                 means a fresh run against current Settings, not a repeat of the failed
                 one's provider. Withholding this step's action panel here left the retry
-                inside the Operation panel as the only way forward, which can only ever
+                inside the Operation overlay as the only way forward, which can only ever
                 repeat the same provider/model that just failed - even after Settings is
                 switched to deterministic. */}
             {viewState === "content" || viewState === "analysis_failed" ? (
-              <PreparationView detail={detail} onQueued={watch} />
+              <PreparationView detail={detail} onQueued={watch} operationLive={operationLive} />
             ) : null}
 
             {/* The posting the CV is tailored to, and the files the work produced: reference
@@ -222,11 +239,11 @@ export const ApplicationPage = () => {
                     /* Repair is the task now, not optional reference reading. Keep the
                        posting and its edit action in view instead of nesting them behind a
                        second disclosure the reader has no reason to discover. */
-                    <JobSnapshotPanel detail={detail} />
+                    <JobSnapshotPanel detail={detail} operationLive={operationLive} />
                   ) : (
                     <Disclosure summary="צפייה בנוסח המשרה שנשמר">
                       <div className="pt-2">
-                        <JobSnapshotPanel detail={detail} />
+                        <JobSnapshotPanel detail={detail} operationLive={operationLive} />
                       </div>
                     </Disclosure>
                   )}

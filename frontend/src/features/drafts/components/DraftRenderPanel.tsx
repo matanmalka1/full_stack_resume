@@ -1,100 +1,27 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 
-import { operationQueryKey } from "@/api/operations";
-import { approvedRevisionQueryOptions, renderApprovedRevision } from "@/api/revisions";
 import { routePaths } from "@/app/routePaths";
-import { PendingWorkCard, operationTypeLabels } from "@/features/operations";
 import { Button, buttonClasses } from "@/ui/Button";
 import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ErrorCallout } from "@/ui/ErrorCallout";
-
-interface DraftRenderPanelProps {
-  approvedRevisionId: string;
-  /* True only in the render reached by this screen's just-completed approval. Reloading
-     an older approved state remains passive, so a visit never queues artifact work by
-     itself. */
-  autoStart?: boolean;
-  /* Whether the host screen's `ActiveOperationPanel` is reporting a render Operation for
-     this revision, of any status. That panel is the single account of the render; while it
-     is up, this panel must not also offer a "create the files" button - the file creation
-     is already under way or already failed with its own recovery action there, so the
-     approved box and its CTA are a second, contradictory account of the same moment. It
-     is also what says whether the wait below is already being reported by something else. */
-  rendering?: boolean;
-  /* What this panel just queued, handed to the editor that holds it. Rendering used to
-     navigate to the Operation's own screen, which took the approved draft off the display
-     at the moment the user was waiting to see what became of it - and the way back from
-     there led to the Application screen rather than to the editor, so the file that had
-     just been produced was never linked from the screen that produced it.
-
-     The editor already watches this Application's work, so the accepted `202` goes to
-     that watch instead. The `202` is the earliest and most certain answer: the projection
-     reports an Operation only on its next read. */
-  onQueued: (operationId: string) => void;
-}
+import type { RenderApprovedRevision } from "../hooks/useRenderApprovedRevision";
 
 /* A.4 frame 6's render step, inline in the editor that produced the revision. Explicit
-   approval starts its artifact generation; a failed Operation remains here with the same
-   manual retry, while reloading an already-approved revision does not create new work. */
-export const DraftRenderPanel = ({
-  approvedRevisionId,
-  autoStart = false,
-  onQueued,
-  rendering = false,
-}: DraftRenderPanelProps) => {
-  const queryClient = useQueryClient();
-  const revisionQuery = useQuery(approvedRevisionQueryOptions(approvedRevisionId));
-  const revision = revisionQuery.data;
-  const renderKey = useMemo(() => `render:${approvedRevisionId}`, [approvedRevisionId]);
+   approval starts its artifact generation; a failed Operation remains in the editor's
+   overlay with its retry and direct return to editing, while reloading an already-approved
+   revision does not create new work.
 
-  const render = useMutation({
-    mutationFn: async () => {
-      if (revision === undefined) throw new Error("Render was offered before the revision loaded");
-      return renderApprovedRevision(revision.id, revision.application_id, renderKey);
-    },
-    onSuccess: ({ operation }) => {
-      queryClient.setQueryData(operationQueryKey(operation.id), operation);
-      onQueued(operation.id);
-    },
-  });
+   The command itself is the editor's (`useRenderApprovedRevision`), because the editor's
+   one overlay reports the render from the press onward. This panel draws the approved
+   state and its manual start, and steps aside while the render is anyone's to report:
+   the approved box and its "create the files" CTA beside a render already under way, or
+   already failed with its own recovery actions, would be a second, contradictory account
+   of the same moment. */
+export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) => {
+  const { inFlight, ready, render, revision, revisionError } = state;
 
-  const ready = revision?.ready_qualified === true;
-  const automaticAttempted = useRef(false);
-  useEffect(() => {
-    if (!autoStart || automaticAttempted.current || revision === undefined || ready) return;
-    automaticAttempted.current = true;
-    render.mutate();
-  }, [autoStart, ready, render, revision]);
-
-  /* While the render is under way, this panel steps aside for the one that is actually
-     reporting it. `ActiveOperationPanel` shows the live status and owns cancel, retry, and
-     the host-provided action that resumes editing; a failed run stays there, so this panel
-     does not offer a second account.
-
-     `render.isPending` covers the moment before the accepted 202 has named an Operation to
-     watch, and the auto-start branch covers the same window in the automatic path: with
-     `autoStart` set the render always begins on mount, so the approved box and its manual
-     CTA are never the right thing to show. The one auto case that does belong here is a 202
-     that never queued anything (`render.error`), which leaves no Operation for the other
-     panel to report - then the retry below is the only way on. */
-  const renderInFlight = rendering || render.isPending || (autoStart && !ready && render.error === null);
-  if (renderInFlight) {
-    /* Stepping aside is right only when something else is reporting the wait. In the
-       window this screen opens with - approval accepted, the render command sent, no
-       Operation named yet - nothing was: the editor had already been replaced by this
-       step, this panel returned nothing, and the run's own panel had no record to show,
-       so the page went briefly blank between the approval and the first status. The same
-       card that reports the run reports the wait for it. */
-    return rendering ? null : (
-      <PendingWorkCard
-        heading={<>הרצת {operationTypeLabels.render_revision}</>}
-        note="הגרסה אושרה. יצירת ה־HTML וה־PDF מתחילה."
-      />
-    );
-  }
+  if (inFlight) return null;
 
   return (
     <>
@@ -113,9 +40,9 @@ export const DraftRenderPanel = ({
           </p>
         </div>
 
-        {revisionQuery.error === null && render.error === null ? null : (
+        {revisionError === null && render.error === null ? null : (
           <ErrorCallout
-            error={render.error ?? revisionQuery.error}
+            error={render.error ?? revisionError}
             fallbackDetail="הפנייה לשרת נכשלה. הגרסה המאושרת נשמרה."
             fallbackTitle="לא ניתן להתחיל את יצירת הקובץ"
           />

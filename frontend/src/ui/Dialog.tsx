@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 
 import { surfaceClasses } from "./surface";
 import { cx } from "./cx";
@@ -34,6 +34,11 @@ interface DialogProps {
   headingId: string;
   onClose: () => void;
   open: boolean;
+  /* Where focus goes once the dialog closes, for a dialog that is not always opened by
+     the control that reopens it. Native restoration returns focus to whatever held it at
+     `showModal()`, which for a dialog the screen opened by itself is an unrelated control,
+     or one that has since left the page. Absent, native restoration stands. */
+  restoreFocusTo?: RefObject<HTMLElement | null>;
   size?: "default" | "wide";
   title: ReactNode;
 }
@@ -47,6 +52,7 @@ export const Dialog = ({
   headingId,
   onClose,
   open,
+  restoreFocusTo,
   size = "default",
   title,
 }: DialogProps) => {
@@ -107,6 +113,7 @@ export const Dialog = ({
            dialog and dismisses that one as well. */
         event.stopPropagation();
         onClose();
+        restoreFocusTo?.current?.focus();
       }}
       ref={dialogRef}
     >

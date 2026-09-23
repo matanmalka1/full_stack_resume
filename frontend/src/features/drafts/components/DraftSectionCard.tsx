@@ -79,7 +79,7 @@ export const DraftSectionCard = ({
         <div className="flex items-center gap-1">
           <Button
             aria-label={`הזזת הסעיף ${section.name} למעלה`}
-            disabled={sectionIndex === 0}
+            disabled={actions.locked || sectionIndex === 0}
             onClick={() => onMoveSection(-1)}
             title="הזזת הסעיף למעלה"
             variant="ghost"
@@ -88,7 +88,7 @@ export const DraftSectionCard = ({
           </Button>
           <Button
             aria-label={`הזזת הסעיף ${section.name} למטה`}
-            disabled={sectionIndex === sectionCount - 1}
+            disabled={actions.locked || sectionIndex === sectionCount - 1}
             onClick={() => onMoveSection(1)}
             title="הזזת הסעיף למטה"
             variant="ghost"
@@ -138,7 +138,7 @@ export const DraftSectionCard = ({
             value={text}
           />
           <div className="flex items-center gap-2">
-            <Button disabled={text.trim() === ""} onClick={submit}>
+            <Button disabled={actions.locked || text.trim() === ""} onClick={submit}>
               הוספת השורה
             </Button>
             <Button

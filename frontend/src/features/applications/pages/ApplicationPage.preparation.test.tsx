@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -473,7 +473,7 @@ describe("ApplicationPage at the preparation route", () => {
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen
        watches the Operation it queued, so a fixed queue of answers would leave that read
-       unanswered and the panel would never settle. */
+       unanswered and the overlay would never settle. */
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") {
         return Promise.resolve(acceptedResponse(queued()));
@@ -491,7 +491,7 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage(aiSettings);
     await clickEnabledButton("ניתוח המשרה");
 
-    /* The accepted `202` is seeded as the panel's first state, so the queued Operation is
+    /* The accepted `202` is seeded as the overlay's first state, so the queued Operation is
        reported on this screen rather than on one the user was sent to. */
     expect(await screen.findByRole("heading", { name: "הרצת ניתוח המשרה", level: 2 })).toBeInTheDocument();
     expect(screen.queryByText("המשרה טרם נותחה")).not.toBeInTheDocument();
@@ -657,7 +657,12 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage();
 
     expect(await screen.findByText("5 years of Python")).toBeInTheDocument();
-    expect(screen.getByText("מכוסה")).toBeInTheDocument();
+    /* A matched requirement is listed under the covered group rather than badged: the
+       group's heading already says "covered", so a badge would repeat the verdict. */
+    expect(
+      within(screen.getByRole("list", { name: "מכוסות במלואן (1)" })).getByText("5 years of Python"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("מכוסה")).not.toBeInTheDocument();
     expect(screen.getByText("מכוסות")).toBeInTheDocument();
     expect(screen.getByText("חלקיות")).toBeInTheDocument();
     expect(screen.getByText("לא מכוסות")).toBeInTheDocument();
@@ -746,6 +751,9 @@ describe("ApplicationPage at the preparation route", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     renderPage();
+    /* A run that had already failed when the screen read it is history: it does not pop
+       over the page, and its report - retry included - is a press on its chip away. */
+    fireEvent.click(await screen.findByRole("button", { name: /פירוט ההרצה/ }));
     fireEvent.click(await screen.findByRole("button", { name: "ניסיון חוזר" }));
     const pending = await screen.findByRole("button", { name: "יוצר ניסיון חדש…" });
     expect(pending).toBeDisabled();
@@ -764,7 +772,7 @@ describe("ApplicationPage at the preparation route", () => {
 
   /* QA report finding 2: `available_actions`/`recommended_action` still name a plain
      "analyze" after a terminal failure - the projection never withdrew it - but the
-     screen used to show only the Operation panel's own "retry", which can only ever
+     screen used to show only the Operation overlay's own "retry", which can only ever
      resend the failed run's own frozen execution. The fix renders this step's own action
      panel beside the failure, so its analyze button - wired to current Settings via
      `useAnalyzeCommand` - is reachable without leaving the screen or predicting the
@@ -795,7 +803,9 @@ describe("ApplicationPage at the preparation route", () => {
 
     /* Both ways forward are on screen at once. Neither is offered instead of the other;
        the projection permits both and the reader chooses. */
+    fireEvent.click(await screen.findByRole("button", { name: /פירוט ההרצה/ }));
     expect(await screen.findByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
     await clickEnabledButton("ניתוח המשרה");
 
     const request = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");

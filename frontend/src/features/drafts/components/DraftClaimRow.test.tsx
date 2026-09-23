@@ -41,6 +41,7 @@ const actions = (overrides: Partial<DraftClaimActions> = {}): DraftClaimActions 
   onRegenerate: vi.fn(),
   onRemove: vi.fn(),
   regenerationDisabled: false,
+  locked: false,
   ...overrides,
 });
 

@@ -175,4 +175,59 @@ test.describe("dialogs", () => {
     await expect(palette).toBeHidden();
     await expect(trigger).toBeFocused();
   });
+
+  /* Work in flight sits over the page. Hiding it with Escape hands focus to the chip that
+     reopens it - not to whatever held focus when the screen opened the overlay by itself -
+     and does not make the page safe to change: the commands that conflict with the run
+     stay locked while it is live. */
+  test("hides a live run on Escape, keeps conflicting actions locked, and reopens from its chip", async ({ page }) => {
+    const running = {
+      id: "op-1",
+      application_id: "app-1",
+      operation_type: "create_draft",
+      status: "running",
+      phase: "executing",
+      is_terminal: false,
+      available_actions: [],
+      outputs: [],
+      message: "",
+      created_at: "2026-08-24T07:00:00Z",
+    };
+    await page.route("**/api/v1/applications/app-1", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        json: { ...detail, active_operation: running, latest_operation: running },
+      });
+    });
+    await page.route("**/api/v1/operations/op-1", async (route) => {
+      await route.fulfill({ contentType: "application/json", json: running });
+    });
+
+    await page.goto("/applications/app-1");
+    const overlay = page.getByRole("dialog", { name: "הרצת יצירת הטיוטה" });
+    await expect(overlay).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(overlay).toBeHidden();
+    const chip = page.getByRole("button", { name: /פירוט ההרצה/ });
+    await expect(chip).toBeFocused();
+    /* The run's own progress sentence, which for draft generation names its phase. */
+    await expect(chip).toContainText("מנסחת ובודקת את הטענות");
+
+    /* The form opens - reading and drafting a new posting is harmless - but the command
+       that would replace the snapshot the run is working from waits for it. */
+    await page.getByText("צפייה בנוסח המשרה שנשמר", { exact: true }).click();
+    await page.getByRole("button", { name: "עדכון נוסח המשרה" }).click();
+    const postingForm = page.getByRole("dialog", { name: "יצירת תצלום משרה חדש" });
+    await expect(postingForm.getByRole("button", { name: "יצירת התצלום החדש" })).toBeDisabled();
+    await expect(postingForm.getByText(/פעולה מתבצעת כעת על המועמדות/)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(postingForm).toBeHidden();
+
+    await chip.click();
+    await expect(overlay).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(overlay).toBeHidden();
+    await expect(chip).toBeFocused();
+  });
 });

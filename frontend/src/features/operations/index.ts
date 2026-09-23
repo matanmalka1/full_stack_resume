@@ -1,21 +1,19 @@
 /* The Operations feature's public surface.
 
-   An Operation is durable work queued against one Application, and four screens report
-   one: the Application hub, the preparation workflow inside it, the draft editor, and the
-   revision. None of them owns the vocabulary or the panel, which is why neither lives in
-   any of them any more - the panel and its Hebrew status/phase/failure maps were inside
-   `features/applications` and reached by deep import from the other three.
+   An Operation is durable work queued against one Application, and three screens report
+   one: the Application's preparation step, the draft editor, and the revision. None of
+   them owns the vocabulary or the overlay, which is why neither lives in any of them.
 
    There is no Operation screen. Cancel and retry are the record's own actions and travel
-   with the panel, so `OperationActions` is not exported: a caller that shows an Operation
-   shows this panel. */
-export { ActiveOperationPanel } from "./components/ActiveOperationPanel";
-/* The same card before there is an Operation to put in it. Exported beside the panel
-   because the two are one report between them: a screen that shows work in flight shows
-   this until the record arrives, and the panel from then on. */
-export { PendingWorkCard } from "./components/WorkCard";
+   with the report inside the overlay, so neither `OperationActions` nor `OperationReport`
+   is exported: a screen that shows an Operation shows this overlay, once. */
+export { OperationOverlay, type PendingWork } from "./components/OperationOverlay";
+/* Whether actions that change what a run replaces must wait - the same definition the
+   overlay's session is built on, so a screen's lock and its overlay never disagree about
+   when work is under way. */
+export { isOperationLive } from "./model/operationLive";
 /* Watching one Application's live work, on whichever screen queued it. It is
-   Operation-shaped and every consumer of it already shows this panel, so it sits with
-   the panel rather than as root-level infrastructure. */
+   Operation-shaped and every consumer of it already shows the overlay, so it sits with it
+   rather than as root-level infrastructure. */
 export { useWatchedOperation } from "./hooks/useWatchedOperation";
 export { operationTypeLabels, statusLabels, statusTones } from "./model/operationLabels";

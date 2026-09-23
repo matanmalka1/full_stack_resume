@@ -297,7 +297,7 @@ describe("the stale-draft commands (§14)", () => {
   });
 
   /* Replacement queues durable work and answers 202, so it is followed in place like
-     `generate`: the panel reports the Operation the press produced rather than appearing a
+     `generate`: the overlay reports the Operation the press produced rather than appearing a
      poll later. */
   it("reports the Operation the replacement queued", async () => {
     vi.stubGlobal("fetch", routedFetch({}));
@@ -307,7 +307,7 @@ describe("the stale-draft commands (§14)", () => {
     fireEvent.click(await enabledButton("החלפת הטיוטה"));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "החלפת הטיוטה" }));
 
-    /* The panel names the work the Operation reports, which for a replacement is the draft
+    /* The overlay names the work the Operation reports, which for a replacement is the draft
        generation it queued. */
     expect(await screen.findByRole("heading", { name: "הרצת יצירת הטיוטה" })).toBeInTheDocument();
   });

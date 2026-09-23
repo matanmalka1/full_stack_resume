@@ -38,10 +38,14 @@ export const SelectionPlanPanel = ({
   action,
   detail,
   onQueued,
+  operationLive,
 }: {
   action: NonNullable<WorkflowActionPlan["createSelectionPlan"]>;
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
+  /* Whether this Application's work is under way, by `isOperationLive`: the actions that
+     change what a run replaces wait for it, whether or not its overlay is showing. */
+  operationLive: boolean;
 }) => {
   const queryClient = useQueryClient();
   const activePlanId = action.selectionPlanId;
@@ -104,7 +108,8 @@ export const SelectionPlanPanel = ({
     },
   });
 
-  const busy = detail.active_operation != null || queuedStillRunning || deterministic.isPending || ai.isPending;
+  const busy =
+    operationLive || detail.active_operation != null || queuedStillRunning || deterministic.isPending || ai.isPending;
   const manualReady = activePlanId !== null && loadedPlanId === activePlanId;
   const changed = manualReady && (!sameMembers(pinned, baseline.pinned) || !sameMembers(excluded, baseline.excluded));
   const mutationError = deterministic.error ?? ai.error;

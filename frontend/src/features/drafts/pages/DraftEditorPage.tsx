@@ -15,16 +15,17 @@ import {
   workingDraftQueryOptions,
 } from "@/api/drafts";
 import { operationQueryKey } from "@/api/operations";
+import { ErrorCallout } from "@/ui/ErrorCallout";
+import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
-import { applicationLabel } from "@/features/applications";
-import { ActiveOperationPanel } from "@/features/operations";
-import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
-import { Button } from "@/ui/Button";
-import { ErrorCallout } from "@/ui/ErrorCallout";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
+import { OperationOverlay, type PendingWork, isOperationLive, operationTypeLabels } from "@/features/operations";
+import { applicationLabel } from "@/features/applications";
+import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
+import { Button } from "@/ui/Button";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
 import { DraftConflictDialog } from "../components/DraftConflictDialog";
@@ -36,11 +37,11 @@ import { DraftHistoryControls } from "../components/DraftHistoryControls";
 import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
-import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
 import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
 import { useDraftDocument } from "../api/queries";
 import { useDraftEditing } from "../hooks/useDraftEditing";
+import { useRenderApprovedRevision } from "../hooks/useRenderApprovedRevision";
 import { useDraftValidation } from "../hooks/useDraftValidation";
 
 /* The workspace's own shape, held while the document behind it is read.
@@ -76,26 +77,19 @@ export const DraftEditorPage = () => {
   const [resolutionError, setResolutionError] = useState<unknown>(null);
   const [resolving, setResolving] = useState(false);
   const [claimTarget, setClaimTarget] = useState<{ claimId: string } | null>(null);
-  const { applicationError, detail, draft, draftError, etag, facts, operation, watch, workingDraftId } =
-    useDraftDocument(applicationId);
-  const editing = useDraftEditing({
-    applicationId,
+  const {
+    applicationError,
+    awaitingRecord,
+    detail,
     draft,
+    draftError,
     etag,
     facts,
-    onOperationQueued: watch,
+    operation,
+    settled,
+    watch,
     workingDraftId,
-  });
-  const validation = useDraftValidation(
-    applicationId,
-    draft,
-    editing.dirty ||
-      resolving ||
-      resolutionError != null ||
-      applicationError != null ||
-      draftError != null ||
-      detail?.working_draft_state === "stale",
-  );
+  } = useDraftDocument(applicationId);
 
   /* The daily workspace opens with editing and the rendered document together. A focused
      full-width preview remains available, especially on narrow screens. */
@@ -142,10 +136,7 @@ export const DraftEditorPage = () => {
   const renderFailureAction =
     operation?.operation_type === "render_revision" && operation.status === "failed" && renderRevisionId !== null ? (
       <Button
-        disabled={
-          detail?.active_analysis_id == null ||
-          detail.active_selection_plan_id == null
-        }
+        disabled={detail?.active_analysis_id == null || detail.active_selection_plan_id == null}
         onClick={() => resumeEditing.mutate()}
         pending={resumeEditing.isPending}
         pendingLabel="מחזיר לעריכה…"
@@ -198,13 +189,60 @@ export const DraftEditorPage = () => {
 
   /* Both windows where this screen's work is finished but the screen is not stopping here:
      it is loading the draft that was just written, or leaving for the ready step. Either
-     way the run's card holds its shape and says what is happening, instead of collapsing
-     to "הושלמה" for the tick before the next thing replaces it. */
+     way the run's overlay stays open and says what is happening, instead of closing on
+     "הושלמה" for the tick before the next thing replaces it. */
   const continuation = renderFinished
     ? "הקבצים נוצרו. מעבר לגרסה המוכנה…"
     : draftArriving
       ? "הטיוטה נוצרה. טוענים את העורך…"
       : undefined;
+
+  /* The render command is the editor's, so the one overlay below reports it from the
+     press - see `useRenderApprovedRevision`. */
+  const renderState = useRenderApprovedRevision({
+    approvedRevisionId: renderRevisionId,
+    autoStart: approvedRevisionId !== null,
+    onQueued: watch,
+    rendering: operation?.operation_type === "render_revision",
+  });
+  const pending: PendingWork | undefined = renderState.pending
+    ? {
+        heading: <>הרצת {operationTypeLabels.render_revision}</>,
+        note: "הגרסה אושרה. יצירת ה־HTML וה־PDF מתחילה.",
+      }
+    : undefined;
+  /* One answer, shared with the overlay, to whether the draft may be changed now. A
+     hidden overlay does not make it so: a regeneration rewriting the draft, or one that
+     finished and has not been read back, would have any edit addressed to the version it
+     replaces - refused as a conflict at best. */
+  const operationLive = isOperationLive({
+    awaitingRecord,
+    continuation,
+    operation,
+    pending: pending !== undefined,
+    settled,
+  });
+
+  const editing = useDraftEditing({
+    applicationId,
+    draft,
+    etag,
+    facts,
+    onOperationQueued: watch,
+    operationLive,
+    workingDraftId,
+  });
+  const validation = useDraftValidation(
+    applicationId,
+    draft,
+    operationLive ||
+      editing.dirty ||
+      resolving ||
+      resolutionError != null ||
+      applicationError != null ||
+      draftError != null ||
+      detail?.working_draft_state === "stale",
+  );
 
   /* Hiding the rows must not strand text still sitting in the buffer, so the document
      view settles it first. */
@@ -245,7 +283,7 @@ export const DraftEditorPage = () => {
     try {
       // Confirmation has committed. Preserve edits made during that request before
       // refreshing its consequences or choosing a version for validation.
-      const settled = await editing.settle();
+      const editsSaved = await editing.settle();
       await invalidateApplicationViews(queryClient, applicationId);
       const currentDetail = await queryClient.fetchQuery({
         ...applicationDetailQueryOptions(applicationId),
@@ -264,7 +302,7 @@ export const DraftEditorPage = () => {
       ]);
       // A stale context may refuse saving. Still show that context, keep the local
       // buffer, and report the unfinished follow-up rather than undoing confirmation.
-      if (!settled)
+      if (!editsSaved)
         throw new Error("מצב הטיוטה רוענן, אך יש לפתור את שגיאת השמירה או הקונפליקט. העריכות המקומיות נשמרו.");
       if (currentDetail.working_draft_state === "stale" || !currentDetail.available_actions.includes("validate"))
         return;
@@ -306,6 +344,7 @@ export const DraftEditorPage = () => {
     (detail?.stale_reasons ?? []).some((reason) => reason.code !== "DRAFT_EDITED_AFTER_VALIDATION");
 
   const approvalUnavailable =
+    operationLive ||
     editing.dirty ||
     resolving ||
     resolutionError != null ||
@@ -384,16 +423,18 @@ export const DraftEditorPage = () => {
               saveState={workingDraftId === null ? null : editing.saveState}
             />
 
-            {/* Live work, reported beside the draft it is rewriting rather than on a screen
-              the user has to leave the text for. */}
-            {operation === undefined ? null : (
-              <ActiveOperationPanel
-                continuation={continuation}
-                failureAction={renderFailureAction}
-                onQueued={watch}
-                operation={operation}
-              />
-            )}
+            {/* Live work, over the draft it is rewriting rather than on a screen the user
+              has to leave the text for; once it is over, a chip here reopens its report.
+              One overlay for every run this screen watches, the render's wait included. */}
+            <OperationOverlay
+              awaitingRecord={awaitingRecord}
+              continuation={continuation}
+              failureAction={renderFailureAction}
+              onQueued={watch}
+              operation={operation}
+              pending={pending}
+              settled={settled}
+            />
             {resumeEditing.error === null ? null : (
               <ErrorCallout
                 error={resumeEditing.error}
@@ -424,17 +465,10 @@ export const DraftEditorPage = () => {
         )}
 
         {renderRevisionId !== null ? (
-          <DraftRenderPanel
-            approvedRevisionId={renderRevisionId}
-            autoStart={approvedRevisionId !== null}
-            onQueued={watch}
-            /* The render is reported once, by `ActiveOperationPanel` above. This tells the
-             render panel whether that is happening, so the approved box and its "create the
-             files" CTA never appear beside the operation already creating them - and so the
-             render panel knows to report the wait itself in the window before there is an
-             Operation to report. */
-            rendering={operation?.operation_type === "render_revision"}
-          />
+          /* The render is reported once, by the overlay above: while it is, the panel
+             steps aside, so the approved box and its "create the files" CTA never appear
+             beside the operation already creating them. */
+          <DraftRenderPanel state={renderState} />
         ) : null}
 
         {renderRevisionId === null && draft === undefined && workingDraftId !== null && draftError === null ? (
@@ -461,8 +495,8 @@ export const DraftEditorPage = () => {
               editor={
                 <>
                   <DraftHistoryControls
-                    canRedo={editing.history.canRedo}
-                    canUndo={editing.history.canUndo}
+                    canRedo={!operationLive && editing.history.canRedo}
+                    canUndo={!operationLive && editing.history.canUndo}
                     onRedo={editing.history.redo}
                     onUndo={editing.history.undo}
                   />
@@ -491,7 +525,11 @@ export const DraftEditorPage = () => {
                     selectionError={editing.selectionError}
                   />
 
-                  <DraftFactPanel busy={editing.selectionPending} facts={facts} onInclude={editing.includeFact} />
+                  <DraftFactPanel
+                    busy={operationLive || editing.selectionPending}
+                    facts={facts}
+                    onInclude={editing.includeFact}
+                  />
                 </>
               }
               mode={mode}

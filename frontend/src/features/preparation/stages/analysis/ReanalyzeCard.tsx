@@ -17,10 +17,14 @@ import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
 export const ReanalyzeCard = ({
   detail,
   onQueued,
+  operationLive,
   plan,
 }: {
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
+  /* Whether this Application's work is under way, by `isOperationLive`: the actions that
+     change what a run replaces wait for it, whether or not its overlay is showing. */
+  operationLive: boolean;
   plan: WorkflowActionPlan;
 }) => {
   const { analyze, settings } = useAnalyzeCommand(detail, onQueued);
@@ -49,7 +53,7 @@ export const ReanalyzeCard = ({
               : "כדי לנתח מחדש יש להגדיר ולהפעיל ספק AI."}
         </p>
         <Button
-          disabled={settings === undefined || !aiRegenerationAvailable(settings)}
+          disabled={operationLive || settings === undefined || !aiRegenerationAvailable(settings)}
           onClick={() => analyze.mutate()}
           pending={analyze.isPending}
           pendingLabel="מפעיל ניתוח…"
