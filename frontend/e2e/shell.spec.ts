@@ -59,16 +59,18 @@ test.describe("the application shell", () => {
 
     // Every rail control sits inside the rail and on its centre line.
     const railCentre = (rail?.x ?? 0) + (rail?.width ?? 0) / 2;
-    for (const control of [
-      expand,
-      page.getByRole("link", { name: "לוח המועמדויות" }),
-      page.getByRole("link", { name: "מאגר העובדות" }),
-      page.getByRole("link", { name: "הגדרות" }),
-      page.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" }),
-      page.getByRole("link", { name: "קליטת משרה חדשה" }),
-      page.getByRole("button", { name: /^ערכת נושא:/ }),
-    ]) {
-      const box = await control.boundingBox();
+    const controlBoxes = await Promise.all(
+      [
+        expand,
+        page.getByRole("link", { name: "לוח המועמדויות" }),
+        page.getByRole("link", { name: "מאגר העובדות" }),
+        page.getByRole("link", { name: "הגדרות" }),
+        page.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" }),
+        page.getByRole("link", { name: "קליטת משרה חדשה" }),
+        page.getByRole("button", { name: /^ערכת נושא:/ }),
+      ].map((control) => control.boundingBox()),
+    );
+    for (const box of controlBoxes) {
       expect(box?.x ?? 0).toBeGreaterThanOrEqual(rail?.x ?? 0);
       expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((rail?.x ?? 0) + (rail?.width ?? 0));
       expect(Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - railCentre)).toBeLessThanOrEqual(2);
