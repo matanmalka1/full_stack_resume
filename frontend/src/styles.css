@@ -233,10 +233,15 @@ body {
 }
 
 /* One outer measure for every route-level surface and shell landmark. A page whose body
-   is a single column of inputs shortens the line by setting --page-measure. */
+   is a single column of inputs shortens the line by setting --page-measure.
+
+   The frame starts at the navigation edge rather than centring. Centred, a shorter
+   measure moved the page heading sideways on every change of route - the board's title
+   against the sidebar, Settings' a third of the way across - so moving between areas
+   read as the layout shifting rather than as the content changing. */
 .page-frame {
   max-width: var(--page-measure, 110rem);
-  margin-inline: auto;
+  margin-inline-end: auto;
 }
 
 button,
@@ -290,6 +295,13 @@ select {
   .workflow-track-upcoming {
     border-block-start: 1px dashed CanvasText;
     background: none;
+  }
+
+  @media (min-width: 64rem) {
+    .workflow-track-upcoming {
+      border-block-start: 0;
+      border-inline-start: 1px dashed CanvasText;
+    }
   }
 
   [class*="bg-cv-success-soft"],
@@ -516,6 +528,16 @@ dialog::backdrop {
   background-repeat: repeat-x;
   background-position: center;
   background-size: 6px 4px;
+}
+
+/* The spine runs across the top below the large breakpoint and down the side from it.
+   Dots repeated only along x drew a vertical 1px track as a single dot, so the upcoming
+   stages looked unconnected; the repeat follows the track's own axis. */
+@media (min-width: 64rem) {
+  .workflow-track-upcoming {
+    background-repeat: repeat-y;
+    background-size: 4px 6px;
+  }
 }
 
 /* Content on its way, drawn as the shape it is about to become.

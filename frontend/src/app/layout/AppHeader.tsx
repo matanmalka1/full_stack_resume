@@ -31,8 +31,8 @@ export const AppHeader = () => {
   return (
     <header className="sticky top-0 z-(--cv-z-navigation) border-b border-cv-hairline bg-cv-canvas/90 backdrop-blur-xl lg:col-start-1 lg:row-start-1 lg:h-screen lg:border-b-0 lg:border-e lg:bg-cv-canvas lg:backdrop-blur-none">
       <div className="page-gutter lg:flex lg:h-full lg:flex-col lg:px-4 lg:py-5">
-        <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 lg:mx-0 lg:min-h-0 lg:w-full lg:flex-1 lg:flex-col lg:items-stretch lg:justify-start lg:gap-6 lg:py-0">
-          <div className="flex min-w-0 items-center gap-4 sm:gap-6 lg:flex-col lg:items-stretch lg:gap-6">
+        <div className="page-frame flex min-h-16 flex-wrap items-center justify-between gap-x-2 gap-y-2 py-2 sm:gap-x-4 lg:mx-0 lg:min-h-0 lg:w-full lg:flex-1 lg:flex-col lg:items-stretch lg:justify-start lg:gap-6 lg:py-0">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-6 lg:flex-col lg:items-stretch lg:gap-6">
             <Link className="group shrink-0 rounded-control" to={boardPath()}>
               <span className="block text-heading-sm font-extrabold tracking-tight text-cv-text">קורות חיים</span>
               <span className="block h-0.5 w-8 bg-cv-accent transition-all duration-200 group-hover:w-full" />
@@ -53,7 +53,7 @@ export const AppHeader = () => {
 
             <Link
               aria-label="קליטת משרה חדשה"
-              className={buttonClasses("primary", "lg:min-h-11 lg:flex-1", "compact")}
+              className={buttonClasses("primary", "whitespace-nowrap lg:flex-1 lg:px-3", "default")}
               to={routePaths.newApplication}
             >
               <Plus aria-hidden="true" className="size-icon-md" />

@@ -14,7 +14,9 @@ const columns = [
   { key: "preparation", label: "הכנת קורות חיים", width: "w-[22%]" },
   { key: "next-action", label: "המשך טיפול", width: "w-[24%]" },
   { key: "activity", label: "עודכן", width: "w-[10%]" },
-  { key: "actions", label: "פעולות", width: "w-12" },
+  /* The column holds one icon-sized menu trigger. Its name stays for assistive tech but is
+     not drawn: at the trigger's width a visible label was clipped by the table edge. */
+  { key: "actions", label: "פעולות", width: "w-12", visuallyHidden: true },
 ] as const;
 
 interface ApplicationListTableProps {
@@ -39,7 +41,7 @@ export const ApplicationListTable = ({
       <table className="block w-full border-collapse text-start lg:table lg:table-fixed">
         <thead className="hidden lg:table-header-group">
           <tr className="border-b border-cv-border bg-cv-surface-muted">
-            {columns.map(({ key, label, width }) => (
+            {columns.map(({ key, label, width, ...column }) => (
               <th
                 className={cx(
                   "px-2.5 py-2.5 text-start text-support font-semibold text-cv-text-muted first:ps-4 last:pe-4",
@@ -48,7 +50,7 @@ export const ApplicationListTable = ({
                 key={key}
                 scope="col"
               >
-                {label}
+                {"visuallyHidden" in column ? <span className="sr-only">{label}</span> : label}
               </th>
             ))}
           </tr>

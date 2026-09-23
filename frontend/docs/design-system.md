@@ -84,7 +84,15 @@ hairline or a background step, not border, radius and shadow together.
 
 Workflow routes place their stage spine beside the active content at desktop widths.
 The spine uses heading-weight labels, larger marks and a continuous vertical connector;
-on narrow screens it stacks above the content as the same navigation landmark.
+below the large breakpoint it becomes one row of marks above the content, joined by
+horizontal connectors, with only the open step labelled. It stays the same navigation
+landmark, and every step keeps its accessible name.
+
+Route frames start at the navigation edge rather than centring, so a page heading keeps
+its position when moving between routes whatever the route's measure. Top-level areas
+reached from the primary navigation carry no breadcrumb: the navigation already marks
+where the reader is, and a trail through the board implied a hierarchy that does not
+exist.
 
 Inline `Callout` messages are compositions rather than chips: a coloured edge, icon,
 sentence and adjacent resolution action on a transparent background. Soft filled

@@ -1,5 +1,3 @@
-import { FileCheck2 } from "lucide-react";
-
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
 
@@ -9,6 +7,9 @@ interface IntakeFeedbackProps {
   serverValidationFailed: boolean;
 }
 
+/* Only what the submission reported. A standing note about what creating does used to
+   close this list, drawn as a filled success banner before anything had succeeded; its
+   sentence was already the job-text field's hint and the commit bar's own line. */
 export const IntakeFeedback = ({ error, isStale, serverValidationFailed }: IntakeFeedbackProps) => (
   <>
     {isStale ? (
@@ -32,9 +33,5 @@ export const IntakeFeedback = ({ error, isStale, serverValidationFailed }: Intak
         fallbackTitle="יצירת המועמדות נכשלה"
       />
     )}
-    <div className="flex items-start gap-2 rounded-control border border-cv-success/25 bg-cv-success-soft p-3 text-support text-cv-text">
-      <FileCheck2 aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-cv-success" />
-      <p>יצירת המועמדות שומרת את הטקסט בדיוק כפי שהוזן בתצלום משרה קבוע, ואז מתחילה את ניתוח ההתאמה.</p>
-    </div>
   </>
 );

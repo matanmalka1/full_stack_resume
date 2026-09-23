@@ -16,11 +16,7 @@ export const ApplicationNextAction = ({
   variant: ApplicationListViewVariant;
 }) => {
   if (item.next_action == null) {
-    return variant === "row" ? (
-      <span className="text-support text-cv-text-muted" title="לא נקבעה משימת גיוס">
-        —
-      </span>
-    ) : null;
+    return null;
   }
   if (variant === "pipeline") {
     return (

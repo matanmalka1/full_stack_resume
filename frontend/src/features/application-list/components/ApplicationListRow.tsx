@@ -111,7 +111,7 @@ export const ApplicationListRow = ({
         </div>
       </td>
       <td className="col-span-2 border-t border-cv-border px-0 pt-3 align-top lg:border-0 lg:px-3 lg:py-3">
-        <div className="flex flex-col items-start gap-2">
+        <div className="flex flex-col items-start gap-2 empty:after:text-support empty:after:text-cv-text-muted empty:after:content-['—']">
           <ApplicationNextAction item={item} variant="row" />
           <ApplicationRecommendedAction item={item} variant="row" />
         </div>

@@ -16,8 +16,6 @@ describe("SettingsPage", () => {
       vi.fn(() => Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' }))),
     );
     renderRoute("/settings", "/settings", <SettingsPage />);
-    expect(screen.getByRole("link", { name: "מועמדויות" })).toHaveAttribute("href", "/");
-    expect(screen.getByText("הגדרות")).toHaveAttribute("aria-current", "page");
     expect(await screen.findByText("לא הוגדר ספק AI בסביבת הריצה.")).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "יצירת טיוטה עם AI כברירת מחדל" })).toBeDisabled();
   });
