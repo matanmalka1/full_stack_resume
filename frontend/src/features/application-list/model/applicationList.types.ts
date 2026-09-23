@@ -1,1 +1,1 @@
-export type ApplicationListViewVariant = "card" | "pipeline" | "row";
+export type ApplicationListViewVariant = "pipeline" | "row";

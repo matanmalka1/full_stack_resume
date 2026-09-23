@@ -1,12 +1,14 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { Tooltip } from "@/ui/Tooltip";
 import { cx } from "@/ui/cx";
 import type { Tone } from "@/ui/tone";
-import { confidenceText, fitLevelIcon, fitLevelLabel, fitLevelTone } from "@/features/preparation";
+import { confidenceText, fitLevelLabel } from "@/features/preparation";
 import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { preparationProgress } from "../model/applicationListPresentation";
+import { ApplicationRunningOperation } from "./ApplicationRowNextAction";
 
 const quietDotClasses: Record<Tone, string> = {
   success: "bg-cv-success",
@@ -17,97 +19,54 @@ const quietDotClasses: Record<Tone, string> = {
   neutral: "bg-cv-text-muted",
 };
 
-export const ApplicationFitStatus = ({
-  item,
-  variant,
-}: {
-  item: ApplicationListItem;
-  variant: ApplicationListViewVariant;
-}) => {
+/* Fit as the board says it: the score where there is one, the level word where there
+   is not. `fitScoreText` is shared by the table's chip and the card's footer. */
+export const fitScoreText = (item: ApplicationListItem): string | null =>
+  item.fit_score == null ? null : confidenceText(item.fit_score);
+
+/* One chip, the way demo_re's score column reads. The level is never lost - it is the
+   chip's tooltip, which is in the document and so is read with it. */
+export const ApplicationFitStatus = ({ item }: { item: ApplicationListItem }) => {
   if (item.fit_level == null) {
-    return variant === "row" ? (
-      <span className="text-support text-cv-text-muted" title="המשרה טרם נותחה">
-        —
-      </span>
-    ) : null;
+    return (
+      <Tooltip align="center" label="המשרה טרם נותחה">
+        <span className="text-support text-cv-text-muted">—</span>
+      </Tooltip>
+    );
   }
 
   const label = fitLevelLabel(item.fit_level);
-  // Fit is projected from the analysis's requirements when the list is built. There is
-  // no classification confidence to show beside it.
-  const fitScoreLabel = item.fit_score == null ? null : confidenceText(item.fit_score);
+  const score = fitScoreText(item);
 
-  if (variant === "card") {
-    return (
-      <span>
-        <StatusBadge
-          className="shrink-0 px-2 py-0.5"
-          icon={fitLevelIcon(item.fit_level)}
-          tone={fitLevelTone(item.fit_level)}
-        >
-          {fitScoreLabel == null ? label : `${label} · ${fitScoreLabel}`}
-        </StatusBadge>
+  return (
+    <Tooltip align="center" label={label}>
+      <span className="inline-flex min-w-12 items-center justify-center rounded-control bg-cv-surface-muted px-2.5 py-1 text-support font-bold text-cv-text tabular-nums">
+        {score ?? label}
       </span>
-    );
-  }
-
-  if (variant === "pipeline") {
-    return <span className="shrink-0 text-support font-semibold text-cv-accent">{label}</span>;
-  }
-
-  /* The row draws fit as one chip, the way the table's other number columns read: the
-     score where there is one, the level word where there is not. The level is never
-     lost - it is the chip's title and, beside a score, its spoken name. */
-  return (
-    <span
-      className="inline-flex min-w-12 items-center justify-center rounded-control bg-cv-surface-muted px-2.5 py-1 text-support font-bold text-cv-text tabular-nums"
-      title={label}
-    >
-      {fitScoreLabel ?? label}
-      {fitScoreLabel == null ? null : <span className="sr-only"> · {label}</span>}
-    </span>
+    </Tooltip>
   );
 };
 
-export const ApplicationRecruitmentStatus = ({
-  item,
-  variant,
-}: {
-  item: ApplicationListItem;
-  variant: ApplicationListViewVariant;
-}) => {
-  const label = recruitmentStatusLabel(item.recruitment_status);
-
-  if (variant === "card") {
-    return (
-      <StatusBadge className="px-2.5 py-0.5" tone="neutral">
-        {label}
-      </StatusBadge>
-    );
-  }
-
-  if (variant === "pipeline") {
-    return <span className="text-cv-text-muted">{label}</span>;
-  }
-
-  /* In the row the employer's side is one outlined pill under the CV track: a status,
-     not a step, so it is drawn as a tag rather than a bar. */
-  return (
+/* The employer's side as one outlined pill under the CV track: a status, not a step,
+   so it is drawn as a tag rather than a bar. */
+export const ApplicationRecruitmentStatus = ({ item }: { item: ApplicationListItem }) => (
+  <span
+    className={cx(
+      "inline-flex items-center gap-1.5 rounded-pill border px-2 py-0.5 text-support font-medium",
+      item.is_closed ? "border-cv-border text-cv-text-muted" : "border-cv-border-strong text-cv-text",
+    )}
+  >
     <span
-      className={cx(
-        "inline-flex items-center gap-1.5 rounded-pill border px-2 py-0.5 text-support font-medium",
-        item.is_closed ? "border-cv-border text-cv-text-muted" : "border-cv-border-strong text-cv-text",
-      )}
-    >
-      <span aria-hidden="true" className={cx("size-1.5 shrink-0 rounded-pill", quietDotClasses[recruitmentStatusTone(item.recruitment_status)])} />
-      {label}
-    </span>
-  );
-};
+      aria-hidden="true"
+      className={cx("size-1.5 shrink-0 rounded-pill", quietDotClasses[recruitmentStatusTone(item.recruitment_status)])}
+    />
+    {recruitmentStatusLabel(item.recruitment_status)}
+  </span>
+);
 
-/* The row's CV track, drawn after demo_re: the state named on one line with its
-   position at the far end, and one bar under it filled to that position. The bar is a
-   position among the seven states, not a percentage of work - a stale draft that needs a
+/* The CV track, drawn after demo_re: the state named on one line with its position at
+   the far end, and one bar under it filled to that position. The bar is a position
+   among the seven states, not a percentage of work - a stale draft that needs a
    decision projects back to `needs_review` and the bar shortens with it. */
 const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_state"] }) => {
   const { step, total } = preparationProgress(state);
@@ -137,16 +96,20 @@ const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_s
   );
 };
 
+/* "row" is the labelled track the table and the cards draw; "pipeline" is the compact
+   badge the global search palette shows beside a result. */
 export const ApplicationPreparationStatus = ({
   item,
   variant,
 }: {
   item: ApplicationListItem;
   variant: ApplicationListViewVariant;
-}) => {
-  const badge = (
+}) =>
+  variant === "row" ? (
+    <PreparationTrack state={item.preparation_state} />
+  ) : (
     <StatusBadge
-      className={variant === "row" ? "gap-1.5 px-2.5 text-start" : variant === "card" ? "px-2.5 py-0.5" : "px-2 py-0.5"}
+      className="px-2 py-0.5"
       icon={preparationStateIcons[item.preparation_state]}
       tone={preparationStateTones[item.preparation_state]}
     >
@@ -154,5 +117,14 @@ export const ApplicationPreparationStatus = ({
     </StatusBadge>
   );
 
-  return variant === "row" ? <PreparationTrack state={item.preparation_state} /> : badge;
-};
+/* The progress block shared by the table row and the card: the CV track, and under it
+   the employer's status with any run still going beside it. */
+export const ApplicationProgress = ({ item }: { item: ApplicationListItem }) => (
+  <div className="flex w-full flex-col items-start gap-2">
+    <ApplicationPreparationStatus item={item} variant="row" />
+    <div className="flex flex-wrap items-center gap-1.5">
+      <ApplicationRecruitmentStatus item={item} />
+      <ApplicationRunningOperation item={item} />
+    </div>
+  </div>
+);

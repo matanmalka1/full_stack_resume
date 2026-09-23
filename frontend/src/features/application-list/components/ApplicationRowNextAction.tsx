@@ -4,16 +4,18 @@ import { Link } from "react-router-dom";
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { routePaths } from "@/app/routePaths";
-import { actionDescription, actionDestination, actionLabel, preparationResumeDestination } from "@/features/preparation";
+import {
+  actionDescription,
+  actionDestination,
+  actionLabel,
+  preparationResumeDestination,
+} from "@/features/preparation";
 import { operationTypeLabels, statusLabels } from "@/features/operations";
 import { buttonClasses } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 import { StatusBadge } from "@/ui/StatusBadge";
-import {
-  applicationAttention,
-  formatApplicationDate,
-  isNextActionOverdue,
-} from "../model/applicationListPresentation";
+import { Tooltip } from "@/ui/Tooltip";
+import { applicationAttention, formatApplicationDate, isNextActionOverdue } from "../model/applicationListPresentation";
 import { reportedOperation } from "./ApplicationListItemActions";
 
 interface Command {
@@ -34,7 +36,7 @@ interface Heading {
    step the server recommends; then a finished CV; and only then the reader's own
    recruitment reminder. The first that applies is the heading - the rest stays below it
    as detail, so nothing the old column showed is dropped. */
-const heading = (item: ApplicationListItem, attentive: boolean): Heading | null => {
+export const nextActionHeading = (item: ApplicationListItem, attentive: boolean): Heading | null => {
   const operation = reportedOperation(item);
   if (operation !== null && (operation.status === "failed" || operation.status === "interrupted")) {
     return {
@@ -78,6 +80,42 @@ const heading = (item: ApplicationListItem, attentive: boolean): Heading | null 
   return null;
 };
 
+/* The projected reasons, as a link into the screen that resolves them. When the label
+   had to shorten the list ("+N נוספים"), the full list is the system tooltip; when it
+   already says everything, a tooltip would only repeat it. */
+export const AttentionLink = ({
+  attention,
+  className,
+  item,
+}: {
+  attention: NonNullable<ReturnType<typeof applicationAttention>>;
+  className?: string;
+  item: ApplicationListItem;
+}) => {
+  const full = attention.items.map((entry) => entry.title).join(" · ");
+  const link = (
+    <Link
+      aria-label={`${item.company}: ${full}`}
+      className={cx(
+        "line-clamp-2 text-support font-medium hover:underline",
+        attention.tone === "blocker" ? "text-cv-blocker" : "text-cv-warning",
+        className,
+      )}
+      to={preparationResumeDestination(item)}
+    >
+      <span>{attention.label}</span>
+    </Link>
+  );
+
+  return full === attention.label ? (
+    link
+  ) : (
+    <Tooltip align="center" className="min-w-0" label={full} wrap>
+      {link}
+    </Tooltip>
+  );
+};
+
 /* The table row's next-action cell, drawn after demo_re: a title and one line of detail
    on the reading side, the command and the reminder's dismissal at the far edge. */
 export const ApplicationRowNextAction = ({
@@ -90,7 +128,7 @@ export const ApplicationRowNextAction = ({
   onClearNextAction: (item: ApplicationListItem) => void;
 }) => {
   const attention = applicationAttention(item);
-  const head = heading(item, attention !== null);
+  const head = nextActionHeading(item, attention !== null);
 
   if (head === null) {
     return <span className="text-support text-cv-text-muted">אין פעולה מתוזמנת</span>;
@@ -112,19 +150,7 @@ export const ApplicationRowNextAction = ({
         {head.description === null ? null : (
           <p className="line-clamp-2 text-support text-cv-text-muted">{head.description}</p>
         )}
-        {attention === null ? null : (
-          <Link
-            aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
-            className={cx(
-              "line-clamp-2 text-support font-medium hover:underline",
-              attention.tone === "blocker" ? "text-cv-blocker" : "text-cv-warning",
-            )}
-            title={attention.items.map((entry) => entry.title).join(" · ")}
-            to={preparationResumeDestination(item)}
-          >
-            <span>{attention.label}</span>
-          </Link>
-        )}
+        {attention === null ? null : <AttentionLink attention={attention} item={item} />}
         {item.next_action == null ? null : (
           <p className="flex flex-wrap items-center gap-1.5 text-support text-cv-text-muted">
             {overdue ? (
@@ -162,16 +188,17 @@ export const ApplicationRowNextAction = ({
           </Link>
         )}
         {item.next_action == null ? null : (
-          <button
-            aria-label={`הסרת התזכורת של ${item.company}`}
-            className="inline-flex size-8 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text disabled:opacity-50"
-            disabled={clearing}
-            onClick={() => onClearNextAction(item)}
-            title="הסרת התזכורת, ללא רישום השלמה"
-            type="button"
-          >
-            <X aria-hidden="true" className="size-icon-sm" />
-          </button>
+          <Tooltip label="הסרת התזכורת, ללא רישום השלמה">
+            <button
+              aria-label={`הסרת התזכורת של ${item.company}`}
+              className="inline-flex size-8 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text disabled:opacity-50"
+              disabled={clearing}
+              onClick={() => onClearNextAction(item)}
+              type="button"
+            >
+              <X aria-hidden="true" className="size-icon-sm" />
+            </button>
+          </Tooltip>
         )}
       </div>
     </div>

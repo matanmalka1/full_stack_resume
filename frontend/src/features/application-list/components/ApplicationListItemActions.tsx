@@ -1,39 +1,12 @@
-import {
-  Archive,
-  ArrowLeft,
-  CircleAlert,
-  EllipsisVertical,
-  ExternalLink,
-  Eye,
-  FileCheck2,
-  SlidersHorizontal,
-  Trash2,
-} from "lucide-react";
+import { Archive, EllipsisVertical, ExternalLink, Eye, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { routePaths } from "@/app/routePaths";
-import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
 import { sourceHostname } from "@/features/applications";
-import { actionDestination, preparationResumeDestination } from "@/features/preparation";
-import { actionLabel } from "@/features/preparation";
-import { operationTypeLabels, statusLabels, statusTones } from "@/features/operations";
-import type { ApplicationListViewVariant } from "../model/applicationList.types";
-
-type ActionVariant = Exclude<ApplicationListViewVariant, "pipeline">;
-
-const actionClasses: Record<ActionVariant, string> = {
-  card: "inline-flex min-h-9 items-center gap-1.5 rounded-pill bg-cv-accent-soft px-3 text-support font-semibold text-cv-accent hover:bg-cv-accent hover:text-cv-on-accent",
-  row: "inline-flex min-h-9 items-center justify-center gap-2 rounded-pill bg-cv-accent-soft px-3 py-1 text-start text-support font-semibold text-cv-accent transition-colors duration-200 hover:bg-cv-accent hover:text-cv-on-accent",
-};
-
-const revisionLinkClasses: Record<ActionVariant, string> = {
-  card: "inline-flex items-center gap-1.5 text-support font-semibold text-cv-accent hover:underline",
-  row: "inline-flex items-center gap-1.5 rounded-pill text-support font-semibold text-cv-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cv-focus",
-};
+import { preparationResumeDestination } from "@/features/preparation";
 
 /* Terminal only means polling may stop. A failed or interrupted run remains the most
    important next-action fact until a newer run supersedes it; successful and deliberately
@@ -47,69 +20,8 @@ export const reportedOperation = (item: ApplicationListItem) => {
     : null;
 };
 
-export const ApplicationRecommendedAction = ({
-  item,
-  variant,
-}: {
-  item: ApplicationListItem;
-  variant: ActionVariant;
-}) => {
-  const operation = reportedOperation(item);
-  const operationFailed = operation?.status === "failed" || operation?.status === "interrupted";
-  /* A ready revision does not suppress newer recommended work: both can be valid when
-     the posting or policy changed after that revision was approved. */
-  const readyRevisionLink =
-    item.latest_ready_revision_id == null ? null : (
-      <Link className={revisionLinkClasses[variant]} to={routePaths.revision(item.latest_ready_revision_id)}>
-        <FileCheck2
-          aria-hidden="true"
-          className={variant === "row" ? "size-icon-sm shrink-0" : "size-icon-md shrink-0"}
-        />
-        הגרסה המוכנה
-      </Link>
-    );
-
-  /* Nothing to report draws nothing. The row's cell owns its one empty-cell dash, so a
-     row with neither a recruitment task nor a recommendation reads as one blank cell
-     rather than a stack of dashes, one per component that had nothing to say. */
-  if (operation === null && item.recommended_action == null && readyRevisionLink === null) {
-    return null;
-  }
-
-  return (
-    <div className={variant === "row" ? "flex flex-col items-start gap-1" : "flex flex-col items-end gap-1.5"}>
-      {operationFailed && operation !== null ? (
-        <span
-          className="inline-flex max-w-full items-start gap-1.5 text-start text-support font-medium text-cv-blocker"
-          title={`${operationTypeLabels[operation.operation_type]} · ${statusLabels[operation.status]}`}
-        >
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0" />
-          <span className="line-clamp-2">
-            {operationTypeLabels[operation.operation_type]} · {statusLabels[operation.status]}
-          </span>
-        </span>
-      ) : operation !== null ? (
-        <StatusBadge
-          className={variant === "row" ? "gap-1.5 px-2.5 text-start" : "px-2.5"}
-          tone={statusTones[operation.status]}
-        >
-          {operationTypeLabels[operation.operation_type]} · {statusLabels[operation.status]}
-        </StatusBadge>
-      ) : item.recommended_action != null ? (
-        <Link
-          className={actionClasses[variant]}
-          to={actionDestination(item.recommended_action, item.id) ?? routePaths.application(item.id)}
-        >
-          <ArrowLeft aria-hidden="true" className="size-icon-md" />
-          {actionLabel(item.recommended_action)}
-        </Link>
-      ) : null}
-      {operation === null ? readyRevisionLink : null}
-    </div>
-  );
-};
-
-const menuItemBase = "flex min-h-9 w-full items-center gap-2 px-3.5 py-2 text-start text-support font-medium transition-colors";
+const menuItemBase =
+  "flex min-h-9 w-full items-center gap-2 px-3.5 py-2 text-start text-support font-medium transition-colors";
 const menuItemClasses = `${menuItemBase} text-cv-text hover:bg-cv-surface-muted`;
 
 export const ApplicationRecordActions = ({
@@ -201,10 +113,14 @@ export const ApplicationRecordActions = ({
                 rel="noreferrer"
                 role="menuitem"
                 target="_blank"
-                title={item.source_url}
               >
                 <ExternalLink aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
-                <span className="min-w-0 truncate">מודעת המשרה המקורית</span>
+                <span className="flex min-w-0 flex-col">
+                  מודעת המשרה המקורית
+                  <span className="truncate text-cv-text-muted" dir="ltr">
+                    {host}
+                  </span>
+                </span>
               </a>
             )}
             <button

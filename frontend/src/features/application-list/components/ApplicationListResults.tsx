@@ -65,7 +65,9 @@ export const ApplicationListResults = ({
     <div aria-busy={fetching ? true : undefined} className={fetching ? "opacity-60 transition-opacity" : undefined}>
       {viewMode === "cards" ? (
         <ApplicationCardsView
+          clearingApplicationId={clearingApplicationId}
           items={items}
+          onClearNextAction={onClearNextAction}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
           onRequestUpdate={onRequestUpdate}

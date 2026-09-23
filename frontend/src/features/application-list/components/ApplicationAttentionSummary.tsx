@@ -6,6 +6,7 @@ import { applicationListQueryOptions } from "@/api/applications";
 import type { ApplicationListItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { Tooltip } from "@/ui/Tooltip";
 import {
   attentionHubItems,
   duplicatedApplicationIdentityIds,
@@ -112,10 +113,7 @@ export const ApplicationAttentionSummary = ({
                   {item.application.company} · {item.subtitle}
                 </p>
                 {ambiguous.has(item.application.id) ? (
-                  <p
-                    className="truncate text-support font-medium text-cv-text"
-                    title="קיימת עוד מועמדות לאותה חברה ולאותו תפקיד"
-                  >
+                  <p className="line-clamp-2 text-support font-medium text-cv-text">
                     קיימת עוד מועמדות לאותה חברה ולאותו תפקיד · נפתחה ב־
                     {formatApplicationDate(item.application.created_at)}
                   </p>
@@ -123,19 +121,20 @@ export const ApplicationAttentionSummary = ({
               </div>
               <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
                 {item.type === "overdue" || item.type === "due_today" ? (
-                  <Button
-                    className="text-cv-text-muted hover:text-cv-success"
-                    disabled={clearingApplicationId === item.application.id}
-                    onClick={() => onClearNextAction(item.application)}
-                    pending={clearingApplicationId === item.application.id}
-                    pendingLabel="מסיר…"
-                    size="compact"
-                    title="הסרת התזכורת, ללא רישום השלמה"
-                    variant="ghost"
-                  >
-                    <BellOff aria-hidden="true" className="size-icon-sm" />
-                    הסרת תזכורת
-                  </Button>
+                  <Tooltip label="הסרת התזכורת, ללא רישום השלמה">
+                    <Button
+                      className="text-cv-text-muted hover:text-cv-success"
+                      disabled={clearingApplicationId === item.application.id}
+                      onClick={() => onClearNextAction(item.application)}
+                      pending={clearingApplicationId === item.application.id}
+                      pendingLabel="מסיר…"
+                      size="compact"
+                      variant="ghost"
+                    >
+                      <BellOff aria-hidden="true" className="size-icon-sm" />
+                      הסרת תזכורת
+                    </Button>
+                  </Tooltip>
                 ) : null}
 
                 {item.actionTo == null ? (

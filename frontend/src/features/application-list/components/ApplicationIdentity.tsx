@@ -3,9 +3,8 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { sourceHostname } from "@/features/applications";
 import { preparationResumeDestination, trackLabel } from "@/features/preparation";
-import { cx } from "@/ui/cx";
+import { Tooltip } from "@/ui/Tooltip";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { formatApplicationDate } from "../model/applicationListPresentation";
 
@@ -20,37 +19,26 @@ const companyInitials = (company: string): string =>
     .join("")
     .toLocaleUpperCase() || "?";
 
-export const CompanyMark = ({ company, variant }: { company: string; variant: "card" | "row" }) => (
+export const CompanyMark = ({ company }: { company: string }) => (
   <span
     aria-hidden="true"
-    className={cx(
-      "flex shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-support text-cv-accent",
-      variant === "row"
-        ? "size-9 border border-cv-border font-bold"
-        : "size-11 border border-cv-accent/20 font-extrabold shadow-surface",
-    )}
+    className="flex size-9 shrink-0 items-center justify-center rounded-control border border-cv-border bg-cv-accent-soft text-support font-bold text-cv-accent"
   >
     {companyInitials(company)}
   </span>
 );
 
-/* The card's third line: the track and where the posting came from, as plain text. */
-const ApplicationProvenance = ({ item }: { item: ApplicationListItem }) => {
-  const host = sourceHostname(item.source_url);
-  const origin = host ?? (item.source === "manual" ? null : item.source);
-  if (item.track == null && origin == null) return null;
-
-  return (
-    <p className="truncate text-support text-cv-text-muted">
-      {item.track == null ? null : trackLabel(item.track)}
-      {item.track != null && origin != null ? " · " : null}
-      {origin}
-    </p>
-  );
-};
-
 const DUPLICATE_IDENTITY_HINT = "קיימת עוד מועמדות לאותה חברה ולאותו תפקיד";
 
+/* "row" is the identity the table and the cards draw, after demo_re: the company on the
+   first line with the record's link beside it, the role and the track on the second.
+
+   The name is text; the icon is the link. It is on every record and is a real anchor, so
+   it stays the keyboard and screen-reader route into the Application and still opens a
+   new tab on Cmd/Ctrl-click. The posting's own address is in the record's menu.
+
+   "pipeline" is the stage card's: the company as its link, with whatever the caller
+   hangs beside it, and the role under it. */
 export const ApplicationIdentity = ({
   afterCompany,
   ambiguous = false,
@@ -63,12 +51,13 @@ export const ApplicationIdentity = ({
   variant: ApplicationListViewVariant;
 }) => {
   const href = preparationResumeDestination(item);
+
   if (variant === "pipeline") {
     return (
-      <>
+      <div>
         <div className="mb-1 flex items-start justify-between gap-2">
           <Link
-            className="min-w-0 truncate text-support font-extrabold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
+            className="min-w-0 truncate text-support font-bold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
             dir="auto"
             to={href}
           >
@@ -76,82 +65,53 @@ export const ApplicationIdentity = ({
           </Link>
           {afterCompany}
         </div>
-        <p className="mb-2 truncate text-support text-cv-text-muted" dir="auto" title={item.target_role}>
+        <p className="line-clamp-2 text-support text-cv-text-muted" dir="auto">
           {item.target_role}
         </p>
-      </>
+      </div>
     );
   }
 
-  if (variant === "row") {
-    return <RowIdentity ambiguous={ambiguous} href={href} item={item} />;
-  }
-
-  /* The card leads with the company, beside its mark, and names the role under it. */
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <CompanyMark company={item.company} variant={variant} />
-      <div className="min-w-0 text-left">
-        <Link
-          className="block truncate font-extrabold text-cv-text transition-colors group-hover:text-cv-accent hover:underline"
-          dir="auto"
-          title={item.company}
-          to={href}
-        >
-          {item.company}
-        </Link>
-        <p className="truncate text-support font-medium text-cv-text-muted" dir="auto" title={item.target_role}>
-          {item.target_role}
+      <CompanyMark company={item.company} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span
+            className="truncate text-body font-bold text-cv-text transition-colors group-hover:text-cv-accent"
+            dir="auto"
+          >
+            {item.company}
+          </span>
+          <Tooltip label="פתיחת המועמדות">
+            <Link
+              aria-label={`פתיחת המועמדות של ${item.company}`}
+              className="inline-flex shrink-0 rounded-control p-0.5 text-cv-text-muted hover:text-cv-text"
+              to={href}
+            >
+              <ExternalLink aria-hidden="true" className="size-icon-sm" />
+            </Link>
+          </Tooltip>
+        </div>
+        {/* Clamped rather than truncated: with no tooltip on it, a long role must still be
+            readable in full within two lines. */}
+        <p className="flex min-w-0 items-baseline gap-1.5 text-support text-cv-text-muted">
+          <span className="line-clamp-2 min-w-0 font-medium text-cv-text" dir="auto">
+            {item.target_role}
+          </span>
+          {item.track == null ? null : (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="shrink-0">{trackLabel(item.track)}</span>
+            </>
+          )}
         </p>
-        <ApplicationProvenance item={item} />
+        {ambiguous ? (
+          <p className="line-clamp-2 text-support font-medium text-cv-text">
+            {DUPLICATE_IDENTITY_HINT} · נפתחה ב־{formatApplicationDate(item.created_at)}
+          </p>
+        ) : null}
       </div>
     </div>
   );
 };
-
-/* The table row's identity, drawn after demo_re: the company on the first line with
-   the row's link beside it, the role and the track on the second.
-
-   The name is text; the icon is the link. It is on every row and is a real anchor, so it
-   stays the keyboard and screen-reader route into the Application and still opens a new
-   tab on Cmd/Ctrl-click. The posting's own address is in the row's menu. */
-const RowIdentity = ({ ambiguous, href, item }: { ambiguous: boolean; href: string; item: ApplicationListItem }) => (
-  <div className="flex min-w-0 items-center gap-3">
-    <CompanyMark company={item.company} variant="row" />
-    <div className="min-w-0 flex-1">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span
-          className="truncate text-body font-bold text-cv-text transition-colors group-hover:text-cv-accent"
-          dir="auto"
-          title={item.company}
-        >
-          {item.company}
-        </span>
-        <Link
-          aria-label={`פתיחת המועמדות של ${item.company}`}
-          className="inline-flex shrink-0 rounded-control p-0.5 text-cv-text-muted hover:text-cv-text"
-          title="פתיחת המועמדות"
-          to={href}
-        >
-          <ExternalLink aria-hidden="true" className="size-icon-sm" />
-        </Link>
-      </div>
-      <p className="flex min-w-0 items-center gap-1.5 text-support text-cv-text-muted">
-        <span className="truncate font-medium text-cv-text" dir="auto" title={item.target_role}>
-          {item.target_role}
-        </span>
-        {item.track == null ? null : (
-          <>
-            <span aria-hidden="true">·</span>
-            <span className="shrink-0">{trackLabel(item.track)}</span>
-          </>
-        )}
-      </p>
-      {ambiguous ? (
-        <p className="truncate text-support font-medium text-cv-text" title={DUPLICATE_IDENTITY_HINT}>
-          {DUPLICATE_IDENTITY_HINT} · נפתחה ב־{formatApplicationDate(item.created_at)}
-        </p>
-      ) : null}
-    </div>
-  </div>
-);

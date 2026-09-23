@@ -407,11 +407,13 @@ describe("ApplicationListPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "כרטיסים" }));
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Acme" })).toHaveLength(1);
-    expect(screen.getAllByRole("link", { name: "Binat" })).toHaveLength(1);
+    /* A card is linked by the same icon as the row, and carries the row's blocks. */
+    expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Binat" })).toHaveLength(1);
     expect(screen.getAllByText("Follow up")).toHaveLength(2);
     expect(screen.getAllByText(/באיחור/)).toHaveLength(2);
-    expect(screen.getByText(/Referral from Dana/)).toBeInTheDocument();
+    expect(screen.getAllByText("פעולה מומלצת הבאה")).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: "ניהול גיוס" })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "פעולות נוספות עבור Acme" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
@@ -421,13 +423,13 @@ describe("ApplicationListPage", () => {
     expect(within(pipeline).getByRole("heading", { name: "תהליכים סגורים" })).toBeInTheDocument();
     expect(within(pipeline).getAllByText("אין מועמדויות בשלב זה")).toHaveLength(3);
     expect(within(pipeline).getByRole("link", { name: "Acme" })).toHaveAttribute("href", "/applications/app-1");
-    expect(within(pipeline).getAllByText("ממתין לניתוח המשרה")).toHaveLength(4);
+    /* Each stage card's main control is the step to take, named for its company. */
+    expect(within(pipeline).getAllByRole("link", { name: /^ניתוח המשרה · / })).toHaveLength(4);
+    expect(within(pipeline).getByRole("button", { name: "עדכון שלב הגיוס של Binat" })).toBeInTheDocument();
     expect(within(pipeline).getByText("Follow up")).toBeInTheDocument();
     /* Only the card with a projected reason carries the attention mark. */
     expect(within(pipeline).getAllByText("דורש טיפול")).toHaveLength(1);
-    expect(
-      within(pipeline).getByText("דורש טיפול").closest("article")?.querySelector("a")?.textContent,
-    ).toBe("Delta");
+    expect(within(pipeline).getByText("דורש טיפול").closest("article")?.querySelector("a")?.textContent).toBe("Delta");
     expect(boardReadCount(fetchMock)).toBe(1);
   });
 

@@ -13,7 +13,7 @@ import { ApplicationPreparationStatus } from "./ApplicationListStatuses";
 export const ApplicationSummary = ({ item }: { item: ApplicationListItem }) => (
   <>
     <div className="flex min-w-0 items-center gap-3">
-      <CompanyMark company={item.company} variant="row" />
+      <CompanyMark company={item.company} />
       <div className="min-w-0">
         <p className="truncate font-semibold text-cv-text" dir="auto">
           {item.company}

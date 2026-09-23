@@ -43,14 +43,17 @@ export const ApplicationListTable = ({
   return (
     /* One semantic table becomes stacked rows below the tablet breakpoint. Keeping one
        tree avoids duplicating controls and status announcements for assistive tech. */
-    <Card className="overflow-visible bg-cv-surface-raised shadow-surface">
+    /* Rounded and lifted like demo_re's table rather than the flat default Card. The
+       card cannot clip its corners - the row menus open over its edge - so the header
+       rounds its own two corner cells instead, and its light fill stays inside. */
+    <Card className="overflow-visible rounded-surface bg-cv-surface-raised shadow-surface">
       <table className="block w-full border-collapse text-start lg:table lg:table-fixed">
         <thead className="hidden lg:table-header-group">
-          <tr className="border-b border-cv-border bg-cv-surface-muted">
+          <tr className="border-b border-cv-border">
             {columns.map(({ key, label, width, ...column }) => (
               <th
                 className={cx(
-                  "px-4 py-3 text-support font-semibold text-cv-text-muted",
+                  "bg-cv-canvas px-4 py-3 text-support font-semibold text-cv-text-muted first:rounded-ss-surface last:rounded-se-surface",
                   "center" in column ? "text-center" : "text-start",
                   width,
                 )}
@@ -86,8 +89,12 @@ const skeletonRows = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4"];
 export const ApplicationListTableSkeleton = () => (
   // role="status" is a Card prop, not a DOM role; Card already renders an <output> for it.
   // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-  <Card aria-label="טוען את המועמדויות" className="overflow-hidden bg-cv-surface-raised shadow-surface" role="status">
-    <div className="hidden h-10 border-b border-cv-border bg-cv-surface-muted lg:block" />
+  <Card
+    aria-label="טוען את המועמדויות"
+    className="overflow-hidden rounded-surface bg-cv-surface-raised shadow-surface"
+    role="status"
+  >
+    <div className="hidden h-11 border-b border-cv-border bg-cv-canvas lg:block" />
     {/* Drawn with the `Skeleton` primitive rather than by hand. The hand-rolled version
         pulsed - `animate-pulse` on the whole row - while every other waiting region in
         the product sweeps, so the one screen a reader opens first was also the one that
