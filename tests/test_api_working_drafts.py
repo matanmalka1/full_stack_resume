@@ -175,9 +175,7 @@ def _unsupported_edit(harness, application_id: str) -> dict:
 # --- E1: generation ----------------------------------------------------------
 
 
-def test_generation_reopens_the_exact_parent_approved_revision(
-    ai_api_worker, monkeypatch
-) -> None:
+def test_generation_reopens_the_exact_parent_approved_revision(ai_api_worker, monkeypatch) -> None:
     application_id, working_draft_id, sources = _drafted(ai_api_worker, "Parent Revision Co")
     original = _read(ai_api_worker, working_draft_id).json()
     validated = _validated(ai_api_worker, working_draft_id)

@@ -295,7 +295,9 @@ class DraftAuthoringService:
                     self.snapshot_payloads.read_payload_text(parent.resume_json_reference)
                 )
             except (OSError, ValueError) as exc:
-                raise InfrastructureFailure("could not load the approved draft for editing") from exc
+                raise InfrastructureFailure(
+                    "could not load the approved draft for editing"
+                ) from exc
             if (
                 draft.application_id != command.application_id
                 or draft.job_snapshot_id != parent.job_snapshot_id
