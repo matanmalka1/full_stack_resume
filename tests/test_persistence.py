@@ -71,39 +71,24 @@ IMMUTABLE_MESSAGE = "immutable record"
 
 
 @pytest.fixture
-def analysis_transactions(database_engine):
-    return SqlAlchemyTransactionManager(database_engine)
-
-
-@pytest.fixture
-def analysis_plans(analysis_transactions):
-    return SqlAlchemyAnalysisPlanRepository(analysis_transactions)
-
-
-@pytest.fixture
-def knowledge_transactions(database_engine):
-    return SqlAlchemyTransactionManager(database_engine)
-
-
-@pytest.fixture
-def knowledge_store(knowledge_transactions):
-    return SqlAlchemyKnowledgeLifecycleRepository(knowledge_transactions)
+def knowledge_store(transaction_manager):
+    return SqlAlchemyKnowledgeLifecycleRepository(transaction_manager)
 
 
 def test_analysis_plan_adapter_rejects_read_closed_and_foreign_tokens(
-    analysis_transactions,
-    analysis_plans,
+    transaction_manager,
+    analysis_plan_store,
     database_engine,
 ) -> None:
-    with analysis_transactions.read() as tx:
+    with transaction_manager.read() as tx:
         with pytest.raises(TypeError, match="write transaction"):
-            analysis_plans.lock_application(tx, "application")
+            analysis_plan_store.lock_application(tx, "application")
     with pytest.raises(RuntimeError, match="transaction is closed"):
-        analysis_plans.selection_plan(tx, "plan")
+        analysis_plan_store.selection_plan(tx, "plan")
     foreign = SqlAlchemyTransactionManager(database_engine)
     with foreign.read() as tx:
         with pytest.raises(TypeError, match="another transaction manager"):
-            analysis_plans.selection_plan(tx, "plan")
+            analysis_plan_store.selection_plan(tx, "plan")
 
 
 def _create_application(
@@ -417,7 +402,7 @@ def test_concurrent_writers_do_not_silently_overwrite(database_engine) -> None:
 
 def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
     database_engine,
-    knowledge_transactions,
+    transaction_manager,
     knowledge_store,
 ) -> None:
     request = PrepareKnowledgeMutation(
@@ -433,26 +418,26 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
         recovery_strategy="finish_or_restore",
     )
 
-    with knowledge_transactions.write() as tx:
+    with transaction_manager.write() as tx:
         prepared = knowledge_store.prepare_mutation(
             tx, request, prepared_at="2026-08-19T10:00:00+00:00"
         )
     assert prepared.state is KnowledgeMutationState.PREPARED
-    with knowledge_transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert knowledge_store.prepared_mutations(tx) == [prepared]
     assert prepared.db_mutation == {"fact_id": "fact-1", "to_status": "canonical"}
 
-    with knowledge_transactions.write() as tx:
+    with transaction_manager.write() as tx:
         committed = knowledge_store.commit_mutation(
             tx, prepared.id, committed_at="2026-08-19T10:01:00+00:00"
         )
         assert knowledge_store.mutation(tx, prepared.id) == committed
 
     assert committed.state is KnowledgeMutationState.COMMITTED
-    with knowledge_transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert knowledge_store.prepared_mutations(tx) == []
     with pytest.raises(PreconditionFailed, match="not prepared"):
-        with knowledge_transactions.write() as tx:
+        with transaction_manager.write() as tx:
             knowledge_store.commit_mutation(tx, prepared.id)
     with pytest.raises(ProgrammingError, match="invalid knowledge mutation transition"):
         with database_engine.begin() as connection:
@@ -471,7 +456,7 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
 
 
 def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
-    knowledge_transactions,
+    transaction_manager,
     knowledge_store,
 ) -> None:
     request = PrepareKnowledgeMutation(
@@ -486,14 +471,14 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
         db_mutation={"fact_id": "fact-1"},
         recovery_strategy="finish_or_restore",
     )
-    with knowledge_transactions.write() as tx:
+    with transaction_manager.write() as tx:
         knowledge_store.prepare_mutation(tx, request)
 
     with pytest.raises(PreconditionFailed, match="requires a reason"):
-        with knowledge_transactions.write() as tx:
+        with transaction_manager.write() as tx:
             knowledge_store.quarantine_mutation(tx, request.mutation_id, " ")
     with pytest.raises(IntegrityError, match="uq_knowledge_mutation_journal"):
-        with knowledge_transactions.write() as tx:
+        with transaction_manager.write() as tx:
             knowledge_store.prepare_mutation(
                 tx,
                 PrepareKnowledgeMutation(
@@ -505,7 +490,7 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
                 ),
             )
 
-    with knowledge_transactions.write() as tx:
+    with transaction_manager.write() as tx:
         quarantined = knowledge_store.quarantine_mutation(
             tx,
             request.mutation_id,
@@ -514,7 +499,7 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
         )
     assert quarantined.state is KnowledgeMutationState.QUARANTINED
     assert quarantined.quarantine_reason == "staged bytes no longer match"
-    with knowledge_transactions.read() as tx:
+    with transaction_manager.read() as tx:
         assert knowledge_store.quarantined_mutations(tx) == [quarantined]
 
 

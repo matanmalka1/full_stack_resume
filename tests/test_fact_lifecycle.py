@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from helpers import approve_active_draft, seed_analysis_for_command
+from helpers import approve_active_draft, seed_analysis_for_command, services_transactions
 from helpers import working_claim as _working_claim
 from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
@@ -20,10 +20,6 @@ from cv_engine.application.knowledge_mutations import PrepareKnowledgeMutation
 from cv_engine.domain.contracts.knowledge import FactStatus
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import FactStoreError, load_fact_store
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
 from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
 )
@@ -41,7 +37,7 @@ NEW_FACT = {
 
 
 def _knowledge_persistence(services: Services):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    transactions = services_transactions(services)
     return transactions, SqlAlchemyKnowledgeLifecycleRepository(transactions)
 
 

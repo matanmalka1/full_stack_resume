@@ -16,7 +16,12 @@ from __future__ import annotations
 import os
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, artifact_path, seed_existing_analysis
+from helpers import (
+    ACCOUNT_MANAGER_JOB,
+    artifact_path,
+    seed_existing_analysis,
+    services_transactions,
+)
 
 import cv_engine.application.services.drafts.activation as draft_activation_module
 import cv_engine.application.services.drafts.validation as draft_validation_module
@@ -32,10 +37,6 @@ from cv_engine.application.maintenance import (
 )
 from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
 from cv_engine.infrastructure.persistence.draft_lifecycle import (
     SqlAlchemyDraftLifecycleRepository,
 )
@@ -43,7 +44,7 @@ from cv_engine.runtime.composition import Services
 
 
 def _persistence(services: Services):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    transactions = services_transactions(services)
     return (
         transactions,
         SqlAlchemyDraftLifecycleRepository(transactions),

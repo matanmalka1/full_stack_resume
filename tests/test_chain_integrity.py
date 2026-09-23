@@ -12,7 +12,6 @@ import uuid
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     AMBIGUOUS_HEBREW_JOB,
@@ -24,7 +23,7 @@ from helpers import (
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import ProgrammingError
 
-from cv_engine.api.app import API_PREFIX, create_app
+from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
@@ -55,7 +54,7 @@ from cv_engine.infrastructure.persistence.tables import (
     metadata,
 )
 from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
-from cv_engine.runtime.composition import Services, build_api_services
+from cv_engine.runtime.composition import Services
 from cv_engine.runtime.paths import AppPaths
 from cv_engine.util import normalized_text, sha256_file, sha256_text, utc_now
 
@@ -415,7 +414,7 @@ def test_approval_binds_the_exact_frozen_lineage_and_payloads_before_registratio
 
 
 def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
-    drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager
+    ai_api_paused, drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager
 ) -> None:
     """The record explains one document, so it names that document's language.
 
@@ -482,8 +481,8 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
             == second_record["id"]
         )
 
-    with TestClient(create_app(build_api_services(services))) as api:
-        latest = api.get(f"{API_PREFIX}/applications/{app_id}/decision")
+    api = ai_api_paused.client
+    latest = api.get(f"{API_PREFIX}/applications/{app_id}/decision")
     assert latest.status_code == 200
     assert latest.json()["id"] == second_record["id"]
     assert latest.json()["structured"]["language"] == "he"

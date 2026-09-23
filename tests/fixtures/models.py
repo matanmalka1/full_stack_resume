@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from cv_engine.application.commands import ApprovalResult
-from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.facts import FactStore
 from cv_engine.runtime.composition import Services
 
@@ -44,18 +43,3 @@ class DraftSetup:
         yield self.analysis
         yield self.draft
         yield self.markdown
-
-
-@dataclass(frozen=True)
-class ProposalSetup:
-    services: Services
-    application_id: str
-    analysis_id: str
-    analysis: JobAnalysis
-    payload: dict[str, Any]
-    operation_id: str = ""
-
-    def __iter__(self):
-        yield self.services
-        yield self.application_id
-        yield self.analysis

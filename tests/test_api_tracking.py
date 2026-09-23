@@ -46,9 +46,9 @@ def _patch(harness, path: str, body: dict):
     return harness.client.patch(f"{API_PREFIX}{path}", json=body, headers=MUTATION_HEADERS)
 
 
-def _ingested(api_worker, company: str = "Tracking Co") -> str:
+def _ingested(api_paused, company: str = "Tracking Co") -> str:
     response = _post(
-        api_worker,
+        api_paused,
         "/applications",
         {
             "company": company,
@@ -62,17 +62,17 @@ def _ingested(api_worker, company: str = "Tracking Co") -> str:
 
 
 def test_status_transitions_are_recorded_and_repeating_one_is_not_an_error(
-    api_worker, transaction_manager
+    api_paused, transaction_manager
 ) -> None:
-    application_id = _ingested(api_worker)
+    application_id = _ingested(api_paused)
 
     moved = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/status",
         {"target_status": "withdrawn", "reason": "no longer hiring"},
     )
     repeated = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/status",
         {"target_status": "withdrawn"},
     )
@@ -89,13 +89,13 @@ def test_status_transitions_are_recorded_and_repeating_one_is_not_an_error(
 
 
 def test_applied_cannot_be_asked_for_because_it_is_submission_owned(
-    api_worker, transaction_manager
+    api_paused, transaction_manager
 ) -> None:
     """state-and-use-cases.md 18: `applied` is reached by recording a submission."""
-    application_id = _ingested(api_worker)
+    application_id = _ingested(api_paused)
 
     response = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/status",
         {"target_status": "applied"},
     )
@@ -105,7 +105,7 @@ def test_applied_cannot_be_asked_for_because_it_is_submission_owned(
 
 
 def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
-    api_worker, transaction_manager
+    api_paused, transaction_manager
 ) -> None:
     """A correction names what should have been recorded, and why.
 
@@ -114,9 +114,9 @@ def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
     Application to `applied` - so the mis-recorded status here is one an
     Application can actually reach without inventing a submission.
     """
-    application_id = _ingested(api_worker)
+    application_id = _ingested(api_paused)
     moved = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/status",
         {"target_status": "withdrawn"},
     )
@@ -125,12 +125,12 @@ def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
     before = len(_events(transaction_manager, application_id))
 
     anonymous = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/status-corrections",
         {"target_status": "closed", "corrects_event_id": corrected_event},
     )
     corrected = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/status-corrections",
         {
             "target_status": "closed",
@@ -146,7 +146,7 @@ def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
     # The corrected event is still there: a correction appends, it never edits.
     assert len(events) == before + 1
     assert corrected_event in {event["id"] for event in events}
-    timeline = _detail(api_worker, application_id)["recruitment_timeline"]
+    timeline = _detail(api_paused, application_id)["recruitment_timeline"]
     projected = {item["id"]: item for item in timeline}
     assert projected[corrected_event]["item_type"] == "status_transition"
     assert projected[corrected.json()["event_id"]]["corrects_event_id"] == corrected_event
@@ -156,7 +156,7 @@ def test_a_correction_appends_an_event_and_needs_a_reason_and_a_target(
 
 
 def test_an_internal_submission_records_the_exact_revision_and_pdf(
-    api_worker, ready_application, transaction_manager
+    api_paused, ready_application, transaction_manager
 ) -> None:
     setup = ready_application("Submission Co")
     application_id = setup.application_id
@@ -164,7 +164,7 @@ def test_an_internal_submission_records_the_exact_revision_and_pdf(
     pdf = _artifact(transaction_manager, application_id, "resume_pdf")
 
     response = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/submissions",
         {
             "approved_revision_id": revision_id,
@@ -180,7 +180,7 @@ def test_an_internal_submission_records_the_exact_revision_and_pdf(
     assert body["pdf_artifact_version_id"] == pdf["id"]
     # Submission is what moves an Application to `applied`.
     assert body["current_status"] == "applied"
-    detail = _detail(api_worker, application_id)
+    detail = _detail(api_paused, application_id)
     assert detail["allowed_recruitment_transitions"] == [
         "recruiter_screen",
         "interview",
@@ -197,7 +197,7 @@ def test_an_internal_submission_records_the_exact_revision_and_pdf(
 
 
 def test_a_submission_naming_the_wrong_pdf_is_refused(
-    api_worker, ready_application, transaction_manager
+    api_paused, ready_application, transaction_manager
 ) -> None:
     """The claim that something was sent is not re-derivable, so it must be exact."""
     setup = ready_application("Mismatched PDF Co")
@@ -205,7 +205,7 @@ def test_a_submission_naming_the_wrong_pdf_is_refused(
     html = _artifact(transaction_manager, application_id, "resume_html")
 
     response = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/submissions",
         {
             "approved_revision_id": setup.approved.revision_id,
@@ -218,11 +218,11 @@ def test_a_submission_naming_the_wrong_pdf_is_refused(
     assert _application(transaction_manager, application_id)["current_status"] != ("applied")
 
 
-def test_an_external_submission_invents_no_revision_or_artifact(api_worker) -> None:
-    application_id = _ingested(api_worker, "External Co")
+def test_an_external_submission_invents_no_revision_or_artifact(api_paused) -> None:
+    application_id = _ingested(api_paused, "External Co")
 
     response = _post(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/external-submissions",
         {"submitted_at": "2026-08-30T09:00:00+00:00", "metadata": {"note": "sent by email"}},
     )
@@ -235,21 +235,21 @@ def test_an_external_submission_invents_no_revision_or_artifact(api_worker) -> N
     assert body["pdf_artifact_version_id"] is None
 
 
-def test_the_next_action_is_set_and_cleared_as_one_whole_value(api_worker) -> None:
-    application_id = _ingested(api_worker, "Next Action Co")
+def test_the_next_action_is_set_and_cleared_as_one_whole_value(api_paused) -> None:
+    application_id = _ingested(api_paused, "Next Action Co")
 
-    initial = _detail(api_worker, application_id)
+    initial = _detail(api_paused, application_id)
     # `applied` belongs to submission, so the backend-owned direct choices omit it.
     assert initial["allowed_recruitment_transitions"] == ["withdrawn", "closed"]
 
     set_action = _patch(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/next-action",
         {"next_action": "follow up with the recruiter", "next_action_date": "2026-09-05"},
     )
-    projected_set = _detail(api_worker, application_id)
+    projected_set = _detail(api_paused, application_id)
     cleared = _patch(
-        api_worker,
+        api_paused,
         f"/applications/{application_id}/next-action",
         {"next_action": None, "next_action_date": None},
     )

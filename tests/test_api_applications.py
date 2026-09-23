@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
-from cv_engine.api.app import API_PREFIX, DEFAULT_PORT, create_app
+from cv_engine.api.app import API_PREFIX, DEFAULT_PORT
 from cv_engine.application.commands import (
     CreateJobSnapshotCommand,
     IngestCommand,
@@ -16,7 +15,6 @@ from cv_engine.application.errors import (
     StateConflict,
 )
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from cv_engine.runtime.composition import build_api_services
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
@@ -226,306 +224,308 @@ def test_repeating_exact_snapshot_content_is_refused_before_a_payload_write(
 
 
 def test_application_http_create_read_snapshot_and_close_sequence(
-    services, transaction_manager, application_projection_reader
+    api_paused, services, transaction_manager, application_projection_reader
 ) -> None:
-    with TestClient(create_app(build_api_services(services))) as api:
-        created = api.post(
-            f"{API_PREFIX}/applications",
-            headers=MUTATION_HEADERS,
-            json={
-                "company": "HTTP Co",
-                "target_role": "Developer",
-                "job_text": "HTTP initial text\r\n",
-                "source_url": "https://jobs.example/http",
-            },
+    api = api_paused.client
+    created = api.post(
+        f"{API_PREFIX}/applications",
+        headers=MUTATION_HEADERS,
+        json={
+            "company": "HTTP Co",
+            "target_role": "Developer",
+            "job_text": "HTTP initial text\r\n",
+            "source_url": "https://jobs.example/http",
+        },
+    )
+    assert created.status_code == 201
+    application_id = created.json()["application_id"]
+    snapshot_id = created.json()["job_snapshot_id"]
+
+    listed = api.get(f"{API_PREFIX}/applications")
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()["items"]] == [application_id]
+
+    detail = api.get(f"{API_PREFIX}/applications/{application_id}")
+    assert detail.status_code == 200
+    assert detail.json()["latest_snapshot"]["id"] == snapshot_id
+    assert detail.json()["latest_snapshot"]["job_text"] == "HTTP initial text\r\n"
+
+    notes = api.patch(
+        f"{API_PREFIX}/applications/{application_id}/notes",
+        headers=MUTATION_HEADERS,
+        json={"notes": "Recruiter referred me", "expected_notes": ""},
+    )
+    assert notes.status_code == 200
+    assert notes.json()["notes"] == "Recruiter referred me"
+    stale_notes = api.patch(
+        f"{API_PREFIX}/applications/{application_id}/notes",
+        headers=MUTATION_HEADERS,
+        json={"notes": "Overwrite", "expected_notes": ""},
+    )
+    assert stale_notes.status_code == 409
+    assert api.get(f"{API_PREFIX}/applications/{application_id}").json()["application"][
+        "notes"
+    ] == ("Recruiter referred me")
+    with transaction_manager.read() as tx:
+        notes_audit = application_projection_reader.audit_records(tx, application_id)[-1]
+    assert notes_audit["action"] == "update_application_notes"
+    assert notes_audit["details_json"] == '{"field":"notes"}'
+
+    replacement = api.post(
+        f"{API_PREFIX}/applications/{application_id}/job-snapshots",
+        headers=MUTATION_HEADERS,
+        json={
+            "job_text": "HTTP replacement text\n",
+            "source_metadata": {"source_label": "revision"},
+        },
+    )
+    assert replacement.status_code == 201
+    replacement_id = replacement.json()["job_snapshot_id"]
+    with transaction_manager.read() as tx:
+        snapshot_audit = application_projection_reader.audit_records(tx, application_id)
+    assert snapshot_audit[-1]["action"] == "create_job_snapshot"
+    assert snapshot_audit[-1]["actor_type"] == "user"
+    assert snapshot_audit[-1]["client"] == "web"
+
+    closed = api.post(
+        f"{API_PREFIX}/applications/{application_id}/close",
+        headers=MUTATION_HEADERS,
+    )
+    assert closed.status_code == 200
+    assert closed.json()["current_status"] == "closed"
+
+    final = api.get(f"{API_PREFIX}/applications/{application_id}")
+    assert final.status_code == 200
+    assert final.json()["latest_snapshot"]["id"] == replacement_id
+    assert final.json()["latest_snapshot"]["prior_snapshot_id"] == snapshot_id
+    assert final.json()["recruitment_status"] == "closed"
+
+    # delete_application is orthogonal to RecruitmentStatus and callable
+    # from a terminal status: it neither requires nor changes `closed`.
+    deleted = api.post(
+        f"{API_PREFIX}/applications/{application_id}/delete",
+        headers=MUTATION_HEADERS,
+    )
+    assert deleted.status_code == 200
+    assert deleted.json()["current_status"] == "closed"
+
+    # Excluded from the default list, but still individually reachable by ID.
+    listed_after_delete = api.get(f"{API_PREFIX}/applications")
+    assert application_id not in [item["id"] for item in listed_after_delete.json()["items"]]
+    still_reachable = api.get(f"{API_PREFIX}/applications/{application_id}")
+    assert still_reachable.status_code == 200
+    assert still_reachable.json()["application"]["deleted_at"] is not None
+
+    with transaction_manager.read() as tx:
+        delete_audit = application_projection_reader.audit_records(tx, application_id)[-1]
+    assert delete_audit["action"] == "delete_application"
+
+    # Idempotency: deleting an already-deleted Application is refused (409),
+    # not silently repeated - and no second `delete_application` audit event
+    # is appended for it.
+    redeleted = api.post(
+        f"{API_PREFIX}/applications/{application_id}/delete",
+        headers=MUTATION_HEADERS,
+    )
+    assert redeleted.status_code == 409
+    with transaction_manager.read() as tx:
+        assert (
+            application_projection_reader.audit_records(tx, application_id)[-1]["id"]
+            == delete_audit["id"]
         )
-        assert created.status_code == 201
-        application_id = created.json()["application_id"]
-        snapshot_id = created.json()["job_snapshot_id"]
 
-        listed = api.get(f"{API_PREFIX}/applications")
-        assert listed.status_code == 200
-        assert [item["id"] for item in listed.json()["items"]] == [application_id]
-
-        detail = api.get(f"{API_PREFIX}/applications/{application_id}")
-        assert detail.status_code == 200
-        assert detail.json()["latest_snapshot"]["id"] == snapshot_id
-        assert detail.json()["latest_snapshot"]["job_text"] == "HTTP initial text\r\n"
-
-        notes = api.patch(
-            f"{API_PREFIX}/applications/{application_id}/notes",
-            headers=MUTATION_HEADERS,
-            json={"notes": "Recruiter referred me", "expected_notes": ""},
-        )
-        assert notes.status_code == 200
-        assert notes.json()["notes"] == "Recruiter referred me"
-        stale_notes = api.patch(
-            f"{API_PREFIX}/applications/{application_id}/notes",
-            headers=MUTATION_HEADERS,
-            json={"notes": "Overwrite", "expected_notes": ""},
-        )
-        assert stale_notes.status_code == 409
-        assert api.get(f"{API_PREFIX}/applications/{application_id}").json()["application"][
-            "notes"
-        ] == ("Recruiter referred me")
-        with transaction_manager.read() as tx:
-            notes_audit = application_projection_reader.audit_records(tx, application_id)[-1]
-        assert notes_audit["action"] == "update_application_notes"
-        assert notes_audit["details_json"] == '{"field":"notes"}'
-
-        replacement = api.post(
-            f"{API_PREFIX}/applications/{application_id}/job-snapshots",
-            headers=MUTATION_HEADERS,
-            json={
-                "job_text": "HTTP replacement text\n",
-                "source_metadata": {"source_label": "revision"},
-            },
-        )
-        assert replacement.status_code == 201
-        replacement_id = replacement.json()["job_snapshot_id"]
-        with transaction_manager.read() as tx:
-            snapshot_audit = application_projection_reader.audit_records(tx, application_id)
-        assert snapshot_audit[-1]["action"] == "create_job_snapshot"
-        assert snapshot_audit[-1]["actor_type"] == "user"
-        assert snapshot_audit[-1]["client"] == "web"
-
-        closed = api.post(
-            f"{API_PREFIX}/applications/{application_id}/close",
-            headers=MUTATION_HEADERS,
-        )
-        assert closed.status_code == 200
-        assert closed.json()["current_status"] == "closed"
-
-        final = api.get(f"{API_PREFIX}/applications/{application_id}")
-        assert final.status_code == 200
-        assert final.json()["latest_snapshot"]["id"] == replacement_id
-        assert final.json()["latest_snapshot"]["prior_snapshot_id"] == snapshot_id
-        assert final.json()["recruitment_status"] == "closed"
-
-        # delete_application is orthogonal to RecruitmentStatus and callable
-        # from a terminal status: it neither requires nor changes `closed`.
-        deleted = api.post(
-            f"{API_PREFIX}/applications/{application_id}/delete",
-            headers=MUTATION_HEADERS,
-        )
-        assert deleted.status_code == 200
-        assert deleted.json()["current_status"] == "closed"
-
-        # Excluded from the default list, but still individually reachable by ID.
-        listed_after_delete = api.get(f"{API_PREFIX}/applications")
-        assert application_id not in [item["id"] for item in listed_after_delete.json()["items"]]
-        still_reachable = api.get(f"{API_PREFIX}/applications/{application_id}")
-        assert still_reachable.status_code == 200
-        assert still_reachable.json()["application"]["deleted_at"] is not None
-
-        with transaction_manager.read() as tx:
-            delete_audit = application_projection_reader.audit_records(tx, application_id)[-1]
-        assert delete_audit["action"] == "delete_application"
-
-        # Idempotency: deleting an already-deleted Application is refused (409),
-        # not silently repeated - and no second `delete_application` audit event
-        # is appended for it.
-        redeleted = api.post(
-            f"{API_PREFIX}/applications/{application_id}/delete",
-            headers=MUTATION_HEADERS,
-        )
-        assert redeleted.status_code == 409
-        with transaction_manager.read() as tx:
-            assert (
-                application_projection_reader.audit_records(tx, application_id)[-1]["id"]
-                == delete_audit["id"]
-            )
-
-        # A duplicate application for the same posting is no longer flagged
-        # against a deleted Application.
-        duplicate = api.post(
-            f"{API_PREFIX}/applications/duplicate-check",
-            headers=MUTATION_HEADERS,
-            json={
-                "company": "HTTP Co",
-                "target_role": "Developer",
-                "job_text": "HTTP replacement text\n",
-                "source_url": "https://jobs.example/http",
-            },
-        )
-        assert duplicate.status_code == 200
-        assert duplicate.json()["matches"] == []
+    # A duplicate application for the same posting is no longer flagged
+    # against a deleted Application.
+    duplicate = api.post(
+        f"{API_PREFIX}/applications/duplicate-check",
+        headers=MUTATION_HEADERS,
+        json={
+            "company": "HTTP Co",
+            "target_role": "Developer",
+            "job_text": "HTTP replacement text\n",
+            "source_url": "https://jobs.example/http",
+        },
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["matches"] == []
 
 
-def test_application_http_duplicate_precheck_and_acknowledgement_contract(services) -> None:
+def test_application_http_duplicate_precheck_and_acknowledgement_contract(
+    api_paused, services
+) -> None:
     payload = {
         "company": "HTTP Duplicate Co",
         "target_role": "Developer",
         "job_text": "Duplicate HTTP text",
         "source_url": "https://jobs.example/http-duplicate",
     }
-    with TestClient(create_app(build_api_services(services))) as api:
-        original = api.post(
-            f"{API_PREFIX}/applications",
-            headers=MUTATION_HEADERS,
-            json=payload,
-        )
-        assert original.status_code == 201
+    api = api_paused.client
+    original = api.post(
+        f"{API_PREFIX}/applications",
+        headers=MUTATION_HEADERS,
+        json=payload,
+    )
+    assert original.status_code == 201
 
-        checked = api.post(
-            f"{API_PREFIX}/applications/duplicate-check",
-            headers=MUTATION_HEADERS,
-            json=payload,
-        )
-        assert checked.status_code == 200
-        assert checked.json()["matches"][0]["matched_on"] == [
-            "source_url",
-            "normalized_text",
-            "company_title",
-        ]
+    checked = api.post(
+        f"{API_PREFIX}/applications/duplicate-check",
+        headers=MUTATION_HEADERS,
+        json=payload,
+    )
+    assert checked.status_code == 200
+    assert checked.json()["matches"][0]["matched_on"] == [
+        "source_url",
+        "normalized_text",
+        "company_title",
+    ]
 
-        refused = api.post(
-            f"{API_PREFIX}/applications",
-            headers=MUTATION_HEADERS,
-            json=payload,
-        )
-        assert refused.status_code == 412
-        assert refused.json()["code"] == "DUPLICATE_ACKNOWLEDGEMENT_REQUIRED"
-        assert refused.json()["context"]["matches"] == checked.json()["matches"]
-        assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 1
+    refused = api.post(
+        f"{API_PREFIX}/applications",
+        headers=MUTATION_HEADERS,
+        json=payload,
+    )
+    assert refused.status_code == 412
+    assert refused.json()["code"] == "DUPLICATE_ACKNOWLEDGEMENT_REQUIRED"
+    assert refused.json()["context"]["matches"] == checked.json()["matches"]
+    assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 1
 
-        accepted = api.post(
-            f"{API_PREFIX}/applications",
-            headers=MUTATION_HEADERS,
-            json={**payload, "acknowledged_duplicates": True},
-        )
-        assert accepted.status_code == 201
-        assert accepted.json()["warnings"] == [
-            "DUPLICATE_SOURCE_URL",
-            "DUPLICATE_NORMALIZED_TEXT",
-            "DUPLICATE_COMPANY_TITLE",
-        ]
-        assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
-        base = {
-            "company": "URL Safety Co",
-            "target_role": "Developer",
-            "job_text": "A safe posting",
-        }
-        for field, value in (
-            ("company", "unsafe company\u0000"),
-            ("target_role", "unsafe role\u0000"),
-            ("job_text", "unsafe posting\u0000"),
-            ("source_url", "https://jobs.example/unsafe\u0000"),
-        ):
-            for endpoint in ("applications/duplicate-check", "applications"):
-                controlled = api.post(
-                    f"{API_PREFIX}/{endpoint}",
-                    headers=MUTATION_HEADERS,
-                    json={**base, field: value},
-                )
-                assert controlled.status_code == 412
-                assert controlled.json()["code"] == "APPLICATION_INTAKE_INVALID"
-                assert controlled.json()["context"] == {"field": field}
-                assert value not in controlled.json()["detail"]
-        assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
-        too_long = api.post(
-            f"{API_PREFIX}/applications/duplicate-check",
-            headers=MUTATION_HEADERS,
-            json={**base, "source_url": "https://jobs.example/" + "x" * 2048},
-        )
+    accepted = api.post(
+        f"{API_PREFIX}/applications",
+        headers=MUTATION_HEADERS,
+        json={**payload, "acknowledged_duplicates": True},
+    )
+    assert accepted.status_code == 201
+    assert accepted.json()["warnings"] == [
+        "DUPLICATE_SOURCE_URL",
+        "DUPLICATE_NORMALIZED_TEXT",
+        "DUPLICATE_COMPANY_TITLE",
+    ]
+    assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
+    base = {
+        "company": "URL Safety Co",
+        "target_role": "Developer",
+        "job_text": "A safe posting",
+    }
+    for field, value in (
+        ("company", "unsafe company\u0000"),
+        ("target_role", "unsafe role\u0000"),
+        ("job_text", "unsafe posting\u0000"),
+        ("source_url", "https://jobs.example/unsafe\u0000"),
+    ):
+        for endpoint in ("applications/duplicate-check", "applications"):
+            controlled = api.post(
+                f"{API_PREFIX}/{endpoint}",
+                headers=MUTATION_HEADERS,
+                json={**base, field: value},
+            )
+            assert controlled.status_code == 412
+            assert controlled.json()["code"] == "APPLICATION_INTAKE_INVALID"
+            assert controlled.json()["context"] == {"field": field}
+            assert value not in controlled.json()["detail"]
+    assert len(api.get(f"{API_PREFIX}/applications").json()["items"]) == 2
+    too_long = api.post(
+        f"{API_PREFIX}/applications/duplicate-check",
+        headers=MUTATION_HEADERS,
+        json={**base, "source_url": "https://jobs.example/" + "x" * 2048},
+    )
 
-        assert too_long.status_code == 422
+    assert too_long.status_code == 422
 
 
-def test_application_list_query_narrows_orders_and_pages_at_the_boundary(services) -> None:
+def test_application_list_query_narrows_orders_and_pages_at_the_boundary(
+    api_paused, services
+) -> None:
     """The list query is answered by the application layer; the router only maps it.
 
     What is under test here is that mapping: the parameters reach the query, the
     counts come back beside the page, and a value outside the closed sets or the
     paging bounds is refused at the boundary rather than silently matching nothing.
     """
-    with TestClient(create_app(build_api_services(services))) as api:
-        for company in ("Alpha", "Binat", "Cegal"):
-            created = api.post(
-                f"{API_PREFIX}/applications",
-                headers=MUTATION_HEADERS,
-                json={
-                    "company": company,
-                    "target_role": "Developer",
-                    "job_text": f"A posting from {company}",
-                },
-            )
-            assert created.status_code == 201
-            if company == "Cegal":
-                closed_id = created.json()["application_id"]
-
-        closed = api.post(f"{API_PREFIX}/applications/{closed_id}/close", headers=MUTATION_HEADERS)
-        assert closed.status_code == 200
-
-        whole = api.get(f"{API_PREFIX}/applications").json()
-        assert (whole["matched"], whole["total"]) == (3, 3)
-        assert whole["limit"] is None and whole["offset"] == 0
-        # Every row is at the first stage, and a state nothing reached is absent
-        # rather than reported as zero.
-        assert whole["stage_counts"] == {"needs_analysis": 3}
-        assert whole["preset_counts"] == {
-            "all": 3,
-            "needs_attention": 0,
-            "ready_to_send": 0,
-            "active_interviews": 0,
-        }
-        assert whole["recruitment_status_counts"] == {"saved": 2, "closed": 1}
-        assert {item["company"]: item["is_closed"] for item in whole["items"]} == {
-            "Alpha": False,
-            "Binat": False,
-            "Cegal": True,
-        }
-
-        # A closed Application stays stored and reachable, and is not what a board
-        # of live work is asking about.
-        live = api.get(f"{API_PREFIX}/applications", params={"activity": "open"}).json()
-        assert sorted(item["company"] for item in live["items"]) == ["Alpha", "Binat"]
-        assert (live["matched"], live["total"]) == (2, 3)
-
-        found = api.get(f"{API_PREFIX}/applications", params={"search": "binat"}).json()
-        assert [item["company"] for item in found["items"]] == ["Binat"]
-
-        # Every row is at the first stage here, so the filter that names it keeps
-        # them and one that names another stage keeps none - both from the computed
-        # projection rather than a stored column.
-        staged = api.get(f"{API_PREFIX}/applications", params={"stage": ["needs_analysis"]}).json()
-        assert staged["matched"] == 3
-        # Counted before narrowing: a stage filter must not erase its own options.
-        assert staged["stage_counts"] == {"needs_analysis": 3}
-        assert (
-            api.get(f"{API_PREFIX}/applications", params={"stage": ["ready"]}).json()["matched"]
-            == 0
-        )
-
-        ordered = api.get(f"{API_PREFIX}/applications", params={"sort": "company"}).json()
-        assert [item["company"] for item in ordered["items"]] == ["Alpha", "Binat", "Cegal"]
-
-        page = api.get(
+    api = api_paused.client
+    for company in ("Alpha", "Binat", "Cegal"):
+        created = api.post(
             f"{API_PREFIX}/applications",
-            params={"sort": "company", "limit": 2, "offset": 1},
-        ).json()
-        assert [item["company"] for item in page["items"]] == ["Binat", "Cegal"]
-        # The page is what it holds; the counts are what place it.
-        assert (page["matched"], page["total"]) == (3, 3)
-        assert (page["limit"], page["offset"]) == (2, 1)
+            headers=MUTATION_HEADERS,
+            json={
+                "company": company,
+                "target_role": "Developer",
+                "job_text": f"A posting from {company}",
+            },
+        )
+        assert created.status_code == 201
+        if company == "Cegal":
+            closed_id = created.json()["application_id"]
 
-        # A stale page number is an empty page, not a refusal.
-        past_end = api.get(f"{API_PREFIX}/applications", params={"offset": 50}).json()
-        assert past_end["items"] == [] and past_end["matched"] == 3
+    closed = api.post(f"{API_PREFIX}/applications/{closed_id}/close", headers=MUTATION_HEADERS)
+    assert closed.status_code == 200
 
-        for params in (
-            {"activity": "archived"},
-            {"stage": ["not_a_stage"]},
-            {"sort": "whatever"},
-            {"limit": 0},
-            {"limit": 201},
-            {"offset": -1},
-        ):
-            refused = api.get(f"{API_PREFIX}/applications", params=params)
-            assert refused.status_code == 422, params
+    whole = api.get(f"{API_PREFIX}/applications").json()
+    assert (whole["matched"], whole["total"]) == (3, 3)
+    assert whole["limit"] is None and whole["offset"] == 0
+    # Every row is at the first stage, and a state nothing reached is absent
+    # rather than reported as zero.
+    assert whole["stage_counts"] == {"needs_analysis": 3}
+    assert whole["preset_counts"] == {
+        "all": 3,
+        "needs_attention": 0,
+        "ready_to_send": 0,
+        "active_interviews": 0,
+    }
+    assert whole["recruitment_status_counts"] == {"saved": 2, "closed": 1}
+    assert {item["company"]: item["is_closed"] for item in whole["items"]} == {
+        "Alpha": False,
+        "Binat": False,
+        "Cegal": True,
+    }
+
+    # A closed Application stays stored and reachable, and is not what a board
+    # of live work is asking about.
+    live = api.get(f"{API_PREFIX}/applications", params={"activity": "open"}).json()
+    assert sorted(item["company"] for item in live["items"]) == ["Alpha", "Binat"]
+    assert (live["matched"], live["total"]) == (2, 3)
+
+    found = api.get(f"{API_PREFIX}/applications", params={"search": "binat"}).json()
+    assert [item["company"] for item in found["items"]] == ["Binat"]
+
+    # Every row is at the first stage here, so the filter that names it keeps
+    # them and one that names another stage keeps none - both from the computed
+    # projection rather than a stored column.
+    staged = api.get(f"{API_PREFIX}/applications", params={"stage": ["needs_analysis"]}).json()
+    assert staged["matched"] == 3
+    # Counted before narrowing: a stage filter must not erase its own options.
+    assert staged["stage_counts"] == {"needs_analysis": 3}
+    assert api.get(f"{API_PREFIX}/applications", params={"stage": ["ready"]}).json()["matched"] == 0
+
+    ordered = api.get(f"{API_PREFIX}/applications", params={"sort": "company"}).json()
+    assert [item["company"] for item in ordered["items"]] == ["Alpha", "Binat", "Cegal"]
+
+    page = api.get(
+        f"{API_PREFIX}/applications",
+        params={"sort": "company", "limit": 2, "offset": 1},
+    ).json()
+    assert [item["company"] for item in page["items"]] == ["Binat", "Cegal"]
+    # The page is what it holds; the counts are what place it.
+    assert (page["matched"], page["total"]) == (3, 3)
+    assert (page["limit"], page["offset"]) == (2, 1)
+
+    # A stale page number is an empty page, not a refusal.
+    past_end = api.get(f"{API_PREFIX}/applications", params={"offset": 50}).json()
+    assert past_end["items"] == [] and past_end["matched"] == 3
+
+    for params in (
+        {"activity": "archived"},
+        {"stage": ["not_a_stage"]},
+        {"sort": "whatever"},
+        {"limit": 0},
+        {"limit": 201},
+        {"offset": -1},
+    ):
+        refused = api.get(f"{API_PREFIX}/applications", params=params)
+        assert refused.status_code == 422, params
 
 
 def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_content(
+    api_paused,
     services,
     transaction_manager,
     application_projection_reader,
@@ -540,48 +540,46 @@ def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_con
         )
     )
     path = f"{API_PREFIX}/applications/{first.application_id}/job-snapshots"
-    with TestClient(create_app(build_api_services(services))) as api:
-        initial = api.get(path)
-        assert initial.status_code == 200
-        assert initial.json()["active_job_snapshot_id"] == first.job_snapshot_id
-        assert len(initial.json()["items"]) == 1
-        second = services.applications.create_job_snapshot(
-            CreateJobSnapshotCommand(
-                application_id=first.application_id,
-                job_text="עברית English\n<script>x</script>\n",
-                source_url="https://jobs.example/second",
-                client="web",
-            )
+    api = api_paused.client
+    initial = api.get(path)
+    assert initial.status_code == 200
+    assert initial.json()["active_job_snapshot_id"] == first.job_snapshot_id
+    assert len(initial.json()["items"]) == 1
+    second = services.applications.create_job_snapshot(
+        CreateJobSnapshotCommand(
+            application_id=first.application_id,
+            job_text="עברית English\n<script>x</script>\n",
+            source_url="https://jobs.example/second",
+            client="web",
         )
-        with transaction_manager.read() as tx:
-            records_before = application_projection_reader.snapshots(tx, first.application_id)
-        history = api.get(path).json()
-        assert history["active_job_snapshot_id"] == second.job_snapshot_id
-        assert [item["id"] for item in history["items"]] == [
-            first.job_snapshot_id,
-            second.job_snapshot_id,
-        ]
-        assert [item["version_number"] for item in history["items"]] == [1, 2]
-        assert [item["job_text"] for item in history["items"]] == [
-            "עברית  English\n<script>x</script>\n",
-            "עברית English\n<script>x</script>\n",
-        ]
-        assert [item["source_url"] for item in history["items"]] == [
-            "https://jobs.example/first",
-            "https://jobs.example/second",
-        ]
-        assert "payload_path" not in history["items"][0]
-        with transaction_manager.read() as tx:
-            assert (
-                application_projection_reader.snapshots(tx, first.application_id) == records_before
-            )
-        assert api.get(f"{API_PREFIX}/applications/unknown/job-snapshots").status_code == 404
-        # Corrupt only the isolated fixture's historical payload: never trust or
-        # reconstruct it from a live posting, and keep the other version readable.
-        record = records_before[0]
-        payload = services.paths.root / record["payload_path"]
-        payload.write_bytes(b"tampered")
-        unavailable = api.get(path)
-        assert unavailable.status_code == 200
-        assert unavailable.json()["items"][0]["job_text"] is None
-        assert unavailable.json()["items"][1]["job_text"] == history["items"][1]["job_text"]
+    )
+    with transaction_manager.read() as tx:
+        records_before = application_projection_reader.snapshots(tx, first.application_id)
+    history = api.get(path).json()
+    assert history["active_job_snapshot_id"] == second.job_snapshot_id
+    assert [item["id"] for item in history["items"]] == [
+        first.job_snapshot_id,
+        second.job_snapshot_id,
+    ]
+    assert [item["version_number"] for item in history["items"]] == [1, 2]
+    assert [item["job_text"] for item in history["items"]] == [
+        "עברית  English\n<script>x</script>\n",
+        "עברית English\n<script>x</script>\n",
+    ]
+    assert [item["source_url"] for item in history["items"]] == [
+        "https://jobs.example/first",
+        "https://jobs.example/second",
+    ]
+    assert "payload_path" not in history["items"][0]
+    with transaction_manager.read() as tx:
+        assert application_projection_reader.snapshots(tx, first.application_id) == records_before
+    assert api.get(f"{API_PREFIX}/applications/unknown/job-snapshots").status_code == 404
+    # Corrupt only the isolated fixture's historical payload: never trust or
+    # reconstruct it from a live posting, and keep the other version readable.
+    record = records_before[0]
+    payload = services.paths.root / record["payload_path"]
+    payload.write_bytes(b"tampered")
+    unavailable = api.get(path)
+    assert unavailable.status_code == 200
+    assert unavailable.json()["items"][0]["job_text"] is None
+    assert unavailable.json()["items"][1]["job_text"] == history["items"][1]["job_text"]

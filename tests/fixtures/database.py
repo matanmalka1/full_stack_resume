@@ -21,13 +21,10 @@ from cv_engine.infrastructure.persistence.application_projections import (
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from cv_engine.infrastructure.persistence.decision_store import SqlAlchemyDecisionRepository
 from cv_engine.infrastructure.persistence.draft_lifecycle import (
     SqlAlchemyDraftLifecycleRepository,
 )
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
-from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
-from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.runtime.config import resolve_config
@@ -151,23 +148,8 @@ def validation_store(transaction_manager):
 
 
 @pytest.fixture
-def decision_store(transaction_manager):
-    return SqlAlchemyDecisionRepository(transaction_manager)
-
-
-@pytest.fixture
-def recruitment_store(transaction_manager):
-    return SqlAlchemyRecruitmentRepository(transaction_manager)
-
-
-@pytest.fixture
 def audit_log(transaction_manager):
     return SqlAlchemyAuditLog(transaction_manager)
-
-
-@pytest.fixture
-def settings_store(transaction_manager):
-    return SqlAlchemySettingsStore(transaction_manager)
 
 
 @pytest.fixture

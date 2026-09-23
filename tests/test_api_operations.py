@@ -8,13 +8,11 @@ report and steer those rows without becoming an execution host.
 from __future__ import annotations
 
 from api_harness import MUTATION_HEADERS
-from fastapi.testclient import TestClient
 from helpers import ACCOUNT_MANAGER_JOB
 
-from cv_engine.api.app import API_PREFIX, create_app
+from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import AnalyzeCommand, IngestCommand
 from cv_engine.application.operations import OperationFailureCode
-from cv_engine.runtime.composition import build_api_services
 
 
 def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-analysis"):
@@ -42,17 +40,17 @@ def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-
 
 
 def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(
-    services, transaction_manager, application_projection_reader
+    api_paused, services, transaction_manager, application_projection_reader
 ) -> None:
     """No worker here on purpose: queued work must be cancelled before it starts."""
     operation = _queued_analysis(services, "Cancel Co")
 
-    with TestClient(create_app(build_api_services(services))) as api:
-        cancelled = api.post(
-            f"{API_PREFIX}/operations/{operation.id}/cancel",
-            headers=MUTATION_HEADERS,
-        )
-        read_back = api.get(f"{API_PREFIX}/operations/{operation.id}")
+    api = api_paused.client
+    cancelled = api.post(
+        f"{API_PREFIX}/operations/{operation.id}/cancel",
+        headers=MUTATION_HEADERS,
+    )
+    read_back = api.get(f"{API_PREFIX}/operations/{operation.id}")
 
     assert cancelled.status_code == 200
     assert "Location" not in cancelled.headers
@@ -67,17 +65,19 @@ def test_cancelling_queued_work_is_recorded_and_the_work_never_runs(
 # --- retry ------------------------------------------------------------------
 
 
-def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(services) -> None:
+def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(
+    api_paused, services
+) -> None:
     operation = _queued_analysis(services, "Retry Co")
     original_record = services.operation_runner.operation(operation.id)
 
-    with TestClient(create_app(build_api_services(services))) as api:
-        api.post(f"{API_PREFIX}/operations/{operation.id}/cancel", headers=MUTATION_HEADERS)
-        retried = api.post(
-            f"{API_PREFIX}/operations/{operation.id}/retry",
-            headers={**MUTATION_HEADERS, "Idempotency-Key": "stage-c-retry"},
-        )
-        followed = api.get(retried.headers["Location"])
+    api = api_paused.client
+    api.post(f"{API_PREFIX}/operations/{operation.id}/cancel", headers=MUTATION_HEADERS)
+    retried = api.post(
+        f"{API_PREFIX}/operations/{operation.id}/retry",
+        headers={**MUTATION_HEADERS, "Idempotency-Key": "stage-c-retry"},
+    )
+    followed = api.get(retried.headers["Location"])
 
     assert retried.status_code == 202
     queued_id = retried.json()["id"]
@@ -92,19 +92,21 @@ def test_retry_accepts_with_a_location_and_leaves_the_original_immutable(service
     assert services.operation_runner.operation(operation.id).payload == original_record.payload
 
 
-def test_retry_replaying_a_used_idempotency_key_returns_the_same_operation(services) -> None:
+def test_retry_replaying_a_used_idempotency_key_returns_the_same_operation(
+    api_paused, services
+) -> None:
     """Replay safety is what the header buys; without it every call is a new attempt."""
     operation = _queued_analysis(services, "Replay Co")
 
-    with TestClient(create_app(build_api_services(services))) as api:
-        api.post(f"{API_PREFIX}/operations/{operation.id}/cancel", headers=MUTATION_HEADERS)
-        headers = {**MUTATION_HEADERS, "Idempotency-Key": "stage-c-replay"}
-        first = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)
-        replayed = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)
-        generated = api.post(
-            f"{API_PREFIX}/operations/{operation.id}/retry",
-            headers=MUTATION_HEADERS,
-        )
+    api = api_paused.client
+    api.post(f"{API_PREFIX}/operations/{operation.id}/cancel", headers=MUTATION_HEADERS)
+    headers = {**MUTATION_HEADERS, "Idempotency-Key": "stage-c-replay"}
+    first = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)
+    replayed = api.post(f"{API_PREFIX}/operations/{operation.id}/retry", headers=headers)
+    generated = api.post(
+        f"{API_PREFIX}/operations/{operation.id}/retry",
+        headers=MUTATION_HEADERS,
+    )
 
     assert replayed.status_code == 202
     assert replayed.json() == first.json()
@@ -114,21 +116,21 @@ def test_retry_replaying_a_used_idempotency_key_returns_the_same_operation(servi
     assert generated.json()["id"] not in {first.json()["id"], operation.id}
 
 
-def test_retrying_work_that_is_not_terminal_is_a_conflict(services) -> None:
+def test_retrying_work_that_is_not_terminal_is_a_conflict(api_paused, services) -> None:
     operation = _queued_analysis(services, "Live Retry Co")
 
-    with TestClient(create_app(build_api_services(services))) as api:
-        refused = api.post(
-            f"{API_PREFIX}/operations/{operation.id}/retry",
-            headers=MUTATION_HEADERS,
-        )
+    api = api_paused.client
+    refused = api.post(
+        f"{API_PREFIX}/operations/{operation.id}/retry",
+        headers=MUTATION_HEADERS,
+    )
 
     assert refused.status_code == 409
     assert refused.json()["code"] == "STATE_CONFLICT"
     assert refused.json()["type"] == "about:blank#state_conflict"
 
 
-def test_source_changed_operation_withholds_and_refuses_retry(services) -> None:
+def test_source_changed_operation_withholds_and_refuses_retry(api_paused, services) -> None:
     operation = _queued_analysis(services, "Changed Source Co")
     runner = services.operation_runner
     with runner.transactions.write() as tx:
@@ -141,12 +143,12 @@ def test_source_changed_operation_withholds_and_refuses_retry(services) -> None:
             runner_id="runner",
         )
 
-    with TestClient(create_app(build_api_services(services))) as api:
-        failed = api.get(f"{API_PREFIX}/operations/{operation.id}")
-        refused = api.post(
-            f"{API_PREFIX}/operations/{operation.id}/retry",
-            headers=MUTATION_HEADERS,
-        )
+    api = api_paused.client
+    failed = api.get(f"{API_PREFIX}/operations/{operation.id}")
+    refused = api.post(
+        f"{API_PREFIX}/operations/{operation.id}/retry",
+        headers=MUTATION_HEADERS,
+    )
 
     assert failed.status_code == 200
     assert failed.json()["available_actions"] == []

@@ -12,10 +12,7 @@ from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    create_database_engine,
-)
+from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.draft_lifecycle import (
     SqlAlchemyDraftLifecycleRepository,
 )
@@ -177,6 +174,15 @@ def analysis_proposal(**overrides) -> AnalysisProposal:
     )
 
 
+def services_transactions(services: Services) -> SqlAlchemyTransactionManager:
+    """The transaction manager `services` was composed with, on its own engine.
+
+    Building a fresh engine from `services.database_url` per call opened a pool
+    that was never disposed; every caller wants the one already composed.
+    """
+    return services.operation_runner.transactions
+
+
 def validate_active_draft(services: Services, application_id: str):
     """Validate the Application's active draft and return the run result.
 
@@ -185,7 +191,7 @@ def validate_active_draft(services: Services, application_id: str):
     call `validate_working(application_id)` resolves it the same way here
     rather than each writing its own two lines.
     """
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    transactions = services_transactions(services)
     drafts = SqlAlchemyDraftLifecycleRepository(transactions)
     with transactions.read() as tx:
         working = drafts.active_working_draft(tx, application_id)
@@ -239,7 +245,7 @@ def artifact_version_and_path(
     artifact_type: str,
     lifecycle_status: str,
 ):
-    transactions = SqlAlchemyTransactionManager(create_database_engine(services.database_url))
+    transactions = services_transactions(services)
     catalog = SqlAlchemyArtifactCatalog(transactions)
     with transactions.read() as tx:
         version = catalog.latest_artifact_version(

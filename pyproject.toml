@@ -38,6 +38,9 @@ test = [
   "httpx2>=2.12,<3",
   "pyright>=1.1.400,<2",
   "pytest>=8.3,<10",
+  # Coverage is what shows a merged or removed test gave up no line or branch of
+  # the engine; a falling test count is otherwise unfalsifiable.
+  "pytest-cov>=6,<8",
   "ruff>=0.9,<1",
 ]
 
