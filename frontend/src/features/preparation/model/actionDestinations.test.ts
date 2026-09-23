@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { actionDestination, preparationResumeDestination } from "./actionDestinations";
+import { actionDescription, actionLabel } from "./preparationLabels";
 
 const item = (overrides: Partial<ApplicationListItem>): ApplicationListItem =>
   ({
@@ -79,6 +80,12 @@ describe("actionDestination covers the backend action vocabulary", () => {
     }
 
     expect(actionDestination(action, "app-1")).not.toBeNull();
+  });
+
+  /* The board row names the step it recommends and says in one line what it is. */
+  it.each(actions)("names and describes %s", (action) => {
+    expect(actionLabel(action)).not.toBe(action);
+    expect(actionDescription(action)).not.toBeNull();
   });
 
   it("keeps the editor's own commands on the editor", () => {

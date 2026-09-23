@@ -76,6 +76,29 @@ const actionLabels: Record<string, string> = {
 
 export const actionLabel = (action: string): string => actionLabels[action] ?? action;
 
+/* One fixed sentence per action: what the step is, for the board row that recommends
+   it. It describes the step in general - never this Application's state - so it can
+   claim nothing the projection has not said. Keyed like `actionLabels`; the test that
+   reads the backend's action vocabulary requires both for every action. */
+const actionDescriptions: Record<string, string> = {
+  analyze: "קריאת דרישות המשרה ובדיקה אילו עובדות מאושרות עונות עליהן.",
+  edit_matching_configuration: "עדכון הגדרות ההתאמה לפני בחירת העובדות.",
+  create_selection_plan: "בחירת העובדות המאושרות שייכנסו לקורות החיים עבור המשרה.",
+  confirm_and_use_fact: "עובדה ממתינה לאישור לפני שאפשר להשתמש בה בטיוטה.",
+  create_draft: "יצירת טיוטה ראשונה מהעובדות שנבחרו.",
+  update_working_draft: "הטיוטה פתוחה לעריכה ועדיין לא עברה אימות.",
+  apply_selection_change: "בחירת העובדות השתנתה, וצריך להחיל את השינוי על הטיוטה.",
+  regenerate_section: "יצירה מחדש של פרק בטיוטה מאותן עובדות.",
+  regenerate_claim: "יצירה מחדש של טענה בטיוטה מאותה עובדה.",
+  archive_working_draft: "הטיוטה כבר לא תואמת להקשר, ואפשר לשמור אותה בארכיון.",
+  replace_working_draft: "הטיוטה כבר לא תואמת להקשר, ואפשר להחליף אותה בטיוטה חדשה.",
+  validate: "בדיקת הטיוטה מול העובדות לפני האישור.",
+  approve: "הטיוטה עברה אימות וממתינה לאישור שלך.",
+  render: "הגרסה אושרה, ונשאר להפיק ממנה את קובץ קורות החיים.",
+};
+
+export const actionDescription = (action: string): string | null => actionDescriptions[action] ?? null;
+
 /* Why a control is disabled, as the one short sentence its tooltip carries.
 
    This replaced a disclosure that listed every blocked action with its reasons. Most of

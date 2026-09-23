@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { routePaths } from "@/app/routePaths";
-import { actionDestination, actionLabel, preparationResumeDestination } from "@/features/preparation";
+import { actionDescription, actionDestination, actionLabel, preparationResumeDestination } from "@/features/preparation";
 import { operationTypeLabels, statusLabels } from "@/features/operations";
 import { buttonClasses } from "@/ui/Button";
 import { cx } from "@/ui/cx";
@@ -24,6 +24,7 @@ interface Command {
 
 interface Heading {
   command: Command | null;
+  description: string | null;
   failed: boolean;
   title: string;
 }
@@ -38,12 +39,18 @@ const heading = (item: ApplicationListItem, attentive: boolean): Heading | null 
   if (operation !== null && (operation.status === "failed" || operation.status === "interrupted")) {
     return {
       command: { label: "בצע", strong: true, to: preparationResumeDestination(item) },
+      description: null,
       failed: true,
       title: `${operationTypeLabels[operation.operation_type]} · ${statusLabels[operation.status]}`,
     };
   }
   if (operation !== null && !isTerminalOperation(operation)) {
-    return { command: null, failed: false, title: `ממתין לסיום: ${operationTypeLabels[operation.operation_type]}` };
+    return {
+      command: null,
+      description: null,
+      failed: false,
+      title: `ממתין לסיום: ${operationTypeLabels[operation.operation_type]}`,
+    };
   }
   if (item.recommended_action != null) {
     return {
@@ -52,6 +59,7 @@ const heading = (item: ApplicationListItem, attentive: boolean): Heading | null 
         strong: attentive,
         to: actionDestination(item.recommended_action, item.id) ?? routePaths.application(item.id),
       },
+      description: actionDescription(item.recommended_action),
       failed: false,
       title: actionLabel(item.recommended_action),
     };
@@ -59,12 +67,13 @@ const heading = (item: ApplicationListItem, attentive: boolean): Heading | null 
   if (item.latest_ready_revision_id != null) {
     return {
       command: { label: "פתיחה", strong: false, to: routePaths.revision(item.latest_ready_revision_id) },
+      description: null,
       failed: false,
       title: "קורות החיים מוכנים",
     };
   }
   if (item.next_action != null) {
-    return { command: null, failed: false, title: item.next_action };
+    return { command: null, description: null, failed: false, title: item.next_action };
   }
   return null;
 };
@@ -100,6 +109,9 @@ export const ApplicationRowNextAction = ({
         >
           {head.title}
         </p>
+        {head.description === null ? null : (
+          <p className="line-clamp-2 text-support text-cv-text-muted">{head.description}</p>
+        )}
         {attention === null ? null : (
           <Link
             aria-label={`${item.company}: ${attention.items.map((entry) => entry.title).join(" · ")}`}
