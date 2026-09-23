@@ -1,4 +1,4 @@
-"""CandidateContext: identity by reference, and no candidate literals in code."""
+"""CandidateContext: identity resolves by reference to canonical facts."""
 
 from __future__ import annotations
 
@@ -13,17 +13,6 @@ from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import load_candidate_context, load_fact_store
 from cv_engine.infrastructure.rendering import normalized_role_filename
-
-ENGINE_DIR = Path(__file__).resolve().parent.parent / "cv_engine"
-
-# Every module is policy: no module in the engine may carry a candidate literal.
-# The one exemption was the canonical source writer, which has moved to
-# tests/seed.py, so the engine no longer names the candidate anywhere. Kept as an
-# empty set rather than deleted, so a re-introduced literal fails here instead of
-# arriving with an exemption of its own. An inclusion list had to be extended for
-# each new module and silently stopped covering anything nobody remembered to add.
-CANDIDATE_EVIDENCE_MODULES: frozenset[str] = frozenset()
-CANDIDATE_LITERALS = ("Matan Malka", "מתן מלכה", "matanmalka1", "matan1391")
 
 
 def _candidate_file(root: Path) -> Path:
@@ -116,32 +105,3 @@ def test_candidate_context_rejects_missing_or_unusable_identity(
     _write(project_root, payload)
     with pytest.raises(CandidateContextError, match="unusable fact"):
         load_candidate_context(project_root, fact_store)
-
-
-# --- no candidate literals in policy code -----------------------------------
-
-
-def test_no_module_carries_a_candidate_literal_except_declared_evidence() -> None:
-    """The candidate lives in Knowledge, not in code.
-
-    Scanned across the whole engine rather than a listed subset, because the
-    listed-subset form could only protect modules someone remembered to add — and
-    a renderer, record, or projection added later is exactly where a literal would
-    reappear.
-    """
-    offenders = {
-        relative: [literal for literal in CANDIDATE_LITERALS if literal in source]
-        for path in sorted(ENGINE_DIR.rglob("*.py"))
-        if (relative := path.relative_to(ENGINE_DIR).as_posix()) not in CANDIDATE_EVIDENCE_MODULES
-        and any(
-            literal in (source := path.read_text(encoding="utf-8"))
-            for literal in CANDIDATE_LITERALS
-        )
-    }
-    assert not offenders, offenders
-    # The exemptions must stay real, or the rule has quietly become decoration.
-    for relative in sorted(CANDIDATE_EVIDENCE_MODULES):
-        source = (ENGINE_DIR / relative).read_text(encoding="utf-8")
-        assert any(literal in source for literal in CANDIDATE_LITERALS), (
-            f"{relative} is exempt but carries no candidate literal; drop the exemption"
-        )

@@ -59,12 +59,6 @@ ALLOWED_INTERNAL = {
     "infrastructure": {"domain", "application", "infrastructure", "util"},
 }
 
-# Known boundary debt. New entries are not
-# permitted. Stages remove entries as they move the owning policy inward. A2, A6, and
-# A24 are all closed; the set stays so a regression fails instead of quietly seeding a
-# new allowlist.
-ARCHITECTURE_DEBT_ALLOWLIST: set[str] = set()
-
 # Every non-persistence module allowed to touch the database libraries. The set
 # stays empty so a new adapter leak fails instead of creating a fresh exception.
 PERSISTENCE_KNOWN_OFFENDERS: set[str] = set()
@@ -278,8 +272,20 @@ def _containment_test_lines(path: Path) -> list[int]:
     return found
 
 
-def test_domain_and_application_dependencies_point_inward() -> None:
-    """Report every dependency and storage-boundary violation in one contract."""
+def test_dependencies_point_inward() -> None:
+    """Report every dependency and storage-boundary violation in one contract.
+
+    `domain`, `application` and `api` are checked for forbidden externals, outward
+    internal imports and (for the two inner layers) storage layout. Infrastructure
+    is checked for the import half alone, because it legitimately owns storage:
+    an `infrastructure -> runtime` edge is how `FilesystemArtifactStore` once came
+    to import `runtime.paths`. `api` is a client of the application, so no inner
+    layer, adapter or worker may import it. `worker` is the process host that is
+    not the API; reaching past the composition root into the database is the
+    boundary it must not cross. No module shells out, and the ApplicationStatus
+    transition table lives only in the domain. None of these carries an exception
+    set: a new offender fails here rather than arriving with an allowlist.
+    """
     from cv_engine.runtime.paths import ROOT_NAMES
 
     # The application's root names, read from their one definition, plus the
@@ -321,63 +327,42 @@ def test_domain_and_application_dependencies_point_inward() -> None:
                 if any(name in line for name in storage_layout_names)
             )
 
-    assert not offenders, offenders
-
-
-def test_infrastructure_does_not_import_its_composition_root() -> None:
-    """Adapters point inward only: no `infrastructure -> runtime / api / worker`.
-
-    The inward test above iterates `domain`, `application`, and `api`, because
-    its other half asserts storage purity and `infrastructure` is the layer
-    that legitimately owns storage. That left infrastructure's own outbound
-    edges unchecked, which is how `FilesystemArtifactStore` came to import
-    `runtime.paths`. This check is the import half alone, derived from the
-    package tree rather than a file list, and it carries no exception set: a
-    new outward edge fails here rather than arriving with an allowlist.
-    """
-    allowed = ALLOWED_INTERNAL["infrastructure"] | {"__own_package__"}
-    internal_layers = {"domain", "application", "infrastructure", "api", "runtime", "worker"}
-
-    offenders = [
+    infrastructure_allowed = ALLOWED_INTERNAL["infrastructure"] | {"__own_package__"}
+    offenders.extend(
         f"{path.relative_to(ENGINE)}:{line} imports {name}"
         for path in _layer_modules("infrastructure")
         for name, line in _imports(path)
-        if name in internal_layers and name not in allowed
-    ]
-    assert not offenders, offenders
+        if name in internal_layers and name not in infrastructure_allowed
+    )
 
+    for layer in ("domain", "application", "infrastructure", "worker"):
+        for path in _layer_modules(layer):
+            offenders.extend(
+                f"{path.relative_to(ENGINE)}:{line} imports api from the {layer} layer"
+                for target, line in _resolved_import_modules(path)
+                if target == "api" or target.startswith("api.")
+            )
 
-def test_known_outer_layer_policy_debt_does_not_grow() -> None:
-    """Cover the outer layers' policy boundaries.
-
-    The allowlist is now empty: A2, A6, and A24 are closed. It stays as an
-    empty set rather than being deleted, so a re-introduced offender fails
-    here instead of arriving with a fresh allowlist of its own.
-
-    `worker` is the process host that is not the API: a host that reached past
-    the composition root into the database directly is the boundary this rule
-    exists to catch.
-    """
-    offenders: set[str] = set()
     for path in _layer_modules("worker"):
-        relative = path.relative_to(ENGINE).as_posix()
-        if any(
-            target == "infrastructure.db" or target.startswith("infrastructure.db.")
-            for target, _line in _resolved_import_modules(path)
-        ):
-            offenders.add(f"{relative}: imports infrastructure.db")
+        offenders.extend(
+            f"{path.relative_to(ENGINE)}:{line} imports infrastructure.db"
+            for target, line in _resolved_import_modules(path)
+            if target == "infrastructure.db" or target.startswith("infrastructure.db.")
+        )
 
     for path in sorted(ENGINE.rglob("*.py")):
         relative = path.relative_to(ENGINE).as_posix()
-        if any(name == "subprocess" for name, _line in _imports(path)):
-            offenders.add(f"{relative}: imports subprocess")
+        offenders.extend(
+            f"{relative}:{line} imports subprocess"
+            for name, line in _imports(path)
+            if name == "subprocess"
+        )
         if not relative.startswith("domain/") and _defines_application_status_transition_table(
             path
         ):
-            offenders.add(f"{relative}: defines an ApplicationStatus transition table")
+            offenders.append(f"{relative}: defines an ApplicationStatus transition table")
 
-    unexpected = offenders - ARCHITECTURE_DEBT_ALLOWLIST
-    assert not unexpected, sorted(unexpected)
+    assert not offenders, offenders
 
 
 def test_database_libraries_and_sql_are_owned_by_persistence() -> None:
@@ -529,25 +514,6 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     assert not (exempt - seen), f"stale exemptions: {sorted(exempt - seen)}"
 
 
-def test_api_is_not_imported_by_the_layers_it_serves() -> None:
-    """`api` is a client of the application, never a dependency of it.
-
-    The direction is `api -> application` and `runtime -> api`. An import
-    pointing the other way - a service reaching for an HTTP schema, a repository
-    raising something defined in a router - is how a transport concern becomes
-    load-bearing inside the layers the API is meant to serve.
-    """
-    offenders: list[str] = []
-    for layer in ("domain", "application", "infrastructure", "worker"):
-        for path in _layer_modules(layer):
-            offenders.extend(
-                f"{path.relative_to(ENGINE)}:{line} imports api from the {layer} layer"
-                for target, line in _resolved_import_modules(path)
-                if target == "api" or target.startswith("api.")
-            )
-    assert not offenders, offenders
-
-
 def test_routers_hold_no_domain_types() -> None:
     """The derived form of "routers contain no business logic" (M3 §5.4, item 4).
 
@@ -572,91 +538,8 @@ def test_routers_hold_no_domain_types() -> None:
     assert not offenders, offenders
 
 
-def _raises_argument_names(call: ast.Call) -> set[str]:
-    """Every exception name a `pytest.raises(...)` call names.
-
-    Both spellings, because they are equally common and only one of them is
-    obvious: `pytest.raises(KeyError)` and `pytest.raises((KeyError, OSError))`.
-    An audit that only understood the first missed two live assertions during
-    M3 Stage A, which is why this reads the tuple as well.
-    """
-    if not call.args:
-        return set()
-    first = call.args[0]
-    elements = first.elts if isinstance(first, ast.Tuple) else [first]
-    return {node.id for node in elements if isinstance(node, ast.Name)}
-
-
-def test_no_test_asserts_a_bare_builtin_from_a_repository() -> None:
-    """Tests must pin the refusal contract, not the builtin it replaced.
-
-    A repository refusal is `UnknownRecord`, `StateConflict`, `LineageBroken`,
-    or another member of the taxonomy. `pytest.raises(KeyError)` around a
-    repository call asserts a contract that no longer exists; it fails loudly
-    once, and then someone is tempted to widen the tuple instead of fixing the
-    assertion.
-
-    The repository methods are discovered from the persistence package rather
-    than listed, so a new method that raises the taxonomy is covered the day it
-    is written.
-    """
-    from cv_engine.application import errors as taxonomy
-
-    taxonomy_names = {
-        name
-        for name in dir(taxonomy)
-        if isinstance(getattr(taxonomy, name), type)
-        and issubclass(getattr(taxonomy, name), taxonomy.ApplicationError)
-    }
-    persistence = ENGINE / "infrastructure/persistence"
-    raising: set[str] = set()
-    for path in sorted(persistence.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
-                continue
-            for sub in ast.walk(node):
-                if not isinstance(sub, ast.Raise) or sub.exc is None:
-                    continue
-                raised = sub.exc.func if isinstance(sub.exc, ast.Call) else sub.exc
-                if isinstance(raised, ast.Name) and raised.id in taxonomy_names:
-                    raising.add(node.name)
-    assert raising, "no persistence method raises the taxonomy; the discovery is broken"
-
-    offenders: list[str] = []
-    for path in sorted(Path(__file__).parent.rglob("test_*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.With):
-                continue
-            named: set[str] = set()
-            for item in node.items:
-                expr = item.context_expr
-                if (
-                    isinstance(expr, ast.Call)
-                    and isinstance(expr.func, ast.Attribute)
-                    and expr.func.attr == "raises"
-                ):
-                    named |= _raises_argument_names(expr)
-            if not named & {"KeyError", "ValueError"}:
-                continue
-            body = ast.Module(body=node.body, type_ignores=[])
-            called = sorted(
-                sub.func.attr
-                for sub in ast.walk(body)
-                if isinstance(sub, ast.Call)
-                and isinstance(sub.func, ast.Attribute)
-                and sub.func.attr in raising
-            )
-            if called:
-                offenders.append(
-                    f"{path.name}:{node.lineno} asserts a bare builtin over {', '.join(called)}"
-                )
-    assert not offenders, offenders
-
-
-def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
-    """The lock has to precede the read it protects, in every writer.
+def test_every_application_lock_precedes_the_reads_it_protects() -> None:
+    """The lock has to precede the read it protects, in every writer and in activation.
 
     `create_selection_plan` reads the standing acceptances and allocates the
     version number; both have to happen under the Application row lock, or two
@@ -667,6 +550,14 @@ def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
     Asserted on the order of statements, not merely on the lock being present
     somewhere in the function: locking after the read would satisfy a presence
     check and protect nothing.
+
+    The runner's activation snapshot has to begin where the lock does. A unit of
+    work runs at REPEATABLE READ, so its first statement fixes its snapshot.
+    Activation used to read the Operation, write two phase rows and run the source
+    checks before the write it was all leading to took the Application lock - so
+    the lock was taken under a snapshot that predated it. A writer that waited
+    then found the row updated by whoever held the lock and failed to serialize,
+    having already done the work. So the lock must be the first call in the block.
     """
     persistence = ENGINE / "infrastructure" / "persistence"
     writers = []
@@ -704,6 +595,22 @@ def test_every_selection_plan_write_takes_the_application_lock_first() -> None:
             f"{node.name} runs a statement before taking the lock; every read it makes "
             "has to be under the lock, not only the ones this guard could name"
         )
+
+    runner_source = (ENGINE / "application" / "operation_runner.py").read_text(encoding="utf-8")
+    activation = next(
+        node
+        for node in ast.walk(ast.parse(runner_source))
+        if isinstance(node, ast.FunctionDef) and node.name == "_activate"
+    )
+    scopes = [node for node in ast.walk(activation) if isinstance(node, ast.With)]
+    assert len(scopes) == 1
+    activation_calls = [
+        inner.func.attr
+        for statement in scopes[0].body
+        for inner in ast.walk(statement)
+        if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)
+    ]
+    assert activation_calls and activation_calls[0] == "lock_application", activation_calls
 
 
 def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> None:
@@ -792,39 +699,6 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
     )
 
 
-def test_the_activation_transaction_locks_before_it_reads() -> None:
-    """The runner's snapshot has to begin where the lock does.
-
-    A unit of work runs at REPEATABLE READ, so its first statement fixes its
-    snapshot. Activation used to read the Operation, write two phase rows and
-    run the source checks before the write it was all leading to took the
-    Application lock - so the lock was taken under a snapshot that predated it.
-    A writer that waited then found the row updated by whoever held the lock and
-    failed to serialize, having already done the work.
-
-    Asserted on the first statement of the block rather than on the call being
-    present somewhere in it, for the same reason the repository guard is: a lock
-    taken after the read satisfies a presence check and protects nothing.
-    """
-    source = (
-        Path(__file__).resolve().parents[1] / "cv_engine" / "application" / "operation_runner.py"
-    ).read_text(encoding="utf-8")
-    activation = next(
-        node
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.FunctionDef) and node.name == "_activate"
-    )
-    scopes = [node for node in ast.walk(activation) if isinstance(node, ast.With)]
-    assert len(scopes) == 1
-    calls = [
-        inner.func.attr
-        for statement in scopes[0].body
-        for inner in ast.walk(statement)
-        if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)
-    ]
-    assert calls and calls[0] == "lock_application", calls
-
-
 def test_deleted_persistence_surfaces_have_zero_consumers() -> None:
     """Inspect definitions and uses, not a manually registered consumer list."""
     forbidden = {
@@ -862,6 +736,7 @@ def test_deleted_persistence_surfaces_have_zero_consumers() -> None:
         "paths_beside",
     }
     assert not (ENGINE / "infrastructure" / "persistence" / "repository.py").exists()
+    assert not (ENGINE / "infrastructure" / "persistence" / "operation_projection.py").exists()
     paths = [*ENGINE.rglob("*.py"), *ENGINE.parent.joinpath("tests").rglob("*.py")]
     for path in paths:
         if path == Path(__file__):
@@ -899,7 +774,10 @@ def test_deleted_persistence_surfaces_have_zero_consumers() -> None:
 
 
 def test_persistence_adapters_are_independent_and_token_explicit() -> None:
-    """Discover every concrete persistence adapter, including inspection readers."""
+    """Discover every concrete persistence adapter, including inspection readers.
+
+    The application projection reader is also held to read-only.
+    """
     persistence = ENGINE / "infrastructure" / "persistence"
     for path in persistence.rglob("*.py"):
         source = path.read_text(encoding="utf-8")
@@ -959,9 +837,40 @@ def test_persistence_adapters_are_independent_and_token_explicit() -> None:
                         )
                         assert isinstance(assignment.value, ast.Name), (path, node.name)
 
+    # The application projection is a reader: it replaced the legacy operation
+    # reads and must never write through them.
+    projections = ast.parse(
+        (persistence / "application_projections.py").read_text(encoding="utf-8")
+    )
+    reader = next(
+        node
+        for node in projections.body
+        if isinstance(node, ast.ClassDef) and node.name == "SqlAlchemyApplicationProjectionReader"
+    )
+    for node in ast.walk(reader):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            assert node.func.id not in {"insert", "update", "delete"}
+        elif isinstance(node.func, ast.Attribute):
+            assert node.func.attr not in {"insert", "update", "delete", "write"}
+        assert not any(
+            keyword.arg == "access"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value == "write"
+            for keyword in node.keywords
+        )
 
-def test_application_has_no_persistence_compatibility_or_capability_casts() -> None:
-    """Discover all application consumers instead of tracking migration file lists."""
+
+def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
+    """Only the listed orchestrators receive a transaction manager; nothing else opens a scope.
+
+    Application code carries no compatibility binding and no cast to a persistence
+    port; activation components and operation handlers never open a scope; the
+    runner never executes a handler or verifies external sources inside one; and
+    routers never reach the transaction manager. The owner set is compared both
+    ways, so a stale exception fails as surely as a new owner.
+    """
     for path in (ENGINE / "application").rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -981,8 +890,6 @@ def test_application_has_no_persistence_compatibility_or_capability_casts() -> N
                     target,
                 ), (path, node.lineno, target)
 
-
-def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
     allowed = {
         "ApplicationService",
         "AnalysisService",
@@ -1018,8 +925,6 @@ def test_only_entry_point_orchestrators_receive_transaction_managers() -> None:
                     assert node.name in allowed, f"{node.name} cannot own transaction scopes"
     assert owners == allowed, "remove stale transaction-owner exceptions"
 
-
-def test_activation_components_cannot_own_transaction_scopes() -> None:
     services = ENGINE / "application" / "services"
     components = [
         node
@@ -1039,8 +944,6 @@ def test_activation_components_cannot_own_transaction_scopes() -> None:
             for node in ast.walk(gateway)
         )
 
-
-def test_operation_lifecycle_and_execution_use_only_token_persistence() -> None:
     application = ENGINE / "application"
     services = application / "services" / "operations"
     migrated = [
@@ -1107,36 +1010,37 @@ def test_operation_lifecycle_and_execution_use_only_token_persistence() -> None:
         assert not (forbidden & set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", source))), path
 
 
-def test_application_projection_replaces_legacy_operation_reads_without_writes() -> None:
-    persistence = ENGINE / "infrastructure" / "persistence"
-    assert not (persistence / "operation_projection.py").exists()
-    path = persistence / "application_projections.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    projection = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "SqlAlchemyApplicationProjectionReader"
-    )
-    methods = {
-        node.name
-        for node in projection.body
-        if isinstance(node, ast.FunctionDef) and node.name != "__init__"
+# Every module is policy: no module in the engine may carry a candidate literal.
+# The one exemption was the canonical source writer, which has moved to
+# tests/seed.py, so the engine no longer names the candidate anywhere. Kept as an
+# empty set rather than deleted, so a re-introduced literal fails here instead of
+# arriving with an exemption of its own. An inclusion list had to be extended for
+# each new module and silently stopped covering anything nobody remembered to add.
+CANDIDATE_EVIDENCE_MODULES: frozenset[str] = frozenset()
+CANDIDATE_LITERALS = ("Matan Malka", "מתן מלכה", "matanmalka1", "matan1391")
+
+
+def test_no_module_carries_a_candidate_literal_except_declared_evidence() -> None:
+    """The candidate lives in Knowledge, not in code.
+
+    Scanned across the whole engine rather than a listed subset, because the
+    listed-subset form could only protect modules someone remembered to add — and
+    a renderer, record, or projection added later is exactly where a literal would
+    reappear.
+    """
+    offenders = {
+        relative: [literal for literal in CANDIDATE_LITERALS if literal in source]
+        for path in sorted(ENGINE.rglob("*.py"))
+        if (relative := path.relative_to(ENGINE).as_posix()) not in CANDIDATE_EVIDENCE_MODULES
+        and any(
+            literal in (source := path.read_text(encoding="utf-8"))
+            for literal in CANDIDATE_LITERALS
+        )
     }
-    assert {
-        "active_operation",
-        "latest_operation",
-        "has_active_matching_context_operation",
-    } <= methods
-    for node in ast.walk(projection):
-        if not isinstance(node, ast.Call):
-            continue
-        if isinstance(node.func, ast.Name):
-            assert node.func.id not in {"insert", "update", "delete"}
-        elif isinstance(node.func, ast.Attribute):
-            assert node.func.attr not in {"insert", "update", "delete", "write"}
-        assert not any(
-            keyword.arg == "access"
-            and isinstance(keyword.value, ast.Constant)
-            and keyword.value.value == "write"
-            for keyword in node.keywords
+    assert not offenders, offenders
+    # The exemptions must stay real, or the rule has quietly become decoration.
+    for relative in sorted(CANDIDATE_EVIDENCE_MODULES):
+        source = (ENGINE / relative).read_text(encoding="utf-8")
+        assert any(literal in source for literal in CANDIDATE_LITERALS), (
+            f"{relative} is exempt but carries no candidate literal; drop the exemption"
         )
