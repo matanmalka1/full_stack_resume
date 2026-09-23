@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 
-import type { ActivityFilter, ApplicationSort, PreparationState } from "@/api/contracts";
+import type { ActivityFilter, PreparationState } from "@/api/contracts";
 import { preparationStateLabels } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Field } from "@/ui/Field";
@@ -17,13 +17,6 @@ const activityLabels: Record<ActivityFilter, string> = {
   all: "הכול",
 };
 
-const sortLabels: Record<ApplicationSort, string> = {
-  updated: "עודכן לאחרונה",
-  created: "נוצר לאחרונה",
-  company: "לפי חברה",
-  stage: "לפי מצב קורות החיים",
-};
-
 // Let each select fit its options without pushing the other controls off the row.
 const fieldClasses = "w-full min-w-0 sm:w-auto sm:min-w-36 sm:max-w-64";
 
@@ -35,7 +28,6 @@ interface ApplicationListToolbarProps {
   recruitmentStageCounts: Partial<Record<RecruitmentStageId, number>>;
   resultSummary: string;
   search: string;
-  sort: ApplicationSort;
   stageCounts: Partial<Record<PreparationState, number>>;
   viewMode: ViewMode;
   onActivityChange: (activity: ActivityFilter) => void;
@@ -43,7 +35,6 @@ interface ApplicationListToolbarProps {
   onPreparationStateChange: (stage: PreparationState | undefined) => void;
   onRecruitmentStageChange: (stage: RecruitmentStageId | null) => void;
   onSearchChange: (search: string) => void;
-  onSortChange: (sort: ApplicationSort) => void;
   onViewModeChange: (view: ViewMode) => void;
 }
 
@@ -55,7 +46,6 @@ export const ApplicationListToolbar = ({
   recruitmentStageCounts,
   resultSummary,
   search,
-  sort,
   stageCounts,
   viewMode,
   onActivityChange,
@@ -63,7 +53,6 @@ export const ApplicationListToolbar = ({
   onPreparationStateChange,
   onRecruitmentStageChange,
   onSearchChange,
-  onSortChange,
   onViewModeChange,
 }: ApplicationListToolbarProps) => (
   <div className="flex flex-col gap-3">
@@ -159,18 +148,9 @@ export const ApplicationListToolbar = ({
         </Button>
       ) : null}
 
-      <div className="flex items-end gap-2 ms-auto">
-        <Field className="w-40" label="סדר">
-          {(control) => (
-            <Select {...control} onChange={(event) => onSortChange(event.target.value as ApplicationSort)} value={sort}>
-              {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
-                <option key={key} value={key}>
-                  {sortLabels[key]}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
+      {/* The order is chosen from the table's own headers; there is no separate sort
+          control. The cards and stages views keep whichever order the table last set. */}
+      <div className="ms-auto">
         <ViewSwitch
           label="בחירת תצוגת מועמדויות"
           onChange={onViewModeChange}

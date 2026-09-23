@@ -229,7 +229,6 @@ export const ApplicationListPage = () => {
                 updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
               }}
               onSearchChange={setSearchInput}
-              onSortChange={(sort) => updateQuery({ ...query, sort })}
               onViewModeChange={setViewMode}
               preparationState={query.stages?.[0]}
               recruitmentStage={selectedStage(query.recruitmentStatuses)}
@@ -242,7 +241,6 @@ export const ApplicationListPage = () => {
                     : `${page.matched} מתוך ${page.total} מועמדויות`
               }
               search={searchInput}
-              sort={query.sort ?? "updated"}
               stageCounts={page.stage_counts}
               viewMode={viewMode}
             />

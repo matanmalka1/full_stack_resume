@@ -276,13 +276,15 @@ describe("ApplicationListPage", () => {
     for (const name of ["חברה ותפקיד", "התקדמות הכנה וגיוס", "פעולה מומלצת הבאה", "ציון התאמה", "עדכון אחרון"]) {
       expect(board.getByRole("columnheader", { name })).toBeInTheDocument();
     }
-    /* The headers of the columns the server can order by apply that order, and stay in
-       step with the toolbar's select. */
+    /* The headers of the columns the server can order by are the board's only sort
+       control; the order they set goes to the server query. */
     expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).toHaveAttribute("aria-sort", "descending");
     expect(board.queryByRole("button", { name: "ציון התאמה" })).not.toBeInTheDocument();
     fireEvent.click(board.getByRole("button", { name: "חברה ותפקיד" }));
-    await waitFor(() => expect(screen.getByLabelText("סדר")).toHaveValue("company"));
-    expect(board.getByRole("columnheader", { name: "חברה ותפקיד" })).toHaveAttribute("aria-sort", "ascending");
+    await waitFor(() =>
+      expect(board.getByRole("columnheader", { name: "חברה ותפקיד" })).toHaveAttribute("aria-sort", "ascending"),
+    );
+    expect(screen.queryByLabelText("סדר")).not.toBeInTheDocument();
     expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).not.toHaveAttribute("aria-sort");
     fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
     expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
@@ -338,13 +340,16 @@ describe("ApplicationListPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "ניקוי הסינון" }));
 
     expect(screen.getByLabelText("מועמדויות")).toHaveValue("open");
-    expect(screen.getByLabelText("סדר")).toHaveValue("company");
     expect(screen.getByLabelText("חיפוש במועמדויות")).toHaveValue("");
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith(
         expect.not.stringContaining("activity=closed"),
         expect.objectContaining({ method: "GET" }),
       ),
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("sort=company"),
+      expect.objectContaining({ method: "GET" }),
     );
     expect(screen.getByRole("button", { name: /הכל/ })).toHaveAttribute("aria-pressed", "true");
   });
