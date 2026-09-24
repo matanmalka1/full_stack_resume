@@ -13,6 +13,7 @@ from ...errors import (
     PreconditionFailed,
     ProposalRejected,
     ProviderInvalidOutput,
+    ProviderNotConfigured,
     ProviderRateLimited,
     ProviderRefused,
     ProviderSchemaViolation,
@@ -20,7 +21,7 @@ from ...errors import (
     ProviderUnavailable,
     StateConflict,
 )
-from ...operations import OperationFailureCode
+from ...operations import FailureReason, MissingFactRenderingReason, OperationFailureCode
 
 #: How a classified failure becomes an Operation failure code, and therefore
 #: whether it is retried. Resolved through the exception's MRO, so a subclass
@@ -43,6 +44,7 @@ FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
     ClaimReviewUncertain: OperationFailureCode.CLAIM_REVIEW_UNCERTAIN,
     ClaimReviewUnsupported: OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED,
     ProposalRejected: OperationFailureCode.INVALID_OUTPUT,
+    ProviderNotConfigured: OperationFailureCode.PROVIDER_NOT_CONFIGURED,
     DependencyUnavailable: OperationFailureCode.PROVIDER_REFUSED,
     StateConflict: OperationFailureCode.SOURCE_CHANGED,
     LineageBroken: OperationFailureCode.SOURCE_CHANGED,
@@ -59,6 +61,7 @@ _FAILURE_DETAIL: dict[OperationFailureCode, str] = {
     OperationFailureCode.PROVIDER_RATE_LIMITED: "The AI provider rate limited the request.",
     OperationFailureCode.PROVIDER_UNAVAILABLE: "The AI provider was unavailable.",
     OperationFailureCode.PROVIDER_REFUSED: "The AI provider refused the request.",
+    OperationFailureCode.PROVIDER_NOT_CONFIGURED: "No AI provider is configured.",
     OperationFailureCode.SCHEMA_VIOLATION: "The AI provider returned an invalid schema.",
     OperationFailureCode.INVALID_OUTPUT: "The AI proposal was rejected.",
     OperationFailureCode.CLAIM_REVIEW_UNCERTAIN: (
@@ -88,3 +91,14 @@ def safe_failure_detail_for(error: ApplicationError) -> str:
         return f"Fact {error.fact_id} has no {error.language!r} rendering."
     code = failure_code_for(error)
     return _FAILURE_DETAIL.get(code, "Operation failed.")
+
+
+def failure_reason_for(error: ApplicationError) -> FailureReason | None:
+    """The structured reason for a classified failure, when it has parameters.
+
+    Built from the error's own fields, never from its message, so a client never
+    has to parse `safe_failure_detail` back apart to explain the failure.
+    """
+    if isinstance(error, MissingFactRendering):
+        return MissingFactRenderingReason(fact_id=error.fact_id, language=error.language)
+    return None

@@ -11,6 +11,7 @@ from time import sleep
 from typing import Any, Protocol
 
 from .operations import (
+    FailureReason,
     OperationFailureCode,
     OperationOutputReference,
     OperationPhase,
@@ -33,10 +34,12 @@ class OperationExecutionError(RuntimeError):
         *,
         technical_log_reference: str | None = None,
         outputs: Sequence[OperationOutputReference] = (),
+        reason: FailureReason | None = None,
     ):
         super().__init__(safe_detail)
         self.code = code
         self.safe_detail = safe_detail
+        self.reason = reason
         self.technical_log_reference = technical_log_reference
         self.outputs = tuple(outputs)
 
@@ -185,6 +188,7 @@ class OperationRunner:
                 error.safe_detail,
                 runner_id=self.runner_id,
                 technical_log_reference=error.technical_log_reference,
+                reason=error.reason,
             )
 
     def _record_inactive_outputs(

@@ -88,6 +88,38 @@ export const failureTones: Partial<Record<OperationStatus, Tone>> = {
   interrupted: "warning",
 };
 
+/* A run that could not reach a provider because none is usable. The server reports it as
+   PROVIDER_NOT_CONFIGURED; runs recorded before that code existed carry PROVIDER_REFUSED,
+   and for those the Settings read is what tells the two apart. Either way the reader is
+   told what is missing and where it is fixed. */
+export const missingProviderPresentation = (providerConfigured: boolean): FailurePresentation =>
+  providerConfigured
+    ? {
+        title: "ה־AI כבוי בהגדרות",
+        guidance: "הבקשה לא נשלחה לספק ושום דבר לא השתנה במועמדות. אחרי הפעלת ה־AI בהגדרות אפשר להריץ את הפעולה שוב.",
+      }
+    : {
+        title: "לא הוגדר ספק AI",
+        guidance:
+          "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI והפעלתו בהגדרות אפשר להריץ את הפעולה שוב.",
+      };
+
+/* The same run once a provider is usable again: nothing was sent then, and it can be
+   run now. */
+export const providerNowConfiguredPresentation: FailurePresentation = {
+  title: "לא היה ספק AI בזמן ההרצה",
+  guidance: "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. ספק AI זמין עכשיו, ואפשר להריץ את הפעולה שוב.",
+};
+
+/* What a terminal run's summary line says when it produced nothing. "Finished" beside a
+   "failed" badge read as a contradiction. */
+export const terminalSummaries: Partial<Record<OperationStatus, string>> = {
+  succeeded: "הפעולה הסתיימה.",
+  failed: "הפעולה נכשלה ולא יצרה תוצאה.",
+  cancelled: "הפעולה בוטלה ולא יצרה תוצאה.",
+  interrupted: "הפעולה נקטעה ולא יצרה תוצאה.",
+};
+
 export interface FailurePresentation {
   title: string;
   guidance: string;
@@ -97,48 +129,45 @@ export interface FailurePresentation {
    translated presentation below. MissingFactRendering and deterministic render failures
    are different: their safe details carry the exact repair the reader needs. Keep the
    parsing narrow so a future or malformed server sentence is not echoed as UI copy. */
-export const actionableFailureDetail = (
-  code: OperationFailureCode | null | undefined,
-  detail: string | null | undefined,
-): string | null => {
-  if (detail == null) return null;
+type FailureReason = NonNullable<Operation["failure_reason"]>;
 
-  if (code === "RENDER_FAILED") {
-    const pageCount = /^Rendered PDF has (\d+) pages; maximum (\d+)\.$/.exec(detail);
-    if (pageCount !== null) {
-      const [, actual, maximum] = pageCount;
-      return `קובץ ה־PDF כולל ${actual} עמודים, אך הפרופיל מאפשר לכל היותר ${maximum}. יש לקצר את התוכן לפני יצירה מחדש.`;
-    }
-    const renderMessages: Record<string, string> = {
-      "Rendered PDF text is not sufficiently recoverable by ATS readers.":
-        "לא ניתן לחלץ מספיק מהטקסט בקובץ ה־PDF. יש לבדוק את מבנה התוכן לפני יצירה מחדש.",
-      "Rendered PDF is missing one or more expected contact links.": "בקובץ ה־PDF חסר לפחות קישור קשר צפוי אחד.",
-      "Rendered content exceeds the page boundaries.": "חלק מהתוכן חורג מגבולות העמוד.",
-      "Rendered document direction does not match its language.": "כיוון המסמך אינו מתאים לשפתו.",
-      "Rendered right-to-left content is missing direction isolation.": "תוכן מימין לשמאל לא קיבל בידוד כיווניות תקין.",
-      "Rendered PDF filename does not match the required recruiter filename.":
-        "שם קובץ ה־PDF אינו תואם לשם הנדרש לשליחה.",
-      "Rendered HTML is missing or empty.": "קובץ ה־HTML שנוצר חסר או ריק.",
-      "Rendered PDF is missing or empty.": "קובץ ה־PDF שנוצר חסר או ריק.",
-      "Rendered PDF could not be read.": "לא ניתן לקרוא את קובץ ה־PDF שנוצר.",
-      "Rendered output did not pass validation.": "התוצר שנוצר לא עבר את בדיקות התקינות.",
-    };
-    return renderMessages[detail] ?? null;
-  }
-
-  if (code !== "MISSING_FACT_RENDERING") return null;
-
-  const match = /^Fact (\S+) has no '([^']+)' rendering\.$/.exec(detail);
-  if (match == null) return null;
-
-  const [, factId, language] = match;
-  return `לעובדה ${factId} חסר ניסוח בשפה ${language}.`;
+/* The reason a run failed, in the reader's words, from the structured reason the server
+   records with the failure. Keyed by the generated union, so a new reason fails the build
+   until it is worded here. Nothing parses `safe_failure_detail`: it is the same reason as
+   an English sentence, and matching that sentence broke silently whenever it was reworded.
+   A record from before the field existed has no reason, and gets its code's guidance. */
+const reasonDetails: Record<FailureReason["code"], string | null> = {
+  pdf_page_limit: null,
+  missing_fact_rendering: null,
+  pdf_text_coverage: "לא ניתן לחלץ מספיק מהטקסט בקובץ ה־PDF. יש לבדוק את מבנה התוכן לפני יצירה מחדש.",
+  pdf_link_targets: "בקובץ ה־PDF חסר לפחות קישור קשר צפוי אחד.",
+  content_overflow: "חלק מהתוכן חורג מגבולות העמוד.",
+  document_direction: "כיוון המסמך אינו מתאים לשפתו.",
+  direction_isolation: "תוכן מימין לשמאל לא קיבל בידוד כיווניות תקין.",
+  pdf_filename: "שם קובץ ה־PDF אינו תואם לשם הנדרש לשליחה.",
+  html_missing: "קובץ ה־HTML שנוצר חסר או ריק.",
+  pdf_missing: "קובץ ה־PDF שנוצר חסר או ריק.",
+  pdf_corrupt: "לא ניתן לקרוא את קובץ ה־PDF שנוצר.",
+  render_validation: "התוצר שנוצר לא עבר את בדיקות התקינות.",
 };
 
-const providerRetryGuidance =
-  "לא בוצע מעבר אוטומטי למצב דטרמיניסטי. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
+export const failureReasonDetail = (reason: FailureReason | null | undefined): string | null => {
+  if (reason == null) return null;
+  switch (reason.code) {
+    case "pdf_page_limit":
+      return `קובץ ה־PDF כולל ${reason.pages} עמודים, אך הפרופיל מאפשר לכל היותר ${reason.maximum}. יש לקצר את התוכן לפני יצירה מחדש.`;
+    case "missing_fact_rendering":
+      return `לעובדה ${reason.fact_id} חסר ניסוח בשפה ${reason.language}.`;
+    default:
+      return reasonDetails[reason.code];
+  }
+};
+
+/* Plain words for the same two guarantees: nothing changed, and nothing was produced in
+   the AI's place without asking. */
+const providerRetryGuidance = "שום דבר לא השתנה במועמדות, ולא נוצרה במקום זה תוצאה בלי AI. אפשר לנסות שוב.";
 const providerOutputGuidance =
-  "התשובה לא הופעלה ולא הוחלפה בשקט בתוצאה דטרמיניסטית. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
+  "התשובה של ספק ה־AI לא הופעלה ושום דבר לא השתנה במועמדות, ולא נוצרה במקום זה תוצאה בלי AI. אפשר לנסות שוב.";
 
 /* Failure codes are decisions a person must be able to distinguish, not technical
    decoration. This map is exhaustive over the generated union: adding a backend code
@@ -198,6 +227,11 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
   VALIDATION_EXECUTION_FAILED: {
     title: "לא ניתן להשלים את בדיקות הפעולה",
     guidance: "המצב שהיה פעיל לפני הפעולה נשמר. אפשר ליצור ניסיון חדש או לחזור למועמדות.",
+  },
+  PROVIDER_NOT_CONFIGURED: {
+    title: "לא הוגדר ספק AI",
+    guidance:
+      "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI והפעלתו בהגדרות אפשר להריץ את הפעולה שוב.",
   },
   CANCELLED_BEFORE_ACTIVATION: {
     title: "הפעולה בוטלה לפני הפעלת התוצאה",

@@ -91,7 +91,7 @@ const CommitBarSurface = ({ back, children, inline, label, primary, result }: Co
       <div
         className={cx(
           "flex flex-wrap items-center gap-3 sm:col-start-auto sm:row-start-auto sm:justify-self-end",
-          back === undefined ? "col-span-2" : "col-start-2 row-start-2 justify-self-end",
+          back === undefined ? "col-span-2 sm:col-span-1" : "col-start-2 row-start-2 justify-self-end",
         )}
       >
         {primary}

@@ -2812,6 +2812,21 @@ export interface components {
             requirement_concepts: string;
         };
         /**
+         * MissingFactRenderingReason
+         * @description A selected canonical fact has no wording in the document language.
+         */
+        MissingFactRenderingReason: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            code: "missing_fact_rendering";
+            /** Fact Id */
+            fact_id: string;
+            /** Language */
+            language: string;
+        };
+        /**
          * NextActionRequest
          * @description Set or clear the one active next action, stated in whole.
          *
@@ -2835,7 +2850,7 @@ export interface components {
          * OperationFailureCode
          * @enum {string}
          */
-        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "CLAIM_REVIEW_UNCERTAIN" | "CLAIM_REVIEW_UNSUPPORTED" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION";
+        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "CLAIM_REVIEW_UNCERTAIN" | "CLAIM_REVIEW_UNSUPPORTED" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION" | "PROVIDER_NOT_CONFIGURED";
         /**
          * OperationOutputResponse
          * @description One immutable output an Operation produced.
@@ -2899,6 +2914,8 @@ export interface components {
             /** Created At */
             created_at: string;
             failure_code?: components["schemas"]["OperationFailureCode"] | null;
+            /** Failure Reason */
+            failure_reason?: (components["schemas"]["PdfPageLimitReason"] | components["schemas"]["MissingFactRenderingReason"] | components["schemas"]["RenderCheckReason"]) | null;
             /** Finished At */
             finished_at?: string | null;
             /** Id */
@@ -2951,6 +2968,21 @@ export interface components {
         OrphanInventoryResponse: {
             /** Candidates */
             candidates: string[];
+        };
+        /**
+         * PdfPageLimitReason
+         * @description The rendered PDF ran past the profile's page limit.
+         */
+        PdfPageLimitReason: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            code: "pdf_page_limit";
+            /** Maximum */
+            maximum: number;
+            /** Pages */
+            pages: number;
         };
         /**
          * PreparationState
@@ -3111,6 +3143,17 @@ export interface components {
             section: string;
             /** Selection Plan Id */
             selection_plan_id: string;
+        };
+        /**
+         * RenderCheckReason
+         * @description A render validation check that failed and carries no parameters.
+         */
+        RenderCheckReason: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            code: "content_overflow" | "direction_isolation" | "document_direction" | "html_missing" | "pdf_corrupt" | "pdf_filename" | "pdf_link_targets" | "pdf_missing" | "pdf_text_coverage" | "render_validation";
         };
         /**
          * RenderRevisionRequest

@@ -18,6 +18,11 @@ import { Tooltip } from "@/ui/Tooltip";
 import { applicationAttention, formatApplicationDate, isNextActionOverdue } from "../model/applicationListPresentation";
 import { reportedOperation } from "./ApplicationListItemActions";
 
+/* The command opens the step where the work is done; it does not do the work. "בצע"
+   promised the latter - on a row whose analysis could not run for want of a provider, it
+   read as a button that would run it. */
+const STEP_COMMAND = "מעבר לשלב";
+
 interface Command {
   label: string;
   strong: boolean;
@@ -40,10 +45,13 @@ export const nextActionHeading = (item: ApplicationListItem, attentive: boolean)
   const operation = reportedOperation(item);
   if (operation !== null && (operation.status === "failed" || operation.status === "interrupted")) {
     return {
-      command: { label: "בצע", strong: true, to: preparationResumeDestination(item) },
+      command: { label: STEP_COMMAND, strong: true, to: preparationResumeDestination(item) },
       description: null,
       failed: true,
-      title: `${operationTypeLabels[operation.operation_type]} · ${statusLabels[operation.status]}`,
+      /* Worded as the run, like the status row on the step itself: "ניתוח המשרה · נכשלה"
+         paired a masculine action with the run's feminine status, and named it differently
+         from the screen it opens. */
+      title: `הרצת ${operationTypeLabels[operation.operation_type]} · ${statusLabels[operation.status]}`,
     };
   }
   if (operation !== null && !isTerminalOperation(operation)) {
@@ -57,7 +65,7 @@ export const nextActionHeading = (item: ApplicationListItem, attentive: boolean)
   if (item.recommended_action != null) {
     return {
       command: {
-        label: "בצע",
+        label: STEP_COMMAND,
         strong: attentive,
         to: actionDestination(item.recommended_action, item.id) ?? routePaths.application(item.id),
       },

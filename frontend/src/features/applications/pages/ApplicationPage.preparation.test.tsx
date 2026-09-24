@@ -525,7 +525,15 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage(deterministicSettings);
 
     expect(await screen.findByRole("button", { name: "ניתוח המשרה" })).toBeDisabled();
-    expect(screen.getByText("כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.")).toBeInTheDocument();
+    /* The reason sits in the bar beside the inert button; the way to fix it sits in the
+       "not analyzed yet" banner. */
+    expect(screen.getByText("הניתוח דורש ספק AI, ועדיין לא הוגדר כזה.")).toBeInTheDocument();
+    expect(screen.getByText(/כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות/)).toBeInTheDocument();
+    /* The fix is offered twice on purpose: under the explanation in the banner, and as the
+       bar's lead action in place of the inert analysis button. */
+    const settingsLinks = screen.getAllByRole("link", { name: "פתיחת ההגדרות" });
+    expect(settingsLinks).toHaveLength(2);
+    for (const link of settingsLinks) expect(link).toHaveAttribute("href", "/settings");
   });
 
   it("shows the frozen AI execution and its calculated cost", async () => {
@@ -553,7 +561,8 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage();
 
     expect(await screen.findByText("gpt-5.6-luna")).toBeInTheDocument();
-    expect(screen.getByText("$0.00002806")).toBeInTheDocument();
+    /* Two significant digits below a cent, not the raw decimal string. */
+    expect(screen.getByText("$0.000028")).toBeInTheDocument();
     expect(screen.getByText("מאמץ חשיבה")).toBeInTheDocument();
     expect(screen.getByText("גבוה")).toBeInTheDocument();
   });
@@ -815,12 +824,39 @@ describe("ApplicationPage at the preparation route", () => {
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
   });
 
+  /* A refusal with no provider is fixed in Settings, not in the posting, so the posting
+     stays folded away like on any other visit instead of opening with its edit action. */
+  it("keeps the posting folded when analysis failed for want of a provider", async () => {
+    const failed = queued({
+      status: "failed",
+      is_terminal: true,
+      failure_code: "PROVIDER_REFUSED",
+      available_actions: ["retry"],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          String(input).includes("/settings")
+            ? jsonResponse(deterministicSettings)
+            : jsonResponse(detail({ latest_operation: failed, active_operation: null })),
+        ),
+      ),
+    );
+
+    renderPage(deterministicSettings);
+
+    expect(await screen.findByText("צפייה בנוסח המשרה שנשמר")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עדכון נוסח המשרה" })).not.toBeVisible();
+  });
+
   it("keeps the stored posting and its update action reachable after analysis fails", async () => {
     const failed = queued({
       status: "failed",
       is_terminal: true,
       failure_code: "MISSING_FACT_RENDERING",
       safe_failure_detail: "Fact development.phdigital.nextjs has no 'he' rendering.",
+      failure_reason: { code: "missing_fact_rendering", fact_id: "development.phdigital.nextjs", language: "he" },
       available_actions: [],
     });
     vi.stubGlobal(

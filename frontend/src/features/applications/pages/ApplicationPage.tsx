@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-import { applicationDetailQueryOptions } from "@/api/applications";
+import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
+import { aiRegenerationAvailable } from "@/api/settings";
+import { useSettings } from "@/api/useSettings";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
@@ -29,6 +31,9 @@ import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
    it is about the request that made the record rather than about the record. */
 interface CreatedApplicationState {
   analysisProblem?: ProblemDetails | null;
+  /* Intake did not request analysis because no AI provider exists; the step's own banner
+     says so and where to fix it, so the "was not started" warning is not repeated. */
+  analysisSkipped?: boolean;
   operationId?: string | null;
 }
 
@@ -72,7 +77,7 @@ export const ApplicationPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
 
-  const query = useQuery(applicationDetailQueryOptions(applicationId));
+  const query = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const {
     awaitingRecord,
@@ -109,6 +114,15 @@ export const ApplicationPage = () => {
     operation: watched,
   });
   const pending = watched === undefined && viewState === "processing" ? analysisPending : undefined;
+  /* A failed analysis opens the posting for repair, because a malformed posting is one
+     cause the reader can fix there. A refusal with no usable provider is not one of
+     them: the fix is in Settings, and an open posting with an edit action pointed the
+     reader at the wrong place. */
+  const { settings } = useSettings();
+  const postingRepairRelevant =
+    viewState === "analysis_failed" &&
+    watched?.failure_code !== "PROVIDER_NOT_CONFIGURED" &&
+    !(watched?.failure_code === "PROVIDER_REFUSED" && settings !== undefined && !aiRegenerationAvailable(settings));
   const operationLive = isOperationLive({
     awaitingRecord,
     continuation,
@@ -139,7 +153,10 @@ export const ApplicationPage = () => {
       detail={detail}
       measure="wide"
       queryError={query.error}
-      wideRow
+      /* Only once there is an analysis to lay out across it. Before that the wide row
+         holds nothing but the reference material and the bar, and parking them below the
+         rail left a hole the rail's height under a one-banner step. */
+      wideRow={detail?.latest_analysis != null}
       /* Held at one line's width while the projection is in flight. Absent, the masthead
          drew the heading a line higher and dropped it when the name arrived - the page's
          own title moving under the reader as the first thing it did. */
@@ -193,6 +210,7 @@ export const ApplicationPage = () => {
                 report; keeping its success message would freeze "running" beside the
                 Operation's later "completed" state. */}
             {createdApplication === undefined ||
+            createdApplication.analysisSkipped === true ||
             createdOperationId !== null ||
             detail.preparation_state !== "needs_analysis" ||
             watched !== undefined ? null : (
@@ -235,7 +253,7 @@ export const ApplicationPage = () => {
                 <div className="flex flex-col gap-2 border-t border-cv-border pt-5">
                   <p className="text-support font-semibold text-cv-text-muted">חומר עזר</p>
 
-                  {viewState === "analysis_failed" ? (
+                  {postingRepairRelevant ? (
                     /* Repair is the task now, not optional reference reading. Keep the
                        posting and its edit action in view instead of nesting them behind a
                        second disclosure the reader has no reason to discover. */

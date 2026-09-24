@@ -55,7 +55,7 @@ const fieldLabels: Record<string, string> = {
   company: "חברה",
   role_title: "תפקיד",
   source_url: "קישור למשרה",
-  job_text: "תיאור המשרה",
+  job_text: "טקסט המשרה",
   target_status: "שלב בתהליך",
   reason: "סיבת השינוי",
   next_action: "הפעולה הבאה",

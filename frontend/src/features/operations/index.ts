@@ -5,8 +5,10 @@
    them owns the vocabulary or the overlay, which is why neither lives in any of them.
 
    There is no Operation screen. Cancel and retry are the record's own actions and travel
-   with the report inside the overlay, so neither `OperationActions` nor `OperationReport`
-   is exported: a screen that shows an Operation shows this overlay, once. */
+   with the report the overlay opens, so neither `OperationActions` nor `OperationReport`
+   is exported: a screen that shows an Operation shows this overlay, once - a live panel
+   beside the page, the report as a dialog on an outcome that needs the reader, and a
+   status row in the step's `StatusSlot`. */
 export { OperationOverlay, type PendingWork } from "./components/OperationOverlay";
 /* Whether actions that change what a run replaces must wait - the same definition the
    overlay's session is built on, so a screen's lock and its overlay never disagree about

@@ -21,11 +21,11 @@ from ...commands import (
 )
 from ...errors import (
     ApplicationError,
-    DependencyUnavailable,
     InfrastructureFailure,
     LineageBroken,
     PreconditionFailed,
     ProposalRejected,
+    ProviderNotConfigured,
     StateConflict,
     UnknownRecord,
 )
@@ -95,7 +95,7 @@ class DraftAuthoringService:
     @property
     def provider(self) -> AIProvider:
         if self._provider is None:
-            raise DependencyUnavailable("AI mode was requested but no provider is configured")
+            raise ProviderNotConfigured("AI mode was requested but no provider is configured")
         return self._provider
 
     def load_knowledge(self) -> Knowledge:

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { cancelOperation, operationQueryKey, retryOperation } from "@/api/operations";
@@ -16,12 +17,15 @@ interface OperationActionsProps {
      because the screen holding the Operation did not hold the Application; every screen
      that shows an Operation now does. */
   onQueued: (operationId: string) => void;
-  /* Hold this row's height while `showCancel` is still withholding a control that is
-     coming. The delayed reveal keeps a destructive button off short runs, but a button
-     arriving into a row that was not there displaced the card mid-run - which is the same
-     jump the reveal was added to avoid, four seconds later. The space is kept from the
-     start and only the control fades in. */
-  reserve?: boolean;
+  /* The recovery that is not the record's own - Settings for a missing provider, or the
+     host's way back for the record the run failed to produce. It shares this row with
+     retry, so every report ends in the same one place, whatever offered the way on. There
+     is no reserved empty row any more: an empty footer under a divider read as a control
+     that failed to load. */
+  recovery?: ReactNode;
+  /* False when the host knows a retry cannot succeed - no AI provider for a refused AI
+     run - and offers the fix in its place rather than a button that fails the same way. */
+  retryOffered?: boolean;
   /* Short Operations should not flash a destructive control that cannot realistically be
      used. The host reveals it after its own "taking longer" threshold; a terminal action
      surface can leave this at the default. */
@@ -31,7 +35,8 @@ interface OperationActionsProps {
 export const OperationActions = ({
   onQueued,
   operation,
-  reserve = false,
+  recovery,
+  retryOffered = true,
   showCancel = true,
 }: OperationActionsProps) => {
   const queryClient = useQueryClient();
@@ -59,21 +64,13 @@ export const OperationActions = ({
 
   const error = cancel.error ?? retry.error;
   const canCancel = showCancel && operation.available_actions.includes("cancel");
-  const canRetry = operation.available_actions.includes("retry");
+  const canRetry = retryOffered && operation.available_actions.includes("retry");
   /* Retry on a run that succeeded re-runs work that has a result on record and
      supersedes it, so it is offered without being recommended: the loud control on the
      screen must never be the one that discards what the reader is looking at. The way on
      from a finished run is the host screen's own next action, which is on the page around
      this overlay. */
-  if (!canCancel && !canRetry && error === null) {
-    /* The row's own chrome around a slot the height of the button that is coming, so the
-       reveal fills a space that was already there rather than making one. */
-    return reserve ? (
-      <div aria-hidden="true" className="mt-2 flex flex-col gap-4 border-t border-cv-border pt-5">
-        <div className="h-11" />
-      </div>
-    ) : null;
-  }
+  if (!canCancel && !canRetry && error === null && recovery == null) return null;
 
   return (
     <div className="mt-2 flex flex-col gap-4 border-t border-cv-border pt-5">
@@ -86,6 +83,7 @@ export const OperationActions = ({
       )}
 
       <div className="flex flex-wrap gap-3">
+        {recovery}
         {canCancel ? (
           <Button
             className="cv-settle-in"

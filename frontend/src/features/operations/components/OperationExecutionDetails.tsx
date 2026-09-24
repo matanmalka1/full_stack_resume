@@ -3,6 +3,7 @@ import { cx } from "@/ui/cx";
 import { Disclosure } from "@/ui/Disclosure";
 import { LtrText } from "@/ui/LtrText";
 import { formatDateTime } from "@/utils/formatDateTime";
+import { formatUsd } from "@/utils/formatUsd";
 
 const effortLabels: Record<NonNullable<Operation["reasoning_effort"]>, string> = {
   low: "נמוך",
@@ -54,7 +55,7 @@ const useRowGroups = (operation: Operation): [string, Row[]][] => {
     [
       "עלות וטוקנים",
       [
-        ["עלות", operation.cost_usd == null ? null : `$${operation.cost_usd}`],
+        ["עלות", operation.cost_usd == null ? null : formatUsd(operation.cost_usd)],
         ["טוקני קלט", operation.input_tokens],
         ["קלט מהמטמון", operation.cached_input_tokens],
         ["טוקני פלט", operation.output_tokens],

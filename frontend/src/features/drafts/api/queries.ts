@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { applicationDetailQueryOptions } from "@/api/applications";
+import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ApplicationDetail, Operation, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
 import { workingDraftFactsQueryOptions, workingDraftQueryOptions } from "@/api/drafts";
 import { useWatchedOperation } from "@/features/operations";
@@ -32,7 +32,7 @@ export interface DraftDocument {
    It derives no second workflow state machine (A.1): blockers are the projection's own
    review reasons, and approval is refused by the backend, not by a rule invented here. */
 export const useDraftDocument = (applicationId: string): DraftDocument => {
-  const applicationQuery = useQuery(applicationDetailQueryOptions(applicationId));
+  const applicationQuery = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = applicationQuery.data;
 
   /* The same watch the Application screen keeps, on the other screen that queues durable

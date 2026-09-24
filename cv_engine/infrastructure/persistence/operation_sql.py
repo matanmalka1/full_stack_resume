@@ -53,6 +53,7 @@ def _operation_record(row: Any, outputs: list[Any]) -> PersistedOperation:
         cancellation_requested_at=record["cancellation_requested_at"],
         failure_code=record["failure_code"],
         safe_failure_detail=record["safe_failure_detail"],
+        failure_reason=record["failure_reason"],
         technical_log_reference=record["technical_log_reference"],
         retry_of_operation_id=record["retry_of_operation_id"],
         attempts_completed=record["attempts_completed"],

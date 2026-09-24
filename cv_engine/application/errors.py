@@ -124,6 +124,10 @@ class DependencyUnavailable(ApplicationError):
     """A required collaborator was not configured."""
 
 
+class ProviderNotConfigured(DependencyUnavailable):
+    """An AI task was requested and no AI provider is configured to run it."""
+
+
 class InfrastructureFailure(ApplicationError):
     """A configured persistence, provider, browser, or filesystem dependency failed."""
 

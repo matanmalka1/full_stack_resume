@@ -405,7 +405,7 @@ describe("ApplicationListPage", () => {
 
     /* The row's command goes to the same step the row itself opens. */
     const command = await screen.findByRole("link", { name: /· Acme$/ });
-    expect(command).toHaveTextContent("בצע");
+    expect(command).toHaveTextContent("מעבר לשלב");
     /* The recommended step carries its fixed one-line description. */
     expect(screen.getByText("הטיוטה עברה אימות וממתינה לאישור שלך.")).toBeInTheDocument();
     expect(command.getAttribute("href")).toBe(

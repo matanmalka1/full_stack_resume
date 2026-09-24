@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, LoaderCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
@@ -21,7 +21,32 @@ import type { RenderApprovedRevision } from "../hooks/useRenderApprovedRevision"
 export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) => {
   const { inFlight, ready, render, revision, revisionError } = state;
 
-  if (inFlight) return null;
+  /* While the render runs, the screen still says where the work stands: the draft was
+     approved and is now becoming files, and the reader will be taken on when they exist.
+     It offers nothing to press - the run is the live panel's to report and cancel - so it
+     is not a second account of the same moment, only the page's own subject. Without it
+     the step went blank for the length of the render once the modal no longer covered it. */
+  if (inFlight) {
+    return (
+      <section
+        aria-labelledby="render-heading"
+        className="flex items-start gap-3 rounded-surface border-2 border-cv-success/30 bg-cv-success-soft p-5"
+      >
+        <LoaderCircle
+          aria-hidden="true"
+          className="mt-1 size-icon-md shrink-0 text-cv-accent motion-safe:animate-spin"
+        />
+        <div>
+          <h2 className="text-heading-sm font-bold text-cv-text" id="render-heading">
+            הגרסה אושרה
+          </h2>
+          <p className="mt-1 text-support leading-6 text-cv-text-muted">
+            יוצרים ממנה HTML ו־PDF. כשהקבצים יהיו מוכנים, המסך יעבור לגרסה המוכנה למסירה.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <>
@@ -54,7 +79,7 @@ export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) =
           revision === undefined ? undefined : (
             <Link className={buttonClasses("ghost")} to={routePaths.application(revision.application_id)}>
               <ArrowRight aria-hidden="true" className="size-icon-md" />
-              חזרה לניתוח ולהתאמה
+              חזרה לניתוח והתאמה
             </Link>
           )
         }

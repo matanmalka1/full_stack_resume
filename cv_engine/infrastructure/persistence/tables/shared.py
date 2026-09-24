@@ -83,6 +83,7 @@ OPERATION_FAILURE_CODES = (
     "MISSING_FACT_RENDERING",
     "VALIDATION_EXECUTION_FAILED",
     "CANCELLED_BEFORE_ACTIVATION",
+    "PROVIDER_NOT_CONFIGURED",
 )
 
 applications = Table(
@@ -208,6 +209,7 @@ operations = Table(
     Column("cancellation_requested_at", Text),
     Column("failure_code", Text),
     Column("safe_failure_detail", Text),
+    Column("failure_reason", JSONB),
     Column("technical_log_reference", Text),
     Column("retry_of_operation_id", String, ForeignKey("operations.id")),
     Column("attempts_completed", Integer, nullable=False, server_default=text("0")),
@@ -255,6 +257,15 @@ operations = Table(
     CheckConstraint(
         "safe_failure_detail IS NULL OR status IN ('failed', 'cancelled')",
         name="failure_detail_status",
+    ),
+    CheckConstraint(
+        "failure_reason IS NULL OR status IN ('failed', 'cancelled')",
+        name="failure_reason_status",
+    ),
+    CheckConstraint(
+        "failure_reason IS NULL OR "
+        "(jsonb_typeof(failure_reason) = 'object' AND failure_reason ? 'code')",
+        name="failure_reason_shape",
     ),
     UniqueConstraint("operation_type", "idempotency_key"),
 )

@@ -766,8 +766,10 @@ def test_a_provider_failure_or_absence_never_produces_a_deterministic_result(
     unconfigured = _ingested(services, "Unconfigured Co")
     refused = _run(services, _analysis_operation(services, unconfigured))
 
+    # Not configured is its own code: nothing was sent, so nothing refused it.
     assert refused.status.value == "failed"
-    assert refused.failure_code is OperationFailureCode.PROVIDER_REFUSED
+    assert refused.failure_code is OperationFailureCode.PROVIDER_NOT_CONFIGURED
+    assert refused.safe_failure_detail == "No AI provider is configured."
 
 
 # --------------------------------------------------------------------------

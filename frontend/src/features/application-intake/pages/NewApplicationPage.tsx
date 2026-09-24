@@ -1,12 +1,13 @@
-import { ArrowRight, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-import { boardPath } from "@/app/boardReturn";
+import { aiRegenerationAvailable } from "@/api/settings";
+import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { WizardStepShell } from "@/features/preparation";
 import { useAppForm } from "@/hooks/useAppForm";
-import { Button, buttonClasses } from "@/ui/Button";
+import { Button } from "@/ui/Button";
 import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
@@ -32,15 +33,25 @@ export const NewApplicationPage = () => {
   const fields = form.watch();
   const currentIntake = intakeFromFields(fields);
   const intakeDraft = useApplicationIntakeDraft(fields, recoveredDraft !== null);
+  /* Analysis is AI-only. Until the settings read settles, creation requests it as before;
+     once Settings say there is no provider, the bar says so and creation does not queue a
+     run the server would only refuse. */
+  const { settings } = useSettings();
+  const analysisUnavailable = settings !== undefined && !aiRegenerationAvailable(settings);
 
   const submission = useApplicationIntakeSubmission({
+    analysisAvailable: !analysisUnavailable,
     currentIntake,
     onCreated: (result, createdInputIsCurrent) => {
       if (createdInputIsCurrent) intakeDraft.clearDraft();
       void navigate(routePaths.application(result.applicationId), {
         replace: true,
         state: {
-          createdApplication: { analysisProblem: result.analysisProblem, operationId: result.operation?.id ?? null },
+          createdApplication: {
+            analysisProblem: result.analysisProblem,
+            analysisSkipped: result.analysisSkipped,
+            operationId: result.operation?.id ?? null,
+          },
         },
       });
     },
@@ -93,13 +104,9 @@ export const NewApplicationPage = () => {
           serverValidationFailed={submission.fieldErrors !== null}
         />
       </div>
+      {/* No `back`: this is the first step, so there is no previous one to return to, and
+          the spine beside the form already carries the way back to the board. */}
       <CommitBar
-        back={
-          <Link className={buttonClasses("ghost")} to={boardPath()}>
-            <ArrowRight aria-hidden="true" className="size-icon-md" />
-            חזרה ללוח המועמדויות
-          </Link>
-        }
         label={NEXT_STEP_LABEL}
         result={
           submission.duplicateMatches === null
@@ -129,7 +136,9 @@ export const NewApplicationPage = () => {
       >
         <p className="text-support leading-6 text-cv-text-muted">
           {submission.duplicateMatches === null
-            ? "יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח."
+            ? analysisUnavailable
+              ? "יצירת המועמדות תשמור את תצלום המשרה. ניתוח המשרה דורש ספק AI, ועדיין לא הוגדר כזה - הניתוח יהיה זמין אחרי הגדרתו במסך ההגדרות."
+              : "יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח."
             : "נדרש אישור מפורש כדי לשמור מועמדות חדשה לצד המועמדויות הדומות."}
         </p>
       </CommitBar>

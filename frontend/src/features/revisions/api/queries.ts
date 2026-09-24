@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { applicationDetailQueryOptions } from "@/api/applications";
+import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import {
   approvedRevisionQueryOptions,
   approvedRevisionsQueryOptions,
@@ -12,7 +12,7 @@ export const useRevisionData = (revisionId: string) => {
   const revision = revisionQuery.data;
   const applicationId = revision?.application_id;
   const applicationQuery = useQuery({
-    ...applicationDetailQueryOptions(applicationId ?? ""),
+    ...watchedApplicationDetailQueryOptions(applicationId ?? ""),
     enabled: applicationId !== undefined,
   });
   const revisionsQuery = useQuery({

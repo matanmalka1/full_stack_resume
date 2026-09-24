@@ -8,7 +8,7 @@ projection without importing any of those hosts.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -117,6 +117,10 @@ class OperationFailureCode(StrEnum):
     MISSING_FACT_RENDERING = "MISSING_FACT_RENDERING"
     VALIDATION_EXECUTION_FAILED = "VALIDATION_EXECUTION_FAILED"
     CANCELLED_BEFORE_ACTIVATION = "CANCELLED_BEFORE_ACTIVATION"
+    #: No AI provider was configured for a run that needs one. Distinct from
+    #: PROVIDER_REFUSED, which means a provider answered and refused: the fix for
+    #: this one is configuration, and nothing was ever sent.
+    PROVIDER_NOT_CONFIGURED = "PROVIDER_NOT_CONFIGURED"
 
 
 TRANSIENT_FAILURE_CODES = frozenset(
@@ -234,6 +238,54 @@ class OperationOutputReference(OperationModel):
     active: bool
 
 
+class PdfPageLimitReason(OperationModel):
+    """The rendered PDF ran past the profile's page limit."""
+
+    code: Literal["pdf_page_limit"] = "pdf_page_limit"
+    pages: int = Field(ge=1)
+    maximum: int = Field(ge=1)
+
+
+class MissingFactRenderingReason(OperationModel):
+    """A selected canonical fact has no wording in the document language."""
+
+    code: Literal["missing_fact_rendering"] = "missing_fact_rendering"
+    fact_id: str
+    language: str
+
+
+RenderCheckCode = Literal[
+    "pdf_text_coverage",
+    "pdf_link_targets",
+    "content_overflow",
+    "document_direction",
+    "direction_isolation",
+    "pdf_filename",
+    "html_missing",
+    "pdf_missing",
+    "pdf_corrupt",
+    "render_validation",
+]
+
+
+class RenderCheckReason(OperationModel):
+    """A render validation check that failed and carries no parameters."""
+
+    code: RenderCheckCode
+
+
+#: Why a failed Operation failed, in a closed vocabulary with typed parameters.
+#: `safe_failure_detail` is the same reason as an English sentence for logs and
+#: legacy clients; this is what a client reads to explain the failure in its own
+#: words, so no client has to parse that sentence back apart. Written when the
+#: failure is recorded; absent on records from before it existed and on failures
+#: whose code already says everything.
+FailureReason = Annotated[
+    PdfPageLimitReason | MissingFactRenderingReason | RenderCheckReason,
+    Field(discriminator="code"),
+]
+
+
 class OperationView(OperationModel):
     id: str
     application_id: str
@@ -247,6 +299,7 @@ class OperationView(OperationModel):
     cancellation_requested_at: str | None = None
     failure_code: OperationFailureCode | None = None
     safe_failure_detail: str | None = None
+    failure_reason: FailureReason | None = None
     retry_of_operation_id: str | None = None
     provider: str | None = None
     model: str | None = None

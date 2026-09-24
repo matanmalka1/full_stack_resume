@@ -4195,6 +4195,32 @@
         "title": "KnowledgeVersions",
         "type": "object"
       },
+      "MissingFactRenderingReason": {
+        "additionalProperties": false,
+        "description": "A selected canonical fact has no wording in the document language.",
+        "properties": {
+          "code": {
+            "const": "missing_fact_rendering",
+            "default": "missing_fact_rendering",
+            "title": "Code",
+            "type": "string"
+          },
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_id",
+          "language"
+        ],
+        "title": "MissingFactRenderingReason",
+        "type": "object"
+      },
       "NextActionRequest": {
         "additionalProperties": false,
         "description": "Set or clear the one active next action, stated in whole.\n\nBoth fields are required and both are nullable. Clearing is a real request\n- sending `null` for each is how a client says the action is done - and\nrequiring them is what keeps that distinguishable from an omitted field\nmeaning \"leave it alone\".",
@@ -4252,7 +4278,8 @@
           "BROWSER_START_FAILED",
           "MISSING_FACT_RENDERING",
           "VALIDATION_EXECUTION_FAILED",
-          "CANCELLED_BEFORE_ACTIVATION"
+          "CANCELLED_BEFORE_ACTIVATION",
+          "PROVIDER_NOT_CONFIGURED"
         ],
         "title": "OperationFailureCode",
         "type": "string"
@@ -4361,6 +4388,44 @@
                 "type": "null"
               }
             ]
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "content_overflow": "#/components/schemas/RenderCheckReason",
+                    "direction_isolation": "#/components/schemas/RenderCheckReason",
+                    "document_direction": "#/components/schemas/RenderCheckReason",
+                    "html_missing": "#/components/schemas/RenderCheckReason",
+                    "missing_fact_rendering": "#/components/schemas/MissingFactRenderingReason",
+                    "pdf_corrupt": "#/components/schemas/RenderCheckReason",
+                    "pdf_filename": "#/components/schemas/RenderCheckReason",
+                    "pdf_link_targets": "#/components/schemas/RenderCheckReason",
+                    "pdf_missing": "#/components/schemas/RenderCheckReason",
+                    "pdf_page_limit": "#/components/schemas/PdfPageLimitReason",
+                    "pdf_text_coverage": "#/components/schemas/RenderCheckReason",
+                    "render_validation": "#/components/schemas/RenderCheckReason"
+                  },
+                  "propertyName": "code"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PdfPageLimitReason"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MissingFactRenderingReason"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RenderCheckReason"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
           },
           "finished_at": {
             "anyOf": [
@@ -4563,6 +4628,34 @@
           "candidates"
         ],
         "title": "OrphanInventoryResponse",
+        "type": "object"
+      },
+      "PdfPageLimitReason": {
+        "additionalProperties": false,
+        "description": "The rendered PDF ran past the profile's page limit.",
+        "properties": {
+          "code": {
+            "const": "pdf_page_limit",
+            "default": "pdf_page_limit",
+            "title": "Code",
+            "type": "string"
+          },
+          "maximum": {
+            "minimum": 1.0,
+            "title": "Maximum",
+            "type": "integer"
+          },
+          "pages": {
+            "minimum": 1.0,
+            "title": "Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pages",
+          "maximum"
+        ],
+        "title": "PdfPageLimitReason",
         "type": "object"
       },
       "PreparationState": {
@@ -4995,6 +5088,33 @@
           "section"
         ],
         "title": "RegenerateSectionRequest",
+        "type": "object"
+      },
+      "RenderCheckReason": {
+        "additionalProperties": false,
+        "description": "A render validation check that failed and carries no parameters.",
+        "properties": {
+          "code": {
+            "enum": [
+              "pdf_text_coverage",
+              "pdf_link_targets",
+              "content_overflow",
+              "document_direction",
+              "direction_isolation",
+              "pdf_filename",
+              "html_missing",
+              "pdf_missing",
+              "pdf_corrupt",
+              "render_validation"
+            ],
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "RenderCheckReason",
         "type": "object"
       },
       "RenderRevisionRequest": {

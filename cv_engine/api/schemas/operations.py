@@ -4,6 +4,7 @@ from pydantic import computed_field
 
 from ...application.ai_configuration import ReasoningEffort
 from ...application.operations import (
+    FailureReason,
     OperationAction,
     OperationFailureCode,
     OperationPhase,
@@ -65,6 +66,9 @@ class OperationResponse(HttpSchema):
     cancellation_requested_at: str | None = None
     failure_code: OperationFailureCode | None = None
     safe_failure_detail: str | None = None
+    #: The failure's reason with typed parameters, for a client to explain in its
+    #: own words; `safe_failure_detail` is the same reason as an English line.
+    failure_reason: FailureReason | None = None
     retry_of_operation_id: str | None = None
     provider: str | None = None
     model: str | None = None

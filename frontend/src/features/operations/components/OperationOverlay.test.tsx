@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Operation } from "@/api/contracts";
+import { settingsQueryKey } from "@/api/settings";
+import { settings as settingsFixture } from "@/test/fixtures";
 import { isOperationLive } from "../model/operationLive";
 import { OperationOverlay, type PendingWork } from "./OperationOverlay";
 import { OperationReport } from "./OperationReport";
@@ -51,18 +54,21 @@ interface OverlayProps {
 
 /* One host screen across several reads: each `update` is the next render of the same
    overlay, the way a watch hands it a new record. */
-const renderOverlay = (initial: OverlayProps) => {
+const renderOverlay = (initial: OverlayProps, settings?: ReturnType<typeof settingsFixture>) => {
   const queryClient = client();
+  if (settings !== undefined) queryClient.setQueryData(settingsQueryKey, { settings, etag: null });
   const view = (props: OverlayProps): ReactElement => (
     <QueryClientProvider client={queryClient}>
-      <OperationOverlay
-        awaitingRecord={props.awaitingRecord ?? false}
-        continuation={props.continuation}
-        onQueued={vi.fn()}
-        operation={props.operation}
-        pending={props.pending}
-        settled={props.settled ?? false}
-      />
+      <MemoryRouter>
+        <OperationOverlay
+          awaitingRecord={props.awaitingRecord ?? false}
+          continuation={props.continuation}
+          onQueued={vi.fn()}
+          operation={props.operation}
+          pending={props.pending}
+          settled={props.settled ?? false}
+        />
+      </MemoryRouter>
     </QueryClientProvider>
   );
   const result = render(view(initial));
@@ -74,7 +80,8 @@ const overlay = (): HTMLDialogElement => {
   if (dialog === null) throw new Error("no overlay on screen");
   return dialog;
 };
-const chip = () => screen.getByRole("button", { name: /פירוט ההרצה/ });
+const chip = () => screen.getByRole("button", { name: /· .*פירוט ההרצה/ });
+const panel = () => screen.getByRole("region");
 
 describe("OperationReport", () => {
   afterEach(() => {
@@ -187,6 +194,7 @@ describe("OperationReport", () => {
         failure_code: "RENDER_FAILED",
         operation_type: "render_revision",
         safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
+        failure_reason: { code: "pdf_page_limit", pages: 2, maximum: 1 },
       }),
       vi.fn(),
       <button type="button">חזרה לעריכת הטיוטה</button>,
@@ -197,6 +205,83 @@ describe("OperationReport", () => {
     expect(alert).toHaveTextContent("הפרופיל מאפשר לכל היותר 1");
     expect(screen.getByRole("button", { name: "חזרה לעריכת הטיוטה" })).toBeInTheDocument();
     expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
+  });
+
+  /* The backend files "no provider configured" under PROVIDER_REFUSED. With Settings
+     saying no provider exists, the report names that cause, says the request went
+     nowhere, and offers Settings rather than a retry that would fail the same way. */
+  it.each([
+    [false, "לא הוגדר ספק AI"],
+    [true, "ה־AI כבוי בהגדרות"],
+  ] as const)("routes a refusal with no usable provider (configured: %s) to Settings", (configured, title) => {
+    const queryClient = client();
+    const settings = settingsFixture({ provider_configured: configured, ai_enabled: false });
+    queryClient.setQueryData(settingsQueryKey, { settings, etag: null });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <OperationReport
+            onQueued={vi.fn()}
+            operation={failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] })}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(title);
+    expect(screen.queryByText("ספק הבינה המלאכותית סירב לבקשה")).not.toBeInTheDocument();
+    /* The reason is the report's line on a failure; no vaguer one above it. */
+    expect(screen.queryByText("הפעולה נכשלה ולא יצרה תוצאה.")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toHaveAttribute("href", "/settings");
+    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
+  });
+
+  /* A failure recorded before the structured reason existed carries only the English
+     sentence. It is not parsed: the code's own guidance stands, and the sentence stays out. */
+  it("does not parse the English detail of a failure recorded without a reason", () => {
+    renderPanel(
+      failed({
+        failure_code: "RENDER_FAILED",
+        operation_type: "render_revision",
+        safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
+      }),
+    );
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("יצירת קובץ קורות החיים נכשלה");
+    expect(alert).not.toHaveTextContent("קובץ ה־PDF כולל");
+    expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
+  });
+
+  /* PROVIDER_NOT_CONFIGURED is the server's own word for a run that had no provider. While
+     that is still true it goes to Settings; once a provider is usable, it can run again. */
+  it("sends a not-configured run to Settings, and offers it again once a provider is usable", () => {
+    const run = failed({ failure_code: "PROVIDER_NOT_CONFIGURED", available_actions: ["retry"] });
+    const renderWith = (configured: boolean) => {
+      const queryClient = client();
+      queryClient.setQueryData(settingsQueryKey, {
+        settings: settingsFixture({ provider_configured: configured, ai_enabled: configured }),
+        etag: null,
+      });
+      return render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <OperationReport onQueued={vi.fn()} operation={run} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    };
+
+    const first = renderWith(false);
+    expect(screen.getByRole("alert")).toHaveTextContent("לא הוגדר ספק AI");
+    expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
+    first.unmount();
+
+    renderWith(true);
+    expect(screen.getByRole("alert")).toHaveTextContent("לא היה ספק AI בזמן ההרצה");
+    expect(screen.getByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "פתיחת ההגדרות" })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -289,6 +374,7 @@ describe("OperationReport", () => {
         available_actions: [],
         failure_code: "MISSING_FACT_RENDERING",
         safe_failure_detail: "Fact development.phdigital.nextjs has no 'he' rendering.",
+        failure_reason: { code: "missing_fact_rendering", fact_id: "development.phdigital.nextjs", language: "he" },
         is_terminal: true,
         phase: "completed",
         status: "failed",
@@ -322,118 +408,151 @@ describe("OperationOverlay", () => {
     vi.useRealTimers();
   });
 
-  it("opens over the page while work runs", () => {
-    renderOverlay({ operation: operation() });
+  /* Once a provider is available, a refused run no longer blocks anything: the row says
+     it can be tried again and stops wearing the blocker tone. */
+  it("stops presenting a refused run as an open blocker once a provider is available", () => {
+    const refused = failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] });
+    renderOverlay(
+      { operation: refused, settled: true },
+      settingsFixture({ provider_configured: true, ai_enabled: true }),
+    );
 
-    expect(overlay().open).toBe(true);
-    expect(screen.getByRole("heading", { name: "הרצת ניתוח המשרה" })).toBeInTheDocument();
-    expect(chip()).toHaveTextContent("מתבצעת");
+    expect(chip()).toHaveTextContent("נכשלה · אפשר לנסות שוב");
   });
 
-  it("does not open by itself for a run that had already finished when the screen read it", () => {
+  it("keeps a refused run a plain failure while no provider is available", () => {
+    const refused = failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] });
+    renderOverlay({ operation: refused, settled: true }, settingsFixture());
+
+    expect(chip()).toHaveTextContent("נכשלה");
+    expect(chip()).not.toHaveTextContent("אפשר לנסות שוב");
+  });
+
+  it("shows live work in a panel beside the page, not over it", () => {
+    renderOverlay({ operation: operation() });
+
+    expect(panel()).toHaveTextContent("הרצת ניתוח המשרה");
+    expect(panel()).toHaveTextContent("מתבצעת");
+    expect(within(panel()).getByRole("list", { name: "שלבי ההרצה" })).toBeInTheDocument();
+    expect(overlay().open).toBe(false);
+
+    /* The full report is still a press away while the run lasts. */
+    fireEvent.click(within(panel()).getByRole("button", { name: "פירוט ההרצה" }));
+    expect(overlay().open).toBe(true);
+  });
+
+  it("shows nothing for a success that was already finished when the screen read it", () => {
     /* Not settled yet either: waiting for the refresh extends a session, never starts one. */
     renderOverlay({ operation: succeeded(), settled: false });
 
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
     expect(overlay().open).toBe(false);
-    expect(chip()).toHaveTextContent("הושלמה");
+    expect(screen.queryByRole("button", { name: /פירוט ההרצה/ })).not.toBeInTheDocument();
   });
 
-  it("closes a success only once its refresh has landed, and reopens from the chip", () => {
+  it("shows a success briefly once its refresh has landed, then leaves nothing behind", () => {
+    vi.useFakeTimers();
     const { update } = renderOverlay({ operation: operation() });
 
     update({ operation: succeeded({ available_actions: ["retry"] }), settled: false });
-    expect(overlay().open).toBe(true);
+    expect(panel()).toHaveTextContent("הושלמה");
 
     update({ operation: succeeded({ available_actions: ["retry"] }), settled: true });
+    expect(panel()).toHaveTextContent("הושלמה");
     expect(overlay().open).toBe(false);
-    expect(chip()).toHaveTextContent("הושלמה");
 
-    fireEvent.click(chip());
-    expect(overlay().open).toBe(true);
-    expect(screen.getByRole("button", { name: "הרצה מחדש" })).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /פירוט ההרצה/ })).not.toBeInTheDocument();
   });
 
-  it("keeps a failure open, and brings it back if the reader had hidden the run", () => {
+  it("opens the report on a failure, and leaves a status row that reopens it", () => {
     const { update } = renderOverlay({ operation: operation() });
 
-    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
-    expect(overlay().open).toBe(false);
+    /* Put away while it runs, the panel is replaced by the status row. */
+    fireEvent.click(within(panel()).getByRole("button", { name: "סגירה" }));
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
     expect(chip()).toHaveTextContent("מתבצעת");
 
     update({ operation: failed({ failure_code: "VALIDATION_EXECUTION_FAILED" }), settled: true });
     expect(overlay().open).toBe(true);
     expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן להשלים את בדיקות הפעולה");
+
+    fireEvent.click(within(overlay()).getByRole("button", { name: "סגירה" }));
+    expect(overlay().open).toBe(false);
+    expect(chip()).toHaveTextContent("נכשלה");
+    fireEvent.click(chip());
+    expect(overlay().open).toBe(true);
   });
 
-  it("keeps one overlay open from pending work to the record that replaces it", () => {
+  it("keeps one session from pending work to the record that replaces it", () => {
     const pending = { heading: <>הרצת ניתוח המשרה</>, note: "יוצרים את המועמדות ומנתחים את המשרה…" };
     const { update } = renderOverlay({ pending });
-    const first = overlay();
-    expect(first.open).toBe(true);
-    expect(screen.getAllByText("נשלחה לביצוע").length).toBeGreaterThan(0);
+    const first = panel();
+    expect(first).toHaveTextContent("נשלחה לביצוע");
+    expect(first).toHaveTextContent("יוצרים את המועמדות ומנתחים את המשרה…");
 
     update({ operation: operation() });
-    expect(overlay()).toBe(first);
-    expect(first.open).toBe(true);
-    expect(chip()).toHaveTextContent("מתבצעת");
+    expect(panel()).toBe(first);
+    expect(first).toHaveTextContent("מתבצעת");
   });
 
-  it("stays open across a continuation and closes only at the end of the chain", () => {
+  it("stays in one panel across a continuation and never opens the report", () => {
     const analyze = operation();
     const draft = operation({ id: "operation-2", operation_type: "create_draft" });
     const continuation = "הניתוח הושלם. יצירת הטיוטה מתחילה מיד.";
     const { update } = renderOverlay({ operation: analyze });
-    const first = overlay();
+    const first = panel();
 
-    update({ continuation, operation: succeeded(), settled: false });
-    expect(first.open).toBe(true);
     update({ continuation, operation: succeeded(), settled: true });
-    expect(first.open).toBe(true);
-    expect(screen.getAllByText(continuation).length).toBeGreaterThan(0);
+    expect(panel()).toBe(first);
+    expect(first).toHaveTextContent(continuation);
 
     update({ operation: draft });
-    expect(overlay()).toBe(first);
-    expect(first.open).toBe(true);
+    expect(panel()).toBe(first);
+    expect(first).toHaveTextContent("הרצת יצירת הטיוטה");
 
-    update({ operation: { ...draft, status: "succeeded", phase: "completed", is_terminal: true }, settled: false });
-    expect(first.open).toBe(true);
     update({ operation: { ...draft, status: "succeeded", phase: "completed", is_terminal: true }, settled: true });
-    expect(first.open).toBe(false);
+    expect(first).toHaveTextContent("הושלמה");
+    expect(overlay().open).toBe(false);
   });
 
-  it("stays open while a retry's new record is on its way", () => {
+  it("moves a retry's new run back to the panel, without the previous failure", () => {
     const previous = failed({ available_actions: ["retry"] });
     const { update } = renderOverlay({ operation: operation() });
     update({ operation: previous, settled: true });
     expect(overlay().open).toBe(true);
 
     update({ awaitingRecord: true, operation: previous, settled: true });
-    expect(overlay().open).toBe(true);
+    expect(overlay().open).toBe(false);
+    expect(panel()).toHaveTextContent("נשלחה לביצוע");
     /* The previous run's failure is not this run's outcome. */
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     update({ operation: operation({ id: "operation-2" }) });
-    expect(overlay().open).toBe(true);
-    expect(chip()).toHaveTextContent("מתבצעת");
+    expect(panel()).toHaveTextContent("מתבצעת");
   });
 
   it("does not hold an old failure open when the new command never queued", () => {
     const { update } = renderOverlay({ operation: failed(), settled: true });
     expect(overlay().open).toBe(false);
+    expect(chip()).toHaveTextContent("נכשלה");
 
     update({ operation: failed(), pending: { heading: "הרצה", note: "נשלחה" }, settled: true });
-    expect(overlay().open).toBe(true);
+    expect(panel()).toHaveTextContent("נשלחה");
 
     update({ operation: failed(), settled: true });
     expect(overlay().open).toBe(false);
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(chip()).toHaveTextContent("נכשלה");
   });
 
-  it("keeps the cancel delay running while the overlay is hidden", () => {
+  it("keeps the cancel delay running while the report is closed", () => {
     vi.useFakeTimers();
     renderOverlay({ operation: operation({ available_actions: ["cancel"] }) });
 
     act(() => vi.advanceTimersByTime(2_000));
-    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
+    fireEvent.click(within(panel()).getByRole("button", { name: "סגירה" }));
     act(() => vi.advanceTimersByTime(2_000));
     fireEvent.click(chip());
 

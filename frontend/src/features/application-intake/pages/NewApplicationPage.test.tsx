@@ -118,7 +118,7 @@ const CreatedApplicationDestination = () => {
   );
 };
 
-const renderPage = (entry = "/") => {
+const renderPage = (entry = "/", aiAvailable = false) => {
   const client = new QueryClient({
     defaultOptions: {
       /* The screen deliberately reads the Settings value already held by the shell.
@@ -135,8 +135,8 @@ const renderPage = (entry = "/") => {
       default_ai_model: "gpt-5.6-terra",
       default_reasoning_effort: "medium",
       available_ai_models: [],
-      provider_configured: false,
-      ai_enabled: false,
+      provider_configured: aiAvailable,
+      ai_enabled: aiAvailable,
     },
     etag: null,
   });
@@ -185,19 +185,28 @@ describe("NewApplicationPage", () => {
     window.sessionStorage.setItem("cv:board-query", "activity=all&stage=approved");
     renderPage("/");
 
-    expect(screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveLength(2);
-    for (const link of screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })) {
-      expect(link).toHaveAttribute("href", "/?activity=all&stage=approved");
-    }
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute(
+      "href",
+      "/?activity=all&stage=approved",
+    );
     expect(screen.getByRole("heading", { name: "קליטת משרה" })).toBeInTheDocument();
+  });
+
+  it("promises an analysis only when a provider can run one", () => {
+    renderPage("/");
+    expect(screen.getByText(/ניתוח המשרה דורש ספק AI/)).toBeInTheDocument();
+    expect(screen.queryByText(/ותתחיל את הניתוח/)).not.toBeInTheDocument();
+    cleanup();
+
+    renderPage("/", true);
+    expect(screen.getByText("יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח.")).toBeInTheDocument();
+    expect(screen.queryByText(/ניתוח המשרה דורש ספק AI/)).not.toBeInTheDocument();
   });
 
   it("returns to the bare board when nothing was remembered", () => {
     renderPage("/");
 
-    for (const link of screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })) {
-      expect(link).toHaveAttribute("href", "/");
-    }
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
   });
 
   it("restores an intake draft from persistent browser storage without changing its text", () => {
@@ -210,7 +219,7 @@ describe("NewApplicationPage", () => {
 
     renderPage();
 
-    expect(screen.getByText("טיוטה קודמת שוחזרה מהדפדפן.")).toBeInTheDocument();
+    expect(screen.getByText("פרטים שהוזנו קודם שוחזרו מהדפדפן הזה.")).toBeInTheDocument();
     expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme Israel ");
     expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Platform Engineer");
     expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("https://example.com/jobs/platform");
@@ -257,7 +266,7 @@ describe("NewApplicationPage", () => {
     fillIntake("Keep this posting even when storage is full");
 
     expect(
-      await screen.findByText("לא ניתן לשמור את הטיוטה בדפדפן. אין לסגור את העמוד לפני השליחה."),
+      await screen.findByText("לא ניתן לשמור את הפרטים בדפדפן. אין לסגור את העמוד לפני יצירת המועמדות."),
     ).toBeInTheDocument();
     expect(jobTextArea()).toHaveValue("Keep this posting even when storage is full");
     const closing = new Event("beforeunload", { cancelable: true });
@@ -285,7 +294,7 @@ describe("NewApplicationPage", () => {
       ],
       [ANALYSES_PATH]: [queuedAnalysisResponse()],
     });
-    renderPage();
+    renderPage("/", true);
 
     fillIntake();
     const createButton = screen.getByRole("button", { name: "יצירת מועמדות" });
@@ -381,6 +390,28 @@ describe("NewApplicationPage", () => {
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH]);
   });
 
+  /* Analysis is AI-only: with no provider it could only be queued to fail, so creation
+     stops at the Application and the next screen says what is missing. */
+  it("creates the application without queuing an analysis when no AI provider can run it", async () => {
+    const calls = stubFetch({
+      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [CREATE_PATH]: [
+        jsonResponse(
+          { application_id: "app-new", job_snapshot_id: "snap-1", warnings: [], duplicate_matches: [] },
+          201,
+        ),
+      ],
+    });
+    renderPage();
+
+    fillIntake();
+    submitForm();
+
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
+    expect(screen.getByText("הניתוח לא הופעל")).toBeInTheDocument();
+    expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH]);
+  });
+
   it("creates anyway with an explicit acknowledgement and no second precheck", async () => {
     const calls = stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match()] })],
@@ -397,7 +428,7 @@ describe("NewApplicationPage", () => {
       ],
       [ANALYSES_PATH]: [queuedAnalysisResponse()],
     });
-    renderPage();
+    renderPage("/", true);
 
     fillIntake();
     submitForm();
@@ -425,7 +456,7 @@ describe("NewApplicationPage", () => {
       ],
       [ANALYSES_PATH]: [problemResponse(503, "SERVICE_UNAVAILABLE", "analysis could not be queued")],
     });
-    renderPage();
+    renderPage("/", true);
 
     fillIntake();
     submitForm();

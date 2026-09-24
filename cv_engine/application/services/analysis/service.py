@@ -14,10 +14,10 @@ from ...commands import (
     SelectionPlanResult,
 )
 from ...errors import (
-    DependencyUnavailable,
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
+    ProviderNotConfigured,
     StateConflict,
 )
 from ...ports import AIProvider, TransactionManager
@@ -111,7 +111,7 @@ class AnalysisService:
     @property
     def provider(self) -> AIProvider:
         if self._provider is None:
-            raise DependencyUnavailable("AI mode was requested but no provider is configured")
+            raise ProviderNotConfigured("AI mode was requested but no provider is configured")
         return self._provider
 
     def preserve(
