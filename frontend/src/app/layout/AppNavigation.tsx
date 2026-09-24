@@ -14,14 +14,18 @@ const areas = () => [
 
 const linkClasses = (isActive: boolean, collapsed: boolean): string =>
   cx(
-    "inline-flex items-center gap-2 border-s-2 text-support transition-colors",
+    "inline-flex items-center gap-2 border-b-2 text-support transition-colors lg:border-b-0 lg:border-s-2",
     collapsed ? "size-11 justify-center" : "min-h-11 px-2 sm:px-3 lg:min-h-0 lg:py-2",
     isActive
-      ? "border-s-cv-nav-active-indicator bg-cv-nav-active-bg font-bold text-cv-text"
-      : "border-s-transparent font-medium text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text",
+      ? "border-cv-nav-active-indicator bg-cv-nav-active-bg font-bold text-cv-text"
+      : "border-transparent font-medium text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text",
   );
 
-/* Active state comes from the router - `NavLink` also sets `aria-current="page"` - so
+/* The indicator sits under the link while the navigation is a horizontal top bar, and on
+   its inline-start edge once it becomes the vertical sidebar at the large breakpoint - a
+   start-edge line in a horizontal row reads as a separator, not as "you are here".
+
+   Active state comes from the router - `NavLink` also sets `aria-current="page"` - so
    nothing here mirrors the location in state of its own.
    
    Each link carries its label as `aria-label` too, because the visible one is hidden on a

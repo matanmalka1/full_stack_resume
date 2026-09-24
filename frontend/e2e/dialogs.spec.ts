@@ -163,7 +163,7 @@ test.describe("dialogs", () => {
      restores focus to the body, and that is correct rather than a lost trigger. */
   test("returns focus to the palette trigger that opened it", async ({ page }) => {
     await page.goto("/applications/app-1");
-    const trigger = page.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" });
+    const trigger = page.getByRole("button", { name: "מעבר מהיר למועמדות" });
     const palette = page.getByRole("dialog", { name: "מעבר מהיר למועמדות" });
 
     await trigger.click();

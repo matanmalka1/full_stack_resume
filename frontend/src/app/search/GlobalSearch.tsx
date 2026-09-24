@@ -52,7 +52,8 @@ export const GlobalSearch = ({
 
   const trigger = (
     <button
-      aria-label="מעבר מהיר למועמדות (Cmd+K)"
+      aria-keyshortcuts="Meta+K Control+K"
+      aria-label="מעבר מהיר למועמדות"
       className={cx(
         "inline-flex items-center rounded-control border border-cv-border bg-cv-surface-muted text-cv-text-muted transition-colors hover:border-cv-border-strong hover:bg-cv-surface hover:text-cv-text",
         compact ? "size-11 justify-center" : "min-h-11 gap-2 px-3 text-support",
