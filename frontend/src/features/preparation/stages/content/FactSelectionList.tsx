@@ -133,8 +133,10 @@ export const FactSelectionList = ({
             aria-hidden="true"
             className="pointer-events-none absolute start-3.5 top-1/2 size-icon-md -translate-y-1/2 text-cv-text-muted"
           />
+          {/* Physical padding: the icon stays on the right while `dir="auto"` turns a
+              Latin query left-to-right. */}
           <Input
-            className="rtl-placeholder w-64 max-w-full ps-10"
+            className="rtl-placeholder w-64 max-w-full pr-10"
             dir="auto"
             id={searchId}
             onChange={(event) => setQuery(event.target.value)}

@@ -39,7 +39,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
                 validate: (value) => value.trim() !== "" || "יש להזין את שם החברה.",
               })}
               autoComplete="organization"
-              className="rtl-placeholder ps-10"
+              className="rtl-placeholder pr-10"
               dir="auto"
               maxLength={LABEL_MAX_CHARACTERS}
               placeholder={examplePlaceholder("monday.com")}
@@ -56,7 +56,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
                 onChange: () => onInputChanged("target_role"),
                 validate: (value) => value.trim() !== "" || "יש להזין את תפקיד היעד.",
               })}
-              className="rtl-placeholder ps-10"
+              className="rtl-placeholder pr-10"
               dir="auto"
               maxLength={LABEL_MAX_CHARACTERS}
               placeholder={examplePlaceholder("Account Manager")}
@@ -76,7 +76,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
           <Input
             {...control}
             {...register("source_url", { onChange: () => onInputChanged("source_url") })}
-            className="ltr-island ps-10"
+            className="ltr-island pr-10"
             dir="ltr"
             inputMode="url"
             maxLength={SOURCE_URL_MAX_CHARACTERS}
