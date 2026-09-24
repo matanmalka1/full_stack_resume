@@ -1,4 +1,4 @@
-import { type ReactElement, useState } from "react";
+import { type ReactElement, useId, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { aiRegenerationAvailable } from "@/api/settings";
@@ -48,6 +48,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
      never chose to discard. */
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [keepPrevious, setKeepPrevious] = useState(true);
+  const analyzeReasonId = useId();
   const closeReplace = () => {
     setReplaceOpen(false);
     setKeepPrevious(true);
@@ -70,6 +71,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
   const analyzeButton =
     plan.analyze === null || plan.analyze.reanalysis ? null : (
       <Button
+        aria-describedby={providerMissing ? analyzeReasonId : undefined}
         disabled={workInFlight || settings === undefined || !aiRegenerationAvailable(settings)}
         key="analyze"
         onClick={() => analyze.mutate()}
@@ -80,8 +82,10 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
         ניתוח המשרה
       </Button>
     );
+  /* Links in the bar take the compact size `Button` defaults to, so a link and a button
+     side by side in it are one height. */
   const settingsButton = providerMissing ? (
-    <Link className={buttonClasses("primary")} key="settings" to={routePaths.settings}>
+    <Link className={buttonClasses("primary", undefined, "compact")} key="settings" to={routePaths.settings}>
       פתיחת ההגדרות
     </Link>
   ) : null;
@@ -132,7 +136,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
     );
 
   const routeButton = (key: string, href: string, label: string, emphasized: boolean) => (
-    <Link className={buttonClasses(emphasized ? "primary" : "secondary")} key={key} to={href}>
+    <Link className={buttonClasses(emphasized ? "primary" : "secondary", undefined, "compact")} key={key} to={href}>
       {label}
     </Link>
   );
@@ -270,7 +274,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
               pressed: an inert button with no reason beside it reads as a broken one. The
               way to fix a missing provider is the bar's own lead action. */}
           {plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? undefined : (
-            <p className="text-support leading-6 text-cv-text-muted">
+            <p className="text-support leading-6 text-cv-text-muted" id={analyzeReasonId}>
               {aiRegenerationAvailable(settings)
                 ? "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."
                 : "הניתוח דורש ספק AI, ועדיין לא הוגדר כזה."}

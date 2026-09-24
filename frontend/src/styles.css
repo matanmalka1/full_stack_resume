@@ -313,14 +313,6 @@ select {
   }
 }
 
-button,
-input,
-optgroup,
-textarea,
-select {
-  font: inherit;
-}
-
 .cv-field {
   --cv-field-fill: var(--color-cv-surface);
   border-color: var(--color-cv-field-border);
