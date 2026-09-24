@@ -561,7 +561,8 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage();
 
     expect(await screen.findByText("gpt-5.6-luna")).toBeInTheDocument();
-    expect(screen.getByText("$0.00002806")).toBeInTheDocument();
+    /* Two significant digits below a cent, not the raw decimal string. */
+    expect(screen.getByText("$0.000028")).toBeInTheDocument();
     expect(screen.getByText("מאמץ חשיבה")).toBeInTheDocument();
     expect(screen.getByText("גבוה")).toBeInTheDocument();
   });

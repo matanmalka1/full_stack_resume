@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-import { applicationDetailQueryOptions } from "@/api/applications";
+import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
@@ -77,7 +77,7 @@ export const ApplicationPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const location = useLocation();
 
-  const query = useQuery(applicationDetailQueryOptions(applicationId));
+  const query = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = query.data;
   const {
     awaitingRecord,

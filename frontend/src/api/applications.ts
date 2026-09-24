@@ -240,6 +240,14 @@ export const applicationDetailQueryOptions = (applicationId: string) =>
     },
   });
 
+/* The same read, for a screen that watches the Application's Operation itself
+   (`useWatchedOperation`). That watch polls the Operation on the same interval and
+   re-reads this projection the moment the run ends, which is the only time a run changes
+   it - so polling the projection as well only doubled the requests while work ran. A
+   screen without the watch keeps the polling read above. */
+export const watchedApplicationDetailQueryOptions = (applicationId: string) =>
+  queryOptions({ ...applicationDetailQueryOptions(applicationId), refetchInterval: false });
+
 /* Every Application this instance holds, which is what makes an existing one reachable
    again. Without it the only route to a saved Application was its URL, so the root screen
    had to be the intake form and "home" meant starting over.
