@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ..operations import OperationFailureCode, OperationPhase, PersistedOperation
+from ..operations import FailureReason, OperationFailureCode, OperationPhase, PersistedOperation
 from .transactions import ReadTransaction, WriteTransaction
 
 
@@ -94,5 +94,6 @@ class OperationExecutionStore(Protocol):
         *,
         runner_id: str,
         technical_log_reference: str | None = None,
+        reason: FailureReason | None = None,
         now: str | None = None,
     ) -> PersistedOperation: ...

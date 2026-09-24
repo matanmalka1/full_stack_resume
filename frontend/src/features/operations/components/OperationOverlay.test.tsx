@@ -194,6 +194,7 @@ describe("OperationReport", () => {
         failure_code: "RENDER_FAILED",
         operation_type: "render_revision",
         safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
+        failure_reason: { code: "pdf_page_limit", pages: 2, maximum: 1 },
       }),
       vi.fn(),
       <button type="button">חזרה לעריכת הטיוטה</button>,
@@ -233,6 +234,54 @@ describe("OperationReport", () => {
     expect(screen.queryByText("הפעולה נכשלה ולא יצרה תוצאה.")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toHaveAttribute("href", "/settings");
     expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
+  });
+
+  /* A failure recorded before the structured reason existed carries only the English
+     sentence. It is not parsed: the code's own guidance stands, and the sentence stays out. */
+  it("does not parse the English detail of a failure recorded without a reason", () => {
+    renderPanel(
+      failed({
+        failure_code: "RENDER_FAILED",
+        operation_type: "render_revision",
+        safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
+      }),
+    );
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("יצירת קובץ קורות החיים נכשלה");
+    expect(alert).not.toHaveTextContent("קובץ ה־PDF כולל");
+    expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
+  });
+
+  /* PROVIDER_NOT_CONFIGURED is the server's own word for a run that had no provider. While
+     that is still true it goes to Settings; once a provider is usable, it can run again. */
+  it("sends a not-configured run to Settings, and offers it again once a provider is usable", () => {
+    const run = failed({ failure_code: "PROVIDER_NOT_CONFIGURED", available_actions: ["retry"] });
+    const renderWith = (configured: boolean) => {
+      const queryClient = client();
+      queryClient.setQueryData(settingsQueryKey, {
+        settings: settingsFixture({ provider_configured: configured, ai_enabled: configured }),
+        etag: null,
+      });
+      return render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <OperationReport onQueued={vi.fn()} operation={run} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+    };
+
+    const first = renderWith(false);
+    expect(screen.getByRole("alert")).toHaveTextContent("לא הוגדר ספק AI");
+    expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
+    first.unmount();
+
+    renderWith(true);
+    expect(screen.getByRole("alert")).toHaveTextContent("לא היה ספק AI בזמן ההרצה");
+    expect(screen.getByRole("button", { name: "ניסיון חוזר" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "פתיחת ההגדרות" })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -325,6 +374,7 @@ describe("OperationReport", () => {
         available_actions: [],
         failure_code: "MISSING_FACT_RENDERING",
         safe_failure_detail: "Fact development.phdigital.nextjs has no 'he' rendering.",
+        failure_reason: { code: "missing_fact_rendering", fact_id: "development.phdigital.nextjs", language: "he" },
         is_terminal: true,
         phase: "completed",
         status: "failed",

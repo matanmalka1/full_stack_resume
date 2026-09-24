@@ -121,6 +121,7 @@ export const ApplicationPage = () => {
   const { settings } = useSettings();
   const postingRepairRelevant =
     viewState === "analysis_failed" &&
+    watched?.failure_code !== "PROVIDER_NOT_CONFIGURED" &&
     !(watched?.failure_code === "PROVIDER_REFUSED" && settings !== undefined && !aiRegenerationAvailable(settings));
   const operationLive = isOperationLive({
     awaitingRecord,

@@ -856,6 +856,7 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       failure_code: "MISSING_FACT_RENDERING",
       safe_failure_detail: "Fact development.phdigital.nextjs has no 'he' rendering.",
+      failure_reason: { code: "missing_fact_rendering", fact_id: "development.phdigital.nextjs", language: "he" },
       available_actions: [],
     });
     vi.stubGlobal(

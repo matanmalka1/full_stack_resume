@@ -45,12 +45,14 @@ from cv_engine.application.operation_runner import (
 )
 from cv_engine.application.operations import (
     CreateOperation,
+    MissingFactRenderingReason,
     OperationFailureCode,
     OperationOutputReference,
     OperationPhase,
     OperationSources,
     OperationStatus,
     OperationType,
+    PdfPageLimitReason,
 )
 from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
@@ -612,6 +614,10 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     assert completed.safe_failure_detail == (
         "Fact situational.agentic_multi_agent has no 'he' rendering."
     )
+    # The same reason, structured, as read back from the database.
+    assert completed.failure_reason == MissingFactRenderingReason(
+        fact_id="situational.agentic_multi_agent", language="he"
+    )
     assert completed.outputs == []
     with pytest.raises(StateConflict, match="cannot be retried"):
         services.operation_lifecycle.retry(completed.id, idempotency_key="meaningless-retry")
@@ -731,6 +737,8 @@ def test_failed_render_operation_preserves_registered_outputs_as_inactive(
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
     assert failed.safe_failure_detail == "Rendered PDF has 2 pages; maximum 1."
+    # The sentence and the structured reason come from the same validation issue.
+    assert failed.failure_reason == PdfPageLimitReason(pages=2, maximum=1)
     assert failed.technical_log_reference == "logs/operations.jsonl"
     log_path = setup.services.paths.root / failed.technical_log_reference
     assert log_path.is_file()

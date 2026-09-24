@@ -353,7 +353,13 @@ BROWSER_START_FAILED
 MISSING_FACT_RENDERING
 VALIDATION_EXECUTION_FAILED
 CANCELLED_BEFORE_ACTIVATION
+PROVIDER_NOT_CONFIGURED
 ```
+
+`PROVIDER_NOT_CONFIGURED` means an AI task was requested and no provider is configured,
+so nothing was sent; `PROVIDER_REFUSED` means a provider answered and refused. Both are
+terminal. Operations recorded before `PROVIDER_NOT_CONFIGURED` existed keep the
+`PROVIDER_REFUSED` they were recorded with.
 
 `CLAIM_REVIEW_UNCERTAIN` means the semantic reviewer could not establish that a
 proposed paraphrase is supported. `CLAIM_REVIEW_UNSUPPORTED` means it found that the
@@ -365,10 +371,17 @@ An Operation may be failed/cancelled while owning an inactive immutable output. 
 existence and output activation are separate.
 
 Operation query fields include status, phase, message, timestamps, failure code, safe
-failure detail, retry reference, cancellation state, output references, and the
-backend-derived Operation actions currently accepted. The UI polls every one to two
+failure detail, structured failure reason, retry reference, cancellation state, output
+references, and the backend-derived Operation actions currently accepted. The UI polls every one to two
 seconds. It does not display fabricated percentages or re-derive lifecycle permissions
 from status strings.
+
+The structured failure reason is the failure's cause in a closed vocabulary with typed
+parameters - a PDF page count against its limit, a fact missing a rendering in a language,
+a named render check - written when the failure is recorded. The safe failure detail is
+the same cause as an English sentence; a client explains the failure from the reason and
+never parses the sentence. The reason is null when the code alone says everything, and on
+Operations recorded before the field existed: none is derived after the fact.
 
 ## 12. Application commands
 

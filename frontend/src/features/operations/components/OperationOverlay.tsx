@@ -161,7 +161,7 @@ export const OperationOverlay = ({
      and says what can be done, instead of staying red until the next run replaces it. */
   const retryableRefusal =
     record?.status === "failed" &&
-    record.failure_code === "PROVIDER_REFUSED" &&
+    (record.failure_code === "PROVIDER_REFUSED" || record.failure_code === "PROVIDER_NOT_CONFIGURED") &&
     settings !== undefined &&
     aiRegenerationAvailable(settings);
   const tone: Tone =

@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from .common import analysis_knowledge_context_hash
-from .failures import FAILURE_CODE_BY_ERROR, failure_code_for, safe_failure_detail_for
+from .failures import (
+    FAILURE_CODE_BY_ERROR,
+    failure_code_for,
+    failure_reason_for,
+    safe_failure_detail_for,
+)
 from .handlers import (
     AITaskHandler,
     AnalysisOperationHandler,
@@ -29,5 +34,6 @@ __all__ = [
     "SelectionPlanOperationHandler",
     "analysis_knowledge_context_hash",
     "failure_code_for",
+    "failure_reason_for",
     "safe_failure_detail_for",
 ]

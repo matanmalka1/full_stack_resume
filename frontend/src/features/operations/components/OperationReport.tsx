@@ -13,12 +13,13 @@ import { OperationActions } from "./OperationActions";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import {
-  actionableFailureDetail,
   activeOutputLabels,
   failurePresentations,
   failureTones,
   joinHebrewList,
+  failureReasonDetail,
   missingProviderPresentation,
+  providerNowConfiguredPresentation,
   statusLabels,
   statusTones,
   terminalSummaries,
@@ -79,16 +80,22 @@ export const OperationReport = ({
   const live = !terminal || continuation !== undefined;
   const progressLabel = operationProgressLabel(operation);
   const { settings } = useSettings();
-  /* Only a refusal can be a missing provider, and only a settled Settings read can say
-     so; while it is loading, the record's own presentation stands. */
+  const providerUsable = settings !== undefined && aiRegenerationAvailable(settings);
+  /* A run that needed a provider and had none: the server's own code, or - for a run
+     recorded before that code existed - a refusal while Settings still show no usable
+     provider. Settings is the fix while it is still true, and a retry would fail the same
+     way; once a provider is usable, the run can simply be tried again. */
+  const notConfigured = operation.failure_code === "PROVIDER_NOT_CONFIGURED";
   const missingProvider =
-    operation.failure_code === "PROVIDER_REFUSED" && settings !== undefined && !aiRegenerationAvailable(settings);
+    settings !== undefined && !providerUsable && (notConfigured || operation.failure_code === "PROVIDER_REFUSED");
   const failure = missingProvider
     ? missingProviderPresentation(settings.provider_configured)
-    : operation.failure_code == null
-      ? null
-      : failurePresentations[operation.failure_code];
-  const actionableDetail = actionableFailureDetail(operation.failure_code, operation.safe_failure_detail);
+    : notConfigured && providerUsable
+      ? providerNowConfiguredPresentation
+      : operation.failure_code == null
+        ? null
+        : failurePresentations[operation.failure_code];
+  const actionableDetail = failureReasonDetail(operation.failure_reason);
   const hasFailure = failure !== null || operation.safe_failure_detail != null;
   const produced = activeOutputLabels(operation);
   /* A finished run says what it came to in one line - unless it failed, where the reason

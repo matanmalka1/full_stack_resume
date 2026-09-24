@@ -34,9 +34,13 @@ from ...errors import (
 )
 from ...operation_runner import OperationExecutionError, PreparedOperation, SourceChanged
 from ...operations import (
+    FailureReason,
     OperationFailureCode,
     OperationOutputReference,
+    PdfPageLimitReason,
     PersistedOperation,
+    RenderCheckCode,
+    RenderCheckReason,
 )
 from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
 from ...ports.drafts import DraftOperationSourceReader
@@ -55,7 +59,7 @@ from .common import (
     analysis_knowledge_context_hash,
     document_knowledge_context_hash,
 )
-from .failures import failure_code_for, safe_failure_detail_for
+from .failures import failure_code_for, failure_reason_for, safe_failure_detail_for
 
 
 def _safe_render_failure_detail(report: ValidationReport) -> str:
@@ -79,6 +83,33 @@ def _safe_render_failure_detail(report: ValidationReport) -> str:
         "pdf-corrupt": "Rendered PDF could not be read.",
     }
     return safe_messages.get(issue.code, "Rendered output did not pass validation.")
+
+
+#: Render validation issue codes and the reason each is reported under. An issue
+#: code this table does not know is reported as the generic `render_validation`.
+_RENDER_REASON_CODES: dict[str, RenderCheckCode] = {
+    "text-coverage": "pdf_text_coverage",
+    "link-targets": "pdf_link_targets",
+    "overflow": "content_overflow",
+    "document-direction": "document_direction",
+    "mixed-direction-isolation": "direction_isolation",
+    "filename": "pdf_filename",
+    "html-missing": "html_missing",
+    "pdf-missing": "pdf_missing",
+    "pdf-corrupt": "pdf_corrupt",
+}
+
+
+def _render_failure_reason(report: ValidationReport) -> FailureReason:
+    """The same first hard issue `_safe_render_failure_detail` reports, structured."""
+    issue = next((item for item in report.issues if item.hard), None)
+    if issue is None:
+        return RenderCheckReason(code="render_validation")
+    if issue.code == "page-count":
+        match = re.fullmatch(r"(\d+) pages; maximum (\d+)", issue.message)
+        if match is not None:
+            return PdfPageLimitReason(pages=int(match[1]), maximum=int(match[2]))
+    return RenderCheckReason(code=_RENDER_REASON_CODES.get(issue.code, "render_validation"))
 
 
 class AITaskHandler:
@@ -180,7 +211,12 @@ class AITaskHandler:
     ) -> OperationExecutionError:
         code = failure_code_for(error)
         outputs = self._preserve_rejected(operation, error)
-        return OperationExecutionError(code, safe_failure_detail_for(error), outputs=outputs)
+        return OperationExecutionError(
+            code,
+            safe_failure_detail_for(error),
+            outputs=outputs,
+            reason=failure_reason_for(error),
+        )
 
 
 class RegisteredEvidenceTaskHandler(AITaskHandler):
@@ -666,6 +702,7 @@ class RenderOperationHandler:
             else OperationExecutionError(
                 OperationFailureCode.RENDER_FAILED,
                 _safe_render_failure_detail(executed.report),
+                reason=_render_failure_reason(executed.report),
             )
         )
         return PreparedOperation(

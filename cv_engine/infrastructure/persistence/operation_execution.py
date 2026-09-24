@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, null, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.sql.elements import ColumnElement
 
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.operations import (
+    FailureReason,
     OperationFailureCode,
     OperationPhase,
     OperationStatus,
@@ -522,6 +523,7 @@ class SqlAlchemyOperationExecutionStore:
         *,
         runner_id: str,
         technical_log_reference: str | None = None,
+        reason: FailureReason | None = None,
         now: str | None = None,
     ) -> PersistedOperation:
         timestamp = now or utc_now()
@@ -541,6 +543,10 @@ class SqlAlchemyOperationExecutionStore:
                 finished_at=timestamp,
                 failure_code=code.value,
                 safe_failure_detail=safe_detail,
+                # SQL NULL, not the JSON `null` a bare None becomes in a JSONB column:
+                # "no reason recorded" is the column's absence, and the shape check
+                # refuses a JSON scalar.
+                failure_reason=null() if reason is None else reason.model_dump(mode="json"),
                 technical_log_reference=technical_log_reference,
                 attempts_completed=operations.c.attempts_completed + 1,
                 lease_owner=None,
