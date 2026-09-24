@@ -424,6 +424,10 @@ describe("DraftRenderPanel", () => {
 
     await waitFor(() => expect(onQueued).toHaveBeenCalledWith(operation().id));
     expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
+    /* While it renders the step says so, and offers no second way to start the same work. */
+    expect(screen.getByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
+    expect(screen.getByText(/יוצרים ממנה HTML ו־PDF/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "יצירת HTML ו־PDF" })).not.toBeInTheDocument();
   });
 
   it("keeps the completed render transition in the wizard action bar", async () => {
