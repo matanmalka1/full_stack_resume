@@ -525,7 +525,11 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage(deterministicSettings);
 
     expect(await screen.findByRole("button", { name: "ניתוח המשרה" })).toBeDisabled();
-    expect(screen.getByText("כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.")).toBeInTheDocument();
+    /* The reason sits in the bar beside the inert button; the way to fix it sits in the
+       "not analyzed yet" banner. */
+    expect(screen.getByText("הניתוח דורש ספק AI, ועדיין לא הוגדר כזה.")).toBeInTheDocument();
+    expect(screen.getByText(/כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toHaveAttribute("href", "/settings");
   });
 
   it("shows the frozen AI execution and its calculated cost", async () => {

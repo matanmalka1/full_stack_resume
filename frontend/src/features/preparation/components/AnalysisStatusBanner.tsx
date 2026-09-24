@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import type { Classification } from "@/api/analyses";
+import { routePaths } from "@/app/routePaths";
 import { Callout } from "@/ui/Callout";
 import type { Tone } from "@/ui/tone";
 import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/analysisLabels";
@@ -54,16 +56,30 @@ const bannerContent = (classification: Classification | null, supersededAnalysis
 
 export const AnalysisStatusBanner = ({
   classification,
+  providerMissing = false,
   supersededAnalysis,
 }: {
   classification: Classification | null;
+  /* No AI provider can analyze. Said here, beside "not analyzed yet", with the way to fix
+     it - rather than in a separate line under the step rail, where it was easy to miss. */
+  providerMissing?: boolean;
   supersededAnalysis: boolean;
 }) => {
   const { body, title, tone } = bannerContent(classification, supersededAnalysis);
+  const needsProvider = providerMissing && classification === null && !supersededAnalysis;
 
   return (
     <Callout emphasis="banner" title={title} tone={tone}>
       {body}
+      {needsProvider ? (
+        <>
+          {" "}
+          כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.{" "}
+          <Link className="font-semibold text-cv-accent hover:underline" to={routePaths.settings}>
+            פתיחת ההגדרות
+          </Link>
+        </>
+      ) : null}
     </Callout>
   );
 };

@@ -18,6 +18,8 @@ type SubmissionResult =
   | { kind: "stale" };
 
 interface UseApplicationIntakeSubmissionOptions {
+  /* False only once Settings say no AI provider can analyze; the create then skips it. */
+  analysisAvailable: boolean;
   currentIntake: ApplicationIntake;
   onCreated: (result: CreatedIntakeApplication, createdInputIsCurrent: boolean) => void;
 }
@@ -67,7 +69,11 @@ const validationFieldErrors = (error: Error | null): IntakeFieldErrors | null =>
 
 /* Owns only the asynchronous intake command. Form state stays with the page, while this
    hook makes duplicate answers safe to render only for the exact intake they describe. */
-export const useApplicationIntakeSubmission = ({ currentIntake, onCreated }: UseApplicationIntakeSubmissionOptions) => {
+export const useApplicationIntakeSubmission = ({
+  analysisAvailable,
+  currentIntake,
+  onCreated,
+}: UseApplicationIntakeSubmissionOptions) => {
   const queryClient = useQueryClient();
   const currentIntakeRef = useRef(currentIntake);
   useLayoutEffect(() => {
@@ -83,7 +89,10 @@ export const useApplicationIntakeSubmission = ({ currentIntake, onCreated }: Use
         if (!acknowledgementApplies(intake, currentIntakeRef.current)) return { kind: "stale" };
       }
 
-      return { kind: "created", result: await createIntakeApplication(queryClient, intake, acknowledged) };
+      return {
+        kind: "created",
+        result: await createIntakeApplication(queryClient, intake, acknowledged, analysisAvailable),
+      };
     },
     onSuccess: (outcome, input) => {
       if (outcome.kind === "created") {

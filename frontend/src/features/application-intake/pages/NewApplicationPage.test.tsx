@@ -294,7 +294,7 @@ describe("NewApplicationPage", () => {
       ],
       [ANALYSES_PATH]: [queuedAnalysisResponse()],
     });
-    renderPage();
+    renderPage("/", true);
 
     fillIntake();
     const createButton = screen.getByRole("button", { name: "יצירת מועמדות" });
@@ -390,6 +390,28 @@ describe("NewApplicationPage", () => {
     expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH]);
   });
 
+  /* Analysis is AI-only: with no provider it could only be queued to fail, so creation
+     stops at the Application and the next screen says what is missing. */
+  it("creates the application without queuing an analysis when no AI provider can run it", async () => {
+    const calls = stubFetch({
+      [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
+      [CREATE_PATH]: [
+        jsonResponse(
+          { application_id: "app-new", job_snapshot_id: "snap-1", warnings: [], duplicate_matches: [] },
+          201,
+        ),
+      ],
+    });
+    renderPage();
+
+    fillIntake();
+    submitForm();
+
+    expect(await screen.findByRole("heading", { name: "פרטי משרה" })).toBeInTheDocument();
+    expect(screen.getByText("הניתוח לא הופעל")).toBeInTheDocument();
+    expect(calls.map((call) => call.path)).toEqual([DUPLICATE_CHECK_PATH, CREATE_PATH]);
+  });
+
   it("creates anyway with an explicit acknowledgement and no second precheck", async () => {
     const calls = stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [match()] })],
@@ -406,7 +428,7 @@ describe("NewApplicationPage", () => {
       ],
       [ANALYSES_PATH]: [queuedAnalysisResponse()],
     });
-    renderPage();
+    renderPage("/", true);
 
     fillIntake();
     submitForm();
@@ -434,7 +456,7 @@ describe("NewApplicationPage", () => {
       ],
       [ANALYSES_PATH]: [problemResponse(503, "SERVICE_UNAVAILABLE", "analysis could not be queued")],
     });
-    renderPage();
+    renderPage("/", true);
 
     fillIntake();
     submitForm();

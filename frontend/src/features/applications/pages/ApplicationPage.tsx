@@ -29,6 +29,9 @@ import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
    it is about the request that made the record rather than about the record. */
 interface CreatedApplicationState {
   analysisProblem?: ProblemDetails | null;
+  /* Intake did not request analysis because no AI provider exists; the step's own banner
+     says so and where to fix it, so the "was not started" warning is not repeated. */
+  analysisSkipped?: boolean;
   operationId?: string | null;
 }
 
@@ -193,6 +196,7 @@ export const ApplicationPage = () => {
                 report; keeping its success message would freeze "running" beside the
                 Operation's later "completed" state. */}
             {createdApplication === undefined ||
+            createdApplication.analysisSkipped === true ||
             createdOperationId !== null ||
             detail.preparation_state !== "needs_analysis" ||
             watched !== undefined ? null : (

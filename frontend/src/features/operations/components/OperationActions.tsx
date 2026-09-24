@@ -22,6 +22,9 @@ interface OperationActionsProps {
      jump the reveal was added to avoid, four seconds later. The space is kept from the
      start and only the control fades in. */
   reserve?: boolean;
+  /* False when the host knows a retry cannot succeed - no AI provider for a refused AI
+     run - and offers the fix in its place rather than a button that fails the same way. */
+  retryOffered?: boolean;
   /* Short Operations should not flash a destructive control that cannot realistically be
      used. The host reveals it after its own "taking longer" threshold; a terminal action
      surface can leave this at the default. */
@@ -32,6 +35,7 @@ export const OperationActions = ({
   onQueued,
   operation,
   reserve = false,
+  retryOffered = true,
   showCancel = true,
 }: OperationActionsProps) => {
   const queryClient = useQueryClient();
@@ -59,7 +63,7 @@ export const OperationActions = ({
 
   const error = cancel.error ?? retry.error;
   const canCancel = showCancel && operation.available_actions.includes("cancel");
-  const canRetry = operation.available_actions.includes("retry");
+  const canRetry = retryOffered && operation.available_actions.includes("retry");
   /* Retry on a run that succeeded re-runs work that has a result on record and
      supersedes it, so it is offered without being recommended: the loud control on the
      screen must never be the one that discards what the reader is looking at. The way on

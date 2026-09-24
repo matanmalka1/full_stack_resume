@@ -33,20 +33,25 @@ export const NewApplicationPage = () => {
   const fields = form.watch();
   const currentIntake = intakeFromFields(fields);
   const intakeDraft = useApplicationIntakeDraft(fields, recoveredDraft !== null);
-  /* Analysis is AI-only. Until the settings read settles the promise stays as it was;
-     once it says there is no provider, the bar says so instead of promising a run the
-     server will refuse. */
+  /* Analysis is AI-only. Until the settings read settles, creation requests it as before;
+     once Settings say there is no provider, the bar says so and creation does not queue a
+     run the server would only refuse. */
   const { settings } = useSettings();
   const analysisUnavailable = settings !== undefined && !aiRegenerationAvailable(settings);
 
   const submission = useApplicationIntakeSubmission({
+    analysisAvailable: !analysisUnavailable,
     currentIntake,
     onCreated: (result, createdInputIsCurrent) => {
       if (createdInputIsCurrent) intakeDraft.clearDraft();
       void navigate(routePaths.application(result.applicationId), {
         replace: true,
         state: {
-          createdApplication: { analysisProblem: result.analysisProblem, operationId: result.operation?.id ?? null },
+          createdApplication: {
+            analysisProblem: result.analysisProblem,
+            analysisSkipped: result.analysisSkipped,
+            operationId: result.operation?.id ?? null,
+          },
         },
       });
     },

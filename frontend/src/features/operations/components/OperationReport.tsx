@@ -1,8 +1,13 @@
 import { Clock3 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
+import { aiRegenerationAvailable } from "@/api/settings";
+import { useSettings } from "@/api/useSettings";
+import { routePaths } from "@/app/routePaths";
+import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
@@ -13,8 +18,10 @@ import {
   failurePresentations,
   failureTones,
   joinHebrewList,
+  missingProviderPresentation,
   statusLabels,
   statusTones,
+  terminalSummaries,
 } from "../model/operationLabels";
 import { operationProgressLabel } from "../model/operationProgress";
 
@@ -70,14 +77,30 @@ export const OperationReport = ({
   const showCancel = useCancelVisibility(operation);
   const terminal = isTerminalOperation(operation);
   const progressLabel = operationProgressLabel(operation);
-  const failure = operation.failure_code == null ? null : failurePresentations[operation.failure_code];
+  const { settings } = useSettings();
+  /* Only a refusal can be a missing provider, and only a settled Settings read can say
+     so; while it is loading, the record's own presentation stands. */
+  const missingProvider =
+    operation.failure_code === "PROVIDER_REFUSED" && settings !== undefined && !aiRegenerationAvailable(settings);
+  const failure = missingProvider
+    ? missingProviderPresentation(settings.provider_configured)
+    : operation.failure_code == null
+      ? null
+      : failurePresentations[operation.failure_code];
+  const recovery = missingProvider ? (
+    <Link className={buttonClasses("primary")} to={routePaths.settings}>
+      פתיחת ההגדרות
+    </Link>
+  ) : (
+    failureAction
+  );
   const actionableDetail = actionableFailureDetail(operation.failure_code, operation.safe_failure_detail);
   const produced = activeOutputLabels(operation);
   const summary =
     continuation ??
     (terminal
       ? produced.length === 0
-        ? "הפעולה הסתיימה."
+        ? (terminalSummaries[operation.status] ?? "הפעולה הסתיימה.")
         : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`
       : "העמוד מתעדכן מעצמו עד לסיום הפעולה. אפשר לסגור את החלון - ההרצה תימשך.");
 
@@ -100,9 +123,14 @@ export const OperationReport = ({
             {/* A.3: the backend's safe progress line is English today, so it picks its
                 own direction rather than inheriting the RTL shell. The line's place is
                 held by the stable status surface while live work has not reported one. */}
-            <p className="mt-1 min-h-6 text-support leading-6 text-cv-text-muted" dir="auto">
-              {operation.message === "" ? (terminal ? null : "ממתינים לעדכון מהפעולה…") : operation.message}
-            </p>
+            {/* The line holds its height only while live work may still report one; a
+                finished run with nothing to say used to leave an empty row under its
+                summary. */}
+            {terminal && operation.message === "" ? null : (
+              <p className="mt-1 min-h-6 text-support leading-6 text-cv-text-muted" dir="auto">
+                {operation.message === "" ? "ממתינים לעדכון מהפעולה…" : operation.message}
+              </p>
+            )}
           </div>
         </div>
 
@@ -137,7 +165,7 @@ export const OperationReport = ({
               {failure.guidance}
             </p>
           )}
-          {failureAction === undefined ? null : <div className="mt-3 flex flex-wrap gap-3">{failureAction}</div>}
+          {recovery === undefined ? null : <div className="mt-3 flex flex-wrap gap-3">{recovery}</div>}
         </Callout>
       )}
 
@@ -157,6 +185,7 @@ export const OperationReport = ({
           onQueued={onQueued}
           operation={operation}
           reserve={!terminal && operation.available_actions.includes("cancel")}
+          retryOffered={!missingProvider}
           showCancel={showCancel}
         />
       ) : null}

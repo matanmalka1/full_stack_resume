@@ -88,6 +88,31 @@ export const failureTones: Partial<Record<OperationStatus, Tone>> = {
   interrupted: "warning",
 };
 
+/* The backend reports "no provider configured" under PROVIDER_REFUSED, the same code as a
+   provider that answered with a refusal, so the record alone cannot tell them apart. The
+   Settings read can: when it says no usable provider exists, a retry would fail the same
+   way, and the reader is told what is actually missing and where it is fixed. */
+export const missingProviderPresentation = (providerConfigured: boolean): FailurePresentation =>
+  providerConfigured
+    ? {
+        title: "ה־AI כבוי בהגדרות",
+        guidance: "הבקשה לא נשלחה לספק ושום דבר לא השתנה במועמדות. אחרי הפעלת ה־AI בהגדרות אפשר להריץ את הפעולה שוב.",
+      }
+    : {
+        title: "לא הוגדר ספק AI",
+        guidance:
+          "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI והפעלתו בהגדרות אפשר להריץ את הפעולה שוב.",
+      };
+
+/* What a terminal run's summary line says when it produced nothing. "Finished" beside a
+   "failed" badge read as a contradiction. */
+export const terminalSummaries: Partial<Record<OperationStatus, string>> = {
+  succeeded: "הפעולה הסתיימה.",
+  failed: "הפעולה נכשלה ולא יצרה תוצאה.",
+  cancelled: "הפעולה בוטלה ולא יצרה תוצאה.",
+  interrupted: "הפעולה נקטעה ולא יצרה תוצאה.",
+};
+
 export interface FailurePresentation {
   title: string;
   guidance: string;
@@ -135,10 +160,11 @@ export const actionableFailureDetail = (
   return `לעובדה ${factId} חסר ניסוח בשפה ${language}.`;
 };
 
-const providerRetryGuidance =
-  "לא בוצע מעבר אוטומטי למצב דטרמיניסטי. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
+/* Plain words for the same two guarantees: nothing changed, and nothing was produced in
+   the AI's place without asking. */
+const providerRetryGuidance = "שום דבר לא השתנה במועמדות, ולא נוצרה במקום זה תוצאה בלי AI. אפשר לנסות שוב.";
 const providerOutputGuidance =
-  "התשובה לא הופעלה ולא הוחלפה בשקט בתוצאה דטרמיניסטית. אפשר ליצור ניסיון חדש, או לחזור למועמדות ולבחור באפשרות המשך אחרת כאשר השרת מציע אותה.";
+  "התשובה של ספק ה־AI לא הופעלה ושום דבר לא השתנה במועמדות, ולא נוצרה במקום זה תוצאה בלי AI. אפשר לנסות שוב.";
 
 /* Failure codes are decisions a person must be able to distinguish, not technical
    decoration. This map is exhaustive over the generated union: adding a backend code

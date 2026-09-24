@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Operation } from "@/api/contracts";
+import { settingsQueryKey } from "@/api/settings";
+import { settings as settingsFixture } from "@/test/fixtures";
 import { isOperationLive } from "../model/operationLive";
 import { OperationOverlay, type PendingWork } from "./OperationOverlay";
 import { OperationReport } from "./OperationReport";
@@ -197,6 +200,34 @@ describe("OperationReport", () => {
     expect(alert).toHaveTextContent("הפרופיל מאפשר לכל היותר 1");
     expect(screen.getByRole("button", { name: "חזרה לעריכת הטיוטה" })).toBeInTheDocument();
     expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
+  });
+
+  /* The backend files "no provider configured" under PROVIDER_REFUSED. With Settings
+     saying no provider exists, the report names that cause, says the request went
+     nowhere, and offers Settings rather than a retry that would fail the same way. */
+  it.each([
+    [false, "לא הוגדר ספק AI"],
+    [true, "ה־AI כבוי בהגדרות"],
+  ] as const)("routes a refusal with no usable provider (configured: %s) to Settings", (configured, title) => {
+    const queryClient = client();
+    const settings = settingsFixture({ provider_configured: configured, ai_enabled: false });
+    queryClient.setQueryData(settingsQueryKey, { settings, etag: null });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <OperationReport
+            onQueued={vi.fn()}
+            operation={failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] })}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(title);
+    expect(screen.queryByText("ספק הבינה המלאכותית סירב לבקשה")).not.toBeInTheDocument();
+    expect(screen.getByText("הפעולה נכשלה ולא יצרה תוצאה.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toHaveAttribute("href", "/settings");
+    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
   });
 
   it.each([
