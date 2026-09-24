@@ -14,7 +14,6 @@ const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem
     target_role: "Backend Engineer",
     current_status: "saved",
     notes: "",
-    source: "manual",
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-24T07:00:00Z",
     recruitment_status: "saved",
@@ -126,7 +125,6 @@ const detailBody = (): ApplicationDetail => ({
     target_role: "Backend Engineer",
     current_status: "saved",
     notes: "",
-    source: "manual",
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-24T07:00:00Z",
   },
@@ -137,7 +135,7 @@ const detailBody = (): ApplicationDetail => ({
     job_text: "Senior Backend Engineer",
     captured_at: "2026-08-24T07:00:00Z",
     source_metadata: {},
-    content_hash: "hash-1",
+    source_hash: "hash-1",
   },
 });
 

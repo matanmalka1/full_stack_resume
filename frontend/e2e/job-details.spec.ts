@@ -36,7 +36,6 @@ const detail = {
     next_action: "Follow up",
     next_action_date: "2026-09-05",
     notes: "Referral from a former colleague",
-    source: "manual",
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-25T08:00:00Z",
   },
@@ -48,7 +47,7 @@ const detail = {
     source_url: "https://example.com/jobs/1",
     captured_at: "2026-08-24T07:00:00Z",
     source_metadata: {},
-    content_hash: "hash-1",
+    source_hash: "hash-1",
   },
 };
 

@@ -29,7 +29,6 @@ const detail = (): ApplicationDetail =>
       next_action: "Follow up",
       next_action_date: "2026-09-05",
       notes: "Referral from a former colleague",
-      source: "manual",
       created_at: "2026-08-24T07:00:00Z",
       updated_at: "2026-08-25T08:00:00Z",
     },
@@ -41,12 +40,11 @@ const detail = (): ApplicationDetail =>
       source_url: "https://example.com/jobs/1",
       captured_at: "2026-08-24T07:00:00Z",
       source_metadata: {},
-      content_hash: "hash-1",
+      source_hash: "hash-1",
     },
   }) as ApplicationDetail;
 
 const artifact = (overrides: Partial<ArtifactVersion>): ArtifactVersion => ({
-  approved_at: null,
   artifact_id: "artifact-1",
   artifact_type: "resume_pdf",
   content_hash: "hash",
@@ -60,7 +58,6 @@ const artifact = (overrides: Partial<ArtifactVersion>): ArtifactVersion => ({
   metadata: {},
   profile: null,
   revision_id: "revision-2",
-  submitted_at: null,
   track: null,
   version_number: 1,
   ...overrides,

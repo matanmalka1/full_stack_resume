@@ -71,12 +71,6 @@ export const ApplicationArtifactRow = ({ artifact }: { artifact: ArtifactVersion
               { term: "גרסת ארטיפקט", value: artifact.version_number, ltr: true },
               { term: "שם לוגי", value: artifact.logical_name, ltr: true },
               { term: "חתימת תוכן", value: artifact.content_hash, ltr: true },
-              ...(artifact.approved_at == null
-                ? []
-                : [{ term: "אושר", value: formatDateTime(artifact.approved_at, "short") }]),
-              ...(artifact.submitted_at == null
-                ? []
-                : [{ term: "הוגש", value: formatDateTime(artifact.submitted_at, "short") }]),
               ...(artifact.profile == null ? [] : [{ term: "פרופיל", value: artifact.profile }]),
               ...(artifact.track == null ? [] : [{ term: "מסלול", value: artifact.track }]),
               ...(artifact.emphasis == null ? [] : [{ term: "דגש", value: artifact.emphasis }]),

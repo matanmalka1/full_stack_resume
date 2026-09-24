@@ -53,7 +53,6 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
     target_role: "Engineer",
     current_status: "saved",
     notes: "",
-    source: "manual",
     created_at: "2026-08-24T00:00:00Z",
     updated_at: "2026-08-24T00:00:00Z",
   },
@@ -64,7 +63,7 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
     job_text: "Engineer",
     captured_at: "2026-08-24T00:00:00Z",
     source_metadata: {},
-    content_hash: "snapshot-hash",
+    source_hash: "snapshot-hash",
   },
   ...overrides,
 });

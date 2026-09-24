@@ -1428,8 +1428,6 @@ export interface components {
             is_closed: boolean;
             /** Language */
             language?: string | null;
-            /** Last Contact Date */
-            last_contact_date?: string | null;
             /** Latest Approved Revision Id */
             latest_approved_revision_id?: string | null;
             latest_operation?: components["schemas"]["OperationResponse"] | null;
@@ -1456,8 +1454,6 @@ export interface components {
             recruitment_status: string;
             /** Review Reasons */
             review_reasons: components["schemas"]["ReasonResponse"][];
-            /** Source */
-            source: string;
             /** Source Url */
             source_url?: string | null;
             /** Stale Reasons */
@@ -1574,8 +1570,6 @@ export interface components {
             id: string;
             /** Language */
             language?: string | null;
-            /** Last Contact Date */
-            last_contact_date?: string | null;
             /** Next Action */
             next_action?: string | null;
             /** Next Action Date */
@@ -1586,8 +1580,6 @@ export interface components {
             notes: string;
             /** Profile */
             profile?: string | null;
-            /** Source */
-            source: string;
             /** Source Url */
             source_url?: string | null;
             /** Target Role */
@@ -1818,8 +1810,6 @@ export interface components {
          * @description Registered metadata plus verified download eligibility (§20).
          */
         ArtifactVersionDetailResponse: {
-            /** Approved At */
-            approved_at?: string | null;
             /** Artifact Id */
             artifact_id: string;
             /** Artifact Type */
@@ -1852,8 +1842,6 @@ export interface components {
             revision_id?: string | null;
             /** Size */
             size?: number | null;
-            /** Submitted At */
-            submitted_at?: string | null;
             /** Track */
             track?: string | null;
             /** Unavailable Reason */
@@ -1863,8 +1851,6 @@ export interface components {
         };
         /** ArtifactVersionResponse */
         ArtifactVersionResponse: {
-            /** Approved At */
-            approved_at?: string | null;
             /** Artifact Id */
             artifact_id: string;
             /** Artifact Type */
@@ -1893,8 +1879,6 @@ export interface components {
             profile?: string | null;
             /** Revision Id */
             revision_id?: string | null;
-            /** Submitted At */
-            submitted_at?: string | null;
             /** Track */
             track?: string | null;
             /** Version Number */
@@ -2242,8 +2226,8 @@ export interface components {
         DecisionRecordResponse: {
             /** Application Id */
             application_id: string;
-            /** Artifact Version Id */
-            artifact_version_id?: string | null;
+            /** Approved Revision Id */
+            approved_revision_id: string;
             /** Created At */
             created_at: string;
             /** Id */
@@ -2777,14 +2761,12 @@ export interface components {
             application_id: string;
             /** Captured At */
             captured_at: string;
-            /** Content Hash */
-            content_hash: string;
             /** Id */
             id: string;
             /** Job Text */
             job_text: string;
-            /** Prior Snapshot Id */
-            prior_snapshot_id?: string | null;
+            /** Source Hash */
+            source_hash: string;
             /** Source Metadata */
             source_metadata: {
                 [key: string]: unknown;

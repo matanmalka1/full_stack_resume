@@ -474,17 +474,6 @@
             ],
             "title": "Language"
           },
-          "last_contact_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Contact Date"
-          },
           "latest_approved_revision_id": {
             "anyOf": [
               {
@@ -605,10 +594,6 @@
             "title": "Review Reasons",
             "type": "array"
           },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
           "source_url": {
             "anyOf": [
               {
@@ -684,7 +669,6 @@
           "target_role",
           "current_status",
           "notes",
-          "source",
           "created_at",
           "updated_at",
           "is_closed"
@@ -926,17 +910,6 @@
             ],
             "title": "Language"
           },
-          "last_contact_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Contact Date"
-          },
           "next_action": {
             "anyOf": [
               {
@@ -984,10 +957,6 @@
               }
             ],
             "title": "Profile"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
           },
           "source_url": {
             "anyOf": [
@@ -1037,7 +1006,6 @@
           "target_role",
           "current_status",
           "notes",
-          "source",
           "created_at",
           "updated_at"
         ],
@@ -1597,17 +1565,6 @@
         "additionalProperties": false,
         "description": "Registered metadata plus verified download eligibility (§20).",
         "properties": {
-          "approved_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Approved At"
-          },
           "artifact_id": {
             "title": "Artifact Id",
             "type": "string"
@@ -1711,17 +1668,6 @@
             ],
             "title": "Size"
           },
-          "submitted_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submitted At"
-          },
           "track": {
             "anyOf": [
               {
@@ -1767,17 +1713,6 @@
       "ArtifactVersionResponse": {
         "additionalProperties": false,
         "properties": {
-          "approved_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Approved At"
-          },
           "artifact_id": {
             "title": "Artifact Id",
             "type": "string"
@@ -1865,17 +1800,6 @@
               }
             ],
             "title": "Revision Id"
-          },
-          "submitted_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submitted At"
           },
           "track": {
             "anyOf": [
@@ -2762,16 +2686,9 @@
             "title": "Application Id",
             "type": "string"
           },
-          "artifact_version_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Artifact Version Id"
+          "approved_revision_id": {
+            "title": "Approved Revision Id",
+            "type": "string"
           },
           "created_at": {
             "title": "Created At",
@@ -2801,6 +2718,7 @@
         },
         "required": [
           "id",
+          "approved_revision_id",
           "application_id",
           "job_snapshot_id",
           "job_analysis_id",
@@ -4095,10 +4013,6 @@
             "title": "Captured At",
             "type": "string"
           },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -4107,16 +4021,9 @@
             "title": "Job Text",
             "type": "string"
           },
-          "prior_snapshot_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prior Snapshot Id"
+          "source_hash": {
+            "title": "Source Hash",
+            "type": "string"
           },
           "source_metadata": {
             "additionalProperties": true,
@@ -4146,7 +4053,7 @@
           "job_text",
           "captured_at",
           "source_metadata",
-          "content_hash"
+          "source_hash"
         ],
         "title": "JobSnapshotResponse",
         "type": "object"

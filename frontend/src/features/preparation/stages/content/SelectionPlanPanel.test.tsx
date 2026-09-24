@@ -39,7 +39,6 @@ const detail = (planId: string | null): ApplicationDetail => ({
     target_role: "Engineer",
     current_status: "saved",
     notes: "",
-    source: "manual",
     created_at: "2026-09-06T10:00:00Z",
     updated_at: "2026-09-06T10:00:00Z",
   },
@@ -50,7 +49,7 @@ const detail = (planId: string | null): ApplicationDetail => ({
     job_text: "Engineer",
     captured_at: "2026-09-06T10:00:00Z",
     source_metadata: {},
-    content_hash: "snapshot-hash",
+    source_hash: "snapshot-hash",
   },
 });
 

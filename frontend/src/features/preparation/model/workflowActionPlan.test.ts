@@ -43,7 +43,6 @@ const staleDetail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDet
       target_role: "Backend Engineer",
       current_status: "saved",
       notes: "",
-      source: "manual",
       created_at: "2026-08-24T07:00:00Z",
       updated_at: "2026-08-24T07:00:00Z",
     },

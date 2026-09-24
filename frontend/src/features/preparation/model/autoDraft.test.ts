@@ -24,7 +24,6 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     target_role: "Backend Engineer",
     current_status: "saved",
     notes: "",
-    source: "manual",
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-24T07:00:00Z",
   },
@@ -35,7 +34,7 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     job_text: "Senior Backend Engineer",
     captured_at: "2026-08-24T07:00:00Z",
     source_metadata: {},
-    content_hash: "hash-1",
+    source_hash: "hash-1",
   },
   ...overrides,
 });
