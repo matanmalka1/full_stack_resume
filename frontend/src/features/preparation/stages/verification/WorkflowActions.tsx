@@ -268,7 +268,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
         >
           {/* A first analysis says in the bar what pressing it costs, or why it cannot be
               pressed: an inert button with no reason beside it reads as a broken one. The
-              way to fix a missing provider is in the step's banner above. */}
+              way to fix a missing provider is the bar's own lead action. */}
           {plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? undefined : (
             <p className="text-support leading-6 text-cv-text-muted">
               {aiRegenerationAvailable(settings)

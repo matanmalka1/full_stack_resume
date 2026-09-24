@@ -1,8 +1,6 @@
 import { useState } from "react";
 
 import { classificationFromAnalysis } from "@/api/analyses";
-import { aiRegenerationAvailable } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
 import { actionLabel } from "../model/preparationLabels";
 import { Callout } from "@/ui/Callout";
 import { WideRow } from "@/ui/WideRow";
@@ -61,7 +59,6 @@ export const PreparationView = ({
   const supersededAnalysis = classification === null && detail.latest_analysis != null;
 
   const plan = workflowActionPlan(detail);
-  const { settings } = useSettings();
   const hasRecommendation = detail.recommended_action != null;
   const selectionPlanAction = plan.createSelectionPlan;
 
@@ -81,7 +78,6 @@ export const PreparationView = ({
           function's decision rather than being pre-empted here. */}
       <AnalysisStatusBanner
         classification={classification}
-        providerMissing={settings !== undefined && !aiRegenerationAvailable(settings)}
         supersededAnalysis={supersededAnalysis}
       />
 

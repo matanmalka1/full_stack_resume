@@ -6,6 +6,10 @@ import { cx } from "./cx";
 interface DisclosureProps {
   children: ReactNode;
   className?: string;
+  /* The content is a card of its own, not text under the summary: it takes the full
+     width, like the cards beside it, instead of the indent that lines text up with the
+     summary's label. */
+  flush?: boolean;
   summary: string;
 }
 
@@ -29,19 +33,42 @@ interface DisclosureProps {
    attribute. Both describe the same fact, but a class recomputed in JS cannot be defeated
    by a CSS selector matching an unexpected ancestor - and `toggle` fires for every way a
    reader can open a `<details>` (click, Space, Enter), keyboard included. */
-export const Disclosure = ({ children, className, summary }: DisclosureProps) => {
+export const Disclosure = ({ children, className, flush = false, summary }: DisclosureProps) => {
   const [open, setOpen] = useState(false);
 
   return (
     <details className={cx("text-support", className)} onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-control font-medium text-cv-text-muted transition-colors hover:text-cv-text [&::-webkit-details-marker]:hidden">
-        <ChevronDown
-          aria-hidden="true"
-          className={cx("size-icon-md shrink-0 transition-transform duration-200", open ? "rotate-0" : "rotate-90")}
-        />
-        <span>{summary}</span>
-      </summary>
-      <div className="mt-2 ps-6 leading-6 text-cv-text-muted">{children}</div>
+      <DisclosureSummary className="font-medium text-cv-text-muted transition-colors hover:text-cv-text" open={open}>
+        {summary}
+      </DisclosureSummary>
+      <div className={flush ? "mt-2" : "mt-2 ps-6 leading-6 text-cv-text-muted"}>{children}</div>
     </details>
   );
 };
+
+/* The summary row with its turning chevron, for a `<details>` that owns more than
+   `Disclosure` does - its own spacing, or work that waits for the first open - so it
+   still carries the one mark every disclosure uses. The caller tracks `open` off the
+   element's `toggle` event, as `Disclosure` does. */
+export const DisclosureSummary = ({
+  children,
+  className,
+  open,
+}: {
+  children: ReactNode;
+  className?: string;
+  open: boolean;
+}) => (
+  <summary
+    className={cx(
+      "flex cursor-pointer list-none items-center gap-2 rounded-control [&::-webkit-details-marker]:hidden",
+      className,
+    )}
+  >
+    <ChevronDown
+      aria-hidden="true"
+      className={cx("size-icon-md shrink-0 transition-transform duration-200", open ? "rotate-0" : "rotate-90")}
+    />
+    <span>{children}</span>
+  </summary>
+);

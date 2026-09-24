@@ -259,7 +259,7 @@ export const ApplicationPage = () => {
                        second disclosure the reader has no reason to discover. */
                     <JobSnapshotPanel detail={detail} operationLive={operationLive} />
                   ) : (
-                    <Disclosure summary="צפייה בנוסח המשרה שנשמר">
+                    <Disclosure flush summary="צפייה בנוסח המשרה שנשמר">
                       <div className="pt-2">
                         <JobSnapshotPanel detail={detail} operationLive={operationLive} />
                       </div>
