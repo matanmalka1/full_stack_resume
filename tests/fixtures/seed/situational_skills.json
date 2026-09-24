@@ -5,7 +5,8 @@
       "fact_id": "situational.testing",
       "meaning": "Wrote unit and integration tests with pytest at PH.Digital.",
       "renderings": {
-        "en": "Wrote unit and integration tests with pytest as part of the PH.Digital development workflow."
+        "en": "Wrote unit and integration tests with pytest as part of the PH.Digital development workflow.",
+        "he": "כתב בדיקות יחידה ואינטגרציה באמצעות pytest כחלק מתהליך הפיתוח ב-PH.Digital."
       },
       "tags": [
         "development",
@@ -25,7 +26,8 @@
       "fact_id": "situational.ai_assisted",
       "meaning": "Uses Claude Code, GitHub Copilot, Cursor, and Codex with critical review before merging.",
       "renderings": {
-        "en": "Uses AI coding assistants including Claude Code, GitHub Copilot, Cursor, and Codex, with critical review before merging."
+        "en": "Uses AI coding assistants including Claude Code, GitHub Copilot, Cursor, and Codex, with critical review before merging.",
+        "he": "משתמש בעוזרי כתיבת קוד מבוססי AI, בהם Claude Code, GitHub Copilot, Cursor ו-Codex, תוך בחינה ביקורתית לפני מיזוג."
       },
       "tags": [
         "development",
@@ -45,7 +47,8 @@
       "fact_id": "situational.html_css",
       "meaning": "Used HTML5 and CSS3 in React frontend work at PH.Digital.",
       "renderings": {
-        "en": "Used HTML5 and CSS3 as part of React frontend work at PH.Digital."
+        "en": "Used HTML5 and CSS3 as part of React frontend work at PH.Digital.",
+        "he": "השתמש ב-HTML5 וב-CSS3 כחלק מעבודת frontend ב-React ב-PH.Digital."
       },
       "tags": [
         "development",
@@ -65,7 +68,8 @@
       "fact_id": "situational.yaml_json",
       "meaning": "Used YAML and JSON configuration files to drive application behavior at PH.Digital.",
       "renderings": {
-        "en": "Used YAML and JSON configuration files to drive application behavior at PH.Digital."
+        "en": "Used YAML and JSON configuration files to drive application behavior at PH.Digital.",
+        "he": "השתמש בקובצי תצורה מסוג YAML ו-JSON להגדרת התנהגות האפליקציה ב-PH.Digital."
       },
       "tags": [
         "development",
@@ -85,7 +89,8 @@
       "fact_id": "situational.alembic",
       "meaning": "Designed and applied Alembic migrations in personal projects.",
       "renderings": {
-        "en": "Designed and applied Alembic schema migrations in personal projects."
+        "en": "Designed and applied Alembic schema migrations in personal projects.",
+        "he": "תכנן והחיל מיגרציות סכימה באמצעות Alembic בפרויקטים אישיים."
       },
       "tags": [
         "development",
@@ -105,7 +110,8 @@
       "fact_id": "situational.pydantic",
       "meaning": "Used Pydantic v2 for validation and settings in personal FastAPI/Flask backends.",
       "renderings": {
-        "en": "Used Pydantic v2 for request/response validation and settings management in personal FastAPI and Flask backends."
+        "en": "Used Pydantic v2 for request/response validation and settings management in personal FastAPI and Flask backends.",
+        "he": "השתמש ב-Pydantic v2 לאימות בקשות ותגובות ולניהול הגדרות בשירותי backend אישיים המבוססים על FastAPI ו-Flask."
       },
       "tags": [
         "development",
@@ -125,7 +131,8 @@
       "fact_id": "situational.vite_tailwind",
       "meaning": "Used Vite and Tailwind CSS across personal and freelance frontend projects.",
       "renderings": {
-        "en": "Used Vite and Tailwind CSS across personal and freelance frontend projects."
+        "en": "Used Vite and Tailwind CSS across personal and freelance frontend projects.",
+        "he": "השתמש ב-Vite וב-Tailwind CSS בפרויקטי frontend אישיים ובפרויקטים כפרילנסר."
       },
       "tags": [
         "development",
@@ -145,7 +152,8 @@
       "fact_id": "situational.sentry_slowapi",
       "meaning": "Integrated Sentry and slowapi in a personal FastAPI backend.",
       "renderings": {
-        "en": "Integrated Sentry monitoring and slowapi rate limiting in a personal FastAPI backend."
+        "en": "Integrated Sentry monitoring and slowapi rate limiting in a personal FastAPI backend.",
+        "he": "שילב ניטור באמצעות Sentry והגבלת קצב באמצעות slowapi בשירות backend אישי המבוסס על FastAPI."
       },
       "tags": [
         "development",
@@ -165,7 +173,8 @@
       "fact_id": "situational.sse",
       "meaning": "Built async FastAPI endpoints with Server-Sent Events in a personal project.",
       "renderings": {
-        "en": "Built async FastAPI endpoints with Server-Sent Events for live updates in a personal project."
+        "en": "Built async FastAPI endpoints with Server-Sent Events for live updates in a personal project.",
+        "he": "פיתח נקודות קצה אסינכרוניות ב-FastAPI עם Server-Sent Events לעדכונים בזמן אמת בפרויקט אישי."
       },
       "tags": [
         "development",
@@ -185,7 +194,8 @@
       "fact_id": "situational.gmail_oauth",
       "meaning": "Implemented Gmail API OAuth for automated email scanning in a personal project.",
       "renderings": {
-        "en": "Implemented a Gmail API OAuth flow for automated email scanning in a personal project."
+        "en": "Implemented a Gmail API OAuth flow for automated email scanning in a personal project.",
+        "he": "מימש תהליך OAuth של Gmail API לסריקה אוטומטית של הודעות דוא״ל בפרויקט אישי."
       },
       "tags": [
         "development",
@@ -205,7 +215,8 @@
       "fact_id": "situational.ml",
       "meaning": "Built a PyTorch transfer-learning image classifier with ResNet as a personal project.",
       "renderings": {
-        "en": "Built a PyTorch image-classification pipeline using transfer learning with ResNet as a personal project."
+        "en": "Built a PyTorch image-classification pipeline using transfer learning with ResNet as a personal project.",
+        "he": "בנה pipeline לסיווג תמונות ב-PyTorch באמצעות transfer learning עם ResNet כפרויקט אישי."
       },
       "tags": [
         "development",
@@ -246,7 +257,8 @@
       "fact_id": "situational.agent_skills",
       "meaning": "Authored a custom Claude Code skill invoked as a slash command, with an explicit tool allowlist, an argument contract, and per-skill model selection.",
       "renderings": {
-        "en": "Authors custom Claude Code skills invoked as slash commands, with explicit tool allowlists, argument contracts, and per-skill model selection."
+        "en": "Authors custom Claude Code skills invoked as slash commands, with explicit tool allowlists, argument contracts, and per-skill model selection.",
+        "he": "כתב מיומנות מותאמת אישית ל-Claude Code, המופעלת כפקודת slash, עם רשימת כלים מורשים מפורשת, חוזה ארגומנטים ובחירת מודל ייעודית למיומנות."
       },
       "tags": [
         "development",
@@ -266,7 +278,8 @@
       "fact_id": "situational.mcp_usage",
       "meaning": "Configures and uses MCP servers as part of an agentic development setup.",
       "renderings": {
-        "en": "Configures and uses MCP servers as part of an agentic development setup, wiring external tools into the coding agent."
+        "en": "Configures and uses MCP servers as part of an agentic development setup, wiring external tools into the coding agent.",
+        "he": "מגדיר ומשתמש בשרתי MCP כחלק מסביבת פיתוח מבוססת סוכנים, ומחבר כלים חיצוניים לסוכן התכנות."
       },
       "tags": [
         "development",
@@ -286,7 +299,8 @@
       "fact_id": "situational.agent_instructions",
       "meaning": "Maintains repository-level agent instruction files defining authority order, scope limits and stop conditions so coding agents work from one binding specification.",
       "renderings": {
-        "en": "Maintains repository-level agent instructions that define an explicit authority order, scope limits, and stop conditions, so coding agents work from one binding specification instead of ad-hoc prompts."
+        "en": "Maintains repository-level agent instructions that define an explicit authority order, scope limits, and stop conditions, so coding agents work from one binding specification instead of ad-hoc prompts.",
+        "he": "מתחזק הנחיות לסוכנים ברמת המאגר, המגדירות סדר סמכויות מפורש, מגבלות היקף ותנאי עצירה, כדי שסוכני תכנות יעבדו לפי מפרט מחייב אחד במקום לפי הנחיות מאולתרות."
       },
       "tags": [
         "development",
