@@ -1,14 +1,13 @@
-import { ArrowRight, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
-import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { WizardStepShell } from "@/features/preparation";
 import { useAppForm } from "@/hooks/useAppForm";
-import { Button, buttonClasses } from "@/ui/Button";
+import { Button } from "@/ui/Button";
 import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
@@ -100,13 +99,9 @@ export const NewApplicationPage = () => {
           serverValidationFailed={submission.fieldErrors !== null}
         />
       </div>
+      {/* No `back`: this is the first step, so there is no previous one to return to, and
+          the spine beside the form already carries the way back to the board. */}
       <CommitBar
-        back={
-          <Link className={buttonClasses("ghost")} to={boardPath()}>
-            <ArrowRight aria-hidden="true" className="size-icon-md" />
-            חזרה ללוח המועמדויות
-          </Link>
-        }
         label={NEXT_STEP_LABEL}
         result={
           submission.duplicateMatches === null
@@ -137,7 +132,7 @@ export const NewApplicationPage = () => {
         <p className="text-support leading-6 text-cv-text-muted">
           {submission.duplicateMatches === null
             ? analysisUnavailable
-              ? "יצירת המועמדות תשמור את תצלום המשרה. ניתוח המשרה דורש ספק AI, ועדיין לא הוגדר כזה - הניתוח יהיה זמין אחרי הגדרתו במסך ההגדרות."
+              ? "יצירת המועמדות תשמור את תצלום המשרה. לניתוח נדרש ספק AI."
               : "יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח."
             : "נדרש אישור מפורש כדי לשמור מועמדות חדשה לצד המועמדויות הדומות."}
         </p>

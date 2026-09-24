@@ -185,30 +185,28 @@ describe("NewApplicationPage", () => {
     window.sessionStorage.setItem("cv:board-query", "activity=all&stage=approved");
     renderPage("/");
 
-    expect(screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveLength(2);
-    for (const link of screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })) {
-      expect(link).toHaveAttribute("href", "/?activity=all&stage=approved");
-    }
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute(
+      "href",
+      "/?activity=all&stage=approved",
+    );
     expect(screen.getByRole("heading", { name: "קליטת משרה" })).toBeInTheDocument();
   });
 
   it("promises an analysis only when a provider can run one", () => {
     renderPage("/");
-    expect(screen.getByText(/ניתוח המשרה דורש ספק AI/)).toBeInTheDocument();
+    expect(screen.getByText(/לניתוח נדרש ספק AI/)).toBeInTheDocument();
     expect(screen.queryByText(/ותתחיל את הניתוח/)).not.toBeInTheDocument();
     cleanup();
 
     renderPage("/", true);
     expect(screen.getByText("יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח.")).toBeInTheDocument();
-    expect(screen.queryByText(/ניתוח המשרה דורש ספק AI/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/לניתוח נדרש ספק AI/)).not.toBeInTheDocument();
   });
 
   it("returns to the bare board when nothing was remembered", () => {
     renderPage("/");
 
-    for (const link of screen.getAllByRole("link", { name: "חזרה ללוח המועמדויות" })) {
-      expect(link).toHaveAttribute("href", "/");
-    }
+    expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toHaveAttribute("href", "/");
   });
 
   it("restores an intake draft from persistent browser storage without changing its text", () => {
