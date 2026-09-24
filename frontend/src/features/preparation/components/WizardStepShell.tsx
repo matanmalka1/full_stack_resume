@@ -36,6 +36,12 @@ interface WizardStepShellProps {
      inset beside the rail, so it can use the width the rail's reserved column would
      otherwise leave unused for the rest of the step's height. */
   wideRow?: boolean;
+  /* "top" keeps the spine as one row above the heading at every width, instead of a
+     column beside the content. The analysis step sets it: from its first analysis its
+     body fills the width below the spine's row, and a spine in a side column left a
+     hole its own height under the one-banner heading. Set for the whole step, not only
+     once an analysis exists, so the spine does not move when the result arrives. */
+  railPlacement?: "side" | "top";
   /* Which step of the flow this screen is, and what the spine marks as current. The
      projection still marks which *other* steps read as already complete - a step ahead of
      this one, reached by revisiting an earlier screen - but it never moves the current
@@ -64,6 +70,7 @@ export const WizardStepShell = ({
   eyebrow,
   measure = "wizard",
   queryError,
+  railPlacement = "side",
   stage,
   title,
   wideRow = false,
@@ -97,7 +104,15 @@ export const WizardStepShell = ({
         }
         description={description}
         eyebrow={eyebrow}
-        landmark={<PreparationWorkflowSteps applicationId={applicationId} detail={detail} stage={stage} />}
+        landmark={
+          <PreparationWorkflowSteps
+            applicationId={applicationId}
+            detail={detail}
+            orientation={railPlacement === "top" ? "row" : "responsive"}
+            stage={stage}
+          />
+        }
+        landmarkPlacement={railPlacement}
         measure={measure}
         title={title ?? workflowStageLabels[stage]}
       >

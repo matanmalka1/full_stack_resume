@@ -51,14 +51,14 @@ const changedSubmission = (current: MatchingValues, next: MatchingValues): Class
 });
 
 const consequence = (detail: ApplicationDetail, createsAnalysis: boolean): string => {
-  const replacement = createsAnalysis ? "ניתוח ותוכנית בחירה חדשים" : "תוכנית בחירה חדשה, בלי להחליף את הניתוח";
+  const replacement = createsAnalysis ? "ניתוח ובחירת עובדות חדשים" : "בחירת עובדות חדשה, בלי להחליף את הניתוח";
   if (detail.active_working_draft_id != null) {
-    return `השמירה תיצור ${replacement}. הטיוטה הפעילה לא תימחק, אך תהיה לא מעודכנת מול ההקשר החדש ותידרש החלפה מפורשת לפני המשך האישור.`;
+    return `השמירה תיצור ${replacement}. הטיוטה הפעילה לא תימחק, אך לא תתאים להגדרות החדשות, ויהיה צריך להחליף אותה לפני האישור.`;
   }
   if (detail.latest_approved_revision_id != null || detail.latest_ready_revision_id != null) {
-    return `השמירה תיצור ${replacement}. הגרסאות שאושרו והקבצים המוכנים לא ישתנו ויישארו זמינים כהיסטוריה; העבודה החדשה תמשיך מהמצב שהשרת יחזיר.`;
+    return `השמירה תיצור ${replacement}. הגרסאות שאושרו והקבצים המוכנים לא ישתנו ויישארו זמינים בהיסטוריה; העבודה תמשיך מההגדרות החדשות.`;
   }
-  return `השמירה תיצור ${replacement} ותפעיל את ההקשר החדש. הרשומות הקודמות נשמרות בהיסטוריה.`;
+  return `השמירה תיצור ${replacement}. הקודמים נשמרים בהיסטוריה.`;
 };
 
 const ConfigurationSelect = <T extends string>({
@@ -188,8 +188,7 @@ export const MatchingConfigurationEditor = ({
           מסלול, פרופיל ודגשים
         </h2>
         <p className="mt-1 text-support leading-6 text-cv-text-muted">
-          הערכים המוצגים הם ההקשר הפעיל. רק שדות ששונו יישלחו, והשרת יוודא שהניתוח ותוכנית הבחירה לא התחלפו מאז פתיחת
-          הטופס.
+          אלה ההגדרות שהניתוח ובחירת העובדות נשענים עליהן כרגע. רק מה שתשנה כאן יישמר.
         </p>
       </div>
 

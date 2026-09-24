@@ -13,6 +13,9 @@ interface PageShellProps {
      knows of no such progression, so the page supplies one where it has one and nothing
      where it does not. */
   landmark?: ReactNode;
+  /* "side" gives the landmark its own column beside the content from the large
+     breakpoint; "top" keeps it above the masthead at every width. */
+  landmarkPlacement?: "side" | "top";
   /* A block rendered after the landmark/content grid, at the section's own full measure
      rather than inset beside the landmark's reserved column. The grid reserves that
      column's width only for its own row - exactly the landmark's height, whatever that
@@ -46,6 +49,7 @@ export const PageShell = ({
   eyebrow,
   eyebrowTone,
   landmark,
+  landmarkPlacement = "side",
   measure = "wide",
   title,
 }: PageShellProps) => {
@@ -60,10 +64,14 @@ export const PageShell = ({
     >
       <div
         className={cx(
-          landmark === undefined ? undefined : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-page-gap",
+          landmark === undefined || landmarkPlacement === "top"
+            ? undefined
+            : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-page-gap",
         )}
       >
-        {landmark === undefined ? null : <aside className="mb-5 lg:mb-0">{landmark}</aside>}
+        {landmark === undefined ? null : (
+          <aside className={cx("mb-5", landmarkPlacement === "side" && "lg:mb-0")}>{landmark}</aside>
+        )}
         <div className="min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-2">
             <div className="min-w-0">

@@ -157,7 +157,7 @@ describe("SelectionPlanPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel(detail(null), false);
 
-    fireEvent.click(screen.getByRole("button", { name: "יצירת בחירה דטרמיניסטית" }));
+    fireEvent.click(screen.getByRole("button", { name: "יצירת בחירת ברירת המחדל" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(

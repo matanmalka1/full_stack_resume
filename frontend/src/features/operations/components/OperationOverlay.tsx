@@ -79,6 +79,7 @@ export const OperationOverlay = ({
   awaitingRecord,
   continuation,
   failureAction,
+  inline = false,
   onQueued,
   operation,
   pending,
@@ -89,6 +90,11 @@ export const OperationOverlay = ({
   continuation?: string | undefined;
   /* Host-owned recovery for the record this Operation failed to produce. */
   failureAction?: ReactNode;
+  /* The live panel sits in the page flow instead of floating at the viewport's corner,
+     and cannot be put away. For a host with nothing else to show while the run lasts -
+     the analysis step before its first analysis - where a corner panel over an empty
+     page said less than the page itself could. */
+  inline?: boolean;
   /* A retry from inside the report belongs to the same watch the host screen keeps. */
   onQueued: (operationId: string) => void;
   operation: Operation | undefined;
@@ -229,8 +235,10 @@ export const OperationOverlay = ({
         <section
           aria-labelledby={panelHeadingId}
           className={cx(
-            "cv-appear-late fixed inset-x-4 top-[4.5rem] z-(--cv-z-toast) flex flex-col gap-2.5 rounded-surface border bg-cv-surface p-4 shadow-floating",
-            "lg:inset-x-auto lg:end-6 lg:top-6 lg:w-[22rem]",
+            "cv-appear-late flex flex-col gap-2.5 rounded-surface border bg-cv-surface p-4",
+            inline
+              ? "shadow-surface"
+              : "fixed inset-x-4 top-[4.5rem] z-(--cv-z-toast) shadow-floating lg:inset-x-auto lg:end-6 lg:top-6 lg:w-[22rem]",
             chipToneClasses[tone],
           )}
         >
@@ -245,7 +253,7 @@ export const OperationOverlay = ({
               </h2>
               <p className="text-cv-text-muted">{statusText}</p>
             </div>
-            {showingSuccess ? null : (
+            {showingSuccess || inline ? null : (
               <button
                 aria-label="סגירה"
                 className="-m-1 rounded-control p-1 text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text"
@@ -261,7 +269,15 @@ export const OperationOverlay = ({
               {continuation ?? pending?.note ?? "ההרצה נשלחה. המצב שלה יופיע כאן מיד."}
             </p>
           ) : (
-            <OperationPhaseSteps phase={record.phase} />
+            <>
+              <OperationPhaseSteps phase={record.phase} />
+              {/* In place of the page's own content, the card says what fills it. */}
+              {inline ? (
+                <p className="text-support leading-6 text-cv-text-muted">
+                  התוצאה תופיע כאן כשההרצה תסתיים. אפשר לעזוב את המסך בינתיים.
+                </p>
+              ) : null}
+            </>
           )}
           {showingSuccess ? null : (
             <button

@@ -222,9 +222,9 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
           cannot describe a run different from the one the press would start. */}
           {plan.createDraft === null || settings === undefined ? null : (
             <p className="text-support leading-6 text-cv-text-muted">
-              הטיוטה נוצרת מהניתוח ומתוכנית הבחירה הפעילים — שתי רשומות שאינן משתנות.{" "}
+              הטיוטה נבנית מהניתוח ומהעובדות שנבחרו.{" "}
               {provider === undefined
-                ? "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע."
+                ? "היא נוצרת ברקע, בלי קריאת AI."
                 : "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
             </p>
           )}

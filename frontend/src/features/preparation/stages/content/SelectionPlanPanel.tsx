@@ -160,7 +160,7 @@ export const SelectionPlanPanel = ({
           <p className="mt-1 text-support leading-6 text-cv-text-muted">
             {activePlanId === null
               ? "לניתוח הפעיל אין תוכנית בחירה. אפשר ליצור את בחירת ברירת המחדל או לבקש מ־AI להציע אחת."
-              : "התוכנית הדטרמיניסטית פעילה. אפשר לקבע או להחריג עובדות לפני יצירת הטיוטה, או לבקש הצעת AI חלופית."}
+              : "זו בחירת העובדות הפעילה. אפשר לקבע או להחריג עובדות לפני יצירת הטיוטה, או לבקש מ־AI הצעה חלופית."}
           </p>
         </div>
 
@@ -223,7 +223,7 @@ export const SelectionPlanPanel = ({
               pendingLabel="שומר את בחירת העובדות…"
               variant={action.emphasized ? "primary" : "secondary"}
             >
-              {activePlanId === null ? "יצירת בחירה דטרמיניסטית" : "שמירת בחירת העובדות"}
+              {activePlanId === null ? "יצירת בחירת ברירת המחדל" : "שמירת בחירת העובדות"}
             </Button>
           </>
         }

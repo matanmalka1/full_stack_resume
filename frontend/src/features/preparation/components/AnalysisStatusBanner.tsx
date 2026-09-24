@@ -40,10 +40,23 @@ const bannerContent = (classification: Classification | null, supersededAnalysis
     classification.fitScore === null
       ? fitLevelPart
       : `התאמה למשרה: ${confidenceText(classification.fitScore)} · ${fitLevelPart}`;
+  /* The level is not the score read off a scale: mandatory requirements the approved
+     facts do not fully cover cap it, however high the percentage. Beside "83% · low" the
+     reader needs that said, or the two read as a contradiction. Stated as how the level
+     is decided, not as the cause of this one - a low score alone can set it too. */
+  const hardGapCount = classification.gaps.filter((gap) => gap.severity === "hard").length;
+  const capNote =
+    (classification.fit === "low" || classification.fit === "medium") && hardGapCount > 0
+      ? ` רמת ההתאמה נקבעת גם לפי דרישות החובה, ולא רק לפי הציון: ${
+          hardGapCount === 1
+            ? "דרישת חובה אחת לא מכוסה במלואה"
+            : `${hardGapCount} דרישות חובה לא מכוסות במלואן`
+        }.`
+      : "";
   const explanation =
     classification.fit === null
       ? "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה."
-      : fitDescriptions[classification.fit];
+      : `${fitDescriptions[classification.fit]}${capNote}`;
 
   return {
     body: explanation,

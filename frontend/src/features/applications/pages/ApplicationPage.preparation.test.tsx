@@ -428,7 +428,7 @@ describe("ApplicationPage at the preparation route", () => {
     {
       body: { job_analysis_id: "analysis-1", selection_plan_id: "plan-1" },
       name: "runs the draft deterministically while AI is enabled but the mode is not",
-      note: "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע.",
+      note: "היא נוצרת ברקע, בלי קריאת AI.",
       settings: aiEnabledDeterministicLane,
     },
     {

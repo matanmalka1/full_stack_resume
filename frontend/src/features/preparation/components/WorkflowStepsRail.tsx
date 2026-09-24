@@ -16,6 +16,11 @@ export interface WorkflowStep {
 
 interface WorkflowStepsRailProps {
   label: string;
+  /* "responsive" turns down the side of the content from the large breakpoint, the
+     default. "row" stays one row across the top at every width, for a step whose content
+     needs the full measure: a side rail reserves its column for its own height, and a
+     step that fills the width below it is left with a hole that tall under its heading. */
+  orientation?: "responsive" | "row";
   steps: WorkflowStep[];
 }
 
@@ -104,7 +109,10 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
    on wide screens; here it owns the large marks, labels and continuous vertical line.
    On narrow screens the same landmark stacks above the content without changing its
    order or accessible description. */
-export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
+export const WorkflowStepsRail = ({ label, orientation = "responsive", steps }: WorkflowStepsRailProps) => {
+  /* The vertical form's classes, only where the rail may turn vertical. */
+  const side = (classes: string) => (orientation === "responsive" ? classes : undefined);
+
   const current = steps.find((step) => step.state === "current");
   const position = current === undefined ? null : steps.indexOf(current) + 1;
   const completed = current === undefined && steps.length > 0 && steps.every((step) => step.state === "complete");
@@ -140,7 +148,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
       : `שלב ${position} מתוך ${steps.length}`;
 
   const content = (
-    <div className="flex flex-col gap-2 lg:gap-4">
+    <div className={cx("flex flex-col gap-2", side("lg:gap-4"))}>
       {/* Decorative: the nav's own `aria-label` already states the label and the
           position in words, so this repeats it for sighted readers only. */}
       <div aria-hidden="true" className="flex shrink-0 flex-wrap items-baseline gap-x-2">
@@ -165,7 +173,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
           by connectors that absorb the spare width, with only the open step labelled, so
           all four stay visible in one short band above the heading. */}
       <div className="min-w-0">
-        <div className="flex items-center lg:flex-col lg:items-stretch">
+        <div className={cx("flex items-center", side("lg:flex-col lg:items-stretch"))}>
           {steps.map((step, index) => {
             const body = <StepBody index={index} step={step} />;
             const next = steps[index + 1];
@@ -176,7 +184,8 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                   <div
                     aria-hidden="true"
                     className={cx(
-                      "flex shrink-0 rounded-control border border-transparent lg:w-full",
+                      "flex shrink-0 rounded-control border border-transparent",
+                      side("lg:w-full"),
                       step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
                     )}
                   >
@@ -191,7 +200,8 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                         : `${hereIndex !== -1 && index < hereIndex ? "חזרה" : "מעבר"} לשלב ${step.label}`
                     }
                     className={cx(
-                      "group flex min-h-11 shrink-0 items-center rounded-control border border-transparent lg:min-h-12 lg:w-full",
+                      "group flex min-h-11 shrink-0 items-center rounded-control border border-transparent",
+                      side("lg:min-h-12 lg:w-full"),
                       "transition-[background-color,border-color,box-shadow] duration-200",
                       "hover:border-cv-border hover:bg-cv-surface-muted",
                       step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
@@ -206,7 +216,8 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                   <span
                     aria-hidden="true"
                     className={cx(
-                      "h-px min-w-3 flex-1 lg:ms-[1.45rem] lg:h-5 lg:w-px lg:min-w-0 lg:flex-none lg:shrink-0",
+                      "h-px min-w-3 flex-1",
+                      side("workflow-track-vertical lg:ms-[1.45rem] lg:h-5 lg:w-px lg:min-w-0 lg:flex-none lg:shrink-0"),
                       connectorClasses[next.state],
                     )}
                   />
