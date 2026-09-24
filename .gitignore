@@ -27,3 +27,5 @@ frontend/.ds-types/
 frontend/.ds-type-stubs/
 frontend/index.d.ts
 frontend/tsconfig.ds-emit.json
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
