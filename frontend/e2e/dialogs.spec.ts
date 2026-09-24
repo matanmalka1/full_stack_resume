@@ -179,7 +179,9 @@ test.describe("dialogs", () => {
      reopens it - not to whatever held focus when the screen opened the overlay by itself -
      and does not make the page safe to change: the commands that conflict with the run
      stay locked while it is live. */
-  test("hides a live run on Escape, keeps conflicting actions locked, and reopens from its chip", async ({ page }) => {
+  test("puts a live run's panel away only from its close button, keeps conflicting actions locked, and opens the report from its chip", async ({
+    page,
+  }) => {
     const running = {
       id: "op-1",
       application_id: "app-1",
@@ -203,13 +205,16 @@ test.describe("dialogs", () => {
     });
 
     await page.goto("/applications/app-1");
-    const overlay = page.getByRole("dialog", { name: "הרצת יצירת הטיוטה" });
-    await expect(overlay).toBeVisible();
-
+    /* Live work is a panel beside the page, not a modal: Escape leaves it where it is,
+       and only its own close button puts it away. */
+    const panel = page.getByRole("region", { name: "הרצת יצירת הטיוטה" });
+    await expect(panel).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(overlay).toBeHidden();
+    await expect(panel).toBeVisible();
+
+    await panel.getByRole("button", { name: "סגירה" }).click();
+    await expect(panel).toBeHidden();
     const chip = page.getByRole("button", { name: /פירוט ההרצה/ });
-    await expect(chip).toBeFocused();
     /* The run's own progress sentence, which for draft generation names its phase. */
     await expect(chip).toContainText("מנסחת ובודקת את הטענות");
 
@@ -223,10 +228,12 @@ test.describe("dialogs", () => {
     await page.keyboard.press("Escape");
     await expect(postingForm).toBeHidden();
 
+    /* The chip opens the run's full report, which is a dialog and does close on Escape. */
+    const report = page.getByRole("dialog", { name: "הרצת יצירת הטיוטה" });
     await chip.click();
-    await expect(overlay).toBeVisible();
+    await expect(report).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(overlay).toBeHidden();
+    await expect(report).toBeHidden();
     await expect(chip).toBeFocused();
   });
 });
