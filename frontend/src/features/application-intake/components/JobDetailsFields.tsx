@@ -42,7 +42,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
               className="rtl-placeholder ps-10"
               dir="auto"
               maxLength={LABEL_MAX_CHARACTERS}
-              placeholder={examplePlaceholder("Stripe")}
+              placeholder={examplePlaceholder("monday.com")}
             />
           </IconField>
         )}
@@ -59,7 +59,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
               className="rtl-placeholder ps-10"
               dir="auto"
               maxLength={LABEL_MAX_CHARACTERS}
-              placeholder={examplePlaceholder("Senior Solutions Architect")}
+              placeholder={examplePlaceholder("Account Manager")}
             />
           </IconField>
         )}

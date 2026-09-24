@@ -44,15 +44,17 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
       title={
         <span className="inline-flex items-center gap-2">
           <FileText aria-hidden="true" className="size-icon-md text-cv-accent" />
-          תיאור המשרה
+          טקסט המשרה
         </span>
       }
     >
       <Field
         error={error}
         label={
-          <span className="flex w-full items-baseline justify-between gap-4">
-            <span>טקסט המשרה</span>
+          /* The section title already shows the field's name; the label keeps it for the
+             control's accessible name without drawing it a second time. */
+          <span className="flex w-full items-baseline justify-end gap-4">
+            <span className="sr-only">טקסט המשרה</span>
             {counter}
           </span>
         }

@@ -118,7 +118,7 @@ const CreatedApplicationDestination = () => {
   );
 };
 
-const renderPage = (entry = "/") => {
+const renderPage = (entry = "/", aiAvailable = false) => {
   const client = new QueryClient({
     defaultOptions: {
       /* The screen deliberately reads the Settings value already held by the shell.
@@ -135,8 +135,8 @@ const renderPage = (entry = "/") => {
       default_ai_model: "gpt-5.6-terra",
       default_reasoning_effort: "medium",
       available_ai_models: [],
-      provider_configured: false,
-      ai_enabled: false,
+      provider_configured: aiAvailable,
+      ai_enabled: aiAvailable,
     },
     etag: null,
   });
@@ -190,6 +190,17 @@ describe("NewApplicationPage", () => {
       expect(link).toHaveAttribute("href", "/?activity=all&stage=approved");
     }
     expect(screen.getByRole("heading", { name: "קליטת משרה" })).toBeInTheDocument();
+  });
+
+  it("promises an analysis only when a provider can run one", () => {
+    renderPage("/");
+    expect(screen.getByText(/ניתוח המשרה דורש ספק AI/)).toBeInTheDocument();
+    expect(screen.queryByText(/ותתחיל את הניתוח/)).not.toBeInTheDocument();
+    cleanup();
+
+    renderPage("/", true);
+    expect(screen.getByText("יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח.")).toBeInTheDocument();
+    expect(screen.queryByText(/ניתוח המשרה דורש ספק AI/)).not.toBeInTheDocument();
   });
 
   it("returns to the bare board when nothing was remembered", () => {

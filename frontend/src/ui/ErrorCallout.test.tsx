@@ -46,6 +46,6 @@ describe("ErrorCallout", () => {
       />,
     );
 
-    expect(screen.getByText("תיאור המשרה: הערך אינו תקין.")).toBeInTheDocument();
+    expect(screen.getByText("טקסט המשרה: הערך אינו תקין.")).toBeInTheDocument();
   });
 });

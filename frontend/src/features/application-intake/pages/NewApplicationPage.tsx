@@ -2,6 +2,8 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { aiRegenerationAvailable } from "@/api/settings";
+import { useSettings } from "@/api/useSettings";
 import { boardPath } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { WizardStepShell } from "@/features/preparation";
@@ -32,6 +34,11 @@ export const NewApplicationPage = () => {
   const fields = form.watch();
   const currentIntake = intakeFromFields(fields);
   const intakeDraft = useApplicationIntakeDraft(fields, recoveredDraft !== null);
+  /* Analysis is AI-only. Until the settings read settles the promise stays as it was;
+     once it says there is no provider, the bar says so instead of promising a run the
+     server will refuse. */
+  const { settings } = useSettings();
+  const analysisUnavailable = settings !== undefined && !aiRegenerationAvailable(settings);
 
   const submission = useApplicationIntakeSubmission({
     currentIntake,
@@ -129,7 +136,9 @@ export const NewApplicationPage = () => {
       >
         <p className="text-support leading-6 text-cv-text-muted">
           {submission.duplicateMatches === null
-            ? "יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח."
+            ? analysisUnavailable
+              ? "יצירת המועמדות תשמור את תצלום המשרה. ניתוח המשרה דורש ספק AI, ועדיין לא הוגדר כזה - הניתוח יהיה זמין אחרי הגדרתו במסך ההגדרות."
+              : "יצירת המועמדות תשמור את תצלום המשרה ותתחיל את הניתוח."
             : "נדרש אישור מפורש כדי לשמור מועמדות חדשה לצד המועמדויות הדומות."}
         </p>
       </CommitBar>
