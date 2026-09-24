@@ -1,5 +1,5 @@
-import { ChevronLeft } from "lucide-react";
-import { type ReactNode, useId, useRef, useState } from "react";
+import { ChevronLeft, X } from "lucide-react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
@@ -9,10 +9,12 @@ import { cx } from "@/ui/cx";
 import { Dialog } from "@/ui/Dialog";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { StatusSlot } from "@/ui/StatusSlot";
 import { type Tone, tonePresentation } from "@/ui/tone";
 import { operationTypeLabels, statusLabels, statusTones } from "../model/operationLabels";
 import { isOperationStarting } from "../model/operationLive";
 import { operationProgressLabel } from "../model/operationProgress";
+import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import { OperationReport } from "./OperationReport";
 
 export interface PendingWork {
@@ -35,36 +37,44 @@ interface Session {
   /* A run this screen watched starting is still in progress, or is finishing: it
      succeeded and the views it changed are still being read again. */
   active: boolean;
+  /* The full report is open. It opens by itself only on an outcome that needs the
+     reader - a failure, a cancellation, an interruption - and otherwise on request. */
+  dialogOpen: boolean;
   /* A finished record already on hand when the session started - history, such as the
      last run before a command that then failed to queue. It is not this session's
-     outcome, so ending on it does not hold the overlay open over an old failure. */
+     outcome, so ending on it does not hold anything open over an old failure. */
   historyId: string | null;
-  open: boolean;
+  /* The reader put the live panel away; the status row at the top of the step stands in
+     for it until the run ends. */
+  panelHidden: boolean;
+  /* The run whose success the panel is still showing, briefly, before it goes. */
+  succeededId: string | null;
 }
 
-/* Work in progress, over the screen that queued it.
+const SUCCESS_LINGER_MS = 3_000;
 
-   It used to be a panel in the page flow: a card that pushed the step below it down while
-   the run lasted and then stayed as a row reporting that finished work had finished. Work
-   in flight now sits over the page instead, and what is left once it is over is a chip in
-   the place the card was - the run's status in one line, which reopens its full report.
+/* Work in progress, beside the screen that queued it rather than over it.
+
+   Live work shows in a small panel at the top corner of the viewport. It does not dim
+   or block the page: the screen already locks the actions that conflict with the run by
+   `isOperationLive`, whether or not anything is showing, so a modal over the page guarded
+   nothing and hid what the reader was waiting on. The panel fades in only after a short
+   delay, so a run that finishes in a fraction of a second never flashes a frame, and a
+   success stays a moment and goes - it leaves no permanent row behind.
+
+   An outcome that needs the reader - a failure, a cancellation, an interruption - opens
+   the full report as a dialog, because that is where a decision is asked for. Such an
+   outcome also leaves a status row in the step's one status slot, which reopens it. So
+   does live work whose panel the reader put away.
 
    One instance per screen, and one session per stretch of work rather than per record.
    Pending work, the record that replaces it, a retry's new record, and a run the screen
    continues straight into (an analysis followed by its draft) are all the same wait for
-   the reader, so none of them closes the overlay or remounts it. Only the start of work
-   this screen watched opens it by itself: a run that was already finished when the screen
-   read it is history, reachable from the chip, and never pops over a reload.
+   the reader, so none of them ends the session or remounts anything. A run that was
+   already finished when the screen read it is history: it never pops over a reload.
 
-   The session ends when nothing is starting and a success's refresh has landed. A success
-   closes by itself, so the reader looks at the page its result is on; anything else
-   stays open - the failure, its guidance and the retry are the most important thing on
-   the screen then - and opens again if the reader had hidden it.
-
-   Hiding the overlay never unmounts the report. The report owns the delayed reveal of
-   cancel, and a reopened run must not wait for it again. Nor does hiding it make the page
-   safe to edit: screens lock the actions that conflict with a run by `isOperationLive`,
-   whether or not the overlay is showing. */
+   The dialog is always mounted, closed or not. The report inside owns the delayed reveal
+   of cancel, and a reopened run must not wait for it again. */
 export const OperationOverlay = ({
   awaitingRecord,
   continuation,
@@ -87,9 +97,16 @@ export const OperationOverlay = ({
   settled: boolean;
 }) => {
   const headingId = useId();
-  const { settings } = useSettings();
+  const panelHeadingId = useId();
   const chipRef = useRef<HTMLButtonElement>(null);
-  const [session, setSession] = useState<Session>({ active: false, historyId: null, open: false });
+  const { settings } = useSettings();
+  const [session, setSession] = useState<Session>({
+    active: false,
+    dialogOpen: false,
+    historyId: null,
+    panelHidden: false,
+    succeededId: null,
+  });
 
   const starting = isOperationStarting({
     awaitingRecord,
@@ -101,21 +118,35 @@ export const OperationOverlay = ({
   const succeeded = operation?.status === "succeeded";
   const live = starting || (session.active && succeeded && !settled);
 
-  /* Adjusted during render, from values this render already holds, so the overlay is
-     open in the same paint that shows the work - never a frame after it. */
+  /* Adjusted during render, from values this render already holds, so the panel is on
+     screen in the same paint that shows the work - never a frame after it. */
   if (starting && !session.active) {
     setSession({
       active: true,
+      dialogOpen: false,
       historyId: operation !== undefined && isTerminalOperation(operation) ? operation.id : null,
-      open: true,
+      panelHidden: false,
+      succeededId: null,
     });
   } else if (session.active && !live) {
+    const outcome = operation !== undefined && operation.id !== session.historyId ? operation : undefined;
     setSession({
       active: false,
+      dialogOpen: outcome !== undefined && outcome.status !== "succeeded",
       historyId: null,
-      open: operation !== undefined && operation.id !== session.historyId && !succeeded,
+      panelHidden: false,
+      succeededId: outcome?.status === "succeeded" ? outcome.id : null,
     });
   }
+
+  useEffect(() => {
+    if (session.succeededId === null) return;
+    const timeout = window.setTimeout(
+      () => setSession((current) => ({ ...current, succeededId: null })),
+      SUCCESS_LINGER_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [session.succeededId]);
 
   /* While new work is asked for or its record is on its way, the record on hand is the
      previous run's: its outcome is not this run's, so the report waits for the new one. */
@@ -145,40 +176,106 @@ export const OperationOverlay = ({
             ? `${statusLabels[record.status]} · אפשר לנסות שוב`
             : statusLabels[record.status]
           : operationProgressLabel(record);
-  /* A.5: the chip is mounted for as long as there is anything to report, hidden overlay
-     or not, so it is the one place the run's progress is announced from. The same single
-     sentence the badge shows, so an identical poll tick re-renders without speaking. */
+  /* A.5: the live region is mounted for as long as there is anything to report, so it is
+     the one place the run's progress is announced from. The same single sentence the
+     status shows, so an identical poll tick re-renders without speaking. */
   const announcement = record === undefined ? (pending?.note ?? PENDING_LABEL) : (continuation ?? statusText);
   const Icon = tonePresentation[tone].icon;
 
+  const showingSuccess = !session.active && session.succeededId !== null && session.succeededId === record?.id;
+  const showPanel = (session.active && !session.panelHidden) || showingSuccess;
+  /* The row in the step's status slot: an outcome that needs the reader, or live work
+     whose panel was put away. A success leaves nothing behind - the page shows its
+     result - and neither does a success the screen found on arrival. */
+  const showChip =
+    (session.active && session.panelHidden) ||
+    (!session.active && record !== undefined && isTerminalOperation(record) && record.status !== "succeeded");
+  const openDialog = () => setSession((current) => ({ ...current, dialogOpen: true }));
+
   return (
     <>
-      <button
-        aria-haspopup="dialog"
-        className={cx(
-          "cv-settle-in flex w-full items-center gap-3 rounded-surface border bg-cv-surface px-4 py-2.5 text-start text-support shadow-surface transition-colors hover:bg-cv-surface-muted",
-          chipToneClasses[tone],
-        )}
-        onClick={() => setSession((current) => ({ ...current, open: true }))}
-        ref={chipRef}
-        type="button"
-      >
-        <Icon aria-hidden="true" className={cx("size-icon-md shrink-0", tone === "progress" && "animate-spin")} />
-        <span className="min-w-0 flex-1 text-cv-text">
-          <span className="font-semibold">{heading}</span>
-          <span className="text-cv-text-muted"> · {statusText}</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-1 font-medium underline underline-offset-4">
-          פירוט ההרצה
-          <ChevronLeft aria-hidden="true" className="size-icon-sm" />
-        </span>
-      </button>
+      {showChip ? (
+        <StatusSlot>
+          <button
+            aria-haspopup="dialog"
+            className={cx(
+              "cv-settle-in flex w-full items-center gap-3 rounded-surface border bg-cv-surface px-4 py-2.5 text-start text-support shadow-surface transition-colors hover:bg-cv-surface-muted",
+              chipToneClasses[tone],
+            )}
+            onClick={openDialog}
+            ref={chipRef}
+            type="button"
+          >
+            <Icon aria-hidden="true" className={cx("size-icon-md shrink-0", tone === "progress" && "animate-spin")} />
+            <span className="min-w-0 flex-1 text-cv-text">
+              <span className="font-semibold">{heading}</span>
+              <span className="text-cv-text-muted"> · {statusText}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1 font-medium underline underline-offset-4">
+              פירוט ההרצה
+              <ChevronLeft aria-hidden="true" className="size-icon-sm" />
+            </span>
+          </button>
+        </StatusSlot>
+      ) : null}
+
+      {showPanel ? (
+        <section
+          aria-labelledby={panelHeadingId}
+          className={cx(
+            "cv-appear-late fixed inset-x-4 top-[4.5rem] z-(--cv-z-toast) flex flex-col gap-2.5 rounded-surface border bg-cv-surface p-4 shadow-floating",
+            "lg:inset-x-auto lg:end-6 lg:top-6 lg:w-[22rem]",
+            chipToneClasses[tone],
+          )}
+        >
+          <div className="flex items-start gap-2.5">
+            <Icon
+              aria-hidden="true"
+              className={cx("mt-0.5 size-icon-md shrink-0", tone === "progress" && "animate-spin")}
+            />
+            <div className="min-w-0 flex-1 text-support">
+              <h2 className="font-semibold text-cv-text" id={panelHeadingId}>
+                {heading}
+              </h2>
+              <p className="text-cv-text-muted">{statusText}</p>
+            </div>
+            {showingSuccess ? null : (
+              <button
+                aria-label="סגירה"
+                className="-m-1 rounded-control p-1 text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text"
+                onClick={() => setSession((current) => ({ ...current, panelHidden: true }))}
+                type="button"
+              >
+                <X aria-hidden="true" className="size-icon-md" />
+              </button>
+            )}
+          </div>
+          {showingSuccess ? null : record === undefined || continuing ? (
+            <p className="text-support leading-6 text-cv-text-muted" dir="auto">
+              {continuation ?? pending?.note ?? "ההרצה נשלחה. המצב שלה יופיע כאן מיד."}
+            </p>
+          ) : (
+            <OperationPhaseSteps phase={record.phase} />
+          )}
+          {showingSuccess ? null : (
+            <button
+              aria-haspopup="dialog"
+              className="w-fit text-support font-medium text-cv-text underline underline-offset-4"
+              onClick={openDialog}
+              type="button"
+            >
+              פירוט ההרצה
+            </button>
+          )}
+        </section>
+      ) : null}
+
       <LiveRegion>{announcement}</LiveRegion>
 
       <Dialog
         headingId={headingId}
-        onClose={() => setSession((current) => ({ ...current, open: false }))}
-        open={session.open}
+        onClose={() => setSession((current) => ({ ...current, dialogOpen: false }))}
+        open={session.dialogOpen}
         restoreFocusTo={chipRef}
         title={heading}
       >

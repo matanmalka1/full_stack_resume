@@ -593,20 +593,19 @@ dialog::backdrop {
   animation: cv-settle-in 180ms ease-out;
 }
 
-/* Operations do not expose a trustworthy percentage, so the bar communicates ongoing
-   activity rather than pretending to approach 100%. It crosses the track and starts
-   again; the global reduced-motion rule above lets it settle into a plain accent segment. */
-@keyframes cv-operation-progress {
+/* A live-work panel waits a moment before it shows, so a run that finishes in a fraction
+   of a second never flashes a frame; one that is still going fades in. */
+@keyframes cv-appear-late {
   from {
-    transform: translateX(-160%);
+    opacity: 0;
   }
   to {
-    transform: translateX(360%);
+    opacity: 1;
   }
 }
 
-.cv-operation-progress {
-  animation: cv-operation-progress 1.4s ease-in-out infinite;
+.cv-appear-late {
+  animation: cv-appear-late 160ms ease-out 400ms both;
 }
 
 /* The workflow rail's one decorative beacon: a soft ring breathing behind the current

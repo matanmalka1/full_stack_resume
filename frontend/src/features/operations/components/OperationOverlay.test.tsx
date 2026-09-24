@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -80,7 +80,8 @@ const overlay = (): HTMLDialogElement => {
   if (dialog === null) throw new Error("no overlay on screen");
   return dialog;
 };
-const chip = () => screen.getByRole("button", { name: /פירוט ההרצה/ });
+const chip = () => screen.getByRole("button", { name: /· .*פירוט ההרצה/ });
+const panel = () => screen.getByRole("region");
 
 describe("OperationReport", () => {
   afterEach(() => {
@@ -228,7 +229,8 @@ describe("OperationReport", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(title);
     expect(screen.queryByText("ספק הבינה המלאכותית סירב לבקשה")).not.toBeInTheDocument();
-    expect(screen.getByText("הפעולה נכשלה ולא יצרה תוצאה.")).toBeInTheDocument();
+    /* The reason is the report's line on a failure; no vaguer one above it. */
+    expect(screen.queryByText("הפעולה נכשלה ולא יצרה תוצאה.")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toHaveAttribute("href", "/settings");
     expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
   });
@@ -376,118 +378,131 @@ describe("OperationOverlay", () => {
     expect(chip()).not.toHaveTextContent("אפשר לנסות שוב");
   });
 
-  it("opens over the page while work runs", () => {
+  it("shows live work in a panel beside the page, not over it", () => {
     renderOverlay({ operation: operation() });
 
+    expect(panel()).toHaveTextContent("הרצת ניתוח המשרה");
+    expect(panel()).toHaveTextContent("מתבצעת");
+    expect(within(panel()).getByRole("list", { name: "שלבי ההרצה" })).toBeInTheDocument();
+    expect(overlay().open).toBe(false);
+
+    /* The full report is still a press away while the run lasts. */
+    fireEvent.click(within(panel()).getByRole("button", { name: "פירוט ההרצה" }));
     expect(overlay().open).toBe(true);
-    expect(screen.getByRole("heading", { name: "הרצת ניתוח המשרה" })).toBeInTheDocument();
-    expect(chip()).toHaveTextContent("מתבצעת");
   });
 
-  it("does not open by itself for a run that had already finished when the screen read it", () => {
+  it("shows nothing for a success that was already finished when the screen read it", () => {
     /* Not settled yet either: waiting for the refresh extends a session, never starts one. */
     renderOverlay({ operation: succeeded(), settled: false });
 
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
     expect(overlay().open).toBe(false);
-    expect(chip()).toHaveTextContent("הושלמה");
+    expect(screen.queryByRole("button", { name: /פירוט ההרצה/ })).not.toBeInTheDocument();
   });
 
-  it("closes a success only once its refresh has landed, and reopens from the chip", () => {
+  it("shows a success briefly once its refresh has landed, then leaves nothing behind", () => {
+    vi.useFakeTimers();
     const { update } = renderOverlay({ operation: operation() });
 
     update({ operation: succeeded({ available_actions: ["retry"] }), settled: false });
-    expect(overlay().open).toBe(true);
+    expect(panel()).toHaveTextContent("הושלמה");
 
     update({ operation: succeeded({ available_actions: ["retry"] }), settled: true });
+    expect(panel()).toHaveTextContent("הושלמה");
     expect(overlay().open).toBe(false);
-    expect(chip()).toHaveTextContent("הושלמה");
 
-    fireEvent.click(chip());
-    expect(overlay().open).toBe(true);
-    expect(screen.getByRole("button", { name: "הרצה מחדש" })).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /פירוט ההרצה/ })).not.toBeInTheDocument();
   });
 
-  it("keeps a failure open, and brings it back if the reader had hidden the run", () => {
+  it("opens the report on a failure, and leaves a status row that reopens it", () => {
     const { update } = renderOverlay({ operation: operation() });
 
-    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
-    expect(overlay().open).toBe(false);
+    /* Put away while it runs, the panel is replaced by the status row. */
+    fireEvent.click(within(panel()).getByRole("button", { name: "סגירה" }));
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
     expect(chip()).toHaveTextContent("מתבצעת");
 
     update({ operation: failed({ failure_code: "VALIDATION_EXECUTION_FAILED" }), settled: true });
     expect(overlay().open).toBe(true);
     expect(screen.getByRole("alert")).toHaveTextContent("לא ניתן להשלים את בדיקות הפעולה");
+
+    fireEvent.click(within(overlay()).getByRole("button", { name: "סגירה" }));
+    expect(overlay().open).toBe(false);
+    expect(chip()).toHaveTextContent("נכשלה");
+    fireEvent.click(chip());
+    expect(overlay().open).toBe(true);
   });
 
-  it("keeps one overlay open from pending work to the record that replaces it", () => {
+  it("keeps one session from pending work to the record that replaces it", () => {
     const pending = { heading: <>הרצת ניתוח המשרה</>, note: "יוצרים את המועמדות ומנתחים את המשרה…" };
     const { update } = renderOverlay({ pending });
-    const first = overlay();
-    expect(first.open).toBe(true);
-    expect(screen.getAllByText("נשלחה לביצוע").length).toBeGreaterThan(0);
+    const first = panel();
+    expect(first).toHaveTextContent("נשלחה לביצוע");
+    expect(first).toHaveTextContent("יוצרים את המועמדות ומנתחים את המשרה…");
 
     update({ operation: operation() });
-    expect(overlay()).toBe(first);
-    expect(first.open).toBe(true);
-    expect(chip()).toHaveTextContent("מתבצעת");
+    expect(panel()).toBe(first);
+    expect(first).toHaveTextContent("מתבצעת");
   });
 
-  it("stays open across a continuation and closes only at the end of the chain", () => {
+  it("stays in one panel across a continuation and never opens the report", () => {
     const analyze = operation();
     const draft = operation({ id: "operation-2", operation_type: "create_draft" });
     const continuation = "הניתוח הושלם. יצירת הטיוטה מתחילה מיד.";
     const { update } = renderOverlay({ operation: analyze });
-    const first = overlay();
+    const first = panel();
 
-    update({ continuation, operation: succeeded(), settled: false });
-    expect(first.open).toBe(true);
     update({ continuation, operation: succeeded(), settled: true });
-    expect(first.open).toBe(true);
-    expect(screen.getAllByText(continuation).length).toBeGreaterThan(0);
+    expect(panel()).toBe(first);
+    expect(first).toHaveTextContent(continuation);
 
     update({ operation: draft });
-    expect(overlay()).toBe(first);
-    expect(first.open).toBe(true);
+    expect(panel()).toBe(first);
+    expect(first).toHaveTextContent("הרצת יצירת הטיוטה");
 
-    update({ operation: { ...draft, status: "succeeded", phase: "completed", is_terminal: true }, settled: false });
-    expect(first.open).toBe(true);
     update({ operation: { ...draft, status: "succeeded", phase: "completed", is_terminal: true }, settled: true });
-    expect(first.open).toBe(false);
+    expect(first).toHaveTextContent("הושלמה");
+    expect(overlay().open).toBe(false);
   });
 
-  it("stays open while a retry's new record is on its way", () => {
+  it("moves a retry's new run back to the panel, without the previous failure", () => {
     const previous = failed({ available_actions: ["retry"] });
     const { update } = renderOverlay({ operation: operation() });
     update({ operation: previous, settled: true });
     expect(overlay().open).toBe(true);
 
     update({ awaitingRecord: true, operation: previous, settled: true });
-    expect(overlay().open).toBe(true);
+    expect(overlay().open).toBe(false);
+    expect(panel()).toHaveTextContent("נשלחה לביצוע");
     /* The previous run's failure is not this run's outcome. */
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     update({ operation: operation({ id: "operation-2" }) });
-    expect(overlay().open).toBe(true);
-    expect(chip()).toHaveTextContent("מתבצעת");
+    expect(panel()).toHaveTextContent("מתבצעת");
   });
 
   it("does not hold an old failure open when the new command never queued", () => {
     const { update } = renderOverlay({ operation: failed(), settled: true });
     expect(overlay().open).toBe(false);
+    expect(chip()).toHaveTextContent("נכשלה");
 
     update({ operation: failed(), pending: { heading: "הרצה", note: "נשלחה" }, settled: true });
-    expect(overlay().open).toBe(true);
+    expect(panel()).toHaveTextContent("נשלחה");
 
     update({ operation: failed(), settled: true });
     expect(overlay().open).toBe(false);
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+    expect(chip()).toHaveTextContent("נכשלה");
   });
 
-  it("keeps the cancel delay running while the overlay is hidden", () => {
+  it("keeps the cancel delay running while the report is closed", () => {
     vi.useFakeTimers();
     renderOverlay({ operation: operation({ available_actions: ["cancel"] }) });
 
     act(() => vi.advanceTimersByTime(2_000));
-    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
+    fireEvent.click(within(panel()).getByRole("button", { name: "סגירה" }));
     act(() => vi.advanceTimersByTime(2_000));
     fireEvent.click(chip());
 

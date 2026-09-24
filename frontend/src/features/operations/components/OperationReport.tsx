@@ -1,4 +1,3 @@
-import { Clock3 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -8,12 +7,11 @@ import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
-import { cx } from "@/ui/cx";
-import { tonePresentation } from "@/ui/tone";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
+import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import {
   actionableFailureDetail,
   activeOutputLabels,
@@ -53,10 +51,10 @@ const useCancelVisibility = (operation: Operation): boolean => {
    guidance - every one of which is here - plus timestamps and a column of identifiers. A
    link promising more detail that leads to less is worse than no link.
 
-   The report has one shape for every status. A succeeded run used to collapse into a row
-   in the page flow; it now lives behind the overlay's chip, reopened on request, so it is
-   read in full or not at all - and its re-run is offered as the secondary action it
-   already was, never louder than the result the page is showing. */
+   One order for every status: what state the run is in, then - while it lives - which
+   step it is on; when it has ended, what it came to or why it failed and what to do; then
+   one row of actions; then the technical detail. A succeeded run's re-run is offered as
+   the secondary action it always was, never louder than the result the page is showing. */
 export const OperationReport = ({
   continuation,
   failureAction,
@@ -68,8 +66,8 @@ export const OperationReport = ({
      the Operation record cannot say that its success will be followed. */
   continuation?: string | undefined;
   /* Recovery belongs to the workflow that owns the affected record, not to the generic
-     Operation. The host supplies the exact safe action while this report owns its place
-     beside the failure explanation. */
+     Operation. The host supplies the exact safe action; the report places it in its one
+     action row, beside the record's own retry. */
   failureAction?: ReactNode;
   /* Handed down to the retry inside: a re-queued Operation belongs to the same watch the
      host screen is already keeping, so it is reported here rather than followed. */
@@ -78,6 +76,7 @@ export const OperationReport = ({
 }) => {
   const showCancel = useCancelVisibility(operation);
   const terminal = isTerminalOperation(operation);
+  const live = !terminal || continuation !== undefined;
   const progressLabel = operationProgressLabel(operation);
   const { settings } = useSettings();
   /* Only a refusal can be a missing provider, and only a settled Settings read can say
@@ -89,27 +88,26 @@ export const OperationReport = ({
     : operation.failure_code == null
       ? null
       : failurePresentations[operation.failure_code];
-  /* In the report's action row, where the retry it replaces would have been - not inside
-     the failure explanation, which left the dialog with no action at its foot. */
-  const settingsAction = missingProvider ? (
-    <div className="mt-2 flex flex-wrap gap-3 border-t border-cv-border pt-5">
-      <Link className={buttonClasses("primary")} to={routePaths.settings}>
-        פתיחת ההגדרות
-      </Link>
-    </div>
-  ) : null;
   const actionableDetail = actionableFailureDetail(operation.failure_code, operation.safe_failure_detail);
+  const hasFailure = failure !== null || operation.safe_failure_detail != null;
   const produced = activeOutputLabels(operation);
-  const settledOutcome = terminal && continuation === undefined;
-  const SummaryIcon = settledOutcome ? tonePresentation[statusTones[operation.status]].icon : Clock3;
-  const summaryIconClass = settledOutcome ? "text-cv-text-muted" : "text-cv-accent";
-  const summary =
-    continuation ??
-    (terminal
-      ? produced.length === 0
-        ? (terminalSummaries[operation.status] ?? "הפעולה הסתיימה.")
-        : `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`
-      : "העמוד מתעדכן מעצמו עד לסיום הפעולה. אפשר לסגור את החלון - ההרצה תימשך.");
+  /* A finished run says what it came to in one line - unless it failed, where the reason
+     below is that line and a second, vaguer one above it only delayed it. */
+  const outcome =
+    live || hasFailure
+      ? null
+      : produced.length > 0
+        ? `הפעולה הושלמה ויצרה ${joinHebrewList(produced)}.`
+        : (terminalSummaries[operation.status] ?? "הפעולה הסתיימה.");
+  /* Settings for a missing provider replaces the retry that would fail the same way;
+     otherwise the host's own recovery, if it has one. */
+  const recovery = missingProvider ? (
+    <Link className={buttonClasses("primary")} to={routePaths.settings}>
+      פתיחת ההגדרות
+    </Link>
+  ) : (
+    failureAction
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -119,41 +117,29 @@ export const OperationReport = ({
         </StatusBadge>
       </div>
 
-      <div className="rounded-control border border-cv-border bg-cv-surface-muted p-3.5 sm:p-4">
-        <div className="flex items-start gap-3">
-          {/* A clock is for work that is waiting or running; a finished run shows its
-              outcome's own icon, so "failed" is not drawn beside a timer. */}
-          <SummaryIcon aria-hidden="true" className={cx("mt-0.5 size-icon-md shrink-0", summaryIconClass)} />
-          <div className="min-w-0 flex-1">
-            <p className="text-support font-medium leading-6 text-cv-text" dir="auto">
-              {summary}
+      {live ? (
+        <div className="flex flex-col gap-2">
+          {continuation === undefined ? (
+            <OperationPhaseSteps phase={operation.phase} />
+          ) : (
+            <p className="text-support font-medium leading-6 text-cv-text">{continuation}</p>
+          )}
+          {/* A.3: the backend's safe progress line is English today, so it picks its own
+              direction rather than inheriting the RTL shell. */}
+          {operation.message === "" || continuation !== undefined ? null : (
+            <p className="text-support leading-6 text-cv-text-muted" dir="auto">
+              {operation.message}
             </p>
-
-            {/* A.3: the backend's safe progress line is English today, so it picks its
-                own direction rather than inheriting the RTL shell. The line's place is
-                held by the stable status surface while live work has not reported one. */}
-            {/* The line holds its height only while live work may still report one; a
-                finished run with nothing to say used to leave an empty row under its
-                summary. */}
-            {terminal && operation.message === "" ? null : (
-              <p className="mt-1 min-h-6 text-support leading-6 text-cv-text-muted" dir="auto">
-                {operation.message === "" ? "ממתינים לעדכון מהפעולה…" : operation.message}
-              </p>
-            )}
-          </div>
+          )}
+          <progress aria-label={`התקדמות: ${progressLabel}`} aria-valuetext={progressLabel} className="sr-only" />
         </div>
+      ) : null}
 
-        {terminal && continuation === undefined ? null : (
-          <>
-            <progress aria-label={`התקדמות: ${progressLabel}`} aria-valuetext={progressLabel} className="sr-only" />
-            <div aria-hidden="true" className="mt-3 h-1.5 overflow-hidden rounded-pill bg-cv-border">
-              <div className="cv-operation-progress h-full w-2/5 rounded-pill bg-cv-accent" />
-            </div>
-          </>
-        )}
-      </div>
+      {outcome === null ? null : <p className="text-support leading-6 text-cv-text">{outcome}</p>}
 
-      {failure === null && operation.safe_failure_detail == null ? null : (
+      {/* The reason and what to do about it, straight under the status: on a failure they
+          are the report. */}
+      {!hasFailure ? null : (
         <Callout
           role="alert"
           title={failure?.title ?? statusLabels[operation.status]}
@@ -168,16 +154,12 @@ export const OperationReport = ({
             </p>
           )}
           {failure === null ? null : (
-            <p className={actionableDetail === null ? "mt-2" : "mt-1"} dir="auto">
+            <p className={actionableDetail === null ? undefined : "mt-1"} dir="auto">
               {failure.guidance}
             </p>
           )}
-          {failureAction === undefined ? null : <div className="mt-3 flex flex-wrap gap-3">{failureAction}</div>}
         </Callout>
       )}
-
-      {/* Technical detail after the reason and its fix, not between the status and them. */}
-      <OperationExecutionDetails operation={operation} />
 
       {operation.cancellation_requested_at != null && !operation.is_terminal ? (
         <Callout title="בקשת הביטול התקבלה" tone="info">
@@ -186,20 +168,21 @@ export const OperationReport = ({
         </Callout>
       ) : null}
 
-      {/* Cancel and retry, which are the Operation's own actions and belong wherever it
-          is shown. A continuation withdraws them: there is nothing to cancel on a run
-          that succeeded, and re-running it would supersede the result that the work now
-          starting is built on. */}
+      {/* Cancel, retry, and any recovery, in the report's one action row. A continuation
+          withdraws them: there is nothing to cancel on a run that succeeded, and re-running
+          it would supersede the result that the work now starting is built on. */}
       {continuation === undefined ? (
         <OperationActions
           onQueued={onQueued}
           operation={operation}
-          reserve={!terminal && operation.available_actions.includes("cancel")}
+          recovery={recovery}
           retryOffered={!missingProvider}
           showCancel={showCancel}
         />
       ) : null}
-      {settingsAction}
+
+      {/* Technical detail last, after the status, the reason, and the way on. */}
+      <OperationExecutionDetails operation={operation} />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import type { ApplicationDetail } from "@/api/contracts";
 import { PageShell } from "@/ui/PageShell";
 import { CommitBarTargetContext } from "@/ui/CommitBar";
+import { StatusSlotTargetContext } from "@/ui/StatusSlot";
 import { WideRowTargetContext } from "@/ui/WideRow";
 import { type WorkflowStage, workflowStageLabels } from "../model/workflowStages";
 import { PreparationWorkflowSteps } from "./PreparationWorkflowSteps";
@@ -69,6 +70,7 @@ export const WizardStepShell = ({
 }: WizardStepShellProps) => {
   const [commitBarTarget, setCommitBarTarget] = useState<HTMLDivElement | null>(null);
   const [wideRowTarget, setWideRowTarget] = useState<HTMLDivElement | null>(null);
+  const [statusTarget, setStatusTarget] = useState<HTMLDivElement | null>(null);
 
   if (queryError !== null && queryError !== undefined) {
     return children;
@@ -100,6 +102,8 @@ export const WizardStepShell = ({
         title={title ?? workflowStageLabels[stage]}
       >
         <div className="flex flex-col gap-6">
+          {/* The step's Operation status, first on every step - see `StatusSlot`. */}
+          <div className="contents" ref={setStatusTarget} />
           {children}
           {wideRow ? null : <div className="contents" ref={setCommitBarTarget} />}
         </div>
@@ -111,6 +115,8 @@ export const WizardStepShell = ({
      step, once an analysis arrives - does not remount its body (and the Operation
      overlay inside it) at that moment. `undefined` makes `WideRow` render in place. */
   return (
-    <WideRowTargetContext.Provider value={wideRow ? wideRowTarget : undefined}>{body}</WideRowTargetContext.Provider>
+    <StatusSlotTargetContext.Provider value={statusTarget}>
+      <WideRowTargetContext.Provider value={wideRow ? wideRowTarget : undefined}>{body}</WideRowTargetContext.Provider>
+    </StatusSlotTargetContext.Provider>
   );
 };
