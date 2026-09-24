@@ -107,6 +107,10 @@ export const WizardStepShell = ({
     </CommitBarTargetContext.Provider>
   );
 
-  if (!wideRow) return body;
-  return <WideRowTargetContext.Provider value={wideRowTarget}>{body}</WideRowTargetContext.Provider>;
+  /* Always the same tree, so a step that turns its wide row on or off - the analysis
+     step, once an analysis arrives - does not remount its body (and the Operation
+     overlay inside it) at that moment. `undefined` makes `WideRow` render in place. */
+  return (
+    <WideRowTargetContext.Provider value={wideRow ? wideRowTarget : undefined}>{body}</WideRowTargetContext.Provider>
+  );
 };

@@ -2,6 +2,7 @@ import { type ReactElement, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { aiRegenerationAvailable } from "@/api/settings";
+import { routePaths } from "@/app/routePaths";
 import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";
@@ -61,6 +62,11 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
      where the analysis it re-runs is on screen, in the diagnostics tab. The first analyze
      of an Application that has none stays exactly here: there is no analysis yet for a
      diagnostics tab to show. */
+  /* A first analysis with no provider cannot be pressed, so the bar leads with the one
+     thing that unblocks it. The inert analysis button stays beside it, secondary, so the
+     step still names its action. */
+  const providerMissing =
+    plan.analyze !== null && !plan.analyze.reanalysis && settings !== undefined && !aiRegenerationAvailable(settings);
   const analyzeButton =
     plan.analyze === null || plan.analyze.reanalysis ? null : (
       <Button
@@ -69,11 +75,16 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
         onClick={() => analyze.mutate()}
         pending={analyze.isPending}
         pendingLabel="מפעיל ניתוח…"
-        variant={plan.analyze.emphasized ? "primary" : "secondary"}
+        variant={plan.analyze.emphasized && !providerMissing ? "primary" : "secondary"}
       >
         ניתוח המשרה
       </Button>
     );
+  const settingsButton = providerMissing ? (
+    <Link className={buttonClasses("primary")} key="settings" to={routePaths.settings}>
+      פתיחת ההגדרות
+    </Link>
+  ) : null;
 
   const draftButton =
     plan.createDraft === null ? null : (
@@ -162,6 +173,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
     { emphasized: false, node: archiveButton },
     { emphasized: plan.draftScreen?.emphasized === true, node: draftScreenButton },
     { emphasized: plan.readyRevision?.emphasized === true, node: readyButton },
+    { emphasized: true, node: settingsButton },
   ].filter((entry): entry is { emphasized: boolean; node: ReactElement } => entry.node !== null);
   const emphasizedEntry =
     inWorkflowOrder.find((entry) => entry.emphasized) ?? inWorkflowOrder[inWorkflowOrder.length - 1];

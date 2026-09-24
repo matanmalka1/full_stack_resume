@@ -3,6 +3,8 @@ import { type ReactNode, useId, useRef, useState } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
+import { aiRegenerationAvailable } from "@/api/settings";
+import { useSettings } from "@/api/useSettings";
 import { cx } from "@/ui/cx";
 import { Dialog } from "@/ui/Dialog";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -85,6 +87,7 @@ export const OperationOverlay = ({
   settled: boolean;
 }) => {
   const headingId = useId();
+  const { settings } = useSettings();
   const chipRef = useRef<HTMLButtonElement>(null);
   const [session, setSession] = useState<Session>({ active: false, historyId: null, open: false });
 
@@ -122,14 +125,25 @@ export const OperationOverlay = ({
   const typeLabel = operation === undefined ? null : operationTypeLabels[operation.operation_type];
   const heading = pending?.heading ?? (typeLabel === null ? "הרצה" : <>הרצת {typeLabel}</>);
   const continuing = continuation !== undefined;
-  const tone: Tone = record === undefined || continuing ? "progress" : statusTones[record.status];
+  /* A refused AI run is history once a provider is available again: it no longer blocks
+     anything, and a fresh run may succeed. The row stops drawing it as an open blocker
+     and says what can be done, instead of staying red until the next run replaces it. */
+  const retryableRefusal =
+    record?.status === "failed" &&
+    record.failure_code === "PROVIDER_REFUSED" &&
+    settings !== undefined &&
+    aiRegenerationAvailable(settings);
+  const tone: Tone =
+    record === undefined || continuing ? "progress" : retryableRefusal ? "warning" : statusTones[record.status];
   const statusText =
     record === undefined
       ? PENDING_LABEL
       : continuing
         ? "ממשיכה לשלב הבא"
         : isTerminalOperation(record)
-          ? statusLabels[record.status]
+          ? retryableRefusal
+            ? `${statusLabels[record.status]} · אפשר לנסות שוב`
+            : statusLabels[record.status]
           : operationProgressLabel(record);
   /* A.5: the chip is mounted for as long as there is anything to report, hidden overlay
      or not, so it is the one place the run's progress is announced from. The same single

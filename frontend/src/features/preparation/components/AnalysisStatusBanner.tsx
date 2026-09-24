@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Classification } from "@/api/analyses";
 import { routePaths } from "@/app/routePaths";
+import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import type { Tone } from "@/ui/tone";
 import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/analysisLabels";
@@ -69,17 +70,22 @@ export const AnalysisStatusBanner = ({
   const needsProvider = providerMissing && classification === null && !supersededAnalysis;
 
   return (
-    <Callout emphasis="banner" title={title} tone={tone}>
-      {body}
-      {needsProvider ? (
-        <>
-          {" "}
-          כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.{" "}
-          <Link className="font-semibold text-cv-accent hover:underline" to={routePaths.settings}>
+    <Callout
+      /* The fix as a control on its own line, not a link at the tail of the explanation
+         where it read as more of the same sentence. */
+      action={
+        needsProvider ? (
+          <Link className={buttonClasses("secondary")} to={routePaths.settings}>
             פתיחת ההגדרות
           </Link>
-        </>
-      ) : null}
+        ) : undefined
+      }
+      emphasis="banner"
+      title={title}
+      tone={tone}
+    >
+      <p>{body}</p>
+      {needsProvider ? <p className="mt-1">כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.</p> : null}
     </Callout>
   );
 };

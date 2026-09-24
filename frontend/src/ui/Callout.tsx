@@ -78,7 +78,12 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className={cx("text-support font-bold", toneIconClasses[tone])}>{label}</span>
+            {/* A neutral banner has no state to announce: "הערה" before the one verdict a
+                screen opens with said nothing its title does not. Every other tone keeps
+                its label, which is what separates it from colour alone (A.2). */}
+            {banner && tone === "neutral" ? null : (
+              <span className={cx("text-support font-bold", toneIconClasses[tone])}>{label}</span>
+            )}
             {/* A.3: the tone label is Hebrew, but a callout usually carries a backend
                 title and detail that may be English. dir="auto" lets each run pick its
                 own direction instead of being forced into the RTL shell. */}
@@ -102,7 +107,7 @@ export const Callout = ({ action, children, className, emphasis, role, title, to
               {children}
             </div>
           )}
-          {action === undefined ? null : <div className="mt-1.5 inline-flex">{action}</div>}
+          {action === undefined ? null : <div className={cx("inline-flex", banner ? "mt-3" : "mt-1.5")}>{action}</div>}
         </div>
       </div>
     </Tag>

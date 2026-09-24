@@ -54,18 +54,21 @@ interface OverlayProps {
 
 /* One host screen across several reads: each `update` is the next render of the same
    overlay, the way a watch hands it a new record. */
-const renderOverlay = (initial: OverlayProps) => {
+const renderOverlay = (initial: OverlayProps, settings?: ReturnType<typeof settingsFixture>) => {
   const queryClient = client();
+  if (settings !== undefined) queryClient.setQueryData(settingsQueryKey, { settings, etag: null });
   const view = (props: OverlayProps): ReactElement => (
     <QueryClientProvider client={queryClient}>
-      <OperationOverlay
-        awaitingRecord={props.awaitingRecord ?? false}
-        continuation={props.continuation}
-        onQueued={vi.fn()}
-        operation={props.operation}
-        pending={props.pending}
-        settled={props.settled ?? false}
-      />
+      <MemoryRouter>
+        <OperationOverlay
+          awaitingRecord={props.awaitingRecord ?? false}
+          continuation={props.continuation}
+          onQueued={vi.fn()}
+          operation={props.operation}
+          pending={props.pending}
+          settled={props.settled ?? false}
+        />
+      </MemoryRouter>
     </QueryClientProvider>
   );
   const result = render(view(initial));
@@ -351,6 +354,26 @@ describe("OperationReport", () => {
 describe("OperationOverlay", () => {
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  /* Once a provider is available, a refused run no longer blocks anything: the row says
+     it can be tried again and stops wearing the blocker tone. */
+  it("stops presenting a refused run as an open blocker once a provider is available", () => {
+    const refused = failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] });
+    renderOverlay(
+      { operation: refused, settled: true },
+      settingsFixture({ provider_configured: true, ai_enabled: true }),
+    );
+
+    expect(chip()).toHaveTextContent("נכשלה · אפשר לנסות שוב");
+  });
+
+  it("keeps a refused run a plain failure while no provider is available", () => {
+    const refused = failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] });
+    renderOverlay({ operation: refused, settled: true }, settingsFixture());
+
+    expect(chip()).toHaveTextContent("נכשלה");
+    expect(chip()).not.toHaveTextContent("אפשר לנסות שוב");
   });
 
   it("opens over the page while work runs", () => {

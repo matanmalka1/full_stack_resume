@@ -8,6 +8,8 @@ import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
+import { cx } from "@/ui/cx";
+import { tonePresentation } from "@/ui/tone";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
@@ -87,15 +89,20 @@ export const OperationReport = ({
     : operation.failure_code == null
       ? null
       : failurePresentations[operation.failure_code];
-  const recovery = missingProvider ? (
-    <Link className={buttonClasses("primary")} to={routePaths.settings}>
-      פתיחת ההגדרות
-    </Link>
-  ) : (
-    failureAction
-  );
+  /* In the report's action row, where the retry it replaces would have been - not inside
+     the failure explanation, which left the dialog with no action at its foot. */
+  const settingsAction = missingProvider ? (
+    <div className="mt-2 flex flex-wrap gap-3 border-t border-cv-border pt-5">
+      <Link className={buttonClasses("primary")} to={routePaths.settings}>
+        פתיחת ההגדרות
+      </Link>
+    </div>
+  ) : null;
   const actionableDetail = actionableFailureDetail(operation.failure_code, operation.safe_failure_detail);
   const produced = activeOutputLabels(operation);
+  const settledOutcome = terminal && continuation === undefined;
+  const SummaryIcon = settledOutcome ? tonePresentation[statusTones[operation.status]].icon : Clock3;
+  const summaryIconClass = settledOutcome ? "text-cv-text-muted" : "text-cv-accent";
   const summary =
     continuation ??
     (terminal
@@ -114,7 +121,9 @@ export const OperationReport = ({
 
       <div className="rounded-control border border-cv-border bg-cv-surface-muted p-3.5 sm:p-4">
         <div className="flex items-start gap-3">
-          <Clock3 aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-cv-accent" />
+          {/* A clock is for work that is waiting or running; a finished run shows its
+              outcome's own icon, so "failed" is not drawn beside a timer. */}
+          <SummaryIcon aria-hidden="true" className={cx("mt-0.5 size-icon-md shrink-0", summaryIconClass)} />
           <div className="min-w-0 flex-1">
             <p className="text-support font-medium leading-6 text-cv-text" dir="auto">
               {summary}
@@ -144,8 +153,6 @@ export const OperationReport = ({
         )}
       </div>
 
-      <OperationExecutionDetails operation={operation} />
-
       {failure === null && operation.safe_failure_detail == null ? null : (
         <Callout
           role="alert"
@@ -165,9 +172,12 @@ export const OperationReport = ({
               {failure.guidance}
             </p>
           )}
-          {recovery === undefined ? null : <div className="mt-3 flex flex-wrap gap-3">{recovery}</div>}
+          {failureAction === undefined ? null : <div className="mt-3 flex flex-wrap gap-3">{failureAction}</div>}
         </Callout>
       )}
+
+      {/* Technical detail after the reason and its fix, not between the status and them. */}
+      <OperationExecutionDetails operation={operation} />
 
       {operation.cancellation_requested_at != null && !operation.is_terminal ? (
         <Callout title="בקשת הביטול התקבלה" tone="info">
@@ -189,6 +199,7 @@ export const OperationReport = ({
           showCancel={showCancel}
         />
       ) : null}
+      {settingsAction}
     </div>
   );
 };
