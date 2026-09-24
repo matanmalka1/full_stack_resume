@@ -50,30 +50,29 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
     >
       <Field
         error={error}
-        label={
-          /* The section title already shows the field's name; the label keeps it for the
-             control's accessible name without drawing it a second time. */
-          <span className="flex w-full items-baseline justify-end gap-4">
-            <span className="sr-only">טקסט המשרה</span>
-            {counter}
-          </span>
-        }
+        /* The section title already shows the field's name; the label keeps it for the
+           control's accessible name without drawing it a second time. */
+        label={<span className="sr-only">טקסט המשרה</span>}
       >
         {(control) => (
-          <Textarea
-            {...control}
-            {...register("job_text", {
-              onChange: () => onInputChanged("job_text"),
-              validate: {
-                required: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
-                withinBudget: (value) =>
-                  isJobTextWithinBudget(value) || "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת המועמדות.",
-              },
-            })}
-            className="rtl-placeholder h-64 max-h-[55vh]"
-            dir="auto"
-            placeholder="הדבק כאן את תיאור המשרה…"
-          />
+          <>
+            <Textarea
+              {...control}
+              {...register("job_text", {
+                onChange: () => onInputChanged("job_text"),
+                validate: {
+                  required: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
+                  withinBudget: (value) =>
+                    isJobTextWithinBudget(value) || "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת המועמדות.",
+                },
+              })}
+              className="rtl-placeholder h-64 max-h-[55vh]"
+              dir="auto"
+              placeholder="הדבק כאן את תיאור המשרה…"
+            />
+            {/* Under the text it counts, at its end, rather than alone on a row above it. */}
+            {counter === null ? null : <p className="self-end text-support">{counter}</p>}
+          </>
         )}
       </Field>
     </FormSection>

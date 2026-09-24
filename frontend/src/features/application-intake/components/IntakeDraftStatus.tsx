@@ -6,10 +6,10 @@ import type { IntakeDraftStatus as Status } from "../hooks/useApplicationIntakeD
 
 const labels: Record<Status, string> = {
   idle: "הטופס נשמר אוטומטית בדפדפן הזה עד ליצירת המועמדות.",
-  restored: "טיוטה קודמת שוחזרה מהדפדפן.",
-  saving: "שומר טיוטה בדפדפן…",
-  saved: "הטיוטה נשמרה בדפדפן.",
-  failed: "לא ניתן לשמור את הטיוטה בדפדפן. אין לסגור את העמוד לפני השליחה.",
+  restored: "פרטים שהוזנו קודם שוחזרו מהדפדפן הזה.",
+  saving: "שומר את הפרטים בדפדפן הזה…",
+  saved: "הפרטים נשמרו בדפדפן הזה עד ליצירת המועמדות.",
+  failed: "לא ניתן לשמור את הפרטים בדפדפן. אין לסגור את העמוד לפני יצירת המועמדות.",
 };
 
 export const IntakeDraftStatus = ({ status }: { status: Status }) => {

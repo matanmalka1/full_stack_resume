@@ -219,7 +219,7 @@ describe("NewApplicationPage", () => {
 
     renderPage();
 
-    expect(screen.getByText("טיוטה קודמת שוחזרה מהדפדפן.")).toBeInTheDocument();
+    expect(screen.getByText("פרטים שהוזנו קודם שוחזרו מהדפדפן הזה.")).toBeInTheDocument();
     expect(screen.getByLabelText("שם החברה")).toHaveValue(" Acme Israel ");
     expect(screen.getByLabelText("תפקיד היעד")).toHaveValue("Platform Engineer");
     expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("https://example.com/jobs/platform");
@@ -266,7 +266,7 @@ describe("NewApplicationPage", () => {
     fillIntake("Keep this posting even when storage is full");
 
     expect(
-      await screen.findByText("לא ניתן לשמור את הטיוטה בדפדפן. אין לסגור את העמוד לפני השליחה."),
+      await screen.findByText("לא ניתן לשמור את הפרטים בדפדפן. אין לסגור את העמוד לפני יצירת המועמדות."),
     ).toBeInTheDocument();
     expect(jobTextArea()).toHaveValue("Keep this posting even when storage is full");
     const closing = new Event("beforeunload", { cancelable: true });
