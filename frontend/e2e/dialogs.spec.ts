@@ -215,6 +215,7 @@ test.describe("dialogs", () => {
     await panel.getByRole("button", { name: "סגירה" }).click();
     await expect(panel).toBeHidden();
     const chip = page.getByRole("button", { name: /פירוט ההרצה/ });
+    await expect(chip).toBeFocused();
     /* The run's own progress sentence, which for draft generation names its phase. */
     await expect(chip).toContainText("מנסחת ובודקת את הטענות");
 

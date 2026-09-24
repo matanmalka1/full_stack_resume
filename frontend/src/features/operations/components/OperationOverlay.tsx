@@ -139,6 +139,12 @@ export const OperationOverlay = ({
     });
   }
 
+  /* Putting the panel away removes the button that did it. The status row takes the
+     panel's place, so focus goes there instead of falling back to the page. */
+  useEffect(() => {
+    if (session.panelHidden) chipRef.current?.focus();
+  }, [session.panelHidden]);
+
   useEffect(() => {
     if (session.succeededId === null) return;
     const timeout = window.setTimeout(
