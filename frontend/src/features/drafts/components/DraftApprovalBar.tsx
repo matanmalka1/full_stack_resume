@@ -64,7 +64,7 @@ export const DraftApprovalBar = ({
       back={
         <Link className={buttonClasses("ghost")} to={applicationHref}>
           <ArrowRight aria-hidden="true" className="size-icon-md" />
-          חזרה להכנת קורות החיים
+          חזרה לניתוח והתאמה
         </Link>
       }
       label={NEXT_STEP_LABEL}

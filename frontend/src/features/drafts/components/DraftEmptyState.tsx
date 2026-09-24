@@ -11,7 +11,7 @@ export const DraftEmptyState = ({ applicationId }: { applicationId: string }) =>
   <Callout
     action={
       <Link className={buttonClasses("primary")} to={routePaths.application(applicationId)}>
-        חזרה להכנת קורות החיים
+        חזרה לניתוח והתאמה
       </Link>
     }
     title="אין כרגע טיוטה פעילה למועמדות הזו"

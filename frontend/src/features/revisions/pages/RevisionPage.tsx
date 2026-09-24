@@ -72,7 +72,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
         to={draftReachable ? routePaths.draft(applicationId) : routePaths.application(applicationId)}
       >
         <ArrowRight aria-hidden="true" className="size-icon-md" />
-        {draftReachable ? "חזרה לעורך הטיוטה" : "חזרה להכנת קורות החיים"}
+        {draftReachable ? "חזרה לעורך הטיוטה" : "חזרה לניתוח והתאמה"}
       </Link>
     );
 

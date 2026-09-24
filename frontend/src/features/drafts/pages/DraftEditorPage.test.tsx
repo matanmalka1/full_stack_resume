@@ -380,7 +380,7 @@ describe("DraftEditorPage", () => {
     /* The wizard's own navigation, and no trail beside it: the step back is on the bar
        that carries the step's action, and the way out is on the spine. */
     expect(screen.queryByRole("navigation", { name: "פירורי לחם" })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "חזרה להכנת קורות החיים" })).toHaveAttribute("href", "/applications/app-1");
+    expect(screen.getByRole("link", { name: "חזרה לניתוח והתאמה" })).toHaveAttribute("href", "/applications/app-1");
     expect(screen.getByRole("link", { name: "חזרה ללוח המועמדויות" })).toBeInTheDocument();
   });
 
@@ -895,7 +895,7 @@ describe("DraftEditorPage", () => {
     fireEvent.change(await screen.findByDisplayValue("Owned the CRM migration."), {
       target: { value: "Keep my text." },
     });
-    fireEvent.click(screen.getByRole("link", { name: "חזרה להכנת קורות החיים" }));
+    fireEvent.click(screen.getByRole("link", { name: "חזרה לניתוח והתאמה" }));
     expect(await screen.findByText("לא ניתן להמשיך לפני שמירת העריכות")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "הכנת קורות החיים" })).toBeNull();
     expect(screen.getByDisplayValue("Keep my text.")).toBeInTheDocument();

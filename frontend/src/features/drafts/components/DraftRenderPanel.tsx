@@ -54,7 +54,7 @@ export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) =
           revision === undefined ? undefined : (
             <Link className={buttonClasses("ghost")} to={routePaths.application(revision.application_id)}>
               <ArrowRight aria-hidden="true" className="size-icon-md" />
-              חזרה לניתוח ולהתאמה
+              חזרה לניתוח והתאמה
             </Link>
           )
         }
