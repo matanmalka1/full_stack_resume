@@ -255,6 +255,7 @@ def snapshot_view(record: dict[str, Any], job_text: str) -> JobSnapshotView:
             },
             "job_text": job_text,
             "source_metadata": json.loads(record.get("source_metadata_json") or "{}"),
+            "source_hash": record["source_hash"],
         }
     )
 

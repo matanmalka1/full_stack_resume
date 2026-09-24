@@ -24,9 +24,10 @@ class SqlAlchemyDraftOperationSourceReader:
         frozen = operation.sources
         snapshot = (
             connection.execute(
-                select(job_snapshots.c.application_id, job_snapshots.c.source_hash).where(
-                    job_snapshots.c.id == frozen.job_snapshot_id
-                )
+                select(
+                    job_snapshots.c.application_id,
+                    job_snapshots.c.source_hash,
+                ).where(job_snapshots.c.id == frozen.job_snapshot_id)
             )
             .mappings()
             .one_or_none()

@@ -47,10 +47,21 @@ class SqlAlchemyApplicationProjectionReader:
     def _connection(self, tx: ReadTransaction):
         return self._transactions.connection_for(tx)
 
+    @staticmethod
+    def _application_projection():
+        source_url = (
+            select(job_snapshots.c.source_url)
+            .where(job_snapshots.c.application_id == applications.c.id)
+            .order_by(job_snapshots.c.version_number.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        return select(*applications.c, source_url.label("source_url"))
+
     def application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]:
         row = (
             self._connection(tx)
-            .execute(select(applications).where(applications.c.id == application_id))
+            .execute(self._application_projection().where(applications.c.id == application_id))
             .mappings()
             .one_or_none()
         )
@@ -62,7 +73,7 @@ class SqlAlchemyApplicationProjectionReader:
         rows = (
             self._connection(tx)
             .execute(
-                select(applications)
+                self._application_projection()
                 .where(applications.c.deleted_at.is_(None))
                 .order_by(applications.c.created_at, applications.c.id)
             )

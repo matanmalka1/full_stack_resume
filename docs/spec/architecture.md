@@ -115,8 +115,9 @@ PostgreSQL transaction scopes, local/S3-compatible object stores, file-backed Kn
 the OpenAI provider, rendering, operation execution, logging, and Alembic integration.
 
 Persistence capabilities follow consumer, lifecycle, and trust boundaries rather than
-tables. Intake, job snapshots, analysis/selection plans, draft lifecycle, artifacts,
-validation, decisions, recruitment/submissions, audit, knowledge lifecycle, idempotency,
+tables. Intake, job snapshots, analysis/selection plans, working drafts and approvals,
+artifacts, validation, decisions, recruitment/submissions, audit (including draft
+lifecycle actions), knowledge lifecycle, idempotency,
 and settings each have an explicit Port. Operation client and execution Ports separate
 API permissions from worker authority. Consumer-specific source/context readers,
 application projections, Ready evidence, and maintenance inspection supply minimal

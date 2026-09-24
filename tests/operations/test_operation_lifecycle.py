@@ -58,6 +58,7 @@ from cv_engine.infrastructure.persistence.tables import (
     OPERATION_FAILURE_CODES,
     operations,
 )
+from cv_engine.util import new_id
 
 
 def _active_operation(services, *args):
@@ -269,16 +270,17 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
     )
     request = _stored_request(ingested.application_id)
 
+    operation_id = new_id()
     created = _enqueue_operation(
         services,
         request,
-        operation_id="operation-id",
+        operation_id=operation_id,
         created_at="2026-08-19T08:00:00+00:00",
     )
     repeated = _enqueue_operation(
         services,
         request,
-        operation_id="ignored-id",
+        operation_id=new_id(),
     )
 
     assert repeated == created
@@ -406,13 +408,14 @@ def test_output_after_cancellation_stays_inactive_and_cannot_be_activated(
     output back once cancellation closed the window.
     """
     operation = _operation_for_runner(services, "Cancel Output Co")
+    inactive_output_id = new_id()
 
     def execute(_operation, _cancelled):
         services.operation_lifecycle.cancel(operation.id)
         return PreparedOperation(
             outputs=(
                 OperationOutputReference(
-                    output_type="provider_response", output_id="inactive-output", active=False
+                    output_type="provider_response", output_id=inactive_output_id, active=False
                 ),
             )
         )
@@ -439,34 +442,32 @@ def test_output_after_cancellation_stays_inactive_and_cannot_be_activated(
     operation = _queued(services, "Output Co", key="output-request")
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
-    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-1")
-    _execution_write(services, "activate_operation_output", operation.id, "analysis", "analysis-1")
+    output_id = new_id()
+    _execution_write(services, "record_operation_output", operation.id, "analysis", output_id)
+    _execution_write(services, "activate_operation_output", operation.id, "analysis", output_id)
     with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "analysis", "analysis-1"
-        )
+        _execution_write(services, "activate_operation_output", operation.id, "analysis", output_id)
     with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "analysis", "never-recorded"
-        )
+        _execution_write(services, "activate_operation_output", operation.id, "analysis", new_id())
 
     with pytest.raises(UnknownRecord):
-        _execution_write(
-            services, "record_operation_output", "no-such-operation", "analysis", "analysis-2"
-        )
+        _execution_write(services, "record_operation_output", new_id(), "analysis", new_id())
 
     # Cancellation closes the window: an output may still be recorded, but it
     # cannot be activated either by the activation method or by active=True on
     # the recording method.
     services.operation_lifecycle.cancel(operation.id)
-    _execution_write(services, "record_operation_output", operation.id, "analysis", "analysis-3")
+    cancelled_output_id = new_id()
+    _execution_write(
+        services, "record_operation_output", operation.id, "analysis", cancelled_output_id
+    )
     with pytest.raises(StateConflict, match="cannot be activated"):
         _execution_write(
-            services, "activate_operation_output", operation.id, "analysis", "analysis-3"
+            services, "activate_operation_output", operation.id, "analysis", cancelled_output_id
         )
     with pytest.raises(StateConflict, match="cannot be activated"):
         _execution_write(
-            services, "record_operation_output", operation.id, "analysis", "analysis-4", active=True
+            services, "record_operation_output", operation.id, "analysis", new_id(), active=True
         )
 
 

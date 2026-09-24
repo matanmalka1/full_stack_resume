@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...domain.contracts.drafts import DraftDocument, WorkingDraft
 from ...domain.contracts.records import ApprovedRevision
@@ -16,8 +14,6 @@ from .drafts_sql import (
     _deactivate_working_draft,
     _latest_approved_revision,
     _lock_working_draft,
-    _record_event,
-    _record_generation_run,
     _replace_active_working_draft,
     _update_draft_source,
     _working_draft,
@@ -168,16 +164,6 @@ class SqlAlchemyDraftLifecycleRepository:
     ) -> list[ApprovedRevision]:
         connection = self._transactions.connection_for(tx)
         return _approved_revisions(connection, application_id)
-
-    def record_event(
-        self, tx: WriteTransaction, application_id: str, event_type: str, payload: dict[str, Any]
-    ) -> str:
-        connection = self._transactions.connection_for(tx, access="write")
-        return _record_event(connection, application_id, event_type, payload)
-
-    def record_generation_run(self, tx: WriteTransaction, values: dict[str, Any]) -> str:
-        connection = self._transactions.connection_for(tx, access="write")
-        return _record_generation_run(connection, values)
 
     def lock_application(self, tx: WriteTransaction, application_id: str) -> None:
         _lock_application(self._transactions.connection_for(tx, access="write"), application_id)

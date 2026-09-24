@@ -45,15 +45,15 @@ class SqlAlchemyJobSnapshotStore:
         )
         return [dict(row) for row in rows]
 
-    def snapshot_for_content_hash(
-        self, tx: ReadTransaction, application_id: str, content_hash: str
+    def snapshot_for_source_hash(
+        self, tx: ReadTransaction, application_id: str, source_hash: str
     ) -> dict[str, Any] | None:
         row = (
             self._transactions.connection_for(tx)
             .execute(
                 select(job_snapshots).where(
                     job_snapshots.c.application_id == application_id,
-                    job_snapshots.c.content_hash == content_hash,
+                    job_snapshots.c.source_hash == source_hash,
                 )
             )
             .mappings()
@@ -85,7 +85,6 @@ class SqlAlchemyJobSnapshotStore:
             source_url=source_url,
             source_metadata=source_metadata,
             captured_at=captured_at,
-            prior_snapshot_id=None,
         )
 
     def insert_next_snapshot(
@@ -125,7 +124,6 @@ class SqlAlchemyJobSnapshotStore:
             source_url=source_url,
             source_metadata=source_metadata,
             captured_at=captured_at,
-            prior_snapshot_id=prior["id"],
         )
 
     def _insert(
@@ -141,7 +139,6 @@ class SqlAlchemyJobSnapshotStore:
         source_url: str | None,
         source_metadata: dict[str, Any],
         captured_at: str,
-        prior_snapshot_id: str | None,
     ) -> None:
         self._transactions.connection_for(tx, access="write").execute(
             insert(job_snapshots).values(
@@ -149,12 +146,10 @@ class SqlAlchemyJobSnapshotStore:
                 application_id=application_id,
                 version_number=version_number,
                 payload_path=payload_path,
-                source_hash=source_hash,
                 normalized_hash=normalized_hash,
                 source_url=source_url,
                 captured_at=captured_at,
                 source_metadata_json=source_metadata,
-                content_hash=source_hash,
-                prior_snapshot_id=prior_snapshot_id,
+                source_hash=source_hash,
             )
         )

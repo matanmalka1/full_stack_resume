@@ -23,7 +23,7 @@ from .tables import (
 
 
 def _require_owned_snapshot(
-    connection: Connection, application_id: str | None, snapshot_id: str, subject: str
+    connection: Connection, application_id: str, snapshot_id: str, subject: str
 ) -> None:
     """Refuse to link a record to a job snapshot another application owns."""
     row = (
@@ -110,8 +110,22 @@ def _decision_for_artifact_version(
 ) -> dict[str, Any]:
     row = (
         connection.execute(
-            select(decision_records)
-            .where(decision_records.c.artifact_version_id == artifact_version_id)
+            select(
+                *decision_records.c,
+                approved_revisions.c.application_id,
+                approved_revisions.c.job_snapshot_id,
+                approved_revisions.c.job_analysis_id,
+            )
+            .select_from(
+                decision_records.join(
+                    approved_revisions,
+                    approved_revisions.c.id == decision_records.c.approved_revision_id,
+                ).join(
+                    artifact_versions,
+                    artifact_versions.c.revision_id == approved_revisions.c.id,
+                )
+            )
+            .where(artifact_versions.c.id == artifact_version_id)
             .order_by(decision_records.c.created_at.desc())
             .limit(1)
         )
@@ -126,14 +140,19 @@ def _decision_for_artifact_version(
 def _decision_for_revision(connection: Connection, revision_id: str) -> dict[str, Any]:
     row = (
         connection.execute(
-            select(decision_records)
+            select(
+                *decision_records.c,
+                approved_revisions.c.application_id,
+                approved_revisions.c.job_snapshot_id,
+                approved_revisions.c.job_analysis_id,
+            )
             .select_from(
                 decision_records.join(
-                    artifact_versions,
-                    artifact_versions.c.id == decision_records.c.artifact_version_id,
+                    approved_revisions,
+                    approved_revisions.c.id == decision_records.c.approved_revision_id,
                 )
             )
-            .where(artifact_versions.c.revision_id == revision_id)
+            .where(decision_records.c.approved_revision_id == revision_id)
             .order_by(decision_records.c.created_at.desc())
             .limit(1)
         )
@@ -149,10 +168,7 @@ def _insert_decision(connection: Connection, record: DecisionRecord) -> None:
     connection.execute(
         insert(decision_records).values(
             id=record.id,
-            application_id=record.application_id,
-            artifact_version_id=record.artifact_version_id,
-            job_snapshot_id=record.job_snapshot_id,
-            job_analysis_id=record.job_analysis_id,
+            approved_revision_id=record.approved_revision_id,
             structured_json=record.structured,
             summary=record.summary,
             created_at=record.created_at,
@@ -187,16 +203,21 @@ def _latest_artifact_version(
 def _latest_decision(connection: Connection, application_id: str) -> dict[str, Any]:
     row = (
         connection.execute(
-            select(decision_records)
+            select(
+                *decision_records.c,
+                approved_revisions.c.application_id,
+                approved_revisions.c.job_snapshot_id,
+                approved_revisions.c.job_analysis_id,
+            )
             .select_from(
                 decision_records.join(
-                    artifact_versions,
-                    artifact_versions.c.id == decision_records.c.artifact_version_id,
+                    approved_revisions,
+                    approved_revisions.c.id == decision_records.c.approved_revision_id,
                 )
             )
-            .where(decision_records.c.application_id == application_id)
+            .where(approved_revisions.c.application_id == application_id)
             .order_by(
-                artifact_versions.c.version_number.desc(),
+                approved_revisions.c.version_number.desc(),
                 decision_records.c.created_at.desc(),
                 decision_records.c.id,
             )
@@ -302,7 +323,7 @@ def _record_validation(
 
 def _register_artifact_version(
     connection: Connection,
-    application_id: str | None,
+    application_id: str,
     artifact_type: str,
     logical_name: str,
     path: str,
@@ -316,8 +337,6 @@ def _register_artifact_version(
     emphasis: str | None = None,
     facts_version: str | None = None,
     metadata: dict[str, Any] | None = None,
-    approved_at: str | None = None,
-    submitted_at: str | None = None,
     artifact_version_id: str | None = None,
 ) -> str:
     version_id = artifact_version_id or new_id()
@@ -340,15 +359,10 @@ def _register_artifact_version(
             )
         if job_snapshot_id is not None and revision["job_snapshot_id"] != job_snapshot_id:
             raise LineageBroken("an artifact version's revision and job snapshot must match")
-    application_clause = (
-        artifacts.c.application_id.is_(None)
-        if application_id is None
-        else artifacts.c.application_id == application_id
-    )
     artifact = (
         connection.execute(
             select(artifacts.c.id).where(
-                application_clause,
+                artifacts.c.application_id == application_id,
                 artifacts.c.artifact_type == artifact_type,
                 artifacts.c.logical_name == logical_name,
             )
@@ -383,8 +397,6 @@ def _register_artifact_version(
             path=path,
             content_hash=content_hash,
             created_at=now,
-            approved_at=approved_at,
-            submitted_at=submitted_at,
             track=track,
             profile=profile,
             emphasis=emphasis,

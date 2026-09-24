@@ -7,7 +7,7 @@ worker reads explicit without a separate module for each interface.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 from ...domain.contracts.drafts import DraftDocument, WorkingDraft
 from ...domain.contracts.providers import ProviderTaskResult
@@ -100,12 +100,6 @@ class DraftLifecycleStore(Protocol):
     def approved_revisions(
         self, tx: ReadTransaction, application_id: str
     ) -> list[ApprovedRevision]: ...
-
-    def record_event(
-        self, tx: WriteTransaction, application_id: str, event_type: str, payload: dict[str, Any]
-    ) -> str: ...
-
-    def record_generation_run(self, tx: WriteTransaction, values: dict[str, Any]) -> str: ...
 
     def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
 

@@ -445,7 +445,6 @@ class RenderingService:
                     profile=draft.profile.value,
                     emphasis=draft.emphasis.value,
                     facts_version=prepared.knowledge.facts.version,
-                    approved_at=prepared.manifest_record["approved_at"],
                     metadata=metadata,
                     artifact_version_id=artifact_version_id,
                 )

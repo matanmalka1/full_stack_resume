@@ -117,9 +117,7 @@ def _create_application(
             application_id=application_id,
             company=company,
             target_role=target_role,
-            source_url=None,
             notes="",
-            source="manual",
             created_at=created_at,
         )
         snapshots.insert_initial_snapshot(
@@ -207,7 +205,7 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         "ui_density": "comfortable",
         "ui_text_size": "normal",
         "ui_theme": "system",
-        "updated_at": "2026",
+        "updated_at": "2026-01-01T00:00:00+00:00",
     }
     invalid_values = (
         {**valid, "singleton_id": 2},
@@ -316,10 +314,9 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
 
     `ready` and `preparing` are workflow projections, never stored statuses; the
     removed `cli` client is refused by the command and record contracts and by the
-    event CHECK; an internal submission must name its revision; and one artifact
-    backs at most one submission, because the table is immutable and a duplicate
-    would permanently say a CV was sent twice. An external submission may carry no
-    artifact at all, and repeated NULLs stay legal under the same constraint.
+    event CHECK; and an internal submission must name its revision. Multiple
+    immutable external submissions may reference the same artifact or carry no
+    artifact at all, matching the append-only recruitment-history contract.
     """
     for status in ("preparing", "ready"):
         with pytest.raises(ValueError):
@@ -369,7 +366,7 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
             job_snapshot_id=snapshot_id,
         )
         recruitment.insert_submission(
-            tx, "submission-1", app_id, "external", None, pdf_id, "2026-08-18T10:00:00+00:00", {}
+            tx, new_id(), app_id, "external", None, pdf_id, "2026-08-18T10:00:00+00:00", {}
         )
 
     def current_status_ready(tx) -> None:
@@ -390,30 +387,32 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
 
     def internal_without_revision(tx) -> None:
         recruitment.insert_submission(
-            tx, "fake-internal", app_id, "internal", None, pdf_id, "2026-08-18T11:00:00+00:00", {}
+            tx, new_id(), app_id, "internal", None, pdf_id, "2026-08-18T11:00:00+00:00", {}
         )
 
-    def second_submission_for_one_artifact(tx) -> None:
+    def repeat_external_submission_for_one_artifact(tx) -> None:
         recruitment.insert_submission(
-            tx, "duplicate", app_id, "external", None, pdf_id, "2026-08-18T12:00:00+00:00", {}
+            tx, new_id(), app_id, "external", None, pdf_id, "2026-08-18T12:00:00+00:00", {}
         )
 
     refused = [
         (current_status_ready, "ck_applications_current_status"),
         (cli_client_event, "ck_recruitment_events_client"),
         (internal_without_revision, None),
-        (second_submission_for_one_artifact, None),
     ]
     for write, constraint in refused:
         with pytest.raises(IntegrityError, match=constraint):
             with transactions.write() as tx:
                 write(tx)
 
+    with transactions.write() as tx:
+        repeat_external_submission_for_one_artifact(tx)
+
     for index in (1, 2):
         with transactions.write() as tx:
             recruitment.insert_submission(
                 tx,
-                f"submission-no-artifact-{index}",
+                new_id(),
                 app_id,
                 "external",
                 None,
@@ -423,7 +422,7 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
             )
     projections = SqlAlchemyApplicationProjectionReader(transactions)
     with transactions.read() as tx:
-        assert len(projections.submissions(tx, app_id)) == 3
+        assert len(projections.submissions(tx, app_id)) == 4
         application = SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)
     assert application["current_status"] == "saved"
     assert application["next_action"] is None
@@ -437,15 +436,14 @@ def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -
             connection = transactions.connection_for(tx, access="write")
             connection.execute(
                 insert(job_snapshots).values(
-                    id="missing-snapshot",
-                    application_id="missing-app",
+                    id=new_id(),
+                    application_id=new_id(),
                     version_number=1,
                     payload_path="artifacts/snapshots/x.txt",
                     source_hash="hash",
                     normalized_hash="normalized",
-                    captured_at="2026",
+                    captured_at="2026-01-01T00:00:00+00:00",
                     source_metadata_json={},
-                    content_hash="hash",
                 )
             )
 
@@ -525,11 +523,12 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
     transaction_manager,
     knowledge_store,
 ) -> None:
+    mutation_id = new_id()
     request = PrepareKnowledgeMutation(
-        mutation_id="mutation-1",
+        mutation_id=mutation_id,
         mutation_type="promote_fact",
         source_reference="base/sales.json",
-        staged_reference="temp/knowledge/mutation-1.json",
+        staged_reference=f"temp/knowledge/{mutation_id}.json",
         old_sha256="a" * 64,
         new_sha256="b" * 64,
         db_mutation_type="fact_event",
@@ -579,11 +578,12 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
     transaction_manager,
     knowledge_store,
 ) -> None:
+    mutation_id = new_id()
     request = PrepareKnowledgeMutation(
-        mutation_id="mutation-1",
+        mutation_id=mutation_id,
         mutation_type="attach_fact",
         source_reference="profiles/sales.json",
-        staged_reference="temp/knowledge/mutation-1.json",
+        staged_reference=f"temp/knowledge/{mutation_id}.json",
         old_sha256="a" * 64,
         new_sha256="b" * 64,
         db_mutation_type="fact_attachment",
@@ -604,8 +604,8 @@ def test_knowledge_mutation_quarantine_requires_reason_and_unique_db_identity(
                 PrepareKnowledgeMutation(
                     **{
                         **request.__dict__,
-                        "mutation_id": "mutation-2",
-                        "staged_reference": "temp/knowledge/mutation-2.json",
+                        "mutation_id": new_id(),
+                        "staged_reference": f"temp/knowledge/{new_id()}.json",
                     }
                 ),
             )
@@ -709,10 +709,11 @@ def test_immutability_triggers_refuse_real_repository_writes(
         application_id = application_projection_reader.applications(tx)[0]["id"]
     transactions = transaction_manager
     recruitment = SqlAlchemyRecruitmentRepository(transactions)
+    external_submission_id = new_id()
     with transactions.write() as tx:
         recruitment.insert_submission(
             tx,
-            "external-submission",
+            external_submission_id,
             application_id,
             "external",
             None,
@@ -724,11 +725,11 @@ def test_immutability_triggers_refuse_real_repository_writes(
         audit_log.insert_audit(
             tx,
             AuditRecord(
-                id="audit-record",
+                id=new_id(),
                 application_id=application_id,
                 action="record_external_submission",
                 entity_type="submission",
-                entity_id="external-submission",
+                entity_id=external_submission_id,
                 actor_type="user",
                 client="web",
                 occurred_at="2026-08-19T10:00:00+00:00",
@@ -777,8 +778,6 @@ def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
             "source_url",
             "captured_at",
             "source_metadata_json",
-            "content_hash",
-            "prior_snapshot_id",
         }
     analysis = analysis_document()
     analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
@@ -938,7 +937,7 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
 
     with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
         with database_engine.begin() as connection:
-            insert_draft(connection, "second", active=True)
+            insert_draft(connection, new_id(), active=True)
 
     with database_engine.begin() as connection:
         connection.execute(
@@ -946,7 +945,7 @@ def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
             .where(working_drafts.c.application_id == app_id)
             .values(active=False)
         )
-        insert_draft(connection, "third", active=True)
+        insert_draft(connection, new_id(), active=True)
     with database_engine.connect() as connection:
         assert (
             connection.execute(

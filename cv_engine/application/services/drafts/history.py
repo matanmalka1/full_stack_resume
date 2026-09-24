@@ -161,16 +161,6 @@ class DraftHistoryService:
                     },
                 ),
             )
-            self.drafts.record_event(
-                tx,
-                working.application_id,
-                "working_draft_archived",
-                {
-                    "working_draft_id": working.id,
-                    "edit_version": working.edit_version,
-                    "artifact_version_id": artifact_version_id,
-                },
-            )
         return ArchivedWorkingDraftResult(
             application_id=working.application_id,
             working_draft_id=working.id,

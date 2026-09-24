@@ -80,11 +80,9 @@ class ApplicationResponse(HttpSchema):
     fit_score: float | None = None
     current_status: str
     terminal_outcome: str | None = None
-    last_contact_date: str | None = None
     next_action: str | None = None
     next_action_date: str | None = None
     notes: str
-    source: str
     created_at: str
     updated_at: str
     deleted_at: str | None = None
@@ -155,8 +153,7 @@ class JobSnapshotResponse(HttpSchema):
     source_url: str | None = None
     captured_at: str
     source_metadata: dict[str, Any]
-    content_hash: str
-    prior_snapshot_id: str | None = None
+    source_hash: str
 
 
 class GapResponse(HttpSchema):
@@ -238,8 +235,6 @@ class ArtifactVersionResponse(HttpSchema):
     lifecycle_status: str
     content_hash: str
     created_at: str
-    approved_at: str | None = None
-    submitted_at: str | None = None
     track: str | None = None
     profile: str | None = None
     emphasis: str | None = None
@@ -254,8 +249,8 @@ class ArtifactVersionsResponse(HttpSchema):
 
 class DecisionRecordResponse(HttpSchema):
     id: str
+    approved_revision_id: str
     application_id: str
-    artifact_version_id: str | None = None
     job_snapshot_id: str
     job_analysis_id: str
     structured: dict[str, Any]

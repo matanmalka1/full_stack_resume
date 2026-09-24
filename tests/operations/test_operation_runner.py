@@ -531,12 +531,13 @@ def test_startup_interrupts_work_held_by_previous_runners(
 
 def test_runner_activates_outputs_and_completes_in_one_activation_transaction(services) -> None:
     operation = _operation_for_runner(services)
+    output_id = new_id()
     prepared = PreparedOperation(
         value={"proposal": "validated"},
         outputs=(
             OperationOutputReference(
                 output_type="provider_response",
-                output_id="provider-artifact-id",
+                output_id=output_id,
                 active=False,
             ),
         ),
@@ -551,9 +552,7 @@ def test_runner_activates_outputs_and_completes_in_one_activation_transaction(se
 
     assert result.status is OperationStatus.SUCCEEDED
     assert result.attempts_completed == 1
-    assert [(item.output_id, item.active) for item in result.outputs] == [
-        ("provider-artifact-id", True)
-    ]
+    assert [(item.output_id, item.active) for item in result.outputs] == [(output_id, True)]
 
 
 def test_source_changed_is_checked_before_execution_and_again_before_activation(services) -> None:

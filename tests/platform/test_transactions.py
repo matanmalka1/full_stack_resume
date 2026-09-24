@@ -13,6 +13,7 @@ from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.tables import applications
 from cv_engine.infrastructure.providers import OpenAIResponsesProvider
+from cv_engine.util import new_id
 
 
 def _application(application_id: str) -> dict[str, str]:
@@ -22,7 +23,6 @@ def _application(application_id: str) -> dict[str, str]:
         "target_role": "Engineer",
         "current_status": "saved",
         "notes": "",
-        "source": "manual",
         "created_at": "2026-09-17T00:00:00+00:00",
         "updated_at": "2026-09-17T00:00:00+00:00",
     }
@@ -31,9 +31,11 @@ def _application(application_id: str) -> dict[str, str]:
 def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_engine) -> None:
     transactions = SqlAlchemyTransactionManager(database_engine)
 
+    committed_id = new_id()
+    rolled_back_id = new_id()
     with transactions.write() as committed:
         connection = transactions.connection_for(committed, access="write")
-        connection.execute(insert(applications).values(**_application("committed")))
+        connection.execute(insert(applications).values(**_application(committed_id)))
         assert committed.active
 
     assert not committed.active
@@ -42,7 +44,7 @@ def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_en
     with pytest.raises(RuntimeError, match="stop"):
         with transactions.write() as rolled_back:
             transactions.connection_for(rolled_back, access="write").execute(
-                insert(applications).values(**_application("rolled-back"))
+                insert(applications).values(**_application(rolled_back_id))
             )
             raise RuntimeError("stop")
 
@@ -55,9 +57,9 @@ def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_en
                 .select_from(applications)
                 .where(applications.c.id == application_id)
             ).scalar_one()
-            for application_id in ("committed", "rolled-back")
+            for application_id in (committed_id, rolled_back_id)
         }
-    assert counts == {"committed": 1, "rolled-back": 0}
+    assert counts == {committed_id: 1, rolled_back_id: 0}
 
 
 def test_read_closed_and_foreign_tokens_are_rejected(database_engine) -> None:

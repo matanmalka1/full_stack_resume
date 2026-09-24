@@ -102,7 +102,6 @@ class ApprovalCommitter:
             profile=p.profile,
             emphasis=p.emphasis,
             facts_version=p.facts_version,
-            approved_at=p.approved_at,
         )
         manifest_id = self.catalog.register_artifact_version(
             tx,
@@ -118,16 +117,12 @@ class ApprovalCommitter:
             profile=p.profile,
             emphasis=p.emphasis,
             facts_version=p.facts_version,
-            approved_at=p.approved_at,
         )
         self.decisions.insert_decision(
             tx,
             DecisionRecord(
                 id=p.decision_id,
-                application_id=p.application_id,
-                artifact_version_id=markdown_id,
-                job_snapshot_id=p.job_snapshot_id,
-                job_analysis_id=p.job_analysis_id,
+                approved_revision_id=revision.id,
                 structured=json.loads(p.decision_json),
                 summary=p.decision_summary,
                 created_at=p.approved_at,
@@ -149,16 +144,6 @@ class ApprovalCommitter:
                     "validation_run_id": p.validation_run_id,
                 },
             ),
-        )
-        self.drafts.record_event(
-            tx,
-            p.application_id,
-            "draft_approved",
-            {
-                "approved_revision_id": revision.id,
-                "decision_record_id": p.decision_id,
-                "version": revision.version_number,
-            },
         )
         result = ApprovalResult(
             application_id=p.application_id,

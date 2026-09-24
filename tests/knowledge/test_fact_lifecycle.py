@@ -302,7 +302,7 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
     setup = drafted_application("Quarantine Co")
     services, application_id = setup
     request = PrepareKnowledgeMutation(
-        mutation_id="quarantined-mutation",
+        mutation_id=str(uuid.uuid4()),
         mutation_type="promote_fact",
         source_reference="base/sales.json",
         staged_reference="tmp/knowledge/quarantined-mutation/new",

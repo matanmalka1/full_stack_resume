@@ -41,13 +41,10 @@ class ApprovedRevision(StrictModel):
 
 
 class DecisionRecord(StrictModel):
-    """The immutable approval decision stored beside an approved artifact."""
+    """The immutable approval decision stored beside its approved revision."""
 
     id: str
-    application_id: str
-    artifact_version_id: str
-    job_snapshot_id: str
-    job_analysis_id: str
+    approved_revision_id: str
     structured: dict[str, Any]
     summary: str
     created_at: str

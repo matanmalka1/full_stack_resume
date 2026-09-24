@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from .... import __version__
 from ....domain.draft_markdown import serialize_markdown
 from ....domain.validation import validate_draft as run_draft_validation
 from ...commands import DraftCommand, DraftResult, RegenerationResult
@@ -8,7 +7,7 @@ from ...ports.analysis_plans import AnalysisPlanStore
 from ...ports.drafts import DraftLifecycleStore
 from ...ports.transactions import WriteTransaction
 from ...ports.validation_store import ValidationStore
-from .inputs import DeterministicRun, PreparedDraft, PreparedRegeneration, validation_lineage
+from .inputs import PreparedDraft, PreparedRegeneration, validation_lineage
 
 
 class DraftActivation:
@@ -57,30 +56,6 @@ class DraftActivation:
             report,
             lineage=self._lineage(working, knowledge),
         )
-        run_context = (
-            prepared.evidence.provenance.context
-            if prepared.evidence is not None
-            else self._deterministic_run_context()
-        )
-        self.drafts.record_generation_run(
-            tx,
-            {
-                "application_id": command.application_id,
-                "engine_version": __version__,
-                "profile_version": profiles.version,
-                "rendering_rules_version": f"1.0.0+presentations.{presentation_rules.version[:12]}"
-                if presentation_rules is not None
-                else "1.0.0",
-                "facts_version": facts.version,
-                "ai_provider": run_context.provider,
-                "ai_model": run_context.model,
-                "task_contract_version": run_context.task_contract_version,
-                "prompt_version": run_context.prompt_version,
-                "job_analysis_version": analysis.analysis_version,
-                "instruction_overrides": analysis.user_override,
-                "status": "completed" if report.passed else "validation-failed",
-            },
-        )
         return DraftResult(
             application_id=command.application_id,
             job_analysis_id=command.job_analysis_id,
@@ -89,10 +64,6 @@ class DraftActivation:
             edit_version=working.edit_version,
             validation=report,
         )
-
-    @staticmethod
-    def _deterministic_run_context() -> DeterministicRun:
-        return DeterministicRun()
 
     def activate_regeneration(
         self, tx: WriteTransaction, prepared: PreparedRegeneration

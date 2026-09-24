@@ -2,29 +2,29 @@
 
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, String, Table, Text, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, Table, Text, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-from ._helpers import sequence_column, sql_values
+from ._helpers import IsoTimestamp, sequence_column, sql_values
 from ._metadata import metadata
 from .shared import RECRUITMENT_STATUSES
 
 recruitment_events = Table(
     "recruitment_events",
     metadata,
-    Column("id", String, primary_key=True),
+    Column("id", UUID(as_uuid=False), primary_key=True),
     sequence_column("recruitment_events"),
-    Column("application_id", String, ForeignKey("applications.id"), nullable=False),
+    Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id"), nullable=False),
     Column("event_type", Text, nullable=False),
     Column("from_status", Text),
     Column("to_status", Text),
-    Column("corrects_event_id", String, ForeignKey("recruitment_events.id")),
+    Column("corrects_event_id", UUID(as_uuid=False), ForeignKey("recruitment_events.id")),
     Column("reason", Text, nullable=False, server_default=text("''")),
     Column("actor_type", Text, nullable=False),
     Column("client", Text, nullable=False),
-    Column("occurred_at", Text, nullable=False),
+    Column("occurred_at", IsoTimestamp(), nullable=False),
     Column("payload_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
-    Column("created_at", Text, nullable=False),
+    Column("created_at", IsoTimestamp(), nullable=False),
     CheckConstraint(
         "event_type IN ('status_transition', 'status_correction', 'next_action')",
         name="event_type",
@@ -59,13 +59,13 @@ Index(
 submissions = Table(
     "submissions",
     metadata,
-    Column("id", String, primary_key=True),
+    Column("id", UUID(as_uuid=False), primary_key=True),
     sequence_column("submissions"),
-    Column("application_id", String, ForeignKey("applications.id"), nullable=False),
+    Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id"), nullable=False),
     Column("submission_type", Text, nullable=False),
-    Column("approved_revision_id", String, ForeignKey("approved_revisions.id")),
-    Column("artifact_version_id", String, ForeignKey("artifact_versions.id"), unique=True),
-    Column("submitted_at", Text, nullable=False),
+    Column("approved_revision_id", UUID(as_uuid=False), ForeignKey("approved_revisions.id")),
+    Column("artifact_version_id", UUID(as_uuid=False), ForeignKey("artifact_versions.id")),
+    Column("submitted_at", IsoTimestamp(), nullable=False),
     Column("metadata_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
     CheckConstraint("submission_type IN ('internal', 'external')", name="submission_type"),
     CheckConstraint(

@@ -15,7 +15,7 @@ from cv_engine.application.errors import (
     UnknownRecord,
 )
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from cv_engine.util import sha256_file, sha256_text
+from cv_engine.util import new_id, sha256_file, sha256_text
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
@@ -105,7 +105,6 @@ def test_snapshot_write_is_exact_atomic_and_refuses_repeat(
     assert services.payloads.read_snapshot(latest["payload_path"], latest["source_hash"]) == (
         replacement_text
     )
-    assert latest["prior_snapshot_id"] == created.job_snapshot_id
     assert latest["version_number"] == 2
     detail = services.queries.application_detail(created.application_id)
     assert detail.latest_snapshot.id == replacement.job_snapshot_id
@@ -254,7 +253,7 @@ def test_application_http_create_read_snapshot_and_close_sequence(
     final = api.get(f"{API_PREFIX}/applications/{application_id}")
     assert final.status_code == 200
     assert final.json()["latest_snapshot"]["id"] == replacement_id
-    assert final.json()["latest_snapshot"]["prior_snapshot_id"] == snapshot_id
+    assert final.json()["latest_snapshot"]["version_number"] == 2
     assert final.json()["recruitment_status"] == "closed"
 
     # delete_application is orthogonal to RecruitmentStatus and callable
@@ -555,7 +554,7 @@ def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_con
     assert "payload_path" not in history["items"][0]
     with transaction_manager.read() as tx:
         assert application_projection_reader.snapshots(tx, first.application_id) == records_before
-    assert api.get(f"{API_PREFIX}/applications/unknown/job-snapshots").status_code == 404
+    assert api.get(f"{API_PREFIX}/applications/{new_id()}/job-snapshots").status_code == 404
     # Corrupt only the isolated fixture's historical payload: never trust or
     # reconstruct it from a live posting, and keep the other version readable.
     record = records_before[0]

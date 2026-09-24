@@ -16,9 +16,7 @@ class IntakeApplicationStore(Protocol):
         application_id: str,
         company: str,
         target_role: str,
-        source_url: str | None,
         notes: str,
-        source: str,
         created_at: str,
     ) -> None: ...
 
@@ -38,8 +36,8 @@ class IntakeApplicationStore(Protocol):
 class JobSnapshotStore(Protocol):
     def duplicate_application_inputs(self, tx: ReadTransaction) -> list[dict[str, Any]]: ...
 
-    def snapshot_for_content_hash(
-        self, tx: ReadTransaction, application_id: str, content_hash: str
+    def snapshot_for_source_hash(
+        self, tx: ReadTransaction, application_id: str, source_hash: str
     ) -> dict[str, Any] | None: ...
 
     def insert_initial_snapshot(

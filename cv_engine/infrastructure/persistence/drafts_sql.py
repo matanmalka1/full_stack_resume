@@ -20,8 +20,6 @@ from ...util import new_id, utc_now
 from .draft_selection_sql import _record, _require_lineage, _update_working_draft
 from .tables import (
     approved_revisions,
-    draft_lifecycle_events,
-    generation_runs,
     job_analyses,
     selection_plans,
     validation_runs,
@@ -462,42 +460,3 @@ def _lock_working_draft(connection: Connection, working_draft_id: str) -> Workin
     if row is None:
         raise UnknownRecord(f"no working draft {working_draft_id}")
     return _record(row)
-
-
-def _record_event(
-    connection: Connection, application_id: str, event_type: str, payload: dict[str, Any]
-) -> str:
-    event_id = new_id()
-    connection.execute(
-        insert(draft_lifecycle_events).values(
-            id=event_id,
-            application_id=application_id,
-            event_type=event_type,
-            payload_json=payload,
-            created_at=utc_now(),
-        )
-    )
-    return event_id
-
-
-def _record_generation_run(connection: Connection, values: dict[str, Any]) -> str:
-    run_id = values.get("id") or new_id()
-    connection.execute(
-        insert(generation_runs).values(
-            id=run_id,
-            application_id=values["application_id"],
-            created_at=values.get("created_at", utc_now()),
-            engine_version=values["engine_version"],
-            profile_version=values["profile_version"],
-            rendering_rules_version=values["rendering_rules_version"],
-            facts_version=values["facts_version"],
-            ai_provider=values["ai_provider"],
-            ai_model=values["ai_model"],
-            task_contract_version=values["task_contract_version"],
-            prompt_version=values["prompt_version"],
-            job_analysis_version=values["job_analysis_version"],
-            instruction_overrides_json=values.get("instruction_overrides", {}),
-            status=values.get("status", "completed"),
-        )
-    )
-    return run_id

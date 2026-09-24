@@ -173,9 +173,7 @@ class ApplicationService:
                     application_id=application_id,
                     company=command.company,
                     target_role=command.target_role,
-                    source_url=command.source_url,
                     notes="",
-                    source="manual",
                     created_at=now,
                 )
                 self._snapshots.insert_initial_snapshot(
@@ -220,7 +218,7 @@ class ApplicationService:
                     self._applications.get_application(tx, command.application_id)
                 except UnknownRecord as exc:
                     raise UnknownRecord(f"unknown application: {command.application_id}") from exc
-                duplicate = self._snapshots.snapshot_for_content_hash(
+                duplicate = self._snapshots.snapshot_for_source_hash(
                     tx, command.application_id, source_hash
                 )
             if duplicate is not None:
@@ -233,7 +231,7 @@ class ApplicationService:
             with self._transactions.write() as tx:
                 self._applications.get_application(tx, command.application_id)
                 if (
-                    self._snapshots.snapshot_for_content_hash(
+                    self._snapshots.snapshot_for_source_hash(
                         tx, command.application_id, source_hash
                     )
                     is not None

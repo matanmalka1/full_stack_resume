@@ -23,9 +23,7 @@ class SqlAlchemyApplicationStore:
         application_id: str,
         company: str,
         target_role: str,
-        source_url: str | None,
         notes: str,
-        source: str,
         created_at: str,
     ) -> None:
         self._transactions.connection_for(tx, access="write").execute(
@@ -33,10 +31,8 @@ class SqlAlchemyApplicationStore:
                 id=application_id,
                 company=company.strip(),
                 target_role=target_role.strip(),
-                source_url=source_url,
                 current_status="saved",
                 notes=notes,
-                source=source,
                 created_at=created_at,
                 updated_at=created_at,
             )

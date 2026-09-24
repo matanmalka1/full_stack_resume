@@ -13,36 +13,41 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-from ._helpers import sequence_column
+from ._helpers import IsoTimestamp, sequence_column
 from ._metadata import metadata
 
 fact_events = Table(
     "fact_events",
     metadata,
-    Column("id", String, primary_key=True),
+    Column("id", UUID(as_uuid=False), primary_key=True),
     sequence_column("fact_events"),
     Column("fact_id", String, nullable=False),
     Column("source_file", Text, nullable=False),
     Column("event_type", Text, nullable=False),
     Column("from_status", Text),
     Column("to_status", Text, nullable=False),
-    Column("application_id", String, ForeignKey("applications.id")),
+    Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id")),
     Column("claim_id", String),
     Column("reason", Text, nullable=False, server_default=text("''")),
     Column("fact_json", JSONB, nullable=False),
     Column("fact_hash", Text, nullable=False),
     Column("facts_version", Text, nullable=False),
     Column("lifecycle_version", Text, nullable=False),
-    Column("created_at", Text, nullable=False),
+    Column("created_at", IsoTimestamp(), nullable=False),
 )
-Index("idx_fact_events_fact", fact_events.c.fact_id)
+Index(
+    "idx_fact_events_fact",
+    fact_events.c.fact_id,
+    fact_events.c.created_at,
+    fact_events.c.seq,
+)
 
 knowledge_mutation_journal = Table(
     "knowledge_mutation_journal",
     metadata,
-    Column("id", String, primary_key=True),
+    Column("id", UUID(as_uuid=False), primary_key=True),
     Column("mutation_type", Text, nullable=False),
     Column("state", Text, nullable=False),
     Column("source_reference", Text, nullable=False),
@@ -53,9 +58,9 @@ knowledge_mutation_journal = Table(
     Column("db_mutation_id", String, nullable=False),
     Column("db_mutation_json", JSONB, nullable=False),
     Column("recovery_strategy", Text, nullable=False),
-    Column("prepared_at", Text, nullable=False),
-    Column("committed_at", Text),
-    Column("quarantined_at", Text),
+    Column("prepared_at", IsoTimestamp(), nullable=False),
+    Column("committed_at", IsoTimestamp()),
+    Column("quarantined_at", IsoTimestamp()),
     Column("quarantine_reason", Text),
     CheckConstraint("length(trim(mutation_type)) > 0", name="mutation_type_nonempty"),
     CheckConstraint(

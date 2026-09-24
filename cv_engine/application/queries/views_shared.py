@@ -40,11 +40,9 @@ class ApplicationView(BoundaryDTO):
     fit_score: float | None = None
     current_status: str
     terminal_outcome: str | None = None
-    last_contact_date: str | None = None
     next_action: str | None = None
     next_action_date: str | None = None
     notes: str = ""
-    source: str = "manual"
     created_at: str
     updated_at: str
     deleted_at: str | None = None

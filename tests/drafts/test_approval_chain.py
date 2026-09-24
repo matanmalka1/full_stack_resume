@@ -404,7 +404,7 @@ def test_latest_decision_uses_revision_order_when_approvals_share_a_timestamp(
     record's value mean anything: it is read back while both the latest analysis
     and the newest revision say the other language.
     """
-    fixed_approval_time = "2026-08-23T12:34:56Z"
+    fixed_approval_time = "2026-08-23T12:34:56+00:00"
     monkeypatch.setattr(
         "cv_engine.application.services.drafts.approval.utc_now", lambda: fixed_approval_time
     )
@@ -507,27 +507,12 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
     monkeypatch.setattr(SqlAlchemyDecisionRepository, "insert_decision", capture_insert)
     approved = approve_active_draft(services, owner.application_id)
     with transaction_manager.read() as tx:
-        owner_markdown = SqlAlchemyArtifactCatalog(transaction_manager).latest_artifact_version(
-            tx, owner.application_id, "resume_markdown", "approved"
-        )
-    with transaction_manager.read() as tx:
         stranger_snapshot_id = SqlAlchemyApplicationProjectionReader(
             transaction_manager
         ).latest_snapshot(tx, stranger.application_id)["id"]
-    with transaction_manager.read() as tx:
-        owner_snapshot_id = SqlAlchemyApplicationProjectionReader(
-            transaction_manager
-        ).latest_snapshot(tx, owner.application_id)["id"]
-    with transaction_manager.read() as tx:
-        owner_analysis_id = SqlAlchemyApplicationProjectionReader(transaction_manager).analyses(
-            tx, owner.application_id
-        )[-1]["id"]
     assert len(inserted) == 1
     decision = inserted[0]
-    assert decision.application_id == owner.application_id
-    assert decision.artifact_version_id == owner_markdown["id"]
-    assert decision.job_snapshot_id == owner_snapshot_id
-    assert decision.job_analysis_id == owner_analysis_id
+    assert decision.approved_revision_id == approved.revision_id
     assert decision.id == approved.decision_record_id
     before = persisted_counts(database_engine)
 
@@ -544,8 +529,8 @@ def test_approval_builds_typed_decision_and_artifacts_cannot_cross_applications(
         )
 
     assert persisted_counts(database_engine) == before
-    assert [row["application_id"] for row in _rows(database_engine, decision_records)] == [
-        owner.application_id
+    assert [row["approved_revision_id"] for row in _rows(database_engine, decision_records)] == [
+        approved.revision_id
     ]
 
 
