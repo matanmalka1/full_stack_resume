@@ -87,11 +87,11 @@ export const NewApplicationPage = () => {
       description="הזנת פרטי המשרה שומרת עותק של המודעה ומתחילה לבדוק עד כמה הניסיון והכישורים שלך מתאימים לדרישות התפקיד."
       stage="intake"
     >
-      {/* The wizard frame carries the spine; the single-column form takes a shorter reading
-          measure inside it so long fields remain easy to scan. Aligned to the heading's
-          edge, not centred: with the spine above rather than beside it, a centred form sat
-          inset from everything else on the step. */}
-      <div className="w-full max-w-3xl">
+      {/* The form takes the wizard's own measure, the same width as the spine and heading
+          above it. A shorter inner measure left the card ending a third of the way short of
+          every edge around it, so the step read as two misaligned columns; the job-text
+          field, the one long input here, is also the one that gains from the width. */}
+      <div className="w-full">
         <ApplicationIntakeForm
           duplicates={submission.duplicateMatches}
           draftStatus={intakeDraft.status}

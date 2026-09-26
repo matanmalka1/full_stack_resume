@@ -17,7 +17,11 @@ interface SwitchProps {
    size a 16px box does not.
 
    The knob travels on the logical axis (`start`), so the shell's RTL direction moves it
-   toward the reading end rather than to a hard-coded left. */
+   toward the reading end rather than to a hard-coded left.
+
+   Off, the knob is drawn in the muted text colour rather than in the surface colour: a
+   white knob on a pale track sat far below the 3:1 non-text contrast a control needs, so
+   an unchecked switch read as a blank pill rather than as a control in a state. */
 export const Switch = ({ checked, children, description, disabled = false, onChange }: SwitchProps) => {
   const id = useId();
   const labelId = `${id}-label`;
@@ -41,8 +45,8 @@ export const Switch = ({ checked, children, description, disabled = false, onCha
         <span
           aria-hidden="true"
           className={cx(
-            "absolute size-4 rounded-pill bg-cv-surface shadow-surface transition-[inset-inline-start] duration-200",
-            checked ? "start-6" : "start-1",
+            "absolute size-4 rounded-pill shadow-surface transition-[inset-inline-start,background-color] duration-200",
+            checked ? "start-6 bg-cv-surface" : "start-1 bg-cv-text-muted",
           )}
         />
       </button>
