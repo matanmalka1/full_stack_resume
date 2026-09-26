@@ -179,6 +179,10 @@ export const ApplicationPage = () => {
       <OperationOverlay
         awaitingRecord={awaitingRecord}
         continuation={continuation}
+        /* While the analysis runs this step has no body to show - `PreparationView` waits
+           for its result - so the run is reported where that body will be, not in a corner
+           over an empty page. */
+        inline={viewState === "processing"}
         onQueued={watch}
         operation={watched}
         pending={pending}
@@ -259,7 +263,7 @@ export const ApplicationPage = () => {
                        second disclosure the reader has no reason to discover. */
                     <JobSnapshotPanel detail={detail} operationLive={operationLive} />
                   ) : (
-                    <Disclosure summary="צפייה בנוסח המשרה שנשמר">
+                    <Disclosure flush summary="צפייה בנוסח המשרה שנשמר">
                       <div className="pt-2">
                         <JobSnapshotPanel detail={detail} operationLive={operationLive} />
                       </div>

@@ -17,7 +17,7 @@ const openPalette = async () => {
     vi.fn(() => Promise.resolve(json({ items: [], total: 0, limit: 8, offset: 0 }))),
   );
   renderRoute("/", "/", <GlobalSearch />);
-  fireEvent.click(screen.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" }));
+  fireEvent.click(screen.getByRole("button", { name: "מעבר מהיר למועמדות" }));
   const field = await screen.findByRole("combobox");
   return { dialog: field.closest("dialog") as HTMLDialogElement, field };
 };

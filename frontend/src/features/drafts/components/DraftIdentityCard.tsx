@@ -21,7 +21,6 @@ export const DraftIdentityCard = ({ actions, draft, facts }: DraftIdentityCardPr
     className="flex flex-col gap-4 bg-cv-surface p-4 shadow-surface sm:p-5"
   >
     <SectionHeader
-      actions={<span className="text-support text-cv-text-muted">מבוססים על הקשר המועמד</span>}
       align="center"
       gap="tight"
       headingId="draft-structure-heading"
@@ -29,6 +28,10 @@ export const DraftIdentityCard = ({ actions, draft, facts }: DraftIdentityCardPr
       iconPresentation="inline"
       title="כותרת ופרטי קשר"
     />
+    {/* Said once for every contact line, rather than repeated under each of them. */}
+    <p className="-mt-2 text-support leading-6 text-cv-text-muted">
+      פרטי הקשר נבנים מהפרופיל שלך ולא מבחירת העובדות, ולכן הם חוזרים בכל בנייה מחדש ואי אפשר להסיר אותם כאן.
+    </p>
 
     <DraftClaimList
       actions={actions}

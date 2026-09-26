@@ -24,7 +24,7 @@ interface WorkflowStepsRailProps {
    widths this screen is read at. Nothing here is positioned outside the box, so the corners
    survive without it. */
 const railClasses =
-  "w-full min-w-0 rounded-control border border-cv-border bg-cv-surface px-3 py-3 shadow-surface sm:px-4 lg:py-4";
+  "w-full min-w-0 rounded-control border border-cv-border bg-cv-surface px-3 py-3 shadow-surface sm:px-4";
 
 const stepMarkClasses: Record<WorkflowStepState, string> = {
   complete: "border-cv-success/25 bg-cv-success-soft text-cv-success",
@@ -100,10 +100,10 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
   </span>
 );
 
-/* The workflow's route-level axis. `PageShell` places it beside the active stage content
-   on wide screens; here it owns the large marks, labels and continuous vertical line.
-   On narrow screens the same landmark stacks above the content without changing its
-   order or accessible description. */
+/* The workflow's route-level axis: one row of marks across the top of the step, above
+   its heading, at every width. It used to turn into a column beside the content from the
+   large breakpoint, which reserved that column for the rail's own height - a hole under
+   a short step's heading, and on the draft step a narrower editor for the whole page. */
 export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
   const current = steps.find((step) => step.state === "current");
   const position = current === undefined ? null : steps.indexOf(current) + 1;
@@ -140,7 +140,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
       : `שלב ${position} מתוך ${steps.length}`;
 
   const content = (
-    <div className="flex flex-col gap-2 lg:gap-4">
+    <div className="flex flex-col gap-2">
       {/* Decorative: the nav's own `aria-label` already states the label and the
           position in words, so this repeats it for sighted readers only. */}
       <div aria-hidden="true" className="flex shrink-0 flex-wrap items-baseline gap-x-2">
@@ -160,12 +160,11 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
           scrollbar, and the spine's whole job is to say where the work stands across all
           four.
 
-          From the large breakpoint up the steps run down the side of the content. Below
-          it - a phone, a split window - they run across its top as one row of marks joined
-          by connectors that absorb the spare width, with only the open step labelled, so
-          all four stay visible in one short band above the heading. */}
+          One row of marks joined by connectors that absorb the spare width. Below the
+          large breakpoint - a phone, a split window - only the open step keeps its label,
+          so all four stay visible in one short band above the heading. */}
       <div className="min-w-0">
-        <div className="flex items-center lg:flex-col lg:items-stretch">
+        <div className="flex items-center">
           {steps.map((step, index) => {
             const body = <StepBody index={index} step={step} />;
             const next = steps[index + 1];
@@ -176,7 +175,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                   <div
                     aria-hidden="true"
                     className={cx(
-                      "flex shrink-0 rounded-control border border-transparent lg:w-full",
+                      "flex shrink-0 rounded-control border border-transparent",
                       step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
                     )}
                   >
@@ -191,7 +190,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                         : `${hereIndex !== -1 && index < hereIndex ? "חזרה" : "מעבר"} לשלב ${step.label}`
                     }
                     className={cx(
-                      "group flex min-h-11 shrink-0 items-center rounded-control border border-transparent lg:min-h-12 lg:w-full",
+                      "group flex min-h-11 shrink-0 items-center rounded-control border border-transparent",
                       "transition-[background-color,border-color,box-shadow] duration-200",
                       "hover:border-cv-border hover:bg-cv-surface-muted",
                       step.here === true && "border-cv-accent/25 bg-cv-accent-soft",
@@ -203,13 +202,7 @@ export const WorkflowStepsRail = ({ label, steps }: WorkflowStepsRailProps) => {
                 )}
 
                 {next === undefined ? null : (
-                  <span
-                    aria-hidden="true"
-                    className={cx(
-                      "h-px min-w-3 flex-1 lg:ms-[1.45rem] lg:h-5 lg:w-px lg:min-w-0 lg:flex-none lg:shrink-0",
-                      connectorClasses[next.state],
-                    )}
-                  />
+                  <span aria-hidden="true" className={cx("h-px min-w-3 flex-1", connectorClasses[next.state])} />
                 )}
               </Fragment>
             );

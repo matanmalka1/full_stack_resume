@@ -27,10 +27,6 @@ interface DraftClaimRowProps {
    the lines they acted on. */
 const rowActionClasses = "min-h-9 px-2";
 
-/* Fixed rather than shrink-to-fit, so every row's status lands in the same column; wide
-   enough for the longest backend label, "מורכב מכמה עובדות". */
-const marginClasses = "w-full shrink-0 pt-0.5 sm:w-36";
-
 /* One line of the draft: status, text, backing facts, actions. Computes nothing about the
    draft itself - removability and linked facts are the list's answers. */
 export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, removal }: DraftClaimRowProps) => {
@@ -66,17 +62,98 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
     ) ?? [],
   );
 
+  const rowActions = (
+    <div className="flex shrink-0 items-center gap-1">
+      {move === undefined ? null : (
+        <>
+          <Button
+            aria-label="הזזת השורה למעלה"
+            className={rowActionClasses}
+            disabled={actions.locked || !move.canMoveUp}
+            onClick={() => move.onMove(-1)}
+            title="הזזת השורה למעלה"
+            variant="ghost"
+          >
+            <ArrowUp aria-hidden="true" className="size-icon-md text-cv-text-muted" />
+          </Button>
+          <Button
+            aria-label="הזזת השורה למטה"
+            className={rowActionClasses}
+            disabled={actions.locked || !move.canMoveDown}
+            onClick={() => move.onMove(1)}
+            title="הזזת השורה למטה"
+            variant="ghost"
+          >
+            <ArrowDown aria-hidden="true" className="size-icon-md text-cv-text-muted" />
+          </Button>
+        </>
+      )}
+      <Button
+        aria-label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
+        className={rowActionClasses}
+        disabled={actions.locked && !editing}
+        onClick={() => {
+          if (editing) {
+            actions.onCommit();
+            setEditOriginal(null);
+          } else {
+            setEditOriginal(text);
+          }
+          setEditing(!editing);
+        }}
+        title={editing ? "סיום עריכת השורה" : "עריכת השורה"}
+        variant="ghost"
+      >
+        {editing ? (
+          <Check aria-hidden="true" className="size-icon-md text-cv-accent" />
+        ) : (
+          <Pencil aria-hidden="true" className="size-icon-md text-cv-text-muted" />
+        )}
+      </Button>
+      <Button
+        aria-label="יצירה מחדש של השורה"
+        className={rowActionClasses}
+        disabled={actions.regenerationDisabled}
+        onClick={() => actions.onRegenerate(claim)}
+        title="יצירה מחדש של השורה"
+        variant="ghost"
+      >
+        <RefreshCw aria-hidden="true" className="size-icon-md text-cv-text-muted" />
+      </Button>
+      {removal.route === "none" ? null : (
+        <Button
+          aria-label="הסרת השורה"
+          className={rowActionClasses}
+          disabled={actions.locked}
+          onClick={() => setConfirmingRemoval(true)}
+          title={
+            removal.route === "selection"
+              ? "הסרת השורה מחריגה את העובדה שמאחוריה ובונה את הטיוטה מחדש בלעדיה."
+              : "הסרת השורה"
+          }
+          variant="ghost"
+        >
+          <Trash2 aria-hidden="true" className="size-icon-md text-cv-text-muted" />
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <li
       id={`draft-claim-${claim.claim_id}`}
       tabIndex={-1}
-      className="scroll-mt-24 flex flex-wrap items-start gap-x-3 gap-y-1.5 py-3 first:pt-0"
+      className="scroll-mt-24 flex flex-col gap-1.5 py-3 first:pt-0"
     >
-      <div className={marginClasses}>
+      {/* Status and actions share one line above the text, which takes the row's whole
+          width. Beside the status column and five icon buttons, the text was left a
+          strip about a hundred pixels wide - one word to a line down the editor. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <StatusBadge tone={claimTypeTones[claim.claim_type]}>{claimTypeLabels[claim.claim_type]}</StatusBadge>
+        {rowActions}
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0">
         {/* `text`, not `claim.text`: an edit still in the autosave buffer is what the user
             last typed. */}
         <div className={editing ? "rounded-control bg-cv-surface-muted" : undefined}>
@@ -156,16 +233,23 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
             whose wording actually differs from the claim's canonical text are worth a
             second line. */}
         {distinctFacts.length === 0 ? null : (
-          <ul aria-label={evidenceLabel} className="mt-1 flex flex-col gap-1 px-2">
-            {distinctFacts.map((fact) => (
-              <li className="flex items-start gap-2" dir="auto" key={fact.fact_id}>
-                <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-pill bg-cv-success" />
-                <span className="text-support leading-6 text-cv-text-muted">
-                  {fact.text ?? "לא ניתן לקרוא את העובדה הזו מהידע."}
-                </span>
-              </li>
-            ))}
-          </ul>
+          /* Captioned, because unlabelled bullets under a line read as more of the line -
+             under the headline, as more titles. */
+          <div className="mt-1 px-2">
+            <p aria-hidden="true" className="text-caption font-semibold text-cv-text-muted">
+              {facts.length === 1 ? "העובדה שמאחורי השורה" : "העובדות שמאחורי השורה"}
+            </p>
+            <ul aria-label={evidenceLabel} className="mt-1 flex flex-col gap-1">
+              {distinctFacts.map((fact) => (
+                <li className="flex items-start gap-2" dir="auto" key={fact.fact_id}>
+                  <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-pill bg-cv-success" />
+                  <span className="text-support leading-6 text-cv-text-muted">
+                    {fact.text ?? "לא ניתן לקרוא את העובדה הזו מהידע."}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {claim.claim_type === "pending" ? (
@@ -180,81 +264,6 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
         {removal.route === "none" && removal.reason !== undefined ? (
           <p className="mt-1.5 px-2 text-support leading-6 text-cv-text-muted">{removal.reason}</p>
         ) : null}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1">
-        {move === undefined ? null : (
-          <>
-            <Button
-              aria-label="הזזת השורה למעלה"
-              className={rowActionClasses}
-              disabled={actions.locked || !move.canMoveUp}
-              onClick={() => move.onMove(-1)}
-              title="הזזת השורה למעלה"
-              variant="ghost"
-            >
-              <ArrowUp aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-            </Button>
-            <Button
-              aria-label="הזזת השורה למטה"
-              className={rowActionClasses}
-              disabled={actions.locked || !move.canMoveDown}
-              onClick={() => move.onMove(1)}
-              title="הזזת השורה למטה"
-              variant="ghost"
-            >
-              <ArrowDown aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-            </Button>
-          </>
-        )}
-        <Button
-          aria-label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
-          className={rowActionClasses}
-          disabled={actions.locked && !editing}
-          onClick={() => {
-            if (editing) {
-              actions.onCommit();
-              setEditOriginal(null);
-            } else {
-              setEditOriginal(text);
-            }
-            setEditing(!editing);
-          }}
-          title={editing ? "סיום עריכת השורה" : "עריכת השורה"}
-          variant="ghost"
-        >
-          {editing ? (
-            <Check aria-hidden="true" className="size-icon-md text-cv-accent" />
-          ) : (
-            <Pencil aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-          )}
-        </Button>
-        <Button
-          aria-label="יצירה מחדש של השורה"
-          className={rowActionClasses}
-          disabled={actions.regenerationDisabled}
-          onClick={() => actions.onRegenerate(claim)}
-          title="יצירה מחדש של השורה"
-          variant="ghost"
-        >
-          <RefreshCw aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-        </Button>
-        {removal.route === "none" ? null : (
-          <Button
-            aria-label="הסרת השורה"
-            className={rowActionClasses}
-            disabled={actions.locked}
-            onClick={() => setConfirmingRemoval(true)}
-            title={
-              removal.route === "selection"
-                ? "הסרת השורה מחריגה את העובדה שמאחוריה ובונה את הטיוטה מחדש בלעדיה."
-                : "הסרת השורה"
-            }
-            variant="ghost"
-          >
-            <Trash2 aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-          </Button>
-        )}
       </div>
 
       {removal.route === "none" ? null : (

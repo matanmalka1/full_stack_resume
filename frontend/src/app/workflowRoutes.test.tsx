@@ -63,7 +63,7 @@ describe("workflow shell", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "מעבר מהיר למועמדות" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "קליטת משרה חדשה" })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "k", metaKey: true });

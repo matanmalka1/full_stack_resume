@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Check, CircleAlert, FileCheck2, ShieldAlert } from "lucide-react";
-import { useMemo } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import type {
   AnalysisGap,
@@ -14,6 +14,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
+import { DisclosureSummary } from "@/ui/Disclosure";
 import { coverageLabels, coverageTones } from "../../model/analysisLabels";
 import { AnalysisSection } from "./AnalysisSection";
 
@@ -51,6 +52,21 @@ const orderedRequirements = (requirements: Requirement[]): Requirement[] =>
       Number(right.importance === "mandatory") - Number(left.importance === "mandatory") ||
       coveragePriority[left.coverage] - coveragePriority[right.coverage],
   );
+
+/* A matched requirement's evidence, folded: the same turning chevron as every other
+   disclosure, not the user agent's triangle. Its own component because each row keeps
+   its own open state. */
+const EvidenceDisclosure = ({ children }: { children: ReactNode }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="mt-2" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <DisclosureSummary className="text-support text-cv-text-muted hover:text-cv-text" open={open}>
+        הצג ראיות תומכות
+      </DisclosureSummary>
+      <div className="mt-2">{children}</div>
+    </details>
+  );
+};
 
 export const RequirementCoverageSummary = ({
   requirements,
@@ -107,10 +123,13 @@ export const RequirementCoverageSummary = ({
                 ? "דרישת חובה אחת דורשת תשומת לב, ללא פער קשיח."
                 : `${uncoveredMandatory} דרישות חובה דורשות תשומת לב, ללא פער קשיח.`
               : hardGapCount === 1
-                ? "נמצא פער קשיח אחד בדרישות החובה."
-                : `נמצאו ${hardGapCount} פערים קשיחים בדרישות החובה.`
+                ? "דרישת חובה אחת לא מכוסה במלואה לפי העובדות המאושרות."
+                : `${hardGapCount} דרישות חובה לא מכוסות במלואן לפי העובדות המאושרות.`
         }
-        tone={hardGapCount > 0 ? "blocker" : uncoveredMandatory > 0 ? "warning" : "success"}
+        /* A warning, not a blocker: gaps lower the Fit and are worth reviewing, but they
+           stop nothing - the step's own banner says the draft can go ahead. The blocker
+           tone labelled this "חסימה" beside a working "יצירת טיוטה". */
+        tone={hardGapCount > 0 || uncoveredMandatory > 0 ? "warning" : "success"}
       />
       {unreadableRequirementCount === 0 ? null : (
         <p className="mt-2 text-support text-cv-text-muted">לא ניתנות להצגה: {unreadableRequirementCount}</p>
@@ -236,10 +255,7 @@ export const RequirementCoverageSection = ({
               /* Matched requirements are confirmation, not action items: the evidence
                  that earned the checkmark stays a click away instead of matching the
                  unmet requirements' full multi-line weight by default. */
-              <details className="mt-2 marker:text-cv-text-muted">
-                <summary className="cursor-pointer text-support text-cv-text-muted">הצג ראיות תומכות</summary>
-                <div className="mt-2">{evidence}</div>
-              </details>
+              <EvidenceDisclosure>{evidence}</EvidenceDisclosure>
             ) : (
               <div className="mt-3">{evidence}</div>
             )}

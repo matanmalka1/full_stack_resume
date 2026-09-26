@@ -88,8 +88,10 @@ export const NewApplicationPage = () => {
       stage="intake"
     >
       {/* The wizard frame carries the spine; the single-column form takes a shorter reading
-          measure inside it so long fields remain easy to scan. */}
-      <div className="mx-auto w-full max-w-3xl">
+          measure inside it so long fields remain easy to scan. Aligned to the heading's
+          edge, not centred: with the spine above rather than beside it, a centred form sat
+          inset from everything else on the step. */}
+      <div className="w-full max-w-3xl">
         <ApplicationIntakeForm
           duplicates={submission.duplicateMatches}
           draftStatus={intakeDraft.status}

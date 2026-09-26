@@ -1,8 +1,6 @@
 import { useState } from "react";
 
 import { classificationFromAnalysis } from "@/api/analyses";
-import { aiRegenerationAvailable } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
 import { actionLabel } from "../model/preparationLabels";
 import { Callout } from "@/ui/Callout";
 import { WideRow } from "@/ui/WideRow";
@@ -61,7 +59,6 @@ export const PreparationView = ({
   const supersededAnalysis = classification === null && detail.latest_analysis != null;
 
   const plan = workflowActionPlan(detail);
-  const { settings } = useSettings();
   const hasRecommendation = detail.recommended_action != null;
   const selectionPlanAction = plan.createSelectionPlan;
 
@@ -79,11 +76,7 @@ export const PreparationView = ({
           sentence for it - fit and confidence, in the verdict's own tone. The banner now
           renders whenever this step renders, and which of its branches speaks stays that
           function's decision rather than being pre-empted here. */}
-      <AnalysisStatusBanner
-        classification={classification}
-        providerMissing={settings !== undefined && !aiRegenerationAvailable(settings)}
-        supersededAnalysis={supersededAnalysis}
-      />
+      <AnalysisStatusBanner classification={classification} supersededAnalysis={supersededAnalysis} />
 
       {/* The work column beside the reasoning column, at the same breakpoint
           `DraftWorkspace` uses. 40/60: see the file doc for why the split favours the

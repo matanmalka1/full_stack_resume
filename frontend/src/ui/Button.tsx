@@ -21,7 +21,7 @@ const variantButtonClasses: Record<ButtonVariant, string> = {
   primary:
     "bg-cv-accent text-cv-on-accent shadow-surface hover:-translate-y-0.5 hover:bg-cv-accent-hover hover:shadow-floating disabled:bg-cv-surface-muted disabled:text-cv-text-muted",
   secondary:
-    "border border-cv-border bg-cv-surface text-cv-text shadow-surface hover:border-cv-border-strong hover:bg-cv-surface-muted disabled:border-cv-border disabled:bg-cv-surface-muted disabled:text-cv-text-muted",
+    "border border-cv-border bg-cv-surface text-cv-text shadow-surface hover:border-cv-border-strong hover:bg-cv-surface-muted disabled:border-cv-border disabled:bg-cv-surface-muted disabled:text-cv-text-muted disabled:opacity-60",
   ghost: "text-cv-accent hover:bg-cv-accent-soft disabled:text-cv-text-muted",
   destructive:
     "bg-cv-blocker text-cv-on-accent shadow-surface hover:-translate-y-0.5 hover:bg-cv-blocker-hover disabled:bg-cv-surface-muted disabled:text-cv-text-muted",

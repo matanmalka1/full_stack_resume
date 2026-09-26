@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 
 import type { Classification } from "@/api/analyses";
-import { routePaths } from "@/app/routePaths";
-import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import type { Tone } from "@/ui/tone";
 import { confidenceText, fitDescriptions, fitLabels, fitTones } from "../model/analysisLabels";
@@ -43,10 +40,21 @@ const bannerContent = (classification: Classification | null, supersededAnalysis
     classification.fitScore === null
       ? fitLevelPart
       : `התאמה למשרה: ${confidenceText(classification.fitScore)} · ${fitLevelPart}`;
+  /* The level is not the score read off a scale: mandatory requirements the approved
+     facts do not fully cover cap it, however high the percentage. Beside "83% · low" the
+     reader needs that said, or the two read as a contradiction. Stated as how the level
+     is decided, not as the cause of this one - a low score alone can set it too. */
+  const hardGapCount = classification.gaps.filter((gap) => gap.severity === "hard").length;
+  const capNote =
+    (classification.fit === "low" || classification.fit === "medium") && hardGapCount > 0
+      ? ` רמת ההתאמה נקבעת גם לפי דרישות החובה, ולא רק לפי הציון: ${
+          hardGapCount === 1 ? "דרישת חובה אחת לא מכוסה במלואה" : `${hardGapCount} דרישות חובה לא מכוסות במלואן`
+        }.`
+      : "";
   const explanation =
     classification.fit === null
       ? "הניתוח נשמר ללא דירוג התאמה. פרטי האבחון המלאים מראים מה כן נקרא מהמשרה."
-      : fitDescriptions[classification.fit];
+      : `${fitDescriptions[classification.fit]}${capNote}`;
 
   return {
     body: explanation,
@@ -57,35 +65,19 @@ const bannerContent = (classification: Classification | null, supersededAnalysis
 
 export const AnalysisStatusBanner = ({
   classification,
-  providerMissing = false,
   supersededAnalysis,
 }: {
   classification: Classification | null;
-  /* No AI provider can analyze. Said here, beside "not analyzed yet", with the way to fix
-     it - rather than in a separate line under the step rail, where it was easy to miss. */
-  providerMissing?: boolean;
   supersededAnalysis: boolean;
 }) => {
   const { body, title, tone } = bannerContent(classification, supersededAnalysis);
-  const needsProvider = providerMissing && classification === null && !supersededAnalysis;
 
+  /* A missing AI provider is not repeated here. The step's bar says it beside the inert
+     analysis button and leads with the way to Settings; a second copy of both in this
+     banner left two identical buttons on one screen. */
   return (
-    <Callout
-      /* The fix as a control on its own line, not a link at the tail of the explanation
-         where it read as more of the same sentence. */
-      action={
-        needsProvider ? (
-          <Link className={buttonClasses("secondary")} to={routePaths.settings}>
-            פתיחת ההגדרות
-          </Link>
-        ) : undefined
-      }
-      emphasis="banner"
-      title={title}
-      tone={tone}
-    >
+    <Callout emphasis="banner" title={title} tone={tone}>
       <p>{body}</p>
-      {needsProvider ? <p className="mt-1">כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות.</p> : null}
     </Callout>
   );
 };

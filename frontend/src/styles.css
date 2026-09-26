@@ -297,13 +297,6 @@ select {
     background: none;
   }
 
-  @media (min-width: 64rem) {
-    .workflow-track-upcoming {
-      border-block-start: 0;
-      border-inline-start: 1px dashed CanvasText;
-    }
-  }
-
   [class*="bg-cv-success-soft"],
   [class*="bg-cv-warning-soft"],
   [class*="bg-cv-blocker-soft"],
@@ -311,14 +304,6 @@ select {
   [class*="bg-cv-accent-soft"] {
     border-color: CanvasText;
   }
-}
-
-button,
-input,
-optgroup,
-textarea,
-select {
-  font: inherit;
 }
 
 .cv-field {
@@ -528,16 +513,6 @@ dialog::backdrop {
   background-repeat: repeat-x;
   background-position: center;
   background-size: 6px 4px;
-}
-
-/* The spine runs across the top below the large breakpoint and down the side from it.
-   Dots repeated only along x drew a vertical 1px track as a single dot, so the upcoming
-   stages looked unconnected; the repeat follows the track's own axis. */
-@media (min-width: 64rem) {
-  .workflow-track-upcoming {
-    background-repeat: repeat-y;
-    background-size: 4px 6px;
-  }
 }
 
 /* Content on its way, drawn as the shape it is about to become.

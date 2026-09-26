@@ -428,7 +428,7 @@ describe("ApplicationPage at the preparation route", () => {
     {
       body: { job_analysis_id: "analysis-1", selection_plan_id: "plan-1" },
       name: "runs the draft deterministically while AI is enabled but the mode is not",
-      note: "היצירה רצה במסלול הדטרמיניסטי, ללא קריאת AI, והעבודה מתבצעת ברקע.",
+      note: "היא נוצרת ברקע, בלי קריאת AI.",
       settings: aiEnabledDeterministicLane,
     },
     {
@@ -524,14 +524,12 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage(deterministicSettings);
 
     expect(await screen.findByRole("button", { name: "ניתוח המשרה" })).toBeDisabled();
-    /* The reason sits in the bar beside the inert button; the way to fix it sits in the
-       "not analyzed yet" banner. */
+    /* The reason sits in the bar beside the inert button, and the bar leads with the way
+       to fix it. The "not analyzed yet" banner does not repeat either. */
     expect(screen.getByText("הניתוח דורש ספק AI, ועדיין לא הוגדר כזה.")).toBeInTheDocument();
-    expect(screen.getByText(/כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות/)).toBeInTheDocument();
-    /* The fix is offered twice on purpose: under the explanation in the banner, and as the
-       bar's lead action in place of the inert analysis button. */
+    expect(screen.queryByText(/כדי לנתח את המשרה יש להגדיר ולהפעיל ספק AI בהגדרות/)).not.toBeInTheDocument();
     const settingsLinks = screen.getAllByRole("link", { name: "פתיחת ההגדרות" });
-    expect(settingsLinks).toHaveLength(2);
+    expect(settingsLinks).toHaveLength(1);
     for (const link of settingsLinks) expect(link).toHaveAttribute("href", "/settings");
   });
 

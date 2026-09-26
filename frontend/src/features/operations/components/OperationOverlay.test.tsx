@@ -473,6 +473,7 @@ describe("OperationOverlay", () => {
     fireEvent.click(within(panel()).getByRole("button", { name: "סגירה" }));
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
     expect(chip()).toHaveTextContent("מתבצעת");
+    expect(chip()).toHaveFocus();
 
     update({ operation: failed({ failure_code: "VALIDATION_EXECUTION_FAILED" }), settled: true });
     expect(overlay().open).toBe(true);

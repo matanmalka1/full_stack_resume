@@ -29,7 +29,7 @@ export const JobSnapshotPanel = ({
   const snapshot = detail.latest_snapshot;
 
   return (
-    <Card aria-labelledby="job-snapshot-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
+    <Card aria-labelledby="job-snapshot-heading" className="rounded-surface bg-cv-surface p-4 shadow-surface sm:p-5">
       <SectionHeader
         actions={<span className="text-support text-cv-text-muted">גרסה {snapshot.version_number}</span>}
         align="center"

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { jobSnapshotHistoryOptions } from "@/api/applications";
 import type { JobSnapshotHistory as History } from "@/api/contracts";
 import { Button } from "@/ui/Button";
+import { Disclosure, DisclosureSummary } from "@/ui/Disclosure";
 import { Select } from "@/ui/Select";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { snapshotComparison } from "../model/snapshotComparison";
@@ -65,8 +66,7 @@ const Comparison = ({ before, after }: { before: Snapshot; after: Snapshot }) =>
         ))}
       </div>
       {readable && (diff.removed !== "" || diff.added !== "") && (
-        <details className="text-support">
-          <summary className="cursor-pointer">הצגת רווחים ושבירות שורה באזור שהשתנה</summary>
+        <Disclosure summary="הצגת רווחים ושבירות שורה באזור שהשתנה">
           <p>· = רווח, ⇥ = טאב, ↵ = ירידת שורה, ␍ = חזרת עגלה</p>
           {(
             [
@@ -81,7 +81,7 @@ const Comparison = ({ before, after }: { before: Snapshot; after: Snapshot }) =>
               </pre>
             </div>
           ))}
-        </details>
+        </Disclosure>
       )}
     </div>
   );
@@ -134,7 +134,9 @@ export const JobSnapshotHistory = ({
   const history = useQuery({ ...jobSnapshotHistoryOptions(applicationId, activeSnapshotId), enabled: open });
   return (
     <details className="mt-4 border-t border-cv-border pt-4" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className="cursor-pointer text-support font-semibold">היסטוריית נוסחי משרה</summary>
+      <DisclosureSummary className="text-support font-semibold" open={open}>
+        היסטוריית נוסחי משרה
+      </DisclosureSummary>
       {open && (
         <>
           <p className="mt-2 text-support text-cv-text-muted">הצגת ההיסטוריה אינה משנה את נוסח המשרה הפעיל.</p>

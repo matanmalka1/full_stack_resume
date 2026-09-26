@@ -65,7 +65,7 @@ test.describe("the application shell", () => {
         page.getByRole("link", { name: "לוח המועמדויות" }),
         page.getByRole("link", { name: "מאגר העובדות" }),
         page.getByRole("link", { name: "הגדרות" }),
-        page.getByRole("button", { name: "מעבר מהיר למועמדות (Cmd+K)" }),
+        page.getByRole("button", { name: "מעבר מהיר למועמדות" }),
         page.getByRole("link", { name: "קליטת משרה חדשה" }),
         page.getByRole("button", { name: /^ערכת נושא:/ }),
       ].map((control) => control.boundingBox()),
