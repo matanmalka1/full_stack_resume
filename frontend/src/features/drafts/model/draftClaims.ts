@@ -45,11 +45,10 @@ export const removability = (
   if (claim.claim_id === draft.outline.headline.claim_id) {
     return { route: "none", reason: "שורת הכותרת היא חלק ממבנה המסמך ואינה נמחקת." };
   }
+  /* No reason on the row: every contact line shares it, so `DraftIdentityCard` says it
+     once for all of them instead of under each. */
   if (draft.outline.contacts.some((contact) => contact.claim_id === claim.claim_id)) {
-    return {
-      route: "none",
-      reason: "פרטי הקשר נבנים מהפרופיל של המועמד ולא מתוכנית הבחירה, ולכן הם חוזרים בכל בנייה מחדש.",
-    };
+    return { route: "none" };
   }
 
   /* Free text nothing authorized: there is no fact to exclude, and its very presence

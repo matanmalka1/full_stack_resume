@@ -157,7 +157,6 @@ export const ApplicationPage = () => {
          holds nothing but the reference material and the bar, and parking them below the
          rail left a hole the rail's height under a one-banner step. */
       wideRow={detail?.latest_analysis != null}
-      railPlacement="top"
       /* Held at one line's width while the projection is in flight. Absent, the masthead
          drew the heading a line higher and dropped it when the name arrived - the page's
          own title moving under the reader as the first thing it did. */

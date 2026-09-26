@@ -1,5 +1,4 @@
 import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
-import { Card } from "@/ui/Card";
 import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { workingDraftStateLabels, workingDraftStateTones } from "@/features/preparation";
@@ -20,23 +19,24 @@ interface DraftHeaderCardProps {
    Which Application it belongs to is not repeated here. The card used to open with the
    company and the target role, two lines under a breadcrumb trail that had just named the
    same pair; the identity is the trail's to state, and what only this card can say is the
-   version, its hash, the draft's state and whether the last edit reached the server. */
+   version, its hash, the draft's state and whether the last edit reached the server.
+
+   A status line under the heading, not a card: framed at the column's full width it held
+   two small tags and read as an empty panel. */
 export const DraftHeaderCard = ({ detail, dirty, draft, saveState }: DraftHeaderCardProps) => (
-  <Card className="flex flex-wrap items-center justify-between gap-4 bg-cv-surface p-4 shadow-surface">
-    <div className="flex flex-wrap items-center gap-2">
-      {draft === undefined ? null : (
-        <LtrText
-          className="rounded-pill border border-cv-border bg-cv-surface-muted px-2.5 py-1 text-support text-cv-text-muted"
-          mono
-          title={draft.content_hash}
-        >
-          v{draft.edit_version}
-        </LtrText>
-      )}
-      <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-        {workingDraftStateLabels[detail.working_draft_state]}
-      </StatusBadge>
-      {saveState === null ? null : <DraftSaveState dirty={dirty} state={saveState} />}
-    </div>
-  </Card>
+  <div className="flex flex-wrap items-center gap-2">
+    {draft === undefined ? null : (
+      <LtrText
+        className="rounded-pill border border-cv-border bg-cv-surface-muted px-2.5 py-1 text-support text-cv-text-muted"
+        mono
+        title={draft.content_hash}
+      >
+        v{draft.edit_version}
+      </LtrText>
+    )}
+    <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
+      {workingDraftStateLabels[detail.working_draft_state]}
+    </StatusBadge>
+    {saveState === null ? null : <DraftSaveState dirty={dirty} state={saveState} />}
+  </div>
 );

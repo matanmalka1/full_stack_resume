@@ -48,9 +48,7 @@ const bannerContent = (classification: Classification | null, supersededAnalysis
   const capNote =
     (classification.fit === "low" || classification.fit === "medium") && hardGapCount > 0
       ? ` רמת ההתאמה נקבעת גם לפי דרישות החובה, ולא רק לפי הציון: ${
-          hardGapCount === 1
-            ? "דרישת חובה אחת לא מכוסה במלואה"
-            : `${hardGapCount} דרישות חובה לא מכוסות במלואן`
+          hardGapCount === 1 ? "דרישת חובה אחת לא מכוסה במלואה" : `${hardGapCount} דרישות חובה לא מכוסות במלואן`
         }.`
       : "";
   const explanation =

@@ -76,10 +76,7 @@ export const PreparationView = ({
           sentence for it - fit and confidence, in the verdict's own tone. The banner now
           renders whenever this step renders, and which of its branches speaks stays that
           function's decision rather than being pre-empted here. */}
-      <AnalysisStatusBanner
-        classification={classification}
-        supersededAnalysis={supersededAnalysis}
-      />
+      <AnalysisStatusBanner classification={classification} supersededAnalysis={supersededAnalysis} />
 
       {/* The work column beside the reasoning column, at the same breakpoint
           `DraftWorkspace` uses. 40/60: see the file doc for why the split favours the

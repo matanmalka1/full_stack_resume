@@ -31,8 +31,6 @@ interface PreparationWorkflowStepsProps {
      projection: the screen open is a fact the reader can see, and the chip must agree with
      it even while the projection is mid-refetch. */
   stage: WorkflowStage;
-  /* Passed through to the rail; see `WorkflowStepsRail`. */
-  orientation?: "responsive" | "row";
 }
 
 const stepsFor = (
@@ -68,12 +66,7 @@ const stepsFor = (
   });
 };
 
-export const PreparationWorkflowSteps = ({
-  applicationId,
-  detail,
-  orientation,
-  stage,
-}: PreparationWorkflowStepsProps) => {
+export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: PreparationWorkflowStepsProps) => {
   const { pathname } = useLocation();
 
   const destinations = applicationId === undefined ? {} : workflowDestinations(applicationId, detail);
@@ -111,7 +104,7 @@ export const PreparationWorkflowSteps = ({
         חזרה ללוח המועמדויות
       </Link>
 
-      <WorkflowStepsRail label="שלבי הכנת קורות החיים" orientation={orientation} steps={located} />
+      <WorkflowStepsRail label="שלבי הכנת קורות החיים" steps={located} />
     </div>
   );
 };
