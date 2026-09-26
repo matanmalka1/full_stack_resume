@@ -13,16 +13,11 @@ interface PageShellProps {
      knows of no such progression, so the page supplies one where it has one and nothing
      where it does not. */
   landmark?: ReactNode;
-  /* "side" gives the landmark its own column beside the content from the large
-     breakpoint; "top" keeps it above the masthead at every width. */
-  landmarkPlacement?: "side" | "top";
-  /* A block rendered after the landmark/content grid, at the section's own full measure
-     rather than inset beside the landmark's reserved column. The grid reserves that
-     column's width only for its own row - exactly the landmark's height, whatever that
-     turns out to be - so a later sibling here can use the full width without any risk of
-     overlapping the landmark: normal block flow stacks it below, it never shares the
-     landmark's row. `children` still renders inset in the usual place; this is an
-     addition, not a replacement. */
+  /* A block rendered after the masthead and `children`, at the section's own full
+     measure. The landmark sits above the masthead rather than in a column beside it, so
+     nothing is inset any more; this remains the place a step renders what must come
+     after its body - the analysis step's two-column row and the commit bar after it. `children` still
+     renders in the usual place; this is an addition, not a replacement. */
   afterBody?: ReactNode;
   /* "wide" is the shared outer measure, which suits listings and record views. "form"
      is a shorter reading measure for a page whose whole body is one column of inputs:
@@ -49,7 +44,6 @@ export const PageShell = ({
   eyebrow,
   eyebrowTone,
   landmark,
-  landmarkPlacement = "side",
   measure = "wide",
   title,
 }: PageShellProps) => {
@@ -62,16 +56,8 @@ export const PageShell = ({
         measure === "wizard" ? "[--page-measure:64rem]" : undefined,
       )}
     >
-      <div
-        className={cx(
-          landmark === undefined || landmarkPlacement === "top"
-            ? undefined
-            : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-page-gap",
-        )}
-      >
-        {landmark === undefined ? null : (
-          <aside className={cx("mb-5", landmarkPlacement === "side" && "lg:mb-0")}>{landmark}</aside>
-        )}
+      <div>
+        {landmark === undefined ? null : <aside className="mb-5">{landmark}</aside>}
         <div className="min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-2">
             <div className="min-w-0">
