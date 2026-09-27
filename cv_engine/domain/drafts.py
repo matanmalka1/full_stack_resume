@@ -335,18 +335,18 @@ def draft_claims(draft: DraftDocument) -> list[ClaimLine]:
 def reorder_draft(
     draft: DraftDocument,
     *,
-    section_order: list[str] | None = None,
     claim_orders: dict[str, list[str]] | None = None,
 ) -> DraftDocument:
-    """Reorder existing structure without changing identity, ownership, or facts."""
+    """Reorder claims within their sections without changing identity, ownership, or facts.
+
+    Sections themselves never move: their order is Profile policy, and validation refuses
+    any other order, so an edit that moved one could only produce a draft that cannot be
+    approved.
+    """
     reordered = draft.model_copy(deep=True)
     sections = {section.name: section for section in reordered.sections}
     if len(sections) != len(reordered.sections):
         raise ValueError("section names must be unique before they can be reordered")
-    if section_order is not None:
-        if len(section_order) != len(set(section_order)) or set(section_order) != set(sections):
-            raise ValueError("section_order must contain every section exactly once")
-        reordered.sections = [sections[name] for name in section_order]
 
     for section_name, requested in (claim_orders or {}).items():
         section = sections.get(section_name)
@@ -569,7 +569,16 @@ def apply_claim_edit(
         if not edited:
             raise ValueError("manual claim text cannot be empty")
         replacement = None
-        if len(fact_ids) == 1:
+        # The headline is not a factual claim: it names the role the document argues
+        # for, and whether its wording is allowed is the Profile's safe-headline list,
+        # which validation enforces (`unsafe-headline`). Treating an edit as a factual
+        # derivation made every headline edit pending - even retyping the exact text -
+        # because its support is several historical titles, not one fact.
+        # Keyed on the slot rather than the claim type, so a headline an earlier edit
+        # left pending is recovered by the next edit.
+        if draft.headline.claim_id == claim_id:
+            replacement = _claim("headline", edited, list(current.fact_ids), "headline")
+        if replacement is None and len(fact_ids) == 1:
             try:
                 fact = facts.get(fact_ids[0], canonical_only=True)
                 canonical_text = facts.rendering(fact.fact_id, draft.language)

@@ -266,6 +266,10 @@ class RegenerateClaimCommand(BoundaryDTO):
     selection_plan_id: str
     claim_id: str
     instruction: str = ""
+    #: Review the user's own wording instead of writing new wording: no writer runs,
+    #: and the claim's current text goes to semantic review against its own facts
+    #: (product spec §10, the reviewed-evidence path for free-text edits).
+    keep_text: bool = False
     model: str | None = None
     reasoning_effort: str | None = None
 
@@ -313,7 +317,6 @@ class UpdateWorkingDraftCommand(BoundaryDTO):
     claim_edits: list[ClaimPatch] = []
     claim_removals: list[str] = []
     claim_additions: list[ClaimAddition] = []
-    section_order: list[str] | None = None
     claim_orders: dict[str, list[str]] = {}
 
     @model_validator(mode="after")
@@ -330,7 +333,6 @@ class UpdateWorkingDraftCommand(BoundaryDTO):
             not self.claim_edits
             and not self.claim_removals
             and not self.claim_additions
-            and self.section_order is None
             and not self.claim_orders
         ):
             raise ValueError("a working draft patch must edit, remove, add, or reorder content")

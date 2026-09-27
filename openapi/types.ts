@@ -1232,6 +1232,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/working-drafts/{working_draft_id}/preview.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Render this exact draft version to a stamped preview PDF, before approval
+         * @description `200` and the PDF itself, shown inline.
+         *
+         *     Seeing the PDF used to require approving, and every approval is a new immutable
+         *     revision - so every look cost a version and a reopened draft. This answers the look
+         *     without touching the approval boundary: the file is stamped as a draft and is not an
+         *     artifact of anything.
+         */
+        get: operations["preview_working_draft_pdf_api_v1_working_drafts__working_draft_id__preview_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/working-drafts/{working_draft_id}/regenerate-claim": {
         parameters: {
             query?: never;
@@ -3113,6 +3138,12 @@ export interface components {
             instruction: string;
             /** Job Analysis Id */
             job_analysis_id: string;
+            /**
+             * Keep Text
+             * @description Keep the claim's current wording and only run semantic review of it against its own linked facts. The claim must be pending and linked to at least one fact.
+             * @default false
+             */
+            keep_text: boolean;
             /** Selection Plan Id */
             selection_plan_id: string;
         };
@@ -3726,7 +3757,9 @@ export interface components {
          *
          *     At least one content operation has to be present. Reordering uses complete
          *     permutations, so an omitted order means "leave this structure alone" while
-         *     an empty order is meaningful only for an already empty section.
+         *     an empty order is meaningful only for an already empty section. Only claims
+         *     within a section reorder: section order is Profile policy (product spec §10),
+         *     so the patch has no field that could move a section.
          */
         UpdateWorkingDraftRequest: {
             /**
@@ -3753,11 +3786,6 @@ export interface components {
              * @default []
              */
             claim_removals: string[];
-            /**
-             * Section Order
-             * @description All section names in their requested reading order.
-             */
-            section_order?: string[] | null;
         };
         /** ValidationIssueResponse */
         ValidationIssueResponse: {
@@ -5922,6 +5950,37 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    preview_working_draft_pdf_api_v1_working_drafts__working_draft_id__preview_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                working_draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft through the same composition and browser the approved render uses, stamped as unapproved on every page. Nothing is stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
             /** @description The request did not match the API contract. */

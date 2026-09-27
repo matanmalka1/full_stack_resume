@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { FileText, RefreshCw } from "lucide-react";
+import { ExternalLink, FileText, RefreshCw } from "lucide-react";
 
 import type { WorkingDraft } from "@/api/contracts";
-import { draftPreviewSrc } from "@/api/drafts";
+import { draftPdfPreviewHref, draftPreviewSrc } from "@/api/drafts";
+import { buttonClasses } from "@/ui/Button";
 import { DocumentFrame } from "@/ui/DocumentFrame";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
@@ -19,8 +20,8 @@ import { StatusBadge } from "@/ui/StatusBadge";
    a frame rather than markup rendered into this one.
 
    The `key` is the version: a save produces a different URL and a fresh document, so the
-   preview cannot go on showing an edit that has been superseded. Nothing here renders a
-   PDF. */
+   preview cannot go on showing an edit that has been superseded. The frame never renders
+   a PDF; the link beside the heading asks for one, on demand. */
 export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
   /* Which version the frame has actually painted, rather than a flag an effect has to
      reset every time the version moves. A save gives the frame a new `key` and a new URL,
@@ -43,7 +44,20 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
           </span>
           <LiveRegion>{loading ? null : "התצוגה המקדימה עודכנה"}</LiveRegion>
         </div>
-        <StatusBadge tone="neutral">טיוטה</StatusBadge>
+        <div className="flex items-center gap-2">
+          {/* The real PDF of the saved version, before any approval: stamped as a draft,
+              stored nowhere. Looking at the layout must not cost an approved version. */}
+          <a
+            className={buttonClasses("secondary")}
+            href={draftPdfPreviewHref(draft.id, draft.edit_version)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <ExternalLink aria-hidden="true" className="size-icon-md" />
+            PDF הטיוטה
+          </a>
+          <StatusBadge tone="neutral">טיוטה</StatusBadge>
+        </div>
       </div>
 
       {/* The document is the thing; a mat around it was a card wrapping a card. The frame
@@ -57,7 +71,8 @@ export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
       />
 
       <p className="text-support leading-6 text-cv-text-muted">
-        התצוגה נבנית בשרת מהגרסה השמורה, באותו מסלול שמייצר את הקובץ המאושר. אין כאן PDF.
+        התצוגה נבנית בשרת מהגרסה השמורה, באותו מסלול שמייצר את הקובץ המאושר. "PDF הטיוטה" פותח את
+        הקובץ האמיתי עם חותמת טיוטה, בלי לאשר ובלי ליצור גרסה.
       </p>
     </section>
   );

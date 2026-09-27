@@ -253,13 +253,12 @@ describe("useDraftAutosave", () => {
     });
   });
 
-  it("coalesces section and claim ordering into the same serialized save", async () => {
+  it("coalesces successive claim orderings into the same serialized save", async () => {
     const fetchMock = vi.fn().mockResolvedValue(updateResponse(5));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = setup();
 
     act(() => {
-      result.current.queueSectionOrder(["experience", "skills"]);
       result.current.queueClaimOrder("experience", ["c-2", "c-1"]);
       result.current.queueClaimOrder("experience", ["c-3", "c-2", "c-1"]);
       result.current.flush();
@@ -270,7 +269,6 @@ describe("useDraftAutosave", () => {
       claim_edits: [],
       claim_removals: [],
       claim_additions: [],
-      section_order: ["experience", "skills"],
       claim_orders: { experience: ["c-3", "c-2", "c-1"] },
     });
   });

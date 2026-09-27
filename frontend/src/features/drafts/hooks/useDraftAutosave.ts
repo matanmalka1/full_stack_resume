@@ -18,7 +18,6 @@ export interface AutosaveState {
   pending: ClaimPatch[];
   pendingRemovals: string[];
   pendingAdditions: ClaimAddition[];
-  pendingSectionOrder: string[] | null;
   pendingClaimOrders: Record<string, string[]>;
 }
 
@@ -33,7 +32,6 @@ const emptyPatch = (patch: DraftPatch): boolean =>
   patch.claim_edits.length === 0 &&
   patch.claim_removals.length === 0 &&
   patch.claim_additions.length === 0 &&
-  patch.section_order === undefined &&
   Object.keys(patch.claim_orders ?? {}).length === 0;
 
 const storageKey = (workingDraftId: string): string => `cv-engine:autosave:${workingDraftId}`;
@@ -42,7 +40,6 @@ interface StoredBuffer {
   edits: ClaimPatch[];
   removals: string[];
   additions: ClaimAddition[];
-  sectionOrder?: string[];
   claimOrders?: Record<string, string[]>;
 }
 
@@ -62,7 +59,6 @@ const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void =
       buffer.edits.length === 0 &&
       buffer.removals.length === 0 &&
       buffer.additions.length === 0 &&
-      buffer.sectionOrder === undefined &&
       Object.keys(buffer.claimOrders ?? {}).length === 0
     ) {
       window.sessionStorage.removeItem(storageKey(workingDraftId));
@@ -98,7 +94,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
   const edits = useRef(new Map<string, ClaimPatch>());
   const removals = useRef(new Set<string>());
   const additions = useRef<ClaimAddition[]>([]);
-  const sectionOrder = useRef<string[] | null>(null);
   const claimOrders = useRef(new Map<string, string[]>());
   const inFlight = useRef(false);
   const activeSave = useRef<Promise<void> | null>(null);
@@ -117,7 +112,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     pending: [],
     pendingRemovals: [],
     pendingAdditions: [],
-    pendingSectionOrder: null,
     pendingClaimOrders: {},
   });
 
@@ -136,7 +130,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       pending: [...edits.current.values()],
       pendingRemovals: [...removals.current],
       pendingAdditions: [...additions.current],
-      pendingSectionOrder: sectionOrder.current === null ? null : [...sectionOrder.current],
       pendingClaimOrders: Object.fromEntries(claimOrders.current),
     });
   }, []);
@@ -152,7 +145,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       edits: [...edits.current.values()],
       removals: [...removals.current],
       additions: [...additions.current],
-      sectionOrder: sectionOrder.current ?? undefined,
       claimOrders: Object.fromEntries(claimOrders.current),
     });
   }, [workingDraftId]);
@@ -164,7 +156,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
         edits.current.size === 0 &&
         removals.current.size === 0 &&
         additions.current.length === 0 &&
-        sectionOrder.current === null &&
         claimOrders.current.size === 0
       ) {
         return;
@@ -188,9 +179,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
         removals.current.add(claimId);
       }
       additions.current = [...patch.claim_additions, ...additions.current];
-      if (sectionOrder.current === null && patch.section_order !== undefined) {
-        sectionOrder.current = [...patch.section_order];
-      }
       for (const [section, order] of Object.entries(patch.claim_orders ?? {})) {
         if (!claimOrders.current.has(section)) claimOrders.current.set(section, [...order]);
       }
@@ -208,7 +196,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
         claim_edits: [...edits.current.values()],
         claim_removals: [...removals.current],
         claim_additions: [...additions.current],
-        ...(sectionOrder.current === null ? {} : { section_order: [...sectionOrder.current] }),
         ...(claimOrders.current.size === 0 ? {} : { claim_orders: Object.fromEntries(claimOrders.current) }),
       };
 
@@ -219,7 +206,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       edits.current.clear();
       removals.current.clear();
       additions.current = [];
-      sectionOrder.current = null;
       claimOrders.current.clear();
       inFlight.current = true;
       publish("saving");
@@ -308,7 +294,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       removals.current.add(claimId);
     }
     additions.current = [...additions.current, ...stored.additions];
-    sectionOrder.current = stored.sectionOrder ?? null;
     claimOrders.current = new Map(Object.entries(stored.claimOrders ?? {}));
     publish("idle");
     schedule();
@@ -354,16 +339,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     [mirror, publish, schedule],
   );
 
-  const queueSectionOrder = useCallback(
-    (order: string[]) => {
-      sectionOrder.current = [...order];
-      mirror();
-      publish(halted.current ? "conflict" : "idle");
-      schedule();
-    },
-    [mirror, publish, schedule],
-  );
-
   const queueClaimOrder = useCallback(
     (section: string, order: string[]) => {
       claimOrders.current.set(section, [...order]);
@@ -396,7 +371,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       edits.current.size === 0 &&
       removals.current.size === 0 &&
       additions.current.length === 0 &&
-      sectionOrder.current === null &&
       claimOrders.current.size === 0
     );
   }, [send]);
@@ -407,7 +381,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     edits.current.clear();
     removals.current.clear();
     additions.current = [];
-    sectionOrder.current = null;
     claimOrders.current.clear();
     halted.current = false;
     mirror();
@@ -458,7 +431,6 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     queueClaimOrder,
     queueEdit,
     queueRemoval,
-    queueSectionOrder,
     reapplyLocal,
     settle,
   };

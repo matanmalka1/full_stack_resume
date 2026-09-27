@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Layers3, Plus, RefreshCw } from "lucide-react";
+import { Layers3, Plus, RefreshCw } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
@@ -25,10 +25,7 @@ interface DraftSectionCardProps {
   headingId: string;
   onRegenerate: () => void;
   onMoveClaim: (index: number, offset: -1 | 1) => void;
-  onMoveSection: (offset: -1 | 1) => void;
   section: DraftOutlineSection;
-  sectionCount: number;
-  sectionIndex: number;
 }
 
 /* A.4 frame 3: one section of the draft outline - its heading, its regenerate action, and
@@ -42,10 +39,7 @@ export const DraftSectionCard = ({
   headingId,
   onRegenerate,
   onMoveClaim,
-  onMoveSection,
   section,
-  sectionCount,
-  sectionIndex,
 }: DraftSectionCardProps) => {
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
@@ -76,30 +70,12 @@ export const DraftSectionCard = ({
             {section.claims.length === 1 ? "שורה אחת" : `${section.claims.length} שורות`}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            aria-label={`הזזת הסעיף ${section.name} למעלה`}
-            disabled={actions.locked || sectionIndex === 0}
-            onClick={() => onMoveSection(-1)}
-            title="הזזת הסעיף למעלה"
-            variant="ghost"
-          >
-            <ArrowUp aria-hidden="true" className="size-icon-md" />
-          </Button>
-          <Button
-            aria-label={`הזזת הסעיף ${section.name} למטה`}
-            disabled={actions.locked || sectionIndex === sectionCount - 1}
-            onClick={() => onMoveSection(1)}
-            title="הזזת הסעיף למטה"
-            variant="ghost"
-          >
-            <ArrowDown aria-hidden="true" className="size-icon-md" />
-          </Button>
-          <Button disabled={actions.regenerationDisabled} onClick={onRegenerate} variant="secondary">
-            <RefreshCw aria-hidden="true" className="size-icon-md" />
-            יצירה מחדש של הפרק
-          </Button>
-        </div>
+        {/* No up/down controls for the section itself: section order is the Profile's,
+            and validation refuses any other, so a moved section could never be approved. */}
+        <Button disabled={actions.regenerationDisabled} onClick={onRegenerate} variant="secondary">
+          <RefreshCw aria-hidden="true" className="size-icon-md" />
+          יצירה מחדש של הפרק
+        </Button>
       </div>
 
       <DraftClaimList

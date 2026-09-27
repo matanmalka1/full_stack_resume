@@ -506,7 +506,6 @@ export const DraftEditorPage = () => {
                     }}
                     facts={facts}
                     onMoveClaim={editing.history.moveClaim}
-                    onMoveSection={editing.history.moveSection}
                     onRegenerateSection={editing.regenerateSection}
                   />
 
@@ -591,7 +590,6 @@ export const DraftEditorPage = () => {
               pending={editing.conflict.pending}
               pendingAdditions={editing.conflict.pendingAdditions}
               pendingRemovals={editing.conflict.pendingRemovals}
-              pendingSectionOrder={editing.conflict.pendingSectionOrder}
               pendingClaimOrders={editing.conflict.pendingClaimOrders}
             />
           </>

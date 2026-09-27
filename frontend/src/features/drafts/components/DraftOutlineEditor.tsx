@@ -11,7 +11,6 @@ interface DraftOutlineEditorProps {
   facts: WorkingDraftFacts | undefined;
   onRegenerateSection: (section: string) => void;
   onMoveClaim: (section: string, index: number, offset: -1 | 1) => void;
-  onMoveSection: (index: number, offset: -1 | 1) => void;
 }
 
 const sectionHeadingId = (index: number): string => `draft-section-${index}`;
@@ -26,7 +25,6 @@ export const DraftOutlineEditor = ({
   facts,
   onRegenerateSection,
   onMoveClaim,
-  onMoveSection,
 }: DraftOutlineEditorProps) => (
   <>
     <DraftIdentityCard actions={actions} draft={draft} facts={facts} />
@@ -52,9 +50,6 @@ export const DraftOutlineEditor = ({
         key={section.name}
         onRegenerate={() => onRegenerateSection(section.name)}
         onMoveClaim={(claimIndex, offset) => onMoveClaim(section.name, claimIndex, offset)}
-        onMoveSection={(offset) => onMoveSection(index, offset)}
-        sectionIndex={index}
-        sectionCount={draft.outline.sections.length}
         section={section}
       />
     ))}

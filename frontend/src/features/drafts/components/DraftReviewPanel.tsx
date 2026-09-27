@@ -4,6 +4,7 @@ import { reasonTitle } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
+import { Disclosure } from "@/ui/Disclosure";
 
 export const DraftReviewPanel = ({
   detail,
@@ -57,14 +58,13 @@ export const DraftReviewPanel = ({
               ) : undefined
             }
           >
-            <p dir="auto">{reason.message}</p>
             <p>יש להשלים את ההחלטה הזו לפני שאפשר להכין את קובץ ה־PDF.</p>
             {claim !== undefined && editAllowed ? (
               <p>
                 {pending
                   ? editableClaim
-                    ? "יש להשתמש באפשרויות לצד השורה: אישור ושימוש בעובדה כאשר ההקשר מאפשר זאת, או תיקון והסרת תוכן שאינו נתמך. יצירת עובדה ממתינה לבדה אינה מתירה אישור."
-                    : "זו שורת כותרת או קשר ללא טופס אישור עובדה. יש לתקן את הניסוח בהתאם למקור הקנוני; אם המקור חסר, נדרש תיקון במאגר הידע לפני המשך."
+                    ? "יש להשתמש באפשרויות לצד השורה: בדיקת הניסוח מול העובדות שמתחתיו, אישור ושימוש בעובדה כאשר ההקשר מאפשר זאת, או תיקון והסרת תוכן שאינו נתמך. יצירת עובדה ממתינה לבדה אינה מתירה אישור."
+                    : `השורה "${claim.text}" בכותרת או בפרטי הקשר נערכה לנוסח שאינו נתמך. עריכה חוזרת שלה פותרת זאת: כותרת עוברת אימות מול הנוסחים שהפרופיל מאשר, ושורת קשר חוזרת לנוסח המקורי שלה.`
                   : "עובדה שנמחקה אינה ניתנת לקידום. יש להסיר את התלות בה או לבחור עובדה קנונית תקפה; אין לשנות את העובדה ההיסטורית."}
               </p>
             ) : selectionAllowed ? (
@@ -76,6 +76,11 @@ export const DraftReviewPanel = ({
                   : "אין בעורך פעולה זמינה שסוגרת את הסיבה הזו בהקשר הנוכחי. יש לפתור את התלות במקור לפני המשך; טופס החלטות הניתוח אינו פותר אותה."}
               </p>
             )}
+            {/* The server's sentence is evidence, not the explanation: it is English and
+                written for a log, so it stays folded as it is in PreparationAlerts. */}
+            <Disclosure summary="פרטי הסיבה">
+              <p dir="auto">{reason.message}</p>
+            </Disclosure>
           </Callout>
         );
       })}

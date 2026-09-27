@@ -632,7 +632,9 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeInTheDocument();
-    expect(screen.getByText("A claim in the active draft depends on a pending fact.")).toBeVisible();
+    // The server's English sentence is evidence, folded behind its disclosure.
+    expect(screen.getByText("A claim in the active draft depends on a pending fact.")).not.toBeVisible();
+    expect(screen.getByText("פרטי הסיבה")).toBeVisible();
     expect(screen.queryByRole("link", { name: "עריכת הטיוטה" })).toBeNull();
   });
 
@@ -1281,6 +1283,16 @@ describe("DraftEditorPage preview", () => {
        document renders in an opaque origin and cannot reach this page. */
     expect(frame).toHaveAttribute("sandbox", "");
     expect(screen.getByText("טיוטה")).toBeInTheDocument();
+  });
+
+  it("offers the draft's own PDF in a new tab, before any approval", async () => {
+    stubReads({});
+
+    renderPage();
+
+    const link = await screen.findByRole("link", { name: "PDF הטיוטה" });
+    expect(link).toHaveAttribute("href", "/api/v1/working-drafts/wd-1/preview.pdf?v=4");
+    expect(link).toHaveAttribute("target", "_blank");
   });
 
   it("opens on the draft as text, with the facts behind each line already open", async () => {

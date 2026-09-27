@@ -377,7 +377,17 @@ def _sections_match_profile(context: _ValidationContext) -> None:
         context.add_issue(
             "structure", "section-order", f"expected {expected_sections}, got {actual_sections}"
         )
-    for section, spec in zip(draft.sections, profile.sections, strict=False):
+    # Each section is checked against the spec it is named after, not the one at its
+    # index: a section out of place is the one finding above, not a cascade of every
+    # fact in it reported as misplaced against its neighbour's spec.
+    specs = {
+        (spec.name_he if draft.language == "he" else spec.name_en): spec
+        for spec in profile.sections
+    }
+    for section in draft.sections:
+        spec = specs.get(section.name)
+        if spec is None:
+            continue
         allowed_fact_ids = set(spec.fact_ids)
         for claim in section.claims:
             disallowed = sorted(set(claim.fact_ids) - allowed_fact_ids)

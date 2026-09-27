@@ -73,6 +73,13 @@ class RegenerateClaimRequest(HttpSchema):
     selection_plan_id: str
     claim_id: str = Field(max_length=200)
     instruction: str = Field(default="", max_length=2000)
+    keep_text: bool = Field(
+        default=False,
+        description=(
+            "Keep the claim's current wording and only run semantic review of it against "
+            "its own linked facts. The claim must be pending and linked to at least one fact."
+        ),
+    )
 
 
 class ClaimPatchRequest(HttpSchema):
@@ -112,7 +119,9 @@ class UpdateWorkingDraftRequest(HttpSchema):
 
     At least one content operation has to be present. Reordering uses complete
     permutations, so an omitted order means "leave this structure alone" while
-    an empty order is meaningful only for an already empty section.
+    an empty order is meaningful only for an already empty section. Only claims
+    within a section reorder: section order is Profile policy (product spec §10),
+    so the patch has no field that could move a section.
     """
 
     claim_edits: list[ClaimPatchRequest] = []
@@ -126,10 +135,6 @@ class UpdateWorkingDraftRequest(HttpSchema):
         ),
     )
     claim_additions: list[ClaimAdditionRequest] = []
-    section_order: list[str] | None = Field(
-        default=None,
-        description="All section names in their requested reading order.",
-    )
     claim_orders: dict[str, list[str]] = Field(
         default={},
         description="Complete claim-ID order for each named section being reordered.",
@@ -147,7 +152,6 @@ class UpdateWorkingDraftRequest(HttpSchema):
             not self.claim_edits
             and not self.claim_removals
             and not self.claim_additions
-            and self.section_order is None
             and not self.claim_orders
         ):
             raise ValueError("a patch must edit, remove, add, or reorder content")

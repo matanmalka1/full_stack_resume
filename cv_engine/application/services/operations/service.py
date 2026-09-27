@@ -26,6 +26,7 @@ from ...commands import (
 )
 from ...errors import (
     LineageBroken,
+    PreconditionFailed,
     StateConflict,
     UnknownRecord,
 )
@@ -320,6 +321,22 @@ class OperationSubmissionService:
                 f"working draft {working.id} has content hash {working.content_hash}, "
                 f"not {command.expected_content_hash}"
             )
+        if isinstance(command, RegenerateClaimCommand) and command.keep_text:
+            claim = next(
+                (
+                    item
+                    for section in working.source.sections
+                    for item in section.claims
+                    if item.claim_id == command.claim_id
+                ),
+                None,
+            )
+            if claim is None:
+                raise UnknownRecord(f"unknown claim in the working draft: {command.claim_id}")
+            if claim.claim_type != "pending" or not claim.fact_ids:
+                raise PreconditionFailed(
+                    "only a pending claim linked to at least one fact can have its own wording reviewed"
+                )
         operation_type = (
             OperationType.REGENERATE_SECTION
             if isinstance(command, RegenerateSectionCommand)

@@ -129,6 +129,41 @@ def preview_working_draft(working_draft_id: str, services: Services) -> HTMLResp
     )
 
 
+@router.get(
+    "/{working_draft_id}/preview.pdf",
+    summary="Render this exact draft version to a stamped preview PDF, before approval",
+    response_class=Response,
+    responses={
+        200: {
+            "description": (
+                "The draft through the same composition and browser the approved render uses, "
+                "stamped as unapproved on every page. Nothing is stored."
+            ),
+            "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
+def preview_working_draft_pdf(working_draft_id: str, services: Services) -> Response:
+    """`200` and the PDF itself, shown inline.
+
+    Seeing the PDF used to require approving, and every approval is a new immutable
+    revision - so every look cost a version and a reopened draft. This answers the look
+    without touching the approval boundary: the file is stamped as a draft and is not an
+    artifact of anything.
+    """
+    result = services.queries.working_draft_pdf_preview(working_draft_id)
+    return Response(
+        content=result.pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="draft-preview.pdf"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+            "ETag": draft_etag(result.edit_version, result.content_hash),
+        },
+    )
+
+
 @router.patch(
     "/{working_draft_id}",
     response_model=WorkingDraftUpdateResponse,
@@ -167,7 +202,6 @@ def update_working_draft(
                 ClaimAddition(**addition.model_dump(mode="python"))
                 for addition in request.claim_additions
             ],
-            section_order=request.section_order,
             claim_orders={
                 name: list(claim_ids) for name, claim_ids in request.claim_orders.items()
             },

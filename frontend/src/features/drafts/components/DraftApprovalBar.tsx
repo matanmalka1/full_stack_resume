@@ -54,8 +54,8 @@ export const DraftApprovalBar = ({
       : unavailable
         ? "יש להשלים את שמירת העריכות לפני בדיקת הקובץ."
         : exactPassingRunId === null
-          ? "המערכת תבדוק את הגרסה המוצגת לפני הכנת ה־PDF."
-          : "הבדיקה עברה. נשאר לאשר את הגרסה ולהכין את ה־PDF.";
+          ? "זה הצעד הסופי: בדיקה ואז אישור ששומר גרסה קבועה. כדי רק לראות PDF, פתחו את PDF הטיוטה."
+          : "הבדיקה עברה. האישור שומר גרסה קבועה ומכין את ה־PDF הסופי.";
 
   const readyForApproval = exactPassingRunId !== null && !reviewBlocked && !stale && !unavailable;
 
