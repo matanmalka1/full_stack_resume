@@ -26,7 +26,11 @@ export const FactOverview = ({ fact }: { fact: Fact }) => {
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-cv-border pb-4">
         <div className="min-w-0 flex-1">
           <p className="mb-1.5 text-support font-semibold text-cv-accent">עובדת מועמד</p>
-          <h2 className="text-heading-sm font-bold leading-7 text-cv-text" dir="auto" id="selected-fact-heading">
+          <h2
+            className="text-heading-sm font-bold leading-7 text-cv-text text-right"
+            dir="auto"
+            id="selected-fact-heading"
+          >
             {english}
           </h2>
           {hebrew === undefined ? null : (

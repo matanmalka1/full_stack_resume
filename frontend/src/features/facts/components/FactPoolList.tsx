@@ -80,9 +80,12 @@ const FactPoolRow = ({
         {/* English leads. It is the rendering the CV is built from, so it is the wording a
           person is actually choosing between here; the Hebrew rendering follows in the
           supporting size as a reading aid, and only when the store holds one distinct
-          from what is already shown. */}
+          from what is already shown. `text-right` anchors both lines to the row's RTL
+          edge (the shell is always RTL): with `dir="auto"` alone an English title sat
+          left above a Hebrew line on the right, so every row zig-zagged. The bidi order
+          inside each line is unchanged. */}
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-cv-text" dir="auto">
+          <p className="font-semibold text-cv-text text-right" dir="auto">
             {english}
           </p>
           {hebrew === undefined ? null : (
