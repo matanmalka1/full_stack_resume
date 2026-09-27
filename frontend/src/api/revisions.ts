@@ -7,6 +7,7 @@ import type {
   DecisionMarkdown,
   Operation,
   RenderRevisionRequest,
+  RevisionComparison,
 } from "./contracts";
 import { type QueuedOperation, queuedOperation } from "./operations";
 
@@ -36,6 +37,21 @@ export const approvedRevisionsQueryOptions = (applicationId: string) =>
           { signal },
         )
       ).data,
+  });
+
+/* Both revisions are immutable, so a comparison between the same two never changes: it is
+   cached for as long as the page lives rather than refetched on focus. */
+export const revisionComparisonQueryOptions = (targetRevisionId: string, baseRevisionId: string) =>
+  queryOptions({
+    queryKey: ["revision-comparison", targetRevisionId, baseRevisionId] as const,
+    queryFn: async ({ signal }) =>
+      (
+        await apiRequest<RevisionComparison>(
+          `${revisionPath(targetRevisionId)}/comparison?base_revision_id=${encodeURIComponent(baseRevisionId)}` as ApiPath,
+          { signal },
+        )
+      ).data,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 
 export interface DecisionMarkdownDownload extends DecisionMarkdown {

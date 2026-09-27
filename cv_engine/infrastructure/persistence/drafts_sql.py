@@ -98,6 +98,27 @@ def _approved_revisions(connection: Connection, application_id: str) -> list[App
     return [_revision_record(row) for row in rows]
 
 
+def _approved_revision_parents(
+    connection: Connection, application_id: str
+) -> dict[str, str | None]:
+    """Each revision's parent: the revision its WorkingDraft was started from.
+
+    The link is recorded on the draft (`working_drafts.parent_revision_id`) and a
+    revision freezes exactly one draft, so it is read through that draft rather
+    than stored twice.
+    """
+    rows = connection.execute(
+        select(approved_revisions.c.id, working_drafts.c.parent_revision_id)
+        .select_from(
+            approved_revisions.join(
+                working_drafts, working_drafts.c.id == approved_revisions.c.working_draft_id
+            )
+        )
+        .where(approved_revisions.c.application_id == application_id)
+    ).all()
+    return {row.id: row.parent_revision_id for row in rows}
+
+
 def _create_approved_revision(
     connection: Connection,
     application_id: str,

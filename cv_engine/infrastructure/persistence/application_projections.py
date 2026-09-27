@@ -24,6 +24,7 @@ from .connection import SqlAlchemyTransactionManager
 from .drafts_sql import (
     _active_working_draft,
     _approved_revision,
+    _approved_revision_parents,
     _approved_revisions,
     _working_draft,
 )
@@ -164,6 +165,9 @@ class SqlAlchemyApplicationProjectionReader:
 
     def approved_revision(self, tx: ReadTransaction, revision_id: str):
         return _approved_revision(self._connection(tx), revision_id)
+
+    def approved_revision_parents(self, tx: ReadTransaction, application_id: str):
+        return _approved_revision_parents(self._connection(tx), application_id)
 
     def latest_validation_for_working_draft(self, tx: ReadTransaction, working_draft_id: str):
         return _latest_validation_for_working_draft(self._connection(tx), working_draft_id)

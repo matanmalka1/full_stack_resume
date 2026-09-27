@@ -3,15 +3,18 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date
 
-from ....domain.contracts.drafts import WorkingDraft
+from ....domain.contracts.drafts import DraftDocument, WorkingDraft
 from ....domain.contracts.recruitment import ApplicationStatus
+from ....domain.draft_markdown import parse_draft
 from ....domain.recruitment import user_transition_targets
+from ....domain.revision_comparison import compare_drafts
 from ...artifacts import verify_artifact
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     InfrastructureFailure,
     KnowledgeRejected,
+    StateConflict,
     UnknownRecord,
 )
 from ...ports.application_projections import ApplicationProjectionReader
@@ -28,6 +31,7 @@ from ...queries import (
     ArtifactVersionsView,
     DecisionRecordView,
     DraftPreviewView,
+    RevisionComparisonView,
     SelectionPlanDetailView,
     ValidationRunView,
     WorkingDraftFactsView,
@@ -42,6 +46,7 @@ from ...queries import (
     draft_outline_view,
     narrow_application_list,
     recruitment_timeline_view,
+    revision_comparison_view,
     selection_plan_detail_view,
     snapshot_view,
 )
@@ -326,12 +331,13 @@ class ApplicationQueryService:
             with self._transactions.read() as tx:
                 revision = self._projections.approved_revision(tx, approved_revision_id)
                 evidence = self._ready_evidence.load(tx, revision.application_id, revision.id)
+                parents = self._projections.approved_revision_parents(tx, revision.application_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown approved revision: {approved_revision_id}") from exc
         qualification = qualify_ready_revision(
             self.revision_payloads, evidence, revision.application_id
         )
-        return approved_revision_view(revision, qualification)
+        return approved_revision_view(revision, qualification, parents.get(revision.id))
 
     def approved_revisions(self, application_id: str) -> ApprovedRevisionsView:
         """All immutable revisions for one Application, each with its own qualification."""
@@ -343,6 +349,7 @@ class ApplicationQueryService:
                     self._ready_evidence.load(tx, application_id, revision.id)
                     for revision in revisions
                 ]
+                parents = self._projections.approved_revision_parents(tx, application_id)
         except UnknownRecord as exc:
             raise UnknownRecord(f"unknown application: {application_id}") from exc
 
@@ -352,6 +359,7 @@ class ApplicationQueryService:
                     approved_revision_view(
                         revision,
                         qualify_ready_revision(self.revision_payloads, item, application_id),
+                        parents.get(revision.id),
                     )
                     for revision, item in zip(revisions, evidence, strict=True)
                 ]
@@ -359,6 +367,46 @@ class ApplicationQueryService:
         except (TypeError, ValueError) as exc:
             raise InfrastructureFailure(
                 f"stored approved revision projection is invalid: {exc}"
+            ) from exc
+
+    def compare_approved_revisions(
+        self, target_revision_id: str, base_revision_id: str
+    ) -> RevisionComparisonView:
+        """What changed from `base` to `target`, read from both immutable payloads.
+
+        Both revisions must belong to one Application: a comparison across two
+        Applications would describe no history at all, so it is a conflict naming
+        the broken pairing rather than a diff. Each payload is verified against the
+        hash its revision froze before it is read, the same way a new draft started
+        from a revision reads it.
+        """
+        try:
+            with self._transactions.read() as tx:
+                target = self._projections.approved_revision(tx, target_revision_id)
+                base = self._projections.approved_revision(tx, base_revision_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown approved revision: {exc.args[0]}") from exc
+        if base.application_id != target.application_id:
+            raise StateConflict("the two approved revisions belong to different applications")
+        comparison = compare_drafts(self._revision_document(base), self._revision_document(target))
+        return revision_comparison_view(base, target, comparison)
+
+    def _revision_document(self, revision) -> DraftDocument:
+        integrity = self.revision_payloads.verify_payload(
+            revision.resume_json_reference, revision.resume_json_hash
+        )
+        if integrity != "ok":
+            raise InfrastructureFailure(
+                f"approved revision {revision.id} payload failed integrity verification: "
+                f"{integrity}"
+            )
+        try:
+            return parse_draft(
+                self.revision_payloads.read_payload_text(revision.resume_json_reference)
+            )
+        except (OSError, ValueError) as exc:
+            raise InfrastructureFailure(
+                f"could not load approved revision {revision.id} for comparison"
             ) from exc
 
     def working_draft(self, working_draft_id: str) -> WorkingDraftView:

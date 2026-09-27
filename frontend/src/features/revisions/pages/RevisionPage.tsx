@@ -1,4 +1,4 @@
-import { ArrowRight, Download, Send } from "lucide-react";
+import { ArrowRight, Download, FilePlus2, PencilLine, Send } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -18,10 +18,11 @@ import { applicationLabel } from "@/features/applications";
 import { WizardStepShell } from "@/features/preparation";
 import { warningDetail, warningTitle } from "@/features/preparation";
 import { RevisionRecord } from "../components/RevisionRecord";
-import { RevisionSelector } from "../components/RevisionSelector";
+import { RevisionHistory } from "../components/RevisionHistory";
 import { RevisionSubmissionDialog } from "../components/RevisionSubmissionDialog";
 import { useRevisionData } from "../api/queries";
 import { useRevisionDraftGeneration } from "../api/mutations";
+import { buildRevisionHistory } from "../model/revisionHistory";
 
 /* The two records this step is read for - the summary of the finished CV and the immutable
    revision behind it - held at their own size while they load. The step is the end of the
@@ -125,6 +126,37 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
               secondary: downloadButton === null ? [] : [downloadButton],
             };
 
+  /* Where work continues from this version. A draft already in progress is the one place
+     edits go, so it is offered instead of a second one; otherwise a new draft starts from
+     exactly the version on screen, and says which. */
+  const activeDraft = detail?.active_working_draft_id != null;
+  const canCreateDraft = canCreate && detail?.working_draft_state === "none";
+  const nextDraft =
+    revision === undefined ? undefined : activeDraft && detail !== undefined ? (
+      <>
+        <Link className={buttonClasses("secondary")} to={routePaths.draft(detail.application.id)}>
+          <PencilLine aria-hidden="true" className="size-icon-md" />
+          המשך עבודה על הטיוטה החדשה
+        </Link>
+        <p className="text-caption text-cv-text-muted">הטיוטה אינה משנה אף גרסה קיימת; אישור שלה יוסיף גרסה חדשה.</p>
+      </>
+    ) : canCreateDraft ? (
+      <Button
+        onClick={() => createDraft.mutate()}
+        pending={createDraft.isPending}
+        pendingLabel="יוצר טיוטה…"
+        size="default"
+        variant="secondary"
+      >
+        <FilePlus2 aria-hidden="true" className="size-icon-md" />
+        יצירת טיוטה חדשה מגרסה {revision.version_number}
+      </Button>
+    ) : (
+      <p className="text-caption text-cv-text-muted">
+        יצירת טיוטה חדשה תהיה זמינה לאחר השלמת הניתוח ובחירת התוכן הפעילים.
+      </p>
+    );
+
   return (
     <WizardStepShell
       applicationId={revision?.application_id}
@@ -184,15 +216,6 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
                 fallbackTitle="לא ניתן לטעון את היסטוריית הגרסאות"
               />
             )}
-            <RevisionSelector
-              canCreateDraft={canCreate && detail?.working_draft_state === "none"}
-              createPending={createDraft.isPending}
-              currentRevisionId={revision.id}
-              detail={detail}
-              onCreateDraft={() => createDraft.mutate()}
-              revisions={revisionsQuery.data?.items ?? [revision]}
-              submittedAt={submittedAt}
-            />
             <RevisionRecord
               additionalOptions={
                 revision.ready_qualified && submittedAt !== null ? (
@@ -214,6 +237,16 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
                 ) : undefined
               }
               decision={decisionQuery.data}
+              history={
+                <RevisionHistory
+                  entries={buildRevisionHistory(
+                    revisionsQuery.data?.items ?? [revision],
+                    revision.id,
+                    detail?.recruitment_timeline ?? [],
+                  )}
+                  nextDraft={nextDraft}
+                />
+              }
               revision={revision}
             />
           </>

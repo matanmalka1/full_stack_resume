@@ -29,4 +29,9 @@ export const routePaths = {
   resumeApplication: (applicationId: string): string => `${application(applicationId)}/resume`,
   draft: (applicationId: string): string => `${application(applicationId)}/draft`,
   revision: (revisionId: string): string => `/revisions/${segment(revisionId)}`,
+  /* What changed from `baseRevisionId` to `revisionId`. The base travels as a query value
+     rather than a second segment: the page is about the newer revision, and the base is
+     a choice made on it that the reader can change in place. */
+  revisionComparison: (revisionId: string, baseRevisionId: string): string =>
+    `/revisions/${segment(revisionId)}/compare?base=${encodeURIComponent(baseRevisionId)}`,
 } as const;

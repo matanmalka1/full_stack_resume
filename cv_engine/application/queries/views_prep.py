@@ -336,12 +336,67 @@ class ApprovedRevisionView(BoundaryDTO):
     pdf_artifact_version_id: str | None = None
     html_artifact_version_id: str | None = None
     ready_validation: ValidationReport
+    #: The revision whose content this one's draft was started from, or `None`
+    #: for a revision drafted fresh from an analysis. Read through the frozen
+    #: WorkingDraft, which is where the link is recorded.
+    parent_revision_id: str | None = None
 
 
 class ApprovedRevisionsView(BoundaryDTO):
     """Every immutable revision for one Application, in version order."""
 
     items: list[ApprovedRevisionView]
+
+
+class RevisionClaimChangeView(BoundaryDTO):
+    """One line that differs between two revisions (see `revision_comparison`)."""
+
+    kind: Literal["added", "removed", "reworded", "moved"]
+    style: ClaimStyle
+    before_text: str | None = None
+    after_text: str | None = None
+    fact_ids: list[str] = []
+    from_section: str | None = None
+
+
+class RevisionSectionComparisonView(BoundaryDTO):
+    kind: Literal["headline", "contacts", "section"]
+    name: str
+    status: Literal["added", "removed", "changed", "unchanged"]
+    changes: list[RevisionClaimChangeView]
+    unchanged_count: int
+
+
+class RevisionChangeSummaryView(BoundaryDTO):
+    added: int
+    removed: int
+    reworded: int
+    moved: int
+    unchanged: int
+
+
+class RevisionComparisonView(BoundaryDTO):
+    """What changed from `base` to `target`, two revisions of one Application.
+
+    Derived on every read from the two immutable payloads; nothing about a
+    comparison is stored. The context flags say which frozen inputs differ, so a
+    reader can tell "the posting changed" from "only the wording did".
+    """
+
+    application_id: str
+    base_revision_id: str
+    base_version_number: int
+    target_revision_id: str
+    target_version_number: int
+    job_snapshot_changed: bool
+    job_analysis_changed: bool
+    selection_plan_changed: bool
+    facts_version_changed: bool
+    profile_changed: bool
+    emphasis_changed: bool
+    language_changed: bool
+    summary: RevisionChangeSummaryView
+    sections: list[RevisionSectionComparisonView]
 
 
 class DecisionRecordView(BoundaryDTO):

@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { detail, json, operation, renderRoute, revision } from "@/test/fixtures";
+import { detail, json, operation, renderRoute, revision, revisionComparison } from "@/test/fixtures";
 import { RevisionPage } from "./RevisionPage";
 
 afterEach(() => {
@@ -10,50 +10,79 @@ afterEach(() => {
 });
 
 describe("RevisionPage", () => {
-  it("switches between immutable revisions and offers one clear next-draft action", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: string | URL | Request) => {
-        const url = String(input);
-        if (url.endsWith("/approved-revisions")) {
-          return Promise.resolve(
-            json({
-              items: [
-                revision({ id: "revision-1", version_number: 1, approved_at: "2026-08-20T09:00:00Z" }),
-                revision({ id: "revision-2", version_number: 2, approved_at: "2026-08-25T09:00:00Z" }),
-              ],
-            }),
-          );
-        }
-        const displayedRevision = url.includes("/approved-revisions/revision-2")
-          ? revision({ id: "revision-2", version_number: 2, approved_at: "2026-08-25T09:00:00Z" })
-          : revision();
+  it("lists every immutable revision newest first, with what changed and a way to compare", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/comparison?")) {
         return Promise.resolve(
           json(
-            url.includes("applications")
-              ? detail({
-                  active_working_draft_id: null,
-                  available_actions: ["create_draft"],
-                  preparation_state: "ready",
-                  latest_ready_revision_id: "revision-2",
-                  working_draft_state: "none",
-                })
-              : displayedRevision,
+            revisionComparison({
+              base_revision_id: "revision-1",
+              target_revision_id: "revision-2",
+              summary: { added: 2, removed: 1, reworded: 1, moved: 0, unchanged: 20 },
+            }),
           ),
         );
-      }),
-    );
+      }
+      if (url.endsWith("/approved-revisions")) {
+        return Promise.resolve(
+          json({
+            items: [
+              revision({ id: "revision-1", version_number: 1, approved_at: "2026-08-20T09:00:00Z" }),
+              revision({
+                id: "revision-2",
+                version_number: 2,
+                approved_at: "2026-08-25T09:00:00Z",
+                parent_revision_id: "revision-1",
+              }),
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(
+        json(
+          url.includes("applications")
+            ? detail({
+                active_working_draft_id: null,
+                available_actions: ["create_draft"],
+                preparation_state: "ready",
+                latest_ready_revision_id: "revision-2",
+                working_draft_state: "none",
+              })
+            : revision(),
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
-    const selector = await screen.findByLabelText("הגרסה המוצגת");
-    expect(selector).toHaveValue("revision-1");
-    /* The selector draws the displayed revision before the Application's list arrives;
-       whether it is historical is known only once the newer one is in that list. */
-    expect(await screen.findByText("גרסה היסטורית")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "יצירת טיוטה חדשה מגרסה 1" })).toBeInTheDocument();
-    fireEvent.change(selector, { target: { value: "revision-2" } });
-    await waitFor(() => expect(screen.getByLabelText("הגרסה המוצגת")).toHaveValue("revision-2"));
+    const history = await screen.findByRole("region", { name: "היסטוריית גרסאות" });
+    const entries = await within(history).findAllByRole("listitem");
+    /* Newest first; the displayed one is marked and is not offered as a link to itself. */
+    expect(within(entries[0]!).getByRole("heading", { name: "גרסה 2" })).toBeInTheDocument();
+    expect(within(entries[0]!).getByText("העדכנית")).toBeInTheDocument();
+    expect(within(entries[0]!).getByText(/נפתחה מגרסה 1 ונערכה/)).toBeInTheDocument();
+    expect(
+      await within(entries[0]!).findByText("2 שורות נוספו · שורה אחת הוסרה · שורה אחת נוסחה מחדש"),
+    ).toBeInTheDocument();
+    expect(within(entries[0]!).getByRole("link", { name: "צפייה בגרסה 2" })).toHaveAttribute(
+      "href",
+      "/revisions/revision-2",
+    );
+    expect(within(entries[0]!).getByRole("link", { name: /השוואה לגרסה 1/ })).toHaveAttribute(
+      "href",
+      "/revisions/revision-2/compare?base=revision-1",
+    );
+    expect(entries[1]).toHaveAttribute("aria-current", "true");
+    expect(within(entries[1]!).getByText(/הגרסה הראשונה שאושרה/)).toBeInTheDocument();
+    expect(within(entries[1]!).queryByRole("link", { name: /צפייה/ })).not.toBeInTheDocument();
+    expect(within(history).getByRole("button", { name: "יצירת טיוטה חדשה מגרסה 1" })).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).endsWith("/approved-revisions/revision-2/comparison?base_revision_id=revision-1"),
+      ),
+    ).toBe(true);
   });
 
   it("routes to the active draft instead of offering to create another one", async () => {
