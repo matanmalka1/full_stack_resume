@@ -85,7 +85,7 @@ export const ApplicationListTable = ({
                 <th
                   aria-sort={active ? column.sort?.direction : undefined}
                   className={cx(
-                    "bg-cv-canvas px-4 py-3 text-support font-semibold text-cv-text-muted first:rounded-ss-surface last:rounded-se-surface",
+                    "whitespace-nowrap bg-cv-canvas px-4 py-3 text-support font-semibold text-cv-text-muted first:rounded-ss-surface last:rounded-se-surface",
                     column.center ? "text-center" : "text-start",
                     column.width,
                   )}

@@ -191,7 +191,7 @@ export const RequirementCoverageSection = ({
             <FileCheck2 aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-success" />
             <p className="text-support text-cv-text-muted" dir="auto">
               <span className="font-bold text-cv-text">ראיות תומכות: </span>
-              {requirement.supportingFactIds.map(factLabel).join(" · ")}
+              <bdi>{requirement.supportingFactIds.map(factLabel).join(" · ")}</bdi>
             </p>
           </div>
         )}
@@ -200,7 +200,7 @@ export const RequirementCoverageSection = ({
             <ShieldAlert aria-hidden="true" className="mt-0.5 size-icon-sm shrink-0 text-cv-warning" />
             <p className="text-support text-cv-text-muted" dir="auto">
               <span className="font-bold text-cv-text">למה הכיסוי מוגבל: </span>
-              {requirement.boundaryFactIds.map(factLabel).join(" · ")}
+              <bdi>{requirement.boundaryFactIds.map(factLabel).join(" · ")}</bdi>
             </p>
           </div>
         )}
@@ -247,7 +247,13 @@ export const RequirementCoverageSection = ({
                 <span className="font-bold text-cv-text">
                   {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:{" "}
                 </span>
-                {requirement.shortfallReason ?? gapReasons.get(requirement.requirementId) ?? "לא סופק הסבר מפורט לפער."}
+                {/* Isolated from the Hebrew label before it: an English reason inherited the
+                    paragraph's RTL direction and its closing period landed on the wrong end. */}
+                <bdi>
+                  {requirement.shortfallReason ??
+                    gapReasons.get(requirement.requirementId) ??
+                    "לא סופק הסבר מפורט לפער."}
+                </bdi>
               </p>
             )}
 
