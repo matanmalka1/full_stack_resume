@@ -179,9 +179,14 @@ export const FactSelectionList = ({
                         open ? "rotate-0" : "rotate-90",
                       )}
                     />
-                    <LtrText className="text-support font-semibold text-cv-text">{group.section}</LtrText>
-                    <span className="rounded-pill bg-cv-surface-sunken px-2.5 py-0.5 text-support text-cv-text-muted">
-                      {group.included} מתוך {group.total} נכללות
+                    {/* Name over count rather than side by side: in the narrow column beside
+                        the analysis, the name, a count pill and the include action competed for
+                        one line and the count broke across three. */}
+                    <span className="flex min-w-0 flex-col">
+                      <LtrText className="text-support font-semibold text-cv-text">{group.section}</LtrText>
+                      <span className="text-caption text-cv-text-muted">
+                        {group.included} מתוך {group.total} נכללות
+                      </span>
                     </span>
                   </button>
 
