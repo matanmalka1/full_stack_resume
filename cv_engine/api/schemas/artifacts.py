@@ -12,7 +12,7 @@ it is not receiving JSON.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from .applications import ArtifactVersionResponse
 from .drafts import ValidationReportResponse
@@ -68,12 +68,66 @@ class ApprovedRevisionResponse(HttpSchema):
     # `dict`, matching `ValidationRunResponse.report`: reports are one shape
     # across the API, and giving this one a typed model would make two.
     ready_validation: ValidationReportResponse
+    #: The revision this one's draft was started from; `null` for a revision
+    #: drafted fresh from an analysis.
+    parent_revision_id: str | None = None
 
 
 class ApprovedRevisionsResponse(HttpSchema):
     """Every immutable ApprovedRevision belonging to one Application."""
 
     items: list[ApprovedRevisionResponse]
+
+
+class RevisionClaimChangeResponse(HttpSchema):
+    """One resume line that differs between two revisions."""
+
+    kind: Literal["added", "removed", "reworded", "moved"]
+    style: Literal["paragraph", "heading", "date", "bullet", "item", "contact", "headline"]
+    before_text: str | None = None
+    after_text: str | None = None
+    fact_ids: list[str] = []
+    from_section: str | None = None
+
+
+class RevisionSectionComparisonResponse(HttpSchema):
+    kind: Literal["headline", "contacts", "section"]
+    name: str
+    status: Literal["added", "removed", "changed", "unchanged"]
+    changes: list[RevisionClaimChangeResponse]
+    unchanged_count: int
+
+
+class RevisionChangeSummaryResponse(HttpSchema):
+    added: int
+    removed: int
+    reworded: int
+    moved: int
+    unchanged: int
+
+
+class RevisionComparisonResponse(HttpSchema):
+    """What changed from one approved revision to another of the same Application.
+
+    Lines are followed by claim and fact identity, not by text position, so a
+    reworded statement is one `reworded` change rather than a removal and an
+    addition. Derived from the two immutable payloads on every read.
+    """
+
+    application_id: str
+    base_revision_id: str
+    base_version_number: int
+    target_revision_id: str
+    target_version_number: int
+    job_snapshot_changed: bool
+    job_analysis_changed: bool
+    selection_plan_changed: bool
+    facts_version_changed: bool
+    profile_changed: bool
+    emphasis_changed: bool
+    language_changed: bool
+    summary: RevisionChangeSummaryResponse
+    sections: list[RevisionSectionComparisonResponse]
 
 
 class DecisionMarkdownResponse(HttpSchema):

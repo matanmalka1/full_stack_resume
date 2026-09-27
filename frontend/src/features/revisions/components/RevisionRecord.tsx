@@ -15,10 +15,13 @@ import { ValidationReportView } from "./ValidationReportView";
 interface RevisionRecordProps {
   additionalOptions?: ReactNode;
   decision: DecisionMarkdownDownload | undefined;
+  /* The Application's version history, first in the aside: which version this is and
+     how it relates to the others is what a reader places the document by. */
+  history?: ReactNode;
   revision: ApprovedRevision;
 }
 
-export const RevisionRecord = ({ additionalOptions, decision, revision }: RevisionRecordProps) => {
+export const RevisionRecord = ({ additionalOptions, decision, history, revision }: RevisionRecordProps) => {
   const downloadDecision = () => {
     if (decision === undefined) return;
     const href = URL.createObjectURL(new Blob([decision.content], { type: "text/markdown;charset=utf-8" }));
@@ -48,6 +51,8 @@ export const RevisionRecord = ({ additionalOptions, decision, revision }: Revisi
       </div>
 
       <aside aria-label="פרטי הגרסה והאימות" className="flex min-w-0 flex-col gap-6">
+        {history}
+
         <Disclosure summary="פרטים טכניים וביקורת">
           <Card aria-labelledby="revision-record-heading" className="overflow-x-auto bg-cv-surface p-4 shadow-surface">
             <h2 className="flex items-center gap-2 font-semibold text-cv-text" id="revision-record-heading">

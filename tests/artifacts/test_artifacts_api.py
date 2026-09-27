@@ -25,10 +25,10 @@ different facts.
 from __future__ import annotations
 
 from api_harness import MUTATION_HEADERS
-from helpers import ACCOUNT_MANAGER_JOB, artifact_path, artifact_reference
+from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, artifact_path, artifact_reference
 
 from cv_engine.api.app import API_PREFIX
-from cv_engine.application.commands import CreateJobSnapshotCommand
+from cv_engine.application.commands import CreateJobSnapshotCommand, DraftCommand
 from cv_engine.util import sha256_bytes, sha256_file
 
 #: Several spellings of the same intent, because the layers that could decode
@@ -114,6 +114,61 @@ def test_application_lists_its_approved_revisions_with_qualification(
         (item["id"], item["version_number"], item["ready_qualified"])
         for item in response.json()["items"]
     ] == [(setup.approved.revision_id, 1, False)]
+    assert response.json()["items"][0]["parent_revision_id"] is None
+
+
+def test_a_revision_names_its_parent_and_compares_with_it(
+    api_worker,
+    artifact_approved_application,
+) -> None:
+    """A draft reopened from revision 1 approves as revision 2 with 1 as its parent.
+
+    The comparison reads both immutable payloads: reopened and approved unchanged,
+    every line is the same line, and nothing in the frozen context moved. It is
+    bound to one Application - a pair across two is a conflict, not a diff.
+    """
+    setup = artifact_approved_application("Revision Lineage Co")
+    other = artifact_approved_application("Other Lineage Co")
+    first = setup.approved.revision_id
+    setup.services.drafts.draft(
+        DraftCommand(
+            application_id=setup.application_id,
+            job_analysis_id=setup.analysis_id,
+            selection_plan_id=setup.selection_plan_id,
+            parent_revision_id=first,
+        )
+    )
+    second = approve_active_draft(setup.services, setup.application_id).revision_id
+
+    listed = _get(api_worker, f"/applications/{setup.application_id}/approved-revisions")
+    assert [
+        (item["version_number"], item["parent_revision_id"]) for item in listed.json()["items"]
+    ] == [(1, None), (2, first)]
+    assert _get(api_worker, f"/approved-revisions/{second}").json()["parent_revision_id"] == first
+
+    response = _get(api_worker, f"/approved-revisions/{second}/comparison?base_revision_id={first}")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["base_revision_id"], body["base_version_number"]) == (first, 1)
+    assert (body["target_revision_id"], body["target_version_number"]) == (second, 2)
+    summary = body["summary"]
+    assert (summary["added"], summary["removed"], summary["reworded"], summary["moved"]) == (
+        0,
+        0,
+        0,
+        0,
+    )
+    assert summary["unchanged"] > 0
+    assert {section["status"] for section in body["sections"]} == {"unchanged"}
+    assert not any(value for key, value in body.items() if key.endswith("_changed"))
+
+    across = _get(
+        api_worker,
+        f"/approved-revisions/{second}/comparison?base_revision_id={other.approved.revision_id}",
+    )
+    assert across.status_code == 409, across.text
+    unknown = _get(api_worker, f"/approved-revisions/{second}/comparison?base_revision_id=missing")
+    assert unknown.status_code == 404, unknown.text
 
 
 def test_a_failed_render_changes_nothing_and_its_retry_is_new_work(

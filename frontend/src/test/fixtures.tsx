@@ -8,6 +8,7 @@ import type {
   ApprovedRevision,
   Operation,
   ReconciliationReport,
+  RevisionComparison,
   Settings,
   ValidationRun,
   WorkingDraft,
@@ -124,6 +125,24 @@ export const revision = (overrides: Partial<ApprovedRevision> = {}): ApprovedRev
   html_artifact_version_id: "html-1",
   pdf_artifact_version_id: "pdf-1",
   ready_validation: { passed: true, groups: { artifacts: true }, evidence: {}, issues: [] },
+  ...overrides,
+});
+
+export const revisionComparison = (overrides: Partial<RevisionComparison> = {}): RevisionComparison => ({
+  application_id: "app-1",
+  base_revision_id: "revision-1",
+  base_version_number: 1,
+  target_revision_id: "revision-2",
+  target_version_number: 2,
+  job_snapshot_changed: false,
+  job_analysis_changed: false,
+  selection_plan_changed: false,
+  facts_version_changed: false,
+  profile_changed: false,
+  emphasis_changed: false,
+  language_changed: false,
+  summary: { added: 0, removed: 0, reworded: 0, moved: 0, unchanged: 0 },
+  sections: [],
   ...overrides,
 });
 

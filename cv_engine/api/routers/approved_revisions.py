@@ -35,6 +35,7 @@ from ..schemas.artifacts import (
     ApprovedRevisionResponse,
     DecisionMarkdownResponse,
     RenderRevisionRequest,
+    RevisionComparisonResponse,
 )
 from ..schemas.operations import OperationResponse
 
@@ -58,6 +59,27 @@ def approved_revision_detail(
     """
     result = services.queries.approved_revision(approved_revision_id)
     return ApprovedRevisionResponse.model_validate(result.model_dump(mode="json"))
+
+
+@router.get(
+    "/{approved_revision_id}/comparison",
+    response_model=RevisionComparisonResponse,
+    summary="Compare one approved revision with an earlier one of the same application",
+)
+def compare_approved_revisions(
+    approved_revision_id: str,
+    services: Services,
+    base_revision_id: str = Query(
+        description=(
+            "The revision to compare against, usually this revision's parent or the "
+            "version before it. Named by the caller rather than inferred, so the "
+            "comparison is between exactly the two records the reader chose."
+        ),
+    ),
+) -> RevisionComparisonResponse:
+    """`200` with the changes; `404` for an unknown revision; `409` across Applications."""
+    result = services.queries.compare_approved_revisions(approved_revision_id, base_revision_id)
+    return RevisionComparisonResponse.model_validate(result.model_dump(mode="json"))
 
 
 @router.get(

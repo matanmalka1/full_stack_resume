@@ -975,6 +975,7 @@ Initial query contracts include:
 - WorkingDraft plus ETag
 - ValidationRun detail
 - ApprovedRevision and Ready qualification detail, plus per-Application immutable revision history
+- comparison of two ApprovedRevisions of one Application
 - artifact metadata/download eligibility
 - Operation status
 - contextual fact detail/history
@@ -988,6 +989,17 @@ JobSnapshot history returns the active snapshot ID and all saved snapshots in ve
 order, with explicit IDs, version numbers, capture times, source URLs, and exact verified
 text. Unreadable or unverified text is NULL; history never fetches the live posting,
 repairs a payload, or changes the active context. Storage paths are not exposed.
+
+Revision history carries each revision's `parent_revision_id`: the revision its
+WorkingDraft was reopened from, read through that draft, or NULL for a revision drafted
+fresh from an analysis. Revision comparison takes the two revision IDs explicitly and
+reads both verified immutable payloads; it writes nothing and stores no result. Lines are
+followed by `claim_id`, then by identical text, then by the same non-empty fact set and
+style, and are reported per section as `added`, `removed`, `reworded` (same line, new
+wording) or `moved` (same line, other section); order inside a section is not a change.
+The comparison also states which frozen inputs differ (JobSnapshot, JobAnalysis,
+SelectionPlan, facts version, profile, emphasis, language). Two revisions of different
+Applications are a conflict, not a comparison.
 
 Queries may use direct efficient joins and read models. They return DTOs, not database
 rows or local paths.

@@ -14,6 +14,7 @@ from ...domain.contracts.records import ApprovedRevision
 from ...domain.contracts.selection import SelectionPlan
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
+from ...domain.revision_comparison import DraftComparison
 from ...domain.selection import ROLE_BLOCK_TAG, STRUCTURAL_STYLES
 from .narrowing import application_is_closed
 from .views_prep import (
@@ -28,6 +29,10 @@ from .views_prep import (
     DraftSectionView,
     JobAnalysisView,
     JobSnapshotView,
+    RevisionChangeSummaryView,
+    RevisionClaimChangeView,
+    RevisionComparisonView,
+    RevisionSectionComparisonView,
     SelectionPlanCandidateView,
     SelectionPlanDetailView,
     WorkingDraftFactsView,
@@ -289,7 +294,9 @@ def artifact_version_view(record: dict[str, Any]) -> ArtifactVersionView:
     )
 
 
-def approved_revision_view(revision: ApprovedRevision, qualification: Any) -> ApprovedRevisionView:
+def approved_revision_view(
+    revision: ApprovedRevision, qualification: Any, parent_revision_id: str | None = None
+) -> ApprovedRevisionView:
     """Build the public view field by field so stored payload paths cannot leak."""
     return ApprovedRevisionView(
         id=revision.id,
@@ -309,6 +316,47 @@ def approved_revision_view(revision: ApprovedRevision, qualification: Any) -> Ap
         pdf_artifact_version_id=qualification.pdf_artifact_version_id,
         html_artifact_version_id=qualification.html_artifact_version_id,
         ready_validation=qualification.validation,
+        parent_revision_id=parent_revision_id,
+    )
+
+
+def revision_comparison_view(
+    base: ApprovedRevision, target: ApprovedRevision, comparison: DraftComparison
+) -> RevisionComparisonView:
+    return RevisionComparisonView(
+        application_id=target.application_id,
+        base_revision_id=base.id,
+        base_version_number=base.version_number,
+        target_revision_id=target.id,
+        target_version_number=target.version_number,
+        job_snapshot_changed=base.job_snapshot_id != target.job_snapshot_id,
+        job_analysis_changed=base.job_analysis_id != target.job_analysis_id,
+        selection_plan_changed=base.selection_plan_id != target.selection_plan_id,
+        facts_version_changed=base.facts_version != target.facts_version,
+        profile_changed=comparison.profile_changed,
+        emphasis_changed=comparison.emphasis_changed,
+        language_changed=comparison.language_changed,
+        summary=RevisionChangeSummaryView(**asdict(comparison.summary)),
+        sections=[
+            RevisionSectionComparisonView(
+                kind=section.kind,
+                name=section.name,
+                status=section.status,
+                changes=[
+                    RevisionClaimChangeView(
+                        kind=change.kind,
+                        style=change.style,
+                        before_text=change.before_text,
+                        after_text=change.after_text,
+                        fact_ids=list(change.fact_ids),
+                        from_section=change.from_section,
+                    )
+                    for change in section.changes
+                ],
+                unchanged_count=section.unchanged_count,
+            )
+            for section in comparison.sections
+        ],
     )
 
 

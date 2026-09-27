@@ -5,7 +5,7 @@ import { ApplicationListPage } from "@/features/application-list";
 import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
 import { DraftEditorPage } from "@/features/drafts";
 import { FactsPage } from "@/features/facts";
-import { RevisionPage } from "@/features/revisions";
+import { RevisionComparisonPage, RevisionPage } from "@/features/revisions";
 import { SettingsPage } from "@/features/settings";
 import { AppLayout } from "./layout/AppLayout";
 import { NotFoundPage } from "./layout/NotFoundPage";
@@ -59,6 +59,10 @@ export const router = createBrowserRouter([
          specific immutable record, and an Application-keyed screen would answer with
          whatever revision is current instead of the one named. */
           { path: "revisions/:revisionId", element: <RevisionPage /> },
+          /* What changed between two of those records. Not a workflow step - nothing is
+             decided here - so it carries no stage spine; it is reached from a revision's
+             history and returns to that revision. */
+          { path: "revisions/:revisionId/compare", element: <RevisionComparisonPage /> },
 
           { path: "facts", element: <FactsPage /> },
           { path: "settings", element: <SettingsPage /> },

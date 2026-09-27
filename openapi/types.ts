@@ -484,6 +484,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/approved-revisions/{approved_revision_id}/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare one approved revision with an earlier one of the same application
+         * @description `200` with the changes; `404` for an unknown revision; `409` across Applications.
+         */
+        get: operations["compare_approved_revisions_api_v1_approved_revisions__approved_revision_id__comparison_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/approved-revisions/{approved_revision_id}/decision-markdown": {
         parameters: {
             query?: never;
@@ -1770,6 +1790,8 @@ export interface components {
             job_analysis_id: string;
             /** Job Snapshot Id */
             job_snapshot_id: string;
+            /** Parent Revision Id */
+            parent_revision_id?: string | null;
             /** Pdf Artifact Version Id */
             pdf_artifact_version_id?: string | null;
             /** Ready Qualified */
@@ -3183,6 +3205,102 @@ export interface components {
             /** Working Draft Id */
             working_draft_id: string;
         };
+        /** RevisionChangeSummaryResponse */
+        RevisionChangeSummaryResponse: {
+            /** Added */
+            added: number;
+            /** Moved */
+            moved: number;
+            /** Removed */
+            removed: number;
+            /** Reworded */
+            reworded: number;
+            /** Unchanged */
+            unchanged: number;
+        };
+        /**
+         * RevisionClaimChangeResponse
+         * @description One resume line that differs between two revisions.
+         */
+        RevisionClaimChangeResponse: {
+            /** After Text */
+            after_text?: string | null;
+            /** Before Text */
+            before_text?: string | null;
+            /**
+             * Fact Ids
+             * @default []
+             */
+            fact_ids: string[];
+            /** From Section */
+            from_section?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "added" | "removed" | "reworded" | "moved";
+            /**
+             * Style
+             * @enum {string}
+             */
+            style: "paragraph" | "heading" | "date" | "bullet" | "item" | "contact" | "headline";
+        };
+        /**
+         * RevisionComparisonResponse
+         * @description What changed from one approved revision to another of the same Application.
+         *
+         *     Lines are followed by claim and fact identity, not by text position, so a
+         *     reworded statement is one `reworded` change rather than a removal and an
+         *     addition. Derived from the two immutable payloads on every read.
+         */
+        RevisionComparisonResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Base Revision Id */
+            base_revision_id: string;
+            /** Base Version Number */
+            base_version_number: number;
+            /** Emphasis Changed */
+            emphasis_changed: boolean;
+            /** Facts Version Changed */
+            facts_version_changed: boolean;
+            /** Job Analysis Changed */
+            job_analysis_changed: boolean;
+            /** Job Snapshot Changed */
+            job_snapshot_changed: boolean;
+            /** Language Changed */
+            language_changed: boolean;
+            /** Profile Changed */
+            profile_changed: boolean;
+            /** Sections */
+            sections: components["schemas"]["RevisionSectionComparisonResponse"][];
+            /** Selection Plan Changed */
+            selection_plan_changed: boolean;
+            summary: components["schemas"]["RevisionChangeSummaryResponse"];
+            /** Target Revision Id */
+            target_revision_id: string;
+            /** Target Version Number */
+            target_version_number: number;
+        };
+        /** RevisionSectionComparisonResponse */
+        RevisionSectionComparisonResponse: {
+            /** Changes */
+            changes: components["schemas"]["RevisionClaimChangeResponse"][];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "headline" | "contacts" | "section";
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "removed" | "changed" | "unchanged";
+            /** Unchanged Count */
+            unchanged_count: number;
+        };
         /**
          * SelectionCandidate
          * @description One fact's full accounting in the selection decision.
@@ -4593,6 +4711,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovedRevisionResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    compare_approved_revisions_api_v1_approved_revisions__approved_revision_id__comparison_get: {
+        parameters: {
+            query: {
+                /** @description The revision to compare against, usually this revision's parent or the version before it. Named by the caller rather than inferred, so the comparison is between exactly the two records the reader chose. */
+                base_revision_id: string;
+            };
+            header?: never;
+            path: {
+                approved_revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionComparisonResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

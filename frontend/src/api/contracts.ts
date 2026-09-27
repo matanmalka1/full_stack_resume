@@ -36,6 +36,12 @@ export type ValidationReport = ApiSchemas["ValidationReportResponse"];
 export type Approval = ApiSchemas["ApprovalResponse"];
 export type ApprovedRevision = ApiSchemas["ApprovedRevisionResponse"];
 export type ApprovedRevisions = ApiSchemas["ApprovedRevisionsResponse"];
+/* What changed from one approved revision to another of the same Application, followed
+   by claim and fact identity rather than by line position. */
+export type RevisionComparison = ApiSchemas["RevisionComparisonResponse"];
+export type RevisionSectionComparison = ApiSchemas["RevisionSectionComparisonResponse"];
+export type RevisionClaimChange = ApiSchemas["RevisionClaimChangeResponse"];
+export type RevisionChangeSummary = ApiSchemas["RevisionChangeSummaryResponse"];
 export type DecisionMarkdown = ApiSchemas["DecisionMarkdownResponse"];
 /* §20 the artifact registry, read by ID. The list carries the registration; the detail
    adds the three answers only a verification can give, so the two are separate types
