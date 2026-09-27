@@ -5,6 +5,7 @@ import type { DraftClaim, DraftFact } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
+import { Disclosure } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Textarea } from "@/ui/Input";
 import type { DraftClaimActions } from "../model/drafts.types";
@@ -254,8 +255,38 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
 
         {claim.claim_type === "pending" ? (
           <>
-            <Callout className="mt-2" title="הטקסט הזה חוסם אישור" tone="blocker">
-              <p dir="auto">{claim.pending_reason ?? claimTypeExplanations.pending}</p>
+            <Callout
+              action={
+                /* A line linked to facts can be checked as written. The headline and the
+                   contacts are not factual claims, and an unlinked line has nothing to be
+                   checked against - it is resolved below, as a fact. */
+                claim.fact_ids.length > 0 && claim.style !== "headline" && claim.style !== "contact" ? (
+                  <Button
+                    disabled={actions.regenerationDisabled}
+                    onClick={() => actions.onReview(claim)}
+                    variant="secondary"
+                  >
+                    בדיקת הניסוח מול העובדות
+                  </Button>
+                ) : undefined
+              }
+              className="mt-2"
+              title="הטקסט הזה חוסם אישור"
+              tone="blocker"
+            >
+              <p>{claimTypeExplanations.pending}</p>
+              {claim.fact_ids.length > 0 && claim.style !== "headline" && claim.style !== "contact" ? (
+                <p className="mt-1">
+                  אפשר לבדוק את הניסוח כפי שכתבת: אם המשמעות זהה לעובדות שמתחתיו, השורה תאושר בלי לשנות אותה.
+                </p>
+              ) : null}
+              {/* The validator's own reason is English and technical - evidence for a
+                  bug report, not the explanation - so it is folded rather than shown. */}
+              {claim.pending_reason == null ? null : (
+                <Disclosure summary="פרטי הסיבה">
+                  <p dir="auto">{claim.pending_reason}</p>
+                </Disclosure>
+              )}
             </Callout>
             {factResolution}
           </>

@@ -39,6 +39,7 @@ const actions = (overrides: Partial<DraftClaimActions> = {}): DraftClaimActions 
   onCommit: vi.fn(),
   onEdit: vi.fn(),
   onRegenerate: vi.fn(),
+  onReview: vi.fn(),
   onRemove: vi.fn(),
   regenerationDisabled: false,
   locked: false,
@@ -87,6 +88,34 @@ describe("DraftClaimRow", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "טקסט השורה" }), { target: { value: "ניסוח חדש" } });
     expect(screen.getByText("העריכה מבטלת את הביקורת הקודמת")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "שחזור הנוסח שנבדק" })).toBeInTheDocument();
+  });
+
+  it("offers a pending line with facts a review of its own wording, and folds the English reason", () => {
+    const rowActions = actions();
+    const pending: DraftClaim = {
+      ...claim,
+      claim_type: "pending",
+      pending_reason: "derived wording must preserve one or more complete canonical clauses",
+      text: "ניסוח שכתבתי בעצמי.",
+    };
+    render(<DraftClaimRow actions={rowActions} claim={pending} facts={facts} removal={{ route: "none" }} />);
+
+    expect(screen.getByText(pending.pending_reason ?? "")).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "בדיקת הניסוח מול העובדות" }));
+    expect(rowActions.onReview).toHaveBeenCalledWith(pending);
+  });
+
+  it("offers no wording review for a pending headline", () => {
+    render(
+      <DraftClaimRow
+        actions={actions()}
+        claim={{ ...claim, claim_type: "pending", style: "headline" }}
+        facts={facts}
+        removal={{ route: "none" }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "בדיקת הניסוח מול העובדות" })).not.toBeInTheDocument();
   });
 
   it("does not remove the line until the confirmation dialog is accepted", () => {

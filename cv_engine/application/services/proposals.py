@@ -233,10 +233,18 @@ def authorize_semantically_reviewed_claims(
     proposal: ClaimSupportProposal,
     facts: FactStore,
     evidence: ProviderEvidence,
+    claim_ids: set[str] | None = None,
 ) -> DraftDocument:
-    """Apply only complete, positive, source-attested semantic review evidence."""
+    """Apply only complete, positive, source-attested semantic review evidence.
+
+    `claim_ids` narrows the review to the claims an Operation produced or was asked to
+    review. Without it every pending claim in the draft is in scope, which made one
+    unsupported line the user wrote elsewhere fail a regeneration it had no part in.
+    """
     pending = {
-        claim.claim_id: claim for claim in draft_claims(draft) if claim.claim_type == "pending"
+        claim.claim_id: claim
+        for claim in draft_claims(draft)
+        if claim.claim_type == "pending" and (claim_ids is None or claim.claim_id in claim_ids)
     }
     assessments = {item.claim_id: item for item in proposal.assessments}
     if len(assessments) != len(proposal.assessments) or set(assessments) != set(pending):

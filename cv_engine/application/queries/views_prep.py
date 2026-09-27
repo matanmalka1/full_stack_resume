@@ -220,6 +220,15 @@ class DraftPreviewView(BoundaryDTO):
     html: str
 
 
+class DraftPdfPreviewView(BoundaryDTO):
+    """One exact draft version as a stamped, unstored preview PDF."""
+
+    working_draft_id: str
+    edit_version: int
+    content_hash: str
+    pdf: bytes
+
+
 class WorkingDraftView(BoundaryDTO):
     """§20: the WorkingDraft a client edits, plus its optimistic token.
 

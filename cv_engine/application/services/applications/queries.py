@@ -30,6 +30,7 @@ from ...queries import (
     ArtifactVersionDetailView,
     ArtifactVersionsView,
     DecisionRecordView,
+    DraftPdfPreviewView,
     DraftPreviewView,
     RevisionComparisonView,
     SelectionPlanDetailView,
@@ -505,6 +506,22 @@ class ApplicationQueryService:
             content_hash=working.content_hash,
             language=working.source.language,
             html=self.renderer.preview_html(working.source, self.candidate()),
+        )
+
+    def working_draft_pdf_preview(self, working_draft_id: str) -> DraftPdfPreviewView:
+        """This exact draft version as a PDF, before any approval.
+
+        The layout the approved render will produce, from the same composition and
+        the same browser - so checking the PDF no longer needs an approval, and an
+        approval is no longer the price of a look. It is stamped as an unapproved
+        draft on every page and stored nowhere: no revision, no artifact, no record.
+        """
+        working = self._working_draft(working_draft_id)
+        return DraftPdfPreviewView(
+            working_draft_id=working.id,
+            edit_version=working.edit_version,
+            content_hash=working.content_hash,
+            pdf=self.renderer.preview_pdf(working.source, self.candidate()),
         )
 
     def latest_decision(self, application_id: str) -> DecisionRecordView:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -202,6 +203,25 @@ def render_html(
     return output_path
 
 
+#: Stamped on every page of a preview PDF, outside the document's flow. A preview is
+#: the real layout of content nobody has approved, so it must not be mistaken for -
+#: or sent in place of - an approved CV.
+PREVIEW_STAMP = "טיוטה — לא מאושרת · DRAFT, NOT APPROVED"
+_PREVIEW_STAMP_HTML = (
+    '<div aria-hidden="true" style="position:fixed;top:3mm;left:0;right:0;'
+    "text-align:center;font:600 8pt sans-serif;color:#b42318;opacity:.7;"
+    f'pointer-events:none">{html.escape(PREVIEW_STAMP)}</div>'
+)
+
+
+def stamp_preview(document: str) -> str:
+    """The composed document with the draft stamp, which takes no space in the layout."""
+    closing = document.rfind("</body>")
+    if closing == -1:
+        raise ValueError("composed CV document has no </body> to stamp")
+    return document[:closing] + _PREVIEW_STAMP_HTML + document[closing:]
+
+
 class BrowserUnavailableError(InfrastructureFailure):
     """The rendering browser could not be started in this environment."""
 
@@ -379,6 +399,21 @@ class PlaywrightRenderer:
 
     def render_pdf(self, html_path: Path, pdf_path: Path) -> dict[str, Any]:
         return render_pdf(html_path, pdf_path)
+
+    def preview_pdf(self, draft: DraftDocument, candidate: CandidateContext) -> bytes:
+        """The same document through the same browser, stamped and never stored.
+
+        On demand only - it starts Chromium, which the HTML preview never does. The
+        files live in a temporary directory that is gone when this returns: nothing
+        here is an artifact, and no record points at it.
+        """
+        document = stamp_preview(compose_html(draft, self.knowledge_root, candidate))
+        with tempfile.TemporaryDirectory(prefix="cv-preview-") as directory:
+            html_path = Path(directory) / "preview.html"
+            pdf_path = Path(directory) / "preview.pdf"
+            html_path.write_text(document, encoding="utf-8")
+            render_pdf(html_path, pdf_path)
+            return pdf_path.read_bytes()
 
     def validate_rendered(
         self,

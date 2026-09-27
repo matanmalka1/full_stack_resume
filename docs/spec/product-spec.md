@@ -355,6 +355,14 @@ canonical fact lifecycle, or removed. Unlinked text requires explicit allowed fa
 links before semantic review. A provider cannot autonomously turn edited text into
 canonical facts or authorize its own wording.
 
+A pending line linked to facts can be sent to semantic review exactly as written
+(`regenerate_claim` with `keep_text`): no writer runs, and the line becomes reviewed
+only on the §10.1 acceptance rule. A writer Operation reviews only the lines it wrote;
+a pending line it left untouched is neither authorized nor failed by it.
+
+The document headline is not a factual claim. Editing it keeps it the headline, and
+deterministic validation accepts it only when it is one of the Profile's safe headlines.
+
 ### 10.1 Reviewed wording
 
 Wording may paraphrase, shorten, or combine information from multiple canonical facts
@@ -393,6 +401,13 @@ explicit choice; it performs no automatic merge.
 Preview is server-rendered from the current DraftDocument through the same rendering
 pipeline used for approved content where possible. It appears in an isolated iframe,
 is clearly marked as draft, and does not generate a PDF on every edit.
+
+A PDF of the current draft version is available on demand, before any approval
+(`GET /working-drafts/{id}/preview.pdf`). It is rendered synchronously through the same
+composition and browser as the approved render, stamped as an unapproved draft on every
+page, and stored nowhere: it creates no revision, artifact, or record, and it is not a
+render Operation. Seeing the layout therefore never requires approving - approval stays
+the one explicit act that freezes a version.
 
 ## 11. Validation, approval, rendering, and Ready
 

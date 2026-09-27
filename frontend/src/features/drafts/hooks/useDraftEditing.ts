@@ -47,7 +47,6 @@ export interface DraftEditing {
     pending: AutosaveState["pending"];
     pendingAdditions: AutosaveState["pendingAdditions"];
     pendingRemovals: AutosaveState["pendingRemovals"];
-    pendingSectionOrder: AutosaveState["pendingSectionOrder"];
     pendingClaimOrders: AutosaveState["pendingClaimOrders"];
     reapplyLocal: () => void;
   };
@@ -66,7 +65,6 @@ export interface DraftEditing {
     canRedo: boolean;
     canUndo: boolean;
     moveClaim: (section: string, index: number, offset: -1 | 1) => void;
-    moveSection: (index: number, offset: -1 | 1) => void;
     redo: () => void;
     undo: () => void;
   };
@@ -122,7 +120,6 @@ export const useDraftEditing = ({
     draft,
     queueClaimOrder: autosave.queueClaimOrder,
     queueEdit: (claim, text) => autosave.queueEdit({ claim_id: claim.claim_id, fact_ids: claim.fact_ids, text }),
-    queueSectionOrder: autosave.queueSectionOrder,
   });
 
   /* §14: the overlay is absolute, so every change starts from what the accounting
@@ -154,17 +151,17 @@ export const useDraftEditing = ({
   });
 
   const regeneration = useMutation({
-    mutationFn: async (target: { claimId?: string; section?: string }) => {
+    mutationFn: async (target: { claimId?: string; keepText?: boolean; section?: string }) => {
       if (draft === undefined) {
         throw new Error("a regeneration was offered before the draft arrived");
       }
       /* One key per target and version: a resent regeneration of the same line at the
          same version is the same command, and a different version is a different one. */
-      const key = `${draft.id}:${draft.edit_version}:${target.claimId ?? target.section ?? ""}`;
+      const key = `${draft.id}:${draft.edit_version}:${target.claimId ?? target.section ?? ""}${target.keepText === true ? ":review" : ""}`;
 
       return target.claimId === undefined
         ? regenerateSection(draft, target.section ?? "", key)
-        : regenerateClaim(draft, target.claimId, key);
+        : regenerateClaim(draft, target.claimId, key, target.keepText === true);
     },
     /* §14 regeneration is an Operation, reported beside the draft it is rewriting rather
        than followed to a screen of its own. The accepted `202` seeds the Operation's own
@@ -184,7 +181,6 @@ export const useDraftEditing = ({
     autosave.pending.length > 0 ||
     autosave.pendingRemovals.length > 0 ||
     autosave.pendingAdditions.length > 0 ||
-    autosave.pendingSectionOrder !== null ||
     Object.keys(autosave.pendingClaimOrders).length > 0;
 
   /* Which command removes a line is `removability`'s answer, not a guess made here: the
@@ -214,6 +210,7 @@ export const useDraftEditing = ({
       onCommit: autosave.flush,
       onAdd: (section, text) => autosave.queueAddition({ section, text }),
       onRegenerate: (claim) => regeneration.mutate({ claimId: claim.claim_id }),
+      onReview: (claim) => regeneration.mutate({ claimId: claim.claim_id, keepText: true }),
       onRemove: removeClaim,
       regenerationDisabled: operationLive || dirty || regeneration.isPending || !regenerationAvailable,
       locked: operationLive,
@@ -227,7 +224,6 @@ export const useDraftEditing = ({
       pending: autosave.pending,
       pendingAdditions: autosave.pendingAdditions,
       pendingRemovals: autosave.pendingRemovals,
-      pendingSectionOrder: autosave.pendingSectionOrder,
       pendingClaimOrders: autosave.pendingClaimOrders,
       reapplyLocal: autosave.reapplyLocal,
     },
@@ -241,7 +237,6 @@ export const useDraftEditing = ({
       canRedo: history.canRedo,
       canUndo: history.canUndo,
       moveClaim: history.moveClaim,
-      moveSection: history.moveSection,
       redo: history.redo,
       undo: history.undo,
     },

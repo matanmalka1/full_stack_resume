@@ -63,6 +63,20 @@ from .inputs import (
 from .selection import SelectionChangeService
 
 
+def _changed_claim_ids(before: DraftDocument, after: DraftDocument) -> set[str]:
+    """Claims a proposal wrote: new in `after`, or carrying different text than before.
+
+    What a writer Operation's review covers. A pending line it left exactly as it found
+    it belongs to whoever wrote it, not to this Operation's review.
+    """
+    unchanged = {(claim.claim_id, claim.text) for claim in draft_claims(before)}
+    return {
+        claim.claim_id
+        for claim in draft_claims(after)
+        if (claim.claim_id, claim.text) not in unchanged
+    }
+
+
 class DraftAuthoringService:
     def __init__(
         self,
@@ -417,6 +431,7 @@ class DraftAuthoringService:
             knowledge,
             selected,
             evidence,
+            claim_ids=_changed_claim_ids(draft, updated),
             model=model,
             reasoning_effort=reasoning_effort,
         )
@@ -526,9 +541,7 @@ class DraftAuthoringService:
                 raise PreconditionFailed(f"claim addition rejected: {exc}") from exc
             added_claim_ids.add(new_claim_id)
         try:
-            patched = reorder_draft(
-                patched, section_order=command.section_order, claim_orders=command.claim_orders
-            )
+            patched = reorder_draft(patched, claim_orders=command.claim_orders)
         except KeyError as exc:
             raise UnknownRecord(f"unknown section in the working draft: {exc.args[0]}") from exc
         except ValueError as exc:
@@ -591,13 +604,20 @@ class DraftAuthoringService:
         draft: DraftDocument,
         knowledge: Knowledge,
         selected: list[str],
-        writer_evidence: ProviderEvidence,
+        writer_evidence: ProviderEvidence | None,
         *,
+        claim_ids: set[str],
         model: str | None,
         reasoning_effort: str | None,
     ) -> tuple[DraftDocument, ProviderEvidence | None]:
+        """Semantic review of the pending claims among `claim_ids` - only those.
+
+        A pending line the Operation did not touch is not its to authorize or to fail on.
+        """
         pending_ids = {
-            claim.claim_id for claim in draft_claims(draft) if claim.claim_type == "pending"
+            claim.claim_id
+            for claim in draft_claims(draft)
+            if claim.claim_type == "pending" and claim.claim_id in claim_ids
         }
         if not pending_ids:
             return draft, None
@@ -627,10 +647,11 @@ class DraftAuthoringService:
             )
             with evidence_attached(evidence):
                 authorized = authorize_semantically_reviewed_claims(
-                    draft, reviewed.proposal, knowledge.facts, evidence
+                    draft, reviewed.proposal, knowledge.facts, evidence, claim_ids=pending_ids
                 )
         except ApplicationError as exc:
-            exc.completed_evidence = (writer_evidence,)
+            if writer_evidence is not None:
+                exc.completed_evidence = (writer_evidence,)
             raise
         return authorized, evidence
 
@@ -694,6 +715,7 @@ class DraftAuthoringService:
             knowledge,
             allowed,
             evidence,
+            claim_ids=_changed_claim_ids(draft, updated),
             model=command.model,
             reasoning_effort=command.reasoning_effort,
         )
@@ -731,6 +753,34 @@ class DraftAuthoringService:
             raise UnknownRecord(f"unknown claim in the working draft: {command.claim_id}")
         section, claim = located
         allowed = sorted(claim.fact_ids)
+        if command.keep_text:
+            # The user's own wording, reviewed as written: the reviewer is the only
+            # provider call, and its evidence is the Operation's evidence. Review decides
+            # nothing on its own - `authorize_semantically_reviewed_claims` applies the
+            # same hard checks it applies to writer output.
+            if claim.claim_type != "pending" or not claim.fact_ids:
+                raise ProposalRejected(
+                    "only a pending claim linked to at least one fact can have its own wording reviewed"
+                )
+            reviewed, review_evidence = self._review_pending_claims(
+                command.application_id,
+                operation_id,
+                draft,
+                knowledge,
+                allowed,
+                None,
+                claim_ids={claim.claim_id},
+                model=command.model,
+                reasoning_effort=command.reasoning_effort,
+            )
+            if review_evidence is None:
+                raise ProposalRejected("semantic review produced no evidence")
+            return PreparedRegeneration(
+                working=working,
+                source=reviewed,
+                claim_ids=[claim.claim_id],
+                evidence=review_evidence,
+            )
         answered = self.provider.regenerate_claim(
             RegenerateClaimContext(
                 claim_id=claim.claim_id,
@@ -775,6 +825,7 @@ class DraftAuthoringService:
             knowledge,
             allowed,
             evidence,
+            claim_ids=_changed_claim_ids(draft, updated),
             model=command.model,
             reasoning_effort=command.reasoning_effort,
         )

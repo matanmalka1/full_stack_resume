@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import json
 from html.parser import HTMLParser
+from io import BytesIO
 
 import pytest
 from api_harness import MUTATION_HEADERS, analyze_offline
 from helpers import ACCOUNT_MANAGER_JOB, artifact_path, working_claim, working_draft_paths
+from pypdf import PdfReader
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import (
@@ -542,6 +544,34 @@ def test_the_preview_is_the_rendered_draft_and_is_safe_to_frame(ai_api_worker) -
     assert first_claim.split()[0] in response.text
 
 
+@pytest.mark.browser
+def test_the_pdf_preview_is_stamped_and_leaves_no_trace(ai_api_worker) -> None:
+    """product spec §10: the real PDF before approval, costing no version.
+
+    Stamped on every page as an unapproved draft, and stored nowhere: the draft stays
+    open at the same version and no revision exists afterwards.
+    """
+    application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Pdf Preview Co")
+    read = _read(ai_api_worker, working_draft_id)
+
+    response = ai_api_worker.client.get(
+        f"{API_PREFIX}/working-drafts/{working_draft_id}/preview.pdf"
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["Content-Type"] == "application/pdf"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["ETag"] == read.headers["ETag"]
+    pages = PdfReader(BytesIO(response.content)).pages
+    assert pages
+    assert all("DRAFT, NOT APPROVED" in page.extract_text() for page in pages)
+    after = _read(ai_api_worker, working_draft_id)
+    assert after.headers["ETag"] == read.headers["ETag"]
+    revisions = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}/approved-revisions")
+    assert revisions.status_code == 200, revisions.text
+    assert revisions.json()["items"] == []
+
+
 def test_a_patch_that_says_nothing_or_contradicts_itself_is_refused(ai_api_worker) -> None:
     """`422`, before anything is applied. An empty patch is not a save."""
     application_id, working_draft_id, _sources = _drafted(ai_api_worker, "Empty Patch Co")
@@ -569,20 +599,29 @@ def test_reorder_preserves_section_membership_and_survives_a_fresh_read(ai_api_w
     before = _read(ai_api_worker, working_draft_id)
     sections = before.json()["outline"]["sections"]
     assert len(sections) >= 2
+    section_names = [section["name"] for section in sections]
     target = next(section for section in sections if len(section["claims"]) >= 2)
-    section_order = [section["name"] for section in reversed(sections)]
     claim_order = [claim["claim_id"] for claim in reversed(target["claims"])]
+
+    # Section order is Profile policy: the patch has no field that could move a section.
+    moved = _reorder(
+        ai_api_worker,
+        working_draft_id,
+        before.headers["ETag"],
+        {"section_order": list(reversed(section_names))},
+    )
+    assert moved.status_code == 422, moved.text
 
     changed = _reorder(
         ai_api_worker,
         working_draft_id,
         before.headers["ETag"],
-        {"section_order": section_order, "claim_orders": {target["name"]: claim_order}},
+        {"claim_orders": {target["name"]: claim_order}},
     )
 
     assert changed.status_code == 200, changed.text
     after = _read(ai_api_worker, working_draft_id)
-    assert [section["name"] for section in after.json()["outline"]["sections"]] == section_order
+    assert [section["name"] for section in after.json()["outline"]["sections"]] == section_names
     reordered = next(
         section
         for section in after.json()["outline"]["sections"]

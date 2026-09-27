@@ -29,10 +29,9 @@ interface DraftHistoryOptions {
   draft: WorkingDraft | undefined;
   queueClaimOrder: (section: string, order: string[]) => void;
   queueEdit: (claim: DraftClaim, text: string) => void;
-  queueSectionOrder: (order: string[]) => void;
 }
 
-export const useDraftHistory = ({ draft, queueClaimOrder, queueEdit, queueSectionOrder }: DraftHistoryOptions) => {
+export const useDraftHistory = ({ draft, queueClaimOrder, queueEdit }: DraftHistoryOptions) => {
   /* Include the outline as well as its server identity. A cache refresh may replace the
      structured projection without changing the hook instance, and that replacement must
      become the new visible base without discarding this draft's usable history. */
@@ -90,18 +89,6 @@ export const useDraftHistory = ({ draft, queueClaimOrder, queueEdit, queueSectio
     [history.outline, queueEdit, record],
   );
 
-  const moveSection = useCallback(
-    (index: number, offset: -1 | 1) => {
-      const current = history.outline;
-      if (current === null || index + offset < 0 || index + offset >= current.sections.length) return;
-      const next = copyOutline(current);
-      [next.sections[index], next.sections[index + offset]] = [next.sections[index + offset], next.sections[index]];
-      record(next, null);
-      queueSectionOrder(next.sections.map((section) => section.name));
-    },
-    [history.outline, queueSectionOrder, record],
-  );
-
   const moveClaim = useCallback(
     (sectionName: string, index: number, offset: -1 | 1) => {
       const current = history.outline;
@@ -133,12 +120,6 @@ export const useDraftHistory = ({ draft, queueClaimOrder, queueEdit, queueSectio
         const previous = currentClaims.get(claim.claim_id);
         if (previous !== undefined && previous.text !== claim.text) queueEdit(previous, claim.text);
       }
-      if (
-        current.sections.map((section) => section.name).join("\0") !==
-        target.sections.map((section) => section.name).join("\0")
-      ) {
-        queueSectionOrder(target.sections.map((section) => section.name));
-      }
       for (const section of target.sections) {
         const previous = current.sections.find((candidate) => candidate.name === section.name);
         if (
@@ -153,7 +134,7 @@ export const useDraftHistory = ({ draft, queueClaimOrder, queueEdit, queueSectio
         }
       }
     },
-    [history.outline, queueClaimOrder, queueEdit, queueSectionOrder],
+    [history.outline, queueClaimOrder, queueEdit],
   );
 
   const undo = useCallback(() => {
@@ -200,7 +181,6 @@ export const useDraftHistory = ({ draft, queueClaimOrder, queueEdit, queueSectio
     canUndo: history.past.length > 0,
     edit,
     moveClaim,
-    moveSection,
     redo,
     reset,
     undo,

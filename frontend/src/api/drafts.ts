@@ -83,6 +83,11 @@ export const workingDraftFactsQueryOptions = (workingDraftId: string) =>
 export const draftPreviewSrc = (workingDraftId: string, editVersion: number): string =>
   `${workingDraftPath(workingDraftId)}/preview?v=${editVersion}`;
 
+/* Opened in a new tab rather than fetched, like the framed preview. The version keeps a
+   save from being answered by a cached older PDF; the server renders the current one. */
+export const draftPdfPreviewHref = (workingDraftId: string, editVersion: number): string =>
+  `${workingDraftPath(workingDraftId)}/preview.pdf?v=${editVersion}`;
+
 /* Every claim in the document, in reading order, headline and contacts included - the
    same set `draft_claims` walks on the backend, so the editor and the projection cannot
    disagree about what a claim is. */
@@ -96,7 +101,6 @@ export interface DraftPatch {
   claim_edits: ClaimPatch[];
   claim_removals: string[];
   claim_additions: ClaimAddition[];
-  section_order?: string[];
   claim_orders?: Record<string, string[]>;
 }
 
@@ -197,10 +201,13 @@ export const regenerateSection = async (
     idempotencyKey,
   );
 
+/* `keepText` reviews the user's own wording instead of writing new wording: the claim's
+   current text goes to semantic review against its own facts (product spec §10). */
 export const regenerateClaim = async (
   draft: WorkingDraft,
   claimId: string,
   idempotencyKey: string,
+  keepText = false,
 ): Promise<QueuedOperation> =>
   regenerate(
     `${workingDraftPath(draft.id)}/regenerate-claim` as ApiPath,
@@ -211,6 +218,7 @@ export const regenerateClaim = async (
       job_analysis_id: draft.job_analysis_id,
       selection_plan_id: draft.selection_plan_id,
       claim_id: claimId,
+      ...(keepText ? { keep_text: true } : {}),
     },
     idempotencyKey,
   );

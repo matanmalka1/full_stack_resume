@@ -48,6 +48,7 @@ from cv_engine.domain.contracts.providers import (
     SectionProposal,
     SelectionProposal,
 )
+from cv_engine.domain.drafts import draft_claims
 from cv_engine.util import new_id, sha256_text
 
 #: One valid reading, for tests whose subject is the machinery around the call
@@ -617,6 +618,87 @@ def test_regeneration_commits_against_the_exact_frozen_version(
     with transaction_manager.read() as tx:
         updated = application_projection_reader.active_working_draft(tx, ingested.application_id)
     assert updated.edit_version == working.edit_version + 1
+
+
+def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
+    ai_services,
+    fake_openai: FakeOpenAI,
+    transaction_manager,
+    application_projection_reader,
+) -> None:
+    """§10: a free-text edit reaches `reviewed` through semantic review, not a rewrite.
+
+    `keep_text` runs no writer. Only the named line is reviewed: another pending line
+    the user wrote stays pending, and does not fail this review.
+    """
+    ingested, analysed, working = _drafted(
+        ai_services, "Own Wording Co", transaction_manager, application_projection_reader
+    )
+    edited = [
+        claim
+        for section in working.source.sections
+        for claim in section.claims
+        if claim.claim_type == "canonical" and len(claim.fact_ids) == 1
+    ][:2]
+    assert len(edited) == 2
+    for claim in edited:
+        ai_services.drafts.edit_claim(
+            ingested.application_id,
+            claim.claim_id,
+            list(claim.fact_ids),
+            text=f"In short: {claim.text}",
+        )
+    with transaction_manager.read() as tx:
+        working = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    target, other = (
+        next(item for item in draft_claims(working.source) if item.claim_id == claim.claim_id)
+        for claim in edited
+    )
+    assert target.claim_type == other.claim_type == "pending"
+    fake_openai.script(
+        "assess_claim_support",
+        ClaimSupportProposal(
+            assessments=[
+                ClaimSupportAssessment(
+                    claim_id=target.claim_id,
+                    verdict="supported",
+                    assertions=[
+                        ReviewedAssertion(
+                            claim_quote=target.text,
+                            fact_ids=list(target.fact_ids),
+                            source_quotes=[edited[0].text],
+                        )
+                    ],
+                    rationale="The wording preserves the supplied fact.",
+                )
+            ]
+        ),
+    )
+    queued = ai_services.operation_submissions.submit_regeneration(
+        RegenerateClaimCommand(
+            application_id=ingested.application_id,
+            working_draft_id=working.id,
+            expected_edit_version=working.edit_version,
+            expected_content_hash=working.content_hash,
+            job_analysis_id=analysed.analysis_id,
+            selection_plan_id=analysed.selection_plan_id,
+            claim_id=target.claim_id,
+            keep_text=True,
+        ),
+        idempotency_key=new_id(),
+        draft_service=ai_services.drafts,
+    )
+    completed = _run(ai_services, queued)
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    assert fake_openai.calls_for("regenerate_claim") == []
+    assert len(fake_openai.calls_for("assess_claim_support")) == 1
+    with transaction_manager.read() as tx:
+        actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    claims = {item.claim_id: item for item in draft_claims(actual.source)}
+    assert claims[target.claim_id].claim_type == "reviewed"
+    assert claims[target.claim_id].text == target.text
+    assert claims[other.claim_id].claim_type == "pending"
 
 
 # --------------------------------------------------------------------------

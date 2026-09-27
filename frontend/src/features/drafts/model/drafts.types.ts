@@ -13,6 +13,9 @@ export interface DraftClaimActions {
      as any other line nothing has authorized yet. */
   onAdd: (section: string, text: string) => void;
   onRegenerate: (claim: DraftClaim) => void;
+  /* Semantic review of the line exactly as the user wrote it, against its own facts. It
+     runs as a regeneration Operation, so it shares that control's availability. */
+  onReview: (claim: DraftClaim) => void;
   onRemove: (claim: DraftClaim) => void;
   /* Regeneration freezes the saved version, so it is withheld while anything is unsaved
      or while a regeneration is already running, and when AI is unavailable. */

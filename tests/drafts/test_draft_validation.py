@@ -25,6 +25,15 @@ def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
     assert set(report.groups) == {"content", "profile", "structure", "headline_safety"}
 
 
+    # A section out of place is one finding. Each section is still checked against its own
+    # spec, so its facts are not all reported as misplaced against its neighbour's.
+    draft.sections[0], draft.sections[1] = draft.sections[1], draft.sections[0]
+    moved = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
+    codes = {issue.code for issue in moved.issues}
+    assert "section-order" in codes
+    assert not codes & {"fact-outside-profile-section", "section-budget-exceeded", "pinned-fact-dropped"}
+
+
 def test_an_unsafe_or_misplaced_headline_is_blocked(
     project_root: Path,
     draft_factory,
@@ -59,6 +68,21 @@ def test_an_unsafe_or_misplaced_headline_is_blocked(
     assert "filename" not in report.groups
     issue = next(issue for issue in report.issues if issue.code == "unsafe-headline")
     assert issue.group == "headline_safety"
+
+    # An edit keeps the headline a headline - the safe-headline list decides it, not a
+    # fact derivation - so retyping an allowed wording clears the finding instead of
+    # leaving a pending claim nothing can resolve.
+    restored = apply_claim_edit(
+        draft,
+        draft.headline.claim_id,
+        list(draft.headline.fact_ids),
+        facts,
+        text=profile.safe_headlines[0],
+    )
+    assert restored.headline.claim_type == "headline"
+    markdown, _text = store_draft(project_root, restored)
+    report = validate_draft(restored, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
+    assert report.passed, report.model_dump()
 
     facts, profile, analysis, draft, _markdown = draft_factory(
         "Account Manager retention portfolio customer relationships",

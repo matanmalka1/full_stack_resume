@@ -28,10 +28,9 @@ const workingDraft = (): WorkingDraft =>
 const setup = () => {
   const queueClaimOrder = vi.fn();
   const queueEdit = vi.fn();
-  const queueSectionOrder = vi.fn();
   const draft = workingDraft();
-  const hook = renderHook(() => useDraftHistory({ draft, queueClaimOrder, queueEdit, queueSectionOrder }));
-  return { ...hook, draft, queueClaimOrder, queueEdit, queueSectionOrder };
+  const hook = renderHook(() => useDraftHistory({ draft, queueClaimOrder, queueEdit }));
+  return { ...hook, draft, queueClaimOrder, queueEdit };
 };
 
 describe("useDraftHistory", () => {
