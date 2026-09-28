@@ -84,6 +84,40 @@ class AnalysisSelectionSourceReader(Protocol):
     def selection_source(self, tx: ReadTransaction, job_analysis_id: str) -> SelectionSource: ...
 
 
+class AnalysisStore(Protocol):
+    """Analysis writes and the Application's current matching configuration.
+
+    Selection lives on the CV document; this store owns no selection state.
+    """
+
+    def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
+
+    def save_analysis(
+        self,
+        tx: WriteTransaction,
+        application_id: str,
+        snapshot_id: str,
+        analysis: JobAnalysis,
+        *,
+        provider: str,
+        model: str,
+        expected_analysis_id: str | None = None,
+        refuse_matching_context_operation: bool = False,
+    ) -> str: ...
+
+    def refuse_matching_context_operation(
+        self, tx: WriteTransaction, application_id: str
+    ) -> None: ...
+
+    def set_normalized_role(
+        self, tx: WriteTransaction, application_id: str, normalized_role: str
+    ) -> None: ...
+
+    def set_matching_emphasis(
+        self, tx: WriteTransaction, application_id: str, emphasis: str
+    ) -> None: ...
+
+
 class AnalysisPlanStore(Protocol):
     def save_analysis(
         self,
