@@ -51,6 +51,31 @@ files, not fewer lanes.
 
 API routers are not in any lane: lanes test through application services directly.
 
+**Check result (2026-09-28): L2 and L3 merge.** The persistence graph has six cross-lane
+edges — `application_projections` → `artifacts_sql`, `operation_sql`;
+`draft_approval_sources`, `validation_store`, `decision_store` → `artifacts_sql`;
+`ready_evidence`, `render_context` → `drafts_sql` — and both lanes read the unowned
+`analysis_sql` (`_lock_application`, `_analysis_record`, `_selection_plan_record`), whose
+selection-plan half dies with `selection_plans`. Hoisting helpers into a lead module
+would not fix it: `_approved_revision` and the validation/decision helpers in
+`artifacts_sql` are deleted by the rewrite, not moved. The application layer is worse:
+`services/operations/handlers.py`, `service.py`, `replacement.py` and
+`services/rendering.py` call `services/drafts/`, `services/analysis/`, `commands`, `chain`,
+`ready` and `queries` — the interfaces L2 is redesigning — so L3 would build on
+signatures that do not survive. The backend is sequentially dependent; it runs as one lane.
+
+| Lane | Owns |
+| --- | --- |
+| **L1 docs** | unchanged |
+| **L2 backend** (was L2 + L3) | `cv_engine/application/` except `ports/`; `cv_engine/infrastructure/` except `persistence/tables/`; `cv_engine/domain/` except `contracts/`; `cv_engine/worker/`; `tests/` except `conftest.py`, `tests/architecture/` and the API-level `test_*_api.py`/`e2e/` files, which Wave 3 moves with the routers |
+| **L4 frontend** | unchanged |
+
+Inside L2 the order is persistence (document store, file store, submission store against
+the Wave 1 ports) → document services (create, selection, edit, check, approve, submit,
+build_from_analysis, projection) → operations (propose_selection, draft generation,
+render_document, worker handlers). Old modules the lane stops using stay in place for the
+Wave 3 deletion unless nothing else in the lane imports them.
+
 Per-lane gate: the lane's focused tests, architecture test with no allowlist growth,
 `git diff --stat` inside ownership.
 
