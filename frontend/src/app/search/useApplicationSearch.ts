@@ -17,6 +17,7 @@ export interface ApplicationSearch {
   // Shown rows answer an earlier search than the field now holds.
   isStale: boolean;
   isError: boolean;
+  error: unknown;
   isPending: boolean;
   retry: () => void;
 }
@@ -42,6 +43,7 @@ export const useApplicationSearch = (enabled: boolean): ApplicationSearch => {
     items: query.data?.items ?? [],
     isStale: query.isPlaceholderData || deferred !== trimmed,
     isError: query.isError,
+    error: query.error,
     isPending: query.isPending,
     retry: () => {
       void query.refetch();

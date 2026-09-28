@@ -6,6 +6,7 @@ import { invalidateDocumentViews } from "@/api/documents";
 import { recordInternalSubmission } from "@/api/tracking";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
+import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
@@ -29,6 +30,8 @@ interface SubmissionDialogProps {
      below is what the reader has to state before a second one can be written. */
   previousSubmittedAt: string | null;
 }
+
+const serverFields = { submitted_at: "submittedAt" } as const;
 
 export const SubmissionDialog = ({
   applicationId,
@@ -72,6 +75,7 @@ export const SubmissionDialog = ({
       void invalidateDocumentViews(queryClient, applicationId);
     },
   });
+  const inlineFields = useServerFieldErrors(submission.error, form.setError, serverFields);
 
   const close = () => {
     setRepeatAcknowledged(false);
@@ -123,13 +127,6 @@ export const SubmissionDialog = ({
             </Checkbox>
           </div>
         )}
-        {submission.error === null ? null : (
-          <ErrorCallout
-            error={submission.error}
-            fallbackDetail="ההגשה לא נרשמה וההיסטוריה לא השתנתה."
-            fallbackTitle="לא ניתן לרשום את ההגשה"
-          />
-        )}
         <Field error={form.formState.errors.submittedAt?.message} label="מועד ההגשה">
           {(control) => (
             <Input
@@ -143,6 +140,14 @@ export const SubmissionDialog = ({
             />
           )}
         </Field>
+        {submission.error === null ? null : (
+          <ErrorCallout
+            error={submission.error}
+            fallbackDetail="היסטוריית ההגשות לא השתנתה. אפשר לנסות שוב."
+            inlineFields={inlineFields}
+            title="ההגשה לא נרשמה"
+          />
+        )}
       </form>
     </Dialog>
   );

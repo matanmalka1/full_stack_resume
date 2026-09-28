@@ -83,8 +83,8 @@ export const FactsIntegrityCheck = () => {
         <ErrorCallout
           className="mt-2"
           error={check.error}
-          fallbackDetail="לא ניתן היה להשלים את בדיקת התקינות."
-          fallbackTitle="בדיקת התקינות נכשלה"
+          fallbackDetail="אפשר להריץ אותה שוב."
+          title="בדיקת התקינות לא הושלמה"
         />
       )}
     </div>

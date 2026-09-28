@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ApiProblem } from "@/api/client";
 import type { ApplicationDetail, DocumentCheck } from "@/api/contracts";
 import { approveDocument, invalidateDocumentViews } from "@/api/documents";
-import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
@@ -110,8 +110,8 @@ export const DraftApprovalDialog = ({
         <ErrorCallout
           className="mt-4"
           error={approval.error}
-          fallbackDetail={briefServerFailureDetail}
-          fallbackTitle="האישור לא בוצע"
+          fallbackDetail="המסמך לא השתנה. אפשר לנסות שוב."
+          title="המסמך לא אושר"
         />
       )}
       {warnings.length === 0 ? null : (

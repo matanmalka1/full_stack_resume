@@ -227,8 +227,8 @@ export const DocumentSelectionPanel = ({
       {mutationError === null ? null : (
         <ErrorCallout
           error={mutationError}
-          fallbackDetail="בחירת העובדות של המסמך לא השתנתה. אפשר לרענן ולנסות שוב."
-          fallbackTitle="בחירת העובדות לא נשמרה"
+          fallbackDetail="הבחירה הקודמת נשארה בתוקף. אפשר לנסות שוב."
+          title="בחירת העובדות לא נשמרה"
         />
       )}
 

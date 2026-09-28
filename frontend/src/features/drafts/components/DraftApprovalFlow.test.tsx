@@ -285,7 +285,7 @@ describe("DraftApprovalDialog", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
     const dialog = await screen.findByRole("dialog");
     /* A known code, so the callout shows the client's own translation. */
-    expect(await within(dialog).findByText("יש להשלים התאמה של מאגר העובדות לפני המשך התהליך.")).toBeInTheDocument();
+    expect(await within(dialog).findByText(/יש להשלים את התאמת מאגר העובדות לפני שממשיכים/)).toBeInTheDocument();
     expect(dialog).toHaveAttribute("open");
   });
 

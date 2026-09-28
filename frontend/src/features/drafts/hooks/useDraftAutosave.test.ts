@@ -145,7 +145,8 @@ describe("useDraftAutosave", () => {
 
     await waitFor(() => expect(result.current.status).toBe("conflict"));
     expect(result.current.pending).toEqual([patch("c-1", "mine")]);
-    expect(result.current.message).toContain("hash-9");
+    /* The server's conflict detail is diagnostic; the dialog explains the choice. */
+    expect(result.current.message).toBeNull();
     expect(onConflict).toHaveBeenCalledTimes(1);
 
     /* Nothing is resent while the dialog is open: a retry would be an answer the user

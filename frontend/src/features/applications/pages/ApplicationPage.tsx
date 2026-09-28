@@ -9,6 +9,7 @@ import { useSettings } from "@/api/useSettings";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
+import { problemSentence } from "@/ui/errorMessages";
 import { QueryState } from "@/ui/QueryState";
 import { WideRow } from "@/ui/WideRow";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -191,7 +192,7 @@ export const ApplicationPage = () => {
 
       <QueryState
         error={query.error}
-        fallbackTitle="לא ניתן לטעון את פרטי המועמדות"
+        errorTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={detail === undefined}
         loadingState={preparationLoading}
       >
@@ -219,8 +220,7 @@ export const ApplicationPage = () => {
             detail.preparation_state !== "needs_analysis" ||
             watched !== undefined ? null : (
               <Callout role="alert" title="המועמדות נוצרה, אך הניתוח לא הופעל" tone="warning">
-                {createdApplication.analysisProblem?.detail ?? "ניתן להפעיל את הניתוח מהמסך הזה."} המועמדות שכבר נוצרה
-                לא תיווצר שוב.
+                {problemSentence({ problem: createdApplication.analysisProblem }, "אפשר להפעיל את הניתוח מהמסך הזה.")}
               </Callout>
             )}
 

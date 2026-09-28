@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiProblem, type ProblemDetails } from "@/api/client";
 import { ErrorCallout } from "./ErrorCallout";
@@ -15,37 +15,78 @@ const problem = (overrides: Partial<ProblemDetails> = {}): ApiProblem =>
   });
 
 describe("ErrorCallout", () => {
-  it("uses the Hebrew message for a known problem code and hides server prose", () => {
-    render(<ErrorCallout error={problem()} fallbackTitle="לא ניתן לטעון" />);
-
-    expect(screen.getByRole("alert")).toHaveTextContent("הרשומה לא נמצאה");
-    expect(screen.getByRole("alert")).toHaveTextContent("הפריט המבוקש אינו קיים או שכבר אינו זמין.");
-    expect(screen.queryByText(/Not Found|unknown application/)).not.toBeInTheDocument();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it("uses safe server detail only for an unknown code", () => {
+  it("titles the failure in the screen's words and explains a known code in Hebrew", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(<ErrorCallout error={problem()} title="לא ניתן לטעון את המועמדות" />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("לא ניתן לטעון את המועמדות");
+    expect(alert).toHaveTextContent("הפריט המבוקש לא נמצא. ייתכן שנמחק. אפשר לרענן את העמוד ולנסות שוב.");
+    expect(screen.queryByText(/Not Found|unknown application|UNKNOWN_RECORD/)).not.toBeInTheDocument();
+  });
+
+  it("keeps server prose for an unknown code in the log, not on the page", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     render(
       <ErrorCallout
-        error={problem({ code: "FUTURE_PROBLEM", detail: "Safe future explanation." })}
-        fallbackTitle="לא ניתן לטעון"
+        error={problem({ code: "FUTURE_PROBLEM", detail: "Safe future explanation.", status: 412 })}
+        fallbackDetail="הרשומות לא השתנו. אפשר לנסות שוב."
+        title="ההגשה לא נרשמה"
       />,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("הבקשה נכשלה");
-    expect(screen.getByRole("alert")).toHaveTextContent("Safe future explanation.");
+    expect(screen.getByRole("alert")).toHaveTextContent("ההגשה לא נרשמה");
+    expect(screen.getByRole("alert")).toHaveTextContent("הרשומות לא השתנו. אפשר לנסות שוב.");
+    expect(screen.queryByText(/Safe future explanation/)).not.toBeInTheDocument();
+    expect(warn).toHaveBeenCalledWith(
+      "ui_error",
+      expect.objectContaining({ code: "FUTURE_PROBLEM", detail: "Safe future explanation.", status: 412 }),
+    );
   });
 
-  it("presents request issues as field errors", () => {
-    render(
-      <ErrorCallout
-        error={problem({
-          code: "REQUEST_VALIDATION_FAILED",
-          context: { issues: [{ location: ["body", "job_text"], type: "string_too_short" }] },
-        })}
-        fallbackTitle="לא ניתן לשמור"
-      />,
-    );
+  it("never renders a local exception's text", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<ErrorCallout error={new Error("Settings require a current ETag")} title="ההגדרות לא נשמרו" />);
 
-    expect(screen.getByText("טקסט המשרה: הערך אינו תקין.")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("הפעולה לא הושלמה. אפשר לרענן את העמוד ולנסות שוב.");
+    expect(screen.queryByText(/ETag/)).not.toBeInTheDocument();
+    expect(logged).toHaveBeenCalledWith(
+      "ui_error",
+      expect.objectContaining({ message: "Settings require a current ETag" }),
+    );
+  });
+
+  it("lists field refusals the form could not place, and leaves out the ones it did", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const refused = problem({
+      code: "REQUEST_VALIDATION_FAILED",
+      status: 422,
+      context: {
+        issues: [
+          { location: ["body", "job_text"], type: "string_too_short" },
+          { location: ["body", "source_url"], type: "string_too_long" },
+        ],
+      },
+    });
+    const { rerender } = render(<ErrorCallout error={refused} title="לא ניתן לשמור" />);
+
+    expect(screen.getByText("טקסט המשרה: יש למלא את השדה.")).toBeInTheDocument();
+    expect(screen.getByText("כתובת המשרה: הערך ארוך מדי.")).toBeInTheDocument();
+
+    rerender(<ErrorCallout error={refused} inlineFields={new Set(["job_text"])} title="לא ניתן לשמור" />);
+
+    expect(screen.queryByText("טקסט המשרה: יש למלא את השדה.")).not.toBeInTheDocument();
+    expect(screen.getByText("כתובת המשרה: הערך ארוך מדי.")).toBeInTheDocument();
+
+    rerender(<ErrorCallout error={refused} inlineFields={new Set(["job_text", "source_url"])} title="לא ניתן לשמור" />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "חלק מהפרטים אינם תקינים. יש לתקן את השדות המסומנים ולנסות שוב.",
+    );
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
   });
 });

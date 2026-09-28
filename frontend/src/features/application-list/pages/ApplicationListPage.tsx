@@ -9,6 +9,7 @@ import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { IconButton } from "@/ui/IconButton";
 import { ErrorCallout } from "@/ui/ErrorCallout";
+import { SuccessNotice } from "@/ui/SuccessNotice";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -157,11 +158,10 @@ export const ApplicationListPage = () => {
         </div>
       )}
       {deletedLabel === null ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border bg-cv-surface-muted px-3.5 py-2.5 text-support text-cv-text">
-          <LiveRegion visuallyHidden={false}>
-            <span dir="auto">המועמדות של {deletedLabel} נמחקה והוסרה מלוח המועמדויות.</span>
-          </LiveRegion>
-        </div>
+        <SuccessNotice
+          onDismiss={() => setDeletedLabel(null)}
+          title={`המועמדות של ${deletedLabel} נמחקה והוסרה מהלוח`}
+        />
       )}
       <ApplicationAttentionSummary
         boardHasApplications={page !== undefined && page.total > 0}
@@ -172,32 +172,20 @@ export const ApplicationListPage = () => {
         onShowAll={() => updateQuery({ ...query, preset: "needs_attention" })}
       />
       {clearNextActionMutation.error === null ? null : (
-        <ErrorCallout
-          error={clearNextActionMutation.error}
-          fallbackDetail="התזכורת לא הוסרה. הערכים הקיימים לא השתנו."
-          fallbackTitle="לא ניתן להסיר את התזכורת"
-        />
+        <ErrorCallout error={clearNextActionMutation.error} fallbackDetail="אפשר לנסות שוב." title="התזכורת לא הוסרה" />
       )}
       {closeMutation.error === null ? null : (
-        <ErrorCallout
-          error={closeMutation.error}
-          fallbackDetail="המועמדות לא נסגרה. אפשר לנסות שוב."
-          fallbackTitle="סגירת המועמדות נכשלה"
-        />
+        <ErrorCallout error={closeMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נסגרה" />
       )}
       {undoCloseMutation.error === null ? null : (
         <ErrorCallout
           error={undoCloseMutation.error}
-          fallbackDetail="הסגירה נשארה בתוקף. אפשר לנסות שוב או לתקן את האירוע מתוך המועמדות."
-          fallbackTitle="לא ניתן לבטל את הסגירה"
+          fallbackDetail="המועמדות נשארה סגורה. אפשר לנסות שוב או לתקן את האירוע מתוך המועמדות."
+          title="הסגירה לא בוטלה"
         />
       )}
       {deleteMutation.error === null ? null : (
-        <ErrorCallout
-          error={deleteMutation.error}
-          fallbackDetail="המועמדות לא נמחקה. אפשר לנסות שוב."
-          fallbackTitle="מחיקת המועמדות נכשלה"
-        />
+        <ErrorCallout error={deleteMutation.error} fallbackDetail="אפשר לנסות שוב." title="המועמדות לא נמחקה" />
       )}
 
       <QueryState
@@ -214,7 +202,7 @@ export const ApplicationListPage = () => {
           </EmptyState>
         }
         error={listQuery.error}
-        fallbackTitle="לא ניתן לטעון את המועמדויות"
+        errorTitle="לא ניתן לטעון את המועמדויות"
         loading={listQuery.isPending}
         /* No `loadingLabel`: `loadingState` always wins over it, so a label here would be
            a string that never renders. The skeleton announces the wait itself. */

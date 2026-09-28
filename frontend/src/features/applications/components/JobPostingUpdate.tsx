@@ -7,11 +7,12 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
+import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { Button } from "@/ui/Button";
-import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
 import { Input, Textarea } from "@/ui/Input";
+import { SuccessNotice } from "@/ui/SuccessNotice";
 import { SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "../model/applicationInput";
 
 /* The save rule this mirrors: text is sent verbatim and an empty URL becomes `null`.
@@ -26,6 +27,11 @@ interface PostingFields {
   job_text: string;
   source_url: string;
 }
+
+const serverFields = { job_text: "job_text", source_url: "source_url" } as const satisfies Record<
+  string,
+  keyof PostingFields
+>;
 
 /* A posting that changed after the Application was opened, without opening a second one.
 
@@ -65,6 +71,7 @@ export const JobPostingUpdate = ({
     getValues,
     handleSubmit,
     register,
+    setError,
   } = useAppForm<PostingFields>({
     defaultValues: {
       job_text: originalJobText,
@@ -96,6 +103,8 @@ export const JobPostingUpdate = ({
     },
   });
 
+  const inlineFields = useServerFieldErrors(create.error, setError, serverFields);
+
   const closeDialog = () => setOpen(false);
 
   return (
@@ -123,22 +132,9 @@ export const JobPostingUpdate = ({
       </div>
 
       {create.isSuccess && !open ? (
-        <Callout
-          action={
-            <Button onClick={() => create.reset()} variant="ghost">
-              סגירת ההודעה
-            </Button>
-          }
-          className="mt-4"
-          // role="status" is a Callout prop, not a DOM role; Callout already renders an
-          // <output> for it.
-          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-          role="status"
-          title="נשמר תצלום משרה חדש"
-          tone="success"
-        >
-          התצלום הקודם נשמר כפי שהוא. הניתוח שנעשה עליו אינו הניתוח הפעיל יותר, ולכן נדרש ניתוח מחדש מול הנוסח החדש.
-        </Callout>
+        <SuccessNotice className="mt-4" onDismiss={() => create.reset()} title="נשמר תצלום משרה חדש">
+          הגרסה הקודמת נשמרה כפי שהיא. הניתוח הקודם אינו פעיל יותר, ולכן יש להריץ ניתוח מחדש.
+        </SuccessNotice>
       ) : null}
 
       <Dialog
@@ -220,8 +216,9 @@ export const JobPostingUpdate = ({
           {create.error === null ? null : (
             <ErrorCallout
               error={create.error}
-              fallbackDetail="הפנייה לשרת נכשלה. שום תצלום לא נוצר, מה שהוזן נשמר בטופס ואפשר לנסות שוב."
-              fallbackTitle="התצלום לא נשמר"
+              fallbackDetail="לא נוצר תצלום חדש, והטקסט נשאר בטופס. אפשר לנסות שוב."
+              inlineFields={inlineFields}
+              title="נוסח המשרה לא נשמר"
             />
           )}
 

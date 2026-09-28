@@ -114,6 +114,9 @@ export const providerNowConfiguredPresentation: FailurePresentation = {
   guidance: "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. ספק AI זמין עכשיו, ואפשר להריץ את הפעולה שוב.",
 };
 
+/* The reason line for a failure this client has no wording for yet. */
+export const unknownFailureGuidance = "הפעולה לא הושלמה, והמצב הקיים נשמר. אפשר לנסות שוב.";
+
 /* What a terminal run's summary line says when it produced nothing. "Finished" beside a
    "failed" badge read as a contradiction. */
 export const terminalSummaries: Partial<Record<OperationStatus, string>> = {
@@ -164,6 +167,21 @@ export const failureReasonDetail = (reason: FailureReason | null | undefined): s
     default:
       return reasonDetails[reason.code];
   }
+};
+
+/* A document's `last_render_error` is the same structured reason, stored as plain JSON
+   next to the English detail. Only a reason this module can word is returned; anything
+   else is null, and the detail stays in the log. */
+export const recordedFailureDetail = (record: Record<string, unknown> | null | undefined): string | null => {
+  const code = record?.code;
+  if (record == null || typeof code !== "string" || !Object.hasOwn(reasonDetails, code)) return null;
+  if (code === "pdf_page_limit") {
+    return typeof record.pages === "number" && typeof record.maximum === "number"
+      ? failureReasonDetail({ code, pages: record.pages, maximum: record.maximum })
+      : null;
+  }
+  if (code === "missing_fact_rendering") return null;
+  return reasonDetails[code as FailureReason["code"]];
 };
 
 /* Plain words for the same two guarantees: nothing changed, and nothing was produced in

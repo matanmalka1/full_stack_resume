@@ -16,8 +16,8 @@ interface ApplicationIntakeFormProps {
   draftStatus: DraftStatus;
   error: Error | null;
   errors: FieldErrors<ApplicationIntakeFields>;
+  inlineFields: ReadonlySet<string>;
   isStale: boolean;
-  serverValidationFailed: boolean;
   formId: string;
   jobText: string;
   onInputChanged: (field: keyof ApplicationIntakeFields) => void;
@@ -31,8 +31,8 @@ export const ApplicationIntakeForm = ({
   error,
   errors,
   formId,
+  inlineFields,
   isStale,
-  serverValidationFailed,
   jobText,
   onInputChanged,
   onSubmit,
@@ -53,6 +53,6 @@ export const ApplicationIntakeForm = ({
       register={register}
     />
     {duplicates === null ? null : <DuplicateChoices matches={duplicates} />}
-    <IntakeFeedback error={error} isStale={isStale} serverValidationFailed={serverValidationFailed} />
+    <IntakeFeedback error={error} inlineFields={inlineFields} isStale={isStale} />
   </form>
 );

@@ -1,11 +1,14 @@
 import { ArrowRight, LoaderCircle } from "lucide-react";
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
+import { recordedFailureDetail } from "@/features/operations";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ErrorCallout } from "@/ui/ErrorCallout";
+import { reportError } from "@/ui/reportError";
 import type { RenderDocument } from "../hooks/useRenderDocument";
 
 /* A.4 frame 6's render step, inline in the editor. Explicit approval starts it; a failed
@@ -14,7 +17,9 @@ import type { RenderDocument } from "../hooks/useRenderDocument";
 
    The document stays editable beside this panel: editing an approved document is allowed
    and simply returns it to draft (§14). A failed render leaves it approved (§16), and the
-   projection's `last_render_error` says why until the next render or edit. */
+   projection's `last_render_error` records why until the next render or edit. Its
+   structured reason is worded the way the Operation report words it; its English detail
+   is diagnostic and goes to the console. */
 export const DraftRenderPanel = ({
   applicationId,
   lastRenderError,
@@ -26,6 +31,10 @@ export const DraftRenderPanel = ({
   state: RenderDocument;
 }) => {
   const { inFlight, ready, render } = state;
+  useEffect(() => {
+    if (lastRenderError != null) reportError("render_failure", lastRenderError);
+  }, [lastRenderError]);
+  const failureDetail = recordedFailureDetail(lastRenderError);
 
   /* While the render runs, the screen still says where the work stands. It offers nothing
      to press - the run is the live panel's to report and cancel. */
@@ -51,15 +60,6 @@ export const DraftRenderPanel = ({
     );
   }
 
-  const failureDetail =
-    lastRenderError == null
-      ? null
-      : typeof lastRenderError.detail === "string"
-        ? lastRenderError.detail
-        : typeof lastRenderError.code === "string"
-          ? lastRenderError.code
-          : null;
-
   return (
     <>
       <section
@@ -79,19 +79,16 @@ export const DraftRenderPanel = ({
 
         {lastRenderError == null ? null : (
           <Callout title="יצירת הקובץ האחרונה נכשלה" tone="blocker">
-            {failureDetail === null ? (
-              "המסמך נשאר מאושר. אפשר לנסות שוב, או לתקן את התוכן - עריכה תחזיר אותו לטיוטה."
-            ) : (
-              <p dir="auto">{failureDetail}</p>
-            )}
+            {failureDetail === null ? null : <p className="font-medium">{failureDetail}</p>}
+            <p>המסמך נשאר מאושר. אפשר לנסות שוב, או לתקן את התוכן - עריכה תחזיר אותו לטיוטה.</p>
           </Callout>
         )}
 
         {render.error === null ? null : (
           <ErrorCallout
             error={render.error}
-            fallbackDetail="הפנייה לשרת נכשלה. המסמך נשאר מאושר."
-            fallbackTitle="לא ניתן להתחיל את יצירת הקובץ"
+            fallbackDetail="המסמך נשאר מאושר. אפשר לנסות שוב."
+            title="יצירת הקבצים לא התחילה"
           />
         )}
       </section>

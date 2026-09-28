@@ -315,12 +315,12 @@ export const DraftEditorPage = () => {
       >
         <QueryState
           error={applicationError}
-          fallbackTitle="לא ניתן לטעון את מצב המועמדות"
+          errorTitle="לא ניתן לטעון את מצב המועמדות"
           loading={detail === undefined}
           loadingLabel="טוען את מצב המועמדות…"
         />
         {draftError === null || draftError === undefined ? null : (
-          <QueryState error={draftError} fallbackTitle="לא ניתן לטעון את הטיוטה" />
+          <QueryState error={draftError} errorTitle="לא ניתן לטעון את הטיוטה" />
         )}
 
         {detail === undefined ? null : (
@@ -348,8 +348,8 @@ export const DraftEditorPage = () => {
             {resolutionError === null ? null : (
               <ErrorCallout
                 error={resolutionError}
-                fallbackTitle="לא ניתן להמשיך לפני שמירת העריכות"
-                fallbackDetail="יש לפתור את שגיאת השמירה או הקונפליקט, ולבדוק את ההקשר המעודכן לפני ניסיון נוסף. הטקסט המקומי נשמר בעורך."
+                title="לא ניתן להמשיך לפני שמירת העריכות"
+                fallbackDetail="העריכות נשארו בעורך. יש לפתור את בעיית השמירה ולנסות שוב."
               />
             )}
 

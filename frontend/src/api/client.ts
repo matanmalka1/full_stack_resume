@@ -62,10 +62,12 @@ const fallbackProblem = (response: Response): ProblemDetails => {
     title: "Request failed",
     status: response.status,
     code: "UNEXPECTED_HTTP_ERROR",
-    detail: "הבקשה נכשלה. ניתן לנסות שוב או לבדוק את פרטי השגיאה הבטוחים.",
+    detail: `HTTP ${response.status} without a Problem Details body`,
   };
 };
 
+/* Problems this client raises itself. Like the server's, their title and detail are for
+   the log; the reader's copy comes from the code (`ui/errorMessages.ts`). */
 const clientProblem = (code: string, title: string, detail: string): ProblemDetails => ({
   type: `about:blank#${code.toLowerCase()}`,
   title,
@@ -78,11 +80,7 @@ const isAbortError = (error: unknown): boolean => error instanceof DOMException 
 
 const invalidServerResponse = (): ApiProblem =>
   new ApiProblem(
-    clientProblem(
-      "INVALID_SERVER_RESPONSE",
-      "התקבלה תשובה לא תקינה",
-      "השרת החזיר תשובה שלא ניתן לקרוא. אפשר לרענן ולנסות שוב.",
-    ),
+    clientProblem("INVALID_SERVER_RESPONSE", "Invalid server response", "The response body could not be read as JSON."),
   );
 
 export const apiRequest = async <T>(path: ApiPath, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> => {
@@ -112,7 +110,11 @@ export const apiRequest = async <T>(path: ApiPath, options: ApiRequestOptions = 
     // TanStack Query uses AbortError as control flow when a query is cancelled.
     if (isAbortError(error)) throw error;
     throw new ApiProblem(
-      clientProblem("NETWORK_UNAVAILABLE", "לא ניתן להגיע לשרת", "החיבור לשרת נכשל. אפשר לבדוק שהשרת פועל ולנסות שוב."),
+      clientProblem(
+        "NETWORK_UNAVAILABLE",
+        "Network unavailable",
+        error instanceof Error ? error.message : "The request did not reach the server.",
+      ),
     );
   }
 

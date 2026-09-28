@@ -75,11 +75,7 @@ export const OperationActions = ({
   return (
     <div className="mt-2 flex flex-col gap-4 border-t border-cv-border pt-5">
       {error === null ? null : (
-        <ErrorCallout
-          error={error}
-          fallbackDetail="לא ניתן להשלים את הפעולה. המצב הבטוח האחרון נשמר ואפשר לנסות שוב."
-          fallbackTitle="הפעולה לא בוצעה"
-        />
+        <ErrorCallout error={error} fallbackDetail="המצב הקיים נשמר. אפשר לנסות שוב." title="הפעולה לא בוצעה" />
       )}
 
       <div className="flex flex-wrap gap-3">
