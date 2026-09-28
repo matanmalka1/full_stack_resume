@@ -1,18 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
 import { CircleAlert, Plus, Search, X } from "lucide-react";
-import { type KeyboardEvent, useDeferredValue, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { applicationListQueryOptions } from "@/api/applications";
 import type { ApplicationListItem } from "@/api/contracts";
 import { ApplicationSummary } from "@/features/application-list";
 import { preparationResumeDestination } from "@/features/preparation";
+import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 import { wrapDialogFocus } from "@/ui/dialogFocus";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { routePaths } from "../routePaths";
+import { type ApplicationSearch, useApplicationSearch } from "./useApplicationSearch";
 
-/* Native <dialog> backdrop clicks are valid interaction; Escape is handled by the
-   element's built-in cancel behavior. */
 /* oxlint-disable jsx-a11y/no-noninteractive-element-interactions */
 
 interface GlobalSearchDialogProps {
@@ -23,47 +22,26 @@ interface GlobalSearchDialogProps {
 const LISTBOX_ID = "global-search-results";
 const optionId = (item: ApplicationListItem): string => `global-search-result-${item.id}`;
 
-/* Find an Application from anywhere and go to it. The palette navigates; it does not
-   manage records, so it is not a second board - the board's own filters, actions, and
-   pagination stay there, and a result here is drawn by the board's own summary.
+const Kbd = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <kbd className={cx("rounded border border-cv-border px-1.5 py-0.5 text-support font-mono", className)}>
+    {children}
+  </kbd>
+);
 
-   The one dialog in the app that does not go through `ui/Dialog`, deliberately: it has no
-   heading to open focus on and no footer, its whole surface is one combobox that must
-   hold focus from the first keystroke, and its results are the listbox that combobox
-   owns. The shared component would have to grow an option for each of those. What it does
-   share is the close policy and Tab boundary wrapping. Native <dialog> owns the inert
-   background and focus restoration, Escape reaches the element's own
-   cancel behavior, a backdrop click dismisses, and a close does not escape to an owning
-   dialog. There is nothing typed here to discard: the search box is the question, not an
-   edit, and reopening deliberately starts a new one. */
+/* Command palette: find an Application and navigate to it. Uses native <dialog> directly
+   (not `ui/Dialog`) because its whole surface is one combobox that owns focus. */
 export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) => {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const results = useApplicationSearch(open);
+  const { items, isStale, search, setSearch } = results;
 
-  const trimmed = search.trim();
-  /* The query, not this client, decides what counts as a match - the server's `search`
-     narrows the same way the board's own search box does. Deferred so a fast typist keeps
-     a responsive input while the fetch it triggers settles a beat behind. */
-  const deferredSearch = useDeferredValue(trimmed);
+  // Clamped: a new result set may be shorter than the one the index was chosen in.
+  const active = Math.min(activeIndex, items.length - 1);
+  const activeItem = active >= 0 ? items[active] : undefined;
 
-  /* Empty query: the board's own "needs_attention" preset, so the palette opens on the
-     same answer to "what needs me" the board already gives rather than an arbitrary
-     recency slice. Typing replaces that question with the server's free-text search. */
-  const query = useQuery({
-    ...applicationListQueryOptions(
-      deferredSearch === "" ? { preset: "needs_attention", limit: 8 } : { search: deferredSearch, limit: 8 },
-    ),
-    enabled: open,
-  });
-  const items = query.data?.items ?? [];
-  const selected = items[selectedIndex];
-
-  /* Opening is also what resets the palette: the previous search is a transient answer to
-     a question already asked, and reopening on it would hide the "what needs me" list the
-     empty state is for. */
   useEffect(() => {
     const dialog = dialogRef.current;
     if (dialog === null) {
@@ -71,67 +49,76 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
     }
 
     if (open && !dialog.open) {
-      // Opening a native dialog synchronizes this transient UI with the `open` prop.
-      // oxlint-disable-next-line react/set-state-in-effect
-      setSearch("");
-      setSelectedIndex(0);
       dialog.showModal();
       inputRef.current?.focus();
       return;
     }
 
-    /* Closing through the element, not by unmounting it. Removing an open modal dialog
-       from the document leaves focus on the body; `close()` is what hands focus back to
-       whatever opened the palette - the header trigger, or the element the Cmd+K
-       shortcut was pressed from. */
+    // Close via the element (not unmount) so focus returns to the invoker.
     if (!open && dialog.open) {
       dialog.close();
     }
   }, [open]);
+
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setActiveIndex(0);
+  };
+
+  const moveTo = (index: number) => {
+    setActiveIndex(index);
+    const item = items[index];
+    if (item !== undefined) {
+      dialogRef.current?.ownerDocument.getElementById(optionId(item))?.scrollIntoView?.({ block: "nearest" });
+    }
+  };
 
   const selectItem = (item: ApplicationListItem) => {
     onClose();
     void navigate(preparationResumeDestination(item));
   };
 
+  // Escape is left to the dialog's native cancel behavior.
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    /* Escape is left to the element's own cancel behavior, which closes the dialog and
-       restores focus; handling it here as well would close the palette twice. */
-    if (items.length === 0) {
+    if (items.length === 0 || event.nativeEvent.isComposing) {
       return;
     }
 
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setSelectedIndex((previous) => (previous + 1) % items.length);
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setSelectedIndex((previous) => (previous - 1 + items.length) % items.length);
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      if (selected !== undefined) {
-        selectItem(selected);
-      }
+    const last = items.length - 1;
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        moveTo(active >= last ? 0 : active + 1);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        moveTo(active <= 0 ? last : active - 1);
+        break;
+      case "Enter":
+        event.preventDefault();
+        // Never act on rows left over from the previous search text.
+        if (activeItem !== undefined && !isStale) {
+          selectItem(activeItem);
+        }
+        break;
     }
   };
 
   return (
     <dialog
-      /* `flex` is an author rule and would beat the user agent's `display: none` for a
-         closed dialog, leaving the palette on screen. The layout is applied only while the
-         element is open. */
+      // `open:flex` only: an unconditional `flex` would override the closed dialog's `display: none`.
       aria-label="מעבר מהיר למועמדות"
       className="fixed left-1/2 top-24 m-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
       onClick={(event) => {
-        if (event.target === dialogRef.current) {
+        if (event.target === event.currentTarget) {
           onClose();
         }
       }}
       onKeyDown={wrapDialogFocus}
       onClose={(event) => {
-        /* The palette can be opened over an owning dialog. React delegates the close
-           event, so without stopping it here this close would dismiss that dialog too. */
+        // Keep the close event from also dismissing an owning dialog.
         event.stopPropagation();
+        updateSearch("");
         onClose();
       }}
       ref={dialogRef}
@@ -139,18 +126,17 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
       <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3">
         <Search aria-hidden="true" className="size-icon-lg shrink-0 text-cv-accent" />
         <input
-          aria-activedescendant={selected === undefined ? undefined : optionId(selected)}
+          aria-activedescendant={activeItem === undefined ? undefined : optionId(activeItem)}
           aria-autocomplete="list"
           aria-controls={LISTBOX_ID}
-          aria-expanded="true"
+          aria-expanded={items.length > 0}
+          aria-label="חיפוש מועמדות"
+          autoComplete="off"
           className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0"
           dir="auto"
           id="global-search-input"
           name="global-search"
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setSelectedIndex(0);
-          }}
+          onChange={(event) => updateSearch(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="חברה, תפקיד או מילת מפתח…"
           ref={inputRef}
@@ -163,8 +149,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
             aria-label="ניקוי חיפוש"
             className="rounded-control p-1 text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text"
             onClick={() => {
-              setSearch("");
-              setSelectedIndex(0);
+              updateSearch("");
               inputRef.current?.focus();
             }}
             type="button"
@@ -172,67 +157,47 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
             <X aria-hidden="true" className="size-icon-md" />
           </button>
         )}
-        <kbd className="hidden rounded border border-cv-border bg-cv-surface-muted px-1.5 py-0.5 text-support font-mono text-cv-text-muted sm:inline-block">
-          ESC
-        </kbd>
+        <Kbd className="hidden bg-cv-surface-muted text-cv-text-muted sm:inline-block">ESC</Kbd>
       </div>
 
-      {/* Custom JS-driven combobox (ARIA authoring-practices pattern): rich item content
-          and keyboard-managed selection that a native <select>/<option> can't render. */}
-      {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role */}
-      <div className="max-h-[60vh] overflow-y-auto p-2" id={LISTBOX_ID} role="listbox">
-        {trimmed === "" && items.length > 0 ? (
-          <p className="px-3 py-1.5 text-support font-semibold text-cv-text-muted">דורש טיפול</p>
-        ) : null}
+      <div className="max-h-[60vh] overflow-y-auto p-2">
+        <ResultsStatus results={results} />
+        <LiveRegion>{announcement(results)}</LiveRegion>
 
-        {query.isError ? (
-          <p className="py-10 text-center font-semibold text-cv-blocker" role="alert">
-            החיפוש נכשל. אפשר לנסות שוב בעוד רגע.
-          </p>
-        ) : items.length === 0 && query.isPending ? (
-          <p className="py-10 text-center text-cv-text-muted">מחפש…</p>
-        ) : items.length === 0 ? (
-          <div className="py-10 text-center">
-            <CircleAlert aria-hidden="true" className="mx-auto mb-3 size-7 text-cv-border-strong" />
-            {trimmed === "" ? (
-              <>
-                <p className="font-semibold text-cv-text">שום מועמדות לא ממתינה לטיפול</p>
-                <p className="mt-1 text-support text-cv-text-muted">אפשר לחפש לפי חברה או תפקיד, או לקלוט משרה חדשה.</p>
-              </>
-            ) : (
-              <>
-                <p className="font-semibold text-cv-text">אין מועמדות שתואמת ל&quot;{trimmed}&quot;</p>
-                <p className="mt-1 text-support text-cv-text-muted">אפשר לנסות מילת חיפוש אחרת או לקלוט משרה חדשה.</p>
-              </>
-            )}
-          </div>
-        ) : (
-          items.map((item, index) => (
-            <div
-              aria-selected={index === selectedIndex}
-              className={cx(
-                "flex cursor-pointer items-center justify-between gap-3 rounded-control border p-3 transition-colors",
-                index === selectedIndex
-                  ? "border-cv-accent/40 bg-cv-accent-soft"
-                  : "border-transparent hover:bg-cv-surface-muted",
-              )}
-              id={optionId(item)}
-              key={item.id}
-              onClick={() => selectItem(item)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") selectItem(item);
-              }}
-              onMouseEnter={() => setSelectedIndex(index)}
-              // Same combobox pattern as the listbox above: rich item content a native
-              // <option> can't render.
-              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-              role="option"
-              tabIndex={-1}
-            >
-              <ApplicationSummary item={item} />
-            </div>
-          ))
-        )}
+        <div
+          aria-label={results.mode.kind === "attention" ? "דורש טיפול" : "תוצאות חיפוש"}
+          className={cx("transition-opacity", isStale && "opacity-60")}
+          id={LISTBOX_ID}
+          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+          role="listbox"
+        >
+          {results.isError
+            ? null
+            : items.map((item, index) => (
+                // Keyboard selection is owned by the combobox; options never take focus.
+                // oxlint-disable-next-line jsx-a11y/click-events-have-key-events
+                <div
+                  aria-selected={index === active}
+                  className={cx(
+                    "flex cursor-pointer items-center justify-between gap-3 rounded-control border p-3 transition-colors",
+                    index === active ? "border-cv-accent/40 bg-cv-accent-soft" : "border-transparent",
+                  )}
+                  id={optionId(item)}
+                  key={item.id}
+                  onClick={() => selectItem(item)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  // Move, not enter: keyboard scrolling must not let a resting pointer steal selection.
+                  onMouseMove={() => {
+                    if (index !== active) setActiveIndex(index);
+                  }}
+                  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+                  role="option"
+                  tabIndex={-1}
+                >
+                  <ApplicationSummary item={item} />
+                </div>
+              ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-cv-border bg-cv-surface-muted/60 px-4 py-2.5 text-support text-cv-text-muted">
@@ -250,11 +215,64 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
 
         <div className="hidden items-center gap-2 sm:flex">
           <span>ניווט במקשים:</span>
-          <kbd className="rounded border border-cv-border bg-cv-surface px-1 text-support font-mono">↑↓</kbd>
+          <Kbd className="bg-cv-surface px-1 py-0">↑↓</Kbd>
           <span>לבחירה:</span>
-          <kbd className="rounded border border-cv-border bg-cv-surface px-1 text-support font-mono">Enter</kbd>
+          <Kbd className="bg-cv-surface px-1 py-0">Enter</Kbd>
         </div>
       </div>
     </dialog>
+  );
+};
+
+const announcement = ({ isError, isPending, isStale, items }: ApplicationSearch): string | null => {
+  if (isError || isPending || isStale) {
+    return null;
+  }
+  return items.length === 0 ? "אין תוצאות" : `${items.length} תוצאות`;
+};
+
+const ResultsStatus = ({ results }: { results: ApplicationSearch }) => {
+  const { isError, isPending, isStale, items, mode, retry } = results;
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <p className="font-semibold text-cv-blocker" role="alert">
+          החיפוש נכשל.
+        </p>
+        <Button onClick={retry} variant="secondary">
+          ניסיון חוזר
+        </Button>
+      </div>
+    );
+  }
+
+  if (items.length > 0) {
+    return mode.kind === "attention" && !isStale ? (
+      <p aria-hidden="true" className="px-3 py-1.5 text-support font-semibold text-cv-text-muted">
+        דורש טיפול
+      </p>
+    ) : null;
+  }
+
+  if (isPending || isStale) {
+    return <p className="py-10 text-center text-cv-text-muted">מחפש…</p>;
+  }
+
+  return (
+    <div className="py-10 text-center">
+      <CircleAlert aria-hidden="true" className="mx-auto mb-3 size-7 text-cv-border-strong" />
+      {mode.kind === "attention" ? (
+        <>
+          <p className="font-semibold text-cv-text">שום מועמדות לא ממתינה לטיפול</p>
+          <p className="mt-1 text-support text-cv-text-muted">אפשר לחפש לפי חברה או תפקיד, או לקלוט משרה חדשה.</p>
+        </>
+      ) : (
+        <>
+          <p className="font-semibold text-cv-text">אין מועמדות שתואמת ל&quot;{mode.text}&quot;</p>
+          <p className="mt-1 text-support text-cv-text-muted">אפשר לנסות מילת חיפוש אחרת או לקלוט משרה חדשה.</p>
+        </>
+      )}
+    </div>
   );
 };
