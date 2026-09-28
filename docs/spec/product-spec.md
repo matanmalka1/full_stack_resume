@@ -13,8 +13,9 @@ Status: **Approved for v2.0 implementation**
 
 Review הוא שער מבוסס חריגים, לא מסך חובה. המערכת ממשיכה אוטומטית ל-draft כאשר
 אין ambiguity מהותית, gap הדורש החלטה, claim לא נתמך או בחירת עובדות לא פתורה.
-האישור ב-Web תמיד מפורש. WorkingDraft הוא המסמך היחיד שניתן לשינוי;
-ApprovedRevision וכל התוצרים הנגזרים ממנה הם immutable.
+האישור ב-Web תמיד מפורש. CVDocument הוא מסמך הרזומה המשתנה היחיד לכל Application;
+עריכה אחרי אישור או רינדור מותרת ומחזירה אותו ל-draft. רק Submission - מה שנשלח
+בפועל, כולל קובצי ה-HTML וה-PDF שהעתיק - הוא immutable.
 
 AI מסווג ומציע ניסוח תחת חוזים מובנים. הוא אינו מקור אמת ואינו יוצר ישויות domain
 ישירות. עובדות canonical, policy דטרמיניסטי ו-validation נשארים סמכותיים. לאחר
@@ -90,17 +91,19 @@ provider configuration or retry instead of a fabricated semantic result.
 
 A user decision remains required for a material professional choice such as changing the
 matching classification or selecting facts. Hard gaps, low Fit and incomplete analysis
-are visible diagnostics, not acknowledgement gates. A matching correction creates a new
-immutable JobAnalysis or SelectionPlan as appropriate, re-derives dependent Fit/gaps and
-selection state, and never rewrites incompatible historical records.
+are visible diagnostics, not acknowledgement gates. A matching correction that changes
+requirement meaning or classification creates a new immutable JobAnalysis and re-derives
+dependent Fit/gaps; it never rewrites incompatible historical records. A correction that
+only changes Emphasis or fact selection updates the document's own selection in place
+instead of creating a new analysis.
 
 ### Current product contract
 
 > A single candidate can create a job application, analyze the job, resolve only the
 > decisions that require human judgment, produce and edit a fact-linked CV, validate and
-> explicitly approve one exact revision, render a valid and ATS-readable PDF, understand
-> every blocker and available action, and track the recruitment process through the
-> Web client backed by one application layer.
+> explicitly approve its exact current content, render a valid and ATS-readable PDF,
+> understand every blocker and available action, and track the recruitment process
+> through the Web client backed by one application layer.
 
 The Web UI must not require the user to know entity IDs, hashes, filesystem
 paths, database details, or architecture. Those details remain available in provenance
@@ -127,9 +130,9 @@ The product includes:
 - A Hebrew, desktop-first Web UI with basic responsive behavior.
 - Job creation from required pasted text, an optional provenance URL, and a browser-read
   `.txt` convenience input.
-- Immutable JobSnapshots, versioned analyses, immutable SelectionPlans, one mutable
-  WorkingDraft, immutable ApprovedRevisions, immutable artifacts, and append-only
-  submissions and audit history.
+- Immutable JobSnapshots, immutable versioned JobAnalyses, one mutable CVDocument per
+  Application (selection and content), narrow immutable provider-response artifacts, and
+  append-only immutable Submissions and audit history.
 - Duplicate warnings based on identical URL, normalized-text hash, and a light
   company/title heuristic. A duplicate never refuses creation permanently: the first
   attempt is refused (412) until the caller resends with explicit acknowledgement, then
@@ -142,8 +145,9 @@ The product includes:
   preview.
 - Full deterministic validation before approval and browser/PDF/ATS validation after
   rendering.
-- Explicit Web approval and immutable provenance for the exact approved content.
-- A Ready projection over a qualifying ApprovedRevision.
+- Explicit Web approval that stamps the document's exact current content as approved.
+- A Ready state derived, on every read, from the document's own approval and render
+  stamps against its current basis (document content plus the facts it depends on).
 - A dedicated candidate-facts surface for listing and inspecting candidate facts,
   creating pending facts, explicit confirmation and promotion, canonical correction
   through a replacement fact, and attachment to existing Profile sections. Contextual
@@ -195,20 +199,24 @@ scope decision.
 1. `Application` is the container for one target job and its history.
 2. The application represents one candidate. Candidate identity is not a dimension on
    every Application row.
-3. `WorkingDraft` is the only mutable resume document and there is at most one active
-   WorkingDraft per Application.
-4. JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision, Artifact,
-   Submission, and completed Operation records are immutable/versioned as specified.
-5. An approved revision is never edited. Editing it creates a new WorkingDraft with an
-   explicit parent revision and source analysis/selection plan.
-6. `ReadyRevision` is not an entity. Ready is a projection over an ApprovedRevision
-   whose exact artifacts and validation remain valid. Active-context compatibility and
-   projection precedence are defined exclusively in `state-and-use-cases.md`.
-7. Approval requires a passing ValidationRun for the exact WorkingDraft ID,
-   `edit_version`, content hash, facts and knowledge context, analysis context, and
-   validator versions being approved.
-8. Changing one character after validation makes that ValidationRun ineligible for
-    approval.
+3. `CVDocument` is the only mutable resume document and there is exactly one per
+   Application once its first analysis has activated.
+4. JobSnapshot, JobAnalysis, provider-response Artifact, Submission, and completed
+   Operation records are immutable/versioned as specified. `CVDocument` is mutable.
+5. Editing an approved or Ready document is allowed at any time. It changes the
+   document's basis, so the document returns to `draft` on the next read; no command
+   reopens it separately, and no new document or history record is created by editing.
+6. `ready` is not a stored entity or a frozen artifact set. It is a state derived, on
+   every read, from comparing the document's `rendered_basis`, `approved_basis`, and
+   current `basis` (`state-and-use-cases.md` §3, §5). Precedence between derived states
+   is defined exclusively there.
+7. Approval requires a passing content check for the document's exact current content
+   (`document_hash`) and the exact current state of every fact it depends on
+   (`facts_hash`) — together, its `basis`. `approve_document` runs that check and
+   approves in one action.
+8. Any change to the document's content, selection, or analysis pin, or to a fact it
+   depends on, changes the basis; a stored content report becomes outdated the moment
+   `checked_basis` no longer equals the current basis.
 9. Unsupported, pending, unlinked, strengthened, or semantically unverified claims may
     be saved in the editor but must block approval.
 10. The presence of a valid fact ID does not prove that generated wording is supported;
@@ -223,8 +231,9 @@ scope decision.
 14. Recruitment lifecycle and preparation lifecycle are independent.
 15. Recruitment history is append-only. Corrections add events and never rewrite past
     events.
-16. Submitted artifacts and ApprovedRevisions are never overwritten or automatically
-    deleted.
+16. A Submission's copied content and rendered files are never overwritten or
+    automatically deleted. The mutable `CVDocument` they were copied from keeps
+    changing after submission; the Submission does not.
 17. No mutable content has two simultaneous sources of truth. Storage ownership is
     defined in the architecture specification.
 18. `delete_fact` and `delete_application` are soft deletes: a terminal disposition flag
@@ -232,11 +241,12 @@ scope decision.
     Neither ever removes a row, rewrites prior content, or touches an immutable table.
     A deleted Fact or Application is excluded from default active listings but remains
     individually reachable, and every immutable record already produced from it
-    (JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision, Artifact,
-    Submission) is preserved unchanged.
-19. Every approved output stores exact provenance sufficient to identify its candidate
-    context, job context, knowledge context, policies, prompts, provider execution, and
-    artifacts.
+    (JobSnapshot, JobAnalysis, provider-response Artifact, Submission) and its own
+    CVDocument are preserved unchanged.
+19. Every Submission stores exact provenance sufficient to identify its candidate
+    context, job context, knowledge context (the facts the submitted content depended
+    on), policies, prompts, provider execution, and files. Because the document itself
+    keeps changing, this provenance is what proves what was actually sent.
 20. Normal queries never expose partially committed cross-store mutations.
 21. API and worker concurrency must remain correct through optimistic versions, atomic
     PostgreSQL claims, leases, idempotency where required, and commit-time precondition
@@ -286,7 +296,9 @@ area; no file is uploaded. URL is provenance only, is never fetched, and uses so
 syntax validation plus explicit length/control-character limits.
 
 Editing job text creates a new immutable JobSnapshot. The old snapshot and every
-analysis/revision linked to it remain historically valid for their own context.
+analysis produced from it remain historically valid for their own context; the document
+itself does not change until the user explicitly runs `build_from_analysis` against a
+newer analysis.
 
 Duplicate detection runs before creation for UX and again inside the create command.
 The user may open an existing Application or explicitly create another. A duplicate is
@@ -298,31 +310,38 @@ proceeds once the caller resends the same request with `acknowledged_duplicates=
 ## 9. Analysis, selection, and review
 
 JobAnalysis owns classification, normalized requirements, analysis issues, and source
-coverage. Fit and gaps are pure projections of its requirements. SelectionPlan owns
-selected, excluded, and pinned facts, content emphasis overrides, and candidate context.
-Both are immutable and versioned.
+coverage. Fit and gaps are pure projections of its requirements. It is immutable; each
+analysis is its own version. The document's `selection` field owns selected, excluded,
+and pinned facts, content emphasis overrides, and candidate accounting; it is part of
+the mutable CVDocument, not a separate versioned entity.
 
-Every successful `analyze_job` commit creates both the immutable JobAnalysis and one
-initial deterministic SelectionPlan for that exact analysis. The plan is produced by
-the deterministic selection policy and freezes its own policy/candidate-context
-versions. An AI `propose_selection_plan` task is an optional, separate Operation that
-may propose a replacement plan; it is never required to make the no-review path
-draftable. Its input includes each Profile section's allowed fact IDs, claim budget,
-facts already occupying that budget, and remaining pin capacity. The deterministic
-selection policy still validates every proposed overlay before activation.
+The first successful `analyze_job` commit for an Application creates the immutable
+JobAnalysis and, in the same transaction, creates the CVDocument pinned to it with that
+analysis's deterministic selection and no content. A later `analyze_job` on the same
+Application creates a new immutable JobAnalysis but never touches the existing document;
+it surfaces as the `DOCUMENT_ON_OLDER_ANALYSIS` warning until the user explicitly runs
+`build_from_analysis`. An AI `propose_selection` task is an optional, separate Operation
+that may propose a replacement selection while the document has no content yet; it is
+never required to make the no-review path draftable. Its input includes each Profile
+section's allowed fact IDs, claim budget, facts already occupying that budget, and
+remaining pin capacity. The deterministic selection policy still validates every
+proposed selection before activation.
 
-A change to the meaning or classification of a requirement creates a JobAnalysis. A
-change only to which facts will address an already understood requirement creates a
-SelectionPlan.
+A change to the meaning or classification of a requirement creates a new immutable
+JobAnalysis; the document is not changed by that alone. A change only to which facts
+address an already understood requirement, or to the Emphasis override, updates the
+document's own `selection` in place.
 
 Fit, analysis issues, and gaps are displayed but never require acknowledgement. Review is
-reserved for active-context integrity problems such as unresolved fact selection or a
-pending/deleted fact on which the active plan or claim depends. When those are absent and
+reserved for active-context integrity problems such as an unresolved pending/deleted fact
+on which the document's selection or claims depend. When those are absent and
 the global auto-generation setting has been turned on -- it is off by default -- the
 workflow may continue to drafting.
 
-Analysis Review is a local form. Applying its decisions creates one new immutable
-version rather than one version per toggle.
+Analysis Review is a local form (`apply_analysis_decisions`). A classification change
+creates one new immutable JobAnalysis rather than one version per toggle; an Emphasis or
+fact-selection decision instead updates the document's selection in place, exactly as a
+direct selection change does.
 
 ## 10. Drafting and editing
 
@@ -343,10 +362,10 @@ policy version and assertion-to-source excerpts. Provider artifact identifiers a
 hashes remain internal. The editor labels this as semantic review rather than
 deterministic proof, and warns that changing the exact wording invalidates that review.
 
-A deterministic selection change creates a new SelectionPlan and synchronously updates
-the WorkingDraft only when it requires no AI and contains no semantic ambiguity. A
-semantic or rewording change creates the new plan and then runs a regeneration
-Operation.
+A deterministic selection change (`update_selection`) updates the document's selection
+synchronously, and updates its content in the same action only when the change requires
+no AI and contains no semantic ambiguity. A change that needs wording judgment writes
+nothing and instead directs the client to a regeneration Operation.
 
 Free-text edits are preserved even when unsupported. They become pending or unlinked,
 are immediately visible as unsafe, and block approval until supported through an
@@ -402,58 +421,68 @@ Preview is server-rendered from the current DraftDocument through the same rende
 pipeline used for approved content where possible. It appears in an isolated iframe,
 is clearly marked as draft, and does not generate a PDF on every edit.
 
-A PDF of the current draft version is available on demand, before any approval
-(`GET /working-drafts/{id}/preview.pdf`). It is rendered synchronously through the same
-composition and browser as the approved render, stamped as an unapproved draft on every
-page, and stored nowhere: it creates no revision, artifact, or record, and it is not a
-render Operation. Seeing the layout therefore never requires approving - approval stays
-the one explicit act that freezes a version.
+A PDF of the document's current unapproved content is available on demand, before any
+approval, at the Application's document resource. It is rendered synchronously through
+the same composition and browser as `render_document`, stamped as an unapproved draft on
+every page, and stored nowhere: it writes no document field, creates no Artifact or
+Submission, and is not a `render_document` Operation. Seeing the layout therefore never
+requires approving - approval stays the one explicit act that stamps `approved_basis`.
+
+The HTML preview and this draft PDF are the document's `preview` and `preview.pdf`
+queries (state-and-use-cases.md §20).
 
 ## 11. Validation, approval, rendering, and Ready
 
 Editing runs lightweight claim, structure, and required-field checks. A full
-deterministic ValidationRun is explicit before approval. Browser/PDF/ATS checks run
-only after an ApprovedRevision is rendered.
+deterministic content check (`check_document`) is explicit before approval, and
+`approve_document` runs that same check as part of approving. Browser/PDF/ATS checks
+run only after `render_document` activates.
 
-A failed ValidationRun is a successful domain result with `passed=false` and structured
+A failed content check is a successful domain result with `passed=false` and structured
 issues. An exception is reserved for a validator that could not run.
 
 Pre-approval validation deterministically checks eligibility and currency of
 the exact proof/review evidence for every claim. It does not call AI. Evidence binds
 wording, language, supporting sources and their content, contextual attribution,
-allowed-fact scope, and review-policy versions. Relevant edits invalidate eligibility
-without rewriting historical evidence. An unrelated edit may preserve claim evidence,
-but any draft edit still requires a new exact ValidationRun before approval.
-An ApprovedRevision freezes the evidence actually used. Old immutable records are
-not rewritten or assigned review evidence they never carried.
+allowed-fact scope, and review-policy versions. Any change to the document's content,
+selection, or analysis pin, or to a fact it depends on, changes the basis, so a stored
+content report is shown as outdated the moment `checked_basis` no longer matches; the
+next `check_document` or `approve_document` produces a fresh one. There is no
+`ValidationRun` history: only the current report, stamped with the basis it was produced
+for, is kept.
 
 Warnings are visible and non-blocking. Approval may require one general confirmation
 that warnings remain. Any item requiring a specific business decision is a blocker or
 review reason rather than a warning.
 
-Web approval is always an explicit trust-boundary action. It creates an immutable
-ApprovedRevision and clears `active_working_draft_id`; the approved content and lineage
-remain frozen in the revision rather than as an active mutable draft. Rendering is a
-separate use-case and may be chained by the UI. A render failure does not revoke
-approval; the user may retry or explicitly create a new WorkingDraft from that
-revision. `newer_draft_in_progress` becomes true only after such a later draft is
-created.
+Web approval is always an explicit trust-boundary action. `approve_document` stamps
+`approved_basis` (and `approved_at`) on the document itself when the check passes and no
+review reason or blocker exists; it does not create a separate frozen entity and does not
+touch `content`. The document remains the one mutable resume document before and after
+approval. Rendering is a separate use-case and may be chained by the UI. A render
+failure does not revoke approval; the document stays `approved` and the user may retry
+`render_document`. Editing an approved or Ready document is always allowed; it changes
+the basis and returns the document to `draft` on the next read, which is the only way
+approval is lost.
 
-A no-pause flow that chains validation, approval, rendering, and Ready checks is an
-explicit user approval instruction and is recorded as one, with `actor_type=user` and
+A no-pause flow that chains the check, approval, and rendering is an explicit user
+approval instruction and is recorded as one, with `actor_type=user` and
 the originating client. It never bypasses blockers or validation and never auto-approves
 merely because an AI Operation completed. No interface offers this flow; the
 guarantee binds whichever one does.
 
-A prior Ready projection remains usable while a newer SelectionPlan or WorkingDraft is
-in progress under the same JobSnapshot and JobAnalysis. The UI shows `Ready` and
-`newer_draft_in_progress`. A new snapshot or analysis makes the prior Ready projection
-historical for the active context and exposes a warning while preserving its files.
-The context change alone does not affect `ready_qualified`; artifact/integrity checks
-still do.
+There is no prior Ready state to keep usable alongside a newer draft, because there is
+only ever one document. A newer JobAnalysis than the one the document is pinned to does
+not change the document or its `ready` state; it surfaces as the `DOCUMENT_ON_OLDER_ANALYSIS`
+warning until the user explicitly runs `build_from_analysis`, which does replace the
+selection and clears content and every stamp. There is no `newer_draft_in_progress` flag
+and no revision comparison: the document either is `ready` for its current basis or it
+is not.
 
-The Ready screen contains preview, recruiter-facing PDF download, validation summary,
-revision/provenance summary, and creation of a new WorkingDraft.
+The Ready screen contains preview, recruiter-facing PDF download, the current content
+report, and the document's own provenance (its analysis, selection, and the facts it
+depends on). It offers editing, which returns the document to `draft`, rather than
+creating a new WorkingDraft.
 
 ## 12. AI behavior
 
@@ -466,7 +495,7 @@ are the provider's; `analyze_job` is the application command that calls the firs
   evidence-linked coverage, and the severity and reason of any shortfall,
   together with Track/Profile/Emphasis/language classification, as one Proposal
   from one call.
-- `propose_selection_plan`
+- `propose_selection`
 - `draft_resume`
 - `regenerate_section`
 - `regenerate_claim`
@@ -501,8 +530,8 @@ the result is `unknown` rather than an invented gap.
 In the first implemented lifecycle, generation and regeneration run writer then reviewer
 inside one persisted Operation. Only complete `supported` evidence may activate wording.
 `uncertain` and `unsupported` are terminal domain outcomes for that Operation: both
-provider responses remain immutable inactive evidence, the current WorkingDraft is not
-replaced, and retry/correction is offered. There is no acknowledgement bypass. A future
+provider responses remain immutable inactive evidence, the document's `content` is not
+changed, and retry/correction is offered. There is no acknowledgement bypass. A future
 claim-clarification UI may add a richer inactive-proposal lifecycle without weakening
 this acceptance rule.
 
@@ -557,19 +586,19 @@ model behavior and is not a guarantee of universal injection resistance.
 
 Preparation and recruitment are separate views.
 
-Preparation state describes progress toward a usable CV. Working-draft state describes
-the active editable document. Recruitment status describes the application after it is
-saved or submitted. Their exact values and transitions belong to
-`state-and-use-cases.md`. Recruitment never changes preparation history, and `closed`
-is archival rather than a hiring outcome.
+Preparation state describes progress toward a usable CV. DocumentState restates the
+document's own approval/render stamps (`draft`/`approved`/`ready`) against its current
+basis. Recruitment status describes the application after it is saved or submitted.
+Their exact values and transitions belong to `state-and-use-cases.md`. Recruitment never
+changes preparation history, and `closed` is archival rather than a hiring outcome.
 
-Every Application projection includes current preparation and draft states, active
-context IDs, latest approved/ready references, review and stale reasons, active
-Operation, warnings, available actions, blocked actions with reason codes, a nullable
-recommended action, and the `newer_draft_in_progress` flag. These values are computed
-from one consistent database snapshot. Payload integrity is verified after the
-database read scope closes; the final policy is derived from the captured metadata
-and that verification without holding a transaction across storage I/O.
+Every Application projection includes current preparation and document states, the
+content check state, active context IDs, the document's own ID/hash/analysis pin,
+review reasons and warnings, active Operation, available actions, blocked actions with
+reason codes, and a nullable recommended action. These values are computed from one
+consistent database snapshot. Payload integrity is verified after the database read
+scope closes; the final policy is derived from the captured metadata and that
+verification without holding a transaction across storage I/O.
 
 The backend owns action policy. React does not implement a second state machine.
 
@@ -580,20 +609,22 @@ preparation/recruitment state, last activity,
 next action/date, active Operation, and warnings. It does not include charts.
 
 Application Detail contains header/status/next action, current preparation, one unified
-timeline, focused revisions/artifacts and submissions sections, and navigation back to
-the editor.
+timeline, a focused document/provenance section and a submissions section, and
+navigation back to the editor.
 
-`submit_application` verifies an explicit `ready_qualified` ApprovedRevision and exact
-PDF artifact, creates an immutable Submission, transitions to `applied` if necessary,
-and appends status/audit history in one PostgreSQL transaction. It never resolves `latest`
-inside the command. The revision need not match the current active snapshot/analysis;
-that case returns `READY_REVISION_FOR_OLDER_SNAPSHOT`,
-`READY_REVISION_FOR_OLDER_ANALYSIS`, or
-`READY_REVISION_FOR_OLDER_SELECTION_PLAN` as a non-blocking historical-context warning.
-Multiple submissions are append-only and do not reset recruitment state.
+`submit_application` requires the document's `document_state = ready` (`rendered_basis
+== approved_basis == basis`) and no review reason, copies its exact content and rendered
+HTML/PDF to submission-owned paths with a SHA-256 per file, creates an immutable
+Submission, transitions to `applied` if necessary, and appends status/audit history in
+one PostgreSQL transaction. It never resolves `latest` inside the command; it records a
+send that already happened and is not itself a validation gate. The document's analysis
+need not match the currently active JobSnapshot/JobAnalysis; that case returns
+`DOCUMENT_ON_OLDER_ANALYSIS` as a non-blocking warning rather than a precondition
+failure. Multiple submissions are append-only and do not reset recruitment state, and
+none of them changes the document.
 
-`record_external_submission` is a distinct use-case. It may reference a file already
-known to the system but never invents an ApprovedRevision or Artifact.
+`record_external_submission` is a distinct use-case. It records an immutable external
+submission that carries no document content or files.
 
 Backward transitions are not ordinary business transitions. A status error is fixed by
 an explicit correction event with the corrected event ID and mandatory reason. The
@@ -640,14 +671,17 @@ Storage ownership and technical layout are defined by the architecture specifica
 Storage keys and local paths are never API inputs. Downloads are addressed by artifact
 ID, verify the registered content hash, and use a friendly filename.
 
-Each approved revision records a global knowledge-store version for coarse audit and an
-exact knowledge context containing the facts, candidate context, Profile, candidate
-pool, Track/Emphasis rules, selection/rendering policies, prompt/task contracts, and
-their hashes. An unrelated fact change does not automatically stale every draft.
+Each Submission records a global knowledge-store version for coarse audit and the
+document's exact `facts_hash` at submission time — the canonical content of every fact
+its selection or claims depended on. An unrelated fact change does not automatically
+affect the document's basis, because `facts_hash` only covers the facts the document
+actually depends on.
 
-A SelectionPlan records candidate fact IDs and hashes, Profile version, selection
-policy version, and every Track/Emphasis dependency. These immutable contexts determine
-staleness without rewriting past plans.
+The document's own `built_with` (profile version, selection-policy version) determines
+the `PROFILE_CHANGED`/`POLICY_CHANGED` warnings by comparison against current versions;
+approval and rendering always validate against the current values rather than trusting
+`built_with`. There is no separate versioned SelectionPlan entity: the selection is part
+of the document and part of its `document_hash`.
 
 Approved, submitted, historical, and inactive Operation outputs are not automatically
 deleted by registration or approval activity. Read-only orphan inspection reports
@@ -663,8 +697,10 @@ way. Reclaim guarantees no registered payload is ever removed and no reclaimed w
 ever completes registration; it does not guarantee a single call removes every orphan,
 since the underlying object-store write is not itself fenced and may still land after
 its lease is gone, leaving that case for a later call to remove (architecture.md §7.1).
-Replacing a WorkingDraft may discard the old working copy after success; an explicit `Keep` archives
-it as a historical draft snapshot while preserving only one active WorkingDraft.
+
+There is no archived copy of replaced content. `build_from_analysis` and ordinary
+editing overwrite `content`; only a Submission keeps what was sent (decision record §3
+item 10).
 
 ## 17. Knowledge lifecycle
 
@@ -689,12 +725,12 @@ not identity.
 The Web supports these lifecycle operations both on the dedicated candidate-facts
 surface and, where the operation depends on a claim or active analysis, in its contextual
 preparation flow: viewing facts, creating a pending fact, explicit confirmation/promotion,
-attachment to an existing Profile section, and use in a new SelectionPlan. The dedicated
-surface may list valid attachment targets; listing them does not grant Profile editing.
-The shortcut `Confirm and add to source of truth` still records
+attachment to an existing Profile section, and selection in the Application's document.
+The dedicated surface may list valid attachment targets; listing them does not grant
+Profile editing. The shortcut `Confirm and add to source of truth` still records
 pending -> confirmed -> canonical transitions separately. `Confirm and use` is one
-logical command that promotes, attaches, and creates the new plan or reports a complete
-failure.
+logical command that promotes, attaches, and updates the named Application's document
+selection (`update_selection`), or reports a complete failure.
 
 Creating a fact from a claim copies the exact user text without AI rewriting. Meaning,
 tags, provenance, dates, and other metadata require explicit input.
@@ -714,7 +750,7 @@ mutation quarantines additional promotion and approvals that depend on Knowledge
 does not block read-only history, export, or recruitment tracking.
 
 Superseded facts add historical warnings. A fact known to be incorrect receives a
-stronger historical warning. Neither case rewrites an immutable prior revision.
+stronger historical warning. Neither case rewrites an already-copied Submission.
 
 Manual edits to the Knowledge files remain supported. Before a relevant command, the
 backend re-reads or re-hashes exact dependencies instead of trusting a long-lived
@@ -743,14 +779,17 @@ architecture specification; their observable command outcomes are defined by
 The HTTP API is `/api/v1`. It exposes application use-cases without leaking database or
 filesystem representations. Asynchronous work returns an Operation reference.
 
-WorkingDraft HTTP updates use ETag/If-Match and return `409 Conflict` on mismatch.
-Domain precondition failures such as stale validation return `412`. Problems use a
-stable Problem Details body with machine code and safe context. Technical details stay
-in logs.
+The document is read and written at the Application's document resource, with
+`document_hash` carried as its ETag. The autosave `update_document` uses If-Match and
+returns `409 Conflict` on mismatch; every other document command carries
+`expected_document_hash` in its body and returns the same `409` on mismatch, because an
+action on a resource is not a conditional replacement of it. Domain precondition
+failures such as a blocked approval return `412`. Problems use a stable Problem Details
+body with machine code and safe context. Technical details stay in logs.
 
-NeedsReview and `ValidationRun(passed=false)` are successful domain outcomes, not HTTP
-errors. The API enforces an explicit body-size limit; oversized job text returns
-`413 Payload Too Large`.
+A review reason and a failed content check (`passed=false`) are successful domain
+outcomes, not HTTP errors. The API enforces an explicit body-size limit; oversized job
+text returns `413 Payload Too Large`.
 
 Data export uses a versioned v2 schema. A compatibility format is added only when a
 real existing consumer is identified; v2 does not create speculative compatibility.
