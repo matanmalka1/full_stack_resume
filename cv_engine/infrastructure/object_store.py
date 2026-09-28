@@ -104,49 +104,6 @@ class ObjectStore(Protocol):
         """
         ...
 
-    def ingest(self, key: str, source: Path) -> StoredObject:
-        """Store the contents of a local file under `key`.
-
-        The one method that admits a `Path`, and it admits one inward only.
-        Chromium writes rendered HTML and PDFs to real paths
-        because it cannot write to an object store, so those payloads reach
-        storage as a location rather than as bytes. Nothing carrying a `Path`
-        comes back.
-
-        The hash describes the bytes that were stored, read once. Raises
-        `ObjectNotFound` when `source` does not exist, and `ObjectAlreadyExists`
-        when the key is already occupied - a rendered output must not silently
-        replace a registered one.
-        """
-        ...
-
-    def render_location(self, key: str, staging_root: Path) -> Path:
-        """Where Chromium should write the payload destined for `key`.
-
-        The store decides, because only the store knows whether that location
-        *is* the stored object. On a filesystem store it is: the render writes
-        straight to the artifact root and ingest is a read. On a remote store it
-        is scratch space that ingest uploads from.
-
-        `render_cleanup` answers the consequence of that difference, and the two
-        must be read together: deleting the render location is correct in the
-        second case and destroys the payload in the first.
-
-        The returned location is ready to be written to: the store creates any
-        directory the renderer would need. Chromium is handed this path and
-        writes to it directly, so a location whose parent does not exist is not
-        a location - it is a `FileNotFoundError` the renderer raises.
-        """
-        ...
-
-    def render_cleanup(self, path: Path) -> bool:
-        """Whether `path` is scratch to delete after ingest, and delete it.
-
-        Returns True when the file was scratch and has been removed, False when
-        the render location is the stored object and must be left alone.
-        """
-        ...
-
     def delete(self, key: str) -> None:
         """Remove the object under `key`, or do nothing if it is not there.
 
@@ -273,55 +230,6 @@ class LocalObjectStore:
         if not path.is_file():
             raise ObjectNotFound(f"no object is stored under {key}")
         return StoredObject(key=key, sha256=sha256_bytes(path.read_bytes()), size=size)
-
-    def ingest(self, key: str, source: Path) -> StoredObject:
-        """Take a file the renderer wrote and store it under `key`.
-
-        On this store the renderer already wrote to the destination path, so
-        the file is where it belongs and ingesting it is a read: the bytes are
-        read once, and that read is what the hash describes. Copying it onto
-        itself would be a no-op with a truncation window in the middle.
-
-        When the source is somewhere else - which is what a remote store always
-        sees, and what this store sees if the renderer is ever pointed at a
-        scratch directory - the bytes are put under the key normally, so the
-        overwrite refusal still applies.
-        """
-        path = self._path(key)
-        resolved_source = Path(source).resolve()
-        if not resolved_source.is_file():
-            raise ObjectNotFound(f"no file to ingest at {source}")
-        if resolved_source == path:
-            payload = resolved_source.read_bytes()
-            return StoredObject(key=key, sha256=sha256_bytes(payload), size=len(payload))
-        return self.put(key, resolved_source.read_bytes())
-
-    def render_location(self, key: str, staging_root: Path) -> Path:  # noqa: ARG002
-        """The artifact path itself: here the render target is the stored object.
-
-        `staging_root` is accepted and ignored deliberately - the protocol
-        passes it because a remote store needs it. Rendering into scratch and
-        then copying would write every artifact twice on the one backend where
-        the copy buys nothing, and would reintroduce the temp-then-publish step
-        this design removed.
-
-        The parent directory is created here because this is where the render
-        location is decided. `put` creates it for a payload that arrives as
-        bytes, but a rendered output never passes through `put` on this store -
-        ingest reads it in place - so nothing else would.
-        """
-        path = self._path(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return resolve_within(self._root, path)
-
-    def render_cleanup(self, path: Path) -> bool:  # noqa: ARG002
-        """Never. On this store the rendered file *is* the payload.
-
-        Deleting it after ingest would delete the artifact the row points at,
-        which is why this returns False rather than doing nothing quietly: the
-        caller is told the file was kept on purpose.
-        """
-        return False
 
     def keys_under(self, prefix: str) -> Iterator[str]:
         """Every key stored beneath `prefix`, in sorted order.
@@ -463,47 +371,6 @@ class S3ObjectStore:
         """
         payload = self.get(key)
         return StoredObject(key=key, sha256=sha256_bytes(payload), size=len(payload))
-
-    def render_location(self, key: str, staging_root: Path) -> Path:
-        """Scratch space. The bucket cannot be a render target.
-
-        Keyed by the object key so two concurrent renders cannot collide on one
-        scratch file, and rooted in the application temp directory so nothing
-        Chromium writes lands in the artifact tree - a stray file there would
-        look like an artifact to anything walking it.
-
-        The parent directory is created here, as on the local store: Chromium
-        writes to this path directly and cannot create it.
-        """
-        path = Path(staging_root) / "render" / validate_key(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path
-
-    def render_cleanup(self, path: Path) -> bool:
-        """Always: the payload is in the bucket, this is a leftover copy."""
-        try:
-            Path(path).unlink()
-        except FileNotFoundError:
-            return False
-        except OSError as exc:
-            raise InfrastructureFailure(f"render scratch could not be removed: {path}") from exc
-        return True
-
-    def ingest(self, key: str, source: Path) -> StoredObject:
-        """Upload a renderer-written file, read once.
-
-        Unlike the local store there is no in-place case: the file Chromium
-        wrote is never already the stored object, so this always uploads. The
-        read that produces the bytes is the read the hash describes.
-        """
-        resolved = Path(source)
-        try:
-            payload = resolved.read_bytes()
-        except FileNotFoundError as exc:
-            raise ObjectNotFound(f"no file to ingest at {source}") from exc
-        except OSError as exc:
-            raise InfrastructureFailure(f"object could not be read: {source}") from exc
-        return self.put(key, payload)
 
     def keys_under(self, prefix: str) -> Iterator[str]:
         requested = validate_key(prefix) if prefix else ""

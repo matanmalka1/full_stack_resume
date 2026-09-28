@@ -139,15 +139,6 @@ def test_s3_applies_its_prefix_to_the_bucket_key_only(s3: S3ObjectStore) -> None
     assert list(s3._client.objects) == ["cv/snapshots/app/snap.txt"]  # type: ignore[attr-defined]
 
 
-def test_ingest_reports_a_source_that_was_never_written(
-    local: LocalObjectStore, s3: S3ObjectStore
-) -> None:
-    missing = Path(tempfile.gettempdir()) / "definitely-not-written-by-any-renderer.html"
-    for store in _stores(local, s3):
-        with pytest.raises(ObjectNotFound):
-            store.ingest("outputs/app/rev/id.html", missing)
-
-
 def test_delete_is_idempotent_on_both_object_stores(local, s3) -> None:
     key = "snapshots/app/snap.txt"
     for store in _stores(local, s3):
