@@ -113,8 +113,7 @@ export const ApplicationRecordActions = ({
               it. The ending pair keeps the blocker tone; nothing else here is coloured. */}
           <div className="py-0.5">
             {/* The keyboard's way to a record's details: a click on the record's body opens
-                them, but only the table row is itself focusable, so every view reaches them
-                here too. */}
+                them, but no record is itself focusable, so every view reaches them here. */}
             <button
               className={menuItemClasses}
               onClick={() => {

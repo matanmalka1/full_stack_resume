@@ -13,11 +13,11 @@ import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { ApplicationAttentionSummary } from "../components/ApplicationAttentionSummary";
+import { ApplicationCardsSkeleton } from "../components/ApplicationCardsView";
 import { ApplicationDetailsDialog } from "../components/ApplicationDetailsDialog";
 import { ApplicationListResults } from "../components/ApplicationListResults";
 import { ApplicationListToolbar } from "../components/ApplicationListToolbar";
 import { ApplicationPresetTabs } from "../components/ApplicationPresetTabs";
-import { ApplicationListTableSkeleton } from "../components/ApplicationListTable";
 import { CloseApplicationDialog } from "../components/CloseApplicationDialog";
 import { DeleteApplicationDialog } from "../components/DeleteApplicationDialog";
 import { useApplicationListMutations } from "../api/mutations";
@@ -129,7 +129,7 @@ export const ApplicationListPage = () => {
       measure="wide"
       title="לוח מועמדויות"
     >
-      {/* The closed row leaves the board, so the way back floats where the reader's eye
+      {/* The closed card leaves the board, so the way back floats where the reader's eye
           already is rather than at the top of a list they may have scrolled away from.
           It has no timer: the correction stays valid, so the offer stays until the
           reader takes it or puts it away. */}
@@ -218,7 +218,7 @@ export const ApplicationListPage = () => {
         loading={listQuery.isPending}
         /* No `loadingLabel`: `loadingState` always wins over it, so a label here would be
            a string that never renders. The skeleton announces the wait itself. */
-        loadingState={<ApplicationListTableSkeleton />}
+        loadingState={<ApplicationCardsSkeleton />}
       >
         {page === undefined ? null : (
           <div className="flex flex-col gap-4">
@@ -233,6 +233,7 @@ export const ApplicationListPage = () => {
                 updateQuery({ ...query, recruitmentStatuses: stage?.statuses ?? [] });
               }}
               onSearchChange={setSearchInput}
+              onSortChange={(sort) => updateQuery({ ...query, sort })}
               onViewModeChange={setViewMode}
               preparationState={query.stages?.[0]}
               recruitmentStage={selectedStage(query.recruitmentStatuses)}
@@ -245,6 +246,7 @@ export const ApplicationListPage = () => {
                     : `${page.matched} מתוך ${page.total} מועמדויות`
               }
               search={searchInput}
+              sort={query.sort ?? "updated"}
               stageCounts={page.stage_counts}
               viewMode={viewMode}
             />
@@ -261,11 +263,9 @@ export const ApplicationListPage = () => {
               onRequestDelete={(item) => setDeletingApplicationId(item.id)}
               onRequestDetails={(item) => setDetailsApplicationId(item.id)}
               onRequestUpdate={(item) => setUpdatingApplicationId(item.id)}
-              onSortChange={(sort) => updateQuery({ ...query, sort })}
               pageSize={PAGE_SIZE}
               recruitmentStatusCounts={page.recruitment_status_counts}
               recruitmentStatusFilter={query.recruitmentStatuses}
-              sort={query.sort ?? "updated"}
               viewMode={viewMode}
             />
           </div>

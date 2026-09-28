@@ -220,7 +220,7 @@ describe("ApplicationListPage", () => {
     expect(window.sessionStorage.getItem("cv:board-query")).toBe("activity=all&stage=approved");
   });
 
-  it("reserves the list layout with row-shaped skeletons while the first request is pending", () => {
+  it("reserves the list layout with card-shaped skeletons while the first request is pending", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => new Promise<Response>(() => undefined)),
@@ -229,13 +229,13 @@ describe("ApplicationListPage", () => {
     renderPage();
 
     expect(screen.getByRole("status", { name: "טוען את המועמדויות" })).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "כרטיסי מועמדויות" })).not.toBeInTheDocument();
   });
 
   /* The reason this screen exists: an Application that was saved has to be reachable
-     without its URL, and its row has to say where it stands. */
+     without its URL, and its card has to say where it stands. */
   it("lists every Application with both of its state axes", async () => {
-    stubList([
+    const { fetchMock } = stubList([
       item(),
       item({ id: "app-2", company: "Binat", preparation_state: "ready", target_role: "Sales Engineer" }),
     ]);
@@ -248,7 +248,7 @@ describe("ApplicationListPage", () => {
        disappearing and leaving the reader to wonder whether it loaded. */
     const quietHub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(quietHub).getByText("אין פעולות ממתינות.")).toBeInTheDocument();
-    /* Each row places its CV state along the way to Ready, as a position and a bar. */
+    /* Each card places its CV state along the way to Ready, as a position and a bar. */
     expect(await screen.findByText("1/7")).toBeInTheDocument();
     expect(screen.getByText("7/7")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "הכנת קורות החיים: קורות החיים מוכנים" })).toHaveAttribute(
@@ -258,32 +258,37 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
     expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
-    /* The row leads with the company as text; the icon beside it is the row's link. */
+    /* The card leads with the company as text; the icon beside it is the card's link. */
     expect(await screen.findByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveAttribute(
       "href",
       "/applications/app-1",
     );
     /* Preparation and recruitment are independent axes and the board shows both: one says
        how far the CV has got, the other where the Application stands with the employer.
-       Scoped to the table because the stage filter offers the same vocabulary as its
-       options, and an option is a control rather than a row. */
-    const board = within(screen.getByRole("table"));
+       Scoped to the cards because the stage filter offers the same vocabulary as its
+       options, and an option is a control rather than a card. */
+    const board = within(screen.getByRole("region", { name: "כרטיסי מועמדויות" }));
     expect(board.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
     expect(board.getByText("קורות החיים מוכנים")).toBeInTheDocument();
     expect(board.getAllByText("טרם הוגש")).toHaveLength(2);
-    for (const name of ["חברה ותפקיד", "התקדמות הכנה וגיוס", "פעולה מומלצת הבאה", "ציון התאמה", "עדכון אחרון"]) {
-      expect(board.getByRole("columnheader", { name })).toBeInTheDocument();
-    }
-    /* The headers of the columns the server can order by are the board's only sort
-       control; the order they set goes to the server query. */
-    expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).toHaveAttribute("aria-sort", "descending");
-    expect(board.queryByRole("button", { name: "ציון התאמה" })).not.toBeInTheDocument();
-    fireEvent.click(board.getByRole("button", { name: "חברה ותפקיד" }));
+    expect(board.getAllByText("פעולה מומלצת הבאה")).toHaveLength(2);
+    /* The toolbar's select is the board's one sort control; the order it sets goes to the
+       server query. */
+    const sort = screen.getByLabelText("מיון");
+    expect(sort).toHaveValue("updated");
+    expect(
+      within(sort)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value")),
+    ).toEqual(["updated", "created", "company", "stage"]);
+    fireEvent.change(sort, { target: { value: "company" } });
     await waitFor(() =>
-      expect(board.getByRole("columnheader", { name: "חברה ותפקיד" })).toHaveAttribute("aria-sort", "ascending"),
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        expect.stringContaining("sort=company"),
+        expect.objectContaining({ method: "GET" }),
+      ),
     );
-    expect(screen.queryByLabelText("סדר")).not.toBeInTheDocument();
-    expect(board.getByRole("columnheader", { name: "עדכון אחרון" })).not.toHaveAttribute("aria-sort");
+    expect(sort).toHaveValue("company");
     fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
     expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
     /* The menu also opens the record, as the demo's first item does. */
@@ -355,10 +360,9 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("button", { name: /הכל/ })).toHaveAttribute("aria-pressed", "true");
   });
 
-  /* The row was painted on hover while only three of its cells were clickable. */
-  /* A click on the row opens its details, as demo_re's job modal does; the modal's
+  /* A click on the card opens its details, as demo_re's job modal does; the modal's
      primary command is the way on to the work. */
-  it("opens the details from a click anywhere the row carries no control of its own", async () => {
+  it("opens the details from a click anywhere the card carries no control of its own", async () => {
     stubList([item({ notes: "Referral from Dana" })]);
 
     renderPage();
@@ -376,7 +380,7 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
   });
 
-  it("opens a focused row's details from the keyboard and hands on to the recruitment dialog", async () => {
+  it("opens a card's details from its menu and hands on to the recruitment dialog", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: unknown) =>
@@ -386,8 +390,8 @@ describe("ApplicationListPage", () => {
 
     renderPage();
 
-    const row = await screen.findByRole("row", { name: "Backend Engineer אצל Acme" });
-    fireEvent.keyDown(row, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "פרטי משרה" }));
 
     const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
     fireEvent.click(within(details).getByRole("button", { name: "עדכון סטטוס גיוס" }));
@@ -396,12 +400,12 @@ describe("ApplicationListPage", () => {
     expect(screen.queryByRole("dialog", { name: "פרטי משרה: Acme" })).not.toBeInTheDocument();
   });
 
-  it("resumes a row at the step recommended by the server", async () => {
+  it("resumes a card at the step recommended by the server", async () => {
     stubList([item({ preparation_state: "ready_for_approval", recommended_action: "approve" })]);
 
     renderPage();
 
-    /* The row's command goes to the same step the row itself opens. */
+    /* The card's command goes to the same step the card itself opens. */
     const command = await screen.findByRole("link", { name: /· Acme$/ });
     expect(command).toHaveTextContent("מעבר לשלב");
     /* The recommended step carries its fixed one-line description. */
@@ -454,7 +458,7 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("heading", { name: "גרסה מוכנה" })).toBeInTheDocument();
   });
 
-  it("switches between table, card, and recruitment pipeline views without changing the server query", async () => {
+  it("switches between card and recruitment pipeline views without changing the server query", async () => {
     const { fetchMock } = stubList([
       item({ next_action: "Follow up", next_action_date: "2020-01-01" }),
       item({ id: "app-2", company: "Binat", notes: "Referral from Dana", recruitment_status: "interview" }),
@@ -462,14 +466,18 @@ describe("ApplicationListPage", () => {
       item({ id: "app-4", company: "Delta", review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] }),
     ]);
 
+    /* A view remembered from before the table was removed is not a view any more; the
+       board falls to cards rather than to nothing. */
+    window.sessionStorage.setItem("cv:application-list:view-mode", "table");
+
     renderPage();
 
-    expect(await screen.findByRole("table")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "כרטיסי מועמדויות" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "כרטיסים" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "טבלה" })).not.toBeInTheDocument();
     await waitFor(() => expect(boardReadCount(fetchMock)).toBe(1));
 
-    fireEvent.click(screen.getByRole("button", { name: "כרטיסים" }));
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    /* A card is linked by the same icon as the row, and carries the row's blocks. */
+    /* A card is linked by its identity icon and carries every block of the record. */
     expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveLength(1);
     expect(screen.getAllByRole("link", { name: "פתיחת המועמדות של Binat" })).toHaveLength(1);
     expect(screen.getAllByText("Follow up")).toHaveLength(2);
@@ -494,6 +502,10 @@ describe("ApplicationListPage", () => {
     /* Only the card with a projected reason carries the attention mark. */
     expect(within(pipeline).getAllByText("דורש טיפול")).toHaveLength(1);
     expect(within(pipeline).getByText("דורש טיפול").closest("article")?.querySelector("a")?.textContent).toBe("Delta");
+    expect(screen.queryByRole("region", { name: "כרטיסי מועמדויות" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "כרטיסים" }));
+    expect(screen.getByRole("region", { name: "כרטיסי מועמדויות" })).toBeInTheDocument();
     expect(boardReadCount(fetchMock)).toBe(1);
   });
 
@@ -505,8 +517,12 @@ describe("ApplicationListPage", () => {
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(hub).getByText("Follow up with recruiter")).toBeInTheDocument();
     expect(within(hub).getByText("פעולה אחת בעדיפות")).toBeInTheDocument();
-    /* The row offers the same dismissal beside its reminder. */
-    expect(within(screen.getByRole("table")).getByRole("button", { name: "הסרת התזכורת של Acme" })).toBeEnabled();
+    /* The card offers the same dismissal beside its reminder. */
+    expect(
+      within(screen.getByRole("region", { name: "כרטיסי מועמדויות" })).getByRole("button", {
+        name: "הסרת התזכורת של Acme",
+      }),
+    ).toBeEnabled();
     fireEvent.click(within(hub).getByRole("button", { name: "הסרת תזכורת" }));
 
     await waitFor(() =>
@@ -529,7 +545,7 @@ describe("ApplicationListPage", () => {
     expect(within(hub).queryByRole("button", { name: "הצגת כל הדורשות טיפול בלוח" })).not.toBeInTheDocument();
   });
 
-  it("keeps duplicate attention rows distinguishable and disables only the reminder being cleared", async () => {
+  it("keeps duplicate Applications distinguishable and disables only the reminder being cleared", async () => {
     const first = item({ next_action: "Follow up", next_action_date: "2020-01-01" });
     const second = item({
       id: "app-2",
@@ -537,17 +553,20 @@ describe("ApplicationListPage", () => {
       next_action: "Follow up",
       next_action_date: "2020-01-02",
     });
-    const fetchMock = vi.fn(async (url: unknown, options?: RequestInit) => {
+    const fetchMock = vi.fn(async (_url: unknown, options?: RequestInit) => {
       if (options?.method === "PATCH") return new Promise<Response>(() => undefined);
-      const requestUrl = new URL(String(url), "http://localhost");
-      return jsonResponse(listBody(requestUrl.searchParams.get("preset") === "needs_attention" ? [first, second] : []));
+      return jsonResponse(listBody([first, second]));
     });
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
 
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
-    expect(within(hub).getAllByText(/קיימת עוד מועמדות לאותה חברה ולאותו תפקיד/)).toHaveLength(2);
+    await waitFor(() => expect(within(hub).getAllByText(/קיימת עוד מועמדות לאותה חברה ולאותו תפקיד/)).toHaveLength(2));
+    /* The cards say it too: two cards for one company and role would otherwise read as
+       one card drawn twice. */
+    const cards = await screen.findByRole("region", { name: "כרטיסי מועמדויות" });
+    expect(within(cards).getAllByText(/קיימת עוד מועמדות לאותה חברה ולאותו תפקיד/)).toHaveLength(2);
     const clearButtons = within(hub).getAllByRole("button", { name: "הסרת תזכורת" });
     fireEvent.click(clearButtons[0]);
     await waitFor(() => expect(clearButtons[0]).toBeDisabled());
@@ -810,14 +829,14 @@ describe("ApplicationListPage", () => {
 
     renderPage({ queryClient });
 
-    const table = await screen.findByRole("table");
+    const cards = await screen.findByRole("region", { name: "כרטיסי מועמדויות" });
     void queryClient.refetchQueries({ type: "active" });
     await waitFor(() => expect(boardReads).toBe(2));
-    expect(table.closest('[aria-busy="true"]')).toBeNull();
+    expect(cards.closest('[aria-busy="true"]')).toBeNull();
 
     fireEvent.change(screen.getByLabelText("חיפוש במועמדויות"), { target: { value: "Acme" } });
     await waitFor(() => expect(boardReads).toBe(3));
-    expect(screen.getByRole("table").closest('[aria-busy="true"]')).not.toBeNull();
+    expect(screen.getByRole("region", { name: "כרטיסי מועמדויות" }).closest('[aria-busy="true"]')).not.toBeNull();
   });
 
   it("invalidates every cached list and detail after closing an Application", async () => {

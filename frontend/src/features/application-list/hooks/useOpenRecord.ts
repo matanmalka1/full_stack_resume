@@ -1,6 +1,6 @@
-import type { KeyboardEvent, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
-/* A board record - a table row, a card, a stage card - opens as a whole but yields to
+/* A board record - a card or a stage card - opens as a whole but yields to
    real controls and to text selection. What opening does is the caller's: the board
    opens the record's details. Its own link icon stays the native route straight to the
    work, for the keyboard, screen readers and a new tab. */
@@ -29,12 +29,5 @@ export const useOpenRecord = (onOpen: () => void) => {
     onOpen();
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
-      event.preventDefault();
-      onOpen();
-    }
-  };
-
-  return { onClick, onKeyDown };
+  return { onClick };
 };

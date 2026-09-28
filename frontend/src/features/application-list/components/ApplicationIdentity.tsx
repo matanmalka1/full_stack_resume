@@ -30,7 +30,7 @@ export const CompanyMark = ({ company }: { company: string }) => (
 
 const DUPLICATE_IDENTITY_HINT = "קיימת עוד מועמדות לאותה חברה ולאותו תפקיד";
 
-/* "row" is the identity the table and the cards draw, after demo_re: the company on the
+/* "row" is the identity the cards draw, after demo_re: the company on the
    first line with the record's link beside it, the role and the track on the second.
 
    The name is text; the icon is the link. It is on every record and is a real anchor, so

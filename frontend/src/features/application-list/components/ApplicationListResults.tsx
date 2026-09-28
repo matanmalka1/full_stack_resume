@@ -1,11 +1,10 @@
-import type { ApplicationListItem, ApplicationSort } from "@/api/contracts";
+import type { ApplicationListItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { cx } from "@/ui/cx";
 import type { ViewMode } from "../model/applicationViews";
 import { ApplicationCardsView } from "./ApplicationCardsView";
 import { ApplicationListPagination } from "./ApplicationListPagination";
-import { ApplicationListTable } from "./ApplicationListTable";
 import { ApplicationPipelineView } from "./ApplicationPipelineView";
 
 interface ApplicationListResultsProps {
@@ -18,7 +17,6 @@ interface ApplicationListResultsProps {
   pageSize: number;
   recruitmentStatusCounts: Readonly<Record<string, number>>;
   recruitmentStatusFilter: readonly string[] | undefined;
-  sort: ApplicationSort;
   viewMode: ViewMode;
   onClearFilters: () => void;
   onClearNextAction: (item: ApplicationListItem) => void;
@@ -27,14 +25,13 @@ interface ApplicationListResultsProps {
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
-  onSortChange: (sort: ApplicationSort) => void;
 }
 
 /* The result region: one page of Applications in whichever view is chosen, the message
    that replaces it when the filters match none, and the pager.
    
-   It exists so the page above it composes four named regions rather than carrying a
-   three-way view switch, two empty states, and a fetching wrapper inline. Which view is
+   It exists so the page above it composes four named regions rather than carrying the
+   view switch, two empty states, and a fetching wrapper inline. Which view is
    drawn is a presentation decision and stays here; what is in the page and how it was
    narrowed remain the page's. */
 export const ApplicationListResults = ({
@@ -46,7 +43,6 @@ export const ApplicationListResults = ({
   pageSize,
   recruitmentStatusCounts,
   recruitmentStatusFilter,
-  sort,
   viewMode,
   onClearFilters,
   onClearNextAction,
@@ -55,7 +51,6 @@ export const ApplicationListResults = ({
   onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
-  onSortChange,
 }: ApplicationListResultsProps) => {
   if (items.length === 0) {
     return (
@@ -80,17 +75,7 @@ export const ApplicationListResults = ({
       aria-busy={replacing ? true : undefined}
       className={cx("transition-opacity", replacing ? "opacity-60" : undefined)}
     >
-      {viewMode === "cards" ? (
-        <ApplicationCardsView
-          clearingApplicationId={clearingApplicationId}
-          items={items}
-          onClearNextAction={onClearNextAction}
-          onRequestClose={onRequestClose}
-          onRequestDelete={onRequestDelete}
-          onRequestDetails={onRequestDetails}
-          onRequestUpdate={onRequestUpdate}
-        />
-      ) : viewMode === "pipeline" ? (
+      {viewMode === "pipeline" ? (
         <ApplicationPipelineView
           items={items}
           onRequestDetails={onRequestDetails}
@@ -99,12 +84,10 @@ export const ApplicationListResults = ({
           recruitmentStatusFilter={recruitmentStatusFilter}
         />
       ) : (
-        <ApplicationListTable
+        <ApplicationCardsView
           clearingApplicationId={clearingApplicationId}
           items={items}
           onClearNextAction={onClearNextAction}
-          onSortChange={onSortChange}
-          sort={sort}
           onRequestClose={onRequestClose}
           onRequestDelete={onRequestDelete}
           onRequestDetails={onRequestDetails}
