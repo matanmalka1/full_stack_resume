@@ -8,7 +8,7 @@ import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recrui
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { preparationProgress } from "../model/applicationListPresentation";
-import { ApplicationRunningOperation } from "./ApplicationRowNextAction";
+import { ApplicationRunningOperation } from "./ApplicationCardNextAction";
 
 const quietDotClasses: Record<Tone, string> = {
   success: "bg-cv-success",
@@ -24,7 +24,7 @@ const quietDotClasses: Record<Tone, string> = {
 const fitScoreText = (item: ApplicationListItem): string | null =>
   item.fit_score == null ? null : confidenceText(item.fit_score);
 
-/* One chip, the way demo_re's score column reads. The level is never lost - it is the
+/* One chip, as the details dialog shows fit. The level is never lost - it is the
    chip's tooltip, which is in the document and so is read with it. */
 export const ApplicationFitStatus = ({ item }: { item: ApplicationListItem }) => {
   if (item.fit_level == null) {
@@ -95,7 +95,7 @@ const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_s
   );
 };
 
-/* "row" is the labelled track the cards draw; "pipeline" is the compact
+/* "card" is the labelled track the cards draw; "pipeline" is the compact
    badge the global search palette shows beside a result. */
 export const ApplicationPreparationStatus = ({
   item,
@@ -104,7 +104,7 @@ export const ApplicationPreparationStatus = ({
   item: ApplicationListItem;
   variant: ApplicationListViewVariant;
 }) =>
-  variant === "row" ? (
+  variant === "card" ? (
     <PreparationTrack state={item.preparation_state} />
   ) : (
     <StatusBadge
@@ -120,7 +120,7 @@ export const ApplicationPreparationStatus = ({
    the employer's status with any run still going beside it. */
 export const ApplicationProgress = ({ item }: { item: ApplicationListItem }) => (
   <div className="flex w-full flex-col items-start gap-2">
-    <ApplicationPreparationStatus item={item} variant="row" />
+    <ApplicationPreparationStatus item={item} variant="card" />
     <div className="flex flex-wrap items-center gap-1.5">
       <ApplicationRecruitmentStatus item={item} />
       <ApplicationRunningOperation item={item} />

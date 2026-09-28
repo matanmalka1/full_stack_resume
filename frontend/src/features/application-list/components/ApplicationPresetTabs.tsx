@@ -16,7 +16,7 @@ interface ApplicationPresetTabsProps {
    dashboard the reader is meant to study, while this is the one question the list can
    be narrowed by - a control, and sized like one. It sits in the page masthead beside
    the title, ahead of the filter bar, because it is the first cut the reader makes.
-   The screen's weight belongs to the rows underneath.
+   The screen's weight belongs to the records underneath.
 
    Each option is one compact pill. The count stays typographically distinct without
    becoming a second badge inside the control. */

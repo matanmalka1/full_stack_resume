@@ -13,7 +13,7 @@ import { Dialog } from "@/ui/Dialog";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { applicationAttention, preparationProgress } from "../model/applicationListPresentation";
 import { ApplicationFitStatus, ApplicationRecruitmentStatus } from "./ApplicationListStatuses";
-import { ApplicationRowNextAction, nextActionHeading } from "./ApplicationRowNextAction";
+import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
 
 interface ApplicationDetailsDialogProps {
   application: ApplicationListItem | null;
@@ -31,7 +31,7 @@ const Fact = ({ children, detail, label }: { children: ReactNode; detail?: React
   </div>
 );
 
-/* The finished CV and its PDF, as demo_re offers them. The board row names only the
+/* The finished CV and its PDF, as demo_re offers them. The board's list item names only the
    revision, so the PDF's artifact comes from the revision itself - the same read, and
    the same recruiter-pdf delivery, the revision screen uses. A revision that did not
    qualify, or whose read has not arrived, offers no download. The link to the revision
@@ -187,7 +187,7 @@ export const ApplicationDetailsDialog = ({
         {hasNextStep ? (
           <section aria-label="פעולה מומלצת הבאה" className="rounded-control border border-cv-border p-4">
             <p className="mb-1.5 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
-            <ApplicationRowNextAction clearing={clearing} item={withoutReadyCv} onClearNextAction={onClearNextAction} />
+            <ApplicationCardNextAction clearing={clearing} item={withoutReadyCv} onClearNextAction={onClearNextAction} />
           </section>
         ) : null}
 

@@ -14,7 +14,7 @@ import {
 import { ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
 import { ApplicationFitStatus, ApplicationProgress } from "./ApplicationListStatuses";
-import { ApplicationRowNextAction, nextActionHeading } from "./ApplicationRowNextAction";
+import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
 
 const cardGridClasses = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
 
@@ -106,7 +106,7 @@ const ApplicationCard = ({
       tabIndex={0}
     >
       <div className="flex items-start justify-between gap-3">
-        <ApplicationIdentity ambiguous={ambiguous} item={item} variant="row" />
+        <ApplicationIdentity ambiguous={ambiguous} item={item} variant="card" />
         {/* Fit is read to decide whether to go on at all, so it sits beside who the
             Application is for rather than in the footer. Unanalysed, there is nothing
             to say yet and nothing is drawn. */}
@@ -129,7 +129,7 @@ const ApplicationCard = ({
       {hasNext ? (
         <div>
           <p className="mb-1 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
-          <ApplicationRowNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
+          <ApplicationCardNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
         </div>
       ) : (
         <p className="text-support text-cv-text-muted">אין פעולה מתוזמנת כעת</p>

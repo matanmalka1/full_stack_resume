@@ -49,7 +49,7 @@ const jsonResponse = (body: unknown, status = 200, extraHeaders: Record<string, 
   });
 
 /* The list endpoint answers one page plus the two counts that place it. The stub defaults
-   `matched` to the rows it was handed for the common one-page case; pagination tests
+   `matched` to the items it was handed for the common one-page case; pagination tests
    override it with the count across every matching page. `total` - the count before the
    query narrowed anything - is separate, and is what tells an empty database apart from
    a filter that matched nothing.
@@ -244,7 +244,7 @@ describe("ApplicationListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
     expect(screen.getByText("איפה עומד כל תהליך גיוס, ומה עוד צריך לקורות החיים.")).toBeInTheDocument();
-    /* Neither row has anything waiting, so the hub says so in one line rather than
+    /* Neither Application has anything waiting, so the hub says so in one line rather than
        disappearing and leaving the reader to wonder whether it loaded. */
     const quietHub = await screen.findByRole("region", { name: "מוקד פעולות" });
     expect(within(quietHub).getByText("אין פעולות ממתינות.")).toBeInTheDocument();
@@ -298,9 +298,9 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).toBeInTheDocument();
   });
 
-  /* The column is read to decide which row to open next, so it names what is waiting
-     rather than counting it, and the badge is the way into the Application that states
-     each item beside the control that resolves it. */
+  /* The next-action block is read to decide which Application to open next, so it
+     names what is waiting rather than counting it, and the badge is the way into the
+     Application that states each item beside the control that resolves it. */
   it("names a blocking reason and links it to preparation", async () => {
     stubList([item({ review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] })]);
 
@@ -483,15 +483,10 @@ describe("ApplicationListPage", () => {
       }),
     ]);
 
-    /* A view remembered from before the table was removed is not a view any more; the
-       board falls to cards rather than to nothing. */
-    window.sessionStorage.setItem("cv:application-list:view-mode", "table");
-
     renderPage();
 
     expect(await screen.findByRole("region", { name: "כרטיסי מועמדויות" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "כרטיסים" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByRole("button", { name: "טבלה" })).not.toBeInTheDocument();
     await waitFor(() => expect(boardReadCount(fetchMock)).toBe(1));
 
     /* A card is linked by its identity icon and carries every block of the record. */
