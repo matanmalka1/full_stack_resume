@@ -31,6 +31,7 @@ const choiceFor = (factId: string, pinned: readonly string[], excluded: readonly
   excluded.includes(factId) ? "exclude" : pinned.includes(factId) ? "include" : "auto";
 
 export const FactRow = ({
+  aiProposed,
   busy,
   candidate,
   change,
@@ -42,6 +43,7 @@ export const FactRow = ({
   savedPinned,
   supports,
 }: {
+  aiProposed: boolean;
   busy: boolean;
   candidate: SelectionPlanCandidate;
   change: "added" | "removed" | undefined;
@@ -61,9 +63,11 @@ export const FactRow = ({
   const source = decisionSource(candidate, pinned, excluded);
   const signals = factSignals(ranking, supports);
   const unreadable = candidate.text == null;
+  // The AI's mark only while the reader still holds it; once changed, the decision is theirs.
+  const fromAi = aiProposed && choice !== "auto" && !pending;
   const why =
     source === "pinned" || source === "excluded"
-      ? decisionSourceLabels[source]
+      ? `${decisionSourceLabels[source]}${fromAi ? " · מהצעת AI" : ""}`
       : pending
         ? "תוחזר להחלטת המנוע בשמירה"
         : outcomeSentence(candidate);

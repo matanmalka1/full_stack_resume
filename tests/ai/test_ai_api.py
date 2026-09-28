@@ -104,7 +104,7 @@ def test_the_selection_plan_route_answers_201_or_202_by_mode(
         SelectionProposal(
             pinned_fact_ids=plan.plan.selected_fact_ids[:1],
             excluded_fact_ids=[],
-            rationale="r",
+            rationale="Pinned the retention fact the posting leads with.",
         ),
     )
     queued = _post(ai_api_worker, path, {"application_id": application_id, "mode": "ai"})
@@ -112,7 +112,20 @@ def test_the_selection_plan_route_answers_201_or_202_by_mode(
     assert queued.headers["Location"].endswith(queued.json()["id"])
     finished = ai_api_worker.wait_for_operation(queued.json()["id"])
     assert finished["status"] == "succeeded", finished
-    assert any(output["output_type"] == "selection_plan" for output in finished["outputs"])
+    proposed_id = next(
+        output["output_id"]
+        for output in finished["outputs"]
+        if output["output_type"] == "selection_plan"
+    )
+    # The detail carries the provider's own rationale; the analysis's initial
+    # engine plan records no provenance rather than a guessed one.
+    proposed = ai_api_worker.client.get(f"{API_PREFIX}/selection-plans/{proposed_id}").json()
+    assert proposed["proposed_by"] == "ai"
+    assert proposed["proposal_rationale"] == "Pinned the retention fact the posting leads with."
+    initial = ai_api_worker.client.get(
+        f"{API_PREFIX}/selection-plans/{sources['selection_plan']}"
+    ).json()
+    assert (initial["proposed_by"], initial["proposal_rationale"]) == (None, None)
 
     deterministic = _post(
         ai_api_worker, path, {"application_id": application_id, "mode": "deterministic"}
@@ -120,6 +133,10 @@ def test_the_selection_plan_route_answers_201_or_202_by_mode(
     assert deterministic.status_code == 201, deterministic.text
     assert "Location" not in deterministic.headers
     assert deterministic.json()["plan"]["id"] == deterministic.json()["selection_plan_id"]
+    saved = ai_api_worker.client.get(
+        f"{API_PREFIX}/selection-plans/{deterministic.json()['selection_plan_id']}"
+    ).json()
+    assert saved["proposed_by"] is None
 
 
 def test_regenerate_claim_is_accepted_at_the_specified_path_only_on_a_current_etag(

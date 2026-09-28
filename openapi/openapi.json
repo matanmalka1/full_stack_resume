@@ -5526,6 +5526,29 @@
             "title": "Preferred Tag Coverage",
             "type": "object"
           },
+          "proposal_rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Rationale"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "const": "ai",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
           "required_tag_coverage": {
             "additionalProperties": {
               "items": {
@@ -5755,6 +5778,29 @@
             "title": "Profile Version",
             "type": "string"
           },
+          "proposal_rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Rationale"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "const": "ai",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
           "selection_policy_version": {
             "title": "Selection Policy Version",
             "type": "string"
@@ -5787,6 +5833,8 @@
           "facts_version",
           "pinned_fact_ids",
           "excluded_fact_ids",
+          "proposed_by",
+          "proposal_rationale",
           "candidates"
         ],
         "title": "SelectionPlanDetailResponse",

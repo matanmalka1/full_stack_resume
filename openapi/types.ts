@@ -3432,6 +3432,10 @@ export interface components {
             preferred_tag_coverage: {
                 [key: string]: string[];
             };
+            /** Proposal Rationale */
+            proposal_rationale?: string | null;
+            /** Proposed By */
+            proposed_by?: "ai" | null;
             /**
              * Required Tag Coverage
              * @default {}
@@ -3527,6 +3531,10 @@ export interface components {
             };
             /** Profile Version */
             profile_version: string;
+            /** Proposal Rationale */
+            proposal_rationale: string | null;
+            /** Proposed By */
+            proposed_by: "ai" | null;
             /** Selection Policy Version */
             selection_policy_version: string;
             /** Track Emphasis Dependencies */

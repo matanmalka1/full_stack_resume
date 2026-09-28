@@ -161,6 +161,8 @@ export const SelectionPlanPanel = ({
   };
 
   const totals = factTotals(candidates, pinned, excluded);
+  // Recorded only on plans activated from an AI proposal; null means "not recorded", never "not AI".
+  const aiProposed = plan?.proposed_by === "ai";
 
   return (
     <section
@@ -210,6 +212,7 @@ export const SelectionPlanPanel = ({
         onPropose={() => ai.mutate()}
         pending={ai.isPending}
         rankings={rankings}
+        rationale={aiProposed ? (plan?.proposal_rationale ?? null) : undefined}
         resultVisible={proposalResultVisible}
         settingsLoaded={settings !== undefined}
         status={proposal.status}
@@ -226,6 +229,7 @@ export const SelectionPlanPanel = ({
         >
           {plan === undefined ? null : (
             <FactSelectionList
+              aiProposed={aiProposed}
               busy={busy}
               candidates={candidates}
               changes={changeIndex}

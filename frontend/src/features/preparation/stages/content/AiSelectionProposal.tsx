@@ -76,6 +76,7 @@ export const AiSelectionProposal = ({
   onPropose,
   pending,
   rankings,
+  rationale,
   resultVisible,
   settingsLoaded,
   status,
@@ -89,6 +90,9 @@ export const AiSelectionProposal = ({
   onPropose: () => void;
   pending: boolean;
   rankings: ReadonlyMap<string, FactRanking>;
+  /* The active plan's recorded AI rationale: undefined when the plan did not come from an
+     AI proposal (or predates provenance), null when the proposal gave none. */
+  rationale: string | null | undefined;
   resultVisible: boolean;
   settingsLoaded: boolean;
   status: ProposalStatus;
@@ -133,6 +137,19 @@ export const AiSelectionProposal = ({
     {!aiAvailable && settingsLoaded ? (
       <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
     ) : null}
+
+    {rationale === undefined ? null : (
+      <div className="rounded-control bg-cv-surface p-3">
+        <h4 className="text-support font-bold text-cv-text">נימוק הצעת ה־AI</h4>
+        {rationale === null ? (
+          <p className="mt-1 text-support text-cv-text-muted">ההצעה לא כללה נימוק כתוב.</p>
+        ) : (
+          <p className="mt-1 whitespace-pre-line text-support text-cv-text" dir="auto">
+            {rationale}
+          </p>
+        )}
+      </div>
+    )}
 
     {status.kind === "running" ? (
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role

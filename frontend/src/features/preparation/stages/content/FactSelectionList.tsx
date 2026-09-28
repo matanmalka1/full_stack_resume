@@ -14,6 +14,8 @@ import type { FactRanking } from "../../model/selectionManifest";
 import { type FactChoice, FactRow } from "./FactRow";
 
 interface FactSelectionListProps {
+  /* The loaded plan was activated from an AI proposal, so its saved marks are the AI's. */
+  aiProposed: boolean;
   busy: boolean;
   candidates: readonly SelectionPlanCandidate[];
   changes: ReadonlyMap<string, "added" | "removed">;
@@ -30,6 +32,7 @@ interface FactSelectionListProps {
 }
 
 export const FactSelectionList = ({
+  aiProposed,
   busy,
   candidates,
   changes,
@@ -148,6 +151,7 @@ export const FactSelectionList = ({
                 <ul className="flex flex-col" hidden={!open} id={panelId}>
                   {group.items.map((candidate) => (
                     <FactRow
+                      aiProposed={aiProposed}
                       busy={busy}
                       candidate={candidate}
                       change={changes.get(candidate.fact_id)}

@@ -119,6 +119,9 @@ class CreateSelectionPlanCommand(SelectionOverlay):
     #: Internal counterpart of AnalyzeCommand's guard, used by the plan-only
     #: branch of apply_analysis_decisions.
     refuse_matching_context_operation: bool = False
+    #: Internal: set only by the `propose_selection_plan` Operation, carrying the
+    #: provider's rationale onto the manifest it activates. Not a request field.
+    ai_proposal_rationale: str | None = None
 
 
 class ApplyAnalysisDecisionsCommand(SelectionOverlay):

@@ -545,7 +545,11 @@ resolve an Emphasis review reason without rewriting JobAnalysis.
 When AI `propose_selection_plan` mode is requested, the command creates an asynchronous,
 idempotent Operation. The provider output is only a Proposal; activation repeats the
 same deterministic validations and optimistic source checks before committing the new
-plan. No provider call occurs inside a synchronous HTTP request.
+plan. No provider call occurs inside a synchronous HTTP request. A plan activated from
+that Proposal records `proposed_by = "ai"` and the provider's written rationale on its
+manifest, and SelectionPlan detail exposes both. They are provenance only: activation
+never reads them. Engine and user plans, and every plan written before provenance was
+recorded, leave both null; no value is back-filled.
 
 Before a WorkingDraft exists, `create_selection_plan` remains available for an active
 analysis even when its initial deterministic plan already exists. This is the explicit

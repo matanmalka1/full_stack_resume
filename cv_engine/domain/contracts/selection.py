@@ -23,6 +23,15 @@ OmissionReason = Literal[
 
 SelectionOutcome = Literal["pinned", "selected", "rescued", "omitted"]
 
+#: Who proposed a plan's overlay. Only a provider proposal is recorded today;
+#: engine and user plans leave it unset rather than claiming a value that
+#: plans written before this field existed could never carry.
+ProposalSource = Literal["ai"]
+
+
+def _unset(value: object) -> bool:
+    return value is None
+
 
 class SelectionCandidate(StrictModel):
     """One fact's full accounting in the selection decision.
@@ -83,6 +92,14 @@ class SelectionManifest(StrictModel):
     required_tag_coverage: dict[str, list[str]] = {}
     preferred_tag_coverage: dict[str, list[str]] = {}
     superseded_by_manual_edit: bool = False
+    #: Provenance of the overlay: set only when an AI selection proposal was
+    #: activated, together with the provider's own written rationale. Omitted
+    #: from serialization while unset, so manifests written before these fields
+    #: existed - and every DraftDocument that embeds one and is fingerprinted by
+    #: `draft_content_hash` - serialize byte-for-byte as they did. Missing stays
+    #: missing: an older plan is never back-filled with a guessed source.
+    proposed_by: ProposalSource | None = Field(default=None, exclude_if=_unset)
+    proposal_rationale: str | None = Field(default=None, exclude_if=_unset)
 
 
 class SelectionPlan(StrictModel):

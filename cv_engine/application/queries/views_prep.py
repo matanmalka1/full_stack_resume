@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.drafts import ClaimStyle, ClaimType, DraftDocument
-from ...domain.contracts.selection import OmissionReason, SelectionOutcome
+from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
 from ...domain.contracts.validation import ValidationReport
 from ..commands import BoundaryDTO
 
@@ -203,6 +203,12 @@ class SelectionPlanDetailView(BoundaryDTO):
     facts_version: str
     pinned_fact_ids: list[str]
     excluded_fact_ids: list[str]
+    #: `"ai"` when this plan activated an AI selection proposal; null for engine
+    #: and user plans and for any plan written before provenance was recorded.
+    proposed_by: ProposalSource | None
+    #: The provider's own written rationale for the overlay, verbatim. Null
+    #: whenever `proposed_by` is null, and for an AI plan whose rationale was blank.
+    proposal_rationale: str | None
     candidates: list[SelectionPlanCandidateView]
 
 

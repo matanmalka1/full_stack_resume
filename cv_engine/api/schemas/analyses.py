@@ -23,7 +23,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from ...domain.contracts.analysis import Language
-from ...domain.contracts.selection import OmissionReason, SelectionOutcome
+from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
 from ...domain.contracts.taxonomy import (
     Emphasis,
     ProfileName,
@@ -145,6 +145,9 @@ class SelectionPlanDetailResponse(SelectionPlanResponse):
     facts_version: str
     pinned_fact_ids: list[str]
     excluded_fact_ids: list[str]
+    #: Null for engine and user plans and for plans written before provenance.
+    proposed_by: ProposalSource | None
+    proposal_rationale: str | None
     candidates: list[SelectionPlanCandidateResponse]
 
 
