@@ -137,6 +137,31 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
       ? null
       : routeButton("ready", plan.ready.href, "צפייה בקורות החיים המוכנים", plan.ready.emphasized);
 
+  /* A first analysis says in the bar what pressing it costs, or why it cannot be
+     pressed: an inert button with no reason beside it reads as a broken one. The way to
+     fix a missing provider is the bar's own lead action. */
+  const analyzeNote =
+    plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? undefined : (
+      <p className="text-support leading-6 text-cv-text-muted" id={analyzeReasonId}>
+        {aiRegenerationAvailable(settings)
+          ? "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."
+          : "הניתוח דורש ספק AI, ועדיין לא הוגדר כזה."}
+      </p>
+    );
+  /* The generate note names its sources and its cost in one sentence, in the bar beside
+     the button it describes. Which cost is read from the same `provider` value the
+     command is sent with, so the sentence cannot describe a run different from the one
+     the press would start. */
+  const draftNote =
+    plan.createDraft === null || settings === undefined ? undefined : (
+      <p className="text-support leading-6 text-cv-text-muted">
+        הטיוטה נבנית מהניתוח ומהעובדות שנבחרו.{" "}
+        {provider === undefined
+          ? "היא נוצרת ברקע, בלי קריאת AI."
+          : "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
+      </p>
+    );
+
   /* Workflow order, and the same order every visit: analyze, draft, the draft screen,
      ready. The bar used to be sorted by how far along each action was, which moved a
      button to the front of the row on the visit it became available - so the control
@@ -168,7 +193,6 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
   const hasNotes =
     error !== null ||
     plan.unbuiltRecommendation !== null ||
-    (plan.createDraft !== null && settings !== undefined) ||
     plan.buildFromAnalysis !== null;
 
   return (
@@ -187,18 +211,6 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
             <Callout title={`הפעולה המומלצת כעת היא ${actionLabel(plan.unbuiltRecommendation)}`} tone="neutral">
               אין לה כרגע מסך שמבצע אותה, ולכן אין לאן להפנות. הפעולות שכן מוצעות למטה הן הדרך להמשיך מכאן.
             </Callout>
-          )}
-
-          {/* The generate note names its sources and its cost in one sentence. Which cost is
-          read from the same `provider` value the command is sent with, so the sentence
-          cannot describe a run different from the one the press would start. */}
-          {plan.createDraft === null || settings === undefined ? null : (
-            <p className="text-support leading-6 text-cv-text-muted">
-              הטיוטה נבנית מהניתוח ומהעובדות שנבחרו.{" "}
-              {provider === undefined
-                ? "היא נוצרת ברקע, בלי קריאת AI."
-                : "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
-            </p>
           )}
 
           {/* What the rebuild does, beside the button that does it: it is the one action
@@ -229,16 +241,8 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
             </>
           }
         >
-          {/* A first analysis says in the bar what pressing it costs, or why it cannot be
-              pressed: an inert button with no reason beside it reads as a broken one. The
-              way to fix a missing provider is the bar's own lead action. */}
-          {plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? undefined : (
-            <p className="text-support leading-6 text-cv-text-muted" id={analyzeReasonId}>
-              {aiRegenerationAvailable(settings)
-                ? "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."
-                : "הניתוח דורש ספק AI, ועדיין לא הוגדר כזה."}
-            </p>
-          )}
+          {/* The two notes never meet: a first analysis offers no draft yet. */}
+          {analyzeNote ?? draftNote}
         </CommitBar>
       )}
 
