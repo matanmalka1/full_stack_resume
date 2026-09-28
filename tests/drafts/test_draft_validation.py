@@ -40,6 +40,7 @@ def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
 def test_an_unsafe_or_misplaced_headline_is_blocked(
     project_root: Path,
     draft_factory,
+    presentation_store,
 ) -> None:
     """Both headline failures, each on its own draft.
 
@@ -86,7 +87,12 @@ def test_an_unsafe_or_misplaced_headline_is_blocked(
     restored.content_hash = draft_content_hash(restored)
     markdown, _text = store_draft(project_root, restored)
     report = validate_draft(
-        restored, markdown.read_text(encoding="utf-8"), facts, profile, analysis
+        restored,
+        markdown.read_text(encoding="utf-8"),
+        facts,
+        profile,
+        analysis,
+        presentations=presentation_store,
     )
     assert report.passed, report.model_dump()
 

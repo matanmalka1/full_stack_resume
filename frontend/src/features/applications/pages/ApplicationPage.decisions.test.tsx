@@ -157,7 +157,7 @@ describe("voluntary matching configuration", () => {
     [
       "draft_in_progress" as const,
       { active_working_draft_id: "draft-1", working_draft_state: "editing" as const },
-      /הטיוטה הפעילה לא תימחק, אך תהיה לא מעודכנת/,
+      /הטיוטה הפעילה לא תימחק, אך לא תתאים להגדרות החדשות/,
     ],
     [
       "ready" as const,

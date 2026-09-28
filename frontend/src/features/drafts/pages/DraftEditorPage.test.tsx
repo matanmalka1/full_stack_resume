@@ -1312,7 +1312,9 @@ describe("DraftEditorPage preview", () => {
     /* The single finish action is pinned rather than left at the foot of a column. It
        starts with validation and changes to explicit approval only after that passes. */
     expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
-    expect(screen.getByText("המערכת תבדוק את הגרסה המוצגת לפני הכנת ה־PDF.")).toBeInTheDocument();
+    expect(
+      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור ששומר גרסה קבועה. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
+    ).toBeInTheDocument();
   });
 
   it("keeps revalidation available when only the previous validation became stale", async () => {
@@ -1335,7 +1337,9 @@ describe("DraftEditorPage preview", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
-    expect(screen.getByText("המערכת תבדוק את הגרסה המוצגת לפני הכנת ה־PDF.")).toBeVisible();
+    expect(
+      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור ששומר גרסה קבועה. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
+    ).toBeVisible();
   });
 
   it("shows the text just typed when the line is closed, not the version on the server", async () => {

@@ -167,7 +167,11 @@ def test_a_revision_names_its_parent_and_compares_with_it(
         f"/approved-revisions/{second}/comparison?base_revision_id={other.approved.revision_id}",
     )
     assert across.status_code == 409, across.text
-    unknown = _get(api_worker, f"/approved-revisions/{second}/comparison?base_revision_id=missing")
+    unknown = _get(
+        api_worker,
+        f"/approved-revisions/{second}/comparison"
+        "?base_revision_id=00000000-0000-4000-8000-000000000000",
+    )
     assert unknown.status_code == 404, unknown.text
 
 
