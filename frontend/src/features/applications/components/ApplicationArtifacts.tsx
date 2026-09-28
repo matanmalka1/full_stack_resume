@@ -32,10 +32,10 @@ export const ApplicationArtifacts = ({ applicationId }: { applicationId: string 
   const hiddenCount = ordered.length - visible.length;
 
   return (
-    <Card aria-labelledby="artifacts-heading" className="bg-cv-surface p-4 shadow-surface">
+    <Card aria-labelledby="artifacts-heading" className="rounded-surface bg-cv-surface p-4 shadow-surface sm:p-5">
       <SectionHeader
         align="baseline"
-        description="תשובות ספק ה־AI שנשמרו כעדות לאופן שבו הניתוח והטיוטה נוצרו. פרטי שלמות זמינים לפי דרישה."
+        description="כל קריאה ל־AI בתהליך נשמרת כאן: איזה שלב היא שירתה, באיזה מודל ומתי. אפשר לבדוק שהקובץ שנשמר לא השתנה ולהוריד אותו."
         gap="wide-compact"
         headingId="artifacts-heading"
         headingSize="body"
@@ -57,7 +57,7 @@ export const ApplicationArtifacts = ({ applicationId }: { applicationId: string 
         loading={query.isPending}
         loadingLabel="טוען את תוצרי המנוע…"
       >
-        <ul className="mt-3 divide-y divide-cv-border rounded-control border border-cv-border px-3 sm:px-4">
+        <ul className="mt-4 divide-y divide-cv-border">
           {visible.map((artifact) => (
             <ApplicationArtifactRow artifact={artifact} key={artifact.id} />
           ))}

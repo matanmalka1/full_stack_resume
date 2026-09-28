@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -185,7 +185,12 @@ describe("ApplicationPage", () => {
 
   it("keeps the engine's provider evidence collapsed until requested", async () => {
     const artifacts = [
-      artifact({ id: "newest", artifact_id: "newest", created_at: "2026-09-06T08:00:00Z" }),
+      artifact({
+        id: "newest",
+        artifact_id: "newest",
+        created_at: "2026-09-06T08:00:00Z",
+        metadata: { task: "propose_analysis", provider: "openai", model: "gpt-5.6-terra" },
+      }),
       artifact({ id: "second", artifact_id: "second", created_at: "2026-09-05T08:00:00Z" }),
       artifact({ id: "third", artifact_id: "third", created_at: "2026-09-04T08:00:00Z" }),
       artifact({ id: "oldest", artifact_id: "oldest", created_at: "2026-09-03T08:00:00Z" }),
@@ -215,10 +220,15 @@ describe("ApplicationPage", () => {
     const artifactsSummary = (await screen.findAllByText("תוצרי המנוע"))[0];
     expect(artifactsSummary.closest("details")).not.toHaveAttribute("open");
     fireEvent.click(artifactsSummary);
-    expect(await screen.findAllByText("תשובת ספק ה־AI")).toHaveLength(3);
+    /* A row is named by the task that produced it, with its model; a record without a
+       known task keeps the artifact type's name. */
+    const artifactsList = await screen.findByRole("region", { name: "תוצרי המנוע" });
+    expect(within(artifactsList).getByText("ניתוח המשרה")).toBeInTheDocument();
+    expect(within(artifactsList).getByText("gpt-5.6-terra")).toBeInTheDocument();
+    expect(within(artifactsList).getAllByText("תשובת ספק ה־AI")).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", { name: "הצגת רשומות קודמות (1)" }));
-    expect(screen.getAllByText("תשובת ספק ה־AI")).toHaveLength(4);
+    expect(within(artifactsList).getAllByText("תשובת ספק ה־AI")).toHaveLength(3);
   });
 
   it("copies the complete stored job text from inside its disclosure", async () => {

@@ -161,22 +161,24 @@ export const DocumentSelectionPanel = ({
       className={surfaceClasses("flex flex-col gap-5 bg-cv-surface p-5")}
     >
       <div className="flex flex-col gap-3 border-b border-cv-border pb-4">
-        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
-          <div className="min-w-0">
+        {/* The count sits beside the heading it belongs to: at the full width of the row,
+            an opposite-edge counter read as detached from the panel it summarizes. */}
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className="text-heading-sm font-bold text-cv-text" id="selection-plan-heading">
               בחירת העובדות לקורות החיים
             </h2>
-            <p className="mt-1 max-w-2xl text-support text-cv-text-muted">
-              המנוע דירג את כל העובדות המאושרות מול המשרה ובחר מה ייכנס לכל סעיף. אפשר להשאיר לו את ההחלטה, לכלול או
-              להחריג עובדה במפורש, או לבקש הצעה מ־AI.
+            <p className="rounded-pill bg-cv-surface-muted px-2.5 py-0.5 text-caption text-cv-text-muted">
+              <span className="font-bold text-cv-text">
+                {totals.included}/{totals.total}
+              </span>{" "}
+              עובדות בקורות החיים
             </p>
           </div>
-          <div className="text-end">
-            <p className="text-heading-sm font-bold text-cv-text">
-              {totals.included}/{totals.total}
-            </p>
-            <p className="text-caption text-cv-text-muted">עובדות בקורות החיים</p>
-          </div>
+          <p className="mt-1 max-w-2xl text-support text-cv-text-muted">
+            המנוע דירג את כל העובדות המאושרות מול המשרה ובחר מה ייכנס לכל סעיף. אפשר להשאיר לו את ההחלטה, לכלול או
+            להחריג עובדה במפורש, או לבקש הצעה מ־AI.
+          </p>
         </div>
         <Disclosure summary="איך המנוע בוחר עובדות?">
           <ol className="flex list-decimal flex-col gap-1 ps-4">
