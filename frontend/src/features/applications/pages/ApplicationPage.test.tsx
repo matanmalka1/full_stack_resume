@@ -12,12 +12,11 @@ const detail = (): ApplicationDetail =>
     allowed_recruitment_transitions: ["interview", "rejected", "withdrawn", "closed"],
     recruitment_timeline: [],
     preparation_state: "needs_analysis",
-    working_draft_state: "none",
+    document_state: "none",
+    content_check: "none",
     review_reasons: [],
-    stale_reasons: [],
     warnings: [],
     active_job_snapshot_id: "snap-1",
-    newer_draft_in_progress: false,
     available_actions: ["analyze"],
     blocked_actions: [],
     recommended_action: "analyze",
@@ -46,7 +45,7 @@ const detail = (): ApplicationDetail =>
 
 const artifact = (overrides: Partial<ArtifactVersion>): ArtifactVersion => ({
   artifact_id: "artifact-1",
-  artifact_type: "resume_pdf",
+  artifact_type: "provider_response",
   content_hash: "hash",
   created_at: "2026-09-06T08:00:00Z",
   emphasis: null,
@@ -54,10 +53,9 @@ const artifact = (overrides: Partial<ArtifactVersion>): ArtifactVersion => ({
   id: "artifact-version-1",
   job_snapshot_id: "snap-1",
   lifecycle_status: "rendered",
-  logical_name: "resume.pdf",
+  logical_name: "provider-response.json",
   metadata: {},
   profile: null,
-  revision_id: "revision-2",
   track: null,
   version_number: 1,
   ...overrides,
@@ -138,7 +136,7 @@ describe("ApplicationPage", () => {
     expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
   });
 
-  it("links a Ready application to the exact immutable revision from the workflow spine", async () => {
+  it("links a Ready application to its ready step and to the draft from the workflow spine", async () => {
     renderPage((input) =>
       Promise.resolve(
         String(input).endsWith("/artifacts")
@@ -146,12 +144,17 @@ describe("ApplicationPage", () => {
           : jsonResponse({
               ...detail(),
               preparation_state: "ready",
-              latest_ready_revision_id: "revision-7",
+              document_state: "ready",
+              document_id: "doc-1",
             }),
       ),
     );
 
-    expect(await screen.findByRole("link", { name: /מוכן למסירה/ })).toHaveAttribute("href", "/revisions/revision-7");
+    expect(await screen.findByRole("link", { name: /מוכן למסירה/ })).toHaveAttribute(
+      "href",
+      "/applications/app-1/ready",
+    );
+    expect(screen.getByRole("link", { name: /טיוטה ואימות/ })).toHaveAttribute("href", "/applications/app-1/draft");
   });
 
   it("keeps recruitment state off the CV preparation step", async () => {
@@ -180,50 +183,42 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
   });
 
-  it("keeps artifact files and previous CV revisions collapsed until requested", async () => {
+  it("keeps the engine's provider evidence collapsed until requested", async () => {
     const artifacts = [
-      artifact({ id: "latest-pdf", artifact_id: "latest-pdf", artifact_type: "resume_pdf" }),
-      artifact({
-        id: "latest-html",
-        artifact_id: "latest-html",
-        artifact_type: "resume_html",
-        logical_name: "resume.html",
-      }),
-      artifact({
-        id: "previous-markdown",
-        artifact_id: "previous-markdown",
-        artifact_type: "resume_markdown",
-        created_at: "2026-09-05T08:00:00Z",
-        logical_name: "resume.md",
-        revision_id: "revision-1",
-      }),
+      artifact({ id: "newest", artifact_id: "newest", created_at: "2026-09-06T08:00:00Z" }),
+      artifact({ id: "second", artifact_id: "second", created_at: "2026-09-05T08:00:00Z" }),
+      artifact({ id: "third", artifact_id: "third", created_at: "2026-09-04T08:00:00Z" }),
+      artifact({ id: "oldest", artifact_id: "oldest", created_at: "2026-09-03T08:00:00Z" }),
     ];
     renderPage((input) =>
       Promise.resolve(
         String(input).endsWith("/artifacts")
           ? jsonResponse({ items: artifacts })
-          : jsonResponse({ ...detail(), preparation_state: "ready", latest_ready_revision_id: "revision-2" }),
+          : jsonResponse({
+              ...detail(),
+              latest_analysis: {
+                id: "analysis-1",
+                application_id: "app-1",
+                job_snapshot_id: "snap-1",
+                version_number: 1,
+                analysis: {},
+                fit_level: "high",
+                gaps: [],
+                provider: "openai",
+                model: "gpt-5.6-terra",
+                created_at: "2026-08-24T07:00:00Z",
+              },
+            }),
       ),
     );
 
-    const artifactsSummary = (await screen.findAllByText("קבצים ותוצרים"))[0];
+    const artifactsSummary = (await screen.findAllByText("תוצרי המנוע"))[0];
     expect(artifactsSummary.closest("details")).not.toHaveAttribute("open");
     fireEvent.click(artifactsSummary);
-    expect(await screen.findByText("הקבצים האחרונים שנוצרו")).toBeInTheDocument();
-    expect(screen.queryByText("קבצים קודמים")).not.toBeInTheDocument();
-    expect(screen.queryByText("קובץ PDF של קורות החיים")).not.toBeInTheDocument();
+    expect(await screen.findAllByText("תשובת ספק ה־AI")).toHaveLength(3);
 
-    fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (2)" }));
-    expect(screen.getByText("קובץ PDF של קורות החיים")).toBeInTheDocument();
-    expect(screen.getByText("קובץ HTML של קורות החיים")).toBeInTheDocument();
-    expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "הצגת קבצים מגרסאות קודמות (1)" }));
-    expect(screen.getByText("קבצים קודמים")).toBeInTheDocument();
-    expect(screen.queryByText("קורות החיים ב־Markdown")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "הצגת הקבצים (1)" }));
-    expect(screen.getByText("קורות החיים ב־Markdown")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "הצגת רשומות קודמות (1)" }));
+    expect(screen.getAllByText("תשובת ספק ה־AI")).toHaveLength(4);
   });
 
   it("copies the complete stored job text from inside its disclosure", async () => {

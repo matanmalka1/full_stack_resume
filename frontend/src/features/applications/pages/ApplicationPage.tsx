@@ -131,10 +131,10 @@ export const ApplicationPage = () => {
     settled,
   });
 
-  /* The files exist only after a revision is rendered, so their reference section is drawn
-     only once there is something in it - never as an empty disclosure the reader opens onto
-     nothing. */
-  const hasArtifacts = detail !== undefined && detail.latest_ready_revision_id != null;
+  /* The engine's provider evidence exists only once an analysis ran, so its reference
+     section is drawn only then - never as an empty disclosure the reader opens onto
+     nothing. The CV's own file is the ready step's, not this section's. */
+  const hasArtifacts = detail !== undefined && detail.latest_analysis != null;
 
   return (
     /* The analysis step of the wizard. Its name and its spine are the shell's; what is left
@@ -203,8 +203,8 @@ export const ApplicationPage = () => {
              lists. The block is unconditional and replaces the step entirely rather than
              merely warning above it. */
           <Callout role="alert" title="המועמדות הזו נמחקה" tone="warning">
-            המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות הכנה נוספות. תצלום המשרה, הניתוח, הטיוטות, הגרסאות
-            שאושרו וכל קובץ שהופק נשארים בדיוק כפי שהם.
+            המועמדות הוסרה מלוח המועמדויות ואין לבצע עליה פעולות הכנה נוספות. תצלום המשרה, הניתוח, מסמך קורות החיים
+            וההגשות שנרשמו נשארים בדיוק כפי שהם.
           </Callout>
         ) : (
           <div className="space-y-6">
@@ -271,7 +271,7 @@ export const ApplicationPage = () => {
                   )}
 
                   {hasArtifacts ? (
-                    <Disclosure summary="קבצים ותוצרים">
+                    <Disclosure summary="תוצרי המנוע">
                       <div className="pt-2">
                         <ApplicationArtifacts applicationId={applicationId} />
                       </div>

@@ -58,7 +58,7 @@ export const formatRelativeUpdate = (value: string, now: Date = new Date()): str
    one the specification lists the values in (§4) and the one the board's "stage" sort
    already ranks by; it is read from the exhaustive label map rather than restated, so a
    new state cannot be left out of the bar. It is a position, not a promise of forward
-   motion: a stale draft that needs a decision projects back to `needs_review`. */
+   motion: an edit to an approved document projects back to `draft_in_progress`. */
 const preparationOrder = Object.keys(preparationStateLabels) as PreparationState[];
 
 export const preparationProgress = (state: PreparationState): { step: number; total: number } => ({
@@ -126,27 +126,15 @@ export interface ApplicationAttention {
 
 const ATTENTION_OVERFLOW_LIMIT = 2;
 
-/* The three sources the board reports under one heading, in the severity order the
-   detail screen's alert region already uses: a blocker, then a draft that no longer
-   matches its sources, then a note.
-
-   The stale group is led by `primary_stale_reason`. The projection picks which of
-   several stale reasons is the one to name; the board repeats that choice rather than
-   re-deriving it, and the remaining reasons follow it with the primary not repeated. */
+/* The two sources the board reports under one heading, in the severity order the detail
+   screen's alert region already uses: a blocker, then a warning. There is no staleness
+   group: a document built on an older analysis is a warning (§8), and an outdated approval
+   is simply a document back in draft. */
 const attentionItems = (item: ApplicationListItem): AttentionItem[] => {
-  const staleCodes = [
-    ...(item.primary_stale_reason == null ? [] : [item.primary_stale_reason]),
-    ...item.stale_reasons.map((reason) => reason.code),
-  ];
-
   return [
     ...item.review_reasons.map((reason) => ({
       code: reason.code,
       title: reasonTitle(reason.code, "נדרשת החלטה לפני המשך"),
-    })),
-    ...[...new Set(staleCodes)].map((code) => ({
-      code,
-      title: reasonTitle(code, "הטיוטה אינה מעודכנת מול המקורות שלה"),
     })),
     ...item.warnings.map((warning) => ({
       code: warning.code,
@@ -185,7 +173,7 @@ export interface HubItem {
 
 /* This is a priority summary of the current server-projected page, not a second list
    filter. Attention comes from the projection's reason collections, Ready comes from
-   its active ready revision, and the date comparison is only a local presentation of a
+   its `document_state`, and the date comparison is only a local presentation of a
    stored reminder. One card per Application prevents a single Application from occupying the
    entire hub when it happens to satisfy several conditions. */
 export const attentionHubItems = (items: readonly ApplicationListItem[], today: Date = new Date()): HubItem[] => {
@@ -233,10 +221,10 @@ export const attentionHubItems = (items: readonly ApplicationListItem[], today: 
       continue;
     }
 
-    if (application.latest_ready_revision_id != null) {
+    if (application.document_state === "ready") {
       ready.push({
-        actionLabel: "פתיחת הגרסה המוכנה",
-        actionTo: routePaths.revision(application.latest_ready_revision_id),
+        actionLabel: "פתיחת קורות החיים המוכנים",
+        actionTo: routePaths.ready(application.id),
         application,
         label: "מוכן לשליחה",
         subtitle: application.target_role,

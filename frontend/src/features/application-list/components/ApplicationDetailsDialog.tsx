@@ -1,10 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
 import { Download, ExternalLink, FileCheck2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
-import { approvedRevisionQueryOptions, recruiterPdfHref } from "@/api/revisions";
+import { documentPdfHref } from "@/api/documents";
 import { routePaths } from "@/app/routePaths";
 import { sourceHostname } from "@/features/applications";
 import { preparationResumeDestination, preparationStateLabels, trackLabel } from "@/features/preparation";
@@ -31,56 +30,46 @@ const Fact = ({ children, detail, label }: { children: ReactNode; detail?: React
   </div>
 );
 
-/* The finished CV and its PDF, as demo_re offers them. The board's list item names only the
-   revision, so the PDF's artifact comes from the revision itself - the same read, and
-   the same recruiter-pdf delivery, the revision screen uses. A revision that did not
-   qualify, or whose read has not arrived, offers no download. The link to the revision
-   is drawn only when the footer's primary command is not already that link. */
+/* The finished CV and its PDF, as demo_re offers them. The board's list item already says
+   the document is Ready and carries its hash, so the download is the document's own PDF -
+   which the server refuses unless the document is still Ready when it answers. The link to
+   the ready step is drawn only when the footer's primary command is not already that link. */
 const ReadyCv = ({
-  linkToRevision,
+  applicationId,
+  documentHash,
+  linkToReady,
   onClose,
-  revisionId,
 }: {
-  linkToRevision: boolean;
+  applicationId: string;
+  documentHash: string;
+  linkToReady: boolean;
   onClose: () => void;
-  revisionId: string;
-}) => {
-  const revision = useQuery(approvedRevisionQueryOptions(revisionId)).data;
-  const pdfArtifactId = revision?.ready_qualified === true ? (revision.pdf_artifact_version_id ?? null) : null;
-
-  if (!linkToRevision && pdfArtifactId === null) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border p-3.5">
-      <span className="inline-flex items-center gap-2 text-support font-medium text-cv-text">
-        <FileCheck2 aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
-        קורות חיים מוכנים למשרה זו
-      </span>
-      <span className="flex flex-wrap items-center gap-2">
-        {linkToRevision ? (
-          <Link
-            className={buttonClasses("secondary", undefined, "compact")}
-            onClick={onClose}
-            to={routePaths.revision(revisionId)}
-          >
-            פתיחת הגרסה המוכנה
-          </Link>
-        ) : null}
-        {pdfArtifactId === null ? null : (
-          <a
-            className={buttonClasses("secondary", undefined, "compact")}
-            href={recruiterPdfHref(revisionId, pdfArtifactId)}
-          >
-            <Download aria-hidden="true" className="size-icon-sm" />
-            הורדת PDF
-          </a>
-        )}
-      </span>
-    </div>
-  );
-};
+}) => (
+  <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-cv-border p-3.5">
+    <span className="inline-flex items-center gap-2 text-support font-medium text-cv-text">
+      <FileCheck2 aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
+      קורות חיים מוכנים למשרה זו
+    </span>
+    <span className="flex flex-wrap items-center gap-2">
+      {linkToReady ? (
+        <Link
+          className={buttonClasses("secondary", undefined, "compact")}
+          onClick={onClose}
+          to={routePaths.ready(applicationId)}
+        >
+          פתיחת קורות החיים המוכנים
+        </Link>
+      ) : null}
+      <a
+        className={buttonClasses("secondary", undefined, "compact")}
+        href={documentPdfHref(applicationId, documentHash)}
+      >
+        <Download aria-hidden="true" className="size-icon-sm" />
+        הורדת PDF
+      </a>
+    </span>
+  </div>
+);
 
 /* A timestamp as its own left-to-right island, so the date and time keep their order
    inside the Hebrew sentence instead of the comma flipping them. */
@@ -91,12 +80,11 @@ const Stamp = ({ value }: { value: string }) => <bdi dir="ltr">{formatDateTime(v
    reader's notes and when it was opened and last changed.
 
    Each fact is said once. The finished CV has its own block, so the next-action block
-   leaves it out, and the block does not repeat the revision link when the footer's
+   leaves it out, and the block does not repeat the ready link when the footer's
    primary command already goes there. The dialog's own
    close control and Escape close it; the footer holds only the two ways onward.
 
-   It is read from the board's own list item - only a finished CV's revision is fetched,
-   for its PDF - and every block is the card's own component, so the modal cannot say
+   It is read from the board's own list item alone, and every block is the card's own component, so the modal cannot say
    something the card does not. It opens from a click on a card and from the "פרטי משרה"
    control every record carries. */
 export const ApplicationDetailsDialog = ({
@@ -113,12 +101,15 @@ export const ApplicationDetailsDialog = ({
   const { step, total } = preparationProgress(application.preparation_state);
   const host = sourceHostname(application.source_url);
   const destination = preparationResumeDestination(application);
-  const readyRevisionId = application.latest_ready_revision_id ?? null;
-  const continuesToRevision = readyRevisionId !== null && destination === routePaths.revision(readyRevisionId);
+  const readyHash = application.document_state === "ready" ? (application.document_hash ?? null) : null;
+  const continuesToReady = readyHash !== null && destination === routePaths.ready(application.id);
   /* The finished CV has its own block below, so the next-action block reads the record
      as if it had none: it then names only a run, a recommended step or the reminder,
      and never a second "the CV is ready" or a second link to it. */
-  const withoutReadyCv: ApplicationListItem = { ...application, latest_ready_revision_id: null };
+  const withoutReadyCv: ApplicationListItem = {
+    ...application,
+    document_state: application.document_state === "ready" ? "approved" : application.document_state,
+  };
   const hasNextStep = nextActionHeading(withoutReadyCv, applicationAttention(application) !== null) !== null;
 
   const description = (
@@ -159,7 +150,7 @@ export const ApplicationDetailsDialog = ({
             עדכון סטטוס גיוס
           </Button>
           <Link className={buttonClasses("primary")} onClick={onClose} to={destination}>
-            {continuesToRevision ? "פתיחת הגרסה המוכנה" : "המשך בהכנה"}
+            {continuesToReady ? "פתיחת קורות החיים המוכנים" : "המשך בהכנה"}
           </Link>
         </>
       }
@@ -195,8 +186,13 @@ export const ApplicationDetailsDialog = ({
           </section>
         ) : null}
 
-        {readyRevisionId === null ? null : (
-          <ReadyCv linkToRevision={!continuesToRevision} onClose={onClose} revisionId={readyRevisionId} />
+        {readyHash === null ? null : (
+          <ReadyCv
+            applicationId={application.id}
+            documentHash={readyHash}
+            linkToReady={!continuesToReady}
+            onClose={onClose}
+          />
         )}
 
         {application.notes === "" ? null : (

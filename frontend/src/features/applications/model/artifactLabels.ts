@@ -7,19 +7,9 @@
    new refusal code reaches the reader as a code rather than as silence. */
 
 const artifactTypeLabels: Record<string, string> = {
-  resume_pdf: "קובץ PDF של קורות החיים",
-  resume_html: "קובץ HTML של קורות החיים",
-  resume_markdown: "קורות החיים ב־Markdown",
-  claim_manifest: "מניפסט הטענות",
-  working_draft_snapshot: "עותק היסטורי של טיוטה",
   job_snapshot: "תצלום המשרה",
   provider_response: "תשובת ספק ה־AI",
 };
-
-/* The artifacts a person is handed or looks at, as opposed to the ones the engine keeps
-   as evidence of how it got there. Both are shown; this decides which are shown first
-   and which sit behind a deliberate press. */
-const deliverableTypes = new Set(["resume_pdf", "resume_html", "resume_markdown"]);
 
 const lifecycleLabels: Record<string, string> = {
   rendered: "נוצר",
@@ -37,8 +27,6 @@ const unavailableReasonLabels: Record<string, string> = {
 };
 
 export const artifactTypeLabel = (artifactType: string): string => artifactTypeLabels[artifactType] ?? artifactType;
-
-export const isDeliverableArtifact = (artifactType: string): boolean => deliverableTypes.has(artifactType);
 
 export const lifecycleLabel = (lifecycleStatus: string): string => lifecycleLabels[lifecycleStatus] ?? lifecycleStatus;
 

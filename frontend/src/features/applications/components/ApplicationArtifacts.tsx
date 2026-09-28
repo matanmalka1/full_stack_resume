@@ -1,192 +1,77 @@
 import { useQuery } from "@tanstack/react-query";
-import { Layers3 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
 import { applicationArtifactsQueryOptions } from "@/api/artifacts";
-import type { ArtifactVersion } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
-import { Button, buttonClasses } from "@/ui/Button";
+import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { EmptyState } from "@/ui/EmptyState";
 import { QueryState } from "@/ui/QueryState";
 import { SectionHeader } from "@/ui/SectionHeader";
-import { formatDateTime } from "@/utils/formatDateTime";
 import { ApplicationArtifactRow } from "./ApplicationArtifactRow";
-import { artifactTypeLabel, isDeliverableArtifact } from "../model/artifactLabels";
 
-interface ArtifactGroup {
-  artifacts: ArtifactVersion[];
-  key: string;
-  revisionId: string | null;
-}
+/* How many records are shown before the rest wait behind a press. */
+const INITIAL_VISIBLE = 3;
 
-const groupArtifacts = (artifacts: ArtifactVersion[]): ArtifactGroup[] => {
-  const groups = new Map<string, ArtifactGroup>();
+/* The engine's evidence for this Application: the AI provider responses it kept (§4 of the
+   single-document decision narrows the artifact registry to them).
 
-  for (const artifact of artifacts) {
-    const revisionId = artifact.revision_id ?? null;
-    const key = revisionId === null ? `artifact:${artifact.id}` : `revision:${revisionId}`;
-    const group = groups.get(key);
-
-    if (group === undefined) {
-      groups.set(key, { artifacts: [artifact], key, revisionId });
-    } else {
-      group.artifacts.push(artifact);
-    }
-  }
-
-  return [...groups.values()];
-};
-
-const fileCountLabel = (count: number): string => (count === 1 ? "קובץ אחד" : `${count} קבצים`);
-
-const ArtifactGroupCard = ({ group, latest }: { group: ArtifactGroup; latest: boolean }) => {
-  const [open, setOpen] = useState(false);
-  const firstArtifact = group.artifacts[0];
-  const title =
-    group.revisionId === null
-      ? artifactTypeLabel(firstArtifact?.artifact_type ?? "")
-      : latest
-        ? "הקבצים האחרונים שנוצרו"
-        : "קבצים קודמים";
-
-  return (
-    <li className="rounded-control border border-cv-border bg-cv-surface">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 sm:px-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-surface-muted text-cv-text-muted">
-            <Layers3 aria-hidden="true" className="size-icon-md" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-support font-semibold text-cv-text">{title}</p>
-            <p className="text-support text-cv-text-muted">
-              {formatDateTime(firstArtifact?.created_at ?? "", "short")} · {fileCountLabel(group.artifacts.length)}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
-          {group.revisionId === null ? null : (
-            <Link className={buttonClasses("ghost", undefined, "compact")} to={routePaths.revision(group.revisionId)}>
-              פתיחת הגרסה
-            </Link>
-          )}
-          <Button aria-expanded={open} onClick={() => setOpen((value) => !value)} size="compact" variant="ghost">
-            {open ? "הסתרת הקבצים" : `הצגת הקבצים (${group.artifacts.length})`}
-          </Button>
-        </div>
-      </div>
-      {open ? (
-        <ul className="mx-3 divide-y divide-cv-border border-t border-cv-border py-2 sm:mx-4">
-          {group.artifacts.map((artifact) => (
-            <ApplicationArtifactRow artifact={artifact} key={artifact.id} />
-          ))}
-        </ul>
-      ) : null}
-    </li>
-  );
-};
-
-const ArtifactGroupList = ({ artifacts, internal = false }: { artifacts: ArtifactVersion[]; internal?: boolean }) => {
-  const [showPrevious, setShowPrevious] = useState(false);
-  const groups = groupArtifacts(artifacts);
-  const visibleGroups = showPrevious ? groups : groups.slice(0, 1);
-  const previousCount = groups.length - 1;
-
-  return (
-    <div className="mt-3 flex flex-col gap-2">
-      <ul className="flex flex-col gap-2">
-        {visibleGroups.map((group, index) => (
-          <ArtifactGroupCard group={group} key={group.key} latest={index === 0} />
-        ))}
-      </ul>
-      {previousCount === 0 ? null : (
-        <div>
-          <Button
-            aria-expanded={showPrevious}
-            className="min-h-9 px-2.5"
-            onClick={() => setShowPrevious((value) => !value)}
-            variant="ghost"
-          >
-            {showPrevious
-              ? internal
-                ? "הסתרת תוצרים קודמים"
-                : "הסתרת קבצים מגרסאות קודמות"
-              : internal
-                ? `הצגת תוצרים קודמים (${previousCount})`
-                : `הצגת קבצים מגרסאות קודמות (${previousCount})`}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* §14 of the product spec: the Application's own revisions-and-artifacts section, not a
-   separate artifact manager.
-
-   Everything it shows belongs to this Application and links back into it, which is why it
-   is a region on this screen rather than a screen of its own: an artifact is meaningful
-   as the output of a revision of this Application, and a global list of files would ask
-   the reader to reconstruct that relationship from identifiers.
-
-   The engine's own evidence - claim manifests, draft snapshots, provider responses - is
-   here too, behind one press. It is part of the record and its integrity is checkable on
-   the same terms; it is simply not what the reader came for. */
+   The CV itself is not here. It is the Application's one document, delivered as a file from
+   the ready step while the document is Ready; the Submissions keep what was actually sent.
+   What is left is provenance - checkable on the same integrity terms, and not what the
+   reader came for, so it sits in a quiet reference section. */
 export const ApplicationArtifacts = ({ applicationId }: { applicationId: string }) => {
   const query = useQuery(applicationArtifactsQueryOptions(applicationId));
-  const [showInternal, setShowInternal] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   /* Newest first, which is the order the reader is asking about. The server's answer is
-     never narrowed here - both groups below are rendered, one behind a press. */
+     never narrowed here - the rest is behind a press, not filtered away. */
   const ordered = [...(query.data?.items ?? [])]
     // The copied array is safe to mutate; the runtime target is ES2022.
     // oxlint-disable-next-line unicorn/no-array-sort
     .sort((left, right) => right.created_at.localeCompare(left.created_at));
-  const deliverables = ordered.filter((artifact) => isDeliverableArtifact(artifact.artifact_type));
-  const internal = ordered.filter((artifact) => !isDeliverableArtifact(artifact.artifact_type));
+  const visible = showAll ? ordered : ordered.slice(0, INITIAL_VISIBLE);
+  const hiddenCount = ordered.length - visible.length;
 
   return (
     <Card aria-labelledby="artifacts-heading" className="bg-cv-surface p-4 shadow-surface">
       <SectionHeader
         align="baseline"
-        description="קבצי המסירה ותוצרי המנוע שנשמרו עבור הגרסאות המאושרות. פרטי שלמות זמינים לפי דרישה."
+        description="תשובות ספק ה־AI שנשמרו כעדות לאופן שבו הניתוח והטיוטה נוצרו. פרטי שלמות זמינים לפי דרישה."
         gap="wide-compact"
         headingId="artifacts-heading"
         headingSize="body"
         spacing="compact"
-        title="קבצים ותוצרים"
+        title="תוצרי המנוע"
       />
 
       <QueryState
         className="mt-3"
         empty={ordered.length === 0}
-        /* A tab the reader chose to open. It used to render nothing at all with nothing
-           registered, which on a tab is a dead end rather than a quiet section: the
-           answer to "where are my files" is that the workflow has not produced any yet,
-           and that has to be said. */
         emptyState={
           <EmptyState>
-            <p className="text-support text-cv-text-muted">
-              עוד לא נוצר קובץ למועמדות הזו. קובץ נרשם כאן אחרי שגרסה מאושרת עוברת רינדור.
-            </p>
+            <p className="text-support text-cv-text-muted">עוד לא נשמרה תשובת ספק למועמדות הזו.</p>
           </EmptyState>
         }
         error={query.error}
-        fallbackDetail="שום קובץ לא השתנה. אפשר לרענן ולנסות שוב."
-        fallbackTitle="לא ניתן לטעון את רשימת הקבצים"
+        fallbackDetail="שום רשומה לא השתנתה. אפשר לרענן ולנסות שוב."
+        fallbackTitle="לא ניתן לטעון את תוצרי המנוע"
         loading={query.isPending}
-        loadingLabel="טוען את רשימת הקבצים…"
+        loadingLabel="טוען את תוצרי המנוע…"
       >
-        {deliverables.length === 0 ? null : <ArtifactGroupList artifacts={deliverables} />}
-
-        {internal.length === 0 ? null : (
-          <div className="flex flex-col gap-3">
-            <div>
-              <Button aria-expanded={showInternal} onClick={() => setShowInternal(!showInternal)} variant="ghost">
-                {showInternal ? "הסתרת תוצרי המנוע" : `הצגת תוצרי המנוע (${internal.length})`}
-              </Button>
-            </div>
-            {showInternal ? <ArtifactGroupList artifacts={internal} internal /> : null}
+        <ul className="mt-3 divide-y divide-cv-border rounded-control border border-cv-border px-3 sm:px-4">
+          {visible.map((artifact) => (
+            <ApplicationArtifactRow artifact={artifact} key={artifact.id} />
+          ))}
+        </ul>
+        {hiddenCount <= 0 && !showAll ? null : (
+          <div className="mt-2">
+            <Button
+              aria-expanded={showAll}
+              className="min-h-9 px-2.5"
+              onClick={() => setShowAll((value) => !value)}
+              variant="ghost"
+            >
+              {showAll ? "הסתרת הרשומות הקודמות" : `הצגת רשומות קודמות (${hiddenCount})`}
+            </Button>
           </div>
         )}
       </QueryState>

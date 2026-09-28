@@ -66,8 +66,8 @@ export const ApplicationRecruitmentStatus = ({ item }: { item: ApplicationListIt
 
 /* The CV track, drawn after demo_re: the state named on one line with its position at
    the far end, and one bar under it filled to that position. The bar is a position
-   among the seven states, not a percentage of work - a stale draft that needs a
-   decision projects back to `needs_review` and the bar shortens with it. */
+   among the five states, not a percentage of work - an edit to an approved document
+   projects back to `draft_in_progress` and the bar shortens with it. */
 const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_state"] }) => {
   const { step, total } = preparationProgress(state);
   const label = preparationStateLabels[state];

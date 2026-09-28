@@ -1,8 +1,8 @@
 /* The Operations feature's public surface.
 
-   An Operation is durable work queued against one Application, and three screens report
-   one: the Application's preparation step, the draft editor, and the revision. None of
-   them owns the vocabulary or the overlay, which is why neither lives in any of them.
+   An Operation is durable work queued against one Application, and two screens report
+   one: the Application's preparation step and the draft editor. Neither owns the
+   vocabulary or the overlay, which is why neither lives in either of them.
 
    There is no Operation screen. Cancel and retry are the record's own actions and travel
    with the report the overlay opens, so neither `OperationActions` nor `OperationReport`

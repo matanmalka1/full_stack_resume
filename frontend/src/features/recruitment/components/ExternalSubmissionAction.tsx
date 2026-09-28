@@ -36,7 +36,6 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
       }
       return recordExternalSubmission(detail.application.id, {
         submitted_at: submittedAt,
-        artifact_version_id: null,
         metadata: fields.note.trim() === "" ? {} : { note: fields.note.trim() },
       });
     },

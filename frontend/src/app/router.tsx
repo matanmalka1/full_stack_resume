@@ -5,14 +5,14 @@ import { ApplicationListPage } from "@/features/application-list";
 import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
 import { DraftEditorPage } from "@/features/drafts";
 import { FactsPage } from "@/features/facts";
-import { RevisionComparisonPage, RevisionPage } from "@/features/revisions";
+import { ReadyPage } from "@/features/ready";
 import { SettingsPage } from "@/features/settings";
 import { AppLayout } from "./layout/AppLayout";
 import { NotFoundPage } from "./layout/NotFoundPage";
 import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
 
 /* The preparation workflow is carried by the board, intake, the Application hub, its
-   preparation tab, the draft editor, and the approved revision. Candidate facts and
+   preparation tab, the draft editor, and the ready document. Candidate facts and
    settings are durable product areas outside that per-Application workflow.
 
    Validation, approval, and render are not among them. Each was a screen holding a single
@@ -50,19 +50,16 @@ export const router = createBrowserRouter([
           { path: "applications/:applicationId", element: <ApplicationPage /> },
           { path: "applications/:applicationId/resume", element: <ApplicationResumePage /> },
 
-          /* The draft editor: edit, preview, validate, approve, and render, on the one screen
-         that holds the draft all five act on. */
+          /* The draft editor: edit, preview, check, approve, and render, on the one screen
+         that holds the document all five act on. */
           { path: "applications/:applicationId/draft", element: <DraftEditorPage /> },
 
-          /* One approved revision, addressed by the revision itself. It stays a screen of its
-         own rather than a state of the editor because the links that reach it name a
-         specific immutable record, and an Application-keyed screen would answer with
-         whatever revision is current instead of the one named. */
-          { path: "revisions/:revisionId", element: <RevisionPage /> },
-          /* What changed between two of those records. Not a workflow step - nothing is
-             decided here - so it carries no stage spine; it is reached from a revision's
-             history and returns to that revision. */
-          { path: "revisions/:revisionId/compare", element: <RevisionComparisonPage /> },
+          /* The ready step: the rendered document, its PDF and the record of sending it.
+             A state of the Application's one document rather than a record of its own, so
+             it is addressed by the Application like the editor beside it - and the way back
+             to editing is always there, because editing a Ready document is allowed and
+             simply returns it to draft. */
+          { path: "applications/:applicationId/ready", element: <ReadyPage /> },
 
           { path: "facts", element: <FactsPage /> },
           { path: "settings", element: <SettingsPage /> },

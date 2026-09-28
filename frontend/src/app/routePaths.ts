@@ -28,10 +28,8 @@ export const routePaths = {
   application,
   resumeApplication: (applicationId: string): string => `${application(applicationId)}/resume`,
   draft: (applicationId: string): string => `${application(applicationId)}/draft`,
-  revision: (revisionId: string): string => `/revisions/${segment(revisionId)}`,
-  /* What changed from `baseRevisionId` to `revisionId`. The base travels as a query value
-     rather than a second segment: the page is about the newer revision, and the base is
-     a choice made on it that the reader can change in place. */
-  revisionComparison: (revisionId: string, baseRevisionId: string): string =>
-    `/revisions/${segment(revisionId)}/compare?base=${encodeURIComponent(baseRevisionId)}`,
+  /* The ready step: the Application's rendered document, its file and its submission.
+     Keyed by the Application, like the editor, because there is one document and a Ready
+     state is a state of it rather than a record of its own. */
+  ready: (applicationId: string): string => `${application(applicationId)}/ready`,
 } as const;

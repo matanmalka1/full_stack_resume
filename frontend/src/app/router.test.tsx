@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { NewApplicationPage } from "@/features/application-intake";
 import { ApplicationListPage } from "@/features/application-list";
 import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
+import { DraftEditorPage } from "@/features/drafts";
+import { ReadyPage } from "@/features/ready";
 import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
 import { router } from "./router";
 
@@ -44,7 +46,16 @@ describe("the route table", () => {
     expect(route("approved-revisions/:revisionId/ready")).toBeUndefined();
   });
 
-  /* Validation, approval, review, and render are states of the draft editor, so the table
+  /* One document per Application: the editor and the ready step are both addressed by the
+     Application, and no screen is addressed by a revision any more - there are none. */
+  it("addresses the draft and ready steps by the Application", () => {
+    expect(elementType("applications/:applicationId/draft")).toBe(DraftEditorPage);
+    expect(elementType("applications/:applicationId/ready")).toBe(ReadyPage);
+    expect(route("revisions/:revisionId")).toBeUndefined();
+    expect(route("revisions/:revisionId/compare")).toBeUndefined();
+  });
+
+  /* Checking, approval, review, and render are states of the draft editor, so the table
      must not carry a screen for any of them. Keeping the assertion as "no route" rather
      than deleting it means a re-added interstitial fails here. */
   it("keeps validation, review, approval, and render off the route table", () => {

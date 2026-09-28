@@ -14,14 +14,15 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     allowed_recruitment_transitions: ["withdrawn", "closed"],
     recruitment_timeline: [],
     preparation_state: "ready_to_draft",
-    working_draft_state: "none",
+    document_state: "none",
+    content_check: "none",
     review_reasons: [],
-    stale_reasons: [],
     warnings: [],
     active_job_snapshot_id: "snap-1",
-    active_analysis_id: "analysis-1",
-    active_selection_plan_id: "plan-1",
-    newer_draft_in_progress: false,
+    latest_analysis_id: "analysis-1",
+    document_id: "doc-1",
+    document_hash: "a".repeat(64),
+    document_analysis_id: "analysis-1",
     available_actions: ["create_draft", "edit_matching_configuration"],
     blocked_actions: [],
     recommended_action: "create_draft",
@@ -104,10 +105,10 @@ afterEach(() => {
 });
 
 describe("voluntary matching configuration", () => {
-  it("shows current values and sends both active-context CAS identities", async () => {
+  it("shows current values and sends the analysis the form read", async () => {
     let applied = false;
     const before = detail();
-    const after = detail({ active_selection_plan_id: "plan-2" });
+    const after = detail({ document_hash: "b".repeat(64) });
     after.application = { ...before.application, emphasis: "new-business" };
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === APPLY_PATH) {
@@ -117,7 +118,7 @@ describe("voluntary matching configuration", () => {
             {
               application_id: "app-1",
               job_analysis_id: "analysis-1",
-              selection_plan_id: "plan-2",
+              selection_plan_id: "legacy-plan",
               created_analysis: false,
               analysis: after.latest_analysis!.analysis,
               plan: {},
@@ -148,7 +149,6 @@ describe("voluntary matching configuration", () => {
     expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
       application_id: "app-1",
       expected_analysis_id: "analysis-1",
-      expected_selection_plan_id: "plan-1",
       emphasis_override: "new-business",
     });
   });
@@ -156,13 +156,13 @@ describe("voluntary matching configuration", () => {
   it.each([
     [
       "draft_in_progress" as const,
-      { active_working_draft_id: "draft-1", working_draft_state: "editing" as const },
-      /הטיוטה הפעילה לא תימחק, אך לא תתאים להגדרות החדשות/,
+      { document_state: "draft" as const, content_check: "outdated" as const },
+      /וייתכן שגם את תוכן הטיוטה/,
     ],
     [
       "ready" as const,
-      { latest_approved_revision_id: "revision-1", latest_ready_revision_id: "revision-1" },
-      /הגרסאות שאושרו והקבצים המוכנים לא ישתנו/,
+      { document_state: "ready" as const, content_check: "passed" as const },
+      /אישור קיים לא יחול עוד על המסמך שהשתנה/,
     ],
   ])("explains the consequence from server state %s", async (preparation_state, extra, message) => {
     vi.stubGlobal(

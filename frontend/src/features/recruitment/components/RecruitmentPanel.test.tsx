@@ -25,12 +25,11 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
   allowed_recruitment_transitions: ["withdrawn", "closed"],
   recruitment_timeline: [statusEvent()],
   preparation_state: "ready",
-  working_draft_state: "none",
+  document_state: "none",
+  content_check: "none",
   review_reasons: [],
-  stale_reasons: [],
   warnings: [],
   active_job_snapshot_id: "snap-1",
-  newer_draft_in_progress: false,
   available_actions: [],
   blocked_actions: [],
   recommended_action: null,
@@ -238,7 +237,6 @@ describe("RecruitmentManagerButton", () => {
     const submissionRequest = requestFor(fetchMock, "/external-submissions");
     expect(JSON.parse(String(submissionRequest?.[1]?.body))).toEqual({
       submitted_at: new Date("2026-09-01T12:30").toISOString(),
-      artifact_version_id: null,
       metadata: { note: "Submitted by email" },
     });
   });
