@@ -5,8 +5,8 @@ from sqlalchemy import select
 from ...application.errors import UnknownRecord
 from ...application.ports.ready import ReadyEvidence
 from ...application.ports.transactions import ReadTransaction
-from .analysis_sql import _analysis_record, _selection_plan_record
-from .artifacts_sql import (
+from .legacy_analysis_sql import _analysis_record, _selection_plan_record
+from .legacy_artifacts_sql import (
     _artifact_version,
     _artifact_version_for_revision,
     _decision_for_artifact_version,

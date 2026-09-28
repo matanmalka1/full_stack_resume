@@ -344,6 +344,34 @@ class PayloadStore:
                 ) from exc
             return self._key(self._path_for_key(validate_key(relative)))
 
+    def submission_path(self, application_id: str, submission_id: str, *, suffix: str) -> Path:
+        """Where one Submission's copy of a rendered file belongs (state-and-use-cases §18).
+
+        Submission-owned and immutable: the document's own rendered files are
+        mutable working outputs that the next render or re-pin replaces, so what
+        was sent is copied here rather than referenced there.
+        """
+        normalized_suffix = suffix if suffix.startswith(".") else f".{suffix}"
+        if normalized_suffix not in self._OUTPUT_SUFFIXES:
+            raise ValueError(f"unsupported submission file suffix: {suffix}")
+        return self._target(
+            "submissions",
+            self._component(application_id, name="application_id"),
+            self._component(submission_id, name="submission_id"),
+            f"resume{normalized_suffix}",
+        )
+
+    def commit_submission_file(
+        self, application_id: str, submission_id: str, *, suffix: str, payload: bytes
+    ) -> SnapshotPayload:
+        """Store one sent file under its Submission; an existing copy is never replaced."""
+        stored = self.commit(
+            self.submission_path(application_id, submission_id, suffix=suffix),
+            payload=payload,
+            validate=lambda content: bool(content),
+        )
+        return self._reference(stored)
+
     def provider_path(self, application_id: str, operation_id: str, artifact_id: str) -> Path:
         return self._target(
             "provider",
@@ -396,6 +424,9 @@ class PayloadStore:
             or len(parts) == 3
             and parts[0] == "drafts"
             and parts[2].endswith(".json")
+            or len(parts) == 4
+            and parts[0] == "submissions"
+            and parts[3] in {"resume.html", "resume.pdf"}
         )
         if not approved:
             raise ValueError(f"payload destination is not an approved layout: {candidate}")

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from ...application.errors import UnknownRecord
 from ...application.ports.submission import SubmissionContext
 from ...application.ports.transactions import ReadTransaction
-from .analysis_sql import _selection_plan_record
+from .legacy_analysis_sql import _selection_plan_record
 from .connection import SqlAlchemyTransactionManager
 from .drafts_sql import _approved_revision
 from .tables import applications, job_analyses, job_snapshots, selection_plans

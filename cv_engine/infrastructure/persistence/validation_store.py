@@ -5,7 +5,7 @@ from typing import Any
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...domain.contracts.records import ValidationRunLineage
 from ...domain.contracts.validation import ValidationReport
-from .artifacts_sql import (
+from .legacy_artifacts_sql import (
     _latest_validation_for_working_draft,
     _record_validation,
     _validation_for_artifact,

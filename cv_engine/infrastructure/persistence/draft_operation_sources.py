@@ -7,7 +7,7 @@ from ...application.operations import PersistedOperation
 from ...application.ports.drafts import DraftGenerationSources
 from ...application.ports.transactions import ReadTransaction
 from ...domain.contracts.drafts import WorkingDraft
-from .analysis_sql import _analysis_record, _selection_plan_record
+from .legacy_analysis_sql import _analysis_record, _selection_plan_record
 from .connection import SqlAlchemyTransactionManager
 from .drafts_sql import _working_draft
 from .tables import job_analyses, job_snapshots, knowledge_mutation_journal, selection_plans

@@ -4,7 +4,7 @@ from typing import Any
 
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...domain.contracts.records import DecisionRecord
-from .artifacts_sql import (
+from .legacy_artifacts_sql import (
     _decision_for_artifact_version,
     _decision_for_revision,
     _insert_decision,

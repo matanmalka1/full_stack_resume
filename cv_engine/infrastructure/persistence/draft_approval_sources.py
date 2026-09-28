@@ -7,8 +7,8 @@ from ...application.errors import UnknownRecord
 from ...application.ports.drafts import ApprovalReplay, DraftApprovalContext
 from ...application.ports.transactions import ReadTransaction
 from ...domain.contracts.drafts import WorkingDraft
-from .analysis_sql import _selection_plan_record
-from .artifacts_sql import (
+from .legacy_analysis_sql import _selection_plan_record
+from .legacy_artifacts_sql import (
     _artifact_version_for_revision,
     _decision_for_revision,
     _validation_lineage,

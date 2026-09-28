@@ -6,7 +6,7 @@ from ...application.chain import DraftChainSources
 from ...application.errors import UnknownRecord
 from ...application.ports.transactions import ReadTransaction
 from ...domain.contracts.drafts import DraftDocument
-from .analysis_sql import _analysis_record
+from .legacy_analysis_sql import _analysis_record
 from .connection import SqlAlchemyTransactionManager
 from .draft_validation_sources import _draft_chain_sources
 from .tables import applications, job_analyses, job_snapshots

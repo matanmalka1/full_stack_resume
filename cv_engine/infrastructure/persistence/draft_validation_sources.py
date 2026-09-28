@@ -10,7 +10,7 @@ from ...application.errors import UnknownRecord
 from ...application.ports.drafts import DraftValidationContext
 from ...application.ports.transactions import ReadTransaction
 from ...domain.contracts.drafts import DraftDocument, WorkingDraft
-from .analysis_sql import _analysis_record, _selection_plan_record
+from .legacy_analysis_sql import _analysis_record, _selection_plan_record
 from .connection import SqlAlchemyTransactionManager
 from .tables import applications, job_analyses, job_snapshots, selection_plans
 
