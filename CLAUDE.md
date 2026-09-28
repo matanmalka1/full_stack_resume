@@ -12,9 +12,12 @@ renders, projections. Getting one wrong costs a re-run. Calibrate effort to that
 
 One thing is not regenerable, and that is where care belongs:
 
-**Immutable records already written** — approved and submitted CV, HTML, PDF, job
-snapshot, and past application history. A job snapshot preserves a posting that later
-vanishes from the web. Never overwrite or relocate one; overwriting destroys evidence
+**Immutable records already written** — what left the system: a Submission (the CV
+content that was sent, its HTML and PDF copies and their checksums), the job snapshot
+it references, provider evidence, and past application history. A job snapshot
+preserves a posting that later vanishes from the web. The CV document itself is
+mutable until it is submitted: approval and Ready are stamps derived against its
+current basis, not frozen revisions. Never overwrite or relocate one; overwriting destroys evidence
 nothing else can reproduce. Never invent a value a record never carried — a field that
 cannot be derived stays NULL. This does not freeze an application's current status: a
 status field may transition per the lifecycle rules in `docs/spec/state-and-use-cases.md`.

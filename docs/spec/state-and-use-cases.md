@@ -424,6 +424,11 @@ the document unchanged; malformed or incomplete reviewer output remains
 An Operation may be failed/cancelled while owning an inactive immutable output (provider
 evidence). Output existence and output activation are separate.
 
+An output reference names one of three things, a closed set: `job_analysis` (the
+JobAnalysis an analysis activated), `cv_document` (the document an analysis created or an
+Operation changed at activation), and `provider_response` (registered provider
+evidence).
+
 Operation query fields include status, phase, message, timestamps, failure code, safe
 failure detail, structured failure reason, retry reference, cancellation state, output
 references, and the backend-derived Operation actions currently accepted. The UI polls every one to two

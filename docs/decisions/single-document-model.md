@@ -1,8 +1,7 @@
 # Decision: one mutable CV document per Application
 
-Status: accepted, in implementation. `spec/state-and-use-cases.md` is rewritten for this
-model; the other specifications listed in §8 still describe the revision model until
-their rewrite in Wave 2.
+Status: implemented (2026-09-28). The specifications listed in §8 describe this model;
+the three-wave execution plan is closed and lives in Git history.
 
 ## 1. Why
 
@@ -182,6 +181,12 @@ as outdated.
   command separate from `approve`; `build_from_analysis` clears content and every stamp;
   the warnings are `DOCUMENT_ON_OLDER_ANALYSIS`, `PROFILE_CHANGED` and `POLICY_CHANGED`;
   `facts_hash` covers every field of a fact, including its status, except `source_file`.
+
+- **Decided in Wave 3** (2026-09-28): the document's candidate rows carry no ranking
+  terms (requirement tier, profile and emphasis scores, keyword hits, gap substitute).
+  The engine still ranks by them; the fact rows explain themselves by the requirements
+  each fact is evidence for. An Operation's `output_type` is the closed set
+  `job_analysis`, `cv_document`, `provider_response`.
 
 ## 8. Specification sections to rewrite
 
