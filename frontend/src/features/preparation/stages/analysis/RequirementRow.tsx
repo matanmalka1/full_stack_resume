@@ -88,11 +88,7 @@ export const RequirementRow = ({
           </p>
         )}
 
-        {citedCount === 0 ? (
-          matched ? null : (
-            <p className="mt-1 text-caption text-cv-text-muted">אין עובדה מאושרת שמעידה על הדרישה.</p>
-          )
-        ) : (
+        {citedCount === 0 ? null : (
           <details className="mt-1.5" onToggle={(event) => setOpen(event.currentTarget.open)}>
             <DisclosureSummary className="text-support font-medium text-cv-text-muted hover:text-cv-text" open={open}>
               {requirement.supportingFactIds.length === 1

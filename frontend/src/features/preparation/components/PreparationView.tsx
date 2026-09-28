@@ -47,9 +47,7 @@ export const PreparationView = ({
           <div
             className={cx(
               "flex min-w-0 flex-col gap-6",
-              hasMainColumn
-                ? "lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:-m-1 lg:basis-2/5 lg:overflow-y-auto lg:p-1 xl:basis-1/3"
-                : "lg:flex-1",
+              hasMainColumn ? "lg:sticky lg:top-20 lg:basis-2/5 xl:basis-1/3" : "lg:flex-1",
             )}
           >
             <VerificationStage

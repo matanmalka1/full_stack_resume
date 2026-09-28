@@ -13,7 +13,6 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
-import { cx } from "@/ui/cx";
 import { surfaceClasses } from "@/ui/surface";
 import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../../model/analysisLabels";
 import {
@@ -28,34 +27,11 @@ import {
   matchingValuesFrom,
 } from "../../model/matchingConfiguration";
 
-const fields: Record<
-  MatchingKey,
-  { cost: string; description: string; label: string; labels: Record<string, string> }
-> = {
-  track: {
-    label: "מסלול",
-    labels: trackLabels,
-    description: "תחום המשרה - קובע אילו פרופילים ודגשים רלוונטיים.",
-    cost: "שינוי יוצר ניתוח חדש",
-  },
-  profile: {
-    label: "פרופיל",
-    labels: profileLabels,
-    description: "התפקיד הספציפי - קובע את מאגר העובדות ואת מבנה קורות החיים.",
-    cost: "שינוי יוצר ניתוח חדש",
-  },
-  emphasis: {
-    label: "דגש",
-    labels: emphasisLabels,
-    description: "מה להבליט - משנה את דירוג העובדות בתוך הפרופיל.",
-    cost: "שינוי יוצר בחירת עובדות חדשה בלבד",
-  },
-  language: {
-    label: "שפת קורות החיים",
-    labels: languageLabels,
-    description: "השפה שבה ייכתבו קורות החיים.",
-    cost: "שינוי יוצר ניתוח חדש",
-  },
+const fields: Record<MatchingKey, { cost: string; label: string; labels: Record<string, string> }> = {
+  track: { label: "מסלול", labels: trackLabels, cost: "ניתוח חדש" },
+  profile: { label: "פרופיל", labels: profileLabels, cost: "ניתוח חדש" },
+  emphasis: { label: "דגש", labels: emphasisLabels, cost: "בחירת עובדות חדשה" },
+  language: { label: "שפת קורות החיים", labels: languageLabels, cost: "ניתוח חדש" },
 };
 
 export const MatchingConfigurationEditor = ({
@@ -135,16 +111,14 @@ export const MatchingConfigurationEditor = ({
       aria-labelledby="matching-configuration-heading"
       className={surfaceClasses("flex flex-col gap-4 bg-cv-surface p-5")}
     >
-      <div className="flex items-start gap-2.5 border-b border-cv-border pb-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
-          <SlidersHorizontal aria-hidden="true" className="size-icon-md" />
-        </span>
+      <div className="flex items-start gap-2.5">
+        <SlidersHorizontal aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-cv-accent" />
         <div className="min-w-0">
           <h2 className="text-body font-semibold text-cv-text" id="matching-configuration-heading">
             הגדרות ההתאמה
           </h2>
-          <p className="mt-0.5 text-support text-cv-text-muted">
-            על פיהן נבחרות העובדות ונבנים קורות החיים. הערכים הוצעו בניתוח, ואפשר לשנות כל אחד מהם.
+          <p className="mt-0.5 text-caption text-cv-text-muted">
+            שינוי מסלול, פרופיל או שפה יוצר ניתוח חדש; שינוי דגש בוחר את העובדות מחדש.
           </p>
         </div>
       </div>
@@ -155,52 +129,40 @@ export const MatchingConfigurationEditor = ({
         </Callout>
       ) : null}
 
-      <div className="flex flex-col gap-4">
+      <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
         {matchingKeys.map((key) => {
           const field = fields[key];
           const isChanged = changes.includes(key);
           const origin = matchingOrigin(key, classification, detail);
           return (
-            <div
-              className={cx(
-                "rounded-control border p-3 transition-colors",
-                isChanged ? "border-cv-accent/40 bg-cv-accent-soft/40" : "border-cv-border",
-              )}
+            <Field
+              hint={
+                <span className={isChanged ? "font-semibold text-cv-accent" : undefined}>
+                  {isChanged
+                    ? `במקום ${field.labels[current[key]] ?? current[key]} · ${field.cost}`
+                    : origin === "decided"
+                      ? "נקבע על ידך"
+                      : "הוצע בניתוח"}
+                </span>
+              }
               key={key}
+              label={field.label}
             >
-              <Field hint={field.description} label={field.label}>
-                {(control) => (
-                  <Select
-                    {...control}
-                    disabled={!canEdit || save.isPending}
-                    onChange={(event) => update(key, event.target.value as MatchingValues[typeof key])}
-                    value={values[key]}
-                  >
-                    {optionsFrom(field.labels).map(([option, optionLabel]) => (
-                      <option key={option} value={option}>
-                        {optionLabel}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption">
-                {isChanged ? (
-                  <span className="font-semibold text-cv-accent">
-                    במקום: {field.labels[current[key]] ?? current[key]} · {field.cost}
-                  </span>
-                ) : (
-                  <span
-                    className={cx(
-                      "rounded-pill px-2 py-0.5 font-semibold",
-                      origin === "decided" ? "bg-cv-info-soft text-cv-info" : "bg-cv-surface-muted text-cv-text-muted",
-                    )}
-                  >
-                    {origin === "decided" ? "נקבע על ידך" : "הוצע בניתוח"}
-                  </span>
-                )}
-              </div>
-            </div>
+              {(control) => (
+                <Select
+                  {...control}
+                  disabled={!canEdit || save.isPending}
+                  onChange={(event) => update(key, event.target.value as MatchingValues[typeof key])}
+                  value={values[key]}
+                >
+                  {optionsFrom(field.labels).map(([option, optionLabel]) => (
+                    <option key={option} value={option}>
+                      {optionLabel}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
           );
         })}
       </div>
