@@ -218,7 +218,7 @@ export const regenerateClaim = async (
       job_analysis_id: draft.job_analysis_id,
       selection_plan_id: draft.selection_plan_id,
       claim_id: claimId,
-      ...(keepText ? { keep_text: true } : {}),
+      keep_text: keepText,
     },
     idempotencyKey,
   );

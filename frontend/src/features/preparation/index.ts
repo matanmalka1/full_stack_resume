@@ -40,9 +40,11 @@ export {
 } from "./model/actionDestinations";
 export {
   confidenceText,
+  emphasisLabels,
   fitLevelIcon,
   fitLevelLabel,
   fitLevelTone,
+  languageLabels,
   profileLabels,
   trackLabel,
 } from "./model/analysisLabels";

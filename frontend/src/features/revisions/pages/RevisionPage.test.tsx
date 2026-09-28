@@ -58,7 +58,10 @@ describe("RevisionPage", () => {
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
     const history = await screen.findByRole("region", { name: "היסטוריית גרסאות" });
-    const entries = await within(history).findAllByRole("listitem");
+    /* Until the list arrives the history holds only the displayed revision, so wait for
+       the full list rather than for the first entry. */
+    await within(history).findByRole("heading", { name: "גרסה 2" });
+    const entries = within(history).getAllByRole("listitem");
     /* Newest first; the displayed one is marked and is not offered as a link to itself. */
     expect(within(entries[0]!).getByRole("heading", { name: "גרסה 2" })).toBeInTheDocument();
     expect(within(entries[0]!).getByText("העדכנית")).toBeInTheDocument();
@@ -207,13 +210,59 @@ describe("RevisionPage", () => {
   it("shows the revision decision record and preserves its server-suggested filename", async () => {
     const fetchMock = vi.fn((input: string | URL | Request) => {
       const url = String(input);
+      if (url.includes("/api/v1/facts")) {
+        return Promise.resolve(
+          json({
+            items: [
+              {
+                fact: {
+                  fact_id: "development.phdigital.cicd",
+                  meaning: "Built CI/CD pipelines",
+                  renderings: { en: "Built CI/CD pipelines with GitHub Actions" },
+                  tags: [],
+                  status: "canonical",
+                  provenance: "user",
+                  source: "development.json",
+                  resume_style: "bullet",
+                },
+                recorded_status: "canonical",
+              },
+            ],
+          }),
+        );
+      }
       if (url.includes("decision-markdown")) {
         return Promise.resolve(
           json(
             {
               application_id: "app-1",
               approved_revision_id: "revision-1",
-              content: "# Why this revision\n\nSelected canonical facts.",
+              content: [
+                "# CV Decision and Provenance",
+                "",
+                "## Decision",
+                "",
+                "Selected canonical facts.",
+                "",
+                "## Classification",
+                "",
+                "- Track: development",
+                "- Language: en",
+                "",
+                "## Selected facts",
+                "",
+                "- `development.phdigital.cicd`",
+                "- `retired.fact`",
+                "",
+                "## Overrides",
+                "",
+                "- User overrides: {}",
+                "",
+                "## Exact lineage",
+                "",
+                "- Job snapshot ID: `lineage-snapshot`",
+                "",
+              ].join("\n"),
               content_hash: "decision-hash",
             },
             200,
@@ -227,7 +276,21 @@ describe("RevisionPage", () => {
 
     renderRoute("/revisions/revision-1", "/revisions/:revisionId", <RevisionPage />);
 
-    expect(await screen.findByText(/# Why this revision/)).toBeInTheDocument();
+    /* Read for a person, not shown as raw Markdown: the decision leads, the classification
+       is named in Hebrew, a fact id resolves to what the fact says under its source, an id
+       the store no longer holds is named rather than hidden, and lineage stays as written. */
+    expect(await screen.findByText("Selected canonical facts.")).toBeInTheDocument();
+    expect(screen.queryByText(/^#/)).not.toBeInTheDocument();
+    const overview = within(screen.getByRole("region", { name: "תקציר ההחלטה" }));
+    expect(overview.getByText("פיתוח")).toBeInTheDocument();
+    expect(overview.getByText("אנגלית")).toBeInTheDocument();
+    expect(overview.getByText("2")).toBeInTheDocument();
+    expect(overview.getByText("אין")).toBeInTheDocument();
+    expect(await screen.findByText("Built CI/CD pipelines with GitHub Actions")).toBeInTheDocument();
+    expect(screen.getByText("ניסיון בפיתוח · 1")).toBeInTheDocument();
+    expect(screen.getByText("retired.fact")).toBeInTheDocument();
+    expect(screen.queryByText("development.phdigital.cicd")).not.toBeInTheDocument();
+    expect(screen.getByText("lineage-snapshot").tagName).toBe("CODE");
     expect(screen.getByRole("button", { name: "הורדת מסמך ההחלטה" })).toBeInTheDocument();
   });
 

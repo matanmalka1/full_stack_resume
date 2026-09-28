@@ -237,6 +237,7 @@ const RevisionPageContent = ({ approvedRevisionId }: { approvedRevisionId: strin
                 ) : undefined
               }
               decision={decisionQuery.data}
+              decisionPending={decisionQuery.isPending}
               history={
                 <RevisionHistory
                   entries={buildRevisionHistory(

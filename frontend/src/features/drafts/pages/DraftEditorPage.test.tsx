@@ -1207,6 +1207,7 @@ describe("DraftEditorPage regeneration", () => {
       job_analysis_id: "an-1",
       selection_plan_id: "sp-1",
       claim_id: "c-headline",
+      keep_text: false,
     });
     expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
       "wd-1:4:c-headline",

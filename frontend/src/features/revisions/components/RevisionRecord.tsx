@@ -1,19 +1,20 @@
-import { Download, Lock, type LucideIcon, ShieldCheck } from "lucide-react";
+import { Lock, type LucideIcon, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ApprovedRevision } from "@/api/contracts";
 import { approvedPreviewSrc, type DecisionMarkdownDownload } from "@/api/revisions";
-import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
 import { DocumentFrame } from "@/ui/DocumentFrame";
 import { SummaryList } from "@/ui/SummaryList";
+import { DecisionDocument } from "./DecisionDocument";
 import { ValidationReportView } from "./ValidationReportView";
 
 interface RevisionRecordProps {
   additionalOptions?: ReactNode;
   decision: DecisionMarkdownDownload | undefined;
+  decisionPending?: boolean;
   /* The Application's version history, first in the aside: which version this is and
      how it relates to the others is what a reader places the document by. */
   history?: ReactNode;
@@ -27,7 +28,13 @@ const CardHeading = ({ children, icon: Icon, id }: { children: ReactNode; icon: 
   </h2>
 );
 
-export const RevisionRecord = ({ additionalOptions, decision, history, revision }: RevisionRecordProps) => {
+export const RevisionRecord = ({
+  additionalOptions,
+  decision,
+  decisionPending = false,
+  history,
+  revision,
+}: RevisionRecordProps) => {
   const downloadDecision = () => {
     if (decision === undefined) return;
     const href = URL.createObjectURL(new Blob([decision.content], { type: "text/markdown;charset=utf-8" }));
@@ -83,10 +90,7 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
         {additionalOptions}
 
         <Disclosure flush summary="פרטים טכניים וביקורת">
-          <Card
-            aria-labelledby="revision-record-heading"
-            className="overflow-x-auto rounded-surface bg-cv-surface p-4"
-          >
+          <Card aria-labelledby="revision-record-heading" className="overflow-x-auto rounded-surface bg-cv-surface p-4">
             <CardHeading icon={Lock} id="revision-record-heading">
               הרשומה הקבועה
             </CardHeading>
@@ -107,26 +111,14 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
 
         {/* The same kind of thing as "פרטים טכניים וביקורת" - a long document held
             closed - so it is the same component, and the chevron and surface come from
-            there rather than from here. */}
-        {decision === undefined ? null : (
-          <Disclosure flush summary="הסבר ההחלטות של הגרסה">
-            <Card className="flex flex-col gap-3 rounded-surface bg-cv-surface p-4">
-              <p className="text-support text-cv-text-muted">
-                מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.
-              </p>
-              <pre
-                className="max-h-96 overflow-auto whitespace-pre-wrap rounded-control border border-cv-border bg-cv-surface-sunken p-4 font-mono text-caption leading-6 text-cv-text"
-                dir="auto"
-              >
-                {decision.content}
-              </pre>
-              <Button className="self-start" onClick={downloadDecision} variant="secondary">
-                <Download aria-hidden="true" className="size-icon-md" />
-                הורדת מסמך ההחלטה
-              </Button>
-            </Card>
-          </Disclosure>
-        )}
+            there rather than from here. Opened, it grows with the page instead of
+            scrolling inside a fixed box, and it stays present while the record loads or
+            is missing, so where the explanation lives never depends on whether it did. */}
+        <Disclosure flush summary="הסבר ההחלטות של הגרסה">
+          <Card className="rounded-surface bg-cv-surface p-4">
+            <DecisionDocument decision={decision} onDownload={downloadDecision} pending={decisionPending} />
+          </Card>
+        </Disclosure>
       </aside>
     </div>
   );
