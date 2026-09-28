@@ -20,13 +20,48 @@ interface DraftAttentionPanelProps {
   unsupportedClaims: DraftClaim[];
 }
 
+/* Every line nothing authorizes, each with the way to it. Quoted: it is a line of the
+   document named here, not text of the panel. */
+const UnsupportedLines = ({
+  claims,
+  onShowClaim,
+}: {
+  claims: DraftClaim[];
+  onShowClaim: (claimId: string) => void;
+}) => (
+  <div className="flex flex-col gap-1">
+    <p className="text-support font-semibold text-cv-text">
+      {claims.length === 1 ? "שורה אחת בלי עובדה מאחוריה" : `${claims.length} שורות בלי עובדה מאחוריהן`}
+    </p>
+    <ul className="flex flex-col divide-y divide-cv-border">
+      {claims.map((claim) => (
+        <li className="flex items-center justify-between gap-3 py-1" key={claim.claim_id}>
+          <p className="line-clamp-2 min-w-0 text-support leading-6 text-cv-text" dir="auto">
+            „{claim.text}”
+          </p>
+          <Button
+            aria-label={`מעבר לשורה: ${claim.text}`}
+            className="shrink-0"
+            onClick={() => onShowClaim(claim.claim_id)}
+            variant="ghost"
+          >
+            מעבר לשורה
+            <ArrowLeft aria-hidden="true" className="size-icon-md" />
+          </Button>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
 const ReasonCallout = ({
   detail,
   draft,
   onNavigate,
   onShowClaim,
   reason,
-}: Omit<DraftAttentionPanelProps, "unsupportedClaims"> & { reason: ReviewReason }) => {
+  unsupportedClaims,
+}: DraftAttentionPanelProps & { reason: ReviewReason }) => {
   const claims = outlineClaims(draft.outline);
   const pending = reason.code === "PENDING_FACT_REQUIRES_RESOLUTION";
   const deleted = reason.code === "FACT_DELETED_REQUIRES_RESOLUTION";
@@ -73,6 +108,11 @@ const ReasonCallout = ({
               ? "נדרשת השלמת התאמה של מאגר הידע. אין בעורך פעולה שסוגרת את החסם הזה."
               : "אין בעורך פעולה שסוגרת את הסיבה הזו. יש לפתור את התלות במקור לפני המשך."}
       </p>
+      {pending && unsupportedClaims.length > 0 ? (
+        <div className="mt-2">
+          <UnsupportedLines claims={unsupportedClaims} onShowClaim={onShowClaim} />
+        </div>
+      ) : null}
       {/* The server's sentence is evidence, not the explanation: it is English and written
           for a log, so it stays folded as it is in PreparationAlerts. */}
       <Disclosure summary="פרטי הסיבה">
@@ -98,11 +138,14 @@ export const DraftAttentionPanel = ({
   unsupportedClaims,
 }: DraftAttentionPanelProps) => {
   if (detail.review_reasons.length === 0 && unsupportedClaims.length === 0) return null;
+  /* The projection's pending-fact reason is about exactly these lines, so they are listed
+     inside it rather than a second time beneath it. */
+  const pendingReasonShown = detail.review_reasons.some((reason) => reason.code === "PENDING_FACT_REQUIRES_RESOLUTION");
 
   return (
     <section
       aria-labelledby="draft-attention-heading"
-      className="flex flex-col gap-3 border border-cv-blocker/30 bg-cv-surface p-card-padding"
+      className="flex flex-col gap-3 border border-cv-border border-s-4 border-s-cv-blocker bg-cv-surface p-card-padding"
     >
       <h2 className="flex items-center gap-2 text-body font-semibold text-cv-text" id="draft-attention-heading">
         <OctagonAlert aria-hidden="true" className="size-icon-md text-cv-blocker" />
@@ -117,36 +160,12 @@ export const DraftAttentionPanel = ({
           onNavigate={onNavigate}
           onShowClaim={onShowClaim}
           reason={reason}
+          unsupportedClaims={unsupportedClaims}
         />
       ))}
 
-      {unsupportedClaims.length === 0 ? null : (
-        <div className="flex flex-col gap-1">
-          <p className="text-support font-semibold text-cv-text">
-            {unsupportedClaims.length === 1
-              ? "שורה אחת בלי עובדה מאחוריה"
-              : `${unsupportedClaims.length} שורות בלי עובדה מאחוריהן`}
-          </p>
-          <ul className="flex flex-col divide-y divide-cv-border">
-            {unsupportedClaims.map((claim) => (
-              <li className="flex items-center justify-between gap-3 py-1.5" key={claim.claim_id}>
-                {/* Quoted: it is a line of the document named here, not text of the panel. */}
-                <p className="line-clamp-2 min-w-0 text-support leading-6 text-cv-text" dir="auto">
-                  „{claim.text}”
-                </p>
-                <Button
-                  aria-label={`מעבר לשורה: ${claim.text}`}
-                  className="shrink-0"
-                  onClick={() => onShowClaim(claim.claim_id)}
-                  variant="ghost"
-                >
-                  מעבר לשורה
-                  <ArrowLeft aria-hidden="true" className="size-icon-md" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {pendingReasonShown || unsupportedClaims.length === 0 ? null : (
+        <UnsupportedLines claims={unsupportedClaims} onShowClaim={onShowClaim} />
       )}
     </section>
   );
