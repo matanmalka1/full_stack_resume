@@ -24,7 +24,12 @@ focused domain tests for basis and derived states.
 Progress: steps 1–3 landed in session 1 (migration `0002`, `domain/document.py`,
 `domain/contracts/document.py`). The dropped tables stay importable as column-only
 shapes in `tables/legacy.py` on a detached `MetaData` — a temporary re-export the Wave 2
-lanes stop using and Wave 3 deletes. Steps 4–5 (ports, API contract) are session 2.
+lanes stop using and Wave 3 deletes. Steps 4–5 landed the same day: `application/ports/documents.py`; `api/schemas/documents.py`
+and the reshaped §9 projection and submission schemas; operation types renamed to
+`propose_selection` / `render_document`. The API is generated from routes, so
+`api/routers/documents.py` declares the document routes now and answers `501` until
+Wave 3 wires them — another temporary surface Wave 3 removes. The frontend does not
+compile against the new contract until L4 moves it.
 
 From here on these are **lead-only**: `alembic/`, `cv_engine/infrastructure/persistence/tables/`,
 `cv_engine/domain/contracts/`, `cv_engine/application/ports/`, `cv_engine/api/schemas/`,

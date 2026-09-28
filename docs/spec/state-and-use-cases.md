@@ -1017,8 +1017,9 @@ endpoint inventory. Command sections above remain authoritative for source IDs,
 preconditions, idempotency, and synchronous versus asynchronous behavior.
 
 The document is read and written at the Application's document resource. Its
-`document_hash` travels as the ETag; commands that take `expected_document_hash` accept
-it as `If-Match`.
+`document_hash` travels as the ETag. The autosave `update_document` takes it as
+`If-Match`; every other command carries it in the body as `expected_document_hash`,
+because an action on a resource is not a conditional replacement of it.
 
 ## 22. HTTP outcomes
 

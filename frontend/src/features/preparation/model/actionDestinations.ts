@@ -60,11 +60,11 @@ type ResumeProjection = Pick<
 
 const operationActions: Record<OperationType, string> = {
   analyze_job: "analyze",
-  propose_selection_plan: "create_selection_plan",
+  propose_selection: "create_selection_plan",
   create_draft: "create_draft",
   regenerate_section: "regenerate_section",
   regenerate_claim: "regenerate_claim",
-  render_revision: "render",
+  render_document: "render",
 };
 
 const resumeDestination = (application: ResumeProjection): string => {

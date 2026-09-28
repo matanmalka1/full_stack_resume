@@ -106,7 +106,7 @@ export const DraftEditorPage = () => {
       : null);
 
   const renderFinished =
-    operation?.operation_type === "render_revision" && operation.status === "succeeded" && renderRevisionId !== null;
+    operation?.operation_type === "render_document" && operation.status === "succeeded" && renderRevisionId !== null;
   const resumeEditing = useMutation({
     mutationFn: async () => {
       if (renderRevisionId === null || detail?.active_analysis_id == null || detail.active_selection_plan_id == null) {
@@ -126,7 +126,7 @@ export const DraftEditorPage = () => {
     },
   });
   const renderFailureAction =
-    operation?.operation_type === "render_revision" && operation.status === "failed" && renderRevisionId !== null ? (
+    operation?.operation_type === "render_document" && operation.status === "failed" && renderRevisionId !== null ? (
       <Button
         disabled={detail?.active_analysis_id == null || detail.active_selection_plan_id == null}
         onClick={() => resumeEditing.mutate()}
@@ -195,11 +195,11 @@ export const DraftEditorPage = () => {
     approvedRevisionId: renderRevisionId,
     autoStart: approvedRevisionId !== null,
     onQueued: watch,
-    rendering: operation?.operation_type === "render_revision",
+    rendering: operation?.operation_type === "render_document",
   });
   const pending: PendingWork | undefined = renderState.pending
     ? {
-        heading: <>הרצת {operationTypeLabels.render_revision}</>,
+        heading: <>הרצת {operationTypeLabels.render_document}</>,
         note: "הגרסה אושרה. יצירת ה־HTML וה־PDF מתחילה.",
       }
     : undefined;

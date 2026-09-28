@@ -70,11 +70,11 @@ def available_operation_actions(
 
 class OperationType(StrEnum):
     ANALYZE_JOB = "analyze_job"
-    PROPOSE_SELECTION_PLAN = "propose_selection_plan"
+    PROPOSE_SELECTION = "propose_selection"
     CREATE_DRAFT = "create_draft"
     REGENERATE_SECTION = "regenerate_section"
     REGENERATE_CLAIM = "regenerate_claim"
-    RENDER_REVISION = "render_revision"
+    RENDER_DOCUMENT = "render_document"
 
 
 #: Operations whose successful activation replaces one of the two records a
@@ -84,7 +84,7 @@ class OperationType(StrEnum):
 MATCHING_CONTEXT_OPERATION_TYPES = frozenset(
     {
         OperationType.ANALYZE_JOB,
-        OperationType.PROPOSE_SELECTION_PLAN,
+        OperationType.PROPOSE_SELECTION,
     }
 )
 
@@ -358,10 +358,10 @@ def required_operation_resources(request: CreateOperation) -> tuple[OperationRes
             key=request.application_id,
         )
     ]
-    if request.operation_type is OperationType.RENDER_REVISION:
+    if request.operation_type is OperationType.RENDER_DOCUMENT:
         resources.append(OperationResource(kind=OperationResourceKind.RENDER_BROWSER, key="global"))
     always_ai = {
-        OperationType.PROPOSE_SELECTION_PLAN,
+        OperationType.PROPOSE_SELECTION,
         OperationType.REGENERATE_SECTION,
         OperationType.REGENERATE_CLAIM,
     }

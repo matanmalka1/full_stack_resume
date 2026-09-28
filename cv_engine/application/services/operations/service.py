@@ -263,7 +263,7 @@ class OperationSubmissionService:
         )
         request = CreateOperation(
             application_id=command.application_id,
-            operation_type=OperationType.PROPOSE_SELECTION_PLAN,
+            operation_type=OperationType.PROPOSE_SELECTION,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
             sources=OperationSources(
@@ -383,7 +383,7 @@ class OperationSubmissionService:
             ) from exc
         request = CreateOperation(
             application_id=command.application_id,
-            operation_type=OperationType.RENDER_REVISION,
+            operation_type=OperationType.RENDER_DOCUMENT,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
             sources=sources,

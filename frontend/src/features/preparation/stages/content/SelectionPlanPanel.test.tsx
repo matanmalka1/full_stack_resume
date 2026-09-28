@@ -112,7 +112,7 @@ const settings = (ai: boolean): Settings =>
 const operation: Operation = {
   id: "operation-1",
   application_id: "app-1",
-  operation_type: "propose_selection_plan",
+  operation_type: "propose_selection",
   status: "queued",
   is_terminal: false,
   phase: "queued",

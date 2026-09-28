@@ -255,6 +255,232 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{application_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the Application's CV document
+         * @description `200` with the document and its `document_hash` as the ETag; `404` before analysis.
+         */
+        get: operations["read_document_api_v1_applications__application_id__document_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Save a structured content patch
+         * @description `200` with the new hash; `409` when `If-Match` no longer describes the document.
+         */
+        patch: operations["update_document_api_v1_applications__application_id__document_patch"];
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check and approve
+         * @description `200` with the report; approved only when it passed. `412` names a blocker.
+         */
+        post: operations["approve_document_api_v1_applications__application_id__document_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/build-from-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-pin the document to a newer analysis
+         * @description `200` with a document that has a fresh selection and no content.
+         */
+        post: operations["build_from_analysis_api_v1_applications__application_id__document_build_from_analysis_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check the content without approving
+         * @description `200` whether or not the check passed; the report is data (§22).
+         */
+        post: operations["check_document_api_v1_applications__application_id__document_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/decision-markdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the document's provenance as Markdown */
+        get: operations["export_decision_markdown_api_v1_applications__application_id__document_decision_markdown_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate the document's content */
+        post: operations["create_draft_api_v1_applications__application_id__document_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the Ready document's PDF
+         * @description `412` unless the document is Ready when the request is answered (§16).
+         */
+        get: operations["download_pdf_api_v1_applications__application_id__document_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/regenerate-claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate or review one claim */
+        post: operations["regenerate_claim_api_v1_applications__application_id__document_regenerate_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/regenerate-section": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate one section */
+        post: operations["regenerate_section_api_v1_applications__application_id__document_regenerate_section_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render the approved document */
+        post: operations["render_document_api_v1_applications__application_id__document_render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the document's fact selection deterministically
+         * @description `200`; `412` when the change needs wording judgment and a regeneration instead.
+         */
+        post: operations["update_selection_api_v1_applications__application_id__document_selection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/document/selection-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the provider to propose a selection */
+        post: operations["propose_selection_api_v1_applications__application_id__document_selection_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}/external-submissions": {
         parameters: {
             query?: never;
@@ -1394,34 +1620,36 @@ export interface components {
         };
         /** ApplicationDetailResponse */
         ApplicationDetailResponse: {
-            /** Active Analysis Id */
-            active_analysis_id?: string | null;
             /** Active Job Snapshot Id */
             active_job_snapshot_id: string;
             active_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Active Selection Plan Id */
-            active_selection_plan_id?: string | null;
-            /** Active Working Draft Id */
-            active_working_draft_id?: string | null;
             /** Allowed Recruitment Transitions */
             allowed_recruitment_transitions: ("saved" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed")[];
             application: components["schemas"]["ApplicationResponse"];
+            /** Approved At */
+            approved_at?: string | null;
             /** Available Actions */
             available_actions: string[];
             /** Blocked Actions */
             blocked_actions: components["schemas"]["BlockedActionResponse"][];
+            content_check: components["schemas"]["ContentCheck"];
+            /** Document Analysis Id */
+            document_analysis_id?: string | null;
+            /** Document Hash */
+            document_hash?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            document_state: components["schemas"]["DocumentState"];
+            /** Last Render Error */
+            last_render_error?: {
+                [key: string]: unknown;
+            } | null;
             latest_analysis?: components["schemas"]["JobAnalysisResponse"] | null;
-            /** Latest Approved Revision Id */
-            latest_approved_revision_id?: string | null;
+            /** Latest Analysis Id */
+            latest_analysis_id?: string | null;
             latest_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Latest Ready Revision Id */
-            latest_ready_revision_id?: string | null;
             latest_snapshot: components["schemas"]["JobSnapshotResponse"];
-            /** Newer Draft In Progress */
-            newer_draft_in_progress: boolean;
             preparation_state: components["schemas"]["PreparationState"];
-            /** Primary Stale Reason */
-            primary_stale_reason?: string | null;
             /** Recommended Action */
             recommended_action?: string | null;
             /** Recruitment Status */
@@ -1430,37 +1658,38 @@ export interface components {
             recruitment_timeline: components["schemas"]["RecruitmentTimelineItemResponse"][];
             /** Review Reasons */
             review_reasons: components["schemas"]["ReasonResponse"][];
-            /** Stale Reasons */
-            stale_reasons: components["schemas"]["ReasonResponse"][];
             /** Terminal Outcome */
             terminal_outcome?: string | null;
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
-            working_draft_state: components["schemas"]["WorkingDraftState"];
         };
         /** ApplicationListItemResponse */
         ApplicationListItemResponse: {
-            /** Active Analysis Id */
-            active_analysis_id?: string | null;
             /** Active Job Snapshot Id */
             active_job_snapshot_id: string;
             active_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Active Selection Plan Id */
-            active_selection_plan_id?: string | null;
-            /** Active Working Draft Id */
-            active_working_draft_id?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
             /** Available Actions */
             available_actions: string[];
             /** Blocked Actions */
             blocked_actions: components["schemas"]["BlockedActionResponse"][];
             /** Company */
             company: string;
+            content_check: components["schemas"]["ContentCheck"];
             /** Created At */
             created_at: string;
             /** Current Status */
             current_status: string;
             /** Deleted At */
             deleted_at?: string | null;
+            /** Document Analysis Id */
+            document_analysis_id?: string | null;
+            /** Document Hash */
+            document_hash?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            document_state: components["schemas"]["DocumentState"];
             /** Emphasis */
             emphasis?: string | null;
             /** Fit Level */
@@ -1473,13 +1702,13 @@ export interface components {
             is_closed: boolean;
             /** Language */
             language?: string | null;
-            /** Latest Approved Revision Id */
-            latest_approved_revision_id?: string | null;
+            /** Last Render Error */
+            last_render_error?: {
+                [key: string]: unknown;
+            } | null;
+            /** Latest Analysis Id */
+            latest_analysis_id?: string | null;
             latest_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Latest Ready Revision Id */
-            latest_ready_revision_id?: string | null;
-            /** Newer Draft In Progress */
-            newer_draft_in_progress: boolean;
             /** Next Action */
             next_action?: string | null;
             /** Next Action Date */
@@ -1489,8 +1718,6 @@ export interface components {
             /** Notes */
             notes: string;
             preparation_state: components["schemas"]["PreparationState"];
-            /** Primary Stale Reason */
-            primary_stale_reason?: string | null;
             /** Profile */
             profile?: string | null;
             /** Recommended Action */
@@ -1501,8 +1728,6 @@ export interface components {
             review_reasons: components["schemas"]["ReasonResponse"][];
             /** Source Url */
             source_url?: string | null;
-            /** Stale Reasons */
-            stale_reasons: components["schemas"]["ReasonResponse"][];
             /** Target Role */
             target_role: string;
             /** Terminal Outcome */
@@ -1513,7 +1738,6 @@ export interface components {
             updated_at: string;
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
-            working_draft_state: components["schemas"]["WorkingDraftState"];
         };
         /**
          * ApplicationListResponse
@@ -1645,7 +1869,7 @@ export interface components {
          * ApplicationStateResponse
          * @description The §9 action policy projection, and nothing wider.
          *
-         *     The two lifecycle states are typed as the application enums rather than
+         *     The lifecycle states are typed as the domain enums rather than
          *     flattened to `str`, the same way `OperationResponse` spells its closed sets.
          *     `preparation_state` drives the workflow landmark and the Hebrew label a user
          *     reads; flattened to `string` the generated TypeScript cannot key a label map
@@ -1659,42 +1883,41 @@ export interface components {
          *     presentation rather than a failure.
          */
         ApplicationStateResponse: {
-            /** Active Analysis Id */
-            active_analysis_id?: string | null;
             /** Active Job Snapshot Id */
             active_job_snapshot_id: string;
             active_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Active Selection Plan Id */
-            active_selection_plan_id?: string | null;
-            /** Active Working Draft Id */
-            active_working_draft_id?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
             /** Available Actions */
             available_actions: string[];
             /** Blocked Actions */
             blocked_actions: components["schemas"]["BlockedActionResponse"][];
-            /** Latest Approved Revision Id */
-            latest_approved_revision_id?: string | null;
+            content_check: components["schemas"]["ContentCheck"];
+            /** Document Analysis Id */
+            document_analysis_id?: string | null;
+            /** Document Hash */
+            document_hash?: string | null;
+            /** Document Id */
+            document_id?: string | null;
+            document_state: components["schemas"]["DocumentState"];
+            /** Last Render Error */
+            last_render_error?: {
+                [key: string]: unknown;
+            } | null;
+            /** Latest Analysis Id */
+            latest_analysis_id?: string | null;
             latest_operation?: components["schemas"]["OperationResponse"] | null;
-            /** Latest Ready Revision Id */
-            latest_ready_revision_id?: string | null;
-            /** Newer Draft In Progress */
-            newer_draft_in_progress: boolean;
             preparation_state: components["schemas"]["PreparationState"];
-            /** Primary Stale Reason */
-            primary_stale_reason?: string | null;
             /** Recommended Action */
             recommended_action?: string | null;
             /** Recruitment Status */
             recruitment_status: string;
             /** Review Reasons */
             review_reasons: components["schemas"]["ReasonResponse"][];
-            /** Stale Reasons */
-            stale_reasons: components["schemas"]["ReasonResponse"][];
             /** Terminal Outcome */
             terminal_outcome?: string | null;
             /** Warnings */
             warnings: components["schemas"]["WarningResponse"][];
-            working_draft_state: components["schemas"]["WorkingDraftState"];
         };
         /**
          * ApplicationStatus
@@ -1885,8 +2108,6 @@ export interface components {
             };
             /** Profile */
             profile?: string | null;
-            /** Revision Id */
-            revision_id?: string | null;
             /** Size */
             size?: number | null;
             /** Track */
@@ -1924,8 +2145,6 @@ export interface components {
             };
             /** Profile */
             profile?: string | null;
-            /** Revision Id */
-            revision_id?: string | null;
             /** Track */
             track?: string | null;
             /** Version Number */
@@ -1957,6 +2176,23 @@ export interface components {
             action: string;
             /** Reasons */
             reasons: string[];
+        };
+        /**
+         * BuildFromAnalysisRequest
+         * @description Re-pin the document to an explicitly named analysis (§14 `build_from_analysis`).
+         */
+        BuildFromAnalysisRequest: {
+            /** Analysis Id */
+            analysis_id: string;
+            /** Expected Document Hash */
+            expected_document_hash: string;
+        };
+        /** BuiltWithResponse */
+        BuiltWithResponse: {
+            /** Profile Version */
+            profile_version: string;
+            /** Selection Policy Version */
+            selection_policy_version: string;
         };
         /**
          * CaptureClaimFactRequest
@@ -2102,6 +2338,11 @@ export interface components {
             selection_plan: components["schemas"]["SelectionPlan"];
         };
         /**
+         * ContentCheck
+         * @enum {string}
+         */
+        ContentCheck: "none" | "outdated" | "failed" | "passed";
+        /**
          * CorrectStatusRequest
          * @description A reasoned correction appended to the trail.
          *
@@ -2170,6 +2411,17 @@ export interface components {
             job_snapshot_id: string;
             /** Warnings */
             warnings: string[];
+        };
+        /** CreateDraftRequest */
+        CreateDraftRequest: {
+            /** Expected Document Hash */
+            expected_document_hash: string;
+            /**
+             * Provider
+             * @default deterministic
+             * @enum {string}
+             */
+            provider: "deterministic" | "openai";
         };
         /** CreateJobSnapshotRequest */
         CreateJobSnapshotRequest: {
@@ -2247,6 +2499,15 @@ export interface components {
             /** Selection Plan Id */
             selection_plan_id: string;
         };
+        /** DecisionExportResponse */
+        DecisionExportResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Document Id */
+            document_id: string;
+            /** Markdown */
+            markdown: string;
+        };
         /**
          * DecisionMarkdownResponse
          * @description One revision's provenance as a human-readable document.
@@ -2310,6 +2571,141 @@ export interface components {
             /** Terminal Outcome */
             terminal_outcome?: string | null;
         };
+        /**
+         * DocumentActionRequest
+         * @description The document the client was looking at when the user acted.
+         */
+        DocumentActionRequest: {
+            /** Expected Document Hash */
+            expected_document_hash: string;
+        };
+        /** DocumentCandidateResponse */
+        DocumentCandidateResponse: {
+            /** Fact Id */
+            fact_id: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "pinned" | "selected" | "rescued" | "omitted";
+            /** Reason */
+            reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
+            /** Section */
+            section: string;
+            /** Text */
+            text?: string | null;
+            /** User Selectable */
+            user_selectable: boolean;
+        };
+        /**
+         * DocumentCheckResponse
+         * @description `check` and `approve`. A failed check is `200` with `passed=false` (§22).
+         */
+        DocumentCheckResponse: {
+            /** Application Id */
+            application_id: string;
+            /** Approved At */
+            approved_at?: string | null;
+            content_check: components["schemas"]["ContentCheck"];
+            /** Document Hash */
+            document_hash: string;
+            /** Document Id */
+            document_id: string;
+            document_state: components["schemas"]["DocumentState"];
+            /** Passed */
+            passed: boolean;
+            /**
+             * Pending Claim Ids
+             * @default []
+             */
+            pending_claim_ids: string[];
+            report: components["schemas"]["ValidationReportResponse"];
+        };
+        /**
+         * DocumentMutationResponse
+         * @description What a synchronous document change returns: the new token and state.
+         */
+        DocumentMutationResponse: {
+            /** Application Id */
+            application_id: string;
+            content_check: components["schemas"]["ContentCheck"];
+            /** Document Hash */
+            document_hash: string;
+            /** Document Id */
+            document_id: string;
+            document_state: components["schemas"]["DocumentState"];
+            /**
+             * Pending Claim Ids
+             * @default []
+             */
+            pending_claim_ids: string[];
+        };
+        /**
+         * DocumentResponse
+         * @description `GET /applications/{id}/document`. `document_hash` is also the ETag.
+         */
+        DocumentResponse: {
+            /** Analysis Id */
+            analysis_id: string;
+            /** Application Id */
+            application_id: string;
+            /** Approved At */
+            approved_at?: string | null;
+            built_with: components["schemas"]["BuiltWithResponse"];
+            /** Content */
+            content?: {
+                [key: string]: unknown;
+            } | null;
+            content_check: components["schemas"]["ContentCheck"];
+            content_report?: components["schemas"]["ValidationReportResponse"] | null;
+            /** Created At */
+            created_at: string;
+            /** Document Hash */
+            document_hash: string;
+            document_state: components["schemas"]["DocumentState"];
+            /**
+             * Facts
+             * @default []
+             */
+            facts: components["schemas"]["DraftFactResponse"][];
+            /** Id */
+            id: string;
+            /** Language */
+            language: string;
+            /** Last Render Error */
+            last_render_error?: {
+                [key: string]: unknown;
+            } | null;
+            outline?: components["schemas"]["DraftOutlineResponse"] | null;
+            selection: components["schemas"]["DocumentSelectionResponse"];
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
+         * DocumentSelectionResponse
+         * @description The selection with its candidate accounting (§20).
+         */
+        DocumentSelectionResponse: {
+            /** Candidates */
+            candidates: components["schemas"]["DocumentCandidateResponse"][];
+            emphasis: components["schemas"]["Emphasis"];
+            emphasis_override?: components["schemas"]["Emphasis"] | null;
+            /** Excluded Fact Ids */
+            excluded_fact_ids: string[];
+            /** Pinned Fact Ids */
+            pinned_fact_ids: string[];
+            /** Proposal Rationale */
+            proposal_rationale?: string | null;
+            /** Proposed By */
+            proposed_by?: "ai" | null;
+            /** Selected Fact Ids */
+            selected_fact_ids: string[];
+        };
+        /**
+         * DocumentState
+         * @enum {string}
+         */
+        DocumentState: "none" | "draft" | "approved" | "ready";
         /**
          * DraftClaimResponse
          * @description One editable line: what a claim edit addresses, plus what it currently is.
@@ -2427,13 +2823,9 @@ export interface components {
          * ExternalSubmissionRequest
          * @description A submission made outside the system, recorded without inventing evidence.
          *
-         *     `artifact_version_id` may name an already registered artifact, and stays
-         *     absent when there is none: a field that cannot be derived stays null rather
-         *     than being filled with a value the record never carried.
+         *     It carries no document content or files: nothing here sent them.
          */
         ExternalSubmissionRequest: {
-            /** Artifact Version Id */
-            artifact_version_id?: string | null;
             /**
              * Metadata
              * @default {}
@@ -2989,7 +3381,7 @@ export interface components {
          * OperationType
          * @enum {string}
          */
-        OperationType: "analyze_job" | "propose_selection_plan" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_revision";
+        OperationType: "analyze_job" | "propose_selection" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document";
         /**
          * OrphanInventoryResponse
          * @description Observed candidates hold no database reference and no live write lease.
@@ -3017,7 +3409,7 @@ export interface components {
          * PreparationState
          * @enum {string}
          */
-        PreparationState: "needs_analysis" | "needs_review" | "ready_to_draft" | "draft_in_progress" | "ready_for_approval" | "approved" | "ready";
+        PreparationState: "needs_analysis" | "ready_to_draft" | "draft_in_progress" | "approved" | "ready";
         ProblemDetails: {
             code: string;
             context?: {
@@ -3034,6 +3426,17 @@ export interface components {
          * @enum {string}
          */
         ProfileName: "development" | "field-sales" | "account-manager" | "key-account-manager" | "sdr-bdr" | "account-executive" | "business-development" | "sales-management" | "tech-sales" | "pre-sales-solutions-consultant";
+        /** ProposeSelectionRequest */
+        ProposeSelectionRequest: {
+            /** Expected Document Hash */
+            expected_document_hash: string;
+            /**
+             * Provider
+             * @default openai
+             * @constant
+             */
+            provider: "openai";
+        };
         /** ReasonResponse */
         ReasonResponse: {
             /** Allowed Resolution Actions */
@@ -3078,14 +3481,12 @@ export interface components {
         RecruitmentTimelineItemResponse: {
             /** Actor Type */
             actor_type?: ("user" | "system") | null;
-            /** Approved Revision Id */
-            approved_revision_id?: string | null;
-            /** Artifact Version Id */
-            artifact_version_id?: string | null;
             /** Client */
             client?: ("web" | "worker") | null;
             /** Corrects Event Id */
             corrects_event_id?: string | null;
+            /** Document Hash */
+            document_hash?: string | null;
             /** From Status */
             from_status?: ("saved" | "applied" | "recruiter_screen" | "interview" | "assignment" | "final_stage" | "offer" | "accepted" | "rejected" | "withdrawn" | "closed") | null;
             /** Id */
@@ -3146,6 +3547,36 @@ export interface components {
             keep_text: boolean;
             /** Selection Plan Id */
             selection_plan_id: string;
+        };
+        /** RegenerateDocumentClaimRequest */
+        RegenerateDocumentClaimRequest: {
+            /** Claim Id */
+            claim_id: string;
+            /** Expected Document Hash */
+            expected_document_hash: string;
+            /**
+             * Instruction
+             * @default
+             */
+            instruction: string;
+            /**
+             * Keep Text
+             * @description Keep the claim's current wording and only run semantic review of it against its own linked facts. The claim must be pending and linked to at least one fact.
+             * @default false
+             */
+            keep_text: boolean;
+        };
+        /** RegenerateDocumentSectionRequest */
+        RegenerateDocumentSectionRequest: {
+            /** Expected Document Hash */
+            expected_document_hash: string;
+            /**
+             * Instruction
+             * @default
+             */
+            instruction: string;
+            /** Section */
+            section: string;
         };
         /**
          * RegenerateSectionRequest
@@ -3622,28 +4053,24 @@ export interface components {
         };
         /**
          * SubmissionResponse
-         * @description A recorded submission, with any staleness the caller should see.
+         * @description A recorded submission, with any warning the caller should see.
          *
-         *     `warnings` carries the `READY_REVISION_FOR_OLDER_*` codes: the submission
-         *     succeeded, and the active snapshot or analysis has moved on since the
-         *     revision was approved. They are reported, not raised - active-context
-         *     compatibility is not a precondition for submitting a qualified revision.
+         *     `warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the active snapshot or
+         *     analysis has moved on from the document's (§18). It is reported, not raised.
          */
         SubmissionResponse: {
             /** Application Id */
             application_id: string;
-            /** Approved Revision Id */
-            approved_revision_id?: string | null;
             /** Current Status */
             current_status: string;
+            /** Document Hash */
+            document_hash?: string | null;
             /** Event Id */
             event_id?: string | null;
             /** Next Action */
             next_action?: string | null;
             /** Next Action Date */
             next_action_date?: string | null;
-            /** Pdf Artifact Version Id */
-            pdf_artifact_version_id?: string | null;
             /** Submission Id */
             submission_id: string;
             /** Terminal Outcome */
@@ -3656,15 +4083,15 @@ export interface components {
         };
         /**
          * SubmitApplicationRequest
-         * @description One exact qualified revision and the exact PDF that was sent.
+         * @description Record that the Ready document the client was showing was sent (§18).
          *
-         *     Both IDs are explicit. A submission that resolved the latest revision for
-         *     itself could record having sent something the user never saw, which is the
+         *     `expected_document_hash` is explicit. A submission against whatever the document
+         *     holds now could record having sent something the user never saw, which is the
          *     one claim in this system that cannot be re-derived afterwards.
          */
         SubmitApplicationRequest: {
-            /** Approved Revision Id */
-            approved_revision_id: string;
+            /** Expected Document Hash */
+            expected_document_hash: string;
             /**
              * Metadata
              * @default {}
@@ -3672,8 +4099,6 @@ export interface components {
             metadata: {
                 [key: string]: unknown;
             };
-            /** Pdf Artifact Version Id */
-            pdf_artifact_version_id: string;
             /** Submitted At */
             submitted_at: string;
         };
@@ -3715,6 +4140,61 @@ export interface components {
             notes: string;
             /** Updated At */
             updated_at: string;
+        };
+        /**
+         * UpdateDocumentRequest
+         * @description What `PATCH /applications/{id}/document` applies as one edit (§14).
+         *
+         *     The same structured patch the working draft accepted; the token is `If-Match`.
+         */
+        UpdateDocumentRequest: {
+            /**
+             * Claim Additions
+             * @default []
+             */
+            claim_additions: components["schemas"]["ClaimAdditionRequest"][];
+            /**
+             * Claim Edits
+             * @default []
+             */
+            claim_edits: components["schemas"]["ClaimPatchRequest"][];
+            /**
+             * Claim Orders
+             * @description Complete claim-ID order for each named section being reordered.
+             * @default {}
+             */
+            claim_orders: {
+                [key: string]: string[];
+            };
+            /**
+             * Claim Removals
+             * @description Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming apply-selection-change, and the headline and contacts are structural.
+             * @default []
+             */
+            claim_removals: string[];
+        };
+        /**
+         * UpdateSelectionRequest
+         * @description A deterministic selection change (§14 `update_selection`).
+         *
+         *     Two lists, not three: explicit inclusion is a pin, and what ends up selected is a
+         *     response field. `emphasis_override` null means "leave the effective Emphasis as it
+         *     is", not "clear the override".
+         */
+        UpdateSelectionRequest: {
+            emphasis_override?: components["schemas"]["Emphasis"] | null;
+            /**
+             * Excluded Fact Ids
+             * @default []
+             */
+            excluded_fact_ids: string[];
+            /** Expected Document Hash */
+            expected_document_hash: string;
+            /**
+             * Pinned Fact Ids
+             * @default []
+             */
+            pinned_fact_ids: string[];
         };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {
@@ -3924,11 +4404,6 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
-        /**
-         * WorkingDraftState
-         * @enum {string}
-         */
-        WorkingDraftState: "none" | "editing" | "validation_failed" | "validated" | "stale";
         /**
          * WorkingDraftUpdateResponse
          * @description The new token, and which claims were saved as pending.
@@ -4364,6 +4839,467 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteApplicationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    read_document_api_v1_applications__application_id__document_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_document_api_v1_applications__application_id__document_patch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required. The ETag returned by the matching document read. A value that no longer describes the stored document is a 409 and changes nothing. */
+                "If-Match": string;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentMutationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    approve_document_api_v1_applications__application_id__document_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCheckResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    build_from_analysis_api_v1_applications__application_id__document_build_from_analysis_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildFromAnalysisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentMutationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    check_document_api_v1_applications__application_id__document_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCheckResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    export_decision_markdown_api_v1_applications__application_id__document_decision_markdown_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionExportResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    create_draft_api_v1_applications__application_id__document_draft_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    download_pdf_api_v1_applications__application_id__document_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rendered PDF, when the document is Ready at request time. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    regenerate_claim_api_v1_applications__application_id__document_regenerate_claim_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateDocumentClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    regenerate_section_api_v1_applications__application_id__document_regenerate_section_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateDocumentSectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    render_document_api_v1_applications__application_id__document_render_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    update_selection_api_v1_applications__application_id__document_selection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentMutationResponse"];
+                };
+            };
+            /** @description The request did not match the API contract. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    propose_selection_api_v1_applications__application_id__document_selection_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

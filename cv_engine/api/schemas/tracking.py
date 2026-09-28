@@ -82,17 +82,14 @@ class ApplicationMutationResponse(HttpSchema):
 
 
 class SubmissionResponse(ApplicationMutationResponse):
-    """A recorded submission, with any staleness the caller should see.
+    """A recorded submission, with any warning the caller should see.
 
-    `warnings` carries the `READY_REVISION_FOR_OLDER_*` codes: the submission
-    succeeded, and the active snapshot or analysis has moved on since the
-    revision was approved. They are reported, not raised - active-context
-    compatibility is not a precondition for submitting a qualified revision.
+    `warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the active snapshot or
+    analysis has moved on from the document's (§18). It is reported, not raised.
     """
 
     submission_id: str
-    approved_revision_id: str | None = None
-    pdf_artifact_version_id: str | None = None
+    document_hash: str | None = None
     warnings: list[str] = []
 
 
@@ -111,8 +108,7 @@ class RecruitmentTimelineItemResponse(HttpSchema):
     next_action: str | None = None
     next_action_date: str | None = None
     submission_type: Literal["internal", "external"] | None = None
-    approved_revision_id: str | None = None
-    artifact_version_id: str | None = None
+    document_hash: str | None = None
     metadata: dict[str, Any] = {}
 
 
@@ -139,15 +135,14 @@ class CorrectStatusRequest(HttpSchema):
 
 
 class SubmitApplicationRequest(HttpSchema):
-    """One exact qualified revision and the exact PDF that was sent.
+    """Record that the Ready document the client was showing was sent (§18).
 
-    Both IDs are explicit. A submission that resolved the latest revision for
-    itself could record having sent something the user never saw, which is the
+    `expected_document_hash` is explicit. A submission against whatever the document
+    holds now could record having sent something the user never saw, which is the
     one claim in this system that cannot be re-derived afterwards.
     """
 
-    approved_revision_id: str = Field(min_length=1)
-    pdf_artifact_version_id: str = Field(min_length=1)
+    expected_document_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     submitted_at: str = Field(min_length=1)
     metadata: dict[str, Any] = {}
 
@@ -155,13 +150,10 @@ class SubmitApplicationRequest(HttpSchema):
 class ExternalSubmissionRequest(HttpSchema):
     """A submission made outside the system, recorded without inventing evidence.
 
-    `artifact_version_id` may name an already registered artifact, and stays
-    absent when there is none: a field that cannot be derived stays null rather
-    than being filled with a value the record never carried.
+    It carries no document content or files: nothing here sent them.
     """
 
     submitted_at: str = Field(min_length=1)
-    artifact_version_id: str | None = None
     metadata: dict[str, Any] = {}
 
 

@@ -383,7 +383,7 @@ def build_services(
     draft_operation_sources = SqlAlchemyDraftOperationSourceReader(transactions)
     runner = OperationRunner(
         {
-            OperationType.RENDER_REVISION: RenderOperationHandler(
+            OperationType.RENDER_DOCUMENT: RenderOperationHandler(
                 rendering_service, SqlAlchemyRenderContextReader(transactions)
             ),
             OperationType.CREATE_DRAFT: DraftOperationHandler(
@@ -412,7 +412,7 @@ def build_services(
                 analysis_service.activation,
                 resolved_activation_knowledge,
             ),
-            OperationType.PROPOSE_SELECTION_PLAN: SelectionPlanOperationHandler(
+            OperationType.PROPOSE_SELECTION: SelectionPlanOperationHandler(
                 analysis_service,
                 analysis_sources,
                 analysis_service.activation,

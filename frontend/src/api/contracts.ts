@@ -70,12 +70,32 @@ export type DuplicateCheckResult = ApiSchemas["DuplicateCheckResponse"];
 export type DuplicateMatch = ApiSchemas["DuplicateMatchResponse"];
 export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];
 
-/* The §9 action policy projection. The two lifecycle states are real unions rather
+/* The §9 action policy projection. The lifecycle states are real unions rather
    than `string`, so a label map keyed by them stays exhaustive; the action fields are
    `string` at the boundary and are treated as open here on purpose. */
 export type PreparationState = ApiSchemas["PreparationState"];
-export type WorkingDraftState = ApiSchemas["WorkingDraftState"];
+export type DocumentState = ApiSchemas["DocumentState"];
+export type ContentCheck = ApiSchemas["ContentCheck"];
 export type Reason = ApiSchemas["ReasonResponse"];
+
+/* §3/§14-§16 the one CV document per Application. `document_hash` is its token: the
+   read returns it as the ETag, the autosave PATCH sends it as If-Match, and every action
+   carries it as `expected_document_hash`. `content` stays the opaque versioned document;
+   `outline` is the editable structure derived from it on each read. */
+export type CVDocument = ApiSchemas["DocumentResponse"];
+export type DocumentSelection = ApiSchemas["DocumentSelectionResponse"];
+export type DocumentCandidate = ApiSchemas["DocumentCandidateResponse"];
+export type DocumentMutation = ApiSchemas["DocumentMutationResponse"];
+export type DocumentCheck = ApiSchemas["DocumentCheckResponse"];
+export type DocumentActionRequest = ApiSchemas["DocumentActionRequest"];
+export type UpdateDocumentRequest = ApiSchemas["UpdateDocumentRequest"];
+export type UpdateSelectionRequest = ApiSchemas["UpdateSelectionRequest"];
+export type ProposeSelectionRequest = ApiSchemas["ProposeSelectionRequest"];
+export type BuildFromAnalysisRequest = ApiSchemas["BuildFromAnalysisRequest"];
+export type CreateDraftRequest = ApiSchemas["CreateDraftRequest"];
+export type RegenerateDocumentSectionRequest = ApiSchemas["RegenerateDocumentSectionRequest"];
+export type RegenerateDocumentClaimRequest = ApiSchemas["RegenerateDocumentClaimRequest"];
+export type DecisionExport = ApiSchemas["DecisionExportResponse"];
 
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
 export type CreateSelectionPlanRequest = ApiSchemas["CreateSelectionPlanRequest"];

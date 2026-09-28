@@ -20,7 +20,6 @@ from ...application.queries import (
     ApplicationListQuery,
     ApplicationPreset,
     ApplicationSort,
-    PreparationState,
     RecruitmentStatus,
 )
 from ...util import new_id
@@ -42,6 +41,7 @@ from ..schemas.applications import (
     DuplicateCheckRequest,
     DuplicateCheckResponse,
     JobSnapshotHistoryResponse,
+    PreparationState,
     UpdateApplicationNotesRequest,
     UpdateApplicationNotesResponse,
 )

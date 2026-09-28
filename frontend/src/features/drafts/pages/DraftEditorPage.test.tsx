@@ -956,7 +956,7 @@ describe("DraftEditorPage", () => {
     const failedRender: Operation = {
       id: "op-render-failed",
       application_id: "app-1",
-      operation_type: "render_revision",
+      operation_type: "render_document",
       status: "failed",
       phase: "completed",
       is_terminal: true,

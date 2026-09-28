@@ -339,7 +339,7 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
     same_app = _enqueue_operation(services, _stored_request(first.application_id, "app-2"))
     render_request = CreateOperation(
         application_id=second.application_id,
-        operation_type=OperationType.RENDER_REVISION,
+        operation_type=OperationType.RENDER_DOCUMENT,
         payload={"approved_revision_id": "revision-1"},
         idempotency_key="render-1",
         sources=OperationSources(approved_revision_id="revision-1"),

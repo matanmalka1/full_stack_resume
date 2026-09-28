@@ -149,7 +149,7 @@ export const revisionComparison = (overrides: Partial<RevisionComparison> = {}):
 export const operation = (): Operation => ({
   id: "op-render",
   application_id: "app-1",
-  operation_type: "render_revision",
+  operation_type: "render_document",
   status: "queued",
   phase: "queued",
   is_terminal: false,

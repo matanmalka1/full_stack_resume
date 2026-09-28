@@ -82,3 +82,33 @@ SettingsIfMatch = Annotated[
         description="Required. The ETag returned by the matching settings read.",
     ),
 ]
+
+
+def document_etag(document_hash: str) -> str:
+    """The strong validator for one exact CV document: its `document_hash` (§21)."""
+    return f'"{document_hash}"'
+
+
+def parse_document_etag(value: str) -> str:
+    """The `document_hash` inside one `If-Match` value; `*` and weak tags are refused."""
+    candidate = value.strip()
+    if candidate.startswith("W/"):
+        raise PreconditionFailed(
+            "a weak ETag cannot authorize a document save; send the exact ETag the read returned"
+        )
+    candidate = candidate.strip('"')
+    if len(candidate) != 64 or any(character not in "0123456789abcdef" for character in candidate):
+        raise PreconditionFailed("If-Match must be the ETag a document read returned")
+    return candidate
+
+
+DocumentIfMatch = Annotated[
+    str,
+    Header(
+        alias="If-Match",
+        description=(
+            "Required. The ETag returned by the matching document read. A value that no "
+            "longer describes the stored document is a 409 and changes nothing."
+        ),
+    ),
+]

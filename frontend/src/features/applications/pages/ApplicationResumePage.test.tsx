@@ -133,11 +133,11 @@ describe("ApplicationResumePage", () => {
 
   it.each([
     ["analyze_job", "ניתוח"],
-    ["propose_selection_plan", "ניתוח"],
+    ["propose_selection", "ניתוח"],
     ["create_draft", "ניתוח"],
     ["regenerate_section", "טיוטה"],
     ["regenerate_claim", "טיוטה"],
-    ["render_revision", "טיוטה"],
+    ["render_document", "טיוטה"],
   ] as const)("restores active %s work ahead of a Ready milestone", async (operation_type, heading) => {
     renderResume(
       detail({
