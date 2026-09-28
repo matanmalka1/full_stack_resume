@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ApplicationDetail, Operation, SelectionPlanDetail, Settings } from "@/api/contracts";
+import { operationQueryKey } from "@/api/operations";
 import { settingsQueryKey } from "@/api/settings";
 import { workflowActionPlan } from "../../model/workflowActionPlan";
 import { SelectionPlanPanel } from "./SelectionPlanPanel";
@@ -125,24 +126,49 @@ const response = (body: unknown, status: number, location?: string): Response =>
     headers: { "Content-Type": "application/json", ...(location === undefined ? {} : { Location: location }) },
   });
 
+/* The panel is handed the offer rather than re-deriving it, so the test derives it the
+   same way the preparation view does - from the projection - instead of inventing one the
+   workflow never made. */
+const panelFor = (client: QueryClient, value: ApplicationDetail, onQueued: (id: string) => void) => {
+  const action = workflowActionPlan(value).createSelectionPlan;
+  if (action === null) {
+    throw new Error("create_selection_plan was not offered for this projection");
+  }
+  return (
+    <QueryClientProvider client={client}>
+      <SelectionPlanPanel
+        action={action}
+        detail={value}
+        onQueued={onQueued}
+        operationLive={false}
+        requirements={[
+          {
+            requirementId: "requirement-1",
+            text: "Priority ERP",
+            importance: "mandatory",
+            coverage: "matched",
+            shortfallSeverity: null,
+            shortfallReason: null,
+            supportingFactIds: ["fact.omitted"],
+            boundaryFactIds: [],
+          },
+        ]}
+      />
+    </QueryClientProvider>
+  );
+};
+
 const renderPanel = (value: ApplicationDetail, ai: boolean, onQueued = vi.fn()) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchInterval: false }, mutations: { retry: false } },
   });
   client.setQueryData(settingsQueryKey, { settings: settings(ai), etag: '"settings-1"' });
-  /* The panel is handed the offer rather than re-deriving it, so the test derives it the
-     same way the preparation view does - from the projection - instead of inventing one
-     the workflow never made. */
-  const action = workflowActionPlan(value).createSelectionPlan;
-  if (action === null) {
-    throw new Error("create_selection_plan was not offered for this projection");
-  }
-  render(
-    <QueryClientProvider client={client}>
-      <SelectionPlanPanel action={action} detail={value} onQueued={onQueued} operationLive={false} />
-    </QueryClientProvider>,
-  );
-  return onQueued;
+  const rendered = render(panelFor(client, value, onQueued));
+  return {
+    client,
+    onQueued,
+    rerender: (next: ApplicationDetail) => rendered.rerender(panelFor(client, next, onQueued)),
+  };
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -174,7 +200,7 @@ describe("SelectionPlanPanel", () => {
   it("queues explicit AI selection even when deterministic is the default", async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(operation, 202, "/api/v1/operations/operation-1"));
     vi.stubGlobal("fetch", fetchMock);
-    const onQueued = renderPanel(detail(null), true);
+    const { onQueued } = renderPanel(detail(null), true);
 
     fireEvent.click(screen.getByRole("button", { name: "הצעת בחירה באמצעות AI" }));
 
@@ -206,7 +232,9 @@ describe("SelectionPlanPanel", () => {
 
     const row = screen.getByText("עובדה שהושמטה").closest("li");
     if (row === null) throw new Error("candidate row was not rendered");
-    fireEvent.click(within(row).getByRole("checkbox", { name: "קיבוע העובדה" }));
+    expect(within(row).getByRole("radio", { name: "אוטומטי" })).toBeChecked();
+    fireEvent.click(within(row).getByRole("radio", { name: "הכללה" }));
+    expect(within(row).getByText(/שינוי שטרם נשמר/)).toBeInTheDocument();
     const saveButton = screen.getByRole("button", { name: "שמירת בחירת העובדות" });
     expect(saveButton.closest(".sticky")).toBeNull();
     fireEvent.click(saveButton);
@@ -224,5 +252,63 @@ describe("SelectionPlanPanel", () => {
         expected_selection_policy_version: "policy-hash",
       }),
     );
+  });
+  it("reports exactly which facts an AI proposal added and removed, and why", async () => {
+    const proposed: SelectionPlanDetail = {
+      ...plan,
+      id: "plan-2",
+      version_number: 2,
+      pinned_fact_ids: ["fact.omitted"],
+      excluded_fact_ids: ["fact.selected"],
+      plan: {
+        candidates: [
+          { fact_id: "fact.omitted", requirement_rank: 2, profile_score: 2, emphasis_score: 1, keyword_hits: 1 },
+        ],
+      },
+      candidates: [
+        { ...plan.candidates[0]!, outcome: "omitted", reason: "excluded_by_user" },
+        { ...plan.candidates[1]!, outcome: "pinned", reason: null },
+      ],
+    };
+    const finished = {
+      ...operation,
+      status: "succeeded",
+      is_terminal: true,
+      available_actions: [],
+      outputs: [{ output_type: "selection_plan", output_id: "plan-2", active: true }],
+    } as Operation;
+    let operationState: Operation = operation;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") {
+        return Promise.resolve(response(operation, 202, "/api/v1/operations/operation-1"));
+      }
+      if (url.includes("/operations/")) {
+        return Promise.resolve(response(operationState, 200));
+      }
+      return Promise.resolve(response(url.endsWith("plan-2") ? proposed : plan, 200));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { client, onQueued, rerender } = renderPanel(detail("plan-1"), true);
+
+    await screen.findByRole("button", { name: /^ניסיון/ });
+    fireEvent.click(screen.getByRole("button", { name: "הצעת בחירה באמצעות AI" }));
+    await waitFor(() => expect(onQueued).toHaveBeenCalledWith("operation-1"));
+    expect(await screen.findByText("ה־AI בוחן את העובדות מול דרישות המשרה…")).toBeInTheDocument();
+
+    operationState = finished;
+    client.setQueryData(operationQueryKey("operation-1"), finished);
+    rerender(detail("plan-2"));
+
+    expect(await screen.findByText("ההצעה שינתה 2 עובדות בקורות החיים:")).toBeInTheDocument();
+    const added = screen.getByRole("heading", { name: "נוספו לקורות החיים (1)" }).parentElement;
+    if (added === null) throw new Error("the added list was not rendered");
+    expect(within(added).getByText("עובדה שהושמטה")).toBeInTheDocument();
+    expect(within(added).getByText(/ראיה לדרישת חובה/)).toBeInTheDocument();
+    expect(within(added).getByText("Priority ERP")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "הוסרו מקורות החיים (1)" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^מיומנויות/ }));
+    expect(screen.getByText("נוספה בהצעת ה־AI")).toBeInTheDocument();
   });
 });

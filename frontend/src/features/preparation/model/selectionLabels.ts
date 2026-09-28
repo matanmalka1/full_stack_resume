@@ -1,4 +1,5 @@
 import type { OmissionReason, SelectionOutcome } from "@/api/contracts";
+import type { DecisionSource } from "./selectionManifest";
 
 /* What the SelectionPlan decided about a fact, in words. Exhaustive over the generated
    unions: an outcome or omission reason added to the backend fails this build rather
@@ -21,4 +22,12 @@ export const omissionReasonLabels: Record<OmissionReason, string> = {
   evicted_by_required_tag_rescue: "פינתה מקום לעובדה שנדרשה לכיסוי",
   not_in_profile_pool: "אינה במאגר של הפרופיל הזה",
   excluded_by_user: "הוחרגה על ידך",
+};
+
+// A manual mark and an AI proposal are stored in the same lists, so neither is named.
+export const decisionSourceLabels: Record<DecisionSource, string> = {
+  engine: "לפי דירוג המנוע",
+  pinned: "נכללה במפורש",
+  excluded: "הוחרגה במפורש",
+  locked: "רכיב מבני קבוע",
 };

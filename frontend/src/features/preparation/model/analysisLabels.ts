@@ -1,11 +1,10 @@
 import { HelpCircle, SignalHigh, SignalLow, SignalMedium } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import type { Classification, RequirementCoverage } from "@/api/analyses";
+import type { RequirementCoverage } from "@/api/analyses";
 import { type FitLevel, isFitLevel } from "@/api/classificationValues";
 import type { Emphasis, Language, ProfileName, Track } from "@/api/contracts";
 import type { Tone } from "@/ui/tone";
-import type { SummaryItem } from "@/ui/SummaryList";
 
 /* Keyed by the generated unions, so a classification value added to the backend fails
    the frontend build instead of reaching the review form untranslated. The runtime
@@ -94,17 +93,6 @@ export const fitLevelIcon = (fit: string): LucideIcon | undefined => (isFitLevel
 
 export const trackLabel = (track: string): string => (track in trackLabels ? trackLabels[track as Track] : track);
 
-/* The backend's `OverrideKey` vocabulary, named for a reader. It doubles as the term
-   list above, so a value the user decided is called the same thing in the summary and in
-   the note saying they decided it. A key this build does not recognise is skipped at the
-   read rather than printed, since an internal token teaches nothing. */
-export const overrideKeyLabels: Record<string, string> = {
-  track: "מסלול",
-  profile: "פרופיל",
-  emphasis: "דגש",
-  language: "שפה",
-};
-
 /* Where the engine narrowed a reading, in words. An open string map rather than a Record
    over a union: issues travel inside the analysis document, which is an opaque object on the
    wire. A code this build does not recognise is shown raw rather than hidden - an unfamiliar
@@ -154,28 +142,3 @@ export const coverageTones: Record<RequirementCoverage, Tone> = {
    own keys, so a label added above becomes an option without a second edit. */
 export const optionsFrom = <T extends string>(labels: Record<T, string>): [T, string][] =>
   Object.entries(labels).map(([value, label]) => [value as T, label as string]);
-
-const UNKNOWN = "לא ידוע";
-
-/* The four classification terms, in one place because two screens state them: the review
-   form, where each is a decision that may be overridden, and the analysis panel, where
-   they are what the draft will be built from. They have to read identically in both, so
-   the terms and the "unknown" fallback are defined once rather than copied. */
-export const classificationItems = (classification: Classification): SummaryItem[] => [
-  {
-    term: overrideKeyLabels.track,
-    value: classification.track === null ? UNKNOWN : trackLabels[classification.track],
-  },
-  {
-    term: overrideKeyLabels.profile,
-    value: classification.profile === null ? UNKNOWN : profileLabels[classification.profile],
-  },
-  {
-    term: overrideKeyLabels.emphasis,
-    value: classification.emphasis === null ? UNKNOWN : emphasisLabels[classification.emphasis],
-  },
-  {
-    term: overrideKeyLabels.language,
-    value: classification.language === null ? UNKNOWN : languageLabels[classification.language],
-  },
-];

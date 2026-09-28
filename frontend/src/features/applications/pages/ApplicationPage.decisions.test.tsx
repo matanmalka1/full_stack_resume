@@ -132,7 +132,7 @@ describe("voluntary matching configuration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
-    await screen.findByText("מסלול, פרופיל ודגשים");
+    await screen.findByRole("heading", { name: "הגדרות ההתאמה" });
     expect(screen.getByLabelText("מסלול")).toHaveValue("sales");
     expect(screen.getByLabelText("פרופיל")).toHaveValue("account-manager");
     expect(screen.getByLabelText("דגש")).toHaveValue("account-growth");
@@ -170,8 +170,12 @@ describe("voluntary matching configuration", () => {
       vi.fn(() => Promise.resolve(jsonResponse(detail({ preparation_state, ...extra })))),
     );
     renderPage();
-    await screen.findByText("מסלול, פרופיל ודגשים");
+    await screen.findByRole("heading", { name: "הגדרות ההתאמה" });
+    /* The consequence is stated once there is a change to have one. */
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
     expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByText("השמירה תבחר את העובדות מחדש")).toBeInTheDocument();
   });
 
   it("keeps local choices visible when the server reports a context conflict", async () => {
@@ -186,7 +190,7 @@ describe("voluntary matching configuration", () => {
     );
 
     renderPage();
-    await screen.findByText("מסלול, פרופיל ודגשים");
+    await screen.findByRole("heading", { name: "הגדרות ההתאמה" });
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות ההתאמה" }));
 
