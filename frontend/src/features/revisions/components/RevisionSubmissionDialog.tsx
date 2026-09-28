@@ -36,6 +36,16 @@ export const RevisionSubmissionDialog = ({
 }: RevisionSubmissionDialogProps) => {
   const queryClient = useQueryClient();
   const [repeatAcknowledged, setRepeatAcknowledged] = useState(false);
+  /* The native dialog keeps painting for its 0.18s exit transition after `open` turns
+     false, and a successful recording invalidates the query that feeds
+     `previousSubmittedAt`. Read live, the refetch lands mid-exit and the closing dialog
+     briefly redraws as the repeat-submission variant. While closed, it keeps the value it
+     last showed open. */
+  const [shownWhileOpen, setShownWhileOpen] = useState(previousSubmittedAt);
+  if (open && shownWhileOpen !== previousSubmittedAt) {
+    setShownWhileOpen(previousSubmittedAt);
+  }
+  const previousShown = open ? previousSubmittedAt : shownWhileOpen;
   const form = useAppForm<{ submittedAt: string }>({
     defaultValues: { submittedAt: localDateTimeInputValue(new Date()) },
   });
@@ -76,7 +86,7 @@ export const RevisionSubmissionDialog = ({
             חזרה
           </Button>
           <Button
-            disabled={!submittedAtValid || (previousSubmittedAt !== null && !repeatAcknowledged)}
+            disabled={!submittedAtValid || (previousShown !== null && !repeatAcknowledged)}
             form="revision-submission-form"
             pending={submission.isPending}
             pendingLabel="רושם…"
@@ -89,16 +99,16 @@ export const RevisionSubmissionDialog = ({
       headingId="submission-dialog-heading"
       onClose={close}
       open={open}
-      title={previousSubmittedAt === null ? "רישום הגשה קבועה" : "רישום הגשה נוספת של אותה גרסה"}
+      title={previousShown === null ? "רישום הגשה קבועה" : "רישום הגשה נוספת של אותה גרסה"}
     >
       <form id="revision-submission-form" onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}>
         <p className="mb-4">
           הרישום קבוע ומתייחס לגרסה ולקובץ ה־PDF המוצגים במסך הזה. הוא לא יפתור גרסה אחרת או קובץ אחר בזמן השמירה.
         </p>
-        {previousSubmittedAt === null ? null : (
+        {previousShown === null ? null : (
           <div className="mb-4 flex flex-col gap-3">
             <Callout title="הגרסה הזו כבר נרשמה כמוגשת" tone="warning">
-              {`ההגשה הקיימת נרשמה ${formatDateTime(previousSubmittedAt)}. הרישום הקיים לא ישתנה — יתווסף לו אירוע הגשה נוסף.`}
+              {`ההגשה הקיימת נרשמה ${formatDateTime(previousShown)}. הרישום הקיים לא ישתנה — יתווסף לו אירוע הגשה נוסף.`}
             </Callout>
             <Checkbox
               checked={repeatAcknowledged}
