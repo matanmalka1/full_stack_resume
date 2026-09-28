@@ -87,7 +87,7 @@ submissions = Table(
     Column("submission_type", Text, nullable=False),
     Column("job_snapshot_id", UUID(as_uuid=False)),
     Column("document_hash", Text),
-    Column("content", JSONB),
+    Column("content", JSONB(none_as_null=True)),
     Column("html_path", Text, unique=True),
     Column("html_sha256", Text),
     Column("pdf_path", Text, unique=True),
