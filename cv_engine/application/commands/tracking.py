@@ -41,9 +41,10 @@ class RecruitmentCorrectionCommand(BoundaryDTO):
 
 
 class SubmissionCommand(BoundaryDTO):
+    """§18: record that the Ready document the client was showing was sent."""
+
     application_id: str
-    approved_revision_id: str
-    pdf_artifact_version_id: str
+    expected_document_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     submitted_at: str = Field(min_length=1)
     metadata: dict[str, Any] = {}
     actor_type: Literal["user", "system"] = "user"
@@ -53,7 +54,6 @@ class SubmissionCommand(BoundaryDTO):
 class ExternalSubmissionCommand(BoundaryDTO):
     application_id: str
     submitted_at: str = Field(min_length=1)
-    artifact_version_id: str | None = None
     metadata: dict[str, Any] = {}
     actor_type: Literal["user", "system"] = "user"
     client: WriteClient
@@ -79,6 +79,5 @@ class ApplicationMutationResult(BoundaryDTO):
 
 class SubmissionResult(ApplicationMutationResult):
     submission_id: str
-    approved_revision_id: str | None = None
-    pdf_artifact_version_id: str | None = None
+    document_hash: str | None = None
     warnings: list[str] = []

@@ -1,4 +1,4 @@
-"""Selection policy shared by analysis activation and later plan changes."""
+"""Selection policy shared by analysis activation and later document selection changes."""
 
 from __future__ import annotations
 
@@ -8,33 +8,22 @@ from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.knowledge import Profile
 from ....domain.contracts.providers import SelectionProposal
 from ....domain.contracts.selection import SelectionManifest
-from ....domain.knowledge import Knowledge
 from ....domain.profiles import ProfileStore, classification_mismatch
 from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ....domain.selection import build_selection, pin_capacity
-from ...commands import CreateSelectionPlanCommand
+from ...commands import ProposeSelectionCommand
 from ...errors import MissingFactRendering, PreconditionFailed, StateConflict
 from ..proposals import ProviderEvidence
 
 
 @dataclass(frozen=True)
-class PreparedSelectionPlan:
-    command: CreateSelectionPlanCommand
-    knowledge: Knowledge
-    manifest: SelectionManifest
-    candidate_context_version: str
-    candidate_context_hash: str
-    profile_version: str
-    selection_policy_version: str
-    track_emphasis_dependencies: dict[str, str]
-
-
-@dataclass(frozen=True)
 class PreparedSelectionProposal:
-    command: CreateSelectionPlanCommand
+    """A provider's selection overlay, already validated by selection policy."""
+
+    command: ProposeSelectionCommand
     proposal: SelectionProposal
     evidence: ProviderEvidence
-    selection: PreparedSelectionPlan
+    selection: SelectionManifest
 
 
 class AnalysisSelection:

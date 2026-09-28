@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ....domain.contracts.drafts import DraftDocument
 from ....domain.contracts.knowledge import Fact
 from ....domain.contracts.selection import SelectionManifest
 from ....domain.facts import FactStore
@@ -35,6 +36,7 @@ from ...knowledge_mutations import (
     PrepareKnowledgeMutation,
     StagedKnowledgeFile,
 )
+from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import TransactionManager, WriteTransaction
@@ -49,10 +51,12 @@ class KnowledgeMutationEngine:
         transactions: TransactionManager,
         store: KnowledgeLifecycleStore,
         knowledge: KnowledgeStore,
+        documents: DocumentStore,
     ) -> None:
         self.transactions = transactions
         self.store = store
         self._knowledge = knowledge
+        self.documents = documents
 
     def load_knowledge(self) -> Knowledge:
         try:
@@ -82,12 +86,18 @@ class KnowledgeMutationEngine:
                 f"Knowledge mutations are quarantined by mutation {quarantined[0].id}"
             )
 
-    @staticmethod
     def _apply_db_mutation(
+        self,
         repository: KnowledgeLifecycleStore,
         tx: WriteTransaction,
         payload: dict[str, Any],
     ) -> None:
+        """Apply the database half of one mutation inside the journal's commit.
+
+        The only document write the journal makes is `confirm_and_use_fact`'s
+        selection step, guarded by the hash the command read (decision 6: fact
+        changes otherwise write nothing to any document).
+        """
         for action in payload.get("actions", []):
             if action.get("type") == "fact_event":
                 repository.record_fact_event(
@@ -106,19 +116,18 @@ class KnowledgeMutationEngine:
                     event_id=action["event_id"],
                     created_at=action["created_at"],
                 )
-            elif action.get("type") == "selection_plan":
-                repository.create_selection_plan(
+            elif action.get("type") == "document_selection":
+                content = action.get("content")
+                self.documents.update_body(
                     tx,
                     action["application_id"],
-                    action["job_analysis_id"],
-                    SelectionManifest.model_validate(action["plan"]),
-                    candidate_context_version=action["candidate_context_version"],
-                    candidate_context_hash=action["candidate_context_hash"],
-                    profile_version=action["profile_version"],
-                    selection_policy_version=action["selection_policy_version"],
-                    track_emphasis_dependencies=action["track_emphasis_dependencies"],
-                    plan_id=action["plan_id"],
-                    created_at=action["created_at"],
+                    action["expected_document_hash"],
+                    DocumentBody(
+                        analysis_id=action["analysis_id"],
+                        selection=SelectionManifest.model_validate(action["selection"]),
+                        content=None if content is None else DraftDocument.model_validate(content),
+                    ),
+                    updated_at=action["updated_at"],
                 )
             else:
                 raise ValueError(f"unknown Knowledge DB action: {action.get('type')}")

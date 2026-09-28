@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.recruitment import ApplicationStatus
 from ..commands import BoundaryDTO
 
@@ -28,6 +29,28 @@ class RecruitmentTimelineItemView(BoundaryDTO):
     next_action: str | None = None
     next_action_date: str | None = None
     submission_type: str | None = None
-    approved_revision_id: str | None = None
-    artifact_version_id: str | None = None
+    document_hash: str | None = None
     metadata: dict[str, Any] = {}
+
+
+class SubmissionView(BoundaryDTO):
+    """One immutable Submission: what was sent, and the checksum of each file (§20).
+
+    File metadata is the SHA-256 of each copy; the stored paths never leave the
+    application.
+    """
+
+    id: str
+    application_id: str
+    submission_type: str
+    submitted_at: str
+    job_snapshot_id: str | None = None
+    document_hash: str | None = None
+    content: DraftDocument | None = None
+    html_sha256: str | None = None
+    pdf_sha256: str | None = None
+    metadata: dict[str, Any] = {}
+
+
+class SubmissionsView(BoundaryDTO):
+    items: list[SubmissionView]

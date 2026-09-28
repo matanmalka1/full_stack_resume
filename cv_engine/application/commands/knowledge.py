@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from ...domain.contracts.knowledge import Fact
-from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.taxonomy import ProfileName
 from ._base import BoundaryDTO
 
@@ -89,7 +88,9 @@ class FactAttachmentResult(FactMutationResult):
 class ConfirmAndUseFactResult(BoundaryDTO):
     fact: Fact
     event_ids: list[str]
-    selection_plan: SelectionPlan
+    #: The document whose selection the fact joined, and its token afterwards.
+    document_id: str
+    document_hash: str
     facts_version: str
     lifecycle_version: str
     profile_store_version: str

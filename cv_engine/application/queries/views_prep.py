@@ -1,14 +1,15 @@
-"""CV-preparation read projections: snapshot/analysis through artifacts."""
+"""CV-preparation read projections: snapshot and analysis through the CV document."""
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Any, Literal
 
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.drafts import ClaimStyle, ClaimType, DraftDocument
 from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
+from ...domain.contracts.taxonomy import Emphasis
 from ...domain.contracts.validation import ValidationReport
+from ...domain.document import ContentCheck, DocumentState
 from ..commands import BoundaryDTO
 
 
@@ -64,24 +65,6 @@ class JobAnalysisView(BoundaryDTO):
     provider: str
     model: str
     created_at: str
-
-
-class PreparationState(StrEnum):
-    NEEDS_ANALYSIS = "needs_analysis"
-    NEEDS_REVIEW = "needs_review"
-    READY_TO_DRAFT = "ready_to_draft"
-    DRAFT_IN_PROGRESS = "draft_in_progress"
-    READY_FOR_APPROVAL = "ready_for_approval"
-    APPROVED = "approved"
-    READY = "ready"
-
-
-class WorkingDraftState(StrEnum):
-    NONE = "none"
-    EDITING = "editing"
-    VALIDATION_FAILED = "validation_failed"
-    VALIDATED = "validated"
-    STALE = "stale"
 
 
 class ClaimReviewAssertionView(BoundaryDTO):
@@ -158,24 +141,13 @@ class DraftFactView(BoundaryDTO):
     reason: OmissionReason | None = None
 
 
-class WorkingDraftFactsView(BoundaryDTO):
-    """§20 candidate accounting: every fact the draft links, and every candidate.
-
-    The union of the two, because neither covers the other. Contacts come from
-    the candidate context and never appear in a SelectionPlan, while an omitted
-    candidate appears in no claim - and the editor needs both to show what backs
-    a line and what could be added to one.
-    """
-
-    working_draft_id: str
-    application_id: str
-    selection_plan_id: str
-    language: str
-    facts: list[DraftFactView]
+class BuiltWithView(BoundaryDTO):
+    profile_version: str
+    selection_policy_version: str
 
 
-class SelectionPlanCandidateView(BoundaryDTO):
-    """One candidate in an immutable SelectionPlan, with safe display text."""
+class DocumentCandidateView(BoundaryDTO):
+    """One candidate in the document's selection, with safe display text."""
 
     fact_id: str
     text: str | None = None
@@ -185,100 +157,75 @@ class SelectionPlanCandidateView(BoundaryDTO):
     user_selectable: bool
 
 
-class SelectionPlanDetailView(BoundaryDTO):
-    """§20 SelectionPlan detail and its complete candidate accounting."""
+class DocumentSelectionView(BoundaryDTO):
+    """The document's selection with its complete candidate accounting (§20)."""
+
+    emphasis: Emphasis
+    emphasis_override: Emphasis | None = None
+    selected_fact_ids: list[str]
+    pinned_fact_ids: list[str]
+    excluded_fact_ids: list[str]
+    #: `"ai"` when an AI selection proposal was activated; null for engine and
+    #: user selections.
+    proposed_by: ProposalSource | None = None
+    #: The provider's own written rationale, verbatim; provenance only.
+    proposal_rationale: str | None = None
+    candidates: list[DocumentCandidateView]
+
+
+class DocumentView(BoundaryDTO):
+    """§20: the CVDocument, with its token and the states derived at read time.
+
+    `document_hash` is the concurrency token a client conditions on. The stored
+    content report is returned even when outdated, so it can be shown as such;
+    `content_check` says whether it is current. No path is carried.
+    """
 
     id: str
     application_id: str
-    job_analysis_id: str
-    version_number: int
-    plan: dict[str, Any]
-    candidate_context_version: str
-    candidate_context_hash: str
-    profile_version: str
-    selection_policy_version: str
-    track_emphasis_dependencies: dict[str, str]
-    created_at: str
+    analysis_id: str
+    document_hash: str
+    built_with: BuiltWithView
     language: str
-    facts_version: str
-    pinned_fact_ids: list[str]
-    excluded_fact_ids: list[str]
-    #: `"ai"` when this plan activated an AI selection proposal; null for engine
-    #: and user plans and for any plan written before provenance was recorded.
-    proposed_by: ProposalSource | None
-    #: The provider's own written rationale for the overlay, verbatim. Null
-    #: whenever `proposed_by` is null, and for an AI plan whose rationale was blank.
-    proposal_rationale: str | None
-    candidates: list[SelectionPlanCandidateView]
+    selection: DocumentSelectionView
+    content: DraftDocument | None = None
+    outline: DraftOutlineView | None = None
+    facts: list[DraftFactView] = []
+    document_state: DocumentState
+    content_check: ContentCheck
+    content_report: ValidationReport | None = None
+    approved_at: str | None = None
+    last_render_error: dict[str, Any] | None = None
+    created_at: str
+    updated_at: str
 
 
-class DraftPreviewView(BoundaryDTO):
-    """The HTML for one exact draft version.
+class DocumentPreviewView(BoundaryDTO):
+    """The HTML of the document's current content, marked as a draft, stored nowhere.
 
-    The version travels with the document so a caller can tell which edit it is
-    looking at, rather than inferring it from when the request was made.
+    The hash travels with it so a caller can tell which content it is looking at,
+    rather than inferring it from when the request was made.
     """
 
-    working_draft_id: str
-    edit_version: int
-    content_hash: str
+    application_id: str
+    document_id: str
+    document_hash: str
     language: str
     html: str
 
 
-class DraftPdfPreviewView(BoundaryDTO):
-    """One exact draft version as a stamped, unstored preview PDF."""
+class DocumentPdfPreviewView(BoundaryDTO):
+    """The document's current content as a stamped, unstored preview PDF."""
 
-    working_draft_id: str
-    edit_version: int
-    content_hash: str
+    application_id: str
+    document_id: str
+    document_hash: str
     pdf: bytes
-
-
-class WorkingDraftView(BoundaryDTO):
-    """§20: the WorkingDraft a client edits, plus its optimistic token.
-
-    `edit_version` and `content_hash` are the two halves of the ETag. They are
-    carried as query fields rather than as a formatted token because the format
-    is HTTP's business: the application layer states what the version is, and
-    the transport decides how to spell it in a header.
-
-    `latest_validation_run_id` is what makes an approve reachable from a read.
-    Without it a client that has just seen `working_draft_state: validated`
-    would have to validate again to obtain the run ID approval requires.
-    """
-
-    id: str
-    application_id: str
-    job_analysis_id: str
-    selection_plan_id: str
-    parent_revision_id: str | None = None
-    source: DraftDocument
-    outline: DraftOutlineView
-    edit_version: int
-    content_hash: str
-    active: bool
-    created_at: str
-    updated_at: str
-    latest_validation_run_id: str | None = None
-    latest_validation_passed: bool | None = None
-
-
-class ValidationRunView(BoundaryDTO):
-    application_id: str
-    working_draft_id: str
-    validation_run_id: str
-    edit_version: int
-    content_hash: str
-    passed: bool
-    report: ValidationReport
-    created_at: str
 
 
 class ArtifactVersionView(BoundaryDTO):
     id: str
     artifact_id: str
-    revision_id: str | None = None
     artifact_type: str
     logical_name: str
     version_number: int
@@ -311,115 +258,3 @@ class ArtifactVersionDetailView(ArtifactVersionView):
     downloadable: bool
     size: int | None = None
     unavailable_reason: str | None = None
-
-
-class ApprovedRevisionView(BoundaryDTO):
-    """One immutable ApprovedRevision and its Ready qualification (§20).
-
-    The two are one query because they are one question. A revision's
-    qualification is re-derived from its own stored evidence every time it is
-    asked for - `ready_qualified` is never a stored flag - so returning the
-    revision without it would hand a client a record it then has to interpret.
-
-    Nothing here says whether the revision is the *active* Ready one. That is
-    the Application's `preparation_state`, which is a fact about the active
-    JobSnapshot and JobAnalysis rather than about this record.
-
-    `ApprovedRevision` carries `resume_json_reference` and
-    `resume_markdown_reference`, which are stored paths. They are absent here
-    deliberately and `approved_revision_view` names its fields one by one
-    rather than validating the record from attributes - which is how the same
-    field set stayed a superset three times in M3 already. A client reaches
-    those two payloads the way it reaches every other one: by artifact-version
-    ID.
-    """
-
-    id: str
-    application_id: str
-    version_number: int
-    working_draft_id: str
-    job_snapshot_id: str
-    job_analysis_id: str
-    selection_plan_id: str
-    validation_run_id: str
-    draft_edit_version: int
-    draft_content_hash: str
-    facts_version: str
-    approved_at: str
-    decision_provenance: dict[str, Any]
-    ready_qualified: bool
-    pdf_artifact_version_id: str | None = None
-    html_artifact_version_id: str | None = None
-    ready_validation: ValidationReport
-    #: The revision whose content this one's draft was started from, or `None`
-    #: for a revision drafted fresh from an analysis. Read through the frozen
-    #: WorkingDraft, which is where the link is recorded.
-    parent_revision_id: str | None = None
-
-
-class ApprovedRevisionsView(BoundaryDTO):
-    """Every immutable revision for one Application, in version order."""
-
-    items: list[ApprovedRevisionView]
-
-
-class RevisionClaimChangeView(BoundaryDTO):
-    """One line that differs between two revisions (see `revision_comparison`)."""
-
-    kind: Literal["added", "removed", "reworded", "moved"]
-    style: ClaimStyle
-    before_text: str | None = None
-    after_text: str | None = None
-    fact_ids: list[str] = []
-    from_section: str | None = None
-
-
-class RevisionSectionComparisonView(BoundaryDTO):
-    kind: Literal["headline", "contacts", "section"]
-    name: str
-    status: Literal["added", "removed", "changed", "unchanged"]
-    changes: list[RevisionClaimChangeView]
-    unchanged_count: int
-
-
-class RevisionChangeSummaryView(BoundaryDTO):
-    added: int
-    removed: int
-    reworded: int
-    moved: int
-    unchanged: int
-
-
-class RevisionComparisonView(BoundaryDTO):
-    """What changed from `base` to `target`, two revisions of one Application.
-
-    Derived on every read from the two immutable payloads; nothing about a
-    comparison is stored. The context flags say which frozen inputs differ, so a
-    reader can tell "the posting changed" from "only the wording did".
-    """
-
-    application_id: str
-    base_revision_id: str
-    base_version_number: int
-    target_revision_id: str
-    target_version_number: int
-    job_snapshot_changed: bool
-    job_analysis_changed: bool
-    selection_plan_changed: bool
-    facts_version_changed: bool
-    profile_changed: bool
-    emphasis_changed: bool
-    language_changed: bool
-    summary: RevisionChangeSummaryView
-    sections: list[RevisionSectionComparisonView]
-
-
-class DecisionRecordView(BoundaryDTO):
-    id: str
-    approved_revision_id: str
-    application_id: str
-    job_snapshot_id: str
-    job_analysis_id: str
-    structured: dict[str, Any]
-    summary: str
-    created_at: str

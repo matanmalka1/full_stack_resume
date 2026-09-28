@@ -1,4 +1,4 @@
-"""Create and propose selection plans from an existing AI analysis."""
+"""Propose a CV document selection from its analysis (the AI form of update_selection)."""
 
 from __future__ import annotations
 
@@ -7,17 +7,16 @@ from dataclasses import asdict
 from ....domain.analysis.projection import gaps as project_gaps
 from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.knowledge import Profile
-from ....domain.contracts.taxonomy import Emphasis
 from ....domain.facts import FactStore
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import allowed_fact_pool
 from ....domain.selection import STRUCTURAL_STYLES
-from ...commands import CreateSelectionPlanCommand, ProposeSelectionPlanCommand
+from ...commands import ProposeSelectionCommand
 from ...errors import PreconditionFailed, ProposalRejected
 from ...ports import SelectionPlanContext, SelectionSectionContext
-from ...ports.analysis_plans import SelectionSource
+from ..documents import build_document_selection, refuse_deleted
 from ..proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
-from .selection_policy import AnalysisSelection, PreparedSelectionPlan, PreparedSelectionProposal
+from .selection_policy import AnalysisSelection, PreparedSelectionProposal
 
 
 class AnalysisSelectionService:
@@ -77,127 +76,29 @@ class AnalysisSelectionService:
         return sorted(protected)
 
     @staticmethod
-    def refuse_moved_sources(command: CreateSelectionPlanCommand, knowledge) -> None:
-        """The optimistic check on what the user was looking at when they decided.
-
-        Each expectation is optional and checked only when the client states it.
-        A client that states nothing is planning against current Knowledge and
-        says so; a client that states a version which has since moved is
-        refused, because the candidate accounting it showed the user no longer
-        describes what this plan would contain.
-        """
-        expected = (
-            (
-                "candidate context",
-                command.expected_candidate_context_hash,
-                knowledge.candidate.version_hash,
-            ),
-            ("Facts store", command.expected_facts_version, knowledge.facts.version),
-            ("Profile store", command.expected_profile_version, knowledge.profiles.version),
-            (
-                "selection policy",
-                command.expected_selection_policy_version,
-                knowledge.policies.version,
-            ),
-        )
-        moved = [name for name, want, have in expected if want is not None and want != have]
-        if moved:
-            raise PreconditionFailed(
-                f"Knowledge moved since the decision was made: {', '.join(moved)}"
-            )
-
-    @staticmethod
-    def prepare_selection_plan(
-        service,
-        command: CreateSelectionPlanCommand,
-    ) -> PreparedSelectionPlan:
-        """Read sources and build a deterministic overlay before opening a write scope."""
-        source = service.selection_source(command.application_id, command.job_analysis_id)
-        service.refuse_deleted(source.application_id, source.deleted_at)
-        return AnalysisSelectionService.prepare_selection(command, source, service.load_knowledge())
-
-    @staticmethod
-    def prepare_selection(
-        command: CreateSelectionPlanCommand,
-        source: SelectionSource,
-        knowledge: Knowledge,
-    ) -> PreparedSelectionPlan:
-        """Pure policy validation, shared by preparation and atomic activation."""
-        analysis: JobAnalysis = source.analysis
-        active_plan = source.active_plan
-        try:
-            effective_emphasis = (
-                Emphasis(command.emphasis_override)
-                if command.emphasis_override is not None
-                else active_plan.emphasis
-                if active_plan is not None
-                else analysis.emphasis
-            )
-        except ValueError as exc:
-            raise PreconditionFailed(f"unknown Emphasis: {command.emphasis_override}") from exc
-        explicit_emphasis = (
-            effective_emphasis
-            if command.emphasis_override is not None
-            else active_plan.emphasis_override
-            if active_plan is not None
-            else None
-        )
-        selection_analysis = analysis.model_copy(update={"emphasis": effective_emphasis})
-        AnalysisSelectionService.refuse_moved_sources(command, knowledge)
-        AnalysisSelection.profile(selection_analysis, knowledge.profiles)
-        manifest = AnalysisSelection.manifest(
-            selection_analysis,
-            knowledge,
-            pinned_fact_ids=frozenset(command.pinned_fact_ids),
-            excluded_fact_ids=frozenset(command.excluded_fact_ids),
-        )
-        rationale = command.ai_proposal_rationale
-        provenance = (
-            {"proposed_by": "ai", "proposal_rationale": rationale.strip() or None}
-            if rationale is not None
-            else {}
-        )
-        manifest = manifest.model_copy(
-            update={"emphasis_override": explicit_emphasis, **provenance}
-        )
-        return PreparedSelectionPlan(
-            command=command,
-            knowledge=knowledge,
-            manifest=manifest,
-            candidate_context_version=knowledge.candidate.context_version,
-            candidate_context_hash=knowledge.candidate.version_hash,
-            profile_version=knowledge.profiles.version,
-            selection_policy_version=knowledge.policies.version,
-            track_emphasis_dependencies={
-                "track": analysis.track.value,
-                "emphasis": effective_emphasis.value,
-            },
-        )
-
-    @staticmethod
     def prepare_selection_proposal(
         service,
-        command: ProposeSelectionPlanCommand,
+        command: ProposeSelectionCommand,
         *,
         operation_id: str,
     ) -> PreparedSelectionProposal:
-        """§13, AI form: ask for an overlay, and refuse anything outside the pool.
+        """§14 `propose_selection`: ask for an overlay, and refuse anything outside the pool.
 
-        No provider call happens inside a synchronous HTTP request, so this is
-        only ever reached from the Operation runner's execute phase. Nothing
-        durable is written here beyond the preserved response: the Proposal is
-        turned into a deterministic command and committed by `activate`, after
-        the runner's final source check.
+        No provider call happens inside a synchronous HTTP request, so this is only
+        ever reached from the Operation runner's execute phase. Nothing durable is
+        written here beyond the preserved response: the overlay is validated by the
+        same selection policy `update_selection` uses, and written only at activation
+        after the `expected_document_hash` check.
         """
-        source = service.selection_source(command.application_id, command.job_analysis_id)
-        service.refuse_deleted(source.application_id, source.deleted_at)
+        source = service.document_source(command.application_id)
+        refuse_deleted(command.application_id, source.deleted_at)
+        document = source.document
+        if document.content is not None:
+            raise PreconditionFailed(
+                "a selection proposal applies only while the document has no content"
+            )
         analysis: JobAnalysis = source.analysis
-        active_plan = source.active_plan
-        effective_analysis = (
-            analysis.model_copy(update={"emphasis": active_plan.emphasis})
-            if active_plan is not None
-            else analysis
-        )
+        effective_analysis = analysis.model_copy(update={"emphasis": document.selection.emphasis})
         knowledge = service.load_knowledge()
         profile = AnalysisSelection.profile(effective_analysis, knowledge.profiles)
         allowed = allowed_fact_pool(profile)
@@ -251,28 +152,14 @@ class AnalysisSelectionService:
                 allowed,
                 task="propose_selection_plan",
             )
-        selection_command = CreateSelectionPlanCommand(
-            application_id=command.application_id,
-            job_analysis_id=command.job_analysis_id,
-            pinned_fact_ids=list(proposal.pinned_fact_ids),
-            excluded_fact_ids=list(proposal.excluded_fact_ids),
-            emphasis_override=(
-                active_plan.emphasis_override.value
-                if active_plan is not None and active_plan.emphasis_override is not None
-                else None
-            ),
-            expected_candidate_context_hash=command.expected_candidate_context_hash,
-            expected_facts_version=command.expected_facts_version,
-            expected_profile_version=command.expected_profile_version,
-            expected_selection_policy_version=command.expected_selection_policy_version,
-            expected_selection_plan_id=command.expected_selection_plan_id,
-            enforce_expected_selection_plan=command.enforce_expected_selection_plan,
-            ai_proposal_rationale=proposal.rationale,
-        )
-        with evidence_attached(evidence):
             try:
-                selection = AnalysisSelectionService.prepare_selection_plan(
-                    service, selection_command
+                selection = build_document_selection(
+                    analysis,
+                    knowledge,
+                    current=document.selection,
+                    pinned_fact_ids=proposal.pinned_fact_ids,
+                    excluded_fact_ids=proposal.excluded_fact_ids,
+                    ai_rationale=proposal.rationale,
                 )
             except PreconditionFailed as exc:
                 raise ProposalRejected(
@@ -282,7 +169,7 @@ class AnalysisSelectionService:
                     ),
                 ) from exc
         return PreparedSelectionProposal(
-            command=selection_command,
+            command=command,
             proposal=proposal,
             evidence=evidence,
             selection=selection,

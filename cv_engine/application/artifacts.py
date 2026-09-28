@@ -87,6 +87,24 @@ class ArtifactDelivery:
 
 
 @dataclass(frozen=True)
+class DocumentPdfDelivery:
+    """The Ready document's PDF, verified present at request time (§16).
+
+    The document's rendered files are mutable working outputs, not registered
+    artifacts, so this carries the document's identity and token rather than an
+    artifact version. `filename` is the recruiter-facing name, never a location.
+    """
+
+    application_id: str
+    document_id: str
+    document_hash: str
+    filename: str
+    size: int
+    stream: ArtifactStream
+    media_type: str = "application/pdf"
+
+
+@dataclass(frozen=True)
 class ArtifactAvailability:
     """Whether one registered artifact could be downloaded right now.
 

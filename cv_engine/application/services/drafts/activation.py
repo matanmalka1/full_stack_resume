@@ -1,90 +1,77 @@
+"""Content activation in a caller-owned transaction, with no external effects."""
+
 from __future__ import annotations
 
-from ....domain.draft_markdown import serialize_markdown
-from ....domain.validation import validate_draft as run_draft_validation
-from ...commands import DraftCommand, DraftResult, RegenerationResult
-from ...ports.analysis_plans import AnalysisPlanStore
-from ...ports.drafts import DraftLifecycleStore
+from ....util import utc_now
+from ...commands import DraftResult, RegenerationResult
+from ...errors import StateConflict
+from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.transactions import WriteTransaction
-from ...ports.validation_store import ValidationStore
-from .inputs import PreparedDraft, PreparedRegeneration, validation_lineage
+from .inputs import PreparedDraft, PreparedRegeneration
 
 
 class DraftActivation:
-    def __init__(
-        self, drafts: DraftLifecycleStore, plans: AnalysisPlanStore, validations: ValidationStore
-    ):
-        self.drafts = drafts
-        self.plans = plans
-        self.validations = validations
+    def __init__(self, documents: DocumentStore):
+        self.documents = documents
 
-    _lineage = staticmethod(validation_lineage)
+    def _current(self, tx: WriteTransaction, application_id: str, expected_document_hash: str):
+        document = self.documents.lock_document(tx, application_id)
+        if document is None:
+            raise StateConflict(f"application {application_id} has no CV document")
+        if document.document_hash != expected_document_hash:
+            raise StateConflict("the CV document changed while its content was generated")
+        return document
 
-    def activate_generation(
-        self, tx: WriteTransaction, command: DraftCommand, prepared: PreparedDraft
-    ) -> DraftResult:
-        """Commit a prepared WorkingDraft after the final optimistic check."""
-        knowledge = prepared.knowledge
-        facts, profiles, policies = (knowledge.facts, knowledge.profiles, knowledge.policies)
-        analysis = prepared.analysis
-        profile = profiles.get(analysis.profile)
-        presentation_rules = knowledge.presentations
-        working = self.drafts.replace_active_working_draft(
+    def activate_generation(self, tx: WriteTransaction, prepared: PreparedDraft) -> DraftResult:
+        """Write generated content while the document still holds the expected hash.
+
+        Draft-producing activation does not recheck input freshness (§11): its output
+        is unapproved, and check/approve/render validate against the current context.
+        """
+        document = self._current(tx, prepared.application_id, prepared.expected_document_hash)
+        if document.content is not None:
+            raise StateConflict("the document already has content")
+        updated = self.documents.update_body(
             tx,
-            command.application_id,
-            command.job_analysis_id,
-            prepared.plan_id,
-            prepared.source,
-            parent_revision_id=command.parent_revision_id,
-            expected_working_draft_id=command.replaces_working_draft_id,
-            expected_edit_version=command.replaces_expected_edit_version,
-        )
-        report = run_draft_validation(
-            working.source,
-            serialize_markdown(working.source),
-            facts,
-            profile,
-            analysis,
-            plan=self.plans.selection_plan(tx, prepared.plan_id),
-            policies=policies,
-            presentations=presentation_rules,
-        )
-        self.validations.record_validation(
-            tx,
-            command.application_id,
-            "pre-render",
-            report,
-            lineage=self._lineage(working, knowledge),
+            prepared.application_id,
+            prepared.expected_document_hash,
+            DocumentBody(
+                analysis_id=document.analysis_id,
+                selection=document.selection,
+                content=prepared.content,
+            ),
+            updated_at=utc_now(),
         )
         return DraftResult(
-            application_id=command.application_id,
-            job_analysis_id=command.job_analysis_id,
-            selection_plan_id=prepared.plan_id,
-            working_draft_id=working.id,
-            edit_version=working.edit_version,
-            validation=report,
+            application_id=prepared.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
         )
 
     def activate_regeneration(
         self, tx: WriteTransaction, prepared: PreparedRegeneration
     ) -> RegenerationResult:
-        """Commit regenerated wording against the exact version that was frozen.
+        """Commit regenerated wording against the exact hash that was read.
 
-        The update carries `expected_edit_version`, so a save that happened
-        while the Operation ran makes this commit fail rather than overwrite it.
-        The provider evidence is registered in the same transaction as the
-        wording it produced.
+        The provider evidence is already registered (inactive); the runner activates
+        it in this same transaction, together with the wording it produced.
         """
-        working = prepared.working
-        changed = self.drafts.update_working_draft(
-            tx, working.id, working.edit_version, prepared.source
+        document = self._current(tx, prepared.application_id, prepared.expected_document_hash)
+        updated = self.documents.update_body(
+            tx,
+            prepared.application_id,
+            prepared.expected_document_hash,
+            DocumentBody(
+                analysis_id=document.analysis_id,
+                selection=document.selection,
+                content=prepared.content,
+            ),
+            updated_at=utc_now(),
         )
         return RegenerationResult(
-            application_id=changed.application_id,
-            working_draft_id=changed.id,
-            edit_version=changed.edit_version,
-            content_hash=changed.content_hash,
-            selection_plan_id=changed.selection_plan_id,
+            application_id=prepared.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
             regenerated_claim_ids=list(prepared.claim_ids),
             provider_artifact_version_id=prepared.evidence.artifact_version_id,
         )
