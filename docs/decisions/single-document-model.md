@@ -123,7 +123,7 @@ as outdated.
 | `validation_runs` | delete; report lives on the document | — | — |
 | `artifacts` | narrow to `provider_response`; `resume_pdf`, `resume_html`, `resume_markdown`, `claim_manifest`, `working_draft_snapshot` removed | no | yes (AI provenance) |
 | `artifact_versions` | narrow as above; `revision_id` column removed | no | yes |
-| `payload_write_leases` | keep for intake and provider-evidence payloads; approval, history and render stop using it | yes | no |
+| `payload_write_leases` | keep for intake, provider-evidence and Submission payloads (state-and-use-cases.md §18); approval, history and render stop using it | yes | no |
 | `operation_outputs` | keep for provider evidence; render no longer registers artifact outputs | yes | no |
 | `operation_resource_leases` | keep unchanged (`application_mutation`, `render_browser`, `ai`) | yes | no |
 | `idempotency_receipts` | keep for operation replacement; approval stops using it (decision 4) | yes | no |

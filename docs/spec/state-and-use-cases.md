@@ -989,6 +989,10 @@ Query contracts:
 - the CVDocument: analysis ID, selection with candidate accounting, content,
   `built_with`, `document_hash` (carried as the ETag), the content report with its
   `content_check`, `document_state`, `approved_at`, and `last_render_error`
+- the document preview: `preview` (HTML) and `preview.pdf`, rendered on request from the
+  current content through the same composition as `render_document`, marked as draft,
+  stored nowhere, and writing no document field, Artifact or Operation. They need no
+  approval.
 - Operation status
 - contextual fact detail/history
 - submissions (with their content and file metadata) and recruitment history
