@@ -179,6 +179,8 @@ def selection_plan_detail_view(
         facts_version=facts.version,
         pinned_fact_ids=list(plan.plan.pinned_fact_ids),
         excluded_fact_ids=list(plan.plan.excluded_fact_ids),
+        proposed_by=plan.plan.proposed_by,
+        proposal_rationale=plan.plan.proposal_rationale,
         candidates=candidates,
     )
 

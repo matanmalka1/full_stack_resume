@@ -151,7 +151,15 @@ class AnalysisSelectionService:
             pinned_fact_ids=frozenset(command.pinned_fact_ids),
             excluded_fact_ids=frozenset(command.excluded_fact_ids),
         )
-        manifest = manifest.model_copy(update={"emphasis_override": explicit_emphasis})
+        rationale = command.ai_proposal_rationale
+        provenance = (
+            {"proposed_by": "ai", "proposal_rationale": rationale.strip() or None}
+            if rationale is not None
+            else {}
+        )
+        manifest = manifest.model_copy(
+            update={"emphasis_override": explicit_emphasis, **provenance}
+        )
         return PreparedSelectionPlan(
             command=command,
             knowledge=knowledge,
@@ -259,6 +267,7 @@ class AnalysisSelectionService:
             expected_selection_policy_version=command.expected_selection_policy_version,
             expected_selection_plan_id=command.expected_selection_plan_id,
             enforce_expected_selection_plan=command.enforce_expected_selection_plan,
+            ai_proposal_rationale=proposal.rationale,
         )
         with evidence_attached(evidence):
             try:

@@ -19,6 +19,7 @@ const factLabel = (candidate: SelectionPlanCandidate): string => candidate.text 
    במפורש"), and collapsing them into one include/exclude toggle would throw away the
    difference between "the engine chose this" and "I chose this". */
 const FactRow = ({
+  aiMarked,
   busy,
   candidate,
   excluded,
@@ -26,6 +27,7 @@ const FactRow = ({
   onTogglePinned,
   pinned,
 }: {
+  aiMarked: readonly string[];
   busy: boolean;
   candidate: SelectionPlanCandidate;
   excluded: readonly string[];
@@ -35,6 +37,11 @@ const FactRow = ({
 }) => {
   const locked = candidateLocked(candidate);
   const included = candidateIncluded(candidate, pinned, excluded);
+  /* Only while the reader still holds the mark the proposal made: once they lift or flip
+     it, the decision on screen is theirs, not the AI's. */
+  const fromAi =
+    aiMarked.includes(candidate.fact_id) &&
+    (pinned.includes(candidate.fact_id) || excluded.includes(candidate.fact_id));
 
   return (
     <li className="flex flex-col gap-2 border-t border-cv-border p-4">
@@ -54,6 +61,7 @@ const FactRow = ({
       <p className="text-support text-cv-text-muted">
         {selectionOutcomeLabels[candidate.outcome]}
         {candidate.reason == null ? "" : ` · ${omissionReasonLabels[candidate.reason]}`}
+        {fromAi ? " · מהצעת AI" : ""}
       </p>
 
       {locked ? (
@@ -88,6 +96,7 @@ const FactRow = ({
    collapsed, and can be filled in one press; the search runs across every group, so a
    fact can still be found without knowing where it lives. */
 export const FactSelectionList = ({
+  aiMarked = [],
   busy,
   candidates,
   excluded,
@@ -96,6 +105,8 @@ export const FactSelectionList = ({
   onTogglePinned,
   pinned,
 }: {
+  /* The plan's own pins and exclusions when an AI proposal produced it; empty otherwise. */
+  aiMarked?: readonly string[];
   busy: boolean;
   candidates: readonly SelectionPlanCandidate[];
   excluded: readonly string[];
@@ -200,6 +211,7 @@ export const FactSelectionList = ({
                 <ul className="flex flex-col bg-cv-surface" hidden={!open} id={panelId}>
                   {group.items.map((candidate) => (
                     <FactRow
+                      aiMarked={aiMarked}
                       busy={busy}
                       candidate={candidate}
                       excluded={excluded}

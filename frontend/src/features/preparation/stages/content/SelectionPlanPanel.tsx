@@ -146,6 +146,11 @@ export const SelectionPlanPanel = ({
   };
 
   const totals = factTotals(plan?.candidates ?? [], pinned, excluded);
+  /* Provenance is recorded only for plans activated from an AI proposal. A null here
+     means "not recorded" - an engine or manual plan, or one saved before provenance
+     existed - so nothing is labelled from it. */
+  const aiProposal = plan?.proposed_by === "ai" ? plan : null;
+  const aiMarked = aiProposal === null ? [] : [...aiProposal.pinned_fact_ids, ...aiProposal.excluded_fact_ids];
 
   return (
     <>
@@ -172,8 +177,21 @@ export const SelectionPlanPanel = ({
             loading={plan === undefined}
             loadingLabel="טוען את בחירת העובדות…"
           >
+            {aiProposal === null ? null : (
+              <div className="rounded-surface border border-cv-border bg-cv-surface-muted p-4">
+                <h3 className="text-support font-semibold text-cv-text">נימוק הצעת ה־AI</h3>
+                {aiProposal.proposal_rationale === null ? (
+                  <p className="mt-1 text-support text-cv-text-muted">ההצעה לא כללה נימוק כתוב.</p>
+                ) : (
+                  <p className="mt-1 whitespace-pre-line text-support leading-6 text-cv-text" dir="auto">
+                    {aiProposal.proposal_rationale}
+                  </p>
+                )}
+              </div>
+            )}
             {plan === undefined ? null : (
               <FactSelectionList
+                aiMarked={aiMarked}
                 busy={busy}
                 candidates={plan.candidates}
                 excluded={excluded}

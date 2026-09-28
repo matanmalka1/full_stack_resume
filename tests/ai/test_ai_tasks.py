@@ -216,6 +216,11 @@ def test_a_proposal_commits_through_its_operation(
         committed = application_projection_reader.selection_plan(tx, plans[0].output_id)
     assert committed.id != analysed.selection_plan_id
     assert set(pinned) <= set(committed.plan.selected_fact_ids)
+    assert (committed.plan.proposed_by, committed.plan.proposal_rationale) == ("ai", "r")
+    # Unset provenance is absent from the serialized manifest, so manifests and the
+    # drafts that embed and fingerprint them keep the bytes they had before it existed.
+    assert plan.plan.proposed_by is None
+    assert {"proposed_by", "proposal_rationale"}.isdisjoint(plan.plan.model_dump(mode="json"))
 
 
 def test_ai_preferences_are_frozen_before_settings_can_change(

@@ -69,6 +69,8 @@ const plan: SelectionPlanDetail = {
   facts_version: "facts-hash",
   pinned_fact_ids: [],
   excluded_fact_ids: [],
+  proposed_by: null,
+  proposal_rationale: null,
   candidates: [
     {
       fact_id: "fact.selected",
@@ -183,6 +185,39 @@ describe("SelectionPlanPanel", () => {
       expect.objectContaining({ mode: "ai", pinned_fact_ids: [], excluded_fact_ids: [] }),
     );
     expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).not.toBeNull();
+  });
+
+  it("shows an AI plan's own rationale and labels only the marks it still holds", async () => {
+    const aiPlan: SelectionPlanDetail = {
+      ...plan,
+      pinned_fact_ids: ["fact.omitted"],
+      excluded_fact_ids: ["fact.selected"],
+      proposed_by: "ai",
+      proposal_rationale: "Pinned the skills fact because the posting asks for it.",
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(aiPlan, 200)));
+    renderPanel(detail("plan-1"), false);
+
+    expect(await screen.findByText("Pinned the skills fact because the posting asks for it.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^מיומנויות/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^ניסיון/ }));
+    const pinnedRow = screen.getByText("עובדה שהושמטה").closest("li");
+    const excludedRow = screen.getByText("עובדה שנבחרה").closest("li");
+    if (pinnedRow === null || excludedRow === null) throw new Error("candidate rows were not rendered");
+    expect(within(pinnedRow).getByText(/מהצעת AI/)).toBeInTheDocument();
+    expect(within(excludedRow).getByText(/מהצעת AI/)).toBeInTheDocument();
+
+    fireEvent.click(within(pinnedRow).getByRole("checkbox", { name: "קיבוע העובדה" }));
+    expect(within(pinnedRow).queryByText(/מהצעת AI/)).toBeNull();
+  });
+
+  it("claims no AI provenance for a plan that did not record one", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ ...plan, pinned_fact_ids: ["fact.omitted"] }, 200)));
+    renderPanel(detail("plan-1"), false);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^מיומנויות/ }));
+    expect(screen.queryByText("נימוק הצעת ה־AI")).toBeNull();
+    expect(screen.queryByText(/מהצעת AI/)).toBeNull();
   });
 
   it("submits absolute manual choices against the plan and versions shown", async () => {
