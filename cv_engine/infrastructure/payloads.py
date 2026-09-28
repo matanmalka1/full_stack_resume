@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,8 +14,6 @@ from ..application.errors import (
 )
 from ..application.ports import (
     ArtifactStream,
-    RenderTargets,
-    RevisionPayloads,
     SnapshotPayload,
 )
 from ..application.transactions import assert_external_io_allowed
@@ -26,7 +23,6 @@ from .object_store import (
     ObjectAlreadyExists,
     ObjectNotFound,
     ObjectStore,
-    validate_key,
 )
 from .paths import relative_within, resolve_within
 
@@ -179,28 +175,6 @@ class PayloadStore:
             f"{self._component(snapshot_id, name='snapshot_id')}.txt",
         )
 
-    def revision_path(
-        self, application_id: str, revision_id: str, attempt_id: str, *, format: str
-    ) -> Path:
-        """Where one approval attempt's revision payload belongs.
-
-        `attempt_id` is part of the key, not just the row: architecture.md
-        §7.1 requires a later attempt against the same `revision_id` -
-        approval is retried under the same idempotency key - to mint new
-        physical keys rather than reuse or overwrite a prior attempt's, so a
-        reclaimed attempt's key can never be resurrected by a legitimate
-        retry landing on the same path.
-        """
-        if format not in {"json", "md"}:
-            raise ValueError(f"unsupported revision format: {format}")
-        return self._target(
-            "revisions",
-            self._component(application_id, name="application_id"),
-            self._component(revision_id, name="revision_id"),
-            self._component(attempt_id, name="attempt_id"),
-            f"resume.{format}",
-        )
-
     def reference_for(self, destination: Path) -> str:
         """The stored reference `destination` would receive, without writing anything.
 
@@ -209,140 +183,6 @@ class PayloadStore:
         write lease (architecture.md §7.1) can be acquired first.
         """
         return self._reference_for_key(self._key(destination))
-
-    def draft_snapshot_path(
-        self, application_id: str, working_draft_id: str, edit_version: int
-    ) -> Path:
-        """Where one archived WorkingDraft version's immutable payload lives.
-
-        The edit version is part of the filename rather than a directory, so a
-        second archive of the same draft at a later version is a new immutable
-        file and archiving the same version twice collides instead of
-        overwriting evidence.
-        """
-        if edit_version < 1:
-            raise ValueError(f"invalid working draft edit version: {edit_version}")
-        return self._target(
-            "drafts",
-            self._component(application_id, name="application_id"),
-            f"{self._component(working_draft_id, name='working_draft_id')}-v{edit_version}.json",
-        )
-
-    def output_path(
-        self,
-        application_id: str,
-        revision_id: str,
-        artifact_id: str,
-        *,
-        suffix: str,
-    ) -> Path:
-        normalized_suffix = suffix if suffix.startswith(".") else f".{suffix}"
-        if normalized_suffix not in self._OUTPUT_SUFFIXES:
-            raise ValueError(f"unsupported output suffix: {suffix}")
-        return self._target(
-            "outputs",
-            self._component(application_id, name="application_id"),
-            self._component(revision_id, name="revision_id"),
-            f"{self._component(artifact_id, name='artifact_id')}{normalized_suffix}",
-        )
-
-    def render_targets(
-        self,
-        application_id: str,
-        revision_id: str,
-        html_artifact_version_id: str,
-        pdf_artifact_version_id: str,
-        recruiter_pdf_filename: str,
-    ) -> RenderTargets:
-        return RenderTargets(
-            html=self._render_location(
-                self.output_path(
-                    application_id, revision_id, html_artifact_version_id, suffix="html"
-                )
-            ),
-            pdf=self._render_location(
-                self.output_path(application_id, revision_id, pdf_artifact_version_id, suffix="pdf")
-            ),
-            recruiter_pdf_filename=recruiter_pdf_filename,
-        )
-
-    def _render_location(self, destination: Path) -> Path:
-        """Where Chromium writes the output destined for `destination`.
-
-        The store decides. On the local store this is the artifact path itself,
-        so the render target *is* the stored object and nothing is written
-        twice. On a remote store it is scratch under the application temp root,
-        which `ingest_render_output` uploads and then removes.
-        """
-        return self._objects.render_location(self._key(destination), self._temp_root)
-
-    def ingest_render_output(self, path: Path) -> SnapshotPayload:
-        """Take one rendered output into storage, keyed by where it belongs.
-
-        The rendered outputs are the one payload family that cannot go
-        through `commit`: Chromium writes them itself, to the paths
-        `render_targets` hands it, so they exist as files before the store ever
-        sees them. Everything else about them is the same - they are immutable,
-        they are registered in `artifact_versions`, and they are served back
-        through `open_artifact` - so they belong under the same keys, with the
-        same containment rules and the same reference format.
-
-        `path` is the render target the caller was handed, which may be the
-        artifact location or scratch, depending on the backend. The key is
-        recovered by asking the store where each approved output would have been
-        rendered and matching - rather than deriving a key from the path, which
-        only works while the two coincide. An unapproved layout still cannot be
-        ingested, because the candidate keys come from `output_path`.
-
-        The bytes are read once and that read is what is stored and what is
-        hashed; the caller registers this digest rather than re-hashing the
-        file, so the recorded hash describes what storage holds rather than what
-        the filesystem held a moment later. Scratch is removed afterwards, and
-        only when the store says the file was scratch: on the local store the
-        rendered file *is* the payload and deleting it would destroy the
-        artifact the row points at.
-
-        A `Path` travels inward here and nothing carrying one travels back:
-        the return value is the same storage-neutral `SnapshotPayload` that
-        every other commit produces.
-        """
-        assert_external_io_allowed("render output ingestion")
-        rendered = Path(path)
-        key = self._key_for_render_location(rendered)
-        try:
-            stored = self._objects.ingest(key, rendered)
-        except ObjectNotFound as exc:
-            raise ArtifactPayloadMissing(
-                "the rendered output was not written to its render target"
-            ) from exc
-        except ObjectAlreadyExists as exc:
-            raise FileExistsError(f"immutable payload already exists: {key}") from exc
-        self._objects.render_cleanup(rendered)
-        return SnapshotPayload(
-            reference=self._reference_for_key(key),
-            sha256=stored.sha256,
-            size=stored.size,
-        )
-
-    def _key_for_render_location(self, rendered: Path) -> str:
-        """The object key one render location belongs to.
-
-        On the local store the render location is the artifact path, so the key
-        derives from it directly. On a remote store it is scratch named after
-        the key, so the key is read back out of it and then validated against
-        the approved layout - never trusted as a path.
-        """
-        try:
-            return self._key(rendered)
-        except ValueError:
-            staging = resolve_within(self._temp_root, "render")
-            try:
-                relative = relative_within(staging, rendered).as_posix()
-            except ValueError as exc:
-                raise ValueError(
-                    f"payload destination is not an approved layout: {rendered}"
-                ) from exc
-            return self._key(self._path_for_key(validate_key(relative)))
 
     def submission_path(self, application_id: str, submission_id: str, *, suffix: str) -> Path:
         """Where one Submission's copy of a rendered file belongs (state-and-use-cases §18).
@@ -380,20 +220,6 @@ class PayloadStore:
             f"{self._component(artifact_id, name='artifact_id')}.json",
         )
 
-    def manifest_path(self, manifest_id: str) -> Path:
-        component = self._component(manifest_id, name="manifest_id")
-        self._require_uuid4(component)
-        return self._target("manifests", f"{component}.json")
-
-    @staticmethod
-    def _require_uuid4(value: str) -> None:
-        try:
-            parsed = uuid.UUID(value)
-        except ValueError as exc:
-            raise ValueError(f"manifest_id must be a UUIDv4: {value}") from exc
-        if parsed.version != 4 or str(parsed) != value:
-            raise ValueError(f"manifest_id must be a UUIDv4: {value}")
-
     def _approved_destination(self, candidate: Path | str) -> Path:
         unresolved = Path(candidate)
         if ".." in unresolved.parts:
@@ -404,34 +230,20 @@ class PayloadStore:
             relative = unresolved
 
         parts = relative.parts
-        manifest_id = Path(parts[1]).stem if len(parts) == 2 else None
+        # The layouts of architecture §6.2, and no others.
         approved = (
             len(parts) == 3
             and parts[0] == "snapshots"
             and parts[2].endswith(".txt")
-            or len(parts) == 5
-            and parts[0] == "revisions"
-            and parts[4] in {"resume.json", "resume.md"}
-            or len(parts) == 4
-            and parts[0] == "outputs"
-            and Path(parts[3]).suffix in self._OUTPUT_SUFFIXES
             or len(parts) == 4
             and parts[0] == "provider"
             and parts[3].endswith(".json")
-            or len(parts) == 2
-            and parts[0] == "manifests"
-            and parts[1].endswith(".json")
-            or len(parts) == 3
-            and parts[0] == "drafts"
-            and parts[2].endswith(".json")
             or len(parts) == 4
             and parts[0] == "submissions"
             and parts[3] in {"resume.html", "resume.pdf"}
         )
         if not approved:
             raise ValueError(f"payload destination is not an approved layout: {candidate}")
-        if manifest_id is not None and parts[0] == "manifests":
-            self._require_uuid4(manifest_id)
         return resolve_within(self._artifacts_root, relative)
 
     def commit(
@@ -492,26 +304,6 @@ class PayloadStore:
             sha256=stored.sha256,
             size=stored.size,
         )
-
-    def commit_draft_snapshot(
-        self,
-        application_id: str,
-        working_draft_id: str,
-        edit_version: int,
-        structured_json: str,
-    ) -> SnapshotPayload:
-        """Materialize one archived WorkingDraft version as an immutable payload.
-
-        Database registration stays with the caller, exactly as it does for
-        revisions: a failure there leaves a safe filesystem orphan rather than
-        an archived pointer with nothing behind it.
-        """
-        stored = self.commit(
-            self.draft_snapshot_path(application_id, working_draft_id, edit_version),
-            payload=structured_json.encode("utf-8"),
-            validate=self._valid_json,
-        )
-        return self._reference(stored)
 
     def commit_provider_response(
         self,
@@ -608,26 +400,6 @@ class PayloadStore:
 
         return ArtifactStream(size=len(payload), chunks=chunks)
 
-    def read_payload_text(self, reference: str) -> str:
-        """Return one registered immutable payload as text.
-
-        `read_snapshot` is deliberately JobSnapshot-only - it refuses anything
-        that is not a snapshot layout - and `open_artifact` is the verified
-        outward-facing download path. Ready qualification needs neither: it
-        reads a registered claim manifest it has already verified by hash a few
-        lines earlier, to re-derive the draft bindings from it. Reading it back
-        off the local filesystem was the last thing in that function still
-        bypassing the store.
-
-        No hash argument, because the caller has already checked it and a
-        second check here would be a different read from the one it verified.
-        """
-        key = self._key_for_reference(reference)
-        try:
-            return self._objects.get(key).decode("utf-8")
-        except ObjectNotFound as exc:
-            raise ArtifactPayloadMissing("the registered artifact payload is not stored") from exc
-
     def verify_payload(self, reference: str, expected_hash: str) -> str:
         """Classify one registered payload as ok, missing, tampered, or unresolvable.
 
@@ -683,38 +455,3 @@ class PayloadStore:
     def _valid_json(payload: bytes) -> bool:
         json.loads(payload.decode("utf-8"))
         return True
-
-    def commit_revision(
-        self,
-        application_id: str,
-        revision_id: str,
-        attempt_id: str,
-        structured_json: str,
-        markdown: str,
-    ) -> RevisionPayloads:
-        """Commit both immutable ApprovedRevision payloads, under this attempt's own keys.
-
-        Database registration is deliberately left to the caller. If either
-        registration later fails, these files are safe reconciliation orphans
-        - or, once their payload write lease expires without registering,
-        safe `reclaim_orphans` candidates (architecture.md §7.1).
-
-        A retry of the same `revision_id` - approval retried under the same
-        idempotency key - is `attempt_id`'s job to keep safe: it always
-        writes to a fresh key, never reusing or overwriting a prior attempt's,
-        so there is no content-equality reuse to special-case here.
-        """
-        structured = self.commit(
-            self.revision_path(application_id, revision_id, attempt_id, format="json"),
-            payload=structured_json.encode("utf-8"),
-            validate=self._valid_json,
-        )
-        rendered = self.commit(
-            self.revision_path(application_id, revision_id, attempt_id, format="md"),
-            payload=markdown.encode("utf-8"),
-            validate=lambda _payload: True,
-        )
-        return RevisionPayloads(
-            structured=self._reference(structured),
-            markdown=self._reference(rendered),
-        )

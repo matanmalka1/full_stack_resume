@@ -118,24 +118,3 @@ class DraftDocument(StrictModel):
         if any(claim.claim_type == "headline" or claim.style == "headline" for claim in body):
             raise ValueError("only the document headline may use the headline claim type or style")
         return self
-
-
-class WorkingDraft(StrictModel):
-    """The one mutable resume record for an Application.
-
-    The caller supplies the content hash alongside the structured source, just as it
-    does for ``DraftDocument``. Persistence owns optimistic version checks and the
-    one-active-draft constraint; the domain record stays storage-neutral.
-    """
-
-    id: str
-    application_id: str
-    job_analysis_id: str
-    selection_plan_id: str
-    parent_revision_id: str | None = None
-    source: DraftDocument
-    edit_version: int
-    content_hash: str
-    active: bool
-    created_at: str
-    updated_at: str

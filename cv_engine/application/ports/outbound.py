@@ -35,8 +35,6 @@ from ..knowledge_mutations import (
 )
 from .values import (
     ArtifactStream,
-    RenderTargets,
-    RevisionPayloads,
     SnapshotPayload,
     StoredDraft,
     TaskContracts,
@@ -75,16 +73,6 @@ class SnapshotPayloadStore(Protocol):
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
 
-    def read_payload_text(self, reference: str) -> str:
-        """Return one registered immutable payload as text.
-
-        For a caller that has already verified the payload's hash and needs its
-        content - Ready qualification re-deriving draft bindings from a claim
-        manifest. `read_snapshot` refuses anything that is not a JobSnapshot,
-        and `open_artifact` is the outward-facing download path.
-        """
-        ...
-
     def verify_payload(self, reference: str, expected_hash: str) -> str:
         """Classify one registered payload without transferring it outward.
 
@@ -100,12 +88,6 @@ class SnapshotPayloadStore(Protocol):
 
 
 class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
-    def output_path(
-        self, application_id: str, revision_id: str, artifact_id: str, *, suffix: str
-    ) -> Path:
-        """Canonical storage destination for a rendered artifact."""
-        ...
-
     def payload_inventory(self) -> list[str]:
         """Read-only observation of managed immutable payload references."""
         ...
@@ -117,35 +99,6 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         """
         ...
 
-    def revision_path(
-        self, application_id: str, revision_id: str, attempt_id: str, *, format: str
-    ) -> Path:
-        """Where one approval attempt's revision payload would land, without writing it."""
-        ...
-
-    def commit_revision(
-        self,
-        application_id: str,
-        revision_id: str,
-        attempt_id: str,
-        structured_json: str,
-        markdown: str,
-    ) -> RevisionPayloads: ...
-
-    def draft_snapshot_path(
-        self, application_id: str, working_draft_id: str, edit_version: int
-    ) -> Path:
-        """Where one archived WorkingDraft version's payload would land, without writing it."""
-        ...
-
-    def commit_draft_snapshot(
-        self,
-        application_id: str,
-        working_draft_id: str,
-        edit_version: int,
-        structured_json: str,
-    ) -> SnapshotPayload: ...
-
     def commit_provider_response(
         self,
         application_id: str,
@@ -153,33 +106,6 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         artifact_id: str,
         sanitized_json: str,
     ) -> SnapshotPayload: ...
-
-    def render_targets(
-        self,
-        application_id: str,
-        revision_id: str,
-        html_artifact_version_id: str,
-        pdf_artifact_version_id: str,
-        recruiter_pdf_filename: str,
-    ) -> RenderTargets: ...
-
-    def ingest_render_output(self, path: Path) -> SnapshotPayload:
-        """Take one rendered output into storage and describe what was stored.
-
-        Rendered HTML and PDF are immutable payloads like any
-        other, but they cannot be handed over as bytes: Chromium writes real
-        files to the real paths `render_targets` hands it, so they arrive as a
-        location rather than a value. This is the one place a `Path` travels
-        *inward* to the store, and nothing comes back out - the returned
-        reference is a storage-neutral string, exactly as `commit_snapshot`
-        returns one.
-
-        The hash describes the bytes that were stored, captured in the same
-        read that stored them. A caller must register this `sha256` rather than
-        re-hashing the file, or it records a digest for something other than
-        what storage holds.
-        """
-        ...
 
 
 class KnowledgeStore(Protocol):

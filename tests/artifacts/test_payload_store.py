@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -110,12 +111,16 @@ def test_traversal_symlink_and_unapproved_destinations_are_refused(
             payload=b"no",
             validate=lambda _payload: True,
         )
-    with pytest.raises(ValueError, match="UUIDv4"):
-        payload_store.commit(
-            "manifests/latest.json",
-            payload=b"no",
-            validate=lambda _payload: True,
-        )
+    # The revision model's layouts are retired: architecture §6.2 approves only
+    # snapshots, provider evidence and Submission files.
+    for retired in (
+        "revisions/app/rev/attempt/resume.json",
+        "outputs/app/rev/id.pdf",
+        "drafts/app/draft-v1.json",
+        f"manifests/{uuid4()}.json",
+    ):
+        with pytest.raises(ValueError, match="not an approved layout"):
+            payload_store.commit(retired, payload=b"{}", validate=lambda _payload: True)
 
     artifacts = tmp_path / "project" / "artifacts"
     outside = tmp_path / "outside"

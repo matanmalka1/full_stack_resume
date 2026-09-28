@@ -41,23 +41,6 @@ class SnapshotPayload:
 
 
 @dataclass(frozen=True)
-class RevisionPayloads:
-    """The two verified immutable payloads owned by one ApprovedRevision."""
-
-    structured: SnapshotPayload
-    markdown: SnapshotPayload
-
-
-@dataclass(frozen=True)
-class RenderTargets:
-    """Where one approved version's rendered outputs belong."""
-
-    html: Path
-    pdf: Path
-    recruiter_pdf_filename: str
-
-
-@dataclass(frozen=True)
 class ArtifactStream:
     """One verified immutable payload, as bytes rather than as a location.
 
