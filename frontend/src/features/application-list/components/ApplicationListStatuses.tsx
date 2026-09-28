@@ -20,8 +20,8 @@ const quietDotClasses: Record<Tone, string> = {
 };
 
 /* Fit as the board says it: the score where there is one, the level word where there
-   is not. `fitScoreText` is shared by the chip and the card's footer. */
-export const fitScoreText = (item: ApplicationListItem): string | null =>
+   is not. */
+const fitScoreText = (item: ApplicationListItem): string | null =>
   item.fit_score == null ? null : confidenceText(item.fit_score);
 
 /* One chip, as the details dialog shows fit. The level is never lost - it is the

@@ -1,7 +1,7 @@
 import type { ApplicationListItem } from "@/api/contracts";
-import { fitLevelLabel } from "@/features/preparation";
 import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
+import { cx } from "@/ui/cx";
 import { surfaceClasses } from "@/ui/surface";
 import { useOpenRecord } from "../hooks/useOpenRecord";
 import {
@@ -9,10 +9,11 @@ import {
   duplicatedApplicationIdentityIds,
   formatApplicationDate,
   formatRelativeUpdate,
+  isNextActionOverdue,
 } from "../model/applicationListPresentation";
 import { ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
-import { ApplicationProgress, fitScoreText } from "./ApplicationListStatuses";
+import { ApplicationFitStatus, ApplicationProgress } from "./ApplicationListStatuses";
 import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
 
 const cardGridClasses = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
@@ -36,10 +37,32 @@ const UpdatedAt = ({ item }: { item: ApplicationListItem }) => (
   </Tooltip>
 );
 
-/* One Application as a card, laid out after demo_re: who and the menu, the progress
-   block, what to do next, and a footer with when it last moved, how well it fits, and
-   the way into its recruitment record. Every block is a shared component, so the cards,
-   the details dialog and the action hub cannot drift apart in what they say. */
+/* What a card's leading edge says before anything on it is read: a projected reason
+   that blocks the work, or one that asks for it, or a reminder already past its date.
+   The most severe wins. A closed Application asks for nothing. */
+type CardUrgency = "blocker" | "warning";
+
+const cardUrgency = (item: ApplicationListItem): CardUrgency | null => {
+  if (item.is_closed) return null;
+  const attention = applicationAttention(item);
+  if (attention !== null) return attention.tone === "blocker" ? "blocker" : "warning";
+  return isNextActionOverdue(item.next_action_date) && item.next_action != null ? "warning" : null;
+};
+
+const urgencyEdgeClasses: Record<CardUrgency, string> = {
+  blocker: "border-s-4 border-s-cv-blocker",
+  warning: "border-s-4 border-s-cv-warning",
+};
+
+/* One Application as a card, laid out after demo_re: who, how well it fits and the
+   menu; the progress; what to do next; and a footer with when it last moved and the way
+   into its recruitment record. The blocks are separated by space rather than each
+   boxed, so a board of cards is not a grid of boxes inside boxes. Every block is a
+   shared component, so the cards, the details dialog and the action hub cannot drift
+   apart in what they say.
+
+   The card itself takes focus and opens its details on Enter or Space, as a click on
+   it does; its link icon stays the route straight to the work. */
 const ApplicationCard = ({
   ambiguous,
   clearing,
@@ -56,19 +79,42 @@ const ApplicationCard = ({
 }) => {
   const open = useOpenRecord(() => onRequestDetails(item));
   const hasNext = nextActionHeading(item, applicationAttention(item) !== null) !== null;
-  const score = fitScoreText(item);
+  const urgency = cardUrgency(item);
 
   return (
-    // The card opens its details on a click; its link icon and its menu stay the keyboard routes.
-    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <article
+      aria-label={`${item.target_role} אצל ${item.company}`}
       className={surfaceClasses(
-        "group flex h-full min-w-0 cursor-pointer flex-col gap-4 bg-cv-surface-raised p-5 shadow-surface transition-all hover:border-cv-border-strong hover:shadow-floating",
+        cx(
+          "group flex h-full min-w-0 cursor-pointer flex-col gap-4 p-5 transition-all hover:border-cv-border-strong focus-visible:border-cv-border-strong",
+          /* A closed Application is history: it sits flat and quiet so the open work
+             around it is what the eye lands on. Its text keeps full contrast. */
+          item.is_closed
+            ? "bg-cv-surface-muted"
+            : "bg-cv-surface-raised shadow-surface hover:shadow-floating focus-visible:shadow-floating",
+          urgency === null ? undefined : urgencyEdgeClasses[urgency],
+        ),
       )}
+      data-closed={item.is_closed ? true : undefined}
+      data-urgency={urgency ?? undefined}
       onClick={open.onClick}
+      onKeyDown={open.onKeyDown}
+      /* Focusable so the keyboard opens the record the way a click does. It stays an
+         article rather than a button: it holds links and buttons of its own. */
+      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
     >
       <div className="flex items-start justify-between gap-3">
         <ApplicationIdentity ambiguous={ambiguous} item={item} variant="card" />
+        {/* Fit is read to decide whether to go on at all, so it sits beside who the
+            Application is for rather than in the footer. Unanalysed, there is nothing
+            to say yet and nothing is drawn. */}
+        {item.fit_level == null ? null : (
+          <span className="ms-auto shrink-0">
+            <ApplicationFitStatus item={item} />
+          </span>
+        )}
         <ApplicationRecordActions
           item={item}
           onRequestClose={onRequestClose}
@@ -78,35 +124,19 @@ const ApplicationCard = ({
         />
       </div>
 
-      <div className="rounded-control border border-cv-border bg-cv-canvas p-3">
-        <ApplicationProgress item={item} />
-      </div>
+      <ApplicationProgress item={item} />
 
       {hasNext ? (
-        <div className="rounded-control border border-cv-border bg-cv-surface p-3">
+        <div>
           <p className="mb-1 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
           <ApplicationCardNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
         </div>
       ) : (
-        <p className="rounded-control border border-dashed border-cv-border p-3 text-center text-support text-cv-text-muted">
-          אין פעולה מתוזמנת כעת
-        </p>
+        <p className="text-support text-cv-text-muted">אין פעולה מתוזמנת כעת</p>
       )}
 
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3 text-support text-cv-text-muted">
-        <span className="flex min-w-0 items-center gap-2">
-          <UpdatedAt item={item} />
-          {item.fit_level == null ? null : (
-            <>
-              <span aria-hidden="true">·</span>
-              <Tooltip align="center" label={fitLevelLabel(item.fit_level)}>
-                <span className="font-semibold text-cv-text tabular-nums">
-                  {score === null ? fitLevelLabel(item.fit_level) : `${score} התאמה`}
-                </span>
-              </Tooltip>
-            </>
-          )}
-        </span>
+        <UpdatedAt item={item} />
         <button
           className="shrink-0 font-semibold text-cv-accent hover:underline"
           onClick={() => onRequestUpdate(item)}
@@ -162,7 +192,7 @@ const skeletonCards = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "
 export const ApplicationCardsSkeleton = () => (
   <output aria-label="טוען את המועמדויות" className={cardGridClasses}>
     {skeletonCards.map((key) => (
-      <div className={surfaceClasses("flex min-h-72 flex-col gap-4 bg-cv-surface-raised p-5 shadow-surface")} key={key}>
+      <div className={surfaceClasses("flex min-h-56 flex-col gap-4 bg-cv-surface-raised p-5 shadow-surface")} key={key}>
         <div className="flex items-start justify-between gap-3">
           <span className="flex flex-1 gap-2">
             <Skeleton className="block size-9 shrink-0" />
@@ -173,8 +203,14 @@ export const ApplicationCardsSkeleton = () => (
           </span>
           <Skeleton className="block size-9 shrink-0" />
         </div>
-        <Skeleton className="block h-16 w-full" />
-        <Skeleton className="block h-14 w-full" />
+        <span className="space-y-2">
+          <Skeleton className="block h-4 w-full" />
+          <Skeleton className="block h-6 w-24" />
+        </span>
+        <span className="space-y-2">
+          <Skeleton className="block h-3 w-32" />
+          <Skeleton className="block h-4 w-3/4" />
+        </span>
         <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3">
           <Skeleton className="block h-4 w-24" />
           <Skeleton className="block h-4 w-16" />

@@ -112,8 +112,8 @@ export const ApplicationRecordActions = ({
           {/* Two groups, as in demo_re: the ways into the record, then the two that end
               it. The ending pair keeps the blocker tone; nothing else here is coloured. */}
           <div className="py-0.5">
-            {/* The keyboard's way to a record's details: a click on the record's body opens
-                them, but no record is itself focusable, so every view reaches them here. */}
+            {/* A way to a record's details in every view: a card opens them on click or
+                Enter, but a stage card is not itself focusable, so the menu offers them too. */}
             <button
               className={menuItemClasses}
               onClick={() => {
