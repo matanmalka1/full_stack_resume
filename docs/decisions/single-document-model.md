@@ -1,7 +1,8 @@
 # Decision: one mutable CV document per Application
 
-Status: accepted, not yet implemented. The specifications in `spec/` still describe the
-revision model and stay authoritative until they are rewritten (§8 lists the sections).
+Status: accepted, in implementation. `spec/state-and-use-cases.md` is rewritten for this
+model; the other specifications listed in §8 still describe the revision model until
+their rewrite in Wave 2.
 
 ## 1. Why
 
@@ -175,6 +176,12 @@ as outdated.
   edited by hand in `base/`, which journal-driven invalidation cannot see, and it removes
   the journal step instead of adding a second mechanism.
 - **`ready_to_draft` means "document without content"** (decisions 3 and 9).
+
+- **Implementation details fixed in Wave 1** (2026-09-28): `document_hash` is also the
+  document's concurrency token and ETag (no `edit_version`); `check_document` exists as a
+  command separate from `approve`; `build_from_analysis` clears content and every stamp;
+  the warnings are `DOCUMENT_ON_OLDER_ANALYSIS`, `PROFILE_CHANGED` and `POLICY_CHANGED`;
+  `facts_hash` covers every field of a fact, including its status, except `source_file`.
 
 ## 8. Specification sections to rewrite
 

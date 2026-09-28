@@ -57,7 +57,7 @@ from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 MUTABLE_TABLES = frozenset(
     {
         "applications",  # the current recruitment projection and tracking fields
-        "working_drafts",  # the one mutable resume document (product invariant 3)
+        "cv_documents",  # the one mutable resume document (product invariant 3)
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
         "operation_resource_leases",  # ephemeral claim/heartbeat coordination
         "operation_outputs",  # permits exactly one inactive-to-active transition

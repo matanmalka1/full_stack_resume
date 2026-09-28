@@ -21,6 +21,11 @@ Everything the lanes build on. Serial because every later file depends on it.
 Gate: migration-topology and empty-database upgrade checks with the schema diff stated;
 focused domain tests for basis and derived states.
 
+Progress: steps 1–3 landed in session 1 (migration `0002`, `domain/document.py`,
+`domain/contracts/document.py`). The dropped tables stay importable as column-only
+shapes in `tables/legacy.py` on a detached `MetaData` — a temporary re-export the Wave 2
+lanes stop using and Wave 3 deletes. Steps 4–5 (ports, API contract) are session 2.
+
 From here on these are **lead-only**: `alembic/`, `cv_engine/infrastructure/persistence/tables/`,
 `cv_engine/domain/contracts/`, `cv_engine/application/ports/`, `cv_engine/api/schemas/`,
 `openapi/`, `frontend/src/api/contracts.ts`, `cv_engine/runtime/composition.py`,
