@@ -78,7 +78,7 @@ export const summarizeSelection = (draft: EditableDocument): SelectionSummary =>
 export type DraftStepId = "review" | "check" | "approve";
 type DraftStepStatus = "done" | "current" | "blocked" | "upcoming";
 
-export interface DraftStep {
+interface DraftStep {
   id: DraftStepId;
   status: DraftStepStatus;
 }
