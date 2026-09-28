@@ -12,6 +12,13 @@ const problemMessages: Record<string, ErrorMessage> = {
   STATE_CONFLICT: { title: "המידע השתנה", detail: "הפעולה מתנגשת במצב העדכני. יש לרענן ולנסות שוב." },
   PRECONDITION_FAILED: { title: "לא ניתן לבצע את הפעולה כעת", detail: "יש להשלים את השלבים הנדרשים ולנסות שוב." },
   VALIDATION_BLOCKED: { title: "הפעולה נחסמה באימות", detail: "יש לתקן את בעיות האימות לפני המשך התהליך." },
+  DOCUMENT_CHANGED: { title: "המסמך השתנה", detail: "המסמך השתנה מאז שנפתח. יש לבדוק את הגרסה העדכנית ולנסות שוב." },
+  DOCUMENT_NOT_APPROVED: { title: "המסמך אינו מאושר", detail: "יש לבדוק ולאשר את הגרסה הנוכחית לפני יצירת הקבצים." },
+  DOCUMENT_NOT_READY: {
+    title: "קורות החיים אינם מוכנים",
+    detail: "המסמך השתנה מאז שהופק. יש לאשר וליצור את הקבצים מחדש.",
+  },
+  VALIDATION_FAILED: { title: "הבדיקה נכשלה", detail: "יש לתקן את הבעיות שנמצאו בבדיקה ולנסות שוב." },
   VALIDATION_STALE: { title: "האימות כבר אינו עדכני", detail: "הטיוטה השתנתה מאז האימות. יש להריץ אימות מחדש." },
   VALIDATION_REQUIRED: { title: "נדרש אימות", detail: "יש לאמת את הגרסה הנוכחית לפני המשך התהליך." },
   UNLINKED_CLAIM: { title: "טענה אינה מקושרת לעובדה", detail: "יש לקשר את הטענה לעובדה מאושרת או להסיר אותה." },

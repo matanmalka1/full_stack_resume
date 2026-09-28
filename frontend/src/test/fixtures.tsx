@@ -5,23 +5,24 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import type {
   ApplicationDetail,
-  ApprovedRevision,
+  CVDocument,
+  DocumentCheck,
   Operation,
   ReconciliationReport,
-  RevisionComparison,
   Settings,
-  ValidationRun,
-  WorkingDraft,
 } from "@/api/contracts";
 
 /* Record builders for the §9 projection shapes, and the one route harness the screens
    that read them are rendered through.
 
-   They live here rather than in one feature's test file because the same Application,
-   draft, and revision are what the draft editor, the revision screen, and settings each
-   see; three copies of the same record drift apart, and a projection field added to the
+   They live here rather than in one feature's test file because the same Application and
+   document are what the draft editor, the ready screen, and settings each see; three copies of the same record drift apart, and a projection field added to the
    contracts then has three places to be remembered. Each builder takes overrides, so a
    test still states only the fields it is about. */
+
+/* A document hash has the shape the contract requires: 64 lowercase hex characters. */
+export const HASH = "a".repeat(64);
+export const OTHER_HASH = "b".repeat(64);
 
 export const json = (value: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(value), {
@@ -33,20 +34,20 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
   recruitment_status: "saved",
   allowed_recruitment_transitions: ["withdrawn", "closed"],
   recruitment_timeline: [],
-  preparation_state: "ready_for_approval",
-  working_draft_state: "validated",
+  preparation_state: "draft_in_progress",
+  document_state: "draft",
+  content_check: "passed",
   review_reasons: [],
-  stale_reasons: [],
   warnings: [],
   blocked_actions: [],
   active_job_snapshot_id: "snapshot-1",
-  active_analysis_id: "analysis-1",
-  active_selection_plan_id: "plan-1",
-  active_working_draft_id: "draft-1",
-  latest_approved_revision_id: null,
-  latest_ready_revision_id: null,
-  newer_draft_in_progress: false,
-  available_actions: ["approve"],
+  latest_analysis_id: "analysis-1",
+  document_id: "doc-1",
+  document_hash: HASH,
+  document_analysis_id: "analysis-1",
+  approved_at: null,
+  last_render_error: null,
+  available_actions: ["edit", "approve"],
   recommended_action: "approve",
   application: {
     id: "app-1",
@@ -69,17 +70,24 @@ export const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationD
   ...overrides,
 });
 
-export const draft = (overrides: Partial<WorkingDraft> = {}): WorkingDraft => ({
-  id: "draft-1",
+export const cvDocument = (overrides: Partial<CVDocument> = {}): CVDocument => ({
+  id: "doc-1",
   application_id: "app-1",
-  active: true,
-  edit_version: 4,
-  content_hash: "draft-hash",
-  job_analysis_id: "analysis-1",
-  selection_plan_id: "plan-1",
-  latest_validation_run_id: "run-1",
-  latest_validation_passed: true,
-  source: {},
+  analysis_id: "analysis-1",
+  document_hash: HASH,
+  built_with: { profile_version: "profile-1", selection_policy_version: "policy-1" },
+  language: "en",
+  selection: {
+    emphasis: "development-balanced",
+    emphasis_override: null,
+    selected_fact_ids: [],
+    pinned_fact_ids: [],
+    excluded_fact_ids: [],
+    proposed_by: null,
+    proposal_rationale: null,
+    candidates: [],
+  },
+  content: {},
   outline: {
     headline: {
       claim_id: "headline",
@@ -91,58 +99,27 @@ export const draft = (overrides: Partial<WorkingDraft> = {}): WorkingDraft => ({
     contacts: [],
     sections: [],
   },
+  facts: [],
+  document_state: "draft",
+  content_check: "passed",
+  content_report: { passed: true, groups: { facts: true }, evidence: { checked: 3 }, issues: [] },
+  approved_at: null,
+  last_render_error: null,
   created_at: "2026-08-24T00:00:00Z",
   updated_at: "2026-08-24T00:00:00Z",
   ...overrides,
 });
 
-export const validation = (overrides: Partial<ValidationRun> = {}): ValidationRun => ({
-  validation_run_id: "run-1",
+export const documentCheck = (overrides: Partial<DocumentCheck> = {}): DocumentCheck => ({
   application_id: "app-1",
-  working_draft_id: "draft-1",
-  edit_version: 4,
-  content_hash: "draft-hash",
+  document_id: "doc-1",
+  document_hash: HASH,
+  document_state: "draft",
+  content_check: "passed",
+  pending_claim_ids: [],
   passed: true,
   report: { passed: true, groups: { facts: true }, evidence: { checked: 3 }, issues: [] },
-  ...overrides,
-});
-
-export const revision = (overrides: Partial<ApprovedRevision> = {}): ApprovedRevision => ({
-  id: "revision-1",
-  application_id: "app-1",
-  version_number: 1,
-  approved_at: "2026-08-24T00:00:00Z",
-  working_draft_id: "draft-1",
-  draft_edit_version: 4,
-  draft_content_hash: "draft-hash",
-  job_snapshot_id: "snapshot-1",
-  job_analysis_id: "analysis-1",
-  selection_plan_id: "plan-1",
-  facts_version: "facts-1",
-  validation_run_id: "run-1",
-  decision_provenance: { client: "web" },
-  ready_qualified: true,
-  html_artifact_version_id: "html-1",
-  pdf_artifact_version_id: "pdf-1",
-  ready_validation: { passed: true, groups: { artifacts: true }, evidence: {}, issues: [] },
-  ...overrides,
-});
-
-export const revisionComparison = (overrides: Partial<RevisionComparison> = {}): RevisionComparison => ({
-  application_id: "app-1",
-  base_revision_id: "revision-1",
-  base_version_number: 1,
-  target_revision_id: "revision-2",
-  target_version_number: 2,
-  job_snapshot_changed: false,
-  job_analysis_changed: false,
-  selection_plan_changed: false,
-  facts_version_changed: false,
-  profile_changed: false,
-  emphasis_changed: false,
-  language_changed: false,
-  summary: { added: 0, removed: 0, reworded: 0, moved: 0, unchanged: 0 },
-  sections: [],
+  approved_at: null,
   ...overrides,
 });
 

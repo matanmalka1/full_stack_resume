@@ -9,7 +9,7 @@ import {
 } from "./applications";
 import { factsQueryKey, factsQueryPrefix } from "./facts";
 import { cancelOperation, operationQueryOptions, retryOperation } from "./operations";
-import { decisionMarkdownQueryOptions } from "./revisions";
+import { decisionExportQueryOptions, documentQueryOptions } from "./documents";
 import { queryClient } from "../app/queryClient";
 
 const jsonResponse = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -56,11 +56,14 @@ describe("query cache policy", () => {
     expect(differentFilter).not.toEqual(filtersFirst);
   });
 
-  it("keys decision markdown by every request argument", () => {
-    expect(decisionMarkdownQueryOptions("revision-1", "application-1").queryKey).toEqual([
-      "decision-markdown",
-      "revision-1",
+  /* One document per Application, so the Application names it; the provenance export
+     describes one exact document, so its hash is part of the key. */
+  it("keys the document by its Application and the decision export by every request argument", () => {
+    expect(documentQueryOptions("application-1").queryKey).toEqual(["document", "application-1"]);
+    expect(decisionExportQueryOptions("application-1", "hash-1").queryKey).toEqual([
+      "decision-export",
       "application-1",
+      "hash-1",
     ]);
   });
 
@@ -76,8 +79,6 @@ describe("query cache policy", () => {
     const detailOnlyByDesign: Record<string, string> = {
       "features/drafts/hooks/useDraftEditing.ts":
         "autosave, which fires per keystroke burst and changes nothing the board shows",
-      "features/preparation/api/mutations.ts":
-        "the version-conflict re-read, which reports a refusal rather than a change",
     };
 
     /* The whole source tree, read through the bundler rather than through the filesystem:
