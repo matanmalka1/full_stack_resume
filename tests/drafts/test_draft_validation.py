@@ -80,6 +80,7 @@ def test_an_unsafe_or_misplaced_headline_is_blocked(
         text=profile.safe_headlines[0],
     )
     assert restored.headline.claim_type == "headline"
+    restored.content_hash = draft_content_hash(restored)
     markdown, _text = store_draft(project_root, restored)
     report = validate_draft(restored, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     assert report.passed, report.model_dump()
