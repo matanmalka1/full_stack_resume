@@ -13,13 +13,16 @@ export const AnalysisPanel = ({
   classification,
   detail,
   footer,
+  headerContent,
 }: {
   classification: Classification;
   detail: ApplicationDetail;
   footer?: ReactNode;
+  /* Controls about how the analysis was produced, shown under its heading. */
+  headerContent?: ReactNode;
 }) => (
   <section aria-labelledby="analysis-heading" className={surfaceClasses("bg-cv-surface p-5")}>
-    <AnalysisHeader record={detail.latest_analysis ?? null} />
+    <AnalysisHeader record={detail.latest_analysis ?? null}>{headerContent}</AnalysisHeader>
 
     <div className="flex flex-col divide-y divide-cv-border [&>*]:py-5 [&>*:last-child]:pb-0">
       <RoleSummary keywords={classification.keywords} summary={classification.summary} />

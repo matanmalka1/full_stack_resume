@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -99,6 +99,12 @@ const renderPage = () => {
   );
 };
 
+/* The form lives in a dialog opened from the summary under the analysis heading. */
+const openMatchingDialog = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: "הגדרות ההתאמה" }));
+  return screen.findByRole("dialog", { name: "הגדרות ההתאמה" });
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
   sessionStorage.clear();
@@ -133,7 +139,13 @@ describe("voluntary matching configuration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
-    await screen.findByRole("heading", { name: "הגדרות ההתאמה" });
+    const current = await screen.findByLabelText("הגדרות ההתאמה הנוכחיות");
+    expect(within(current).getByText("מכירות")).toBeInTheDocument();
+    expect(within(current).getByText("מנהל לקוחות")).toBeInTheDocument();
+    expect(within(current).getByText("צמיחת לקוחות קיימים")).toBeInTheDocument();
+    expect(within(current).getByText("עברית")).toBeInTheDocument();
+
+    await openMatchingDialog();
     expect(screen.getByLabelText("מסלול")).toHaveValue("sales");
     expect(screen.getByLabelText("פרופיל")).toHaveValue("account-manager");
     expect(screen.getByLabelText("דגש")).toHaveValue("account-growth");
@@ -145,6 +157,7 @@ describe("voluntary matching configuration", () => {
     fireEvent.click(save);
 
     expect(await screen.findByText("הגדרות ההתאמה נשמרו")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "הגדרות ההתאמה" })).not.toBeInTheDocument();
     const applyCall = fetchMock.mock.calls.find((call) => call[0] === APPLY_PATH);
     expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
       application_id: "app-1",
@@ -171,7 +184,7 @@ describe("voluntary matching configuration", () => {
       vi.fn(() => Promise.resolve(jsonResponse(detail({ preparation_state, ...extra })))),
     );
     renderPage();
-    await screen.findByRole("heading", { name: "הגדרות ההתאמה" });
+    await openMatchingDialog();
     /* The consequence is stated once there is a change to have one. */
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
@@ -191,11 +204,26 @@ describe("voluntary matching configuration", () => {
     );
 
     renderPage();
-    await screen.findByRole("heading", { name: "הגדרות ההתאמה" });
+    await openMatchingDialog();
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות ההתאמה" }));
 
     expect(await screen.findByText("הפעולה מתנגשת במצב העדכני. יש לרענן ולנסות שוב.")).toBeInTheDocument();
     expect(screen.getByLabelText("דגש")).toHaveValue("new-business");
+  });
+
+  it("discards unsaved choices when the dialog is cancelled", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(detail())));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+    const dialog = await openMatchingDialog();
+    fireEvent.change(within(dialog).getByLabelText("דגש"), { target: { value: "new-business" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "ביטול" }));
+    expect(screen.queryByRole("dialog", { name: "הגדרות ההתאמה" })).not.toBeInTheDocument();
+
+    await openMatchingDialog();
+    expect(screen.getByLabelText("דגש")).toHaveValue("account-growth");
+    expect(fetchMock.mock.calls.some((call) => String((call as unknown[])[0]) === APPLY_PATH)).toBe(false);
   });
 });

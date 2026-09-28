@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
 
 import { applyAnalysisDecisions, type Classification } from "@/api/analyses";
 import { invalidateApplicationViews } from "@/api/applications";
@@ -13,7 +12,6 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
-import { surfaceClasses } from "@/ui/surface";
 import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../../model/analysisLabels";
 import {
   type MatchingKey,
@@ -46,6 +44,7 @@ export const MatchingConfigurationEditor = ({
   const queryClient = useQueryClient();
   const current = useMemo(() => matchingValuesFrom(classification), [classification]);
   const [values, setValues] = useState<MatchingValues | null>(current);
+  const [open, setOpen] = useState(false);
 
   const canEdit = detail.available_actions.includes("edit_matching_configuration");
   const changes = current === null || values === null ? [] : changedKeys(current, values);
@@ -66,34 +65,11 @@ export const MatchingConfigurationEditor = ({
       );
     },
     onSuccess: async (result) => {
+      setOpen(false);
       onSaved(result);
       await invalidateApplicationViews(queryClient, detail.application.id);
     },
   });
-
-  const navigate = useNavigate();
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!changed) return;
-    const handler = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [changed]);
-
-  useEffect(() => {
-    if (!changed || save.isPending) return;
-    const handler = (event: MouseEvent) => {
-      const anchor = (event.target as Element).closest("a");
-      const href = anchor?.getAttribute("href");
-      if (href?.startsWith("/") && !href.startsWith("//")) {
-        event.preventDefault();
-        setPendingHref(href);
-      }
-    };
-    document.addEventListener("click", handler, true);
-    return () => document.removeEventListener("click", handler, true);
-  }, [changed, save.isPending]);
 
   const update = <K extends MatchingKey>(key: K, value: MatchingValues[K]) => {
     save.reset();
@@ -114,137 +90,123 @@ export const MatchingConfigurationEditor = ({
     return null;
   }
 
+  /* Closing is a deliberate cancel (Escape, the close control, or "ביטול"): the dialog
+     discards unsaved choices rather than carrying them to the next opening. The backdrop
+     click that `Dialog` refuses while fields are edited is the accidental one. */
+  const close = () => {
+    save.reset();
+    setValues(current);
+    setOpen(false);
+  };
+
   return (
-    <section
-      aria-labelledby="matching-configuration-heading"
-      className={surfaceClasses("flex flex-col gap-4 bg-cv-surface p-5")}
-    >
-      <div className="flex items-start gap-2.5">
-        <SlidersHorizontal aria-hidden="true" className="mt-0.5 size-icon-md shrink-0 text-cv-accent" />
-        <div className="min-w-0">
-          <h2 className="text-body font-semibold text-cv-text" id="matching-configuration-heading">
-            הגדרות ההתאמה
-          </h2>
-          <p className="mt-0.5 text-caption text-cv-text-muted">
-            שינוי מסלול, פרופיל או שפה יוצר ניתוח חדש; שינוי דגש בוחר את העובדות מחדש.
-          </p>
-        </div>
-      </div>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-control bg-cv-surface-muted px-3 py-2">
+      <dl aria-label="הגדרות ההתאמה הנוכחיות" className="flex flex-wrap gap-x-4 gap-y-1 text-caption">
+        {matchingKeys.map((key) => (
+          <div className="flex gap-1" key={key}>
+            <dt className="text-cv-text-muted">{fields[key].label}:</dt>
+            <dd className="font-semibold text-cv-text">{fields[key].labels[current[key]] ?? current[key]}</dd>
+          </div>
+        ))}
+      </dl>
 
-      {lockedByOperation ? (
-        <Callout title="ההגדרות נעולות בזמן שינוי ההקשר" tone="warning">
-          יש להמתין לסיום ניתוח המשרה או שינוי בחירת העובדות, ואז לפתוח את ההגדרות המעודכנות.
-        </Callout>
-      ) : null}
-
-      <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
-        {matchingKeys.map((key) => {
-          const field = fields[key];
-          const isChanged = changes.includes(key);
-          const origin = matchingOrigin(key, classification, detail);
-          return (
-            <Field
-              hint={
-                <span className={isChanged ? "font-semibold text-cv-accent" : undefined}>
-                  {isChanged
-                    ? `במקום ${field.labels[current[key]] ?? current[key]} · ${field.cost}`
-                    : origin === "decided"
-                      ? "נקבע על ידך"
-                      : "הוצע בניתוח"}
-                </span>
-              }
-              key={key}
-              label={field.label}
-            >
-              {(control) => (
-                <Select
-                  {...control}
-                  disabled={!canEdit || save.isPending}
-                  onChange={(event) => update(key, event.target.value as MatchingValues[typeof key])}
-                  value={values[key]}
-                >
-                  {optionsFrom(field.labels).map(([option, optionLabel]) => (
-                    <option key={option} value={option}>
-                      {optionLabel}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          );
-        })}
-      </div>
-
-      {changed ? (
-        <Callout
-          title={createsAnalysis(changes) ? "השמירה תריץ ניתוח מחדש" : "השמירה תבחר את העובדות מחדש"}
-          tone={hasContent ? "warning" : "info"}
-        >
-          {matchingConsequence(detail, createsAnalysis(changes))}
-        </Callout>
-      ) : null}
-
-      {save.error === null ? null : (
-        <ErrorCallout
-          error={save.error}
-          fallbackDetail="ההגדרות לא נשמרו. ייתכן שהניתוח או בחירת העובדות התחלפו; הערכים שבחרת נשארו בטופס כדי שאפשר יהיה להשוות ולנסות שוב לאחר רענון."
-          fallbackTitle="הגדרות ההתאמה לא נשמרו"
-        />
-      )}
-
-      <LiveRegion>{save.isPending ? "שומר את הגדרות ההתאמה…" : undefined}</LiveRegion>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          disabled={!canEdit || !changed}
-          onClick={() => save.mutate()}
-          pending={save.isPending}
-          pendingLabel="שומר…"
-        >
-          שמירת הגדרות ההתאמה
-        </Button>
-        {changed ? (
-          <Button
-            disabled={save.isPending}
-            onClick={() => {
-              save.reset();
-              setValues(current);
-            }}
-            variant="ghost"
-          >
-            ביטול השינויים
-          </Button>
-        ) : null}
-        {!canEdit && !lockedByOperation ? (
-          <p className="text-caption text-cv-text-muted">לא ניתן לשנות את ההגדרות בשלב הנוכחי.</p>
-        ) : null}
-      </div>
+      <Button onClick={() => setOpen(true)} variant="secondary">
+        <SlidersHorizontal aria-hidden="true" className="size-icon-sm shrink-0" />
+        הגדרות ההתאמה
+      </Button>
 
       <Dialog
+        description="שינוי מסלול, פרופיל או שפה יוצר ניתוח חדש; שינוי דגש בוחר את העובדות מחדש."
+        dismissible={!save.isPending}
         footer={
           <>
-            <Button onClick={() => setPendingHref(null)} variant="secondary">
-              המשך בעריכה
+            <Button disabled={save.isPending} onClick={close} variant="secondary">
+              ביטול
             </Button>
             <Button
-              onClick={() => {
-                const href = pendingHref;
-                setPendingHref(null);
-                if (href !== null) navigate(href);
-              }}
-              variant="destructive"
+              disabled={!canEdit || !changed}
+              onClick={() => save.mutate()}
+              pending={save.isPending}
+              pendingLabel="שומר…"
             >
-              יציאה בלי שמירה
+              שמירת הגדרות ההתאמה
             </Button>
           </>
         }
-        headingId="matching-configuration-leave-heading"
-        onClose={() => setPendingHref(null)}
-        open={pendingHref !== null}
-        title="לצאת בלי לשמור את הגדרות ההתאמה?"
+        headingId="matching-configuration-heading"
+        onClose={close}
+        open={open}
+        title="הגדרות ההתאמה"
       >
-        <p dir="auto">השינויים במסלול, בפרופיל, בדגש או בשפת קורות החיים לא נשמרו ויאבדו אם תצא/י מהמסך עכשיו.</p>
+        <div className="flex flex-col gap-4">
+          {lockedByOperation ? (
+            <Callout title="ההגדרות נעולות בזמן שינוי ההקשר" tone="warning">
+              יש להמתין לסיום ניתוח המשרה או שינוי בחירת העובדות, ואז לפתוח את ההגדרות המעודכנות.
+            </Callout>
+          ) : null}
+
+          {!canEdit && !lockedByOperation ? (
+            <p className="text-caption text-cv-text-muted">לא ניתן לשנות את ההגדרות בשלב הנוכחי.</p>
+          ) : null}
+
+          <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+            {matchingKeys.map((key) => {
+              const field = fields[key];
+              const isChanged = changes.includes(key);
+              const origin = matchingOrigin(key, classification, detail);
+              return (
+                <Field
+                  hint={
+                    <span className={isChanged ? "font-semibold text-cv-accent" : undefined}>
+                      {isChanged
+                        ? `במקום ${field.labels[current[key]] ?? current[key]} · ${field.cost}`
+                        : origin === "decided"
+                          ? "נקבע על ידך"
+                          : "הוצע בניתוח"}
+                    </span>
+                  }
+                  key={key}
+                  label={field.label}
+                >
+                  {(control) => (
+                    <Select
+                      {...control}
+                      disabled={!canEdit || save.isPending}
+                      onChange={(event) => update(key, event.target.value as MatchingValues[typeof key])}
+                      value={values[key]}
+                    >
+                      {optionsFrom(field.labels).map(([option, optionLabel]) => (
+                        <option key={option} value={option}>
+                          {optionLabel}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+              );
+            })}
+          </div>
+
+          {changed ? (
+            <Callout
+              title={createsAnalysis(changes) ? "השמירה תריץ ניתוח מחדש" : "השמירה תבחר את העובדות מחדש"}
+              tone={hasContent ? "warning" : "info"}
+            >
+              {matchingConsequence(detail, createsAnalysis(changes))}
+            </Callout>
+          ) : null}
+
+          {save.error === null ? null : (
+            <ErrorCallout
+              error={save.error}
+              fallbackDetail="ההגדרות לא נשמרו. ייתכן שהניתוח או בחירת העובדות התחלפו; הערכים שבחרת נשארו בטופס כדי שאפשר יהיה להשוות ולנסות שוב לאחר רענון."
+              fallbackTitle="הגדרות ההתאמה לא נשמרו"
+            />
+          )}
+
+          <LiveRegion>{save.isPending ? "שומר את הגדרות ההתאמה…" : undefined}</LiveRegion>
+        </div>
       </Dialog>
-    </section>
+    </div>
   );
 };

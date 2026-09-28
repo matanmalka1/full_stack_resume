@@ -1,8 +1,10 @@
+import type { ReactNode } from "react";
+
 import type { JobAnalysisRecord } from "@/api/contracts";
 import { LtrText } from "@/ui/LtrText";
 import { formatDateTime } from "@/utils/formatDateTime";
 
-export const AnalysisHeader = ({ record }: { record: JobAnalysisRecord | null }) => (
+export const AnalysisHeader = ({ children, record }: { children?: ReactNode; record: JobAnalysisRecord | null }) => (
   <div className="border-b border-cv-border pb-4">
     <div className="min-w-0">
       <h2 className="text-heading-sm font-bold text-cv-text" id="analysis-heading">
@@ -15,5 +17,6 @@ export const AnalysisHeader = ({ record }: { record: JobAnalysisRecord | null })
         </p>
       )}
     </div>
+    {children}
   </div>
 );

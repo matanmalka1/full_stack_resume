@@ -68,33 +68,32 @@ export const PreparationView = ({
               operationLive={operationLive}
               plan={plan}
             />
-
-            {classification === null ? null : (
-              // A new analysis or document remounts the form so stale choices are never submitted.
-              <MatchingConfigurationEditor
-                classification={classification}
-                detail={detail}
-                key={`${detail.latest_analysis_id ?? "none"}:${detail.document_hash ?? "none"}`}
-                onSaved={setMatchingSaved}
-              />
-            )}
-
-            {matchingSaveInContext && matchingSaved !== null && (
-              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-              <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
-                {matchingSaved.state.recommended_action == null
-                  ? "מצב המועמדות עודכן לפי ההקשר החדש."
-                  : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
-              </Callout>
-            )}
           </div>
 
           {hasMainColumn ? (
             <div className="flex min-w-0 flex-1 flex-col gap-6">
+              {matchingSaveInContext && matchingSaved !== null && (
+                // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+                <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
+                  {matchingSaved.state.recommended_action == null
+                    ? "מצב המועמדות עודכן לפי ההקשר החדש."
+                    : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
+                </Callout>
+              )}
+
               {classification === null ? null : (
                 <AnalysisStage
                   classification={classification}
                   detail={detail}
+                  headerContent={
+                    // A new analysis or document remounts the form so stale choices are never submitted.
+                    <MatchingConfigurationEditor
+                      classification={classification}
+                      detail={detail}
+                      key={`${detail.latest_analysis_id ?? "none"}:${detail.document_hash ?? "none"}`}
+                      onSaved={setMatchingSaved}
+                    />
+                  }
                   onQueued={onQueued}
                   operationLive={operationLive}
                   plan={plan}
