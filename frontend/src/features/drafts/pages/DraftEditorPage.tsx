@@ -26,7 +26,7 @@ import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
-import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
+import { type DraftWorkspaceMode, DraftWorkspace, DraftWorkspaceSwitch } from "../components/DraftWorkspace";
 import { useDraftDocument } from "../api/queries";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
 import { useDraftEditing } from "../hooks/useDraftEditing";
@@ -326,6 +326,7 @@ export const DraftEditorPage = () => {
         {detail === undefined ? null : (
           <>
             <DraftHeaderCard
+              actions={draft === undefined ? undefined : <DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />}
               detail={detail}
               dirty={editing.dirty}
               draft={draft}
@@ -429,7 +430,6 @@ export const DraftEditorPage = () => {
                 </>
               }
               mode={mode}
-              onModeChange={changeMode}
               preview={
                 <>
                   <DraftPreview draft={draft} />
