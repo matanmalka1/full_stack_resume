@@ -20,7 +20,7 @@ describe("PreparationWorkflowSteps", () => {
       <MemoryRouter>
         <PreparationWorkflowSteps
           applicationId="app-1"
-          detail={detail({ preparation_state: "needs_review" })}
+          detail={detail({ preparation_state: "ready_to_draft" })}
           stage="draft"
         />
       </MemoryRouter>,
@@ -48,7 +48,7 @@ describe("PreparationWorkflowSteps", () => {
       <MemoryRouter initialEntries={["/applications/app-1"]}>
         <PreparationWorkflowSteps
           applicationId="app-1"
-          detail={detail({ active_working_draft_id: "draft-1", preparation_state: "draft_in_progress" })}
+          detail={detail({ preparation_state: "draft_in_progress" })}
           stage="analysis"
         />
       </MemoryRouter>,
@@ -65,7 +65,7 @@ describe("PreparationWorkflowSteps", () => {
       <MemoryRouter initialEntries={["/applications/app-1"]}>
         <PreparationWorkflowSteps
           applicationId="app-1"
-          detail={detail({ latest_ready_revision_id: "revision-1", preparation_state: "ready" })}
+          detail={detail({ document_state: "ready", preparation_state: "ready" })}
           stage="analysis"
         />
       </MemoryRouter>,
@@ -73,7 +73,25 @@ describe("PreparationWorkflowSteps", () => {
 
     expect(screen.getByRole("link", { name: "מעבר לשלב מוכן למסירה" })).toHaveAttribute(
       "href",
-      "/revisions/revision-1",
+      "/applications/app-1/ready",
+    );
+  });
+
+  /* The reason for the single-document model: from Ready the draft stays one press away. */
+  it("offers the way back from Ready to the draft", () => {
+    render(
+      <MemoryRouter initialEntries={["/applications/app-1/ready"]}>
+        <PreparationWorkflowSteps
+          applicationId="app-1"
+          detail={detail({ document_state: "ready", preparation_state: "ready" })}
+          stage="ready"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "חזרה לשלב טיוטה ואימות" })).toHaveAttribute(
+      "href",
+      "/applications/app-1/draft",
     );
   });
 

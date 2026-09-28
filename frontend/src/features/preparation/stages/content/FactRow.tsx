@@ -2,7 +2,7 @@ import { Check, Lock, Minus, Plus, Sparkles } from "lucide-react";
 import { useId } from "react";
 
 import type { Requirement } from "@/api/analyses";
-import type { SelectionPlanCandidate } from "@/api/contracts";
+import type { DocumentCandidate } from "@/api/contracts";
 import { cx } from "@/ui/cx";
 import { candidateIncluded, candidateLocked } from "../../model/factGroups";
 import { type FactRanking, type FactSignal, decisionSource, factSignals } from "../../model/selectionManifest";
@@ -22,7 +22,7 @@ const signalClasses: Record<FactSignal["tone"], string> = {
   negative: "bg-cv-surface-muted text-cv-text-muted",
 };
 
-const outcomeSentence = (candidate: SelectionPlanCandidate): string =>
+const outcomeSentence = (candidate: DocumentCandidate): string =>
   candidate.reason == null
     ? selectionOutcomeLabels[candidate.outcome]
     : `${selectionOutcomeLabels[candidate.outcome]} · ${omissionReasonLabels[candidate.reason]}`;
@@ -45,7 +45,7 @@ export const FactRow = ({
 }: {
   aiProposed: boolean;
   busy: boolean;
-  candidate: SelectionPlanCandidate;
+  candidate: DocumentCandidate;
   change: "added" | "removed" | undefined;
   excluded: readonly string[];
   onChoose: (factId: string, choice: FactChoice) => void;

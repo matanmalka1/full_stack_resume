@@ -45,13 +45,11 @@ export const workflowStageLabels: Record<WorkflowStage, string> = {
    `recommended_action`. */
 export const stageForPreparationState: Record<PreparationState, WorkflowStage> = {
   needs_analysis: "analysis",
-  needs_review: "analysis",
-  /* Creating the draft is the action that closes analysis. Until a draft exists there is
-     no draft screen to be on, so marking the next stage here made the rail disagree with
-     the open page's heading. */
+  /* Creating the draft is the action that closes analysis. The document exists from the
+     first analysis on, but until it has content there is no draft to be on, so marking the
+     next stage here made the rail disagree with the open page's heading. */
   ready_to_draft: "analysis",
   draft_in_progress: "draft",
-  ready_for_approval: "draft",
   approved: "draft",
   ready: "ready",
 };
@@ -59,27 +57,30 @@ export const stageForPreparationState: Record<PreparationState, WorkflowStage> =
 export type StageDestinations = Partial<Record<WorkflowStage, string>>;
 
 /* Where each stage's work can be re-read, derived from the projection rather than listed
-   by hand. A stage whose record does not exist yet gets no entry, so the landmark offers
-   a link only where there is something at the other end.
+   by hand. A stage with nothing at the other end yet gets no entry, so the landmark offers
+   a link only where there is something to open.
 
    Job Detail is not among them. It holds the job, not a stage of the CV, so the bar
    offers no way to it - the screens that need a way back to it have one in their own
    breadcrumbs and in the shell header.
 
-   The editor is one destination for one stage: the draft, its validation, and its
-   approval are panels of that single screen. Ready names only a rendered revision.
-   Approval remains in the draft stage until rendering succeeds, and the editor stays
-   reachable because it owns that explicit render action. */
+   The editor is one destination for one stage: the draft, its check, its approval and its
+   render are panels of that single screen, reachable whenever the document has content -
+   from Ready too, because editing a Ready document is allowed and is the way back to it.
+   Ready is offered only while the projection says the document is Ready. */
 export const workflowDestinations = (
   applicationId: string,
   detail: ApplicationDetail | undefined,
 ): StageDestinations => {
-  const readyRevisionId = detail?.latest_ready_revision_id ?? null;
-  const draftAvailable = detail?.active_working_draft_id != null || detail?.preparation_state === "approved";
+  const hasContent =
+    detail !== undefined &&
+    detail.document_id != null &&
+    detail.preparation_state !== "needs_analysis" &&
+    detail.preparation_state !== "ready_to_draft";
 
   return {
     analysis: routePaths.application(applicationId),
-    ...(draftAvailable ? { draft: routePaths.draft(applicationId) } : {}),
-    ...(readyRevisionId == null ? {} : { ready: routePaths.revision(readyRevisionId) }),
+    ...(hasContent ? { draft: routePaths.draft(applicationId) } : {}),
+    ...(detail?.document_state === "ready" ? { ready: routePaths.ready(applicationId) } : {}),
   };
 };

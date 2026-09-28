@@ -1,5 +1,5 @@
 import type { Requirement } from "@/api/analyses";
-import type { SelectionPlanCandidate } from "@/api/contracts";
+import type { DocumentCandidate } from "@/api/contracts";
 import { candidateIncluded, candidateLocked } from "./factGroups";
 
 export interface FactRanking {
@@ -10,35 +10,17 @@ export interface FactRanking {
   requirementRank: number;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+/* The engine's ranking terms per fact. The retired SelectionPlan manifest carried them;
+   the document selection (`DocumentSelectionResponse`) does not yet, so until it does the
+   fact rows state requirement support only - see the lane report's contract gaps. */
+export type FactRankings = ReadonlyMap<string, FactRanking>;
 
-const count = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
-
-// The manifest is an opaque object on the wire, so it is narrowed field by field.
-export const factRankings = (manifest: unknown): Map<string, FactRanking> => {
-  const rankings = new Map<string, FactRanking>();
-  if (!isRecord(manifest) || !Array.isArray(manifest.candidates)) {
-    return rankings;
-  }
-  for (const candidate of manifest.candidates) {
-    if (!isRecord(candidate) || typeof candidate.fact_id !== "string") {
-      continue;
-    }
-    rankings.set(candidate.fact_id, {
-      emphasisScore: count(candidate.emphasis_score),
-      gapSubstitute: candidate.gap_substitute === true,
-      keywordHits: count(candidate.keyword_hits),
-      profileScore: count(candidate.profile_score),
-      requirementRank: count(candidate.requirement_rank),
-    });
-  }
-  return rankings;
-};
+export const noRankings: FactRankings = new Map();
 
 export type DecisionSource = "engine" | "excluded" | "locked" | "pinned";
 
 export const decisionSource = (
-  candidate: SelectionPlanCandidate,
+  candidate: DocumentCandidate,
   pinned: readonly string[],
   excluded: readonly string[],
 ): DecisionSource => {
@@ -106,13 +88,13 @@ export const factSignals = (ranking: FactRanking | undefined, supports: readonly
 };
 
 export interface SelectionChange {
-  candidate: SelectionPlanCandidate;
+  candidate: DocumentCandidate;
   direction: "added" | "removed";
 }
 
 export const selectionChanges = (
   previousIncluded: readonly string[],
-  candidates: readonly SelectionPlanCandidate[],
+  candidates: readonly DocumentCandidate[],
   pinned: readonly string[],
   excluded: readonly string[],
 ): SelectionChange[] => {
@@ -131,7 +113,7 @@ export const selectionChanges = (
 };
 
 export const includedFactIds = (
-  candidates: readonly SelectionPlanCandidate[],
+  candidates: readonly DocumentCandidate[],
   pinned: readonly string[],
   excluded: readonly string[],
 ): string[] =>

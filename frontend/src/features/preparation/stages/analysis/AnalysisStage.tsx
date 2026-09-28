@@ -22,7 +22,7 @@ export const AnalysisStage = ({
     detail={detail}
     footer={
       plan.analyze?.reanalysis === true ? (
-        <ReanalyzeCard detail={detail} onQueued={onQueued} operationLive={operationLive} plan={plan} />
+        <ReanalyzeCard detail={detail} onQueued={onQueued} operationLive={operationLive} />
       ) : undefined
     }
   />

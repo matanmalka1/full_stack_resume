@@ -17,23 +17,23 @@ const item = (overrides: Partial<ApplicationListItem>): ApplicationListItem =>
 describe("preparationResumeDestination", () => {
   it("follows the action recommended by the server projection", () => {
     expect(
-      preparationResumeDestination(item({ preparation_state: "ready_for_approval", recommended_action: "approve" })),
+      preparationResumeDestination(item({ preparation_state: "draft_in_progress", recommended_action: "approve" })),
     ).toBe("/applications/app-1/draft");
   });
 
-  it("reopens an existing draft when no recommendation is present", () => {
+  it("reopens a document with content when no recommendation is present", () => {
     expect(preparationResumeDestination(item({ preparation_state: "draft_in_progress" }))).toBe(
       "/applications/app-1/draft",
     );
   });
 
-  it("opens the exact rendered revision for a completed flow", () => {
+  it("opens the Ready document for a completed flow", () => {
     expect(
-      preparationResumeDestination(item({ preparation_state: "ready", latest_ready_revision_id: "revision / 1" })),
-    ).toBe("/revisions/revision%20%2F%201");
+      preparationResumeDestination(item({ id: "app / 1", preparation_state: "ready", document_state: "ready" })),
+    ).toBe("/applications/app%20%2F%201/ready");
   });
 
-  it("falls back to analysis when no later record exists", () => {
+  it("falls back to analysis while the document has no content", () => {
     expect(preparationResumeDestination(item({ preparation_state: "ready_to_draft" }))).toBe("/applications/app-1");
   });
 });
@@ -46,6 +46,10 @@ describe("preparationResumeDestination", () => {
    registered. The list is therefore read from the one place that defines it - the
    `PREPARATION_ACTIONS` tuple in the application layer - and every name must be classified,
    either by having a destination or by being named in UNBUILT with a reason.
+
+   The tables are written for the single-document vocabulary of state-and-use-cases §9.
+   That tuple is owned by the document-core lane, so in this lane's isolated tree it still
+   carries the revision vocabulary; the guard is meant to run against the merged tree.
 
    UNBUILT is deliberately empty. Add an entry only with a reason, so forgetting to
    register a new action fails here instead of stranding the record that receives it. */
@@ -90,16 +94,20 @@ describe("actionDestination covers the backend action vocabulary", () => {
 
   it("keeps the editor's own commands on the editor", () => {
     for (const action of [
-      "update_working_draft",
-      "apply_selection_change",
+      "edit",
       "confirm_and_use_fact",
       "regenerate_claim",
       "regenerate_section",
-      "validate",
+      "check",
       "approve",
       "render",
     ]) {
       expect(actionDestination(action, "app-1")).toBe("/applications/app-1/draft");
     }
+  });
+
+  it("keeps what is done with a Ready document on the ready step", () => {
+    expect(actionDestination("submit", "app-1")).toBe("/applications/app-1/ready");
+    expect(actionDestination("download_pdf", "app-1")).toBe("/applications/app-1/ready");
   });
 });

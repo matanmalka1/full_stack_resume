@@ -71,7 +71,7 @@ export const AiSelectionProposal = ({
   aiAvailable,
   busy,
   changes,
-  firstPlan,
+  offered,
   onDismiss,
   onPropose,
   pending,
@@ -85,13 +85,15 @@ export const AiSelectionProposal = ({
   aiAvailable: boolean;
   busy: boolean;
   changes: readonly SelectionChange[];
-  firstPlan: boolean;
+  /* The projection offers `propose_selection` now. Whether it does is the server's answer
+     (§9); this panel only says so. */
+  offered: boolean;
   onDismiss: () => void;
   onPropose: () => void;
   pending: boolean;
   rankings: ReadonlyMap<string, FactRanking>;
-  /* The active plan's recorded AI rationale: undefined when the plan did not come from an
-     AI proposal (or predates provenance), null when the proposal gave none. */
+  /* The selection's recorded AI rationale: undefined when the selection did not come from
+     an AI proposal, null when the proposal gave none. */
   rationale: string | null | undefined;
   resultVisible: boolean;
   settingsLoaded: boolean;
@@ -112,7 +114,7 @@ export const AiSelectionProposal = ({
           ה־AI עובר על העובדות מול דרישות המשרה ומציע אילו להוסיף ואילו להוציא. לאחר ההצעה יוצג בדיוק מה השתנה ולמה.
         </p>
       </div>
-      {aiAvailable ? (
+      {aiAvailable && offered ? (
         <Button
           disabled={busy || !settingsLoaded || status.kind === "running"}
           onClick={onPropose}
@@ -136,6 +138,8 @@ export const AiSelectionProposal = ({
 
     {!aiAvailable && settingsLoaded ? (
       <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
+    ) : aiAvailable && !offered ? (
+      <p className="text-support text-cv-text-muted">הצעת AI אינה זמינה למסמך במצבו הנוכחי.</p>
     ) : null}
 
     {rationale === undefined ? null : (
@@ -182,11 +186,9 @@ export const AiSelectionProposal = ({
       <div className="flex flex-col gap-3 rounded-control bg-cv-surface p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-support font-bold text-cv-text">
-            {firstPlan
-              ? "ההצעה יצרה את בחירת העובדות. עובדות שה־AI כלל או החריג מופיעות במסנן ״שינויים מפורשים״."
-              : changes.length === 0
-                ? "ההצעה לא שינתה אילו עובדות נכנסות לקורות החיים."
-                : `ההצעה שינתה ${changes.length === 1 ? "עובדה אחת" : `${changes.length} עובדות`} בקורות החיים:`}
+            {changes.length === 0
+              ? "ההצעה לא שינתה אילו עובדות נכנסות לקורות החיים."
+              : `ההצעה שינתה ${changes.length === 1 ? "עובדה אחת" : `${changes.length} עובדות`} בקורות החיים:`}
           </p>
           <Button onClick={onDismiss} variant="ghost">
             סגירה

@@ -2,7 +2,7 @@ import { ChevronDown, Search } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { Requirement } from "@/api/analyses";
-import type { SelectionPlanCandidate } from "@/api/contracts";
+import type { DocumentCandidate } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { Input } from "@/ui/Input";
@@ -17,7 +17,7 @@ interface FactSelectionListProps {
   /* The loaded plan was activated from an AI proposal, so its saved marks are the AI's. */
   aiProposed: boolean;
   busy: boolean;
-  candidates: readonly SelectionPlanCandidate[];
+  candidates: readonly DocumentCandidate[];
   changes: ReadonlyMap<string, "added" | "removed">;
   excluded: readonly string[];
   filter: FactFilter;

@@ -3,8 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "@/api/operations";
 
+/* What the document selected before the proposal was queued, so the result can be shown
+   as the difference it made. `fromDocumentHash` is the document the proposal was
+   addressed to: activation changes the hash, so a read still carrying it has not caught
+   up with the proposal yet. */
 interface ProposalBaseline {
-  fromPlanId: string | null;
+  fromDocumentHash: string;
   included: string[];
   operationId: string;
 }
@@ -14,7 +18,7 @@ export type ProposalStatus =
   | { kind: "running" }
   | { kind: "unknown" }
   | { kind: "failed"; operation: Operation }
-  | { kind: "done"; resultPlanId: string | null };
+  | { kind: "done" };
 
 // Kept in the query cache so it survives the panel unmounting while the proposal runs.
 const baselineKey = (applicationId: string) => ["selection-proposal-baseline", applicationId] as const;
@@ -43,12 +47,7 @@ export const useSelectionProposal = (applicationId: string) => {
         : operation === undefined || !isTerminalOperation(operation)
           ? { kind: "running" }
           : operation.status === "succeeded"
-            ? {
-                kind: "done",
-                resultPlanId:
-                  operation.outputs.find((output) => output.output_type === "selection_plan" && output.active)
-                    ?.output_id ?? null,
-              }
+            ? { kind: "done" }
             : { kind: "failed", operation };
 
   return {

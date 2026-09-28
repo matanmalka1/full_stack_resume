@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { Requirement } from "@/api/analyses";
-import type { SelectionPlanCandidate } from "@/api/contracts";
-import { decisionSource, factRankings, factSignals, includedFactIds, selectionChanges } from "./selectionManifest";
+import type { DocumentCandidate } from "@/api/contracts";
+import { decisionSource, factSignals, includedFactIds, selectionChanges } from "./selectionManifest";
 
-const candidate = (overrides: Partial<SelectionPlanCandidate> = {}): SelectionPlanCandidate => ({
+const candidate = (overrides: Partial<DocumentCandidate> = {}): DocumentCandidate => ({
   fact_id: "fact.a",
   outcome: "selected",
   reason: null,
@@ -26,37 +26,7 @@ const requirement = (overrides: Partial<Requirement> = {}): Requirement => ({
   ...overrides,
 });
 
-describe("the plan manifest the fact selection explains itself from", () => {
-  it("reads each candidate's ranking terms and ignores what it cannot read", () => {
-    const rankings = factRankings({
-      candidates: [
-        {
-          fact_id: "fact.a",
-          requirement_rank: 2,
-          profile_score: 3,
-          emphasis_score: 1,
-          keyword_hits: 2,
-          gap_substitute: false,
-        },
-        { fact_id: "fact.b", keyword_hits: "many" },
-        { requirement_rank: 1 },
-        "not a candidate",
-      ],
-    });
-
-    expect(rankings.get("fact.a")).toEqual({
-      emphasisScore: 1,
-      gapSubstitute: false,
-      keywordHits: 2,
-      profileScore: 3,
-      requirementRank: 2,
-    });
-    expect(rankings.get("fact.b")).toMatchObject({ keywordHits: 0, requirementRank: 0 });
-    expect(rankings.size).toBe(2);
-    expect(factRankings(null).size).toBe(0);
-    expect(factRankings({ candidates: "none" }).size).toBe(0);
-  });
-
+describe("the selection the fact list explains itself from", () => {
   it("states each term of the ranking as a signal, strongest first", () => {
     const ranking = { emphasisScore: 1, gapSubstitute: false, keywordHits: 2, profileScore: 3, requirementRank: 2 };
 
@@ -77,7 +47,7 @@ describe("the plan manifest the fact selection explains itself from", () => {
     expect(decisionSource(candidate({ user_selectable: false }), [], ["fact.a"])).toBe("locked");
   });
 
-  it("reports what a new plan added and removed against the facts included before it", () => {
+  it("reports what a new selection added and removed against the facts included before it", () => {
     const candidates = [
       candidate({ fact_id: "kept" }),
       candidate({ fact_id: "added", outcome: "pinned" }),

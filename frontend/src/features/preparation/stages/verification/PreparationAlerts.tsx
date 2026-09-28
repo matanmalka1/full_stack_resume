@@ -14,8 +14,7 @@ import {
   warningTitle,
 } from "../../model/preparationLabels";
 
-/* Review reasons and stale reasons carry the same shape, and both are reported as a
-   short title plus the control that resolves them. The server's complete message stays
+/* A review reason is reported as a short title plus the control that resolves it. The server's complete message stays
    available behind a disclosure: it is useful evidence when a reader needs it, but does
    not turn several simultaneous reasons into the wall of text this screen used to open
    with. The internal code remains translated rather than exposed as UI vocabulary. */
@@ -59,8 +58,9 @@ const ReasonCallout = ({
   );
 };
 
-/* One alert backdrop with a fixed severity/order: failed automatic start, review
-   blockers, stale sources, general warnings, then the informational newer-draft note.
+/* One alert backdrop with a fixed severity/order: review blockers, warnings, then the
+   blocked actions no callout above already explains. There is no staleness to report:
+   an outdated approval or check is a state of the document (§6), not a reason here.
    Keeping this region visually quiet lets the action surface beside it remain the clear
    place to continue the workflow. */
 export const PreparationAlerts = ({
@@ -76,7 +76,7 @@ export const PreparationAlerts = ({
 }) => {
   const currentPath = screenPath(screen, detail.application.id);
   const reviewReasons = showReviewReasons ? detail.review_reasons : [];
-  const statedReasonCodes = new Set([...detail.review_reasons, ...detail.stale_reasons].map((reason) => reason.code));
+  const statedReasonCodes = new Set(detail.review_reasons.map((reason) => reason.code));
   /* `blocked_actions` contains the normal future workflow as well as exceptional
      blockers. Only translated exceptions are useful here, and a reason already stated
      by its own callout is not repeated once for every action it blocks. The translation
@@ -92,12 +92,7 @@ export const PreparationAlerts = ({
     });
     return reasons.length === 0 ? [] : [{ action: blocked.action, reasons: [...new Set(reasons)] }];
   });
-  const hasAlerts =
-    reviewReasons.length > 0 ||
-    detail.stale_reasons.length > 0 ||
-    detail.warnings.length > 0 ||
-    exceptionalBlockedActions.length > 0 ||
-    detail.newer_draft_in_progress;
+  const hasAlerts = reviewReasons.length > 0 || detail.warnings.length > 0 || exceptionalBlockedActions.length > 0;
 
   if (!hasAlerts) {
     return null;
@@ -116,17 +111,6 @@ export const PreparationAlerts = ({
         />
       ))}
 
-      {detail.stale_reasons.map((reason) => (
-        <ReasonCallout
-          applicationId={detail.application.id}
-          currentPath={currentPath}
-          fallbackTitle="הטיוטה אינה מעודכנת מול המקורות שלה"
-          key={reason.code}
-          reason={reason}
-          tone="warning"
-        />
-      ))}
-
       {/* A code this build knows says its own sentence, in the open, exactly as the ready
           screen already says it - `warningDetail` is the table both read from, and this
           was the one call site that skipped it and printed the server's raw string
@@ -136,9 +120,27 @@ export const PreparationAlerts = ({
           evidence stays reachable without several of them becoming a wall of text. */}
       {detail.warnings.map((warning) => {
         const localized = warningDetail(warning.code, "");
+        /* The older-analysis warning has an explicit answer, `build_from_analysis`, which
+           lives beside the analysis. Offered from another screen only while the projection
+           offers the action, and never as a link to the screen the reader is on. */
+        const rebuildHref =
+          warning.code === "DOCUMENT_ON_OLDER_ANALYSIS" && detail.available_actions.includes("build_from_analysis")
+            ? actionDestination("build_from_analysis", detail.application.id)
+            : null;
 
         return (
-          <Callout key={warning.code} title={warningTitle(warning.code)} tone="warning">
+          <Callout
+            action={
+              rebuildHref === null || rebuildHref === currentPath ? undefined : (
+                <Link className={buttonClasses("secondary")} to={rebuildHref}>
+                  {actionLabel("build_from_analysis")}
+                </Link>
+              )
+            }
+            key={warning.code}
+            title={warningTitle(warning.code)}
+            tone="warning"
+          >
             {localized === "" ? (
               <Disclosure summary="פרטי האזהרה">
                 <p dir="auto">{warning.message}</p>
@@ -159,12 +161,6 @@ export const PreparationAlerts = ({
           </ul>
         </Callout>
       ))}
-
-      {detail.newer_draft_in_progress ? (
-        <Callout title="קיימת טיוטה חדשה יותר מהגרסה שאושרה" tone="warning">
-          הגרסה שאושרה נשמרת בדיוק כפי שהיא. הטיוטה החדשה היא עבודה נפרדת ואינה משנה אותה.
-        </Callout>
-      ) : null}
     </Card>
   );
 };

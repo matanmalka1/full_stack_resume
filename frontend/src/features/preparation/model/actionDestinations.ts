@@ -19,48 +19,51 @@ const destinations: Record<string, (applicationId: string) => string> = {
   /* `MatchingConfigurationEditor` is a control inside `PreparationView`, which this screen
      renders, so the action resolves to the screen already holding it. */
   edit_matching_configuration: routePaths.application,
-  create_selection_plan: routePaths.application,
+  /* Re-pinning the document to a newer analysis, and the fact selection screen with its AI
+     proposal, sit beside the analysis they are decided against. */
+  build_from_analysis: routePaths.application,
+  update_selection: routePaths.application,
+  propose_selection: routePaths.application,
   create_draft: routePaths.application,
-  archive_working_draft: routePaths.application,
-  replace_working_draft: routePaths.application,
   /* The Draft Editor is where the patch is issued, so the commands it carries all lead
-     to it. `apply_selection_change`, the regeneration commands and the fact resolution
-     are controls on that screen rather than screens of their own: they act on the claim
-     the user is looking at, and a separate destination would ask them to find it twice.
-     `confirm_and_use_fact` in particular is the terminal state of an ordinary editing
-     mistake - a claim that lost its fact link - and its control is `ClaimFactResolution`,
-     which is already on that screen beside the claim it repairs. */
-  update_working_draft: routePaths.draft,
-  apply_selection_change: routePaths.draft,
+     to it. The regeneration commands and the fact resolution are controls on that screen
+     rather than screens of their own: they act on the claim the user is looking at, and a
+     separate destination would ask them to find it twice. `confirm_and_use_fact` in
+     particular is the terminal state of an ordinary editing mistake - a claim that lost its
+     fact link - and its control is `ClaimFactResolution`, which is already on that screen
+     beside the claim it repairs. */
+  edit: routePaths.draft,
   confirm_and_use_fact: routePaths.draft,
   regenerate_claim: routePaths.draft,
   regenerate_section: routePaths.draft,
-  /* Validation and approval are states of the draft editor, not screens beside it.
-     Both act on the exact draft the editor is holding, so they resolve to that one
-     destination: the panel that reports the result and the dialog that approves it are
-     already there when the user arrives. */
-  validate: routePaths.draft,
+  /* Checking, approval and render are states of the draft editor, not screens beside it.
+     All three act on the document the editor is holding, so they resolve to that one
+     destination: the panel that reports the check, the dialog that approves and the panel
+     that renders are already there when the user arrives. */
+  check: routePaths.draft,
   approve: routePaths.draft,
-  /* After approval the editor recovers the exact latest approved revision from the
-     projection and renders its explicit render panel, including after a reload. */
   render: routePaths.draft,
+  /* What is done with a Ready document - taking its file and recording that it was sent -
+     is the ready step's. */
+  submit: routePaths.ready,
+  download_pdf: routePaths.ready,
 };
 
 export const actionDestination = (action: string, applicationId: string): string | null =>
   destinations[action]?.(applicationId) ?? null;
 
 /* Re-enter the guided flow at the work the server currently recommends. The fallback is
-   deliberately about records that already exist, not about deciding what work is allowed:
-   a draft opens in its editor and a rendered revision opens as the finished document.
-   Availability and recommendation remain projection-owned. */
+   deliberately about what the document already is, not about deciding what work is
+   allowed: a document with content opens in its editor and a Ready one opens as the
+   finished document. Availability and recommendation remain projection-owned. */
 type ResumeProjection = Pick<
   ApplicationListItem,
-  "id" | "latest_ready_revision_id" | "preparation_state" | "recommended_action" | "active_operation"
+  "id" | "document_state" | "preparation_state" | "recommended_action" | "active_operation"
 >;
 
 const operationActions: Record<OperationType, string> = {
   analyze_job: "analyze",
-  propose_selection: "create_selection_plan",
+  propose_selection: "propose_selection",
   create_draft: "create_draft",
   regenerate_section: "regenerate_section",
   regenerate_claim: "regenerate_claim",
@@ -68,8 +71,8 @@ const operationActions: Record<OperationType, string> = {
 };
 
 const resumeDestination = (application: ResumeProjection): string => {
-  /* Running work owns the entry point even when a compatible Ready milestone exists.
-     This chooses its host screen, without creating work or changing permissions. */
+  /* Running work owns the entry point even when the document is Ready. This chooses its
+     host screen, without creating work or changing permissions. */
   const operation = application.active_operation;
   if (operation != null && operation.application_id === application.id) {
     const destination = actionDestination(operationActions[operation.operation_type], application.id);
@@ -82,15 +85,11 @@ const resumeDestination = (application: ResumeProjection): string => {
     return recommended;
   }
 
-  if (application.preparation_state === "ready" && application.latest_ready_revision_id != null) {
-    return routePaths.revision(application.latest_ready_revision_id);
+  if (application.document_state === "ready") {
+    return routePaths.ready(application.id);
   }
 
-  if (
-    application.preparation_state === "draft_in_progress" ||
-    application.preparation_state === "ready_for_approval" ||
-    application.preparation_state === "approved"
-  ) {
+  if (application.preparation_state === "draft_in_progress" || application.preparation_state === "approved") {
     return routePaths.draft(application.id);
   }
 
@@ -107,7 +106,7 @@ export const preparationResumeDestinationFromDetail = (applicationId: string, de
   resumeDestination({
     id: applicationId,
     active_operation: detail.active_operation,
-    latest_ready_revision_id: detail.latest_ready_revision_id,
+    document_state: detail.document_state,
     preparation_state: detail.preparation_state,
     recommended_action: detail.recommended_action,
   });
@@ -116,7 +115,11 @@ export const preparationResumeDestinationFromDetail = (applicationId: string, de
    one of them, and whether it offers a way to the control that resolves a reason depends
    on whether that control is already where the reader is standing - a question only the
    screen can answer, so it says which one it is rather than each caller re-deriving it. */
-export type PreparationScreen = "preparation" | "draft";
+export type PreparationScreen = "preparation" | "draft" | "ready";
 
 export const screenPath = (screen: PreparationScreen, applicationId: string): string =>
-  screen === "draft" ? routePaths.draft(applicationId) : routePaths.application(applicationId);
+  screen === "draft"
+    ? routePaths.draft(applicationId)
+    : screen === "ready"
+      ? routePaths.ready(applicationId)
+      : routePaths.application(applicationId);
