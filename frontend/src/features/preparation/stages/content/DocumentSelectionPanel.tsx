@@ -14,7 +14,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { surfaceClasses } from "@/ui/surface";
 import { type FactFilter, factTotals } from "../../model/factGroups";
 import { requirementsByFact } from "../../model/requirementGroups";
-import { includedFactIds, noRankings, selectionChanges } from "../../model/selectionManifest";
+import { includedFactIds, selectionChanges } from "../../model/selectionManifest";
 import { AiSelectionProposal } from "./AiSelectionProposal";
 import type { FactChoice } from "./FactRow";
 import { FactSelectionList } from "./FactSelectionList";
@@ -199,7 +199,6 @@ export const DocumentSelectionPanel = ({
         onDismiss={proposal.dismiss}
         onPropose={() => ai.mutate()}
         pending={ai.isPending}
-        rankings={noRankings}
         rationale={aiProposed ? (selection.proposal_rationale ?? null) : undefined}
         resultVisible={proposalResultVisible}
         settingsLoaded={settings !== undefined}
@@ -218,7 +217,6 @@ export const DocumentSelectionPanel = ({
         onFilterChange={setFilter}
         onIncludeAll={includeAll}
         pinned={pinned}
-        rankings={noRankings}
         savedExcluded={baseline.excluded}
         savedPinned={baseline.pinned}
         supportsByFact={supportsByFact}

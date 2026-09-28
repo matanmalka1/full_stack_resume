@@ -16,8 +16,8 @@ interface DraftFactPanelProps {
 
 /* A.4 frame 3's deterministic fact include control.
 
-   Only facts the SelectionPlan actually ranked appear: `outcome` is null for anything no
-   plan considered, and an include for such a fact would have nothing to act on. That is
+   Only facts the document's selection actually ranked appear: `outcome` is null for
+   anything the selection never considered, and an include for such a fact would have nothing to act on. That is
    also what keeps this from becoming a Knowledge manager - the whole canonical pool is
    not on offer here, this draft's own accounting is. */
 export const DraftFactPanel = ({ busy, facts, onInclude }: DraftFactPanelProps) => {

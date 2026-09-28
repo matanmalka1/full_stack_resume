@@ -5,9 +5,9 @@ import type { Tone } from "@/ui/tone";
    build rather than reaching a screen as an untranslated value. This is the same reason
    `preparation_state` and `is_terminal` were typed at the boundary in the first place.
 
-   Selection outcomes and omission reasons are the SelectionPlan's vocabulary rather than
-   the draft's, and both the preparation screen and this editor say them, so they live
-   with the plan in `@/features/preparation`. */
+   Selection outcomes and omission reasons are the selection's vocabulary rather than the
+   content's, and both the preparation screen and this editor say them, so they live
+   with the selection in `@/features/preparation`. */
 
 export const claimTypeLabels: Record<ClaimType, string> = {
   canonical: "מבוסס עובדה",

@@ -10,7 +10,6 @@ import { LtrText } from "@/ui/LtrText";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { cx } from "@/ui/cx";
 import { type FactFilter, candidateIncluded, factGroups, includableFactIds } from "../../model/factGroups";
-import type { FactRanking } from "../../model/selectionManifest";
 import { type FactChoice, FactRow } from "./FactRow";
 
 interface FactSelectionListProps {
@@ -25,7 +24,6 @@ interface FactSelectionListProps {
   onFilterChange: (filter: FactFilter) => void;
   onIncludeAll: (factIds: readonly string[]) => void;
   pinned: readonly string[];
-  rankings: ReadonlyMap<string, FactRanking>;
   savedExcluded: readonly string[];
   savedPinned: readonly string[];
   supportsByFact: ReadonlyMap<string, readonly Requirement[]>;
@@ -42,7 +40,6 @@ export const FactSelectionList = ({
   onFilterChange,
   onIncludeAll,
   pinned,
-  rankings,
   savedExcluded,
   savedPinned,
   supportsByFact,
@@ -159,7 +156,6 @@ export const FactSelectionList = ({
                       key={candidate.fact_id}
                       onChoose={onChoose}
                       pinned={pinned}
-                      ranking={rankings.get(candidate.fact_id)}
                       savedExcluded={savedExcluded}
                       savedPinned={savedPinned}
                       supports={supportsByFact.get(candidate.fact_id) ?? []}
