@@ -12,7 +12,7 @@ from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.document import CVDocument, DocumentSubmission
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.selection import SelectionManifest
-from ...domain.document import ContentCheck, DocumentState
+from ...domain.document import ContentCheck, DocumentState, current_approved_at
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
 from ...domain.selection import ROLE_BLOCK_TAG, STRUCTURAL_STYLES
@@ -194,7 +194,7 @@ def document_view(
         document_state=document_state,
         content_check=content_check,
         content_report=document.content_report,
-        approved_at=document.approved_at,
+        approved_at=current_approved_at(document, document_state),
         last_render_error=document.last_render_error,
         created_at=document.created_at,
         updated_at=document.updated_at,

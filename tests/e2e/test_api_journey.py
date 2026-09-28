@@ -223,6 +223,7 @@ def test_the_full_api_journey_reaches_ready_offline(
 
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "approved"
+    assert detail["approved_at"] == approved.json()["approved_at"]
     # Nothing is rendered yet, so there is nothing to hand a recruiter.
     assert _get(ai_api_worker, f"{document_path}/pdf").status_code == 412
 
@@ -263,6 +264,9 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert back.status_code == 200, back.text
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "draft_in_progress"
+    # The stored approval no longer approves anything, so its time is not reported.
+    assert detail["approved_at"] is None
+    assert _get(ai_api_worker, document_path).json()["approved_at"] is None
     assert _get(ai_api_worker, f"{document_path}/pdf").status_code == 412
 
 

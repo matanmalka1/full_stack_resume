@@ -262,6 +262,11 @@ one read. The projection is derived from that capture. `recommended_action` is
 deterministic and nullable. Action identifiers are stable application commands, not UI
 labels.
 
+`approved_at` is the time of the approval in force: it is reported only while
+`document_state` is `approved` or `ready`, and is null otherwise, including after an edit
+or a fact change has left a stored approval outdated. `last_render_error` is likewise
+reported only while the document still carries the hash the render failed against.
+
 Action availability:
 
 | Action | Available when |
@@ -993,7 +998,8 @@ Query contracts:
 - JobSnapshot and analysis history
 - the CVDocument: analysis ID, selection with candidate accounting, content,
   `built_with`, `document_hash` (carried as the ETag), the content report with its
-  `content_check`, `document_state`, `approved_at`, and `last_render_error`
+  `content_check`, `document_state`, `approved_at` (reported as in the §9 projection), and
+  `last_render_error`
 - the document preview: `preview` (HTML) and `preview.pdf`, rendered on request from the
   current content through the same composition as `render_document`, marked as draft,
   stored nowhere, and writing no document field, Artifact or Operation. They need no

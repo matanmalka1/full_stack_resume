@@ -23,6 +23,7 @@ from cv_engine.domain.document import (
     PreparationState,
     basis,
     content_check,
+    current_approved_at,
     document_hash,
     document_state,
     preparation_state,
@@ -212,6 +213,9 @@ def test_states_are_derived_from_stamps_against_the_current_basis(stamps, expect
     )
 
     assert derived == expected
+    # An approval's time is reported only while that approval is in force.
+    in_force = expected[0] in {DocumentState.APPROVED, DocumentState.READY}
+    assert current_approved_at(document, derived[0]) == ("t" if in_force else None)
 
 
 def test_documents_without_content_or_without_existence_project_their_own_states() -> None:

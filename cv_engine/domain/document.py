@@ -105,6 +105,17 @@ def document_state(document: CVDocument | None, current_basis: str | None) -> Do
     return DocumentState.APPROVED
 
 
+def current_approved_at(document: CVDocument | None, state: DocumentState) -> str | None:
+    """When the approval in force was given; null when no approval is in force (§9).
+
+    `approved_at` stays stored after the basis moves on, but an outdated approval
+    approves nothing, so a read does not report its time as if it did.
+    """
+    if document is None or state not in {DocumentState.APPROVED, DocumentState.READY}:
+        return None
+    return document.approved_at
+
+
 def content_check(document: CVDocument | None, current_basis: str | None) -> ContentCheck:
     if document is None or document.content is None or document.checked_basis is None:
         return ContentCheck.NONE
