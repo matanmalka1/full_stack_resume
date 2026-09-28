@@ -107,8 +107,9 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
   return (
     <dialog
       // `open:flex` only: an unconditional `flex` would override the closed dialog's `display: none`.
+      // Centred by `inset-x-0 mx-auto`: with a fixed width in RTL, `left` loses to the UA's `right: 0`.
       aria-label="מעבר מהיר למועמדות"
-      className="fixed left-1/2 top-24 m-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
+      className="fixed inset-x-0 top-24 bottom-auto mx-auto my-0 hidden open:flex max-h-[75vh] w-[calc(100%-2rem)] max-w-2xl flex-col rounded-surface border border-cv-border bg-cv-surface p-0 text-cv-text shadow-floating backdrop:bg-cv-text/40 backdrop:backdrop-blur-sm"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
