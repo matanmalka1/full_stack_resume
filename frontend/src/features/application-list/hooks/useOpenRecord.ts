@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import type { KeyboardEvent, MouseEvent } from "react";
 
 /* A board record - a card or a stage card - opens as a whole but yields to
    real controls and to text selection. What opening does is the caller's: the board
@@ -29,5 +29,14 @@ export const useOpenRecord = (onOpen: () => void) => {
     onOpen();
   };
 
-  return { onClick };
+  /* Only for the record itself having focus: Enter or Space on a control inside it is
+     that control's. */
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
+      event.preventDefault();
+      onOpen();
+    }
+  };
+
+  return { onClick, onKeyDown };
 };

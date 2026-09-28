@@ -380,7 +380,7 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("heading", { name: "מסך המועמדות" })).toBeInTheDocument();
   });
 
-  it("opens a card's details from its menu and hands on to the recruitment dialog", async () => {
+  it("opens a card's details from its menu or the keyboard and hands on to the recruitment dialog", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: unknown) =>
@@ -392,6 +392,17 @@ describe("ApplicationListPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "פעולות נוספות עבור Acme" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "פרטי משרה" }));
+    expect(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "סגירה" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "פרטי משרה: Acme" })).not.toBeInTheDocument());
+
+    /* The card itself is focusable, and Enter on it opens what a click on it opens.
+       Enter on a control inside it stays that control's. */
+    const card = screen.getByRole("article", { name: "Backend Engineer אצל Acme" });
+    expect(card).toHaveAttribute("tabindex", "0");
+    fireEvent.keyDown(screen.getByRole("link", { name: "פתיחת המועמדות של Acme" }), { key: "Enter" });
+    expect(screen.queryByRole("dialog", { name: "פרטי משרה: Acme" })).not.toBeInTheDocument();
+    fireEvent.keyDown(card, { key: "Enter" });
 
     const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
     fireEvent.click(within(details).getByRole("button", { name: "עדכון סטטוס גיוס" }));
@@ -463,7 +474,13 @@ describe("ApplicationListPage", () => {
       item({ next_action: "Follow up", next_action_date: "2020-01-01" }),
       item({ id: "app-2", company: "Binat", notes: "Referral from Dana", recruitment_status: "interview" }),
       item({ id: "app-3", company: "ClosedCo", recruitment_status: "rejected" }),
-      item({ id: "app-4", company: "Delta", review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")] }),
+      item({
+        id: "app-4",
+        company: "Delta",
+        fit_level: "high",
+        fit_score: 0.82,
+        review_reasons: [reason("PENDING_FACT_REQUIRES_RESOLUTION")],
+      }),
     ]);
 
     /* A view remembered from before the table was removed is not a view any more; the
@@ -485,6 +502,19 @@ describe("ApplicationListPage", () => {
     expect(screen.getAllByText("פעולה מומלצת הבאה")).toHaveLength(4);
     expect(screen.getAllByRole("button", { name: "ניהול גיוס" })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "פעולות נוספות עבור Acme" })).toBeInTheDocument();
+    /* The leading edge says what asks for the reader before a word is read: a blocking
+       reason over an overdue reminder, nothing for a card that is fine, and nothing for
+       a closed one - which sits flat instead, as history. */
+    const card = (company: string) => screen.getByRole("article", { name: `Backend Engineer אצל ${company}` });
+    expect(card("Delta")).toHaveAttribute("data-urgency", "blocker");
+    expect(card("Acme")).toHaveAttribute("data-urgency", "warning");
+    expect(card("Binat")).not.toHaveAttribute("data-urgency");
+    expect(card("ClosedCo")).not.toHaveAttribute("data-urgency");
+    expect(card("ClosedCo")).toHaveAttribute("data-closed", "true");
+    expect(card("Acme")).not.toHaveAttribute("data-closed");
+    /* Fit sits at the head of the card, and only where there is one to state. */
+    expect(within(card("Delta")).getByText("82%")).toBeInTheDocument();
+    expect(within(card("Acme")).queryByText("—")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
     const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
