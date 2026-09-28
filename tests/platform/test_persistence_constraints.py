@@ -64,15 +64,12 @@ MUTABLE_TABLES = frozenset(
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
         "operation_resource_leases",  # ephemeral claim/heartbeat coordination
         "operation_outputs",  # permits exactly one inactive-to-active transition
-        "idempotency_receipts",  # permits exactly one pending-to-completed transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
         "payload_write_leases",  # pending/committed/reclaiming coordination state
     }
 )
-DELETE_ONLY_TABLES = frozenset(
-    {"operations", "operation_outputs", "idempotency_receipts", "knowledge_mutation_journal"}
-)
+DELETE_ONLY_TABLES = frozenset({"operations", "operation_outputs", "knowledge_mutation_journal"})
 
 IMMUTABLE_MESSAGE = "immutable record"
 

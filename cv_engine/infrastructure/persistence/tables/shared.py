@@ -341,27 +341,6 @@ Index(
     operation_outputs.c.id,
 )
 
-idempotency_receipts = Table(
-    "idempotency_receipts",
-    metadata,
-    Column("id", UUID(as_uuid=False), primary_key=True),
-    Column("command_type", Text, nullable=False),
-    Column("idempotency_key", Text, nullable=False),
-    Column("payload_json", JSONB, nullable=False),
-    Column("payload_hash", Text, nullable=False),
-    Column("reserved_entity_id", UUID(as_uuid=False), nullable=False),
-    Column("status", Text, nullable=False),
-    Column("result_json", JSONB),
-    Column("created_at", IsoTimestamp(), nullable=False),
-    Column("completed_at", IsoTimestamp()),
-    CheckConstraint("length(trim(idempotency_key)) > 0", name="idempotency_key_nonempty"),
-    CheckConstraint("length(payload_hash) = 64", name="payload_hash_length"),
-    CheckConstraint("status IN ('pending', 'completed')", name="status"),
-    CheckConstraint("(status = 'completed') = (result_json IS NOT NULL)", name="result"),
-    CheckConstraint("(status = 'completed') = (completed_at IS NOT NULL)", name="completed_at"),
-    UniqueConstraint("command_type", "idempotency_key"),
-)
-
 app_settings = Table(
     "app_settings",
     metadata,

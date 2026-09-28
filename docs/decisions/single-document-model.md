@@ -125,7 +125,7 @@ as outdated.
 | `payload_write_leases` | keep for intake, provider-evidence and Submission payloads (state-and-use-cases.md §18); approval, history and render stop using it | yes | no |
 | `operation_outputs` | keep for provider evidence; render no longer registers artifact outputs | yes | no |
 | `operation_resource_leases` | keep unchanged (`application_mutation`, `render_browser`, `ai`) | yes | no |
-| `idempotency_receipts` | table kept; approval stops using it (decision 4) and operation replacement is gone, so nothing writes it and its repository code is deleted. Dropping the table is a later schema change | yes | no |
+| `idempotency_receipts` | delete (migration `0003`): approval stops using it (decision 4) and operation replacement is gone, so nothing wrote it | — | — |
 | `operations` | keep; operation types follow decision 8 | yes | no |
 | `audit_records` | keep; entity types move from revision/draft to document | no | yes (history) |
 | `submissions` | restructure per decision 7 (drop `approved_revision_id`, `artifact_version_id`) | no | yes |
