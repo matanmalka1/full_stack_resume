@@ -3,6 +3,13 @@
 The runner owns the lifecycle; these own what a given Operation type means.
 Adding an Operation type is a change to this module and to the composition
 root's handler table, and to nothing else.
+
+Every Operation that mutates the CV document froze `expected_document_hash` when it
+was submitted. Its source check and its activation compare that hash against the
+document under the runner's Application lock; a mismatch discards the result and
+fails the Operation with `SOURCE_CHANGED` (state-and-use-cases.md §11).
+Draft-producing Operations do not recheck input freshness: their output is
+unapproved, and check/approve/render validate against the current context.
 """
 
 from __future__ import annotations
@@ -12,11 +19,10 @@ from dataclasses import fields
 from typing import Any
 
 from ....domain.contracts.validation import ValidationReport
-from ...chain import draft_source_mismatch
 from ...commands import (
     AnalyzeCommand,
     DraftCommand,
-    ProposeSelectionPlanCommand,
+    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
@@ -28,9 +34,11 @@ from ...errors import (
     KnowledgeRejected,
     LineageBroken,
     MissingFactRendering,
+    PreconditionFailed,
     ProposalRejected,
     StateConflict,
     UnknownRecord,
+    ValidationBlocked,
 )
 from ...operation_runner import OperationExecutionError, PreparedOperation, SourceChanged
 from ...operations import (
@@ -43,8 +51,7 @@ from ...operations import (
     RenderCheckReason,
 )
 from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
-from ...ports.drafts import DraftOperationSourceReader
-from ...ports.rendering import RenderContextReader
+from ...ports.documents import DocumentStore, RenderedFiles
 from ...ports.transactions import ReadTransaction, WriteTransaction
 from ..analysis.activation import AnalysisActivation
 from ..analysis.preparation import PreparedAnalysis
@@ -54,12 +61,27 @@ from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
 from ..proposals import ProviderEvidence
 from ..rendering import ExecutedRender, RenderingService
-from .common import (
-    _model_hash,
-    analysis_knowledge_context_hash,
-    document_knowledge_context_hash,
-)
+from .common import analysis_knowledge_context_hash
 from .failures import failure_code_for, failure_reason_for, safe_failure_detail_for
+
+
+def _document_output(document_id: str) -> tuple[OperationOutputReference, ...]:
+    return (
+        OperationOutputReference(output_type="cv_document", output_id=document_id, active=True),
+    )
+
+
+def verify_document_hash(
+    tx: ReadTransaction, documents: DocumentStore, operation: PersistedOperation
+) -> str:
+    """The frozen `expected_document_hash` still describes the document, or SOURCE_CHANGED."""
+    expected = operation.sources.expected_document_hash
+    if expected is None:
+        raise SourceChanged("The Operation has no frozen document identity.")
+    document = documents.document(tx, operation.application_id)
+    if document is None or document.document_hash != expected:
+        raise SourceChanged("The CV document changed before the Operation activated.")
+    return document.id
 
 
 def _safe_render_failure_detail(report: ValidationReport) -> str:
@@ -128,6 +150,10 @@ class AITaskHandler:
 
     def verify_external_sources(self, operation: PersistedOperation) -> None:
         del operation
+
+    def discard(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
+        """Nothing to clean up: provider evidence is immutable and stays inactive."""
+        del operation, prepared
 
     @classmethod
     def evidence_outputs(cls, prepared_value: Any) -> tuple[OperationOutputReference, ...]:
@@ -258,6 +284,8 @@ class AnalysisTaskHandler(RegisteredEvidenceTaskHandler):
 
 
 class AnalysisOperationHandler(AnalysisTaskHandler):
+    """`analyze_job`, bound to its input JobSnapshot rather than to a document."""
+
     task = "propose_analysis"
 
     def __init__(
@@ -319,148 +347,22 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
     def activate(self, tx: WriteTransaction, operation, prepared):
         if not isinstance(prepared.value, PreparedAnalysis):
             raise TypeError("analysis handler received an invalid prepared value")
-        result = self.activation.activate(tx, self._command(operation), prepared.value)
-        return (
+        try:
+            result = self.activation.activate(tx, self._command(operation), prepared.value)
+        except StateConflict as exc:
+            raise SourceChanged("The analysis context changed before activation.") from exc
+        outputs = [
             OperationOutputReference(
                 output_type="job_analysis", output_id=result.analysis_id, active=True
-            ),
-            OperationOutputReference(
-                output_type="selection_plan",
-                output_id=result.selection_plan_id,
-                active=True,
-            ),
-        )
-
-
-class DraftTaskHandler(RegisteredEvidenceTaskHandler):
-    service: DraftAuthoringService
-    knowledge: AnalysisKnowledgeSource
-
-    sources: DraftOperationSourceReader
-
-    def verify_knowledge(self, tx: ReadTransaction, _operation: PersistedOperation) -> None:
-        if self.sources.knowledge_is_prepared(tx):
-            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
-
-    def verify_external_sources(self, operation: PersistedOperation) -> None:
-        if operation.sources.knowledge_context_hash != document_knowledge_context_hash(self):
-            raise SourceChanged("Knowledge changed before draft activation.")
-
-    def after_activation(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
-        del operation
-        if isinstance(prepared.value, (PreparedDraft, PreparedRegeneration)):
-            self.service.store_working_draft(prepared.value.source)
-
-
-class DraftOperationHandler(DraftTaskHandler):
-    task = "draft_resume"
-
-    def __init__(
-        self,
-        service: DraftAuthoringService,
-        sources: DraftOperationSourceReader,
-        activation: DraftActivation,
-        knowledge: AnalysisKnowledgeSource,
-    ):
-        self.service = service
-        self.sources = sources
-        self.activation = activation
-        self.knowledge = knowledge
-
-    @staticmethod
-    def _command(operation: PersistedOperation) -> DraftCommand:
-        return DraftCommand.model_validate(operation.payload)
-
-    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
-        sources = operation.sources
-        if (
-            sources.job_snapshot_id is None
-            or sources.job_snapshot_hash is None
-            or sources.job_analysis_id is None
-            or sources.selection_plan_id is None
-        ):
-            raise SourceChanged("Draft Operation has incomplete frozen source identity.")
-        try:
-            current = self.sources.generation_sources(tx, operation)
-            snapshot = current.snapshot
-            analysis = current.analysis
-            plan = current.plan
-            active_snapshot = {"id": current.active_snapshot_id}
-            active_analysis_id = current.active_analysis_id
-        except UnknownRecord as exc:
-            raise SourceChanged("A draft source no longer exists.") from exc
-        dependencies = sources.dependency_hashes
-        if (
-            snapshot["application_id"] != operation.application_id
-            or snapshot["source_hash"] != sources.job_snapshot_hash
-            or active_snapshot["id"] != sources.job_snapshot_id
-            or draft_source_mismatch(
-                operation.application_id, sources.job_analysis_id, analysis, plan
             )
-            is not None
-            or analysis["job_snapshot_id"] != sources.job_snapshot_id
-            or active_analysis_id != sources.job_analysis_id
-            or _model_hash(analysis["analysis"]) != dependencies.get("job_analysis")
-            or current.active_plan_id != sources.selection_plan_id
-            or _model_hash(plan) != dependencies.get("selection_plan")
-        ):
-            raise SourceChanged("Analysis or SelectionPlan changed before draft activation.")
-        # §14: a replacement froze the identity of the draft it is replacing, and that
-        # record is a source like any other. Without this the check above validated every
-        # input to *generating* the document and nothing about the one being overwritten,
-        # so an edit or an archive landing between the `202` and this point was not seen:
-        # the edit was overwritten, and the archive turned the replacement into a brand
-        # new draft with a new id.
-        if sources.working_draft_id is not None:
-            try:
-                replaced = current.replaced
-                if replaced is None:
-                    raise UnknownRecord(sources.working_draft_id)
-            except UnknownRecord as exc:
-                raise SourceChanged("The working draft being replaced no longer exists.") from exc
-            if (
-                replaced.application_id != operation.application_id
-                or not replaced.active
-                or replaced.edit_version != sources.working_draft_edit_version
-                or replaced.content_hash != sources.working_draft_content_hash
-            ):
-                raise SourceChanged("The working draft changed before the replacement activated.")
-        self.verify_knowledge(tx, operation)
-
-    def execute(self, operation, cancellation_requested) -> PreparedOperation:
-        if cancellation_requested():
-            return PreparedOperation()
-        try:
-            return self.prepared(
-                self.service.prepare(self._command(operation), operation_id=operation.id)
-            )
-        except (
-            DependencyUnavailable,
-            InfrastructureFailure,
-            MissingFactRendering,
-            ProposalRejected,
-        ) as exc:
-            raise self._classified(operation, exc) from exc
-
-    def activate(self, tx: WriteTransaction, operation, prepared):
-        if not isinstance(prepared.value, PreparedDraft):
-            raise TypeError("draft handler received an invalid prepared value")
-        result = self.activation.activate_generation(
-            tx,
-            self._command(operation),
-            prepared.value,
-        )
-        return (
-            OperationOutputReference(
-                output_type="working_draft",
-                output_id=result.working_draft_id,
-                active=True,
-            ),
-        )
+        ]
+        if result.created_document and result.document_id is not None:
+            outputs.extend(_document_output(result.document_id))
+        return tuple(outputs)
 
 
 class SelectionPlanOperationHandler(AnalysisTaskHandler):
-    """`propose_selection_plan`: the AI branch of §13 `create_selection_plan`."""
+    """`propose_selection`: the AI form of §14 `update_selection`, while content is NULL."""
 
     task = "propose_selection_plan"
 
@@ -477,36 +379,11 @@ class SelectionPlanOperationHandler(AnalysisTaskHandler):
         self.knowledge = knowledge
 
     @staticmethod
-    def _command(operation: PersistedOperation) -> ProposeSelectionPlanCommand:
-        return ProposeSelectionPlanCommand.model_validate(operation.payload)
+    def _command(operation: PersistedOperation) -> ProposeSelectionCommand:
+        return ProposeSelectionCommand.model_validate(operation.payload)
 
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
-        command = self._command(operation)
-        sources = operation.sources
-        if sources.job_analysis_id is None:
-            raise SourceChanged("Selection Operation has no frozen analysis identity.")
-        try:
-            source = self.sources.selection_source(tx, sources.job_analysis_id)
-        except UnknownRecord as exc:
-            raise SourceChanged("The selection plan source no longer exists.") from exc
-        if (
-            source.application_id != operation.application_id
-            or source.deleted_at is not None
-            or source.active_analysis_id != sources.job_analysis_id
-            or source.active_snapshot_id != source.job_snapshot_id
-            or _model_hash(source.analysis) != sources.dependency_hashes.get("job_analysis")
-        ):
-            raise SourceChanged("The analysis changed before the plan proposal activated.")
-        active_plan_id = source.active_plan.id if source.active_plan is not None else None
-        if command.enforce_expected_selection_plan and (
-            active_plan_id != command.expected_selection_plan_id
-        ):
-            raise SourceChanged("The active SelectionPlan changed before the proposal activated.")
-
-        if self.sources.knowledge_is_prepared(tx):
-            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
-        if operation.sources.knowledge_context_hash != document_knowledge_context_hash(self):
-            raise SourceChanged("Knowledge changed before the plan proposal activated.")
+        verify_document_hash(tx, self.service.documents, operation)
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
@@ -522,44 +399,104 @@ class SelectionPlanOperationHandler(AnalysisTaskHandler):
             InfrastructureFailure,
             MissingFactRendering,
             ProposalRejected,
+            # The document moved between the source check and execution.
+            StateConflict,
+        ) as exc:
+            raise self._classified(operation, exc) from exc
+
+    def activate(self, tx: WriteTransaction, operation, prepared):
+        if not isinstance(prepared.value, PreparedSelectionProposal):
+            raise TypeError("selection handler received an invalid prepared value")
+        try:
+            document_id = self.activation.activate_selection_proposal(
+                tx, self._command(operation), prepared.value, self.load_knowledge()
+            )
+        except StateConflict as exc:
+            raise SourceChanged("The CV document changed before the proposal activated.") from exc
+        except PreconditionFailed as exc:
+            raise OperationExecutionError(
+                OperationFailureCode.INVALID_OUTPUT,
+                "The AI proposal was rejected.",
+            ) from exc
+        return _document_output(document_id)
+
+
+class DraftTaskHandler(RegisteredEvidenceTaskHandler):
+    service: DraftAuthoringService
+    knowledge: AnalysisKnowledgeSource
+    documents: DocumentStore
+
+    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
+        verify_document_hash(tx, self.documents, operation)
+
+
+class DraftOperationHandler(DraftTaskHandler):
+    """`create_draft`: deterministic or AI content, written only at the frozen hash."""
+
+    task = "draft_resume"
+
+    def __init__(
+        self,
+        service: DraftAuthoringService,
+        documents: DocumentStore,
+        activation: DraftActivation,
+        knowledge: AnalysisKnowledgeSource,
+    ):
+        self.service = service
+        self.documents = documents
+        self.activation = activation
+        self.knowledge = knowledge
+
+    @staticmethod
+    def _command(operation: PersistedOperation) -> DraftCommand:
+        return DraftCommand.model_validate(operation.payload)
+
+    def execute(self, operation, cancellation_requested) -> PreparedOperation:
+        if cancellation_requested():
+            return PreparedOperation()
+        try:
+            return self.prepared(
+                self.service.prepare(self._command(operation), operation_id=operation.id)
+            )
+        except (
+            DependencyUnavailable,
+            InfrastructureFailure,
+            MissingFactRendering,
+            ProposalRejected,
+            # The document moved between the source check and execution.
+            StateConflict,
         ) as exc:
             raise self._classified(operation, exc) from exc
 
     def activate(self, tx: WriteTransaction, operation, prepared):
         del operation
-        if not isinstance(prepared.value, PreparedSelectionProposal):
-            raise TypeError("selection handler received an invalid prepared value")
-        result = self.activation.activate_selection_plan(tx, prepared.value.selection)
-        return (
-            OperationOutputReference(
-                output_type="selection_plan",
-                output_id=result.selection_plan_id,
-                active=True,
-            ),
-        )
+        if not isinstance(prepared.value, PreparedDraft):
+            raise TypeError("draft handler received an invalid prepared value")
+        try:
+            result = self.activation.activate_generation(tx, prepared.value)
+        except StateConflict as exc:
+            raise SourceChanged("The CV document changed before the draft activated.") from exc
+        return _document_output(result.document_id)
 
 
 class RegenerationOperationHandler(DraftTaskHandler):
     """`regenerate_section` and `regenerate_claim`, which differ only in the command.
 
-    One class for both because their contract is identical: the same frozen
-    draft identity, the same source check, the same optimistic commit. Splitting
-    them would give two places for the version check to drift apart, and it is
-    the version check that stops a regeneration landing on content the user
-    edited while it ran.
+    One class for both because their contract is identical: the same frozen hash,
+    the same source check, the same optimistic commit.
     """
 
     def __init__(
         self,
         service: DraftAuthoringService,
-        sources: DraftOperationSourceReader,
+        documents: DocumentStore,
         activation: DraftActivation,
         knowledge: AnalysisKnowledgeSource,
         *,
         task: str,
     ):
         self.service = service
-        self.sources = sources
+        self.documents = documents
         self.activation = activation
         self.knowledge = knowledge
         self.task = task
@@ -569,29 +506,6 @@ class RegenerationOperationHandler(DraftTaskHandler):
 
     def _command(self, operation: PersistedOperation):
         return self._command_type.model_validate(operation.payload)
-
-    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
-        sources = operation.sources
-        if (
-            sources.working_draft_id is None
-            or sources.working_draft_edit_version is None
-            or sources.working_draft_content_hash is None
-        ):
-            raise SourceChanged("Regeneration Operation has no frozen draft identity.")
-        try:
-            working = self.sources.regeneration_source(tx, sources.working_draft_id)
-        except UnknownRecord as exc:
-            raise SourceChanged("The working draft no longer exists.") from exc
-        if (
-            working.application_id != operation.application_id
-            or not working.active
-            or working.edit_version != sources.working_draft_edit_version
-            or working.content_hash != sources.working_draft_content_hash
-            or working.job_analysis_id != sources.job_analysis_id
-            or working.selection_plan_id != sources.selection_plan_id
-        ):
-            raise SourceChanged("The working draft changed before regeneration activated.")
-        self.verify_knowledge(tx, operation)
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
@@ -622,63 +536,88 @@ class RegenerationOperationHandler(DraftTaskHandler):
         del operation
         if not isinstance(prepared.value, PreparedRegeneration):
             raise TypeError("regeneration handler received an invalid prepared value")
-        result = self.activation.activate_regeneration(
-            tx,
-            prepared.value,
-        )
-        return (
-            OperationOutputReference(
-                output_type="working_draft",
-                output_id=result.working_draft_id,
-                active=True,
-            ),
-        )
+        try:
+            result = self.activation.activate_regeneration(tx, prepared.value)
+        except StateConflict as exc:
+            raise SourceChanged("The CV document changed before regeneration activated.") from exc
+        return _document_output(result.document_id)
+
+
+def _render_failure(
+    code: OperationFailureCode, detail: str, reason: FailureReason | None
+) -> tuple[OperationExecutionError, dict[str, Any]]:
+    """The Operation failure and the structured `last_render_error` it records."""
+    error = OperationExecutionError(code, detail, reason=reason)
+    recorded: dict[str, Any] = (
+        reason.model_dump(mode="json") if reason is not None else {"code": code.value.lower()}
+    )
+    return error, {**recorded, "failure_code": code.value, "detail": detail}
 
 
 class RenderOperationHandler:
-    def __init__(self, service: RenderingService, sources: RenderContextReader):
+    """`render_document`: render outside every scope, activate under the row lock."""
+
+    def __init__(
+        self,
+        service: RenderingService,
+        documents: DocumentStore,
+        sources: AnalysisSelectionSourceReader,
+        knowledge: AnalysisKnowledgeSource,
+    ):
         self.service = service
+        self.documents = documents
         self.sources = sources
+        self.knowledge = knowledge
+        #: Files a committed activation released, by Operation, for `after_activation`.
+        self._superseded: dict[str, RenderedFiles | None] = {}
 
     @staticmethod
     def _command(operation: PersistedOperation) -> RenderCommand:
         return RenderCommand.model_validate(operation.payload)
 
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
-        sources = operation.sources
-        if sources.approved_revision_id is None:
-            raise SourceChanged("Render Operation has no frozen ApprovedRevision identity.")
-        try:
-            context = self.sources.operation_sources(tx, sources.approved_revision_id)
-            revision, manifest = context.revision, context.manifest
-            snapshot, analysis, plan = context.snapshot, context.analysis, context.plan
-        except (UnknownRecord, OSError, ValueError) as exc:
-            raise SourceChanged("An approved render source is missing or unreadable.") from exc
-        dependencies = sources.dependency_hashes
-        if (
-            revision.application_id != operation.application_id
-            or _model_hash(revision) != dependencies.get("approved_revision")
-            or snapshot["source_hash"] != sources.job_snapshot_hash
-            or analysis["application_id"] != operation.application_id
-            or plan.application_id != operation.application_id
-            or manifest["content_hash"] != dependencies.get("claim_manifest")
-        ):
-            raise SourceChanged("Approved render inputs changed before activation.")
+        verify_document_hash(tx, self.documents, operation)
+        if self.sources.knowledge_is_prepared(tx):
+            raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
 
     def verify_external_sources(self, operation: PersistedOperation) -> None:
-        sources = operation.sources
-        current_knowledge = document_knowledge_context_hash(self.service)
-        if sources.knowledge_context_hash != current_knowledge:
-            raise SourceChanged("Knowledge changed before render activation.")
-        revision_id = sources.approved_revision_id
-        if revision_id is None or not self.service.operation_source_payloads_match(revision_id):
-            raise SourceChanged("An approved render payload changed before activation.")
+        del operation
+
+    def _fail(
+        self,
+        operation: PersistedOperation,
+        code: OperationFailureCode,
+        detail: str,
+        reason: FailureReason | None,
+    ) -> OperationExecutionError:
+        error, recorded = _render_failure(code, detail, reason)
+        command = self._command(operation)
+        # Recorded only while the hash still matches; otherwise only the Operation
+        # keeps the failure (§16).
+        self.service.record_failure(
+            command.application_id, command.expected_document_hash, recorded
+        )
+        return error
 
     def execute(self, operation, cancellation_requested) -> PreparedOperation:
         if cancellation_requested():
             return PreparedOperation()
         try:
             prepared = self.service.prepare(self._command(operation))
+        except ValidationBlocked as exc:
+            raise self._fail(
+                operation,
+                OperationFailureCode.RENDER_FAILED,
+                "The document no longer passes its content check.",
+                RenderCheckReason(code="render_validation"),
+            ) from exc
+        except (MissingFactRendering, StateConflict, PreconditionFailed) as exc:
+            raise OperationExecutionError(
+                failure_code_for(exc),
+                safe_failure_detail_for(exc),
+                reason=failure_reason_for(exc),
+            ) from exc
+        try:
             executed = self.service.execute(prepared)
         except InfrastructureFailure as exc:
             message = str(exc).casefold()
@@ -687,39 +626,36 @@ class RenderOperationHandler:
                 if "browser" in message and "start" in message
                 else OperationFailureCode.RENDER_FAILED
             )
-            raise OperationExecutionError(code, "Rendering failed.") from exc
-        outputs = tuple(
-            OperationOutputReference(output_type=output_type, output_id=output_id, active=False)
-            for output_type, output_id in zip(
-                ("resume_html", "resume_pdf"),
-                executed.artifact_ids,
-                strict=True,
-            )
-        )
-        failure = (
-            None
-            if executed.report.passed
-            else OperationExecutionError(
+            raise self._fail(operation, code, "Rendering failed.", None) from exc
+        if not executed.report.passed:
+            self.service.discard(executed.files)
+            raise self._fail(
+                operation,
                 OperationFailureCode.RENDER_FAILED,
                 _safe_render_failure_detail(executed.report),
-                reason=_render_failure_reason(executed.report),
+                _render_failure_reason(executed.report),
             )
-        )
-        return PreparedOperation(
-            value=executed,
-            outputs=outputs,
-            activate_outputs=executed.report.passed,
-            terminal_failure=failure,
-        )
+        return PreparedOperation(value=executed)
 
     def activate(self, tx: WriteTransaction, operation, prepared):
-        del operation
         if not isinstance(prepared.value, ExecutedRender):
             raise TypeError("render handler received an invalid executed value")
-        self.service.activate(tx, prepared.value)
-        return ()
+        knowledge = load_analysis_knowledge(self.knowledge)
+        try:
+            result, superseded = self.service.activate(tx, prepared.value, knowledge)
+        except StateConflict as exc:
+            raise SourceChanged(
+                "The CV document changed or lost its approval before the render activated."
+            ) from exc
+        self._superseded[operation.id] = superseded
+        return _document_output(result.document_id)
 
     def after_activation(self, operation, prepared):
-        del operation
+        del prepared
+        self.service.discard(self._superseded.pop(operation.id, None))
+
+    def discard(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
+        """An attempt that never activated leaves files nothing references: delete them."""
+        self._superseded.pop(operation.id, None)
         if isinstance(prepared.value, ExecutedRender):
-            self.service.verify_activation(prepared.value)
+            self.service.discard(prepared.value.files)

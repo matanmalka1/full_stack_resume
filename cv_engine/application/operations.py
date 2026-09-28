@@ -77,8 +77,8 @@ class OperationType(StrEnum):
     RENDER_DOCUMENT = "render_document"
 
 
-#: Operations whose successful activation replaces one of the two records a
-#: matching-configuration decision is taken against.  Kept beside the closed
+#: Operations whose successful activation replaces the analysis or the document
+#: selection a matching-configuration decision is taken against.  Kept beside the closed
 #: OperationType vocabulary so both the action projection and the persistence
 #: CAS use one definition of "competing with this context".
 MATCHING_CONTEXT_OPERATION_TYPES = frozenset(
@@ -149,33 +149,19 @@ class OperationResource(OperationModel):
 
 
 class OperationSources(OperationModel):
-    """Exact optimistic inputs frozen when an Operation is created."""
+    """Exact optimistic inputs frozen when an Operation is created.
+
+    An Operation that mutates the document carries `expected_document_hash`; at
+    activation it locks the document row and a mismatch discards the result
+    (state-and-use-cases.md §11). Analysis is bound to its input JobSnapshot instead.
+    """
 
     job_snapshot_id: str | None = None
     job_snapshot_hash: str | None = None
     job_analysis_id: str | None = None
-    selection_plan_id: str | None = None
-    working_draft_id: str | None = None
-    working_draft_edit_version: int | None = Field(default=None, ge=1)
-    working_draft_content_hash: str | None = None
-    approved_revision_id: str | None = None
+    expected_document_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     knowledge_context_hash: str | None = None
     dependency_hashes: dict[str, str] = {}
-
-    @model_validator(mode="after")
-    def complete_working_draft_identity(self) -> OperationSources:
-        values = (
-            self.working_draft_id,
-            self.working_draft_edit_version,
-            self.working_draft_content_hash,
-        )
-        if any(value is not None for value in values) and not all(
-            value is not None for value in values
-        ):
-            raise ValueError(
-                "working draft optimistic identity requires id, edit version, and content hash"
-            )
-        return self
 
 
 _SECRET_KEYS = frozenset(

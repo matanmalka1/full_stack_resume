@@ -15,21 +15,15 @@ from ...ai_configuration import (
     normalize_ai_model,
     normalize_reasoning_effort,
 )
-from ...chain import draft_source_mismatch
 from ...commands import (
     AnalyzeCommand,
     DraftCommand,
-    ProposeSelectionPlanCommand,
+    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
 )
-from ...errors import (
-    LineageBroken,
-    PreconditionFailed,
-    StateConflict,
-    UnknownRecord,
-)
+from ...errors import PreconditionFailed, StateConflict, UnknownRecord
 from ...operations import (
     CreateOperation,
     OperationSources,
@@ -41,13 +35,10 @@ from ...ports.operation_client import OperationClientStore
 from ...ports.settings import SettingsStore
 from ...ports.transactions import TransactionManager
 from ..analysis.service import AnalysisService
+from ..documents import DocumentSource, refuse_deleted, require_hash
 from ..drafts import DraftAuthoringService
 from ..rendering import RenderingService
-from .common import (
-    _model_hash,
-    analysis_knowledge_context_hash,
-    document_knowledge_context_hash,
-)
+from .common import analysis_knowledge_context_hash
 
 
 class OperationSubmissionService:
@@ -141,6 +132,16 @@ class OperationSubmissionService:
         )
         return self._enqueue(request)
 
+    def _document_sources(self, source: DocumentSource, expected_document_hash: str):
+        """Freeze the document the command was issued against, and what it is pinned to."""
+        refuse_deleted(source.document.application_id, source.deleted_at)
+        require_hash(source.document, expected_document_hash)
+        return OperationSources(
+            job_snapshot_id=source.job_snapshot_id,
+            job_analysis_id=source.document.analysis_id,
+            expected_document_hash=expected_document_hash,
+        )
+
     def submit_draft(
         self,
         command: DraftCommand,
@@ -149,131 +150,56 @@ class OperationSubmissionService:
         draft_service: DraftAuthoringService,
         operation_id: str | None = None,
     ) -> OperationView:
+        """§14 `create_draft`: queue generation against the document the client read."""
         self._load_active_application(command.application_id)
         command = (
             self._freeze_ai_execution(command)
             if command.provider == "openai"
             else command.model_copy(update={"model": "rules-v1", "reasoning_effort": None})
         )
-        try:
-            analysis = draft_service.analysis_record(command.job_analysis_id)
-            plan = draft_service.selection_plan(command.selection_plan_id)
-            snapshot = draft_service.snapshot_source(analysis["job_snapshot_id"])
-        except UnknownRecord as exc:
-            raise UnknownRecord("unknown source for draft generation") from exc
-        if (
-            draft_source_mismatch(command.application_id, command.job_analysis_id, analysis, plan)
-            is not None
-        ):
-            raise LineageBroken("draft sources do not belong to the named Application")
-        if command.parent_revision_id is not None:
-            try:
-                parent = draft_service.approved_revision(command.parent_revision_id)
-            except UnknownRecord as exc:
-                raise UnknownRecord(
-                    f"unknown parent approved revision: {command.parent_revision_id}"
-                ) from exc
-            if parent.application_id != command.application_id:
-                raise LineageBroken(
-                    f"approved revision {parent.id} does not belong to application "
-                    f"{command.application_id}"
-                )
-        knowledge_hash = document_knowledge_context_hash(draft_service)
-        # §14: a replacement freezes the identity of the draft it is replacing, so the
-        # runner can re-check at activation that the record is still the one the user
-        # meant. Generation with nothing to replace freezes none, and the validator on
-        # `OperationSources` requires the three fields together or not at all.
-        replaced_id: str | None = None
-        replaced_version: int | None = None
-        replaced_hash: str | None = None
-        if command.replaces_working_draft_id is not None:
-            existing = draft_service.working_draft(command.replaces_working_draft_id)
-            if existing.application_id != command.application_id:
-                raise LineageBroken(
-                    f"working draft {existing.id} does not belong to application "
-                    f"{command.application_id}"
-                )
-            if existing.edit_version != command.replaces_expected_edit_version:
-                raise StateConflict(
-                    f"working draft {existing.id} is at edit version "
-                    f"{existing.edit_version}, not {command.replaces_expected_edit_version}"
-                )
-            replaced_id = existing.id
-            replaced_version = existing.edit_version
-            replaced_hash = existing.content_hash
+        source = draft_service.document_source(command.application_id)
+        sources = self._document_sources(source, command.expected_document_hash)
+        if source.document.content is not None:
+            raise PreconditionFailed(
+                "the document already has content; edit or regenerate it, or build it "
+                "again from its analysis"
+            )
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.CREATE_DRAFT,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
-            sources=OperationSources(
-                job_snapshot_id=snapshot["id"],
-                job_snapshot_hash=snapshot["source_hash"],
-                job_analysis_id=command.job_analysis_id,
-                selection_plan_id=command.selection_plan_id,
-                knowledge_context_hash=knowledge_hash,
-                working_draft_id=replaced_id,
-                working_draft_edit_version=replaced_version,
-                working_draft_content_hash=replaced_hash,
-                dependency_hashes={
-                    "job_analysis": _model_hash(analysis["analysis"]),
-                    "selection_plan": _model_hash(plan),
-                },
-            ),
-            # The mode the client chose, recorded on the Operation. It also
-            # decides whether the AI resource slot is required, which
-            # `required_operation_resources` derives from these two fields
-            # rather than from a second list of AI operation types.
+            sources=sources,
+            # The mode the client chose, recorded on the Operation. It also decides
+            # whether the AI resource slot is required.
             provider=command.provider,
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )
         return self._enqueue(request, operation_id=operation_id)
 
-    def submit_selection_plan_proposal(
+    def submit_selection_proposal(
         self,
-        command: ProposeSelectionPlanCommand,
+        command: ProposeSelectionCommand,
         *,
         idempotency_key: str,
         analysis_service: AnalysisService,
     ) -> OperationView:
-        """§13, AI mode: queue the proposal; no provider call in a request.
-
-        The analysis is frozen with its content hash, so a review decision that
-        replaces the analysis while this is queued fails the source check
-        instead of proposing a plan for an analysis nobody is looking at.
-        """
+        """§14 `propose_selection`: queue the proposal; no provider call in a request."""
         self._load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
-        source = analysis_service.selection_source(command.application_id, command.job_analysis_id)
-        analysis_service.refuse_deleted(source.application_id, source.deleted_at)
-        # A caller that omitted an expectation gets the current compatible pointer frozen
-        # here. An HTTP client that stated one - including explicit `null` for no plan -
-        # keeps exactly that expectation. Deferring a mismatch to the Operation's source
-        # check preserves idempotent replay: the same key and payload can still return its
-        # original terminal Operation after that Operation itself changed the active plan.
-        expected_plan_id = command.expected_selection_plan_id
-        if not command.enforce_expected_selection_plan:
-            expected_plan_id = source.active_plan.id if source.active_plan is not None else None
-        command = command.model_copy(
-            update={
-                "expected_selection_plan_id": expected_plan_id,
-                "enforce_expected_selection_plan": True,
-            }
-        )
+        source = analysis_service.document_source(command.application_id)
+        sources = self._document_sources(source, command.expected_document_hash)
+        if source.document.content is not None:
+            raise PreconditionFailed(
+                "a selection proposal applies only while the document has no content"
+            )
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.PROPOSE_SELECTION,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
-            sources=OperationSources(
-                job_snapshot_id=source.job_snapshot_id,
-                job_analysis_id=command.job_analysis_id,
-                # Building a plan reads no requirement concepts: it consumes the
-                # analysis, which is already frozen in `dependency_hashes`.
-                knowledge_context_hash=document_knowledge_context_hash(analysis_service),
-                dependency_hashes={"job_analysis": _model_hash(source.analysis)},
-            ),
+            sources=sources,
             provider="openai",
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
@@ -287,55 +213,33 @@ class OperationSubmissionService:
         idempotency_key: str,
         draft_service: DraftAuthoringService,
     ) -> OperationView:
-        """§14: queue one section or claim regeneration against an exact draft.
-
-        The draft's three-part identity goes into the frozen sources, which is
-        what the handler's `check_sources` re-checks at activation. The command
-        also states the analysis and plan explicitly - `latest` never appears -
-        so a regeneration cannot be launched against sources the client did not
-        name.
-        """
+        """§14: queue one section or claim regeneration against an exact document hash."""
         self._load_active_application(command.application_id)
         command = self._freeze_ai_execution(command)
-        try:
-            working = draft_service.working_draft(command.working_draft_id)
-            analysis = draft_service.analysis_record(command.job_analysis_id)
-            plan = draft_service.selection_plan(command.selection_plan_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord("unknown source for regeneration") from exc
-        if (
-            working.application_id != command.application_id
-            or draft_source_mismatch(
-                command.application_id, command.job_analysis_id, analysis, plan
-            )
-            is not None
-        ):
-            raise LineageBroken("regeneration sources do not belong to the named Application")
-        if working.edit_version != command.expected_edit_version:
-            raise StateConflict(
-                f"working draft {working.id} is at edit version {working.edit_version}, "
-                f"not {command.expected_edit_version}"
-            )
-        if working.content_hash != command.expected_content_hash:
-            raise StateConflict(
-                f"working draft {working.id} has content hash {working.content_hash}, "
-                f"not {command.expected_content_hash}"
-            )
-        if isinstance(command, RegenerateClaimCommand) and command.keep_text:
+        source = draft_service.document_source(command.application_id)
+        sources = self._document_sources(source, command.expected_document_hash)
+        content = source.document.content
+        if content is None:
+            raise PreconditionFailed("the document has no content to regenerate yet")
+        if isinstance(command, RegenerateSectionCommand):
+            if not any(section.name == command.section for section in content.sections):
+                raise UnknownRecord(f"unknown section in the document: {command.section}")
+        else:
             claim = next(
                 (
                     item
-                    for section in working.source.sections
+                    for section in content.sections
                     for item in section.claims
                     if item.claim_id == command.claim_id
                 ),
                 None,
             )
             if claim is None:
-                raise UnknownRecord(f"unknown claim in the working draft: {command.claim_id}")
-            if claim.claim_type != "pending" or not claim.fact_ids:
+                raise UnknownRecord(f"unknown claim in the document: {command.claim_id}")
+            if command.keep_text and (claim.claim_type != "pending" or not claim.fact_ids):
                 raise PreconditionFailed(
-                    "only a pending claim linked to at least one fact can have its own wording reviewed"
+                    "only a pending claim linked to at least one fact can have its own "
+                    "wording reviewed"
                 )
         operation_type = (
             OperationType.REGENERATE_SECTION
@@ -347,18 +251,7 @@ class OperationSubmissionService:
             operation_type=operation_type,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
-            sources=OperationSources(
-                job_analysis_id=command.job_analysis_id,
-                selection_plan_id=command.selection_plan_id,
-                working_draft_id=working.id,
-                working_draft_edit_version=working.edit_version,
-                working_draft_content_hash=working.content_hash,
-                knowledge_context_hash=document_knowledge_context_hash(draft_service),
-                dependency_hashes={
-                    "job_analysis": _model_hash(analysis["analysis"]),
-                    "selection_plan": _model_hash(plan),
-                },
-            ),
+            sources=sources,
             provider="openai",
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
@@ -372,21 +265,15 @@ class OperationSubmissionService:
         idempotency_key: str,
         rendering_service: RenderingService,
     ) -> OperationView:
+        """§16: admit only an approved document with no review reason, then queue."""
         self._load_active_application(command.application_id)
-        try:
-            sources = rendering_service.freeze_operation_sources(
-                command, document_knowledge_context_hash(rendering_service)
-            )
-        except UnknownRecord as exc:
-            raise UnknownRecord(
-                f"unknown approved revision: {command.approved_revision_id}"
-            ) from exc
+        rendering_service.admit(command)
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.RENDER_DOCUMENT,
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
-            sources=sources,
+            sources=OperationSources(expected_document_hash=command.expected_document_hash),
             provider="deterministic",
             model="playwright",
         )

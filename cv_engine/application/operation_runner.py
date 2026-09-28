@@ -42,6 +42,9 @@ class OperationExecutionError(RuntimeError):
         self.reason = reason
         self.technical_log_reference = technical_log_reference
         self.outputs = tuple(outputs)
+        #: Set when the failure is raised after an activation that committed, so the
+        #: runner does not discard what that activation kept.
+        self.activated = False
 
 
 class SourceChanged(OperationExecutionError):
@@ -69,6 +72,9 @@ class OperationHandler(Protocol):
     def after_activation(
         self, operation: PersistedOperation, prepared: PreparedOperation
     ) -> None: ...
+    def discard(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
+        """Release what an executed result produced when it will never activate."""
+        ...
 
 
 class OperationRunner:
@@ -330,16 +336,20 @@ class OperationRunner:
                 )
         self._record_inactive_outputs(operation.id, prepared.outputs)
         if self._cancelled(operation.id):
+            self._discard(handler, operation, prepared)
             return self._complete(operation.id)
         try:
-            return self._activate(operation, prepared, handler)
+            result = self._activate(operation, prepared, handler)
         except OperationExecutionError as error:
+            if not error.activated:
+                self._discard(handler, operation, prepared)
             if error.technical_log_reference is None:
                 error.technical_log_reference = self._record_technical_failure(
                     error.__cause__ or error, operation.id, error.code
                 )
             return self._fail(operation.id, error)
         except Exception as error:
+            self._discard(handler, operation, prepared)
             return self._fail(
                 operation.id,
                 OperationExecutionError(
@@ -350,6 +360,25 @@ class OperationRunner:
                     ),
                 ),
             )
+        if result.status is not OperationStatus.SUCCEEDED:
+            # Cancelled under the activation lock: the result was never activated.
+            self._discard(handler, operation, prepared)
+        return result
+
+    def _discard(
+        self,
+        handler: OperationHandler,
+        operation: PersistedOperation,
+        prepared: PreparedOperation,
+    ) -> None:
+        """Best-effort cleanup outside every scope; a failure here is only logged."""
+        try:
+            handler.discard(operation, prepared)
+        except Exception as error:
+            try:
+                self.technical_logger(error)
+            except Exception:
+                logger.warning("discard log unavailable operation_id=%s", operation.id)
 
     def _activate(
         self,
@@ -415,5 +444,7 @@ class OperationRunner:
                 "operation.phase_changed", "INFO", phase_operation, {"runner_id": self.runner_id}
             )
         if terminal_failure is not None:
+            # Committed evidence: the runner must not discard what activation kept.
+            terminal_failure.activated = True
             raise terminal_failure
         return result
