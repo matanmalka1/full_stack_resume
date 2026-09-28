@@ -1,4 +1,4 @@
-import { Code2, Lock, ShieldCheck } from "lucide-react";
+import { Download, Lock, type LucideIcon, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ApprovedRevision } from "@/api/contracts";
@@ -9,7 +9,6 @@ import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
 import { DocumentFrame } from "@/ui/DocumentFrame";
 import { SummaryList } from "@/ui/SummaryList";
-import { surfaceClasses } from "@/ui/surface";
 import { ValidationReportView } from "./ValidationReportView";
 
 interface RevisionRecordProps {
@@ -21,6 +20,13 @@ interface RevisionRecordProps {
   revision: ApprovedRevision;
 }
 
+const CardHeading = ({ children, icon: Icon, id }: { children: ReactNode; icon: LucideIcon; id: string }) => (
+  <h2 className="flex items-center gap-2 font-semibold text-cv-text" id={id}>
+    <Icon aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
+    {children}
+  </h2>
+);
+
 export const RevisionRecord = ({ additionalOptions, decision, history, revision }: RevisionRecordProps) => {
   const downloadDecision = () => {
     if (decision === undefined) return;
@@ -28,8 +34,13 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
     const anchor = document.createElement("a");
     anchor.href = href;
     anchor.download = decision.filename;
+    /* Firefox ignores a click on a detached anchor, and revoking the URL in the same task
+       can cancel the download before the browser has read the blob. */
+    anchor.hidden = true;
+    document.body.append(anchor);
     anchor.click();
-    URL.revokeObjectURL(href);
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(href), 0);
   };
 
   return (
@@ -43,22 +54,36 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
           </Callout>
         ) : (
           <DocumentFrame
-            className={surfaceClasses("w-full bg-cv-surface-raised shadow-document")}
+            className="w-full"
             src={approvedPreviewSrc(revision.id, revision.html_artifact_version_id)}
             title="תצוגה מאושרת של קורות החיים"
           />
         )}
       </div>
 
-      <aside aria-label="פרטי הגרסה והאימות" className="flex min-w-0 flex-col gap-6">
+      {/* Ordered by what a reader places the document by: its history, whether it holds,
+          what can still be done with it, and only then the record and its reasoning. */}
+      <aside aria-label="פרטי הגרסה והאימות" className="flex min-w-0 flex-col gap-4">
         {history}
 
-        <Disclosure summary="פרטים טכניים וביקורת">
-          <Card aria-labelledby="revision-record-heading" className="overflow-x-auto bg-cv-surface p-4 shadow-surface">
-            <h2 className="flex items-center gap-2 font-semibold text-cv-text" id="revision-record-heading">
-              <Lock aria-hidden="true" className="size-icon-md text-cv-accent" />
+        <Card aria-labelledby="ready-validation-heading" className="flex flex-col gap-4 bg-cv-surface p-4">
+          <CardHeading icon={ShieldCheck} id="ready-validation-heading">
+            אימות הגרסה המוכנה
+          </CardHeading>
+          <ValidationReportView report={revision.ready_validation} />
+        </Card>
+
+        {/* Secondary actions belong beside the record they affect. On the wide Ready
+            layout this fills the space below validation instead of leaving the aside
+            empty while the controls sit below the entire document grid; when the grid
+            stacks, the same slot preserves their reading order after validation. */}
+        {additionalOptions}
+
+        <Disclosure flush summary="פרטים טכניים וביקורת">
+          <Card aria-labelledby="revision-record-heading" className="overflow-x-auto bg-cv-surface p-4">
+            <CardHeading icon={Lock} id="revision-record-heading">
               הרשומה הקבועה
-            </h2>
+            </CardHeading>
             <SummaryList
               className="mt-4"
               items={[
@@ -74,39 +99,23 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
           </Card>
         </Disclosure>
 
-        <Card aria-labelledby="ready-validation-heading" className="bg-cv-surface p-4 shadow-surface">
-          <h2 className="mb-4 flex items-center gap-2 font-semibold text-cv-text" id="ready-validation-heading">
-            <ShieldCheck aria-hidden="true" className="size-icon-md text-cv-accent" />
-            אימות הגרסה המוכנה
-          </h2>
-          <ValidationReportView report={revision.ready_validation} />
-        </Card>
-
-        {/* Secondary actions belong beside the record they affect. On the wide Ready
-            layout this fills the space below validation instead of leaving the aside
-            empty while the controls sit below the entire document grid; when the grid
-            stacks, the same slot preserves their reading order after validation. */}
-        {additionalOptions}
-
-        {/* The third of three peers in this aside, and for a while the only one drawn by
-            hand: a bare `<details>` on a filled panel, opened by the user agent's own
-            triangle, beside a `Disclosure` and a `Card`. It is the same kind of thing as
-            "פרטים טכניים וביקורת" - a long document held closed - so it is now the same
-            component, and the chevron and surface come from there rather than from here. */}
+        {/* The same kind of thing as "פרטים טכניים וביקורת" - a long document held
+            closed - so it is the same component, and the chevron and surface come from
+            there rather than from here. */}
         {decision === undefined ? null : (
-          <Disclosure summary="הסבר ההחלטות של הגרסה">
-            <Card className="bg-cv-surface p-4 shadow-surface">
+          <Disclosure flush summary="הסבר ההחלטות של הגרסה">
+            <Card className="flex flex-col gap-3 bg-cv-surface p-4">
               <p className="text-support text-cv-text-muted">
                 מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.
               </p>
               <pre
-                className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-control border border-cv-border bg-cv-surface-sunken p-4 text-support"
+                className="max-h-96 overflow-auto whitespace-pre-wrap rounded-control border border-cv-border bg-cv-surface-sunken p-4 font-mono text-caption leading-6 text-cv-text"
                 dir="auto"
               >
                 {decision.content}
               </pre>
-              <Button className="mt-3" onClick={downloadDecision} variant="secondary">
-                <Code2 aria-hidden="true" className="size-icon-md" />
+              <Button className="self-start" onClick={downloadDecision} variant="secondary">
+                <Download aria-hidden="true" className="size-icon-md" />
                 הורדת מסמך ההחלטה
               </Button>
             </Card>
