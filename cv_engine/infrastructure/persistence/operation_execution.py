@@ -71,15 +71,26 @@ class SqlAlchemyOperationExecutionStore:
         timestamp = now or utc_now()
         expires_at = _expiry(timestamp, lease_seconds)
         connection = self._transactions.connection_for(tx, access="write")
-        row = (
-            connection.execute(
-                select(operations)
-                .where(operations.c.id == operation_id)
-                .with_for_update(skip_locked=True)
-            )
-            .mappings()
-            .one_or_none()
-        )
+        try:
+            with connection.begin_nested():
+                row = (
+                    connection.execute(
+                        select(operations)
+                        .where(operations.c.id == operation_id)
+                        .with_for_update(skip_locked=True)
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+        except DBAPIError as error:
+            # SKIP LOCKED only skips a row that is locked now. A rival that claimed
+            # and committed after this transaction's snapshot leaves the row unlocked
+            # but updated, and REPEATABLE READ refuses to lock it with 40001. That is
+            # the same lost claim as a skipped row; the savepoint keeps the caller's
+            # transaction usable.
+            if getattr(error.orig, "sqlstate", None) != "40001":
+                raise
+            return None
         if row is None:
             # A concurrent runner may already hold this row. Waiting for it at
             # REPEATABLE READ turns the normal claim race into PostgreSQL's
