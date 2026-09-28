@@ -662,26 +662,31 @@ describe("ApplicationPage at the preparation route", () => {
 
     renderPage();
 
-    expect(await screen.findByText("5 years of Python")).toBeInTheDocument();
-    /* A matched requirement is listed under the covered group rather than badged: the
-       group's heading already says "covered", so a badge would repeat the verdict. */
+    /* The list opens on what needs attention; a covered requirement is one press away. */
+    expect(await screen.findByText("Production Kubernetes experience")).toBeInTheDocument();
+    expect(screen.getByText("Terraform")).toBeInTheDocument();
+    expect(screen.queryByText("5 years of Python")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "הכל (3)" }));
     expect(
-      within(screen.getByRole("list", { name: "מכוסות במלואן (1)" })).getByText("5 years of Python"),
+      within(screen.getByRole("list", { name: "דרישות חובה" })).getByText("5 years of Python"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("מכוסה")).not.toBeInTheDocument();
-    expect(screen.getByText("מכוסות")).toBeInTheDocument();
-    expect(screen.getByText("חלקיות")).toBeInTheDocument();
-    expect(screen.getByText("לא מכוסות")).toBeInTheDocument();
-    expect(screen.getByText("לא ניתנות להצגה: 1")).toBeInTheDocument();
-    expect(screen.getByText("דרישת חובה אחת דורשת תשומת לב, ללא פער קשיח.")).toBeInTheDocument();
-    expect(screen.getByText("דרישה אחת אינה ניתנת להצגה")).toBeInTheDocument();
-    expect(await screen.findByText(/5 years building backend systems in Python/)).toBeInTheDocument();
-    expect(screen.getByText(/^למה הכיסוי מוגבל/)).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "דרישות מועדפות" })).getByText("Terraform")).toBeInTheDocument();
+
+    /* Coverage is split by how much the employer insists, and the malformed record is
+       reported rather than silently dropped. */
+    const overview = screen.getByRole("region", { name: "סיכום הכיסוי" });
+    expect(within(overview).getByText("1/2")).toBeInTheDocument();
+    expect(within(overview).getByText("0/1")).toBeInTheDocument();
+    expect(within(overview).getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("הערות על אמינות הניתוח (1)")).toBeInTheDocument();
+    expect(screen.getByText("דרישה אחת לא הייתה תקינה ואינה מוצגת.")).toBeInTheDocument();
+    expect(screen.queryByText("Malformed requirement")).not.toBeInTheDocument();
+
+    /* Evidence is resolved by id to the fact's current wording. */
+    expect(screen.getByText("עובדה אחת מעידה על הדרישה")).toBeInTheDocument();
+    expect(await screen.findByText("5 years building backend systems in Python")).toBeInTheDocument();
+    expect(screen.getByText("מה מגביל את הכיסוי")).toBeInTheDocument();
     expect(screen.getByText("Used Kubernetes in a personal lab")).toBeInTheDocument();
-    /* Coverage supersedes the plain mandatory/preferred term lists once an analysis
-       carries `requirements` - they would otherwise show the same requirement twice,
-       once with its coverage and once as a bare string. */
-    expect(screen.queryByText("דרישות חובה שזוהו")).not.toBeInTheDocument();
   });
 
   it("keeps the projected warning explanation available behind its alert disclosure", async () => {

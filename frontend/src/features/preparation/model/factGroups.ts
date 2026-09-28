@@ -46,6 +46,29 @@ const matches = (candidate: SelectionPlanCandidate, needle: string): boolean =>
   (candidate.text ?? "").toLowerCase().includes(needle) ||
   candidate.section.toLowerCase().includes(needle);
 
+/* A narrower view of the same plan. "overridden" is every fact the plan carries an
+   explicit mark for - the reader's own or an AI proposal's - which is the set a reader
+   reviews to see where the selection departs from the engine's ranking. */
+export type FactFilter = "all" | "included" | "omitted" | "overridden";
+
+const passesFilter = (
+  candidate: SelectionPlanCandidate,
+  pinned: readonly string[],
+  excluded: readonly string[],
+  filter: FactFilter,
+): boolean => {
+  switch (filter) {
+    case "all":
+      return true;
+    case "included":
+      return candidateIncluded(candidate, pinned, excluded);
+    case "omitted":
+      return !candidateIncluded(candidate, pinned, excluded);
+    case "overridden":
+      return pinned.includes(candidate.fact_id) || excluded.includes(candidate.fact_id);
+  }
+};
+
 /* The plan's candidates as the CV reads them: one group per section, in the order the
    plan listed them, so the reader recognises the document rather than a flat list of 27
    sentences. The section string is the Profile's own English section name; it is not
@@ -56,12 +79,13 @@ export const factGroups = (
   pinned: readonly string[],
   excluded: readonly string[],
   query: string,
+  filter: FactFilter = "all",
 ): FactGroup[] => {
   const needle = query.trim().toLowerCase();
   const groups = new Map<string, FactGroup>();
 
   for (const candidate of candidates) {
-    if (!matches(candidate, needle)) {
+    if (!matches(candidate, needle) || !passesFilter(candidate, pinned, excluded, filter)) {
       continue;
     }
     const group = groups.get(candidate.section) ?? {
