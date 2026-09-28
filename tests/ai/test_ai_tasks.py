@@ -1082,7 +1082,9 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
     assert {fact_id for section in sections for fact_id in section["fact_ids"]} == supplied
     summary = next(section for section in sections if section["section"] == "Professional Summary")
     assert summary["max_claims"] == 1
-    assert summary["max_additional_pins"] == 1 - len(summary["fixed_fact_ids"])
+    # Floors and required-tag rescue may reserve part of what structure leaves;
+    # tests/selection proves the rest is honoured.
+    assert 0 <= summary["max_additional_pins"] <= 1 - len(summary["fixed_fact_ids"])
     assert {fact_id for section in sections for fact_id in section["fixed_fact_ids"]} <= supplied
 
     job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."

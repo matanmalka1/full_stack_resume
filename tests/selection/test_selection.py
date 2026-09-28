@@ -24,6 +24,7 @@ from cv_engine.domain.selection import (
     MissingFactRendering,
     SelectionError,
     build_selection,
+    pin_capacity,
 )
 from cv_engine.infrastructure.rendering import normalized_role_filename
 
@@ -751,6 +752,45 @@ def test_an_overlay_the_engine_cannot_honour_is_refused(
             _account_manager_selection(
                 profile_store, policy_store, fact_store, analysis_document, **overlay
             )
+
+
+def test_pins_within_the_advertised_capacity_are_never_refused(
+    profile_store: ProfileStore, policy_store, fact_store, analysis_document
+) -> None:
+    """The capacity offered to a proposer is capacity the engine honours.
+
+    It once counted only structure and Profile pins, so the development Work
+    Experience section offered four pins when the sales role block's floor had
+    already reserved one of them. Four pins on the earlier role were then
+    refused as an overlay. Pins are taken from both ends of each pool, so they
+    fall both outside and inside a block that is short of its floor.
+    """
+    for profile in profile_store.profiles.values():
+        for emphasis in profile.allowed_emphases:
+            analysis = analysis_document(
+                profile_override=profile.profile.value, emphasis_override=emphasis.value
+            )
+            policy = policy_store.get(emphasis)
+            capacity = pin_capacity(
+                analysis=analysis, profile=profile, policy=policy, facts=fact_store
+            )
+            for spec in profile.sections:
+                contenders = [
+                    fact_id
+                    for fact_id in spec.fact_ids
+                    if fact_id not in spec.pinned_fact_ids
+                    and fact_store.get(fact_id).resume_style not in STRUCTURAL_STYLES
+                ]
+                room = capacity[spec.name_en]
+                for pins in (contenders[:room], contenders[::-1][:room]):
+                    build_selection(
+                        analysis=analysis,
+                        profile=profile,
+                        policy=policy,
+                        policy_store_version=policy_store.version,
+                        facts=fact_store,
+                        pinned_fact_ids=frozenset(pins),
+                    )
 
 
 def test_acceptance_is_not_an_input_to_selection(

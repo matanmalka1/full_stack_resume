@@ -276,6 +276,115 @@ def _floor_reach(
     return len(lines), sum(1 for item in reached if QUANTITATIVE_TAG in item.tags)
 
 
+def _score_pool(
+    spec: ResumeSectionSpec,
+    *,
+    profile: Profile,
+    policy: EmphasisPolicy,
+    analysis: JobAnalysis,
+    facts: FactStore,
+    gap_substitutes: frozenset[str],
+    requirement_ranks: dict[str, int],
+    extra_pinned: frozenset[str],
+) -> list[_Scored]:
+    return [
+        _score(
+            facts.get(fact_id, canonical_only=True),
+            section=spec.name_en,
+            pool_index=index,
+            spec=spec,
+            profile=profile,
+            policy=policy,
+            analysis=analysis,
+            gap_substitutes=gap_substitutes,
+            requirement_ranks=requirement_ranks,
+            extra_pinned=extra_pinned,
+        )
+        for index, fact_id in enumerate(spec.fact_ids)
+    ]
+
+
+def _line_of(
+    section: str,
+    line_groups: dict[str, list[tuple[str, ...]]] | None,
+) -> dict[str, str]:
+    return {
+        fact_id: group[0] for group in (line_groups or {}).get(section, []) for fact_id in group
+    }
+
+
+def _section_floor_picks(
+    live: list[_Scored],
+    spec: ResumeSectionSpec,
+    line_of: dict[str, str],
+) -> list[_Scored]:
+    """Every contender a section must spend on role-block floors."""
+    picks: list[_Scored] = []
+    for block in _role_blocks(live):
+        for item in _block_floor_picks(block, spec, line_of):
+            if item not in picks:
+                picks.append(item)
+    return picks
+
+
+def pin_capacity(
+    *,
+    analysis: JobAnalysis,
+    profile: Profile,
+    policy: EmphasisPolicy,
+    facts: FactStore,
+    line_groups: dict[str, list[tuple[str, ...]]] | None = None,
+) -> dict[str, int]:
+    """How many further pins each section can take without an overlay refusal.
+
+    The section budget less what `build_selection` spends before any overlay:
+    structural facts, Profile pins, the claims role-block floors reserve, and
+    one slot per required tag in the section its rescue would land in. It is
+    computed by the same scoring and floor code, not restated, so a new floor
+    cannot leave this number advertising room the engine will refuse.
+
+    A pin can only lower a block's floor need, never raise it, so a count taken
+    with no overlay is a safe upper bound for any overlay that pins within it.
+    Pins can displace every ordinary fact carrying a required tag, though, so a
+    tag no held fact covers keeps one evictable slot where
+    `_rescue_required_tags` would look for it: the section of the best-ranked
+    contender carrying that tag. Pins do not change rank, so that section is
+    the same whatever is pinned.
+    """
+    gap_substitutes = frozenset(
+        fact_id for gap in gaps(analysis.requirements, facts) for fact_id in gap.substitute_fact_ids
+    )
+    requirement_ranks = _requirement_ranks(analysis)
+    pools = {
+        spec.name_en: _score_pool(
+            spec,
+            profile=profile,
+            policy=policy,
+            analysis=analysis,
+            facts=facts,
+            gap_substitutes=gap_substitutes,
+            requirement_ranks=requirement_ranks,
+            extra_pinned=frozenset(),
+        )
+        for spec in profile.sections
+    }
+    rescue_slots = dict.fromkeys(pools, 0)
+    for tag in profile.required_tags:
+        carriers = [item for pool in pools.values() for item in pool if tag in item.tags]
+        if any(item.structural or item.pinned for item in carriers):
+            continue
+        if carriers:
+            rescue_slots[max(carriers, key=lambda item: item.rank).section] += 1
+    capacity: dict[str, int] = {}
+    for spec in profile.sections:
+        pool = pools[spec.name_en]
+        held = sum(1 for item in pool if item.structural or item.pinned)
+        budget = spec.max_claims if spec.max_claims is not None else len(pool)
+        floors = len(_section_floor_picks(pool, spec, _line_of(spec.name_en, line_groups)))
+        capacity[spec.name_en] = max(0, budget - held - floors - rescue_slots[spec.name_en])
+    return capacity
+
+
 def _refuse_structural_exclusion(
     section: str,
     pool: list[_Scored],
@@ -440,21 +549,16 @@ def build_selection(
 
     for spec in profile.sections:
         section = spec.name_en
-        pool = [
-            _score(
-                facts.get(fact_id, canonical_only=True),
-                section=section,
-                pool_index=index,
-                spec=spec,
-                profile=profile,
-                policy=policy,
-                analysis=analysis,
-                gap_substitutes=gap_substitutes,
-                requirement_ranks=requirement_ranks,
-                extra_pinned=pinned_fact_ids,
-            )
-            for index, fact_id in enumerate(spec.fact_ids)
-        ]
+        pool = _score_pool(
+            spec,
+            profile=profile,
+            policy=policy,
+            analysis=analysis,
+            facts=facts,
+            gap_substitutes=gap_substitutes,
+            requirement_ranks=requirement_ranks,
+            extra_pinned=pinned_fact_ids,
+        )
         pools[section] = pool
         _refuse_structural_exclusion(section, pool, excluded_fact_ids)
         live = [item for item in pool if item.fact_id not in excluded_fact_ids]
@@ -470,15 +574,9 @@ def build_selection(
                 f"section {section!r} pins {len(held)} facts into a budget of {budget}"
             )
         allowance = budget - len(held)
-        line_of = {
-            fact_id: group[0] for group in (line_groups or {}).get(section, []) for fact_id in group
-        }
+        line_of = _line_of(section, line_groups)
         _refuse_floor_loss(section, spec, pool, live, line_of, excluded_fact_ids)
-        floor_picks: list[_Scored] = []
-        for block in _role_blocks(live):
-            for item in _block_floor_picks(block, spec, line_of):
-                if item not in floor_picks:
-                    floor_picks.append(item)
+        floor_picks = _section_floor_picks(live, spec, line_of)
         if len(floor_picks) > allowance:
             raise SelectionError(
                 f"section {section!r} needs {len(floor_picks)} claims to reach its "

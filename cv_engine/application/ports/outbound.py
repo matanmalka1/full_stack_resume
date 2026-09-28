@@ -322,7 +322,11 @@ class AnalysisContext(StrictModel):
 
 
 class SelectionSectionContext(StrictModel):
-    """One Profile section's candidate pool and pin capacity."""
+    """One Profile section's candidate pool and pin capacity.
+
+    `max_additional_pins` is the budget left after structural facts, Profile
+    pins and role-block floor reservations, as `build_selection` counts them.
+    """
 
     section: str
     fact_ids: list[str]

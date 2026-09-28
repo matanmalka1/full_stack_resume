@@ -22,12 +22,16 @@ from .selection_policy import AnalysisSelection, PreparedSelectionPlan, Prepared
 
 class AnalysisSelectionService:
     @staticmethod
-    def _section_constraints(profile: Profile, facts: FactStore) -> list[SelectionSectionContext]:
+    def _section_constraints(
+        profile: Profile, facts: FactStore, capacity: dict[str, int]
+    ) -> list[SelectionSectionContext]:
         """Describe the same per-section pin capacity that selection enforces.
 
-        Structural facts and Profile pins consume the section budget before an
-        AI overlay is considered. The full selection policy still validates the
-        proposal, including role floors and required-tag coverage.
+        Structural facts, Profile pins and role-block floor reservations consume
+        the section budget before an AI overlay is considered. `capacity` comes
+        from the domain's own selection code, so the number offered here is the
+        number `build_selection` will honour. The full selection policy still
+        validates the proposal, including required-tag coverage.
         """
         sections: list[SelectionSectionContext] = []
         for spec in profile.sections:
@@ -44,7 +48,7 @@ class AnalysisSelectionService:
                     fact_ids=list(spec.fact_ids),
                     max_claims=budget,
                     fixed_fact_ids=fixed,
-                    max_additional_pins=budget - len(fixed),
+                    max_additional_pins=capacity[spec.name_en],
                 )
             )
         return sections
@@ -217,7 +221,11 @@ class AnalysisSelectionService:
                     "non_excludable_fact_ids": non_excludable,
                     "emphasis_policy_version": manifest.emphasis_policy_version,
                 },
-                sections=AnalysisSelectionService._section_constraints(profile, knowledge.facts),
+                sections=AnalysisSelectionService._section_constraints(
+                    profile,
+                    knowledge.facts,
+                    AnalysisSelection.pin_capacity(effective_analysis, knowledge),
+                ),
             ),
             model=command.model,
             reasoning_effort=command.reasoning_effort,

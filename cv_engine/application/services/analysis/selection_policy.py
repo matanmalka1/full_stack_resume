@@ -11,7 +11,7 @@ from ....domain.contracts.selection import SelectionManifest
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import ProfileStore, classification_mismatch
 from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
-from ....domain.selection import build_selection
+from ....domain.selection import build_selection, pin_capacity
 from ...commands import CreateSelectionPlanCommand
 from ...errors import MissingFactRendering, PreconditionFailed, StateConflict
 from ..proposals import ProviderEvidence
@@ -55,6 +55,23 @@ class AnalysisSelection:
             )
         return selected
 
+    @staticmethod
+    def _line_groups(analysis: JobAnalysis, profile: Profile, knowledge):
+        if knowledge.presentations is None:
+            return None
+        return knowledge.presentations.line_groups(profile, analysis.emphasis)
+
+    @classmethod
+    def pin_capacity(cls, analysis: JobAnalysis, knowledge) -> dict[str, int]:
+        profile = cls.profile(analysis, knowledge.profiles)
+        return pin_capacity(
+            analysis=analysis,
+            profile=profile,
+            policy=knowledge.policies.get(analysis.emphasis),
+            facts=knowledge.facts,
+            line_groups=cls._line_groups(analysis, profile, knowledge),
+        )
+
     @classmethod
     def manifest(cls, analysis: JobAnalysis, knowledge, **overlays) -> SelectionManifest:
         profile = cls.profile(analysis, knowledge.profiles)
@@ -65,11 +82,7 @@ class AnalysisSelection:
                 policy=knowledge.policies.get(analysis.emphasis),
                 policy_store_version=knowledge.policies.version,
                 facts=knowledge.facts,
-                line_groups=(
-                    knowledge.presentations.line_groups(profile, analysis.emphasis)
-                    if knowledge.presentations is not None
-                    else None
-                ),
+                line_groups=cls._line_groups(analysis, profile, knowledge),
                 **overlays,
             )
             return manifest

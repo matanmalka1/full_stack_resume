@@ -538,6 +538,9 @@ def apply_claim_edit(
     template_id: str | None = None,
     template_version: str | None = None,
 ) -> DraftDocument:
+    # Callers diff the draft they passed against the one returned to find what an
+    # edit touched; editing the input in place made that diff always empty.
+    draft = draft.model_copy(deep=True)
     try:
         current = next(claim for claim in draft_claims(draft) if claim.claim_id == claim_id)
     except StopIteration as exc:
@@ -639,6 +642,7 @@ def remove_claim(draft: DraftDocument, claim_id: str, facts: FactStore) -> Draft
     A section left with no claims keeps its heading. Removing a line is not
     permission to restructure the document.
     """
+    draft = draft.model_copy(deep=True)
     if draft.headline.claim_id == claim_id:
         raise ValueError("the headline is structural and cannot be removed")
     if any(claim.claim_id == claim_id for claim in draft.contacts):
@@ -673,6 +677,7 @@ def add_claim(
     removed), and the fact-resolution flow built for that case is exactly what
     a manually added line needs.
     """
+    draft = draft.model_copy(deep=True)
     stripped = text.strip()
     if not stripped:
         raise ValueError("manual claim text cannot be empty")
