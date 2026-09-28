@@ -11,19 +11,18 @@ interface TooltipProps {
 
      The default is the trigger's closing edge, so the bubble opens back across the page.
      A tooltip is always wider than the icon button it names, and the controls that need
-     one are the icon-only ones - which is to say the ones at an edge: the masthead's
-     theme toggle, a table row's overflow menu. Centred on those, half the bubble hung
+     one are the icon-only ones - which is to say the ones at an edge, such as a table
+     row's overflow menu. Centred on those, half the bubble hung
      off the viewport and gave the whole document a horizontal scrollbar while remaining
      invisible at rest. "center" stays available for a trigger with room on both sides. */
   align?: "center" | "end";
   children: ReactNode;
   className?: ClassValue;
   label: string;
-  /* Which side of the trigger the bubble hangs on. "shell" is the shell's own case: the
-     masthead's controls sit at the top of a narrow page and at the foot of the sidebar on
-     a wide one, so the bubble has to hang down in the first and up in the second, or it
-     leaves the viewport at whichever end it is pinned to. "rail" is the collapsed
-     sidebar's: its controls are icons in a column pinned to the inline-start edge, so the
+  /* Which side of the trigger the bubble hangs on. "shell" supports controls that sit at
+     the top of a narrow page and at the foot of a wide sidebar, so the bubble hangs down
+     in the first and up in the second. "rail" is the collapsed sidebar's: its controls
+     are icons in a column pinned to the inline-start edge, so the
      bubble hangs beside the trigger and opens across the page. It sets its own inline
      position, so `align` does not apply to it. */
   placement?: "top" | "bottom" | "shell" | "rail";

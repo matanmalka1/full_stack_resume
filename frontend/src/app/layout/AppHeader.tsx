@@ -9,7 +9,6 @@ import { GlobalSearch } from "../search/GlobalSearch";
 import { boardPath } from "../boardReturn";
 import { routePaths } from "../routePaths";
 import { AppNavigation } from "./AppNavigation";
-import { ThemeToggle } from "./ThemeToggle";
 
 /* Whether the application is currently talking to the server, anywhere. Decorative: the
    screens announce their own loading in words through `QueryState`, and a bar that also
@@ -111,13 +110,9 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
             <AppNavigation collapsed={collapsed} />
           </div>
 
-          {/* In the sidebar this wraps into exactly two rows: the palette takes the
-              column's full width - it is the one control here with a label to read - and
-              the new-job command shares the row below it with the theme toggle. Left to
-              free wrapping at a 15rem measure each control claimed a row of its own, and
-              the toggle, the only one narrower than the column, sat alone against the
-              opening edge reading as a stray control rather than as part of the group.
-              On the rail every control is an icon, so they stack in one column. */}
+          {/* The palette takes the expanded sidebar's full width, with the new-job
+              command below it. On the rail both controls are icons, so they stack in
+              one column. */}
           <div
             className={cx(
               "flex items-center gap-2 sm:gap-3 lg:mt-auto lg:gap-2",
@@ -147,7 +142,6 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
               </Link>
             )}
 
-            <ThemeToggle tooltipPlacement={collapsed ? "rail" : "shell"} />
           </div>
         </div>
       </div>

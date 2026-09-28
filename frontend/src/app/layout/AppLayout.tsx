@@ -35,7 +35,7 @@ export const AppLayout = () => {
     <div
       className={cx(
         "min-h-screen text-cv-text lg:grid",
-        sidebar.collapsed ? "lg:grid-cols-[4.5rem_minmax(0,1fr)]" : "lg:grid-cols-[15rem_minmax(0,1fr)]",
+        sidebar.collapsed ? "lg:grid-cols-[4.5rem_minmax(0,1fr)]" : "lg:grid-cols-[13rem_minmax(0,1fr)]",
       )}
       data-density={displaySettings?.ui_density ?? "comfortable"}
       data-route-density={inWorkflow ? "focus" : "work"}

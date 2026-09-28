@@ -67,7 +67,6 @@ test.describe("the application shell", () => {
         page.getByRole("link", { name: "הגדרות" }),
         page.getByRole("button", { name: "מעבר מהיר למועמדות" }),
         page.getByRole("link", { name: "קליטת משרה חדשה" }),
-        page.getByRole("button", { name: /^ערכת נושא:/ }),
       ].map((control) => control.boundingBox()),
     );
     for (const box of controlBoxes) {
@@ -98,7 +97,7 @@ test.describe("the application shell", () => {
   });
 });
 
-test("shares the saved theme between the shell and Settings and follows system changes", async ({ page }) => {
+test("applies the saved theme from Settings and follows system changes", async ({ page }) => {
   let saved: Settings = { ...settings, ui_theme: "system" };
   await page.route("**/api/v1/settings", async (route) => {
     if (route.request().method() === "PATCH")
@@ -123,11 +122,8 @@ test("shares the saved theme between the shell and Settings and follows system c
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("button", { name: "שמירת הגדרות" }).click();
   await expect(page.getByText("ההגדרות נשמרו")).toBeVisible();
-  await expect(page.getByRole("button", { name: "ערכת נושא: כהה", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "ערכת נושא: כהה", exact: true }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(page.getByRole("switch", { name: "ערכת נושא כהה", exact: true })).not.toBeChecked();
-  await expect(page.getByRole("dialog", { name: "ערכת נושא", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^ערכת נושא:/ })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("switch", { name: "ערכת נושא כהה", exact: true })).not.toBeChecked();
+  await expect(page.getByRole("switch", { name: "ערכת נושא כהה", exact: true })).toBeChecked();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
