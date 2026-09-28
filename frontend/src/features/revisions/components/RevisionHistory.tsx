@@ -248,7 +248,10 @@ export const RevisionHistory = ({ entries, nextDraft }: RevisionHistoryProps) =>
   });
 
   return (
-    <Card aria-labelledby="revision-history-heading" className="bg-cv-surface p-4 shadow-surface sm:p-5">
+    <Card
+      aria-labelledby="revision-history-heading"
+      className="rounded-surface bg-cv-surface p-4 shadow-surface sm:p-5"
+    >
       <SectionHeader
         actions={
           <span className="rounded-pill border border-cv-border bg-cv-surface-muted px-2.5 py-0.5 text-caption font-semibold text-cv-text-muted">

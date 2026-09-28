@@ -66,7 +66,10 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
       <aside aria-label="פרטי הגרסה והאימות" className="flex min-w-0 flex-col gap-4">
         {history}
 
-        <Card aria-labelledby="ready-validation-heading" className="flex flex-col gap-4 bg-cv-surface p-4">
+        <Card
+          aria-labelledby="ready-validation-heading"
+          className="flex flex-col gap-4 rounded-surface bg-cv-surface p-4"
+        >
           <CardHeading icon={ShieldCheck} id="ready-validation-heading">
             אימות הגרסה המוכנה
           </CardHeading>
@@ -80,7 +83,10 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
         {additionalOptions}
 
         <Disclosure flush summary="פרטים טכניים וביקורת">
-          <Card aria-labelledby="revision-record-heading" className="overflow-x-auto bg-cv-surface p-4">
+          <Card
+            aria-labelledby="revision-record-heading"
+            className="overflow-x-auto rounded-surface bg-cv-surface p-4"
+          >
             <CardHeading icon={Lock} id="revision-record-heading">
               הרשומה הקבועה
             </CardHeading>
@@ -104,7 +110,7 @@ export const RevisionRecord = ({ additionalOptions, decision, history, revision 
             there rather than from here. */}
         {decision === undefined ? null : (
           <Disclosure flush summary="הסבר ההחלטות של הגרסה">
-            <Card className="flex flex-col gap-3 bg-cv-surface p-4">
+            <Card className="flex flex-col gap-3 rounded-surface bg-cv-surface p-4">
               <p className="text-support text-cv-text-muted">
                 מסמך קריא שמסביר מה נבחר, אילו פערים התקבלו ואילו חריגות נרשמו.
               </p>
