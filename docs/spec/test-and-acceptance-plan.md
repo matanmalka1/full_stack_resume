@@ -36,13 +36,15 @@ Cover:
 - entity/value validation
 - immutable lifecycle rules
 - Fact lifecycle and replacement
-- JobSnapshot/Analysis/SelectionPlan lineage
-- approval exactness
-- Ready qualification and compatibility
-- PreparationState and WorkingDraftState
-- exact PreparationState precedence with milestones plus newer review/draft work
-- WorkingDraft deactivation on approval and explicit later-draft creation
-- warnings, blockers, review and stale reasons
+- JobSnapshot/JobAnalysis lineage and document pinning (`analysis_id`)
+- `document_hash`, `facts_hash`, and `basis` computation
+- derived-state exactness: `draft`/`approved`/`ready` from `approved_basis`/
+  `rendered_basis` against `basis`; `content_check` from `checked_basis`
+- PreparationState and DocumentState
+- exact PreparationState precedence, first-match-wins, over the five values
+- editing an approved or Ready document returns it to `draft` on the next read, with no
+  separate deactivation or new-document step
+- warnings, blockers, and review reasons (no stale reasons: state-and-use-cases.md §6)
 - available/blocked/recommended action policy
 - recruitment transitions, correction, closed/terminal outcome
 - filename/CandidateContext policy
@@ -74,9 +76,10 @@ contract coverage. Cover:
 - fixed project-path containment
 - transaction isolation, row locking, and claiming behavior relevant to API/worker concurrency
 - query/Ready metadata captured in one snapshot, with payload verification after closure
-- backend-neutral read-only orphan inventory, snapshot/revision/artifact reference
-  exclusion (including historical/inactive evidence), working-projection exclusion,
-  symlink containment, S3 prefix isolation/pagination, and explicit listing failure
+- backend-neutral read-only orphan inventory, snapshot/submission/artifact reference
+  exclusion (including historical/inactive evidence), the document's mutable rendered
+  files' exclusion, symlink containment, S3 prefix isolation/pagination, and explicit
+  listing failure
 - inspection candidates remain unchanged and readable; listing does not imply safe
   deletion or change the reconciliation verdict
 
@@ -180,7 +183,9 @@ Cross-cutting variants, covered through the application layer and the API:
 - low fit/hard gap -> visible diagnostics without a review stop
 - no-review auto-generation
 - unsupported free-text claim -> save succeeds, approval blocks
-- stale snapshot/analysis/plan/draft/validation
+- a newer JobSnapshot or JobAnalysis than the document's pin (`DOCUMENT_ON_OLDER_ANALYSIS`
+  warning, document unchanged), and a basis mismatch from a content/selection edit or a
+  dependency fact edit (outdated content report, lost approval/ready)
 - prompt-injection job text
 
 Every Sales subtype remains covered through unit analysis, golden selection, and
@@ -192,10 +197,10 @@ fixture tests rather than a costly journey per subtype.
 
 ```text
 Create
--> Analyze
+-> Analyze (creates the CVDocument, pinned, with its deterministic selection, no content)
 -> auto Draft when review is unnecessary
 -> Edit
--> Validate
+-> Check
 -> Approve
 -> Render
 -> Ready
@@ -203,16 +208,17 @@ Create
 ```
 
 Assert state/action projection after every step.
-Assert Analyze atomically returns an initial deterministic SelectionPlan ID and the
-no-review path passes that explicit ID to Draft without another plan-creation request.
+Assert the first `analyze_job` atomically creates the document with the analysis's
+deterministic selection and `content IS NULL`, and that the no-review path calls
+`create_draft` against that document without a separate selection-creation request.
 
 ### 5.2 Low-fit and hard-gap path
 
 ```text
 Create
--> Analyze -> immutable Analysis/SelectionPlan created
+-> Analyze -> immutable JobAnalysis created; CVDocument created pinned to it
 -> Fit and gaps remain visible
--> Draft -> Validate -> Approve -> Render -> Ready
+-> Draft -> Check -> Approve -> Render -> Ready
 ```
 
 ### 5.3 Editor safety path
@@ -221,36 +227,65 @@ Create
 - add an unsupported claim and preserve it
 - observe blocker and pending/unlinked status
 - remove or resolve it through deterministic/fact lifecycle
-- invalidate prior ValidationRun on any content change
-- approve only exact revalidated content
+- assert `checked_basis != basis` (the report is shown as outdated) after any content
+  change, without a separate invalidation write
+- approve only when `check_document`'s fresh report against the current basis passes
 
 ### 5.4 Rendering failure path
 
-- approve exact revision
+- approve the document (`approved_basis == basis`)
 - inject render/browser failure
-- assert ApprovedRevision remains approved
+- assert the document stays `approved` (`document_state = approved`); `last_render_error`
+  is recorded only while `document_hash` still equals the failed attempt's
+  `expected_document_hash`
 - retry through a new Operation
-- establish `ready_qualified` for the same ApprovedRevision only after exact passing
-  artifacts, then assert active Ready separately from snapshot+analysis compatibility
+- establish `document_state = ready` only once `rendered_basis == approved_basis ==
+  basis` for exact passing artifacts, then assert Ready is lost only by a change the
+  basis covers, never by an unrelated context event
 
-### 5.5 Ready plus parallel draft
+### 5.5 Ready, then a newer analysis
 
-- create Ready ApprovedRevision
-- create a new SelectionPlan/WorkingDraft under the same snapshot+analysis
-- assert PreparationState remains Ready and newer draft is visible
-- create a new analysis or snapshot
-- assert old Ready becomes historical for active context
-- submit the exact older `ready_qualified` revision/PDF and assert success plus the
-  older-snapshot/analysis warning rather than a false precondition failure
+- render the document to `ready`
+- create a new JobAnalysis under the same or a new JobSnapshot
+- assert the document's `analysis_id`, selection, content, and `document_state` are all
+  unchanged, and that `DOCUMENT_ON_OLDER_ANALYSIS` is now a warning
+- assert `submit_application` still succeeds against the still-`ready` document and
+  returns the `DOCUMENT_ON_OLDER_ANALYSIS` warning rather than a false precondition
+  failure
+- call `build_from_analysis` against the newer analysis and assert selection is replaced,
+  content and every stamp (`checked_basis`, `approved_basis`, `rendered_basis`) are
+  cleared, and the previous rendered files are deleted best-effort
+
+There is no parallel-draft scenario to cover: there is exactly one document per
+Application, so "Ready plus a newer draft in progress" does not arise.
 
 ### 5.6 Approval and execution boundaries
 
-- approve an exact validated WorkingDraft and assert the active draft pointer is clear
-- assert `newer_draft_in_progress=false` until a later draft is explicitly created
-- run analyze/generate/render through the Operation runner and assert it uses
-  leases/heartbeat/idempotency and completes the Operations
+- approve an exact checked document and assert `approved_basis` is stamped and
+  `approved_at` set; re-approving an already-current `approved_basis` returns the
+  existing approval without rewriting `approved_at` or appending an audit record
+- edit the approved document and assert the next read reports `document_state = draft`
+  with no separate command required to "reopen" it
+- run `propose_selection`/`create_draft`/`regenerate_section`/`regenerate_claim`/
+  `render_document` through the Operation runner and assert each carries
+  `expected_document_hash`, uses leases/heartbeat/idempotency, and completes
 - assert an approval records explicit user approval and cannot bypass a validation
-  blocker
+  blocker or review reason
+
+### 5.7 Pipeline scenario
+
+```text
+ingest -> analyze -> draft -> check -> approve -> render -> ready -> reconcile
+```
+
+This is `tests/e2e/test_pipeline_end_to_end.py` (CLAUDE.md's third gate trigger — a
+change to a stored value's meaning, a public signature, or a projection field). It
+drives the application services directly against a fresh PostgreSQL database with
+`OPENAI_API_KEY` unset: `analyze` is the one step needing a provider (or a pre-seeded
+JobAnalysis, since analysis creation itself requires a configured provider per
+product-spec §2); `draft` (`create_draft` in deterministic mode) through `reconcile` run
+with no provider configured, proving the deterministic downstream path reaches Ready and
+survives `reconcile()` with no AI key.
 
 ## 6. AI tests
 
@@ -386,12 +421,13 @@ list is that checklist; there is no separate smoke-run document:
 Required concurrency scenarios (they may be grouped into a smaller number of
 table-driven or journey tests):
 
-- two autosaves with the same ETag
+- two autosaves with the same `expected_document_hash`
 - a second client's edit during Web autosave
-- source changes during generation
+- `expected_document_hash` changes during generation (`SOURCE_CHANGED`)
 - duplicate analyze/generate/render idempotency requests
-- duplicate approve request with the same idempotency key
-- same key with a different payload hash
+- duplicate approve request repeated with `approved_basis` already equal to `basis`
+  (returns the existing approval, no new audit record)
+- same idempotency key with a different payload hash
 - two workers attempt to claim one Operation
 - two runners race for one Operation and only one claims it
 - a render contending with the global render lease remains queued with an observable
@@ -400,15 +436,18 @@ table-driven or journey tests):
 - expired lease and restart
 - cancellation before execution
 - cancellation after an immutable output exists but before activation
-- ValidationRun becomes stale before approve
+- a content edit between `check_document` and `approve_document` makes `checked_basis !=
+  basis`, so `approve_document`'s own re-check fails rather than trusting the stale
+  report
 - render retry
-- new snapshot during analysis
-- new analysis/SelectionPlan during drafting
+- new JobSnapshot during analysis
+- a new JobAnalysis or an `update_selection` call during drafting
 - Knowledge dependency changes before Operation activation
-- external/manual Knowledge change while an editor form is open
+- external/manual Knowledge change while an editor form is open; assert the next basis
+  read reflects it without a journal write to the document
 
 Expected results are exact Conflict/Precondition/Operation outcomes with no overwrite,
-double revision, double activation, or silent partial state.
+double activation, or silent partial state.
 
 ## 8. Knowledge journal failure injection
 
@@ -417,14 +456,15 @@ matrix rather than independent test items:
 
 1. crash before filesystem replace
 2. crash after replace and before PostgreSQL commit
-3. failure marking the journal COMMITTED rolls back fact events and any SelectionPlan
-   in the same write scope; no separately committed mutation/unmarked journal window
-   is permitted
+3. failure marking the journal COMMITTED rolls back fact events and any resulting
+   document selection update in the same write scope; no separately committed
+   mutation/unmarked journal window is permitted
 4. staged file missing or corrupted
 5. old hash mismatch
 6. new hash mismatch
 7. audit insertion failure
-8. attachment or SelectionPlan constraint failure
+8. attachment or document-selection-update constraint failure (`expected_document_hash`
+   mismatch inside `confirm_and_use_fact`'s `update_selection` step)
 9. post-commit staging cleanup failure leaves committed state intact and recoverable
 
 Every case must end in deterministic recovery or explicit focused quarantine. No silent
@@ -474,7 +514,7 @@ magnitude and recorded in API/config contracts.
 
 Automated axe checks currently cover New Application, Application Detail (including the
 new-snapshot dialog), and Settings/Reconciliation. Release coverage must additionally
-exercise the Dashboard, Resume view, Draft Editor, and Revision screens. A new screen is
+exercise the Dashboard, Resume view, Draft Editor, and the document/Ready screen. A new screen is
 expected to arrive with its scan; until a route-derived coverage guard exists, the
 acceptance report lists the routed screens and their corresponding axe scenarios so a
 missing scan is visible rather than implied to pass.
@@ -529,9 +569,10 @@ Cover:
 - rejection of normal backward transition
 - correction event/reference/reason and current projection
 - terminal outcome preserved after closed
-- exact internal submission revision/PDF
-- multiple submissions without redundant applied transition
-- external submission without fake artifact/revision
+- exact internal submission content/PDF, copied with a SHA-256 per file
+- multiple submissions without redundant applied transition, and without changing the
+  document
+- external submission without fake artifact/content
 - draft work after applied leaves recruitment state unchanged
 - one active next action, event history, and computed overdue warning
 - no hard delete through UI
