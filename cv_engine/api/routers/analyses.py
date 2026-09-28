@@ -1,25 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, status
 
-from ...application.commands import (
-    ApplyAnalysisDecisionsCommand,
-    CreateSelectionPlanCommand,
-    ProposeSelectionPlanCommand,
-)
-from ...application.errors import PreconditionFailed
-from ...util import new_id
+from ...application.commands import ApplyAnalysisDecisionsCommand
 from ..dependencies import Services
-from ..headers import IdempotencyKey
-from ..responses import accepted_operation
-from ..schemas.analyses import (
-    AnalysisDecisionsResponse,
-    ApplyAnalysisDecisionsRequest,
-    CreateSelectionPlanRequest,
-    CreateSelectionPlanResponse,
-)
+from ..schemas.analyses import AnalysisDecisionsResponse, ApplyAnalysisDecisionsRequest
 from ..schemas.applications import ApplicationStateResponse
-from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -35,7 +21,8 @@ def apply_analysis_decisions(
     request: ApplyAnalysisDecisionsRequest,
     services: Services,
 ) -> AnalysisDecisionsResponse:
-    """`201`: both branches create an immutable record and neither mutates one.
+    """`201`: a meaning change creates an immutable JobAnalysis; a selection-only
+    change updates the document's selection in place (§13).
 
     `application_id` is in the body rather than inferred from the analysis. The
     client states which Application it believes it is deciding for, and a
@@ -64,75 +51,3 @@ def apply_analysis_decisions(
             "state": projected,
         }
     )
-
-
-@router.post(
-    "/{analysis_id}/selection-plans",
-    response_model=None,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a replacement SelectionPlan for an analysis",
-    responses={
-        201: {"model": CreateSelectionPlanResponse, "description": "SelectionPlan created."},
-        202: {"model": OperationResponse, "description": "AI proposal Operation accepted."},
-    },
-)
-def create_selection_plan(
-    analysis_id: str,
-    request: CreateSelectionPlanRequest,
-    services: Services,
-    response: Response,
-    idempotency_key: IdempotencyKey = None,
-) -> CreateSelectionPlanResponse | OperationResponse:
-    """`201` and the plan itself in deterministic mode; `202` in AI mode (§13).
-
-    One route, two statuses, decided per request rather than per route - which
-    is why the acceptance helper sets its own status instead of the decorator
-    doing it. `201` means the immutable plan exists and is in the body; `202`
-    means a provider will be asked and the `Location` is what to poll.
-
-    No provider call happens inside this request in either branch. That is the
-    §13 rule, and it is why the AI branch queues an Operation rather than
-    awaiting an answer.
-    """
-    body = request.model_dump(mode="python")
-    mode = body.pop("mode")
-    overlay = {
-        "pinned_fact_ids": body.pop("pinned_fact_ids"),
-        "excluded_fact_ids": body.pop("excluded_fact_ids"),
-        "expected_selection_plan_id": body.pop("expected_selection_plan_id"),
-    }
-    if mode == "ai":
-        if overlay["pinned_fact_ids"] or overlay["excluded_fact_ids"]:
-            raise PreconditionFailed(
-                "AI mode proposes the fact overlay; submit pins and exclusions "
-                "through the deterministic mode instead"
-            )
-        if body.pop("emphasis_override") is not None:
-            raise PreconditionFailed(
-                "emphasis_override is a deterministic-mode decision; submit it through "
-                "the deterministic mode instead"
-            )
-        queued = services.operation_submissions.submit_selection_plan_proposal(
-            ProposeSelectionPlanCommand(
-                job_analysis_id=analysis_id,
-                expected_selection_plan_id=overlay["expected_selection_plan_id"],
-                enforce_expected_selection_plan=(
-                    "expected_selection_plan_id" in request.model_fields_set
-                ),
-                **body,
-            ),
-            idempotency_key=idempotency_key or new_id(),
-            analysis_service=services.analysis,
-        )
-        return accepted_operation(response, queued)
-    result = services.analysis.create_selection_plan(
-        CreateSelectionPlanCommand(
-            job_analysis_id=analysis_id,
-            enforce_expected_selection_plan=(
-                "expected_selection_plan_id" in request.model_fields_set
-            ),
-            **overlay,
-            **body,
-        )
-    )
-    return CreateSelectionPlanResponse.model_validate(result.model_dump(mode="json"))

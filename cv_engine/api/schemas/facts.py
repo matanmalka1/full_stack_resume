@@ -29,7 +29,6 @@ from pydantic import Field
 
 from ...application.commands import FactEventView
 from ...domain.contracts.knowledge import Fact, FactStatus
-from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.taxonomy import ProfileName
 from ...domain.facts import FACT_SOURCE_NAMES, source_name_of
 from .health import HttpSchema
@@ -167,11 +166,15 @@ class FactAttachmentResponse(FactMutationResponse):
 
 
 class ConfirmAndUseFactResponse(HttpSchema):
-    """The one logical command's whole outcome: promoted, attached, selected."""
+    """The one logical command's whole outcome: promoted, attached, selected.
+
+    The document whose selection the fact joined, and its token afterwards.
+    """
 
     fact: FactResponse
     event_ids: list[str]
-    selection_plan: SelectionPlan
+    document_id: str
+    document_hash: str
     facts_version: str
     lifecycle_version: str
     profile_store_version: str
@@ -197,7 +200,7 @@ class FactContentRequest(HttpSchema):
 
 
 class CaptureClaimFactRequest(HttpSchema):
-    """A fact created from an unsupported manual claim in a working draft.
+    """A fact created from an unsupported manual claim in the document.
 
     The claim's exact text is copied without AI rewriting, so `renderings` is
     absent: the English rendering comes from the claim itself. Everything the
@@ -244,6 +247,8 @@ class ConfirmAndUseFactRequest(HttpSchema):
     job_analysis_id: str
     profile: str
     section: str
+    #: The document the user was looking at; the selection step is guarded by it.
+    expected_document_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     reason: str = ""
 
 

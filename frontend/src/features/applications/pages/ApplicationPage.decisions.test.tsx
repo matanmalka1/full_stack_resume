@@ -118,10 +118,10 @@ describe("voluntary matching configuration", () => {
             {
               application_id: "app-1",
               job_analysis_id: "analysis-1",
-              selection_plan_id: "legacy-plan",
               created_analysis: false,
               analysis: after.latest_analysis!.analysis,
-              plan: {},
+              document_id: "doc-1",
+              document_hash: "b".repeat(64),
               state: after,
             },
             201,
@@ -149,6 +149,7 @@ describe("voluntary matching configuration", () => {
     expect(JSON.parse((applyCall as [string, RequestInit])[1].body as string)).toEqual({
       application_id: "app-1",
       expected_analysis_id: "analysis-1",
+      expected_document_hash: "a".repeat(64),
       emphasis_override: "new-business",
     });
   });

@@ -61,6 +61,7 @@ export const MatchingConfigurationEditor = ({
       return applyAnalysisDecisions(
         detail.latest_analysis_id,
         detail.application.id,
+        detail.document_hash ?? null,
         matchingSubmission(current, values),
       );
     },

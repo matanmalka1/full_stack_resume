@@ -81,12 +81,7 @@ export const outlineClaims = (outline: DocumentOutline): DraftClaim[] => [
 /* The preview is framed, not fetched: the browser loads this URL inside a sandboxed
    iframe, so it never passes through `apiRequest` and never becomes a string this code
    holds. The hash is in the query string only so that a save produces a different URL and
-   the frame reloads; the server ignores it and answers for the current document.
-
-   Lead-decided contract addition: `GET .../document/preview` (HTML) and
-   `.../document/preview.pdf` have the shape of the retired working-draft preview routes,
-   minus the draft id. They are not in the generated contract yet - Wave 3 declares them -
-   so the paths are built here, the way the old ones were. */
+   the frame reloads; the server ignores it and answers for the current document. */
 export const documentPreviewSrc = (applicationId: string, documentHash: string): string =>
   `${documentPath(applicationId, "/preview")}?v=${encodeURIComponent(documentHash)}`;
 

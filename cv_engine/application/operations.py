@@ -218,8 +218,14 @@ class CreateOperation(OperationModel):
         return sha256_text(canonical_json(self.payload))
 
 
+#: What an Operation can own as an output. Closed: analysis activates a JobAnalysis,
+#: document-mutating operations name the CVDocument they changed, and every provider
+#: call registers its response as evidence.
+OperationOutputType = Literal["job_analysis", "cv_document", "provider_response"]
+
+
 class OperationOutputReference(OperationModel):
-    output_type: str
+    output_type: OperationOutputType
     output_id: str
     active: bool
 

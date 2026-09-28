@@ -1,6 +1,6 @@
-"""Analysis, review decisions, and selection plans over HTTP.
+"""Analysis and review decisions over HTTP.
 
-`analysis` and `plan` are carried as objects rather than restated field by
+`analysis` is carried as an object rather than restated field by
 field, the same way `JobAnalysisResponse` already carries one. They are domain
 documents with their own versioned schema; a second hand-written copy of that
 schema in the HTTP layer could only drift from it, and a router that named the
@@ -22,8 +22,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from pydantic import Field
+
 from ...domain.contracts.analysis import Language
-from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
 from ...domain.contracts.taxonomy import (
     Emphasis,
     ProfileName,
@@ -40,8 +41,8 @@ class ClassificationOverrides(HttpSchema):
     and a second declaration is a second place to forget one.
 
     Every field is optional and withholding one is not a retraction. Track,
-    Profile and language are analysis-level decisions; Emphasis is committed
-    on SelectionPlan when it is the only change.
+    Profile and language are analysis-level decisions; Emphasis changes only the
+    document's selection when it is the only change.
     """
 
     track_override: Track | None = None
@@ -61,53 +62,13 @@ class CreateAnalysisRequest(ClassificationOverrides):
     provider: Literal["openai"] = "openai"
 
 
-class SelectionOverlayRequest(HttpSchema):
-    """The user's explicit fact decisions.
-
-    Two lists, not three: `selected_fact_ids` is what the resulting plan
-    reports, so it is a response field rather than a request one. Explicit
-    inclusion is a pin.
-    """
-
-    pinned_fact_ids: list[str] = []
-    excluded_fact_ids: list[str] = []
-    #: The plan the client had in front of it when the user decided. A decision
-    #: made against a plan that has since moved is refused rather than applied
-    #: to one the user never saw.
-    expected_selection_plan_id: str | None = None
-
-
-class CreateSelectionPlanRequest(SelectionOverlayRequest):
-    """What `POST /analyses/{id}/selection-plans` accepts, in both modes.
-
-    `mode` is what makes the route answer `201` or `202`. It is explicit and has
-    no `auto` value (§12): the deterministic form commits a plan inside the
-    request, the AI form queues an Operation, and a client is never left
-    guessing which of the two it got.
-
-    The overlay lists are the user's own decisions and belong to the
-    deterministic form. In AI mode the provider proposes the overlay, so
-    sending both would be two answers to the same question - which is why the
-    router refuses that combination rather than silently preferring one.
-    """
-
-    application_id: str
-    mode: Literal["deterministic", "ai"] = "deterministic"
-    #: An explicit Emphasis decision. Deterministic-mode only (§13): AI mode
-    #: proposes the plan under the analysis's own Emphasis, so this is
-    #: refused there the same way the fact overlay is.
-    emphasis_override: Emphasis | None = None
-    expected_candidate_context_hash: str | None = None
-    expected_facts_version: str | None = None
-    expected_profile_version: str | None = None
-    expected_selection_policy_version: str | None = None
-
-
-class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverrides):
+class ApplyAnalysisDecisionsRequest(ClassificationOverrides):
     """One review-form submission (§13).
 
-    Carries analysis and selection-policy decisions because one form may submit
-    both. Which immutable records are created is decided by what changed.
+    Carries analysis and selection decisions because one form may submit both.
+    Track/Profile/language create a new JobAnalysis; Emphasis and the fact overlay
+    change only the document's selection, in place. Two overlay lists, not three:
+    explicit inclusion is a pin.
     """
 
     application_id: str
@@ -115,64 +76,29 @@ class ApplyAnalysisDecisionsRequest(SelectionOverlayRequest, ClassificationOverr
     #: identity so the write can compare the observation as well as resolve the
     #: immutable source being addressed.
     expected_analysis_id: str
-
-
-class SelectionPlanResponse(HttpSchema):
-    id: str
-    application_id: str
-    job_analysis_id: str
-    version_number: int
-    plan: dict[str, Any]
-    candidate_context_version: str
-    candidate_context_hash: str
-    profile_version: str
-    selection_policy_version: str
-    track_emphasis_dependencies: dict[str, str]
-    created_at: str
-
-
-class SelectionPlanCandidateResponse(HttpSchema):
-    fact_id: str
-    text: str | None = None
-    section: str
-    outcome: SelectionOutcome
-    reason: OmissionReason | None = None
-    user_selectable: bool
-
-
-class SelectionPlanDetailResponse(SelectionPlanResponse):
-    language: str
-    facts_version: str
-    pinned_fact_ids: list[str]
-    excluded_fact_ids: list[str]
-    #: Null for engine and user plans and for plans written before provenance.
-    proposed_by: ProposalSource | None
-    proposal_rationale: str | None
-    candidates: list[SelectionPlanCandidateResponse]
-
-
-class CreateSelectionPlanResponse(HttpSchema):
-    application_id: str
-    job_analysis_id: str
-    selection_plan_id: str
-    plan: SelectionPlanResponse
+    #: The document the form was read beside; required whenever a document exists.
+    #: A decision made against a document that has since moved is refused rather
+    #: than applied to one the user never saw.
+    expected_document_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    pinned_fact_ids: list[str] = []
+    excluded_fact_ids: list[str] = []
 
 
 class AnalysisDecisionsResponse(HttpSchema):
     """Which analysis is in force after the decision, and whether it is a new one.
 
     `job_analysis_id` names the analysis the client should work from now: the
-    new one when the decision changed meaning, the original when only the fact
-    overlay moved. `created_analysis` is what tells the two apart.
+    new one when the decision changed meaning, the original when only the
+    selection moved. `created_analysis` is what tells the two apart. Neither
+    branch re-pins the document; `document_hash` is its token now.
     """
 
     application_id: str
     job_analysis_id: str
-    selection_plan_id: str
     created_analysis: bool
     analysis: dict[str, Any]
-    plan: SelectionPlanResponse
-    #: Fresh authoritative projection after the immutable replacements were
-    #: activated. Clients choose the next step from this rather than predicting
-    #: whether the new context is reviewable, draftable, stale, or historical.
+    document_id: str | None = None
+    document_hash: str | None = None
+    #: Fresh authoritative projection after the decision. Clients choose the next
+    #: step from this rather than predicting what the new context allows.
     state: ApplicationStateResponse

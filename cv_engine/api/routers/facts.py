@@ -238,7 +238,7 @@ def delete_fact(
     """One-way; `confirm: false` is refused rather than interpreted.
 
     Always permitted, even for a fact attached to a Profile section or
-    referenced by an active SelectionPlan/claim/gap resolution: this command
+    referenced by a document selection, claim, or gap resolution: this command
     does not pre-check those, the review reason and warning it produces do
     (state-and-use-cases.md §17).
     """
@@ -296,8 +296,8 @@ def confirm_and_use_fact(
     request: ConfirmAndUseFactRequest,
     services: Services,
 ) -> ConfirmAndUseFactResponse:
-    """One logical command: it promotes, attaches, and creates the replacement
-    plan, or it reports a complete failure. There is no partial outcome to
+    """One logical command: it promotes, attaches, and adds the fact to the
+    document's selection, or it reports a complete failure. There is no partial outcome to
     report, so there is no partial success status.
     """
     result = services.knowledge.confirm_and_use_fact(
@@ -306,12 +306,14 @@ def confirm_and_use_fact(
         job_analysis_id=request.job_analysis_id,
         profile=request.profile,
         section=request.section,
+        expected_document_hash=request.expected_document_hash,
         reason=request.reason,
     )
     return ConfirmAndUseFactResponse(
         fact=FactResponse.of(result.fact),
         event_ids=result.event_ids,
-        selection_plan=result.selection_plan,
+        document_id=result.document_id,
+        document_hash=result.document_hash,
         facts_version=result.facts_version,
         lifecycle_version=result.lifecycle_version,
         profile_store_version=result.profile_store_version,

@@ -14,7 +14,7 @@ import {
   factHistoryQueryOptions,
   factsQueryPrefix,
 } from "@/api/facts";
-import { documentQueryKey } from "@/api/documents";
+import { type DocumentRead, documentQueryKey } from "@/api/documents";
 import type { EditableDocument } from "../model/drafts.types";
 import { routePaths } from "@/app/routePaths";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -120,11 +120,15 @@ export const ClaimFactResolution = ({
         throw new Error("Confirm and use requires the document's analysis and Profile");
       }
       await beforeResolve?.();
+      /* The selection step is guarded by the document hash. `beforeResolve` settles the
+         autosave and reads the document back, so the cached read is the one to name. */
+      const current = queryClient.getQueryData<DocumentRead>(documentQueryKey(applicationId));
       return confirmAndUseFact(factId, {
         application_id: applicationId,
         job_analysis_id: analysisId,
         profile,
         section,
+        expected_document_hash: current?.document.document_hash ?? draft.document_hash,
         reason: "confirmed from the contextual draft claim flow",
       });
     },

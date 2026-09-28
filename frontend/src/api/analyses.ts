@@ -25,14 +25,10 @@ const applyDecisionsPath = (analysisId: string): ApiPath =>
   `/api/v1/analyses/${encodeURIComponent(analysisId)}/apply-decisions`;
 
 /* §13: synchronous, one commit, no Operation - so no `Idempotency-Key` and no
-   `202`/`Location` obligation. `application_id` and `expected_analysis_id` are stated
-   rather than inferred: the first names ownership and the second is the exact analysis
-   the form read.
-
-   Contract gap, reported rather than worked around: §13 has this command carry
-   `expected_document_hash` when a document exists, but the Wave 1 request schema still
-   offers only the retired `expected_selection_plan_id`. Neither is sent until the request
-   carries the document token.
+   `202`/`Location` obligation. `application_id`, `expected_analysis_id` and
+   `expected_document_hash` are stated rather than inferred: the first names ownership,
+   the second is the exact analysis the form read, and the third the document it was read
+   beside - required whenever a document exists, absent when none does.
 
    Only the decisions that were actually set are sent. A blank control is an absent
    field, not an empty string, because the application layer merges a submission over
@@ -41,6 +37,7 @@ const applyDecisionsPath = (analysisId: string): ApiPath =>
 export const applyAnalysisDecisions = async (
   analysisId: string,
   applicationId: string,
+  expectedDocumentHash: string | null,
   decisions: ClassificationDecisions,
 ): Promise<AnalysisDecisions> => {
   /* The fact overlay is omitted by type, not merely left unset: it belongs to a dedicated
@@ -49,6 +46,7 @@ export const applyAnalysisDecisions = async (
   const body: Omit<ApplyAnalysisDecisionsRequest, "pinned_fact_ids" | "excluded_fact_ids"> = {
     application_id: applicationId,
     expected_analysis_id: analysisId,
+    ...(expectedDocumentHash == null ? {} : { expected_document_hash: expectedDocumentHash }),
     ...(decisions.track_override == null ? {} : { track_override: decisions.track_override }),
     ...(decisions.profile_override == null ? {} : { profile_override: decisions.profile_override }),
     ...(decisions.emphasis_override == null ? {} : { emphasis_override: decisions.emphasis_override }),
