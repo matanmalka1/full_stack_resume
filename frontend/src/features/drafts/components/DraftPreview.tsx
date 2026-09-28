@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { CircleCheck, ExternalLink, FileText, RefreshCw } from "lucide-react";
+import { CircleCheck, ExternalLink, RefreshCw } from "lucide-react";
 
 import { documentPreviewPdfHref, documentPreviewSrc } from "@/api/documents";
 import { buttonClasses } from "@/ui/Button";
 import { DocumentFrame } from "@/ui/DocumentFrame";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
+import { Tooltip } from "@/ui/Tooltip";
 import type { EditableDocument } from "../model/drafts.types";
 
 /* A.4 frame 3's preview pane, and A.3's direction isolation.
@@ -35,39 +36,41 @@ export const DraftPreview = ({ draft }: { draft: EditableDocument }) => {
   return (
     <section aria-labelledby="draft-preview-heading" className="flex flex-col gap-3">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-preview-heading">
-              <FileText aria-hidden="true" className="size-icon-md text-cv-accent" />
-              תצוגה מקדימה
-            </h2>
-            <StatusBadge tone="neutral">טיוטה</StatusBadge>
-          </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="text-heading-sm font-bold text-cv-text" id="draft-preview-heading">
+            תצוגה מקדימה
+          </h2>
+          <StatusBadge className="px-2 py-0.5" tone="neutral">
+            טיוטה
+          </StatusBadge>
           <span className="flex items-center gap-1.5 text-caption text-cv-text-muted">
             {loading ? (
               <RefreshCw aria-hidden="true" className="size-icon-sm animate-spin" />
             ) : (
               <CircleCheck aria-hidden="true" className="size-icon-sm" />
             )}
-            {loading ? "מרענן את התצוגה…" : "מעודכן לגרסה השמורה"}
+            {loading ? "מרענן…" : "מעודכן לגרסה השמורה"}
           </span>
           <LiveRegion>{!loading && loaded?.refreshed ? "התצוגה המקדימה עודכנה" : null}</LiveRegion>
         </div>
         {/* The real PDF of the saved version, before any approval: stamped as a draft,
             stored nowhere. Looking at the layout must not cost an approved version. */}
-        <a
-          className={buttonClasses("secondary", undefined, "compact")}
-          href={documentPreviewPdfHref(draft.application_id, draft.document_hash)}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <ExternalLink aria-hidden="true" className="size-icon-md" />
-          PDF הטיוטה
-        </a>
+        <Tooltip label="הקובץ נבנה מהגרסה השמורה עם חותמת טיוטה, בלי אישור ובלי לשמור אותו." wrap>
+          <a
+            className={buttonClasses("secondary", undefined, "compact")}
+            href={documentPreviewPdfHref(draft.application_id, draft.document_hash)}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <ExternalLink aria-hidden="true" className="size-icon-md" />
+            PDF הטיוטה
+          </a>
+        </Tooltip>
       </header>
 
       {/* The frame owns its toolbar, canvas and page; nothing else sits between it and
-          the document. */}
+          the document. It is built on the server from the saved content, by the same
+          path that produces the final file. */}
       <DocumentFrame
         busy={loading}
         className="w-full"
@@ -75,11 +78,6 @@ export const DraftPreview = ({ draft }: { draft: EditableDocument }) => {
         src={documentPreviewSrc(draft.application_id, draft.document_hash)}
         title="תצוגה מקדימה של הטיוטה"
       />
-
-      <p className="text-caption text-cv-text-muted">
-        נבנית בשרת מהתוכן השמור, באותו מסלול שמייצר את הקובץ הסופי. "PDF הטיוטה" פותח את הקובץ עם חותמת טיוטה, בלי
-        אישור.
-      </p>
     </section>
   );
 };

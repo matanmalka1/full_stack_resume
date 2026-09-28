@@ -48,7 +48,8 @@ export const DraftValidationPanel = ({ check }: DraftValidationPanelProps) => {
 
       {report === null ? (
         <p className="text-support leading-6 text-cv-text-muted">
-          הבדיקה תופעל מכפתור הכנת ה־PDF ותוודא שהגרסה המוצגת מוכנה למסירה.
+          עוד לא הורצה בדיקה על הגרסה הזו. הכפתור "בדיקה והכנת PDF" מריץ אותה ומוודא שהמבנה, העובדות והמספרים תקינים
+          לפני האישור.
         </p>
       ) : (
         <div className={contentCheck === "outdated" ? "opacity-70" : undefined}>
