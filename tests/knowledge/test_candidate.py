@@ -7,9 +7,9 @@ import uuid
 from pathlib import Path
 
 import pytest
+from helpers import stored_document
 
 from cv_engine.domain.candidate import CANDIDATE_FILE, CandidateContextError, contact_href
-from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.domain.facts import FactStore
 from cv_engine.infrastructure.knowledge import load_candidate_context, load_fact_store
 from cv_engine.infrastructure.rendering import normalized_role_filename
@@ -77,7 +77,8 @@ def test_context_resolves_identity_filename_track_contacts_and_dependency_hash(
 
 def test_a_drafted_document_takes_its_identity_from_the_context(drafted_application) -> None:
     setup = drafted_application("Context Co")
-    document = parse_draft(setup.manifest.read_text(encoding="utf-8"))
+    document = stored_document(setup.services, setup.application_id).content
+    assert document is not None
 
     assert document.name == "Matan Malka"
     assert [claim.fact_ids[0] for claim in document.contacts] == [

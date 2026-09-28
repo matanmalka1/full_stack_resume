@@ -1,91 +1,43 @@
 from __future__ import annotations
 
 import hashlib
-import uuid
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from cv_engine.application.errors import ArtifactPayloadMissing
+from cv_engine.application.ports.documents import RenderedFiles
+from cv_engine.infrastructure.document_files import DocumentFiles
 from cv_engine.infrastructure.payloads import PayloadStore
+from cv_engine.runtime.paths import AppPaths
 
 
 @pytest.fixture
 def payload_store(tmp_path: Path) -> PayloadStore:
     root = tmp_path / "project"
-    paths = SimpleNamespace(
-        root=root,
-        artifacts_root=root / "artifacts",
-        temp_root=root / "tmp",
-    )
-    return PayloadStore(paths)
+    root.mkdir()
+    return PayloadStore(AppPaths.from_root(root))
 
 
-def test_approved_payload_layouts_and_every_family_commits(payload_store: PayloadStore) -> None:
-    manifest_id = str(uuid.uuid4())
-
-    assert payload_store.snapshot_path("app", "snapshot").parts[-3:] == (
-        "snapshots",
-        "app",
-        "snapshot.txt",
-    )
-    assert payload_store.revision_path("app", "revision", "attempt", format="json").parts[-5:] == (
-        "revisions",
-        "app",
-        "revision",
-        "attempt",
-        "resume.json",
-    )
-    assert (
-        payload_store.revision_path("app", "revision", "attempt", format="md").name == "resume.md"
-    )
-    for suffix in ("html", ".pdf"):
-        assert (
-            payload_store.output_path("app", "revision", "artifact", suffix=suffix).suffix
-            == f".{suffix.lstrip('.')}"
-        )
-    with pytest.raises(ValueError, match="unsupported output suffix"):
-        payload_store.output_path("app", "revision", "artifact", suffix="png")
-    targets = payload_store.render_targets(
-        "app", "revision", "html-id", "pdf-id", "Recruiter CV.pdf"
-    )
-    assert targets.html.parts[-4:] == ("outputs", "app", "revision", "html-id.html")
-    assert targets.pdf.name == "pdf-id.pdf"
-    assert targets.recruiter_pdf_filename == "Recruiter CV.pdf"
-    assert payload_store.provider_path("app", "operation", "artifact").parts[-4:] == (
-        "provider",
-        "app",
-        "operation",
-        "artifact.json",
-    )
-    assert payload_store.manifest_path(manifest_id).parts[-2:] == (
-        "manifests",
-        f"{manifest_id}.json",
-    )
-
-    with pytest.raises(ValueError, match="UUIDv4"):
-        payload_store.manifest_path("manifest-latest")
-    with pytest.raises(ValueError, match="UUIDv4"):
-        payload_store.manifest_path(str(uuid.uuid1()))
-
+def test_immutable_payload_families_include_submissions(payload_store: PayloadStore):
     destinations = [
-        payload_store.revision_path("app", "revision", "attempt", format="json"),
-        payload_store.revision_path("app", "revision", "attempt", format="md"),
-        payload_store.output_path("app", "revision", "html", suffix="html"),
-        payload_store.output_path("app", "revision", "pdf", suffix="pdf"),
+        payload_store.snapshot_path("app", "snapshot"),
         payload_store.provider_path("app", "operation", "response"),
-        payload_store.manifest_path(str(uuid.uuid4())),
+        *(
+            payload_store.submission_path("app", "submission", suffix=suffix)
+            for suffix in ("html", "pdf")
+        ),
     ]
-
-    for number, destination in enumerate(destinations):
-        content = f"payload-{number}".encode()
+    for index, destination in enumerate(destinations):
+        payload = f"payload-{index}".encode()
         stored = payload_store.commit(
-            destination,
-            payload=content,
-            validate=lambda _payload: True,
+            destination, payload=payload, validate=lambda value: bool(value)
         )
-        assert stored.path.read_bytes() == content
+        assert stored.path.read_bytes() == payload
+        assert stored.sha256 == hashlib.sha256(payload).hexdigest()
+        assert payload_store.verify_payload(stored.project_relative, stored.sha256) == "ok"
+        with pytest.raises(FileExistsError):
+            payload_store.commit(destination, payload=b"replacement", validate=lambda _value: True)
 
 
 def test_commit_validates_before_storing_and_keys_each_attempt_immutably(
@@ -111,15 +63,17 @@ def test_commit_validates_before_storing_and_keys_each_attempt_immutably(
     assert stored.size == len(content)
     assert destination.read_bytes() == content
 
-    first = payload_store.commit_revision("app", "revision", "attempt-1", '{"value":1}', "markdown")
-    second = payload_store.commit_revision(
-        "app", "revision", "attempt-2", '{"value":1}', "markdown"
+    first = payload_store.commit_submission_file(
+        "app", "submission-1", suffix="pdf", payload=b"first"
     )
-    assert first.structured.reference != second.structured.reference
-    assert first.markdown.reference != second.markdown.reference
-
+    second = payload_store.commit_submission_file(
+        "app", "submission-2", suffix="pdf", payload=b"first"
+    )
+    assert first.reference != second.reference
     with pytest.raises(FileExistsError, match="immutable payload already exists"):
-        payload_store.commit_revision("app", "revision", "attempt-1", '{"value":2}', "markdown")
+        payload_store.commit_submission_file(
+            "app", "submission-1", suffix="pdf", payload=b"changed"
+        )
 
 
 def test_traversal_symlink_and_unapproved_destinations_are_refused(
@@ -207,44 +161,26 @@ def test_failed_validation_never_claims_the_destination_key(
     assert stored.project_relative == "artifacts/snapshots/app/snapshot.txt"
 
 
-def test_ingest_render_output_matches_the_reference_the_registry_records(
-    payload_store: PayloadStore,
-) -> None:
-    """Rendered outputs are the one family that arrives as a file, not bytes.
-
-    Chromium writes them to the paths `render_targets` hands it, so they enter
-    storage by location. What must not move is the stored reference: an
-    `artifact_versions` row records this string, and it has to be exactly what
-    the previous `ArtifactStore.relative(path)` produced.
-    """
-    targets = payload_store.render_targets(
-        "app", "revision", "html-id", "pdf-id", "Recruiter CV.pdf"
-    )
-    content = b"<html>rendered</html>"
-    targets.html.parent.mkdir(parents=True, exist_ok=True)
-    targets.html.write_bytes(content)
-
-    stored = payload_store.ingest_render_output(targets.html)
-
-    assert stored.reference == "artifacts/outputs/app/revision/html-id.html"
-    assert stored.sha256 == hashlib.sha256(content).hexdigest()
-    assert stored.size == len(content)
-    # Served back through the same path a download takes.
-    stream = payload_store.open_artifact(stored.reference, stored.sha256)
-    assert b"".join(stream.chunks()) == content
-
-
-def test_ingest_render_output_refuses_a_stray_file_and_reports_a_missing_target(
-    payload_store: PayloadStore, tmp_path: Path
-) -> None:
-    stray = tmp_path / "project" / "artifacts" / "working" / "app" / "resume.html"
-    stray.parent.mkdir(parents=True, exist_ok=True)
-    stray.write_bytes(b"not a rendered output")
-
-    with pytest.raises(ValueError, match="not an approved layout"):
-        payload_store.ingest_render_output(stray)
-
-    missing = payload_store.output_path("app", "revision", "ghost", suffix="pdf")
-
+def test_document_attempts_are_unique_and_submission_copies_are_managed(tmp_path):
+    root = tmp_path / "documents"
+    root.mkdir()
+    paths = AppPaths.from_root(root)
+    payloads = PayloadStore(paths)
+    files = DocumentFiles(paths, payloads)
+    html, pdf = files.render_targets("app", "attempt")
+    html.write_bytes(b"<html>CV</html>")
+    pdf.write_bytes(b"%PDF-CV")
+    with pytest.raises(FileExistsError):
+        files.render_targets("app", "attempt")
+    references = RenderedFiles(html=files.reference_for(html), pdf=files.reference_for(pdf))
+    targets = files.submission_targets("app", "submission")
+    sent = files.copy_for_submission("app", "submission", references)
+    assert targets == (sent.html_path, sent.pdf_path)
+    assert payloads.verify_payload(sent.html_path, sent.html_sha256) == "ok"
+    assert payloads.verify_payload(sent.pdf_path, sent.pdf_sha256) == "ok"
+    assert b"".join(files.open_rendered_pdf(references.pdf).chunks()) == b"%PDF-CV"
+    files.discard(references)
+    assert not html.exists() and not pdf.exists()
+    assert payloads.verify_payload(sent.pdf_path, sent.pdf_sha256) == "ok"
     with pytest.raises(ArtifactPayloadMissing):
-        payload_store.ingest_render_output(missing)
+        files.open_rendered_pdf(references.pdf)

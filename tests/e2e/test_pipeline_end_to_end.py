@@ -1,248 +1,105 @@
-"""The downstream deterministic pipeline, driven through the application layer.
-
-`existing analysis -> draft -> validate -> approve -> render -> ready ->
-reconcile`, with no AI key and no HTTP server. This is the check CLAUDE.md
-names as the proof that everything downstream of an existing analysis reaches
-Ready without AI. It belongs to the engine rather than to any one client:
-driving it through `application/` proves the engine works instead of proving
-that a particular client knows how to call it.
-
-Every step names the exact source record it consumes, the way the use-cases
-require: no step resolves "the latest" for itself.
-"""
+"""§14 acceptance: the service pipeline reaches Ready with no AI key."""
 
 from __future__ import annotations
 
 import os
 
-import pytest
-from helpers import (
-    ACCOUNT_MANAGER_JOB,
-    artifact_path,
-    seed_existing_analysis,
-    services_transactions,
-)
+from helpers import persisted_counts, seed_document, stored_document, stored_submissions
 
-import cv_engine.application.services.drafts.activation as draft_activation_module
-import cv_engine.application.services.drafts.validation as draft_validation_module
 from cv_engine.application.commands import (
-    ApproveDraftCommand,
+    ApproveDocumentCommand,
+    CheckDocumentCommand,
     DraftCommand,
-    IngestCommand,
-    ValidateDraftCommand,
+    RenderCommand,
+    SubmissionCommand,
+    UpdateDocumentCommand,
 )
-from cv_engine.application.errors import ValidationBlocked
-from cv_engine.application.maintenance import (
-    build_application_export,
-)
-from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.draft_lifecycle import (
-    SqlAlchemyDraftLifecycleRepository,
-)
-from cv_engine.runtime.composition import Services
-
-
-def _persistence(services: Services):
-    transactions = services_transactions(services)
-    return (
-        transactions,
-        SqlAlchemyDraftLifecycleRepository(transactions),
-        SqlAlchemyArtifactCatalog(transactions),
-    )
-
-
-@pytest.fixture
-def no_ai_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The deterministic workflow reaches Ready with nothing configured.
-
-    Asserted rather than assumed: a key leaking in from the developer's own
-    environment would let this test pass while the offline path was broken.
-    """
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+from cv_engine.domain.document import DocumentState
+from cv_engine.util import utc_now
 
 
 def test_deterministic_pipeline_reaches_ready_and_reconciles(
-    services: Services,
-    deterministic_renderer: None,
-    no_ai_key: None,
-) -> None:
+    services, deterministic_renderer, database_engine
+):
     assert os.environ.get("OPENAI_API_KEY") is None
-
-    # ingest
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Pipeline Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            acknowledged_duplicates=True,
-            client="web",
-        )
-    )
-    application_id = ingested.application_id
-    assert ingested.job_snapshot_id
-
-    # begin from an existing analysis against that exact snapshot
-    analysed = seed_existing_analysis(services, ingested)
-
-    # draft, from that exact analysis and plan
-    drafted = services.drafts.draft(
-        DraftCommand(
-            application_id=application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
-        )
-    )
-
-    # validate the exact draft version in front of us
-    transactions, drafts, _catalog = _persistence(services)
-    with transactions.read() as tx:
-        working = drafts.active_working_draft(tx, application_id)
-    assert working.id == drafted.working_draft_id
-    validated = services.draft_validation.validate_draft(
-        ValidateDraftCommand(
-            working_draft_id=working.id,
-            expected_edit_version=working.edit_version,
-        )
-    )
-    assert validated.passed, validated.report.model_dump(mode="json")
-
-    # approve exactly what that run passed
-    approved = services.draft_approval.approve_draft(
-        ApproveDraftCommand(
-            working_draft_id=validated.working_draft_id,
-            expected_edit_version=validated.edit_version,
-            validation_run_id=validated.validation_run_id,
-            client="web",
-        )
-    )
-    assert approved.revision_id
-    assert approved.decision_record_id
-
-    # render, then read Ready back from stored evidence
-    rendered = services.rendering.render(application_id)
-    assert rendered.validation.passed, rendered.validation.model_dump(mode="json")
-    assert services.rendering.ready_report(application_id).passed
-    assert services.rendering.ready_qualification(application_id).ready_qualified
-
-    # reconcile: every registered artifact verifies through the payload store
-    report = services.maintenance.reconcile().model_dump(mode="python")
-    assert report["passed"], report["problems"]
-    assert report["artifact_versions_checked"] > 0
-    assert services.knowledge_queries.reconcile_facts().passed
-    # Inventory protects snapshot and revision references as well as artifacts.
-    assert services.maintenance.inspect_orphans().candidates == []
-    orphan = services.payloads.commit_snapshot("unregistered", "snapshot", "awaiting registration")
-    assert services.maintenance.inspect_orphans().candidates == [orphan.reference]
-    assert (
-        services.payloads.read_snapshot(orphan.reference, orphan.sha256) == "awaiting registration"
-    )
-
-    # the export projection sees the application the pipeline just produced
-    export = build_application_export(services.queries.list_applications())
-    assert export.metadata["row_count"] == 1
-    assert export.rows[0]["id"] == application_id
-    assert export.rows[0]["current_status"] == "saved"
-
-
-def test_reconcile_reports_a_tampered_artifact(
-    services: Services,
-    deterministic_renderer: None,
-    no_ai_key: None,
-    ready_application,
-) -> None:
-    """Reconcile fails when stored evidence stops matching its recorded hash.
-
-    Verification goes through the payload store rather than a resolved local
-    path, so this asserts the check reports a hash mismatch rather than that a
-    particular file on disk changed.
-    """
-    setup = ready_application("Tamper Co")
-    assert services.maintenance.reconcile().passed
-
-    transactions, _drafts, catalog = _persistence(services)
-    with transactions.read() as tx:
-        pdf_record = catalog.latest_artifact_version(tx, setup.application_id, "resume_pdf")
-    artifact_path(services, pdf_record["path"]).write_bytes(b"%PDF-1.4\n% not the approved bytes\n")
-
-    report = services.maintenance.reconcile().model_dump(mode="python")
-    assert not report["passed"]
-    assert any("hash mismatch" in problem for problem in report["problems"]), report["problems"]
-
-
-def test_failed_pre_render_validation_blocks_approval(
-    services: Services,
-    no_ai_key: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A draft that fails pre-render validation cannot be approved.
-
-    The guarantee belongs to the pipeline, not to any client: validation is
-    mandatory, and a failing run must leave the application with no approved
-    revision rather than one nothing vouched for.
-    """
-    real_validate = draft_activation_module.run_draft_validation
-
-    def fail_validation(*args, **kwargs) -> ValidationReport:
-        report = real_validate(*args, **kwargs)
-        return ValidationReport.from_findings(
-            groups={**report.groups, "content": False},
-            issues=[
-                *report.issues,
-                ValidationIssue(
-                    group="content",
-                    code="injected-validation-failure",
-                    message="controlled pre-render validation failure",
-                ),
-            ],
-            evidence=report.evidence,
-        )
-
-    # Each draft module imports the domain validator under its own name, so a
-    # patch reaches only the module it names. `activation` records the draft
-    # Operation's own pre-render run; `validation` is the §15 command this test
-    # calls. Both are patched so the assertion does not depend on which one the
-    # pipeline happens to route through.
-    monkeypatch.setattr(draft_activation_module, "run_draft_validation", fail_validation)
-    monkeypatch.setattr(draft_validation_module, "run_draft_validation", fail_validation)
-
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Blocked Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            acknowledged_duplicates=True,
-            client="web",
-        )
-    )
-    analysed = seed_existing_analysis(services, ingested)
+    ingested, analysis = seed_document(services, "Pipeline Co")
+    app_id = ingested.application_id
+    assert analysis.created_document
+    document = stored_document(services, app_id)
     services.drafts.draft(
-        DraftCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+        DraftCommand(application_id=app_id, expected_document_hash=document.document_hash)
+    )
+    document = stored_document(services, app_id)
+    assert document.content is not None
+    section = next(
+        s
+        for s in document.content.sections
+        if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
+    )
+    edited = services.drafts.update_document(
+        UpdateDocumentCommand(
+            application_id=app_id,
+            expected_document_hash=document.document_hash,
+            claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
         )
     )
-
-    transactions, drafts, _catalog = _persistence(services)
-    with transactions.read() as tx:
-        working = drafts.active_working_draft(tx, ingested.application_id)
-    validated = services.draft_validation.validate_draft(
-        ValidateDraftCommand(
-            working_draft_id=working.id,
-            expected_edit_version=working.edit_version,
+    token = edited.document_hash
+    checked = services.draft_validation.check_document(
+        CheckDocumentCommand(application_id=app_id, expected_document_hash=token)
+    )
+    assert checked.passed, checked.report
+    approved = services.draft_approval.approve_document(
+        ApproveDocumentCommand(application_id=app_id, expected_document_hash=token, client="web")
+    )
+    assert approved.passed, approved.report
+    rendered = services.rendering.render(
+        RenderCommand(application_id=app_id, expected_document_hash=token)
+    )
+    assert rendered.validation.passed, rendered.validation
+    assert services.queries.application_detail(app_id).document_state is DocumentState.READY
+    services.submission.submit_application(
+        SubmissionCommand(
+            application_id=app_id,
+            expected_document_hash=token,
+            submitted_at=utc_now(),
+            client="web",
         )
     )
+    (sent,) = stored_submissions(services, app_id)
+    assert sent.content == stored_document(services, app_id).content
+    assert sent.job_snapshot_id == ingested.job_snapshot_id
+    report = services.maintenance.reconcile()
+    assert report.passed, report.problems
+    counts = persisted_counts(database_engine)
+    submission_files = sum(path is not None for path in (sent.html_path, sent.pdf_path))
+    assert report.artifact_versions_checked == (
+        counts["job_snapshots"] + counts["artifact_versions"] + submission_files
+    )
+    assert services.maintenance.inspect_orphans().candidates == []
+    assert services.queries.application_detail(app_id).application.current_status == "applied"
 
-    assert not validated.passed
-    with pytest.raises(ValidationBlocked):
-        services.draft_approval.approve_draft(
-            ApproveDraftCommand(
-                working_draft_id=validated.working_draft_id,
-                expected_edit_version=validated.edit_version,
-                validation_run_id=validated.validation_run_id,
-                client="web",
-            )
-        )
-    with transactions.read() as tx:
-        assert drafts.approved_revisions(tx, ingested.application_id) == []
+
+def test_reconcile_reports_tampered_submission_without_repair(submitted_application):
+    setup = submitted_application("Tamper Co")
+    services, app_id = setup
+    (sent,) = stored_submissions(services, app_id)
+    assert sent.pdf_path is not None
+    path = services.paths.root / sent.pdf_path
+    tampered = b"%PDF-1.4\n% not the submitted bytes\n"
+    path.write_bytes(tampered)
+    report = services.maintenance.reconcile()
+    assert not report.passed
+    assert any("hash mismatch" in problem for problem in report.problems)
+    assert path.read_bytes() == tampered
+    assert stored_submissions(services, app_id) == [sent]
+
+
+def test_reconcile_verifies_job_snapshot_payloads(services):
+    """§19b requires JobSnapshot verification, including without any Submission."""
+    ingested, _ = seed_document(services, "Snapshot Integrity")
+    reference = services.payloads.snapshot_path(ingested.application_id, ingested.job_snapshot_id)
+    reference.write_bytes(b"posting changed after capture")
+    report = services.maintenance.reconcile()
+    assert not report.passed
+    assert report.problems
+    assert reference.read_bytes() == b"posting changed after capture"

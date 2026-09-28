@@ -6,11 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from cv_engine.domain.contracts.analysis import JobAnalysis
-from cv_engine.domain.contracts.drafts import DraftDocument, WorkingDraft
-from cv_engine.domain.contracts.records import ValidationRunLineage
-from cv_engine.domain.contracts.selection import SelectionManifest, SelectionPlan
 from cv_engine.domain.contracts.validation import (
-    ReadyQualification,
     ValidationIssue,
     ValidationReport,
 )
@@ -72,89 +68,6 @@ def test_a_validation_reports_pass_is_derived_from_its_findings() -> None:
     )
     assert not unpaired.passed
     assert unpaired.groups == {"content": True}
-
-
-def test_ready_qualification_cannot_claim_a_result_its_evidence_did_not_earn() -> None:
-    failed = ValidationReport.from_findings(groups={"rendered_artifacts": False}, issues=[])
-    with pytest.raises(ValidationError, match="derived from its validation evidence"):
-        ReadyQualification(
-            application_id="application-1",
-            approved_revision_id="revision-1",
-            pdf_artifact_version_id="pdf-1",
-            ready_qualified=True,
-            validation=failed,
-        )
-
-    passed = ValidationReport.from_findings(groups={"rendered_artifacts": True}, issues=[])
-    with pytest.raises(ValidationError, match="exact PDF"):
-        ReadyQualification(
-            application_id="application-1",
-            approved_revision_id="revision-1",
-            ready_qualified=True,
-            validation=passed,
-        )
-
-
-def test_preparation_records_preserve_exact_domain_lineage(draft_factory) -> None:
-    draft: DraftDocument = draft_factory(
-        "Python backend developer API React", profile_override="development"
-    ).draft
-    manifest = draft.selection
-    assert isinstance(manifest, SelectionManifest)
-
-    plan = SelectionPlan(
-        id="plan-1",
-        application_id=draft.application_id,
-        job_analysis_id=draft.job_analysis_id or "",
-        version_number=1,
-        plan=manifest,
-        candidate_context_version="candidate-v1",
-        candidate_context_hash="candidate-hash",
-        profile_version="profile-v1",
-        selection_policy_version="selection-v1",
-        track_emphasis_dependencies={
-            "track": "track-v1",
-            "emphasis": "emphasis-v1",
-        },
-        created_at="2026-08-18T00:00:00Z",
-    )
-    working = WorkingDraft(
-        id="draft-1",
-        application_id=draft.application_id,
-        job_analysis_id=plan.job_analysis_id,
-        selection_plan_id=plan.id,
-        source=draft,
-        edit_version=3,
-        content_hash="caller-supplied-hash",
-        active=True,
-        created_at="2026-08-18T00:00:00Z",
-        updated_at="2026-08-18T00:01:00Z",
-    )
-    lineage = ValidationRunLineage(
-        working_draft_id=working.id,
-        edit_version=working.edit_version,
-        content_hash=working.content_hash,
-        job_snapshot_id=draft.job_snapshot_id,
-        job_analysis_id=working.job_analysis_id,
-        selection_plan_id=working.selection_plan_id,
-        knowledge_context_hash="knowledge-hash",
-        validator_versions={"draft": "2.0"},
-    )
-
-    assert plan.plan is manifest
-    assert working.source is draft
-    assert working.parent_revision_id is None
-    assert working.content_hash == "caller-supplied-hash"
-    assert lineage.model_dump() == {
-        "working_draft_id": "draft-1",
-        "edit_version": 3,
-        "content_hash": "caller-supplied-hash",
-        "job_snapshot_id": draft.job_snapshot_id,
-        "job_analysis_id": plan.job_analysis_id,
-        "selection_plan_id": "plan-1",
-        "knowledge_context_hash": "knowledge-hash",
-        "validator_versions": {"draft": "2.0"},
-    }
 
 
 def test_an_analysis_refuses_an_override_it_cannot_act_on(draft_factory) -> None:

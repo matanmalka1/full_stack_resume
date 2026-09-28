@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from cv_engine.application.commands import ApprovalResult
+from cv_engine.application.commands import DocumentCheckResult
 from cv_engine.domain.facts import FactStore
 from cv_engine.runtime.composition import Services
 
@@ -15,11 +15,9 @@ class WorkflowSetup:
     application_id: str
     snapshot_id: str
     analysis_id: str | None = None
-    selection_plan_id: str | None = None
-    markdown: Path | None = None
-    manifest: Path | None = None
+    document_hash: str | None = None
     draft_report: Any = None
-    approved: ApprovalResult | None = None
+    approved: DocumentCheckResult | None = None
     pdf: Path | None = None
     ready_report: Any = None
 

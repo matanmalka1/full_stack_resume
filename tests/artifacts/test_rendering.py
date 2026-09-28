@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from helpers import artifact_path
+import pytest
+from helpers import edit_document_claim, stored_document
 from pypdf import PdfWriter
 
-from cv_engine.application.errors import WorkflowError
+from cv_engine.application.commands import RenderCommand
+from cv_engine.application.errors import DOCUMENT_NOT_APPROVED, PreconditionFailed
 from cv_engine.infrastructure.rendering import (
     _claim_recoverable,
     _launch_failure_message,
@@ -89,29 +91,25 @@ def test_render_findings_keep_their_existing_failed_groups(
     assert all(final.groups[issue.group] is False for issue in final.issues)
 
 
-def test_render_revalidates_approved_markdown_before_browser(
-    approved_application, transaction_manager, artifact_catalog
+def test_render_refuses_a_document_edited_after_approval_before_browser(
+    approved_application,
+    monkeypatch,
 ) -> None:
-    setup = approved_application(
-        "Acme",
-        "Developer",
-        "Python backend developer API React\n\n"
-        "Requirements:\n"
-        "- Fluent English.\n"
-        "- Media industry experience is preferred.",
-    )
+    setup = approved_application("Edited Before Render")
     services, app_id = setup
-    with transaction_manager.read() as tx:
-        markdown_record = artifact_catalog.latest_artifact_version(
-            tx, app_id, "resume_markdown", "approved"
-        )
-    markdown = artifact_path(services, markdown_record["path"])
-    markdown.write_text(
-        markdown.read_text(encoding="utf-8") + "\nUnsupported claim.\n", encoding="utf-8"
+    document = stored_document(services, app_id)
+    assert document.content is not None
+    claim = document.content.sections[0].claims[0]
+    edited = edit_document_claim(
+        services, app_id, claim.claim_id, list(claim.fact_ids), text="Unsupported claim"
     )
-    try:
-        services.rendering.render(app_id)
-    except WorkflowError as exc:
-        assert "approved Markdown" in str(exc)
-    else:
-        raise AssertionError("modified approved source reached rendering")
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("an unapproved document reached the browser")
+
+    monkeypatch.setattr("cv_engine.infrastructure.rendering.render_pdf", forbidden)
+    with pytest.raises(PreconditionFailed) as refused:
+        services.rendering.render(
+            RenderCommand(application_id=app_id, expected_document_hash=edited.document_hash)
+        )
+    assert refused.value.code == DOCUMENT_NOT_APPROVED

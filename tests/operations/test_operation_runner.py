@@ -6,12 +6,7 @@ from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
-from helpers import (
-    ACCOUNT_MANAGER_JOB,
-    artifact_path,
-    seed_analysis_for_command,
-    validate_active_draft,
-)
+from helpers import seed_document, stored_document
 from operations_support import (
     _claim_operation,
     _enqueue_operation,
@@ -24,20 +19,21 @@ from operations_support import (
 )
 from sqlalchemy import select, update
 
+import cv_engine.infrastructure.rendering as rendering_adapter
 from cv_engine.application.commands import (
     AnalyzeCommand,
-    ApproveDraftCommand,
-    CreateSelectionPlanCommand,
+    ApproveDocumentCommand,
     DraftCommand,
     IngestCommand,
+    ProposeSelectionCommand,
     RenderCommand,
+    UpdateDocumentCommand,
+    UpdateSelectionCommand,
 )
 from cv_engine.application.errors import (
-    IDEMPOTENCY_KEY_REUSED,
-    InfrastructureFailure,
     MissingFactRendering,
+    PreconditionFailed,
     StateConflict,
-    UnknownRecord,
 )
 from cv_engine.application.operation_runner import (
     PreparedOperation,
@@ -52,58 +48,22 @@ from cv_engine.application.operations import (
     OperationSources,
     OperationStatus,
     OperationType,
-    PdfPageLimitReason,
 )
-from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
+from cv_engine.domain.contracts.providers import SelectionProposal
+from cv_engine.domain.document import DocumentState, PreparationState
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
-from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
-from cv_engine.infrastructure.persistence.draft_lifecycle import SqlAlchemyDraftLifecycleRepository
 from cv_engine.infrastructure.persistence.operation_execution import (
     SqlAlchemyOperationExecutionStore,
 )
-from cv_engine.infrastructure.persistence.render_context import SqlAlchemyRenderContextReader
 from cv_engine.infrastructure.persistence.tables import (
     operation_resource_leases,
     operations,
-    payload_write_leases,
 )
-from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
+from cv_engine.runtime.composition import Services
 from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
-
-
-def _active_working_draft(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyDraftLifecycleRepository(transactions).active_working_draft(tx, *args)
-
-
-def _working_draft(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyDraftLifecycleRepository(transactions).working_draft(tx, *args)
-
-
-def _approved_revision(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyDraftLifecycleRepository(transactions).approved_revision(tx, *args)
-
-
-def _approved_revisions(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyDraftLifecycleRepository(transactions).approved_revisions(tx, *args)
-
-
-def _latest_validation_for_working_draft(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyValidationRepository(transactions).latest_validation_for_working_draft(
-            tx, *args
-        )
 
 
 def _artifact_version(services, *args):
@@ -118,46 +78,10 @@ def _artifact_versions(services, *args):
         return SqlAlchemyArtifactCatalog(transactions).artifact_versions(tx, *args)
 
 
-def _artifact_version_for_revision(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).artifact_version_for_revision(tx, *args)
-
-
 def _latest_artifact_version(services, *args):
     transactions = services.operation_runner.transactions
     with transactions.read() as tx:
         return SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(tx, *args)
-
-
-def _claim_receipt(services, *args, **options):
-    with services.draft_approval.transactions.write() as tx:
-        return services.draft_approval.receipts.claim_idempotency_receipt(tx, *args, **options)
-
-
-def _read_receipt(services, command_type, idempotency_key):
-    with services.draft_approval.transactions.read() as tx:
-        return services.draft_approval.receipts.idempotency_receipt(
-            tx, command_type, idempotency_key
-        )
-
-
-def _payload_lease(services, group_key: str):
-    transactions = services.draft_approval.transactions
-    with transactions.read() as tx:
-        return (
-            transactions.connection_for(tx)
-            .execute(
-                select(payload_write_leases).where(payload_write_leases.c.group_key == group_key)
-            )
-            .mappings()
-            .one()
-        )
-
-
-def _complete_receipt(services, receipt_id, result):
-    with services.draft_approval.transactions.write() as tx:
-        return services.draft_approval.receipts.complete_idempotency_receipt(tx, receipt_id, result)
 
 
 def test_racing_claimants_produce_one_claim_and_one_execution(
@@ -340,9 +264,9 @@ def test_application_and_global_render_leases_queue_contending_work(services) ->
     render_request = CreateOperation(
         application_id=second.application_id,
         operation_type=OperationType.RENDER_DOCUMENT,
-        payload={"approved_revision_id": "revision-1"},
+        payload={"expected_document_hash": "a" * 64},
         idempotency_key="render-1",
-        sources=OperationSources(approved_revision_id="revision-1"),
+        sources=OperationSources(expected_document_hash="a" * 64),
     )
     render_one = _enqueue_operation(services, render_request)
     third = services.applications.ingest(
@@ -624,557 +548,6 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     assert attempts == 1
 
 
-def test_draft_operation_activates_one_validated_working_draft(services) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Draft Operation Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            client="web",
-        )
-    )
-    analysis = seed_analysis_for_command(
-        services,
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-    )
-    operation = services.operation_submissions.submit_draft(
-        DraftCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysis.analysis_id,
-            selection_plan_id=analysis.selection_plan_id,
-        ),
-        idempotency_key="draft-operation",
-        draft_service=services.drafts,
-    )
-
-    completed = foreground_executor(services).execute(operation.id)
-
-    assert completed.status is OperationStatus.SUCCEEDED
-    outputs = {output.output_type: output.output_id for output in completed.outputs}
-    working_id = outputs["working_draft"]
-    assert _active_working_draft(services, ingested.application_id).id == working_id
-    validation = _latest_validation_for_working_draft(services, working_id)
-    assert validation is not None and validation["report"].passed
-
-
-def test_draft_operation_refuses_a_replaced_selection_plan(services) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Draft Plan Race Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
-            client="web",
-        )
-    )
-    analysis = seed_analysis_for_command(
-        services,
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-    )
-    command = DraftCommand(
-        application_id=ingested.application_id,
-        job_analysis_id=analysis.analysis_id,
-        selection_plan_id=analysis.selection_plan_id,
-    )
-    operation = services.operation_submissions.submit_draft(
-        command,
-        idempotency_key="draft-plan-race",
-        draft_service=services.drafts,
-    )
-    services.analysis.create_selection_plan(
-        CreateSelectionPlanCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysis.analysis_id,
-        )
-    )
-
-    failed = foreground_executor(services).execute(operation.id)
-
-    assert failed.status is OperationStatus.FAILED
-    assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
-    with pytest.raises(UnknownRecord):
-        _active_working_draft(services, ingested.application_id)
-
-
-def test_failed_render_operation_preserves_registered_outputs_as_inactive(
-    ready_application,
-    monkeypatch,
-    transaction_manager,
-) -> None:
-    setup = ready_application("Invalid Render Operation Co")
-    failed_report = ValidationReport.from_findings(
-        groups={"page_count": False},
-        issues=[
-            ValidationIssue(
-                group="page_count",
-                code="page-count",
-                message="2 pages; maximum 1",
-            )
-        ],
-    )
-    monkeypatch.setattr(
-        setup.services.rendering.renderer,
-        "validate_rendered",
-        lambda *_args, **_kwargs: failed_report,
-    )
-    operation = setup.services.operation_submissions.submit_render(
-        RenderCommand(
-            application_id=setup.application_id,
-            approved_revision_id=setup.approved.revision_id,
-        ),
-        idempotency_key="invalid-render-operation",
-        rendering_service=setup.services.rendering,
-    )
-
-    failed = foreground_executor(setup.services).execute(operation.id)
-
-    assert failed.status is OperationStatus.FAILED
-    assert failed.failure_code is OperationFailureCode.RENDER_FAILED
-    assert failed.safe_failure_detail == "Rendered PDF has 2 pages; maximum 1."
-    # The sentence and the structured reason come from the same validation issue.
-    assert failed.failure_reason == PdfPageLimitReason(pages=2, maximum=1)
-    assert failed.technical_log_reference == "logs/operations.jsonl"
-    log_path = setup.services.paths.root / failed.technical_log_reference
-    assert log_path.is_file()
-    log_entry = json.loads(log_path.read_text(encoding="utf-8").splitlines()[-1])
-    assert {
-        "occurred_at",
-        "level",
-        "operation_id",
-        "application_id",
-        "phase",
-        "error_code",
-        "log_reference",
-    } <= log_entry.keys()
-    assert log_entry["operation_id"] == failed.id
-    assert log_entry["application_id"] == setup.application_id
-    assert log_entry["error_code"] == OperationFailureCode.RENDER_FAILED.value
-    assert log_entry["log_reference"] == failed.technical_log_reference
-    assert len(failed.outputs) == 2
-    assert all(not output.active for output in failed.outputs)
-    for output in failed.outputs:
-        assert (
-            _artifact_version(setup.services, output.output_id)["lifecycle_status"]
-            == "rendered-invalid"
-        )
-    pdf_output = next(output for output in failed.outputs if output.output_type == "resume_pdf")
-    with transaction_manager.read() as tx:
-        stored_report = SqlAlchemyValidationRepository(transaction_manager).validation_for_artifact(
-            tx,
-            setup.application_id,
-            "post-render",
-            pdf_output.output_id,
-        )
-    assert stored_report == failed_report
-
-    retried = setup.services.operation_lifecycle.retry(
-        failed.id, idempotency_key="invalid-render-operation-retry"
-    )
-    failed_again = foreground_executor(setup.services).execute(retried.id)
-    assert failed_again.status is OperationStatus.FAILED
-    assert {(output.output_type, output.output_id) for output in failed_again.outputs} == {
-        (output.output_type, output.output_id) for output in failed.outputs
-    }
-
-
-def _render_operation(setup, key: str):
-    return setup.services.operation_submissions.submit_render(
-        RenderCommand(
-            application_id=setup.application_id,
-            approved_revision_id=setup.approved.revision_id,
-        ),
-        idempotency_key=key,
-        rendering_service=setup.services.rendering,
-    )
-
-
-def _cancel_after_render(setup, operation_id: str):
-    def interfere(_executed) -> None:
-        setup.services.operation_lifecycle.cancel(operation_id)
-
-    return interfere
-
-
-def _move_the_source_after_render(setup, _operation_id: str):
-    def interfere(_executed) -> None:
-        manifest = _artifact_version_for_revision(
-            setup.services, setup.approved.revision_id, "claim_manifest", "approved"
-        )
-        path = artifact_path(setup.services, manifest["path"])
-        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
-
-    return interfere
-
-
-@pytest.mark.parametrize(
-    "interference,expected_status,expected_code",
-    [
-        (
-            _cancel_after_render,
-            OperationStatus.CANCELLED,
-            OperationFailureCode.CANCELLED_BEFORE_ACTIVATION,
-        ),
-        (
-            _move_the_source_after_render,
-            OperationStatus.FAILED,
-            OperationFailureCode.SOURCE_CHANGED,
-        ),
-    ],
-    ids=["cancelled", "source-changed"],
-)
-def test_a_render_stopped_between_the_phases_keeps_registered_inactive_outputs(
-    ready_application, monkeypatch, interference, expected_status, expected_code
-) -> None:
-    """§18: "a completed output after cancellation is recorded as inactive evidence".
-
-    Both parameters are the same window: the render finished and its three
-    artifacts exist, and then the Operation stopped before activation - once
-    because the user cancelled, once because the approved source moved under it.
-
-    What has to hold in both is that every Operation output names a row that is
-    really there. `operation_outputs.output_id` carries no foreign key, so
-    nothing in the schema refuses a dangling reference and nothing reading the
-    Operation can tell one from a real output. A reference to nothing is not
-    evidence.
-
-    Parameterized rather than written twice because the property is one
-    property; the two interferences are only the two ways of reaching the
-    window. `artifact_version` raises `UnknownRecord` for an ID registered
-    nowhere, so resolving both *is* the assertion.
-    """
-    setup = ready_application(f"Stopped Render {expected_status.value}")
-    existing_pdf = _latest_artifact_version(
-        setup.services, setup.application_id, "resume_pdf", "rendered"
-    )
-    original_record_validation = SqlAlchemyValidationRepository.record_validation
-    post_render_writes = 0
-
-    def record_validation(
-        self, tx, application_id, phase, report, artifact_version_id=None, **kwargs
-    ):
-        nonlocal post_render_writes
-        if phase == "post-render":
-            post_render_writes += 1
-        return original_record_validation(
-            self,
-            tx,
-            application_id,
-            phase,
-            report,
-            artifact_version_id,
-            **kwargs,
-        )
-
-    monkeypatch.setattr(SqlAlchemyValidationRepository, "record_validation", record_validation)
-    operation = _render_operation(setup, f"stopped-render-{expected_status.value}")
-    original = setup.services.rendering.execute
-    interfere = interference(setup, operation.id)
-
-    def execute_then_interfere(prepared):
-        executed = original(prepared)
-        interfere(executed)
-        return executed
-
-    monkeypatch.setattr(setup.services.rendering, "execute", execute_then_interfere)
-    stopped = foreground_executor(setup.services).execute(operation.id)
-
-    assert stopped.status is expected_status
-    assert stopped.failure_code is expected_code
-    outputs = [
-        output for output in stopped.outputs if output.output_type in {"resume_html", "resume_pdf"}
-    ]
-    assert len(outputs) == 2
-    assert all(not output.active for output in outputs)
-    for output in outputs:
-        registered = _artifact_version(setup.services, output.output_id)
-        assert registered["revision_id"] == setup.approved.revision_id
-        assert registered["lifecycle_status"] == "rendered"
-
-    # An identical retry reuses the immutable artifacts and their existing
-    # evidence. Stopping before activation must not add a fresh ValidationRun.
-    pdf = next(output for output in outputs if output.output_type == "resume_pdf")
-    assert pdf.output_id == existing_pdf["id"]
-    assert post_render_writes == 0
-
-
-def test_render_registration_is_all_or_nothing(
-    ready_application,
-    monkeypatch,
-) -> None:
-    """Both artifacts are one render: both are registered, or neither is.
-
-    The first repair moved registration into `execute` so the rows survive a
-    cancellation. Left as independent writes that would have bought the opposite
-    bug: a failure partway leaves rows committed while `execute` raises, so the
-    runner records no Operation output and the Application carries registered
-    artifacts belonging to a render that never reported. That is not reachable
-    through cancellation or `SOURCE_CHANGED`, which is why neither of those tests
-    would have found it. It is driven here twice - a registry failure on the
-    second registration, and a failure ingesting the second payload - and what is
-    asserted is that nothing from the first survived.
-    """
-    setup = ready_application("Partial Registration Co")
-    before = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
-    operation = _render_operation(setup, "partial-registration")
-    original = SqlAlchemyArtifactCatalog.register_artifact_version
-    calls = 0
-
-    def fail_on_the_second(self, *args, **kwargs):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise InfrastructureFailure("injected registry failure")
-        return original(self, *args, **kwargs)
-
-    with pytest.MonkeyPatch.context() as scoped:
-        scoped.setattr(SqlAlchemyArtifactCatalog, "register_artifact_version", fail_on_the_second)
-        scoped.setattr(
-            SqlAlchemyRenderContextReader,
-            "matching_render_artifact",
-            lambda *_args, **_kwargs: None,
-        )
-        failed = foreground_executor(setup.services).execute(operation.id)
-
-        assert failed.status is OperationStatus.FAILED
-        assert calls == 2, "the injected failure never reached the code under test"
-        after = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
-        assert after == before, "a partial render registration survived"
-        assert not [
-            output
-            for output in failed.outputs
-            if output.output_type in {"resume_html", "resume_pdf"}
-        ]
-
-        # The registry and matching patches above must not reach the second render.
-
-    setup = ready_application("Partial Render Ingest Co")
-    before = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
-    original = PayloadStore.ingest_render_output
-    calls = 0
-
-    def fail_second(self, path):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError("injected second ingest failure")
-        return original(self, path)
-
-    monkeypatch.setattr(PayloadStore, "ingest_render_output", fail_second)
-    failed = foreground_executor(setup.services).execute(
-        _render_operation(setup, "partial-render-ingest").id
-    )
-    assert failed.status is OperationStatus.FAILED
-    after = {row["id"] for row in _artifact_versions(setup.services, setup.application_id)}
-    assert after == before
-
-
-def _approve_command(services, application_id) -> ApproveDraftCommand:
-    """Validate the active draft and name the run that approval must rely on."""
-    validated = validate_active_draft(services, application_id)
-    return ApproveDraftCommand(
-        working_draft_id=validated.working_draft_id,
-        expected_edit_version=validated.edit_version,
-        validation_run_id=validated.validation_run_id,
-        client="web",
-    )
-
-
-def test_pending_approval_receipt_recovers_a_committed_revision(drafted_application) -> None:
-    setup = drafted_application("Approval Recovery Co")
-    working = _active_working_draft(setup.services, setup.application_id)
-    command = _approve_command(setup.services, setup.application_id)
-    reserved_revision = new_id()
-    receipt = _claim_receipt(
-        setup.services,
-        "approve_draft",
-        "approval-recovery",
-        {
-            "working_draft_id": command.working_draft_id,
-            "expected_edit_version": command.expected_edit_version,
-            "validation_run_id": command.validation_run_id,
-            "content_hash": working.content_hash,
-        },
-        reserved_entity_id=reserved_revision,
-    )
-    committed = setup.services.draft_approval.approve_draft(command, revision_id=reserved_revision)
-    assert receipt["status"] == "pending"
-
-    recovered = setup.services.draft_approval.approve_idempotent(
-        command,
-        idempotency_key="approval-recovery",
-    )
-
-    assert recovered == committed
-    completed = _read_receipt(
-        setup.services,
-        "approve_draft",
-        "approval-recovery",
-    )
-    assert completed["status"] == "completed"
-    assert len(_approved_revisions(setup.services, setup.application_id)) == 1
-
-
-@pytest.mark.parametrize("receipt_status", ["pending", "completed"])
-def test_approval_recovery_refuses_changed_inputs(drafted_application, receipt_status) -> None:
-    """Every frozen input is part of the reservation, in either receipt state.
-
-    The four inputs are one invariant - a change to any of them is key reuse -
-    so they are looped rather than parametrized; the receipt state is the
-    distinct recovery path.
-    """
-    setup = drafted_application("Approval Frozen Inputs Co")
-    command = _approve_command(setup.services, setup.application_id)
-    working = _working_draft(setup.services, command.working_draft_id)
-    receipt = _claim_receipt(
-        setup.services,
-        "approve_draft",
-        "approval-frozen-inputs",
-        {**command.model_dump(mode="json"), "content_hash": working.content_hash},
-        reserved_entity_id=new_id(),
-    )
-    committed = setup.services.draft_approval.approve_draft(
-        command, revision_id=receipt["reserved_entity_id"]
-    )
-    if receipt_status == "completed":
-        _complete_receipt(setup.services, receipt["id"], committed.model_dump(mode="json"))
-    changed_values = {
-        "expected_edit_version": command.expected_edit_version + 1,
-        "validation_run_id": new_id(),
-        "actor_type": "system",
-        "client": "worker",
-    }
-    for changed_input, changed_value in changed_values.items():
-        changed = command.model_copy(update={changed_input: changed_value})
-        with pytest.raises(StateConflict) as refused:
-            setup.services.draft_approval.approve_idempotent(
-                changed,
-                idempotency_key="approval-frozen-inputs",
-            )
-        assert refused.value.code == IDEMPOTENCY_KEY_REUSED, changed_input
-        after = _read_receipt(setup.services, "approve_draft", "approval-frozen-inputs")
-        assert after["status"] == receipt_status, changed_input
-        assert after["payload"] == receipt["payload"], changed_input
-        assert _approved_revisions(setup.services, setup.application_id) == [
-            _approved_revision(setup.services, committed.revision_id)
-        ], changed_input
-    replayed = setup.services.draft_approval.approve_idempotent(
-        command,
-        idempotency_key="approval-frozen-inputs",
-    )
-    assert replayed == committed
-
-
-@pytest.mark.parametrize(
-    "failure_stage", ["artifact_registration", "receipt_completion", "after_commit"]
-)
-def test_approval_identical_retry_reuses_reservation_after_failure(
-    drafted_application, monkeypatch, failure_stage
-) -> None:
-    setup = drafted_application("Approval Retry Co")
-    command = _approve_command(setup.services, setup.application_id)
-    before_artifacts = _artifact_versions(setup.services, setup.application_id)
-    calls = 0
-    if failure_stage == "artifact_registration":
-        original = SqlAlchemyArtifactCatalog.register_artifact_version
-
-        def fail_registration(self, *args, **kwargs):
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                raise InfrastructureFailure("injected second approval artifact failure")
-            return original(self, *args, **kwargs)
-
-        monkeypatch.setattr(
-            SqlAlchemyArtifactCatalog, "register_artifact_version", fail_registration
-        )
-    elif failure_stage == "receipt_completion":
-        original = setup.services.draft_approval.receipts.complete_idempotency_receipt
-
-        def fail_completion(*args, **kwargs):
-            nonlocal calls
-            calls += 1
-            raise InfrastructureFailure("injected approval receipt completion failure")
-
-        monkeypatch.setattr(
-            setup.services.draft_approval.receipts,
-            "complete_idempotency_receipt",
-            fail_completion,
-        )
-    else:
-        original = setup.services.draft_approval._approve
-
-        def fail_after_commit(*args, **kwargs):
-            nonlocal calls
-            original(*args, **kwargs)
-            calls += 1
-            raise RuntimeError("injected lost response after approval commit")
-
-        monkeypatch.setattr(setup.services.draft_approval, "_approve", fail_after_commit)
-
-    expected_error = RuntimeError if failure_stage == "after_commit" else InfrastructureFailure
-    with pytest.raises(expected_error):
-        setup.services.draft_approval.approve_idempotent(
-            command,
-            idempotency_key="approval-retry",
-        )
-    assert calls == (2 if failure_stage == "artifact_registration" else 1)
-    receipt = _read_receipt(setup.services, "approve_draft", "approval-retry")
-    assert receipt["status"] == ("completed" if failure_stage == "after_commit" else "pending")
-    lease = _payload_lease(
-        setup.services,
-        f"revision:{setup.application_id}:{receipt['reserved_entity_id']}",
-    )
-    references = lease["keys_json"]
-    published = [setup.services.payloads.read_payload_text(reference) for reference in references]
-    revisions = _approved_revisions(setup.services, setup.application_id)
-    if failure_stage in {"artifact_registration", "receipt_completion"}:
-        assert revisions == []
-        assert _artifact_versions(setup.services, setup.application_id) == before_artifacts
-        assert _working_draft(setup.services, command.working_draft_id).active
-        if failure_stage == "artifact_registration":
-            monkeypatch.setattr(SqlAlchemyArtifactCatalog, "register_artifact_version", original)
-        else:
-            monkeypatch.setattr(
-                setup.services.draft_approval.receipts,
-                "complete_idempotency_receipt",
-                original,
-            )
-    else:
-        assert len(revisions) == 1
-        assert revisions[0].id == receipt["reserved_entity_id"]
-        assert receipt["status"] == "completed"
-        monkeypatch.setattr(setup.services.draft_approval, "_approve", original)
-
-    recovered = setup.services.draft_approval.approve_idempotent(
-        command,
-        idempotency_key="approval-retry",
-    )
-    repeated = setup.services.draft_approval.approve_idempotent(
-        command,
-        idempotency_key="approval-retry",
-    )
-    assert recovered == repeated
-    assert recovered.revision_id == receipt["reserved_entity_id"]
-    assert len(_approved_revisions(setup.services, setup.application_id)) == 1
-    completed = _read_receipt(setup.services, "approve_draft", "approval-retry")
-    assert completed["id"] == receipt["id"]
-    assert completed["payload"] == receipt["payload"]
-    assert completed["status"] == "completed"
-    revision = _approved_revisions(setup.services, setup.application_id)[0]
-    committed_references = [
-        revision.resume_json_reference,
-        revision.resume_markdown_reference,
-    ]
-    assert [
-        setup.services.payloads.read_payload_text(reference) for reference in committed_references
-    ] == published
-
-
 def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     services, monkeypatch
 ) -> None:
@@ -1232,3 +605,280 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     assert not thread.is_alive()
     assert _operation(services, operation.id).status is OperationStatus.CANCELLED
     assert len(cancellation_attempts) == 2
+
+
+def _run(services: Services, operation_id: str):
+    return ForegroundOperationExecutor(services.operation_runner).execute(operation_id)
+
+
+def _submit_draft(services: Services, application_id: str, document_hash: str):
+    return services.operation_submissions.submit_draft(
+        DraftCommand(application_id=application_id, expected_document_hash=document_hash),
+        idempotency_key=new_id(),
+        draft_service=services.drafts,
+    )
+
+
+@pytest.mark.parametrize("race_phase", ["queued", "prepared"])
+def test_create_draft_activates_only_against_the_hash_it_froze(
+    services: Services, monkeypatch, race_phase
+) -> None:
+    """A selection change before execution or activation yields SOURCE_CHANGED.
+
+    The failure is not retryable; a new Operation against the current hash is how
+    the user continues, and it writes the content.
+    """
+    ingested, _analysis = seed_document(services, "Race Co")
+    application_id = ingested.application_id
+    document = stored_document(services, application_id)
+    queued = _submit_draft(services, application_id, document.document_hash)
+
+    def move_selection():
+        services.selection.update_selection(
+            UpdateSelectionCommand(
+                application_id=application_id,
+                expected_document_hash=document.document_hash,
+                emphasis_override=document.selection.emphasis.value,
+            )
+        )
+
+    prepare = services.drafts.prepare
+
+    def prepare_then_move(*args, **kwargs):
+        prepared = prepare(*args, **kwargs)
+        move_selection()
+        return prepared
+
+    with monkeypatch.context() as patch:
+        if race_phase == "queued":
+            move_selection()
+        else:
+            patch.setattr(services.drafts, "prepare", prepare_then_move)
+        failed = _run(services, queued.id)
+    moved = stored_document(services, application_id)
+    assert moved.document_hash != document.document_hash
+    assert failed.status is OperationStatus.FAILED
+    assert failed.failure_code is OperationFailureCode.SOURCE_CHANGED
+    assert stored_document(services, application_id).content is None
+    with pytest.raises(StateConflict):
+        services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
+
+    succeeded = _run(services, _submit_draft(services, application_id, moved.document_hash).id)
+    assert succeeded.status is OperationStatus.SUCCEEDED, succeeded.safe_failure_detail
+    written = stored_document(services, application_id)
+    assert written.content is not None
+    assert [(item.output_type, item.output_id, item.active) for item in succeeded.outputs] == [
+        ("cv_document", written.id, True)
+    ]
+    with pytest.raises(PreconditionFailed):
+        _submit_draft(services, application_id, written.document_hash)
+
+
+def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
+    services: Services, deterministic_renderer, monkeypatch
+) -> None:
+    """§5.4: a render failure leaves the document approved and records why.
+
+    `last_render_error` carries the structured failure while the hash still matches;
+    the attempt's own files are gone; a retry is a new Operation that reaches Ready and
+    clears the error.
+    """
+    ingested, _analysis = seed_document(services, "Render Co")
+    application_id = ingested.application_id
+    document_hash = services.drafts.draft(
+        DraftCommand(
+            application_id=application_id,
+            expected_document_hash=stored_document(services, application_id).document_hash,
+        )
+    ).document_hash
+    assert services.draft_approval.approve_document(
+        ApproveDocumentCommand(
+            application_id=application_id, expected_document_hash=document_hash, client="web"
+        )
+    ).passed
+
+    working = rendering_adapter.render_pdf
+
+    def crash(_html_path, _pdf_path):
+        raise RuntimeError("renderer crashed")
+
+    monkeypatch.setattr(rendering_adapter, "render_pdf", crash)
+    queued = services.operation_submissions.submit_render(
+        RenderCommand(application_id=application_id, expected_document_hash=document_hash),
+        idempotency_key=new_id(),
+        rendering_service=services.rendering,
+    )
+    failed = _run(services, queued.id)
+    assert failed.status is OperationStatus.FAILED
+    assert failed.failure_code is OperationFailureCode.RENDER_FAILED
+    detail = services.queries.application_detail(application_id)
+    assert detail.document_state is DocumentState.APPROVED
+    assert detail.last_render_error is not None
+    assert detail.last_render_error["failure_code"] == "RENDER_FAILED"
+    assert detail.recommended_action == "render"
+    attempts = services.paths.artifacts_root / "documents" / application_id
+    assert not [path for path in attempts.rglob("*") if path.is_file()]
+
+    monkeypatch.setattr(rendering_adapter, "render_pdf", working)
+    current = stored_document(services, application_id)
+    assert current.content is not None
+    section = next(
+        s
+        for s in current.content.sections
+        if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
+    )
+    changed = services.drafts.update_document(
+        UpdateDocumentCommand(
+            application_id=application_id,
+            expected_document_hash=current.document_hash,
+            claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
+        )
+    )
+    assert services.draft_approval.approve_document(
+        ApproveDocumentCommand(
+            application_id=application_id,
+            expected_document_hash=changed.document_hash,
+            client="web",
+        )
+    ).passed
+    retried = services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
+    retry_record = services.operation_runner.operation(retried.id)
+    assert retry_record.sources.expected_document_hash == changed.document_hash
+    assert retry_record.payload["expected_document_hash"] == changed.document_hash
+    assert retried.retry_of_operation_id == queued.id
+    completed = _run(services, retried.id)
+    assert completed.status is OperationStatus.SUCCEEDED, completed.safe_failure_detail
+    detail = services.queries.application_detail(application_id)
+    assert detail.preparation_state is PreparationState.READY
+    assert detail.last_render_error is None
+    assert len([path for path in attempts.rglob("*.pdf")]) == 1
+
+
+def test_an_ai_selection_proposal_is_provenance_on_the_selection_it_activates(
+    ai_services: Services, fake_openai
+) -> None:
+    """§14 `propose_selection`: activated through the same policy, recorded as `ai`.
+
+    Only while the document has no content; the rationale is kept verbatim and never
+    read back.
+    """
+    services = ai_services
+    ingested, _analysis = seed_document(services, "Proposal Co")
+    application_id = ingested.application_id
+    document = stored_document(services, application_id)
+    fake_openai.script(
+        "propose_selection_plan",
+        SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="keep it"),
+    )
+    queued = services.operation_submissions.submit_selection_proposal(
+        ProposeSelectionCommand(
+            application_id=application_id, expected_document_hash=document.document_hash
+        ),
+        idempotency_key=new_id(),
+        analysis_service=services.analysis,
+    )
+    completed = _run(services, queued.id)
+    assert completed.status is OperationStatus.SUCCEEDED, completed.safe_failure_detail
+
+    proposed = stored_document(services, application_id)
+    assert proposed.selection.proposed_by == "ai"
+    assert proposed.selection.proposal_rationale == "keep it"
+    assert proposed.selection.selected_fact_ids == document.selection.selected_fact_ids
+    assert proposed.document_hash != document.document_hash
+    outputs = {(item.output_type, item.active) for item in completed.outputs}
+    assert ("cv_document", True) in outputs and ("provider_response", True) in outputs
+
+    services.drafts.draft(
+        DraftCommand(application_id=application_id, expected_document_hash=proposed.document_hash)
+    )
+    with pytest.raises(PreconditionFailed):
+        services.operation_submissions.submit_selection_proposal(
+            ProposeSelectionCommand(
+                application_id=application_id,
+                expected_document_hash=stored_document(services, application_id).document_hash,
+            ),
+            idempotency_key=new_id(),
+            analysis_service=services.analysis,
+        )
+
+
+@pytest.mark.parametrize("outcome", ["cancel", "edit"])
+def test_render_discards_unactivated_files(
+    approved_application, deterministic_renderer, monkeypatch, outcome
+):
+    from helpers import edit_document_claim
+
+    setup = approved_application("Render Activation Race")
+    services, app_id = setup
+    document = stored_document(services, app_id)
+    assert document.content is not None
+    claim = document.content.sections[0].claims[0]
+    queued = services.operation_submissions.submit_render(
+        RenderCommand(application_id=app_id, expected_document_hash=document.document_hash),
+        idempotency_key=new_id(),
+        rendering_service=services.rendering,
+    )
+    execute = services.rendering.execute
+    attempts = []
+
+    def render_then_interfere(prepared):
+        result = execute(prepared)
+        attempts.append(result.files)
+        if outcome == "cancel":
+            services.operation_lifecycle.cancel(queued.id)
+        else:
+            edit_document_claim(
+                services,
+                app_id,
+                claim.claim_id,
+                list(claim.fact_ids),
+                text="manual edit during render",
+            )
+        return result
+
+    monkeypatch.setattr(services.rendering, "execute", render_then_interfere)
+    completed = _run(services, queued.id)
+    assert completed.status is (
+        OperationStatus.CANCELLED if outcome == "cancel" else OperationStatus.FAILED
+    )
+    if outcome == "edit":
+        assert completed.failure_code is OperationFailureCode.SOURCE_CHANGED
+    assert attempts
+    assert all(
+        not (services.paths.root / path).exists()
+        for files in attempts
+        for path in (files.html, files.pdf)
+    )
+    assert stored_document(services, app_id).rendered_basis is None
+
+
+def test_successful_rerender_discards_superseded_files(ready_application):
+    setup = ready_application("Superseded Render")
+    services, app_id = setup
+    before = stored_document(services, app_id)
+    assert before.content is not None
+    section = next(
+        s
+        for s in before.content.sections
+        if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
+    )
+    edited = services.drafts.update_document(
+        UpdateDocumentCommand(
+            application_id=app_id,
+            expected_document_hash=before.document_hash,
+            claim_orders={section.name: [c.claim_id for c in reversed(section.claims)]},
+        )
+    )
+    assert services.draft_approval.approve_document(
+        ApproveDocumentCommand(
+            application_id=app_id, expected_document_hash=edited.document_hash, client="web"
+        )
+    ).passed
+    services.rendering.render(
+        RenderCommand(application_id=app_id, expected_document_hash=edited.document_hash)
+    )
+    after = stored_document(services, app_id)
+    assert after.pdf_path != before.pdf_path and after.html_path != before.html_path
+    assert before.pdf_path is not None and before.html_path is not None
+    assert not (services.paths.root / before.pdf_path).exists()
+    assert not (services.paths.root / before.html_path).exists()

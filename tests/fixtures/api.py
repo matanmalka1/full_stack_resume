@@ -99,6 +99,7 @@ def live_api_server(project_root: Path, database_url: str) -> Iterator[LiveApiSe
     )
     server = LiveApiServer(f"http://127.0.0.1:{port}")
     try:
+        assert process.stdout is not None
         deadline = monotonic() + 60
         while monotonic() < deadline:
             if process.poll() is not None:

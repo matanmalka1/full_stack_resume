@@ -249,9 +249,11 @@ def test_a_submission_carries_what_was_sent_only_when_internal() -> None:
     }
     base = {"id": "s", "application_id": "app", "submitted_at": "t"}
 
-    DocumentSubmission(submission_type="internal", **base, **sent)
-    DocumentSubmission(submission_type="external", **base)
+    DocumentSubmission.model_validate({"submission_type": "internal", **base, **sent})
+    DocumentSubmission.model_validate({"submission_type": "external", **base})
     with pytest.raises(ValidationError, match="records the content"):
-        DocumentSubmission(submission_type="internal", **base, **(sent | {"pdf_sha256": None}))
+        DocumentSubmission.model_validate(
+            {"submission_type": "internal", **base, **sent, "pdf_sha256": None}
+        )
     with pytest.raises(ValidationError, match="carries no document"):
-        DocumentSubmission(submission_type="external", **base, html_path="x")
+        DocumentSubmission.model_validate({"submission_type": "external", **base, "html_path": "x"})

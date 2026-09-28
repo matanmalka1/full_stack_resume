@@ -287,7 +287,8 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
     assert created.payload_hash == request.payload_hash
     assert created.status is OperationStatus.QUEUED
     assert _operation(services, created.id) == created
-    assert _active_operation(services, ingested.application_id).id == created.id
+    active = _active_operation(services, ingested.application_id)
+    assert active is not None and active.id == created.id
     detail = services.queries.application_detail(ingested.application_id)
     assert detail.active_operation == as_operation_view(created)
     assert detail.latest_operation == as_operation_view(created)
