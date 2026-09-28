@@ -23,7 +23,6 @@ from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
 from ..application.services.drafts import DraftAuthoringService
 from ..application.services.drafts.approval import DraftApprovalService
-from ..application.services.drafts.approval_commit import ApprovalCommitter
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.selection import SelectionChangeService
 from ..application.services.drafts.validation import DraftValidationService
@@ -48,6 +47,7 @@ from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
 from ..application.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
+from ..infrastructure.document_files import DocumentFiles, SubmissionPayloads
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
 from ..infrastructure.operation_logging import OperationFailureLogger
@@ -65,20 +65,12 @@ from ..infrastructure.persistence.application_projections import (
 from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from ..infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from ..infrastructure.persistence.decision_store import SqlAlchemyDecisionRepository
-from ..infrastructure.persistence.draft_approval_sources import SqlAlchemyDraftApprovalSourceReader
-from ..infrastructure.persistence.draft_authoring_sources import (
-    SqlAlchemyDraftAuthoringSourceReader,
+from ..infrastructure.persistence.documents import (
+    SqlAlchemyDocumentStore,
+    SqlAlchemyDocumentSubmissionStore,
 )
 from ..infrastructure.persistence.draft_history_sources import (
     SqlAlchemyDraftHistoryApplicationReader,
-)
-from ..infrastructure.persistence.draft_lifecycle import SqlAlchemyDraftLifecycleRepository
-from ..infrastructure.persistence.draft_operation_sources import (
-    SqlAlchemyDraftOperationSourceReader,
-)
-from ..infrastructure.persistence.draft_validation_sources import (
-    SqlAlchemyDraftValidationSourceReader,
 )
 from ..infrastructure.persistence.idempotency import SqlAlchemyIdempotencyRepository
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
@@ -90,16 +82,11 @@ from ..infrastructure.persistence.operation_client import SqlAlchemyOperationCli
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
 from ..infrastructure.persistence.payload_leases import SqlAlchemyPayloadLeaseStore
 from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
-from ..infrastructure.persistence.ready_evidence import SqlAlchemyReadyEvidenceReader
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from ..infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
-from ..infrastructure.persistence.render_context import SqlAlchemyRenderContextReader
-from ..infrastructure.persistence.selection_drafts import SqlAlchemySelectionDraftStore
 from ..infrastructure.persistence.settings_store import SqlAlchemySettingsStore
-from ..infrastructure.persistence.submission_context import SqlAlchemySubmissionContextReader
-from ..infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id
@@ -127,7 +114,7 @@ def _has_prepared_knowledge_mutation(
         return bool(store.prepared_mutations(tx))
 
 
-class RuntimePayloadStore(RevisionPayloadStore, AnalysisPayloadStore, Protocol):
+class RuntimePayloadStore(RevisionPayloadStore, AnalysisPayloadStore, SubmissionPayloads, Protocol):
     """The complete payload capability set required by runtime composition."""
 
 
@@ -144,6 +131,7 @@ class Services:
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
+    selection: SelectionChangeService
     drafts: DraftAuthoringService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService
@@ -273,28 +261,27 @@ def build_services(
             temp_root=paths.temp_root,
         )
     )
+    documents = SqlAlchemyDocumentStore(transactions)
+    document_submissions = SqlAlchemyDocumentSubmissionStore(transactions)
+    document_files = DocumentFiles(paths, resolved_payloads)
     analysis_service = AnalysisService(
         transactions=transactions,
-        plans=analysis_plans,
+        analyses=analysis_plans,
         sources=analysis_sources,
+        documents=documents,
         evidence=evidence_store,
         knowledge=resolved_knowledge,
         payloads=resolved_payloads,
         leases=payload_leases,
         provider=resolved_provider,
     )
-    draft_lifecycle = SqlAlchemyDraftLifecycleRepository(transactions)
     draft_catalog = SqlAlchemyArtifactCatalog(transactions)
-    draft_decisions = SqlAlchemyDecisionRepository(transactions)
     draft_history = DraftHistoryService(
         transactions=transactions,
-        drafts=draft_lifecycle,
-        catalog=draft_catalog,
-        decisions=draft_decisions,
-        audit=intake_audit,
-        payloads=resolved_payloads,
-        leases=payload_leases,
+        documents=documents,
+        sources=analysis_sources,
         applications=SqlAlchemyDraftHistoryApplicationReader(transactions),
+        knowledge=resolved_knowledge,
     )
     operation_submissions = OperationSubmissionService(
         transactions=transactions,
@@ -302,7 +289,11 @@ def build_services(
         settings=SqlAlchemySettingsStore(transactions),
         default_ai_model=str(resolved_config.get("model")),
     )
-    operation_lifecycle = OperationLifecycleService(transactions, operation_client)
+    operation_lifecycle = OperationLifecycleService(
+        transactions, operation_client, documents=documents
+    )
+    # Temporary: the revision-replacement flow it served is gone. Wave 3 deletes it
+    # with its router; until then it is built only so `ApiServices` stays complete.
     operation_replacements = OperationReplacementService(
         transactions=transactions,
         operations=operation_client,
@@ -310,98 +301,82 @@ def build_services(
         submissions=operation_submissions,
         draft_history=draft_history,
     )
-    draft_validations = SqlAlchemyValidationRepository(transactions)
-    draft_receipts = SqlAlchemyIdempotencyRepository(transactions)
+    selection_service = SelectionChangeService(
+        transactions=transactions,
+        documents=documents,
+        sources=analysis_sources,
+        analyses=analysis_plans,
+        files=document_files,
+        knowledge=resolved_knowledge,
+    )
     draft_service = DraftAuthoringService(
         transactions=transactions,
-        drafts=draft_lifecycle,
-        plans=analysis_plans,
-        validations=draft_validations,
-        sources=SqlAlchemyDraftAuthoringSourceReader(transactions),
+        documents=documents,
+        sources=analysis_sources,
         knowledge=resolved_knowledge,
-        artifacts=resolved_artifacts,
         provider=resolved_provider,
         evidence=analysis_service,
-        selection_changes=SelectionChangeService(
-            transactions,
-            SqlAlchemySelectionDraftStore(transactions),
-            resolved_knowledge,
-            resolved_artifacts,
-        ),
         snapshot_payloads=resolved_payloads,
     )
     draft_validation = DraftValidationService(
         transactions=transactions,
-        drafts=draft_lifecycle,
-        sources=SqlAlchemyDraftValidationSourceReader(transactions),
-        validations=draft_validations,
+        documents=documents,
+        sources=analysis_sources,
         knowledge=resolved_knowledge,
     )
     draft_approval = DraftApprovalService(
         transactions=transactions,
-        drafts=draft_lifecycle,
-        sources=SqlAlchemyDraftApprovalSourceReader(transactions),
-        receipts=draft_receipts,
+        documents=documents,
+        sources=analysis_sources,
         knowledge=resolved_knowledge,
-        renderer=resolved_renderer,
-        payloads=resolved_payloads,
-        leases=payload_leases,
-        maintenance=maintenance_service,
-        committer=ApprovalCommitter(
-            draft_lifecycle,
-            draft_catalog,
-            draft_decisions,
-            intake_audit,
-            draft_receipts,
-            payload_leases,
-        ),
+        journal=knowledge_lifecycle_store,
+        audit=intake_audit,
     )
-    ready_evidence = SqlAlchemyReadyEvidenceReader(transactions)
     rendering_service = RenderingService(
         transactions=transactions,
+        documents=documents,
+        sources=analysis_sources,
+        files=document_files,
         catalog=draft_catalog,
-        validations=draft_validations,
-        ready_evidence=ready_evidence,
-        contexts=SqlAlchemyRenderContextReader(transactions),
-        drafts=draft_lifecycle,
         knowledge=resolved_knowledge,
         renderer=resolved_renderer,
         payloads=resolved_payloads,
-        leases=payload_leases,
     )
     recruitment_store = SqlAlchemyRecruitmentRepository(transactions)
     recruitment_service = RecruitmentService(transactions, recruitment_store, intake_audit)
     submission_service = SubmissionService(
         transactions=transactions,
-        contexts=SqlAlchemySubmissionContextReader(transactions),
+        documents=documents,
+        sources=analysis_sources,
+        submissions=document_submissions,
+        files=document_files,
+        leases=payload_leases,
         recruitment=recruitment_store,
-        artifacts=draft_catalog,
         audit=intake_audit,
-        ready=rendering_service,
+        knowledge=resolved_knowledge,
     )
     failure_logger = OperationFailureLogger(paths.root, paths.logs_root)
-    draft_operation_sources = SqlAlchemyDraftOperationSourceReader(transactions)
     runner = OperationRunner(
         {
             OperationType.RENDER_DOCUMENT: RenderOperationHandler(
-                rendering_service, SqlAlchemyRenderContextReader(transactions)
+                rendering_service, documents, analysis_sources, resolved_activation_knowledge
             ),
             OperationType.CREATE_DRAFT: DraftOperationHandler(
                 draft_service,
-                draft_operation_sources,
+                documents,
                 draft_service.activation,
                 resolved_activation_knowledge,
             ),
             OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
                 draft_service,
-                draft_operation_sources,
+                documents,
                 draft_service.activation,
                 resolved_activation_knowledge,
                 task="regenerate_section",
             ),
             OperationType.REGENERATE_CLAIM: RegenerationOperationHandler(
                 draft_service,
-                draft_operation_sources,
+                documents,
                 draft_service.activation,
                 resolved_activation_knowledge,
                 task="regenerate_claim",
@@ -431,11 +406,13 @@ def build_services(
         transactions=transactions,
         store=knowledge_lifecycle_store,
         knowledge=resolved_knowledge,
+        documents=documents,
     )
     KnowledgeRecoveryService(
         transactions=transactions,
         store=knowledge_lifecycle_store,
         knowledge=resolved_knowledge,
+        documents=documents,
     ).recover_knowledge_mutations()
     settings_service = SettingsService(
         transactions,
@@ -462,12 +439,13 @@ def build_services(
         queries=ApplicationQueryService(
             transactions=transactions,
             projections=application_projections,
-            ready_evidence=ready_evidence,
+            documents=documents,
+            submissions=document_submissions,
             knowledge=resolved_knowledge,
-            renderer=resolved_renderer,
             payloads=resolved_payloads,
         ),
         analysis=analysis_service,
+        selection=selection_service,
         drafts=draft_service,
         draft_validation=draft_validation,
         draft_history=draft_history,

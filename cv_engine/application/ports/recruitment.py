@@ -41,15 +41,3 @@ class RecruitmentStore(Protocol):
         client: str,
         occurred_at: str,
     ) -> str: ...
-
-    def insert_submission(
-        self,
-        tx: WriteTransaction,
-        submission_id: str,
-        application_id: str,
-        submission_type: str,
-        approved_revision_id: str | None,
-        artifact_version_id: str | None,
-        submitted_at: str,
-        metadata: dict[str, Any],
-    ) -> None: ...
