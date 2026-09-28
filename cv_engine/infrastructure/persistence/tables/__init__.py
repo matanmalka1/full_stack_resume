@@ -9,13 +9,6 @@ from __future__ import annotations
 
 from ._metadata import metadata
 from .knowledge import fact_events, knowledge_mutation_journal
-from .legacy import (  # temporary re-export: removed in Wave 3
-    approved_revisions,
-    decision_records,
-    selection_plans,
-    validation_runs,
-    working_drafts,
-)
 from .prep import cv_documents, job_analyses, job_snapshots
 from .shared import (
     OPERATION_FAILURE_CODES,
@@ -42,11 +35,6 @@ __all__ = [
     "job_snapshots",
     "job_analyses",
     "cv_documents",
-    "selection_plans",
-    "working_drafts",
-    "approved_revisions",
-    "decision_records",
-    "validation_runs",
     "recruitment_events",
     "submissions",
     "artifacts",
