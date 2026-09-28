@@ -14,7 +14,7 @@ describe("application list URL parameters", () => {
       ["preset", "needs_attention"],
       ["search", "platform engineer"],
       ["sort", "company"],
-      ["offset", "51"],
+      ["offset", String(2 * PAGE_SIZE + 1)],
     ]);
 
     expect(queryFromParams(params)).toEqual({
@@ -25,7 +25,7 @@ describe("application list URL parameters", () => {
       search: "platform engineer",
       sort: "company",
       limit: PAGE_SIZE,
-      offset: 50,
+      offset: 2 * PAGE_SIZE,
     });
   });
 
