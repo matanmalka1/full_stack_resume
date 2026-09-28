@@ -444,15 +444,19 @@ def test_output_after_cancellation_stays_inactive_and_cannot_be_activated(
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
     output_id = new_id()
-    _execution_write(services, "record_operation_output", operation.id, "analysis", output_id)
-    _execution_write(services, "activate_operation_output", operation.id, "analysis", output_id)
+    _execution_write(services, "record_operation_output", operation.id, "job_analysis", output_id)
+    _execution_write(services, "activate_operation_output", operation.id, "job_analysis", output_id)
     with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(services, "activate_operation_output", operation.id, "analysis", output_id)
+        _execution_write(
+            services, "activate_operation_output", operation.id, "job_analysis", output_id
+        )
     with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(services, "activate_operation_output", operation.id, "analysis", new_id())
+        _execution_write(
+            services, "activate_operation_output", operation.id, "job_analysis", new_id()
+        )
 
     with pytest.raises(UnknownRecord):
-        _execution_write(services, "record_operation_output", new_id(), "analysis", new_id())
+        _execution_write(services, "record_operation_output", new_id(), "job_analysis", new_id())
 
     # Cancellation closes the window: an output may still be recorded, but it
     # cannot be activated either by the activation method or by active=True on
@@ -460,15 +464,15 @@ def test_output_after_cancellation_stays_inactive_and_cannot_be_activated(
     services.operation_lifecycle.cancel(operation.id)
     cancelled_output_id = new_id()
     _execution_write(
-        services, "record_operation_output", operation.id, "analysis", cancelled_output_id
+        services, "record_operation_output", operation.id, "job_analysis", cancelled_output_id
     )
     with pytest.raises(StateConflict, match="cannot be activated"):
         _execution_write(
-            services, "activate_operation_output", operation.id, "analysis", cancelled_output_id
+            services, "activate_operation_output", operation.id, "job_analysis", cancelled_output_id
         )
     with pytest.raises(StateConflict, match="cannot be activated"):
         _execution_write(
-            services, "record_operation_output", operation.id, "analysis", new_id(), active=True
+            services, "record_operation_output", operation.id, "job_analysis", new_id(), active=True
         )
 
 

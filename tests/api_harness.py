@@ -128,7 +128,7 @@ def analyze_offline(harness, application_id: str, job_text: str) -> dict[str, st
     outputs = {item["output_type"]: item["output_id"] for item in finished["outputs"]}
     return {
         "job_analysis": outputs["job_analysis"],
-        "selection_plan": outputs["selection_plan"],
+        "cv_document": outputs["cv_document"],
     }
 
 

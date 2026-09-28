@@ -919,7 +919,6 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "OperationRunner",
         "OperationSubmissionService",
         "OperationLifecycleService",
-        "OperationReplacementService",
         "DraftValidationService",
         "DraftHistoryService",
         "DraftApprovalService",
@@ -968,13 +967,7 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
 
     application = ENGINE / "application"
     services = application / "services" / "operations"
-    migrated = [
-        services / "service.py",
-        services / "lifecycle.py",
-        services / "replacement.py",
-        services / "handlers.py",
-        application / "operation_runner.py",
-    ]
+    migrated = [*sorted(services.glob("*.py")), application / "operation_runner.py"]
     for path in migrated:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source)

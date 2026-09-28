@@ -453,15 +453,19 @@ def test_the_committed_openapi_schema_matches_the_application() -> None:
         "code",
         "detail",
     }
-    selection_responses = schema["paths"][f"{API_PREFIX}/analyses/{{analysis_id}}/selection-plans"][
-        "post"
-    ]["responses"]
-    assert selection_responses["201"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/CreateSelectionPlanResponse"
-    }
-    assert selection_responses["202"]["content"]["application/json"]["schema"] == {
+    document = f"{API_PREFIX}/applications/{{application_id}}/document"
+    render_responses = schema["paths"][f"{document}/render"]["post"]["responses"]
+    assert render_responses["202"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/OperationResponse"
     }
+    for route, media_type in [
+        ("pdf", "application/pdf"),
+        ("preview", "text/html"),
+        ("preview.pdf", "application/pdf"),
+    ]:
+        assert set(
+            schema["paths"][f"{document}/{route}"]["get"]["responses"]["200"]["content"]
+        ) == {media_type}, route
     assert OUTPUT.is_file(), (
         "openapi/openapi.json is missing; run `python openapi/generate_openapi.py`"
     )
@@ -476,7 +480,7 @@ def test_the_committed_openapi_schema_matches_the_application() -> None:
 #: Response fields whose name looks filesystem-shaped and is not. One entry,
 #: stated deliberately, so that forgetting to register a genuinely new one fails
 #: the guard instead of passing it. `entity_references` maps a reason or warning
-#: to the *entity IDs* it concerns - `{"approved_revision_id": "..."}` - which is
+#: to the *entity IDs* it concerns - `{"document_id": "..."}` - which is
 #: the opposite of a stored location.
 PATH_SHAPED_NAME_EXCEPTIONS = frozenset({"entity_references"})
 

@@ -1,6 +1,6 @@
 """M3 §5.4 item 1: the whole sequence, through the API, offline.
 
-Create -> Analyze -> Draft -> Edit -> Validate -> Approve -> Render -> Ready,
+Create -> Analyze -> Draft -> Edit -> Check -> Approve -> Render -> Ready -> Submit,
 driven entirely over HTTP against a real FastAPI app, a real `OperationWorker`,
 real PostgreSQL, and a real filesystem. This is the acceptance test the milestone
 names, so it is deliberately one long test rather than several short ones: what
@@ -21,7 +21,7 @@ Three things it does *not* do, each for a stated reason:
 - It does not read the repository to decide what happened next. Every step is
   driven from the previous response, because that is what a client has.
 - It does not skip the edit. §23's sequence has an Edit step, and a journey that
-  went straight from draft to validate would leave the ETag path unproven in the
+  went straight from draft to check would leave the ETag path unproven in the
   one test that is meant to prove the path end to end.
 """
 
@@ -35,12 +35,12 @@ from helpers import (
     ACCOUNT_MANAGER_JOB,
     REVIEW_DECISION_JOB,
     analysis_proposal,
-    working_claim,
 )
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.domain.analysis.projection import gaps
 from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
+from cv_engine.util import utc_now
 
 
 def _post(harness, path: str, body: dict | None = None, **headers):
@@ -71,6 +71,21 @@ def _run_operation(harness, response, *, expect: str = "succeeded") -> dict:
 
 def _outputs(finished: dict) -> dict[str, str]:
     return {output["output_type"]: output["output_id"] for output in finished["outputs"]}
+
+
+def _reorder(outline: dict) -> dict:
+    """A patch reversing the claims of the first section whose order is free to change."""
+    section = next(
+        item
+        for item in outline["sections"]
+        if len(item["claims"]) > 1
+        and all(claim["style"] not in {"heading", "date"} for claim in item["claims"])
+    )
+    return {
+        "claim_orders": {
+            section["name"]: [claim["claim_id"] for claim in reversed(section["claims"])]
+        }
+    }
 
 
 def _matched(quote: str, fact_id: str) -> ProposedRequirement:
@@ -131,9 +146,11 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert created.status_code == 201, created.text
     application_id = created.json()["application_id"]
     job_snapshot_id = created.json()["job_snapshot_id"]
+    document_path = f"/applications/{application_id}/document"
 
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "needs_analysis"
+    assert _get(ai_api_worker, document_path).status_code == 404
 
     # --- Analyze --------------------------------------------------------
     analyzed = _run_operation(
@@ -145,138 +162,108 @@ def test_the_full_api_journey_reaches_ready_offline(
         ),
     )
     sources = _outputs(analyzed)
-    analysis_id = sources["job_analysis"]
-    # §5.4 item 2: Analyze commits the initial deterministic SelectionPlan, so
-    # the no-review path can draft without a separate selection command.
-    selection_plan_id = sources["selection_plan"]
-
+    # The first analysis creates the document with a deterministic selection and no
+    # content, so the no-review path can draft without a separate selection command.
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready_to_draft"
-    assert detail["active_selection_plan_id"] == selection_plan_id
+    assert detail["document_id"] == sources["cv_document"]
+    assert detail["document_analysis_id"] == sources["job_analysis"]
+
+    read = _get(ai_api_worker, document_path)
+    assert read.status_code == 200, read.text
+    assert read.json()["content"] is None
+    assert read.headers["ETag"] == f'"{detail["document_hash"]}"'
+    token = read.json()["document_hash"]
 
     # --- Draft ----------------------------------------------------------
     drafted = _run_operation(
         ai_api_worker,
-        _post(
-            ai_api_worker,
-            f"/applications/{application_id}/working-draft/generate",
-            {"job_analysis_id": analysis_id, "selection_plan_id": selection_plan_id},
-        ),
+        _post(ai_api_worker, f"{document_path}/draft", {"expected_document_hash": token}),
     )
-    working_draft_id = _outputs(drafted)["working_draft"]
-
-    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
-    assert detail["preparation_state"] == "ready_for_approval"
-    assert detail["working_draft_state"] == "validated"
-
-    read = _get(ai_api_worker, f"/working-drafts/{working_draft_id}")
-    assert read.status_code == 200, read.text
-    etag = read.headers["ETag"]
-
-    # --- Edit -----------------------------------------------------------
-    # A real claim edit, restating one claim's own facts and wording. The patch
-    # has to carry at least one claim - `claim_edits` is `min_length=1`, because
-    # a save that changes nothing is not an edit - so the journey makes the
-    # smallest genuine one rather than an empty request the API rejects.
-    #
-    # It still commits a new version: `apply_claim_edit` records the manual
-    # derivation, so the content hash moves even when the words do not, which is
-    # what makes the second save below a real lost-update attempt.
-    claim = working_claim(ai_api_worker.services, application_id, "sales.metric.performance")
-    patch_body = {
-        "claim_edits": [
-            {"claim_id": claim.claim_id, "fact_ids": claim.fact_ids, "text": claim.text}
-        ]
-    }
-
-    edited = _patch(
-        ai_api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
-    )
-    assert edited.status_code == 200, edited.text
-    new_etag = edited.headers["ETag"]
-    assert new_etag != etag
+    assert _outputs(drafted)["cv_document"] == sources["cv_document"]
 
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "draft_in_progress"
-    assert detail["working_draft_state"] == "editing"
+    assert detail["document_state"] == "draft"
+
+    read = _get(ai_api_worker, document_path)
+    etag = read.headers["ETag"]
+    assert read.json()["outline"] is not None
+
+    # --- Edit -----------------------------------------------------------
+    # A real edit: one section's claims reversed. The same patch is sent again below
+    # with the old token, which makes that second save a real lost-update attempt.
+    patch_body = _reorder(read.json()["outline"])
+
+    edited = _patch(ai_api_worker, document_path, patch_body, **{"If-Match": etag})
+    assert edited.status_code == 200, edited.text
+    new_etag = edited.headers["ETag"]
+    assert new_etag != etag
+    token = edited.json()["document_hash"]
+    assert new_etag == f'"{token}"'
 
     # The same token again is the concurrency matrix's first row: the second
     # save must change nothing at all rather than win or merge.
-    stale = _patch(
-        ai_api_worker, f"/working-drafts/{working_draft_id}", patch_body, **{"If-Match": etag}
-    )
+    stale = _patch(ai_api_worker, document_path, patch_body, **{"If-Match": etag})
     assert stale.status_code == 409, stale.text
-    assert _get(ai_api_worker, f"/working-drafts/{working_draft_id}").headers["ETag"] == new_etag
+    assert _get(ai_api_worker, document_path).headers["ETag"] == new_etag
 
-    # --- Validate -------------------------------------------------------
-    current = _get(ai_api_worker, f"/working-drafts/{working_draft_id}").json()
-    validated = _post(
-        ai_api_worker,
-        f"/working-drafts/{working_draft_id}/validate",
-        {"expected_edit_version": current["edit_version"]},
-    )
-    assert validated.status_code == 200, validated.text
-    assert validated.json()["passed"] is True, validated.json()["report"]
-    validation_run_id = validated.json()["validation_run_id"]
-
-    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
-    assert detail["preparation_state"] == "ready_for_approval"
-    assert detail["working_draft_state"] == "validated"
+    # --- Check ----------------------------------------------------------
+    checked = _post(ai_api_worker, f"{document_path}/check", {"expected_document_hash": token})
+    assert checked.status_code == 200, checked.text
+    assert checked.json()["passed"] is True, checked.json()["report"]
+    assert checked.json()["content_check"] == "passed"
+    assert checked.json()["document_state"] == "draft"
 
     # --- Approve --------------------------------------------------------
-    approved = _post(
-        ai_api_worker,
-        f"/working-drafts/{working_draft_id}/approve",
-        {
-            "expected_edit_version": current["edit_version"],
-            "validation_run_id": validation_run_id,
-        },
-    )
-    assert approved.status_code == 201, approved.text
-    revision_id = approved.json()["revision_id"]
+    approved = _post(ai_api_worker, f"{document_path}/approve", {"expected_document_hash": token})
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["passed"] is True
+    assert approved.json()["approved_at"] is not None
 
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "approved"
-
-    revision = _get(ai_api_worker, f"/approved-revisions/{revision_id}").json()
-    assert revision["ready_qualified"] is False, "nothing is rendered yet"
-    # The approval was made from a browser, and the immutable record must say so.
-    assert revision["decision_provenance"]["client"] == "web"
+    # Nothing is rendered yet, so there is nothing to hand a recruiter.
+    assert _get(ai_api_worker, f"{document_path}/pdf").status_code == 412
 
     # --- Render ---------------------------------------------------------
     rendered = _run_operation(
         ai_api_worker,
-        _post(
-            ai_api_worker,
-            f"/approved-revisions/{revision_id}/render",
-            {"application_id": application_id},
-        ),
+        _post(ai_api_worker, f"{document_path}/render", {"expected_document_hash": token}),
     )
-    pdf_artifact_version_id = _outputs(rendered)["resume_pdf"]
+    assert _outputs(rendered)["cv_document"] == sources["cv_document"]
 
     # --- Ready ----------------------------------------------------------
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready"
-    assert detail["latest_ready_revision_id"] == revision_id
+    assert detail["document_state"] == "ready"
+    assert detail["document_hash"] == token
 
-    revision = _get(ai_api_worker, f"/approved-revisions/{revision_id}").json()
-    assert revision["ready_qualified"] is True
-    assert revision["pdf_artifact_version_id"] == pdf_artifact_version_id
-    assert revision["ready_validation"]["passed"] is True
-
-    # --- Download the exact Ready PDF (§5.2) ----------------------------
-    export = _get(
-        ai_api_worker,
-        f"/approved-revisions/{revision_id}/recruiter-pdf"
-        f"?pdf_artifact_version_id={pdf_artifact_version_id}",
-    )
+    # --- Download the Ready PDF (§16) -----------------------------------
+    export = _get(ai_api_worker, f"{document_path}/pdf")
     assert export.status_code == 200, export.text
     assert export.content.startswith(b"%PDF")
     assert "CV.pdf" in export.headers["content-disposition"]
+    assert export.headers["ETag"] == f'"{token}"'
 
-    by_id = _get(ai_api_worker, f"/artifacts/{pdf_artifact_version_id}/download")
-    assert by_id.status_code == 200, by_id.text
-    assert by_id.content == export.content
+    # --- Submit (§18) ---------------------------------------------------
+    submitted = _post(
+        ai_api_worker,
+        f"/applications/{application_id}/submissions",
+        {"expected_document_hash": token, "submitted_at": utc_now()},
+    )
+    assert submitted.status_code == 201, submitted.text
+    assert submitted.json()["document_hash"] == token
+
+    # --- The way back ---------------------------------------------------
+    # Ready is derived, not a frozen revision: an edit returns the document to the
+    # draft step, and the PDF is refused until it is approved and rendered again.
+    reorder = _reorder(_get(ai_api_worker, document_path).json()["outline"])
+    back = _patch(ai_api_worker, document_path, reorder, **{"If-Match": f'"{token}"'})
+    assert back.status_code == 200, back.text
+    detail = _get(ai_api_worker, f"/applications/{application_id}").json()
+    assert detail["preparation_state"] == "draft_in_progress"
+    assert _get(ai_api_worker, f"{document_path}/pdf").status_code == 412
 
 
 def test_the_review_journey_resolves_once_and_reaches_ready(
@@ -308,6 +295,7 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     )
     assert created.status_code == 201, created.text
     application_id = created.json()["application_id"]
+    document_path = f"/applications/{application_id}/document"
 
     analyzed = _run_operation(
         ai_api_worker,
@@ -318,16 +306,9 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         ),
     )
     original = _outputs(analyzed)
-    resolved = {
-        "job_analysis_id": original["job_analysis"],
-        "selection_plan_id": original["selection_plan"],
-    }
 
-    # The posting demands SaaS sales the candidate cannot show. That used to
-    # stop the journey twice - once for low Fit, once per hard gap - and each
-    # stop asked the user to acknowledge something that was never a defect in
-    # the document. The gap is still found and still marked hard; it is shown,
-    # and drafting is open without a decision.
+    # The posting demands SaaS sales the candidate cannot show. The gap is found and
+    # marked hard; it is shown, and drafting is open without a decision.
     state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert state["review_reasons"] == []
     assert state["preparation_state"] == "ready_to_draft"
@@ -343,48 +324,20 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
         for gap in gaps(analysis.requirements, ai_api_worker.services.knowledge.facts())
     ] == ["hard"]
 
-    drafted = _run_operation(
+    token = state["document_hash"]
+    _run_operation(
         ai_api_worker,
-        _post(
-            ai_api_worker,
-            f"/applications/{application_id}/working-draft/generate",
-            {
-                "job_analysis_id": resolved["job_analysis_id"],
-                "selection_plan_id": resolved["selection_plan_id"],
-            },
-        ),
+        _post(ai_api_worker, f"{document_path}/draft", {"expected_document_hash": token}),
     )
-    working_draft_id = _outputs(drafted)["working_draft"]
-    working = _get(ai_api_worker, f"/working-drafts/{working_draft_id}").json()
+    token = _get(ai_api_worker, document_path).json()["document_hash"]
 
-    validated = _post(
-        ai_api_worker,
-        f"/working-drafts/{working_draft_id}/validate",
-        {"expected_edit_version": working["edit_version"]},
-    )
-    assert validated.status_code == 200, validated.text
-    assert validated.json()["passed"] is True
+    approved = _post(ai_api_worker, f"{document_path}/approve", {"expected_document_hash": token})
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["passed"] is True, approved.json()["report"]
 
-    approved = _post(
+    _run_operation(
         ai_api_worker,
-        f"/working-drafts/{working_draft_id}/approve",
-        {
-            "expected_edit_version": working["edit_version"],
-            "validation_run_id": validated.json()["validation_run_id"],
-        },
+        _post(ai_api_worker, f"{document_path}/render", {"expected_document_hash": token}),
     )
-    assert approved.status_code == 201, approved.text
-    revision_id = approved.json()["revision_id"]
-
-    rendered = _run_operation(
-        ai_api_worker,
-        _post(
-            ai_api_worker,
-            f"/approved-revisions/{revision_id}/render",
-            {"application_id": application_id},
-        ),
-    )
-    assert _outputs(rendered)["resume_pdf"]
     state = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert state["preparation_state"] == "ready"
-    assert state["latest_ready_revision_id"] == revision_id

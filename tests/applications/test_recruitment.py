@@ -143,8 +143,8 @@ def test_recruitment_http_contract(api_paused) -> None:
     )
     assert external.status_code == 201, external.text
     assert external.json()["current_status"] == "applied"
-    assert external.json()["approved_revision_id"] is None
-    assert external.json()["pdf_artifact_version_id"] is None
+    # Nothing passed through the system, so no document content or files are claimed.
+    assert external.json()["document_hash"] is None
 
 
 def test_an_internal_submission_records_the_exact_document_and_files(ready_application) -> None:
