@@ -844,8 +844,8 @@ presented by a client as an available action.
 Records a send that already happened; it carries the submission time. It is not a
 validation gate. Under the document row lock it requires
 `rendered_basis == approved_basis == basis` and `document_hash == expected_document_hash`
-and no review reason. It copies the content and the rendered HTML and PDF to
-submission-owned paths under a payload write lease, computing a SHA-256 per file, and
+and no review reason. It copies the content into the Submission and the rendered HTML and
+PDF to submission-owned paths under a payload write lease, computing a SHA-256 per file, and
 then, in one PostgreSQL transaction, inserts the immutable Submission, transitions to
 `applied` if required, and appends status/audit events.
 

@@ -258,13 +258,13 @@ The key layout is the same either way:
 {artifacts_root}/ or {bucket}/{prefix}/
   snapshots/{application_id}/{snapshot_id}.txt
   provider/{application_id}/{operation_id}/{artifact_id}.json
-  submissions/{application_id}/{submission_id}/resume.json
   submissions/{application_id}/{submission_id}/resume.html
   submissions/{application_id}/{submission_id}/resume.pdf
 ```
 
-`cv_documents.content` is a mutable structured field stored inline in PostgreSQL, not an
-object-store payload: there is no per-edit-version draft file, because the document has
+A Submission's sent content is stored inline in `submissions.content`; only its HTML and
+PDF are object-store payloads. `cv_documents.content` is likewise a mutable structured
+field stored inline in PostgreSQL, not an object-store payload: there is no per-edit-version draft file, because the document has
 no version history to address. The document's rendered `html_path`/`pdf_path` are
 mutable working outputs written to a unique per-attempt path outside this immutable
 layout (below); they are plain document fields, not registered artifacts, and are not
