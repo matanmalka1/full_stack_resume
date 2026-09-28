@@ -1,7 +1,7 @@
 import { Layers3, Plus, RefreshCw } from "lucide-react";
 import { useId, useState } from "react";
 
-import type { WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { DocumentFacts, EditableDocument } from "../model/drafts.types";
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
 import { Textarea } from "@/ui/Input";
@@ -13,13 +13,13 @@ import { DraftClaimList } from "./DraftClaimList";
    own fact-resolution context for each claim. */
 /* oxlint-disable react/no-unstable-nested-components */
 
-type DraftOutlineSection = WorkingDraft["outline"]["sections"][number];
+type DraftOutlineSection = EditableDocument["outline"]["sections"][number];
 
 interface DraftSectionCardProps {
   actions: DraftClaimActions;
-  draft: WorkingDraft;
+  draft: EditableDocument;
   factContext: ClaimFactContext;
-  facts: WorkingDraftFacts | undefined;
+  facts: DocumentFacts | undefined;
   /* Its own id, so the section navigation above can reach it and so the heading names the
      card for assistive tech. */
   headingId: string;

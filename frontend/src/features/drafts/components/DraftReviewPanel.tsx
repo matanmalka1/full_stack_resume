@@ -1,10 +1,12 @@
-import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
+import type { ApplicationDetail } from "@/api/contracts";
+import { outlineClaims } from "@/api/documents";
 import { routePaths } from "@/app/routePaths";
 import { reasonTitle } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
+import type { EditableDocument } from "../model/drafts.types";
 
 export const DraftReviewPanel = ({
   detail,
@@ -13,16 +15,12 @@ export const DraftReviewPanel = ({
   onShowClaim,
 }: {
   detail: ApplicationDetail;
-  draft: WorkingDraft;
+  draft: EditableDocument;
   onNavigate: (href: string) => void;
   onShowClaim: (claimId: string) => void;
 }) => {
   if (detail.review_reasons.length === 0) return null;
-  const claims = [
-    draft.outline.headline,
-    ...draft.outline.contacts,
-    ...draft.outline.sections.flatMap((section) => section.claims),
-  ];
+  const claims = outlineClaims(draft.outline);
   return (
     <Card aria-label="החלטות שחוסמות את אישור הטיוטה" className="flex flex-col gap-4 p-5">
       <h2 className="text-body font-semibold text-cv-text">יש לפתור את ההחלטות לפני אישור הטיוטה</h2>
@@ -38,9 +36,9 @@ export const DraftReviewPanel = ({
           claim !== undefined &&
           draft.outline.sections.some((section) => section.claims.some((item) => item.claim_id === claim.claim_id));
         const editAllowed = reason.allowed_resolution_actions.some((action) =>
-          ["update_working_draft", "apply_selection_change", "confirm_and_use_fact"].includes(action),
+          ["edit", "update_selection", "confirm_and_use_fact"].includes(action),
         );
-        const selectionAllowed = reason.allowed_resolution_actions.includes("create_selection_plan");
+        const selectionAllowed = reason.allowed_resolution_actions.includes("update_selection");
         return (
           <Callout
             key={reason.code}
@@ -68,7 +66,7 @@ export const DraftReviewPanel = ({
                   : "עובדה שנמחקה אינה ניתנת לקידום. יש להסיר את התלות בה או לבחור עובדה קנונית תקפה; אין לשנות את העובדה ההיסטורית."}
               </p>
             ) : selectionAllowed ? (
-              <p>יש ליצור תוכנית בחירה עבור הניתוח הפעיל. טופס החלטות הסיווג אינו פותר את החסר הזה.</p>
+              <p>יש לשנות את בחירת העובדות של המסמך. טופס החלטות הסיווג אינו פותר את החסר הזה.</p>
             ) : (
               <p>
                 {reason.code === "KNOWLEDGE_RECONCILIATION_REQUIRED"

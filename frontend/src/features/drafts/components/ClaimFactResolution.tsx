@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 /* oxlint-disable unicorn/no-array-reverse */
 
 import { invalidateApplicationViews } from "@/api/applications";
-import type { DraftClaim, WorkingDraft } from "@/api/contracts";
+import type { DraftClaim } from "@/api/contracts";
 import {
   confirmAndUseFact,
   factDetailQueryKey,
@@ -14,7 +14,8 @@ import {
   factHistoryQueryOptions,
   factsQueryPrefix,
 } from "@/api/facts";
-import { workingDraftFactsQueryKey, workingDraftQueryKey } from "@/api/drafts";
+import { documentQueryKey } from "@/api/documents";
+import type { EditableDocument } from "../model/drafts.types";
 import { routePaths } from "@/app/routePaths";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import {
@@ -44,7 +45,7 @@ interface ClaimFactResolutionProps {
   analysisId: string | null;
   applicationId: string;
   claim: DraftClaim;
-  draft: WorkingDraft;
+  draft: EditableDocument;
   language: string;
   profile: string | null;
   section: string;
@@ -53,7 +54,7 @@ interface ClaimFactResolutionProps {
 /* Turning an unsupported line of the draft into a fact the CV is allowed to carry. The
    claim's own text is copied into the fact verbatim - this flow never rewords it - and
    the person supplies what it means and how it is attested. A fact captured here is
-   still pending; the second step confirms it and puts it into a fresh selection plan. */
+   still pending; the second step confirms it and selects it in the document. */
 export const ClaimFactResolution = ({
   beforeResolve,
   afterResolve,
@@ -103,10 +104,10 @@ export const ClaimFactResolution = ({
         await afterResolve();
       } else {
         await invalidateApplicationViews(queryClient, applicationId);
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(draft.id) }, { throwOnError: true }),
-          queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(draft.id) }, { throwOnError: true }),
-        ]);
+        await queryClient.invalidateQueries(
+          { queryKey: documentQueryKey(draft.application_id) },
+          { throwOnError: true },
+        );
       }
     },
     onSettled: () => onResolvingChange?.(false),
@@ -116,7 +117,7 @@ export const ClaimFactResolution = ({
     onMutate: () => onResolvingChange?.(true),
     mutationFn: async () => {
       if (factId === null || analysisId === null || profile === null) {
-        throw new Error("Confirm and use requires the active analysis and Profile");
+        throw new Error("Confirm and use requires the document's analysis and Profile");
       }
       await beforeResolve?.();
       return confirmAndUseFact(factId, {
@@ -127,8 +128,8 @@ export const ClaimFactResolution = ({
         reason: "confirmed from the contextual draft claim flow",
       });
     },
-    /* Confirming reaches past the fact store: it writes a new selection plan, so the
-       application and the draft's own fact list are stale too. */
+    /* Confirming reaches past the fact store: it changes the document's selection, so the
+       document and its projection are out of date too. */
     onSuccess: async () => {
       void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
       void queryClient.invalidateQueries({ queryKey: factHistoryQueryKey });

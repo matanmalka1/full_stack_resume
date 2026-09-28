@@ -1,5 +1,6 @@
-import { outlineClaims } from "@/api/drafts";
-import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import { outlineClaims } from "@/api/documents";
+import type { DraftClaim, DraftFact } from "@/api/contracts";
+import type { DocumentFacts, EditableDocument } from "./drafts.types";
 
 /* A.4 frame 3 offers edit / regenerate / remove, and removal is two different commands.
    Which one - or neither - is decided per claim, so the reason a line cannot be removed
@@ -23,7 +24,7 @@ const shorten = (text: string): string => (text.length <= SHARED_LIMIT ? text : 
 
 /* The facts the accounting says stand behind one line, in the order the accounting
    reports them. */
-export const linkedFacts = (claim: DraftClaim, facts: WorkingDraftFacts | undefined): DraftFact[] =>
+export const linkedFacts = (claim: DraftClaim, facts: DocumentFacts | undefined): DraftFact[] =>
   (facts?.facts ?? []).filter((fact) => claim.fact_ids.includes(fact.fact_id));
 
 /* Which command, if any, removes this line.
@@ -31,16 +32,16 @@ export const linkedFacts = (claim: DraftClaim, facts: WorkingDraftFacts | undefi
    The first three answers are the backend's own refusals, restated here only so the
    control is absent rather than offered and refused: `remove_claim` rejects the headline
    and the contacts as structural, and rejects a claim the fact selection authorizes,
-   naming `apply_selection_change`.
+   naming the selection change.
 
    The last two are this screen's, and are deliberately stricter than the server. Nothing
-   stops `apply_selection_change` from excluding a shared fact or the fact behind a
+   stops `update_selection` from excluding a shared fact or the fact behind a
    heading - it would simply do it, and change a line the user was not looking at. A
    `הסרה` whose effect cannot be described honestly is not offered. */
 export const removability = (
   claim: DraftClaim,
-  draft: WorkingDraft,
-  facts: WorkingDraftFacts | undefined,
+  draft: EditableDocument,
+  facts: DocumentFacts | undefined,
 ): Removability => {
   if (claim.claim_id === draft.outline.headline.claim_id) {
     return { route: "none", reason: "שורת הכותרת היא חלק ממבנה המסמך ואינה נמחקת." };
@@ -69,7 +70,7 @@ export const removability = (
   }
 
   const byId = new Map(facts.facts.map((fact) => [fact.fact_id, fact]));
-  const texts = new Map(outlineClaims(draft).map((line) => [line.claim_id, line.text]));
+  const texts = new Map(outlineClaims(draft.outline).map((line) => [line.claim_id, line.text]));
 
   for (const factId of claim.fact_ids) {
     const fact = byId.get(factId);
@@ -77,7 +78,7 @@ export const removability = (
     if (fact === undefined || fact.outcome === null || fact.outcome === undefined) {
       return {
         route: "none",
-        reason: "העובדה שמאחורי השורה אינה חלק מתוכנית הבחירה, ולכן אי אפשר להסיר אותה דרך שינוי הבחירה.",
+        reason: "העובדה שמאחורי השורה אינה חלק מבחירת העובדות של המסמך, ולכן אי אפשר להסיר אותה דרך שינוי הבחירה.",
       };
     }
 

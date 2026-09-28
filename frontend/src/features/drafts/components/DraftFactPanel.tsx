@@ -1,7 +1,8 @@
 import { Database, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { DraftFact, WorkingDraftFacts } from "@/api/contracts";
+import type { DraftFact } from "@/api/contracts";
+import type { DocumentFacts } from "../model/drafts.types";
 import { routePaths } from "@/app/routePaths";
 import { Button } from "@/ui/Button";
 import { QueryState } from "@/ui/QueryState";
@@ -9,7 +10,7 @@ import { omissionReasonLabels, selectionOutcomeLabels } from "@/features/prepara
 
 interface DraftFactPanelProps {
   busy: boolean;
-  facts: WorkingDraftFacts | undefined;
+  facts: DocumentFacts | undefined;
   onInclude: (fact: DraftFact) => void;
 }
 

@@ -3,29 +3,32 @@ import { Link } from "react-router-dom";
 
 import { routePaths } from "@/app/routePaths";
 import { Button, buttonClasses } from "@/ui/Button";
+import { Callout } from "@/ui/Callout";
 import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ErrorCallout } from "@/ui/ErrorCallout";
-import type { RenderApprovedRevision } from "../hooks/useRenderApprovedRevision";
+import type { RenderDocument } from "../hooks/useRenderDocument";
 
-/* A.4 frame 6's render step, inline in the editor that produced the revision. Explicit
-   approval starts its artifact generation; a failed Operation remains in the editor's
-   overlay with its retry and direct return to editing, while reloading an already-approved
-   revision does not create new work.
+/* A.4 frame 6's render step, inline in the editor. Explicit approval starts it; a failed
+   Operation remains in the editor's overlay with its retry, while reloading an approved
+   document does not create new work.
 
-   The command itself is the editor's (`useRenderApprovedRevision`), because the editor's
-   one overlay reports the render from the press onward. This panel draws the approved
-   state and its manual start, and steps aside while the render is anyone's to report:
-   the approved box and its "create the files" CTA beside a render already under way, or
-   already failed with its own recovery actions, would be a second, contradictory account
-   of the same moment. */
-export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) => {
-  const { inFlight, ready, render, revision, revisionError } = state;
+   The document stays editable beside this panel: editing an approved document is allowed
+   and simply returns it to draft (§14). A failed render leaves it approved (§16), and the
+   projection's `last_render_error` says why until the next render or edit. */
+export const DraftRenderPanel = ({
+  applicationId,
+  lastRenderError,
+  state,
+}: {
+  applicationId: string;
+  /* §9: the structured failure of the newest failed render of this exact document. */
+  lastRenderError: Record<string, unknown> | null | undefined;
+  state: RenderDocument;
+}) => {
+  const { inFlight, ready, render } = state;
 
-  /* While the render runs, the screen still says where the work stands: the draft was
-     approved and is now becoming files, and the reader will be taken on when they exist.
-     It offers nothing to press - the run is the live panel's to report and cancel - so it
-     is not a second account of the same moment, only the page's own subject. Without it
-     the step went blank for the length of the render once the modal no longer covered it. */
+  /* While the render runs, the screen still says where the work stands. It offers nothing
+     to press - the run is the live panel's to report and cancel. */
   if (inFlight) {
     return (
       <section
@@ -41,12 +44,21 @@ export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) =
             הגרסה אושרה
           </h2>
           <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            יוצרים ממנה HTML ו־PDF. כשהקבצים יהיו מוכנים, המסך יעבור לגרסה המוכנה למסירה.
+            יוצרים ממנה HTML ו־PDF. כשהקבצים יהיו מוכנים, המסך יעבור לקורות החיים המוכנים למסירה.
           </p>
         </div>
       </section>
     );
   }
+
+  const failureDetail =
+    lastRenderError == null
+      ? null
+      : typeof lastRenderError.detail === "string"
+        ? lastRenderError.detail
+        : typeof lastRenderError.code === "string"
+          ? lastRenderError.code
+          : null;
 
   return (
     <>
@@ -56,19 +68,29 @@ export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) =
       >
         <div>
           <h2 className="text-heading-sm font-bold text-cv-text" id="render-heading">
-            הגרסה אושרה
+            {ready ? "קורות החיים מוכנים" : "הגרסה אושרה"}
           </h2>
           <p className="mt-1 text-support leading-6 text-cv-text-muted">
             {ready
-              ? "הקבצים נוצרו בהצלחה. אפשר להמשיך לגרסה המוכנה למסירה."
-              : "הגרסה שאושרה נשמרה כרשומה קבועה. כעת נותר ליצור ממנה HTML ו־PDF."}
+              ? "הקבצים נוצרו מהמסמך כפי שהוא. עריכה כאן תחזיר אותו לטיוטה, ואפשר לאשר ולהפיק אותו שוב."
+              : "המסמך אושר כפי שהוא. כעת נותר ליצור ממנו HTML ו־PDF. עריכה תחזיר אותו לטיוטה."}
           </p>
         </div>
 
-        {revisionError === null && render.error === null ? null : (
+        {lastRenderError == null ? null : (
+          <Callout title="יצירת הקובץ האחרונה נכשלה" tone="blocker">
+            {failureDetail === null ? (
+              "המסמך נשאר מאושר. אפשר לנסות שוב, או לתקן את התוכן - עריכה תחזיר אותו לטיוטה."
+            ) : (
+              <p dir="auto">{failureDetail}</p>
+            )}
+          </Callout>
+        )}
+
+        {render.error === null ? null : (
           <ErrorCallout
-            error={render.error ?? revisionError}
-            fallbackDetail="הפנייה לשרת נכשלה. הגרסה המאושרת נשמרה."
+            error={render.error}
+            fallbackDetail="הפנייה לשרת נכשלה. המסמך נשאר מאושר."
             fallbackTitle="לא ניתן להתחיל את יצירת הקובץ"
           />
         )}
@@ -76,26 +98,19 @@ export const DraftRenderPanel = ({ state }: { state: RenderApprovedRevision }) =
 
       <CommitBar
         back={
-          revision === undefined ? undefined : (
-            <Link className={buttonClasses("ghost")} to={routePaths.application(revision.application_id)}>
-              <ArrowRight aria-hidden="true" className="size-icon-md" />
-              חזרה לניתוח והתאמה
-            </Link>
-          )
+          <Link className={buttonClasses("ghost")} to={routePaths.application(applicationId)}>
+            <ArrowRight aria-hidden="true" className="size-icon-md" />
+            חזרה לניתוח והתאמה
+          </Link>
         }
         label={NEXT_STEP_LABEL}
         primary={
-          revision?.ready_qualified === true ? (
-            <Link className={buttonClasses("primary")} to={routePaths.revision(revision.id)}>
-              מעבר לגרסה המוכנה
+          ready ? (
+            <Link className={buttonClasses("primary")} to={routePaths.ready(applicationId)}>
+              מעבר לקורות החיים המוכנים
             </Link>
           ) : (
-            <Button
-              disabled={revision === undefined}
-              onClick={() => render.mutate()}
-              pending={render.isPending}
-              pendingLabel="יוצר HTML ו־PDF…"
-            >
+            <Button onClick={() => render.mutate()} pending={render.isPending} pendingLabel="יוצר HTML ו־PDF…">
               יצירת HTML ו־PDF
             </Button>
           )

@@ -1,31 +1,40 @@
 import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
-import { ValidationReportView } from "@/features/revisions";
-import type { DraftValidation } from "../hooks/useDraftValidation";
+import type { DocumentCheckState } from "../hooks/useDocumentCheck";
+import { ValidationReportView } from "./ValidationReportView";
 
 interface DraftValidationPanelProps {
-  validation: DraftValidation;
+  check: DocumentCheckState;
 }
 
-/* A.4 frame 5's result, as a panel of the editor rather than a screen of its own. The
-   draft it describes is the one in the editor beside it, so making the user leave to read
-   the verdict - and come back to fix it - was the trip this removes.
+/* A.4 frame 5's result, as a panel of the editor rather than a screen of its own.
 
-   It draws the run and runs the command. What follows from the run - whether approval is
-   open - is derived upstream from the same values, so nothing is reported back out of
-   here through an effect. */
-export const DraftValidationPanel = ({ validation }: DraftValidationPanelProps) => {
-  const { error, run, stale } = validation;
+   It draws the stored content report and says whether it still describes the document
+   (§5 `content_check`). An outdated report is kept on screen - the reader can still see
+   what it found - but it is marked as outdated and authorizes nothing. */
+export const DraftValidationPanel = ({ check }: DraftValidationPanelProps) => {
+  const { contentCheck, error, report, stale } = check;
 
   return (
     <section aria-labelledby="validation-summary" className="flex flex-col gap-3 border-t border-cv-border pt-4">
       <h2 className="text-heading-sm font-bold text-cv-text" id="validation-summary">
-        {run === undefined ? "בדיקת הקובץ" : run.passed ? "הקובץ עבר בדיקה" : "נדרשים תיקונים בקובץ"}
+        {contentCheck === "passed"
+          ? "הקובץ עבר בדיקה"
+          : contentCheck === "failed"
+            ? "נדרשים תיקונים בקובץ"
+            : "בדיקת הקובץ"}
       </h2>
 
       {stale ? (
         <Callout title="הטיוטה השתנתה מאז הבדיקה" tone="warning">
           יש לבדוק מחדש את הגרסה הנוכחית לפני הכנת ה־PDF.
+        </Callout>
+      ) : null}
+
+      {contentCheck === "outdated" && report !== null ? (
+        <Callout title="תוצאת הבדיקה אינה מעודכנת" tone="warning">
+          הטיוטה, או עובדה שהיא נשענת עליה, השתנתה מאז הבדיקה. התוצאה למטה מתארת את המצב הקודם; יש לבדוק מחדש לפני
+          האישור.
         </Callout>
       ) : null}
 
@@ -37,12 +46,14 @@ export const DraftValidationPanel = ({ validation }: DraftValidationPanelProps) 
         />
       )}
 
-      {run === undefined ? (
+      {report === null ? (
         <p className="text-support leading-6 text-cv-text-muted">
           הבדיקה תופעל מכפתור הכנת ה־PDF ותוודא שהגרסה המוצגת מוכנה למסירה.
         </p>
       ) : (
-        <ValidationReportView report={run.report} />
+        <div className={contentCheck === "outdated" ? "opacity-70" : undefined}>
+          <ValidationReportView report={report} />
+        </div>
       )}
     </section>
   );

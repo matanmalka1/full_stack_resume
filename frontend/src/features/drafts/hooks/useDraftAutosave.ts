@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiProblem } from "@/api/client";
-import { type DraftPatch, updateWorkingDraft } from "@/api/drafts";
-import type { ClaimAddition, ClaimPatch, WorkingDraftUpdate } from "@/api/contracts";
+import { type DocumentPatch, updateDocument } from "@/api/documents";
+import type { ClaimAddition, ClaimPatch, DocumentMutation } from "@/api/contracts";
 
 const AUTOSAVE_DEBOUNCE_MS = 700;
 
@@ -22,19 +22,21 @@ export interface AutosaveState {
 }
 
 interface UseDraftAutosaveOptions {
-  workingDraftId: string | null;
+  /* The Application whose document is being edited; null while there is no content to edit.
+     The document is keyed by its Application, so this is also the local buffer's key. */
+  applicationId: string | null;
   etag: string | null;
   onConflict: () => Promise<string | null>;
-  onSaved: (update: WorkingDraftUpdate, etag: string | null) => void;
+  onSaved: (update: DocumentMutation, etag: string | null) => void;
 }
 
-const emptyPatch = (patch: DraftPatch): boolean =>
+const emptyPatch = (patch: DocumentPatch): boolean =>
   patch.claim_edits.length === 0 &&
   patch.claim_removals.length === 0 &&
   patch.claim_additions.length === 0 &&
   Object.keys(patch.claim_orders ?? {}).length === 0;
 
-const storageKey = (workingDraftId: string): string => `cv-engine:autosave:${workingDraftId}`;
+const storageKey = (applicationId: string): string => `cv-engine:autosave:document:${applicationId}`;
 
 interface StoredBuffer {
   edits: ClaimPatch[];
@@ -44,16 +46,16 @@ interface StoredBuffer {
 }
 
 /* Best-effort only: a full or disabled storage must never block typing or saving. */
-const readStoredBuffer = (workingDraftId: string): StoredBuffer | null => {
+const readStoredBuffer = (applicationId: string): StoredBuffer | null => {
   try {
-    const raw = window.sessionStorage.getItem(storageKey(workingDraftId));
+    const raw = window.sessionStorage.getItem(storageKey(applicationId));
     return raw === null ? null : (JSON.parse(raw) as StoredBuffer);
   } catch {
     return null;
   }
 };
 
-const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void => {
+const writeStoredBuffer = (applicationId: string, buffer: StoredBuffer): void => {
   try {
     if (
       buffer.edits.length === 0 &&
@@ -61,10 +63,10 @@ const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void =
       buffer.additions.length === 0 &&
       Object.keys(buffer.claimOrders ?? {}).length === 0
     ) {
-      window.sessionStorage.removeItem(storageKey(workingDraftId));
+      window.sessionStorage.removeItem(storageKey(applicationId));
       return;
     }
-    window.sessionStorage.setItem(storageKey(workingDraftId), JSON.stringify(buffer));
+    window.sessionStorage.setItem(storageKey(applicationId), JSON.stringify(buffer));
   } catch {
     /* ignore */
   }
@@ -90,7 +92,7 @@ const writeStoredBuffer = (workingDraftId: string, buffer: StoredBuffer): void =
    Everything that must not race is a ref. Component state here would be read at the value
    it had when the callback was created, which is exactly the staleness this is
    preventing. */
-export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: UseDraftAutosaveOptions) => {
+export const useDraftAutosave = ({ applicationId, etag, onConflict, onSaved }: UseDraftAutosaveOptions) => {
   const edits = useRef(new Map<string, ClaimPatch>());
   const removals = useRef(new Set<string>());
   const additions = useRef<ClaimAddition[]>([]);
@@ -103,7 +105,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
   /* `send` recurses into itself on success (below) to drain whatever was queued while it was
      in flight, and the unmount cleanup effect below needs to reach it too - both from
      closures that must not call a `send` frozen at an earlier render (a stale
-     `workingDraftId` or `onSaved`), so both go through this ref instead of the function
+     `applicationId` or `onSaved`), so both go through this ref instead of the function
      value directly. */
   const sendRef = useRef<() => Promise<void>>(async () => undefined);
   const [state, setState] = useState<AutosaveState>({
@@ -138,16 +140,16 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
      the browser" message already promises. Writes on every mutation and is cleared the
      moment a save actually lands, so it never outlives what it stands in for. */
   const mirror = useCallback(() => {
-    if (workingDraftId === null) {
+    if (applicationId === null) {
       return;
     }
-    writeStoredBuffer(workingDraftId, {
+    writeStoredBuffer(applicationId, {
       edits: [...edits.current.values()],
       removals: [...removals.current],
       additions: [...additions.current],
       claimOrders: Object.fromEntries(claimOrders.current),
     });
-  }, [workingDraftId]);
+  }, [applicationId]);
 
   /* Warns before the tab or navigation discards text the buffer has not yet sent. */
   useEffect(() => {
@@ -169,7 +171,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
   /* Put a rejected patch back so nothing the user wrote is lost - but never over a newer
      edit to the same claim. The buffer is the latest intent, and a restore is older. */
   const restore = useCallback(
-    (patch: DraftPatch) => {
+    (patch: DocumentPatch) => {
       for (const edit of patch.claim_edits) {
         if (!edits.current.has(edit.claim_id)) {
           edits.current.set(edit.claim_id, edit);
@@ -189,10 +191,10 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
 
   const send = useCallback((): Promise<void> => {
     if (activeSave.current !== null) return activeSave.current;
-    if (halted.current || workingDraftId === null) return Promise.resolve();
+    if (halted.current || applicationId === null) return Promise.resolve();
 
     const task = (async () => {
-      const patch: DraftPatch = {
+      const patch: DocumentPatch = {
         claim_edits: [...edits.current.values()],
         claim_removals: [...removals.current],
         claim_additions: [...additions.current],
@@ -211,9 +213,9 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       publish("saving");
 
       try {
-        const result = await updateWorkingDraft(workingDraftId, token.current, patch);
+        const result = await updateDocument(applicationId, token.current, patch);
         token.current = result.etag;
-        onSaved(result.update, result.etag);
+        onSaved(result.mutation, result.etag);
         publish("saved");
         mirror();
       } catch (error) {
@@ -260,7 +262,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
       return undefined;
     });
     return task;
-  }, [mirror, onConflict, onSaved, publish, restore, workingDraftId]);
+  }, [mirror, onConflict, onSaved, publish, restore, applicationId]);
 
   useEffect(() => {
     sendRef.current = send;
@@ -280,10 +282,10 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
      finished loading. Runs once per draft id; the save it schedules is a normal save,
      and success clears the entry like any other. */
   useEffect(() => {
-    if (workingDraftId === null) {
+    if (applicationId === null) {
       return;
     }
-    const stored = readStoredBuffer(workingDraftId);
+    const stored = readStoredBuffer(applicationId);
     if (stored === null) {
       return;
     }
@@ -298,7 +300,7 @@ export const useDraftAutosave = ({ workingDraftId, etag, onConflict, onSaved }: 
     publish("idle");
     schedule();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workingDraftId]);
+  }, [applicationId]);
 
   const queueEdit = useCallback(
     (patch: ClaimPatch) => {

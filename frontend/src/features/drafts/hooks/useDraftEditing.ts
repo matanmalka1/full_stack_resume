@@ -2,36 +2,34 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { applicationDetailQueryKey } from "@/api/applications";
-import type { DraftClaim, DraftFact, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { DraftClaim, DraftFact } from "@/api/contracts";
 import {
-  applySelectionChange,
+  documentQueryKey,
+  documentQueryOptions,
   regenerateClaim,
   regenerateSection,
   selectionOverlay,
-  workingDraftFactsQueryKey,
-  workingDraftFactsQueryOptions,
-  workingDraftQueryKey,
-  workingDraftQueryOptions,
-} from "@/api/drafts";
+  updateSelection,
+} from "@/api/documents";
 import { type QueuedOperation, operationQueryKey } from "@/api/operations";
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
-import type { DraftClaimActions } from "../model/drafts.types";
+import type { DraftClaimActions, EditableDocument } from "../model/drafts.types";
 import { removability } from "../model/draftClaims";
 import { type AutosaveState, useDraftAutosave } from "./useDraftAutosave";
 import { useDraftHistory } from "./useDraftHistory";
 
 interface UseDraftEditingOptions {
   applicationId: string;
-  draft: WorkingDraft | undefined;
+  /* The document with content; undefined while there is none to edit. Its `facts` are the
+     accounting the removal and include decisions read. */
+  draft: EditableDocument | undefined;
   etag: string | null;
-  facts: WorkingDraftFacts | undefined;
   /* Regeneration is a durable Operation. The accepted `202` goes to the screen's own
      watch rather than to a route of its own. */
   onOperationQueued: (operationId: string) => void;
   /* This Application's work is under way (`isOperationLive`). See `DraftClaimActions.locked`. */
   operationLive: boolean;
-  workingDraftId: string | null;
 }
 
 export interface DraftEditing {
@@ -68,7 +66,7 @@ export interface DraftEditing {
     redo: () => void;
     undo: () => void;
   };
-  visibleDraft: WorkingDraft | undefined;
+  visibleDraft: EditableDocument | undefined;
 }
 
 /* Every write this screen makes to the draft: the autosave buffer, the two removal
@@ -81,71 +79,64 @@ export const useDraftEditing = ({
   applicationId,
   draft,
   etag,
-  facts,
   onOperationQueued,
   operationLive,
-  workingDraftId,
 }: UseDraftEditingOptions): DraftEditing => {
   const queryClient = useQueryClient();
   const { isPending: settingsPending, settings } = useSettings();
   const regenerationAvailable = aiRegenerationAvailable(settings);
 
-  /* A save changes the draft, so the read that produced it is stale by definition. Keep
+  /* The document is keyed by its Application; with no content there is nothing to save. */
+  const editingKey = draft === undefined ? null : applicationId;
+
+  /* A save changes the document, so the read that produced it is stale by definition. Keep
      its body and token together until the invalidated read replaces both: installing the
-     response token beside the previous outline would briefly construct a DraftRead that
-     never existed. The autosave queue owns the returned token needed by its next write. */
+     response token beside the previous outline would briefly construct a read that never
+     existed. The autosave queue owns the returned token needed by its next write. */
   const onSaved = useCallback(() => {
-    if (workingDraftId === null) {
-      return;
-    }
-    void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(workingDraftId) });
-    void queryClient.invalidateQueries({ queryKey: workingDraftFactsQueryKey(workingDraftId) });
+    void queryClient.invalidateQueries({ queryKey: documentQueryKey(applicationId) });
     void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(applicationId) });
-  }, [applicationId, queryClient, workingDraftId]);
+  }, [applicationId, queryClient]);
 
   /* A 409 says the read behind both the editor and its ETag is obsolete. Refresh them as
-     one DraftRead so the conflict comparison and the next If-Match name the same server
-     version. `fetchQuery` is deliberate here: invalidation alone would not wait for or
-     return the replacement token. */
+     one read so the conflict comparison and the next If-Match name the same document.
+     `fetchQuery` is deliberate here: invalidation alone would not wait for or return the
+     replacement token. */
   const onConflict = useCallback(async () => {
-    if (workingDraftId === null) {
-      return null;
-    }
-    const current = await queryClient.fetchQuery(workingDraftQueryOptions(workingDraftId));
+    const current = await queryClient.fetchQuery(documentQueryOptions(applicationId));
     return current.etag;
-  }, [queryClient, workingDraftId]);
+  }, [applicationId, queryClient]);
 
-  const autosave = useDraftAutosave({ etag, onConflict, onSaved, workingDraftId });
+  const autosave = useDraftAutosave({ applicationId: editingKey, etag, onConflict, onSaved });
   const history = useDraftHistory({
     draft,
     queueClaimOrder: autosave.queueClaimOrder,
     queueEdit: (claim, text) => autosave.queueEdit({ claim_id: claim.claim_id, fact_ids: claim.fact_ids, text }),
   });
 
-  /* §14: the overlay is absolute, so every change starts from what the accounting
-     currently reports and adds one decision to it. Sending only what moved would drop
-     every pin and exclusion the user made before. */
+  /* §14 `update_selection`: the overlay is absolute, so every change starts from what the
+     document's selection currently holds and adds one decision to it. Sending only what
+     moved would drop every pin and exclusion the user made before. The hash sent is the
+     one read back after the buffer settled, so the change is addressed to the document the
+     user's last edit produced. */
   const selection = useMutation({
     mutationFn: async (change: { pinned?: string[]; excluded?: string[] }) => {
-      if (draft === undefined || facts === undefined) {
-        throw new Error("a selection change was offered before the draft and its facts arrived");
+      if (draft === undefined) {
+        throw new Error("a selection change was offered before the document arrived");
       }
       if (!(await autosave.settle())) {
         throw new Error("Selection cannot change until local draft edits are saved");
       }
-      const [current, currentFacts] = await Promise.all([
-        queryClient.fetchQuery(workingDraftQueryOptions(draft.id)),
-        queryClient.fetchQuery(workingDraftFactsQueryOptions(draft.id)),
-      ]);
-      const overlay = selectionOverlay(currentFacts);
-      return applySelectionChange(draft.id, current.draft.edit_version, {
+      const current = await queryClient.fetchQuery({ ...documentQueryOptions(applicationId), staleTime: 0 });
+      const overlay = selectionOverlay(current.document);
+      return updateSelection(applicationId, current.document.document_hash, {
         pinned_fact_ids: [...new Set([...overlay.pinned_fact_ids, ...(change.pinned ?? [])])],
         excluded_fact_ids: [...new Set([...overlay.excluded_fact_ids, ...(change.excluded ?? [])])],
       });
     },
     onSuccess: () => {
-      /* The plan and the document changed together, and the ETag with them. Nothing from
-         the response is seeded: the refreshed reads report the version that now exists. */
+      /* Selection and content changed together, and the hash with them. Nothing from the
+         response is seeded: the refreshed reads report the document that now exists. */
       onSaved();
     },
   });
@@ -155,9 +146,9 @@ export const useDraftEditing = ({
       if (draft === undefined) {
         throw new Error("a regeneration was offered before the draft arrived");
       }
-      /* One key per target and version: a resent regeneration of the same line at the
-         same version is the same command, and a different version is a different one. */
-      const key = `${draft.id}:${draft.edit_version}:${target.claimId ?? target.section ?? ""}${target.keepText === true ? ":review" : ""}`;
+      /* One key per target and document: a resent regeneration of the same line of the
+         same document is the same command, and a changed document is a different one. */
+      const key = `${draft.document_hash}:${target.claimId ?? target.section ?? ""}${target.keepText === true ? ":review" : ""}`;
 
       return target.claimId === undefined
         ? regenerateSection(draft, target.section ?? "", key)
@@ -172,8 +163,8 @@ export const useDraftEditing = ({
     },
   });
 
-  /* The version and hash sent are the ones the read returned, so an unsaved edit would
-     be regenerated away from. Autosave settles first, and until it does the control says
+  /* The hash sent is the one the read returned, so an unsaved edit would be regenerated
+     away from. Autosave settles first, and until it does the control says
      so rather than freezing a version the user has already moved past. */
   const dirty =
     autosave.status === "saving" ||
@@ -190,7 +181,7 @@ export const useDraftEditing = ({
     if (draft === undefined) {
       return;
     }
-    const { route } = removability(claim, draft, facts);
+    const { route } = removability(claim, draft, draft);
 
     if (route === "patch") {
       autosave.queueRemoval(claim.claim_id);

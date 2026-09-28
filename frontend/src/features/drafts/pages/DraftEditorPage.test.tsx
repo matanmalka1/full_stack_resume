@@ -3,30 +3,23 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, FactDetail, Operation, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { ApplicationDetail, CVDocument, DraftFact, FactDetail, Operation } from "@/api/contracts";
+import type { DocumentOutline } from "@/api/documents";
 import { settingsQueryKey } from "@/api/settings";
+import { HASH, OTHER_HASH, cvDocument, detail as projection } from "@/test/fixtures";
 import { DraftEditorPage } from "./DraftEditorPage";
 
-const DRAFT_PATH = "/api/v1/working-drafts/wd-1";
+const DOC_PATH = "/api/v1/applications/app-1/document";
+
+/* A document hash per saved state, so a test can say which save a command was addressed
+   to. Every one has the 64-hex shape the contract requires. */
+const hashAt = (version: number): string => version.toString(16).padStart(64, "0");
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
-  ({
-    recruitment_status: "saved",
-    allowed_recruitment_transitions: ["withdrawn", "closed"],
-    recruitment_timeline: [],
-    preparation_state: "draft_in_progress",
-    working_draft_state: "editing",
-    review_reasons: [],
-    stale_reasons: [],
-    warnings: [],
-    active_job_snapshot_id: "snap-1",
-    active_analysis_id: "an-1",
-    active_selection_plan_id: "sp-1",
-    active_working_draft_id: "wd-1",
-    newer_draft_in_progress: false,
-    available_actions: ["update_working_draft"],
-    blocked_actions: [],
-    recommended_action: "validate",
+  projection({
+    content_check: "none",
+    available_actions: ["edit", "check", "approve"],
+    recommended_action: "check",
     application: {
       id: "app-1",
       company: "Acme",
@@ -37,128 +30,134 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
       updated_at: "2026-08-24T07:00:00Z",
     },
     ...overrides,
-  }) as unknown as ApplicationDetail;
+  });
 
-const draft = (overrides: Partial<WorkingDraft["outline"]> = {}): WorkingDraft =>
-  ({
-    id: "wd-1",
-    application_id: "app-1",
-    job_analysis_id: "an-1",
-    selection_plan_id: "sp-1",
-    source: {},
-    outline: {
-      headline: {
-        claim_id: "c-headline",
-        style: "headline",
-        text: "Account Manager",
-        claim_type: "headline",
-        fact_ids: [],
-        pending_reason: null,
-      },
-      contacts: [
+const baseFacts = (): DraftFact[] => [
+  {
+    fact_id: "f-1",
+    text: "Owned the CRM migration end to end.",
+    linked_claim_ids: ["c-1"],
+    section: "Core Skills",
+    outcome: "selected",
+    reason: null,
+  },
+  {
+    fact_id: "f-mail",
+    text: "matan@example.com",
+    linked_claim_ids: ["c-mail"],
+    section: null,
+    outcome: null,
+    reason: null,
+  },
+];
+
+const baseOutline = (): DocumentOutline => ({
+  headline: {
+    claim_id: "c-headline",
+    style: "headline",
+    text: "Account Manager",
+    claim_type: "headline",
+    fact_ids: [],
+    pending_reason: null,
+  },
+  contacts: [
+    {
+      claim_id: "c-mail",
+      style: "contact",
+      text: "matan@example.com",
+      claim_type: "canonical",
+      fact_ids: ["f-mail"],
+      pending_reason: null,
+    },
+  ],
+  sections: [
+    {
+      name: "Core Skills",
+      claims: [
         {
-          claim_id: "c-mail",
-          style: "contact",
-          text: "matan@example.com",
+          claim_id: "c-1",
+          style: "bullet",
+          text: "Owned the CRM migration.",
           claim_type: "canonical",
-          fact_ids: ["f-mail"],
+          fact_ids: ["f-1"],
           pending_reason: null,
         },
       ],
-      sections: [
-        {
-          name: "Core Skills",
-          claims: [
-            {
-              claim_id: "c-1",
-              style: "bullet",
-              text: "Owned the CRM migration.",
-              claim_type: "canonical",
-              fact_ids: ["f-1"],
-              pending_reason: null,
-            },
-          ],
-        },
-      ],
-      ...overrides,
-    },
-    edit_version: 4,
-    content_hash: "hash-4",
-    active: true,
-    created_at: "2026-08-24T07:00:00Z",
-    updated_at: "2026-08-24T07:10:00Z",
-  }) as unknown as WorkingDraft;
-
-const facts = (): WorkingDraftFacts => ({
-  working_draft_id: "wd-1",
-  application_id: "app-1",
-  selection_plan_id: "sp-1",
-  language: "en",
-  facts: [
-    {
-      fact_id: "f-1",
-      text: "Owned the CRM migration end to end.",
-      linked_claim_ids: ["c-1"],
-      section: "Core Skills",
-      outcome: "selected",
-      reason: null,
-    },
-    {
-      fact_id: "f-mail",
-      text: "matan@example.com",
-      linked_claim_ids: ["c-mail"],
-      section: null,
-      outcome: null,
-      reason: null,
     },
   ],
 });
 
-const jsonResponse = (body: unknown, status = 200): Response =>
+/* The document the editor reads: content, outline and fact accounting in one read. It
+   starts unchecked, so the finish action starts with the check. */
+const draft = (outline: Partial<DocumentOutline> = {}, overrides: Partial<CVDocument> = {}): CVDocument =>
+  cvDocument({
+    content_check: "none",
+    content_report: null,
+    outline: { ...baseOutline(), ...outline },
+    facts: baseFacts(),
+    ...overrides,
+  });
+
+const firstClaim = () => baseOutline().sections[0]!.claims[0]!;
+
+const jsonResponse = (body: unknown, status = 200, etag = `"${HASH}"`): Response =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ETag: '"4-hash-4"' },
+    headers: { "Content-Type": "application/json", ETag: etag },
   });
 
 const conflictResponse = (): Response =>
   new Response(
     JSON.stringify({
-      type: "about:blank#state_conflict",
+      type: "about:blank#document_changed",
       title: "Conflict",
       status: 409,
-      code: "STATE_CONFLICT",
-      detail: "working draft wd-1 has content hash hash-9, not hash-4",
+      code: "DOCUMENT_CHANGED",
+      detail: "the document no longer has the hash the request named",
     }),
     { status: 409, headers: { "Content-Type": "application/problem+json" } },
   );
 
-const updateResponse = (editVersion: number): Response =>
-  new Response(
-    JSON.stringify({
-      application_id: "app-1",
-      working_draft_id: "wd-1",
-      edit_version: editVersion,
-      content_hash: `hash-${editVersion}`,
-      selection_plan_id: "sp-1",
-      pending_claim_ids: [],
-    }),
+const updateResponse = (version: number): Response =>
+  jsonResponse(
     {
-      status: 200,
-      headers: { "Content-Type": "application/json", ETag: `"${editVersion}-hash-${editVersion}"` },
+      application_id: "app-1",
+      document_id: "doc-1",
+      document_hash: hashAt(version),
+      document_state: "draft",
+      content_check: "none",
+      pending_claim_ids: [],
     },
+    200,
+    `"${hashAt(version)}"`,
   );
+
+const checkResponse = (documentHash: string, passed: boolean, issues: unknown[] = []): Response =>
+  jsonResponse({
+    application_id: "app-1",
+    document_id: "doc-1",
+    document_hash: documentHash,
+    document_state: "draft",
+    content_check: passed ? "passed" : "failed",
+    pending_claim_ids: [],
+    passed,
+    report: { passed, groups: {}, evidence: {}, issues },
+    approved_at: null,
+  });
+
+const isDocumentRead = (url: string, init?: RequestInit) => url === DOC_PATH && (init?.method ?? "GET") === "GET";
 
 /* One route per read, so a test states which answer it is giving rather than depending on
    the order the screen happens to request them in. */
 const stubReads = (
   answers: Partial<
     Record<
-      "detail" | "draft" | "facts" | "operation" | "selectionChange" | "regenerate" | "validation" | "validationRun",
-      () => Response
+      "detail" | "document" | "operation" | "selection" | "regenerate" | "check",
+      () => Response | Promise<Response>
     >
   >,
 ): ReturnType<typeof vi.fn> => {
-  const fetchMock = vi.fn((input: unknown) => {
+  const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
 
     if (url.includes("/regenerate-")) {
@@ -167,33 +166,17 @@ const stubReads = (
     if (url.startsWith("/api/v1/operations/")) {
       return Promise.resolve(answers.operation?.() ?? jsonResponse({}, 404));
     }
-    if (url.endsWith("/apply-selection-change")) {
-      return Promise.resolve(
-        answers.selectionChange?.() ??
-          jsonResponse({
-            application_id: "app-1",
-            working_draft_id: "wd-1",
-            edit_version: 5,
-            content_hash: "hash-5",
-            selection_plan_id: "sp-2",
-            plan: {},
-          }),
-      );
+    if (url === `${DOC_PATH}/selection`) {
+      return Promise.resolve(answers.selection?.() ?? updateResponse(5));
     }
-    if (url.startsWith("/api/v1/validation-runs/")) {
-      return Promise.resolve(answers.validationRun?.() ?? answers.validation?.() ?? jsonResponse({}, 404));
-    }
-    if (url.endsWith("/validate")) {
-      return Promise.resolve(answers.validation?.() ?? jsonResponse({}, 500));
-    }
-    if (url.startsWith(`${DRAFT_PATH}/facts`)) {
-      return Promise.resolve(answers.facts?.() ?? jsonResponse(facts()));
+    if (url === `${DOC_PATH}/check`) {
+      return Promise.resolve(answers.check?.() ?? jsonResponse({}, 500));
     }
     if (url === "/api/v1/facts" || url === "/api/v1/facts/history") {
       return Promise.resolve(jsonResponse(url.endsWith("/history") ? { events: [] } : { items: [] }));
     }
-    if (url.startsWith(DRAFT_PATH)) {
-      return Promise.resolve(answers.draft?.() ?? jsonResponse(draft()));
+    if (isDocumentRead(url, init)) {
+      return Promise.resolve(answers.document?.() ?? jsonResponse(draft()));
     }
     return Promise.resolve(answers.detail?.() ?? jsonResponse(detail()));
   });
@@ -209,34 +192,8 @@ const reviewDetail = (
       code,
       message: `Reason: ${code}`,
       entity_references: {},
-      allowed_resolution_actions:
-        code === "PENDING_FACT_REQUIRES_RESOLUTION" ? ["confirm_and_use_fact", "update_working_draft"] : [],
+      allowed_resolution_actions: code === "PENDING_FACT_REQUIRES_RESOLUTION" ? ["confirm_and_use_fact", "edit"] : [],
     })),
-    latest_analysis: {
-      id: "an-1",
-      application_id: "app-1",
-      job_snapshot_id: "snap-1",
-      version_number: 1,
-      analysis: {
-        track: "sales",
-        profile: "account-manager",
-        user_override: {},
-      },
-      fit_level: "medium",
-      fit_score: 0.5,
-      gaps: [
-        {
-          requirement: "Kubernetes",
-          severity: "hard",
-          reason: "missing",
-          requirement_id: "req-1",
-          substitute_fact_ids: [],
-        },
-      ],
-      provider: "openai",
-      model: "gpt-5.6-terra",
-      created_at: "2026-08-24T07:00:00Z",
-    } as ApplicationDetail["latest_analysis"],
   });
 
 const renderPage = (aiEnabled = true) => {
@@ -305,22 +262,10 @@ describe("DraftEditorPage", () => {
     expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
   });
 
-  it("reports a requested validation in the pinned commit bar", async () => {
+  it("reports a requested check in the pinned commit bar", async () => {
     stubReads({
-      validation: () =>
-        jsonResponse({
-          application_id: "app-1",
-          content_hash: "hash-4",
-          edit_version: 4,
-          passed: false,
-          report: {
-            evidence: {},
-            groups: { facts: false },
-            issues: [{ code: "MISSING_FACT", group: "facts", hard: true, message: "Missing fact" }],
-          },
-          validation_run_id: "run-1",
-          working_draft_id: "wd-1",
-        }),
+      check: () =>
+        checkResponse(HASH, false, [{ code: "MISSING_FACT", group: "facts", hard: true, message: "Missing fact" }]),
     });
 
     renderPage();
@@ -332,24 +277,17 @@ describe("DraftEditorPage", () => {
   });
 
   it("opens explicit approval immediately after the finish check passes", async () => {
-    stubReads({
-      validation: () =>
-        jsonResponse({
-          application_id: "app-1",
-          content_hash: "hash-4",
-          edit_version: 4,
-          passed: true,
-          report: { evidence: {}, groups: { facts: true }, issues: [] },
-          validation_run_id: "run-1",
-          working_draft_id: "wd-1",
-        }),
-    });
+    const fetchMock = stubReads({ check: () => checkResponse(HASH, true) });
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "בדיקה והכנת PDF" }));
 
     expect(await screen.findByRole("dialog", { name: "אישור והכנת PDF" })).toBeInTheDocument();
     expect(screen.getByText(/אני מאשר\/ת את הגרסה הזו להפקת PDF/)).toBeInTheDocument();
+    /* The check is addressed to the exact document on screen, and nothing approved yet. */
+    const call = fetchMock.mock.calls.find((entry) => String(entry[0]) === `${DOC_PATH}/check`);
+    expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({ expected_document_hash: HASH });
+    expect(fetchMock.mock.calls.some((entry) => String(entry[0]).endsWith("/approve"))).toBe(false);
   });
 
   it("gates AI regeneration through effective Settings without offering a silent fallback", async () => {
@@ -372,10 +310,9 @@ describe("DraftEditorPage", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Core Skills" })).toBeInTheDocument();
     expect(screen.getAllByText("מבוסס עובדה").length).toBeGreaterThan(0);
     /* The headline is a line of the document rather than a field: it is drawn as text
-       under its own "כותרת" status, and it is the only place the role is written on its
-       own - the header card used to name it a second time. */
+       under its own "כותרת" status. The identity card also names the target role. */
     expect(screen.getByText("כותרת", { selector: "span" })).toBeInTheDocument();
-    expect(screen.getAllByText("Account Manager")).toHaveLength(1);
+    expect(screen.getByText("Account Manager", { selector: "p" })).toBeInTheDocument();
     /* The wizard's own navigation, and no trail beside it: the step back is on the bar
        that carries the step's action, and the way out is on the spine. */
     expect(screen.queryByRole("navigation", { name: "פירורי לחם" })).not.toBeInTheDocument();
@@ -385,11 +322,11 @@ describe("DraftEditorPage", () => {
 
   it("offers in-page navigation once the outline carries more than one section", async () => {
     stubReads({
-      draft: () =>
+      document: () =>
         jsonResponse(
           draft({
             sections: [
-              { name: "Core Skills", claims: draft().outline.sections[0]!.claims },
+              { name: "Core Skills", claims: [firstClaim()] },
               { name: "Experience", claims: [] },
             ],
           }),
@@ -416,7 +353,7 @@ describe("DraftEditorPage", () => {
 
   it("marks free text nothing authorized as a blocker and keeps the text", async () => {
     stubReads({
-      draft: () =>
+      document: () =>
         jsonResponse(
           draft({
             sections: [
@@ -512,10 +449,7 @@ describe("DraftEditorPage", () => {
       if (url === "/api/v1/facts") {
         return Promise.resolve(jsonResponse({ items: [] }));
       }
-      if (url.startsWith(`${DRAFT_PATH}/facts`)) {
-        return Promise.resolve(jsonResponse(facts()));
-      }
-      if (url.startsWith(DRAFT_PATH)) {
+      if (url === DOC_PATH) {
         return Promise.resolve(jsonResponse(pendingDraft));
       }
       return Promise.resolve(jsonResponse(detail()));
@@ -544,47 +478,27 @@ describe("DraftEditorPage", () => {
   });
 
   it("refreshes the conflict comparison and reapplies against the current ETag", async () => {
-    let draftReads = 0;
+    let documentReads = 0;
     let patchWrites = 0;
     const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       const url = String(input);
-      if (url.startsWith(`${DRAFT_PATH}/facts`)) {
-        return Promise.resolve(jsonResponse(facts()));
-      }
       if (url === "/api/v1/facts" || url === "/api/v1/facts/history") {
         return Promise.resolve(jsonResponse(url.endsWith("/history") ? { events: [] } : { items: [] }));
       }
-      if (url === DRAFT_PATH && init?.method === "PATCH") {
+      if (url === DOC_PATH && init?.method === "PATCH") {
         patchWrites += 1;
         return Promise.resolve(patchWrites === 1 ? conflictResponse() : updateResponse(10));
       }
-      if (url === DRAFT_PATH) {
-        draftReads += 1;
+      if (url === DOC_PATH) {
+        documentReads += 1;
         const current =
-          draftReads === 1
+          documentReads === 1
             ? draft()
-            : draft({
-                sections: [
-                  {
-                    name: "Core Skills",
-                    claims: [
-                      {
-                        ...draft().outline.sections[0]!.claims[0]!,
-                        text: "Saved in the other tab.",
-                      },
-                    ],
-                  },
-                ],
-              });
-        return Promise.resolve(
-          new Response(JSON.stringify(current), {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              ETag: draftReads === 1 ? '"4-hash-4"' : '"9-hash-9"',
-            },
-          }),
-        );
+            : draft(
+                { sections: [{ name: "Core Skills", claims: [{ ...firstClaim(), text: "Saved in the other tab." }] }] },
+                { document_hash: OTHER_HASH },
+              );
+        return Promise.resolve(jsonResponse(current, 200, documentReads === 1 ? `"${HASH}"` : `"${OTHER_HASH}"`));
       }
       return Promise.resolve(jsonResponse(detail()));
     });
@@ -606,10 +520,11 @@ describe("DraftEditorPage", () => {
     await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
 
     const patchCalls = fetchMock.mock.calls.filter(
-      (call) => String(call[0]) === DRAFT_PATH && (call[1] as RequestInit)?.method === "PATCH",
+      (call) => String(call[0]) === DOC_PATH && (call[1] as RequestInit)?.method === "PATCH",
     );
     expect(patchCalls).toHaveLength(2);
-    expect(((patchCalls[1]![1] as RequestInit).headers as Headers).get("If-Match")).toBe('"9-hash-9"');
+    expect(((patchCalls[0]![1] as RequestInit).headers as Headers).get("If-Match")).toBe(`"${HASH}"`);
+    expect(((patchCalls[1]![1] as RequestInit).headers as Headers).get("If-Match")).toBe(`"${OTHER_HASH}"`);
   });
 
   it("presents the projection's own review reason rather than inventing an approval rule", async () => {
@@ -622,10 +537,10 @@ describe("DraftEditorPage", () => {
                 code: "PENDING_FACT_REQUIRES_RESOLUTION",
                 message: "A claim in the active draft depends on a pending fact.",
                 entity_references: {},
-                allowed_resolution_actions: ["confirm_and_use_fact", "update_working_draft"],
+                allowed_resolution_actions: ["confirm_and_use_fact", "edit"],
               },
             ],
-          } as Partial<ApplicationDetail>),
+          }),
         ),
     });
 
@@ -641,21 +556,10 @@ describe("DraftEditorPage", () => {
   it("takes pending facts to their own row with focus", async () => {
     stubReads({
       detail: () => jsonResponse(reviewDetail()),
-      draft: () =>
+      document: () =>
         jsonResponse(
           draft({
-            sections: [
-              {
-                name: "Core Skills",
-                claims: [
-                  {
-                    ...draft().outline.sections[0]!.claims[0]!,
-                    claim_type: "pending",
-                    fact_ids: [],
-                  },
-                ],
-              },
-            ],
+            sections: [{ name: "Core Skills", claims: [{ ...firstClaim(), claim_type: "pending", fact_ids: [] }] }],
           }),
         ),
     });
@@ -677,7 +581,7 @@ describe("DraftEditorPage", () => {
                 code: "FACT_DELETED_REQUIRES_RESOLUTION",
                 message: "A selected fact was deleted.",
                 entity_references: { fact_id: "f-1" },
-                allowed_resolution_actions: ["apply_selection_change"],
+                allowed_resolution_actions: ["update_selection"],
               },
             ],
           }),
@@ -690,55 +594,26 @@ describe("DraftEditorPage", () => {
     expect(screen.queryByRole("button", { name: "שמירת ההחלטות" })).toBeNull();
   });
 
-  it.each(["stale", "passed", "failed", "refresh-error", "validation-error", "edit-during-confirmation"])(
-    "updates draft state after fact confirmation: %s",
+  it.each(["blocked", "passed", "failed", "refresh-error", "check-error", "edit-during-confirmation"])(
+    "updates document state after fact confirmation: %s",
     async (outcome) => {
       let confirmed = false;
       let retry = false;
-      let validated = false;
-      let editVersion = 4;
+      let checked = false;
+      let version = 4;
       let wording = "Owned the CRM migration.";
       let finishConfirmation: (response: Response) => void = () => {};
       const confirmation = new Promise<Response>((resolve) => {
         finishConfirmation = resolve;
       });
-      const pendingDraft = draft({
-        sections: [
-          {
-            name: "Core Skills",
-            claims: [
-              {
-                ...draft().outline.sections[0]!.claims[0]!,
-                claim_type: "pending",
-                fact_ids: [],
-              },
-            ],
-          },
-        ],
-      });
-      const run = {
-        application_id: "app-1",
-        working_draft_id: "wd-1",
-        edit_version: 4,
-        content_hash: "hash-4",
-        validation_run_id: "run-new",
-        passed: outcome !== "failed",
-        report: {
-          passed: outcome !== "failed",
-          groups: {},
-          evidence: {},
-          issues:
-            outcome === "failed"
-              ? [{ code: "UNSUPPORTED", group: "facts", hard: true, message: "Still unsupported" }]
-              : [],
-        },
-      };
+      const issues =
+        outcome === "failed" ? [{ code: "UNSUPPORTED", group: "facts", hard: true, message: "Still unsupported" }] : [];
       const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
         const url = String(input);
         if (url.endsWith("/confirm-and-use")) {
           confirmed = true;
           if (outcome === "edit-during-confirmation") return confirmation;
-          return Promise.resolve(jsonResponse({ fact_id: "f-captured", selection_plan_id: "sp-2" }));
+          return Promise.resolve(jsonResponse({ fact_id: "f-captured" }));
         }
         if (url === "/api/v1/facts/history")
           return Promise.resolve(
@@ -762,66 +637,57 @@ describe("DraftEditorPage", () => {
               events: [],
             } satisfies FactDetail),
           );
-        if (url === DRAFT_PATH && init?.method === "PATCH") {
-          editVersion += 1;
+        if (url === DOC_PATH && init?.method === "PATCH") {
+          version += 1;
           wording = JSON.parse(String(init.body)).claim_edits[0].text;
-          return Promise.resolve(updateResponse(editVersion));
+          return Promise.resolve(updateResponse(version));
         }
-        if (url.endsWith("/validate")) {
-          if (outcome === "validation-error" && !retry) return Promise.resolve(jsonResponse({}, 503));
-          validated = true;
-          return Promise.resolve(
-            jsonResponse({ ...run, edit_version: editVersion, content_hash: `hash-${editVersion}` }),
-          );
+        if (url === `${DOC_PATH}/check`) {
+          if (outcome === "check-error" && !retry) return Promise.resolve(jsonResponse({}, 503));
+          checked = true;
+          return Promise.resolve(checkResponse(hashAt(version), outcome !== "failed", issues));
         }
-        if (url.startsWith("/api/v1/validation-runs/"))
-          return Promise.resolve(
-            jsonResponse({ ...run, edit_version: editVersion, content_hash: `hash-${editVersion}` }),
-          );
-        if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(facts()));
-        if (url === DRAFT_PATH) {
+        if (url === DOC_PATH) {
           if (confirmed && outcome === "refresh-error" && !retry) return Promise.resolve(jsonResponse({}, 503));
           return Promise.resolve(
-            jsonResponse({
-              ...pendingDraft,
-              edit_version: editVersion,
-              content_hash: `hash-${editVersion}`,
-              outline: {
-                ...pendingDraft.outline,
-                sections: [
-                  {
-                    name: "Core Skills",
-                    claims: [
-                      {
-                        ...pendingDraft.outline.sections[0]!.claims[0]!,
-                        text: wording,
-                      },
-                    ],
-                  },
-                ],
-              },
-              latest_validation_run_id: validated ? "run-new" : null,
-            }),
+            jsonResponse(
+              draft(
+                {
+                  sections: [
+                    {
+                      name: "Core Skills",
+                      claims: [{ ...firstClaim(), claim_type: "pending", fact_ids: [], text: wording }],
+                    },
+                  ],
+                },
+                {
+                  document_hash: hashAt(version),
+                  content_check: checked ? (outcome === "failed" ? "failed" : "passed") : "none",
+                  content_report: checked ? { passed: outcome !== "failed", groups: {}, evidence: {}, issues } : null,
+                },
+              ),
+              200,
+              `"${hashAt(version)}"`,
+            ),
           );
         }
+        const blocked = confirmed && outcome === "blocked";
         return Promise.resolve(
           jsonResponse(
             detail({
               application: { ...detail().application, profile: "account-manager" },
-              active_selection_plan_id: confirmed ? "sp-2" : "sp-1",
-              working_draft_state: confirmed && outcome === "stale" ? "stale" : "editing",
-              available_actions: confirmed && outcome === "stale" ? ["replace_working_draft"] : ["validate"],
-              stale_reasons:
-                confirmed && outcome === "stale"
-                  ? [
-                      {
-                        code: "SELECTION_PLAN_REPLACED",
-                        message: "The fact changed the selection plan.",
-                        entity_references: {},
-                        allowed_resolution_actions: ["replace_working_draft"],
-                      },
-                    ]
-                  : [],
+              document_hash: hashAt(version),
+              available_actions: blocked ? [] : ["edit", "check"],
+              review_reasons: blocked
+                ? [
+                    {
+                      code: "KNOWLEDGE_RECONCILIATION_REQUIRED",
+                      message: "Knowledge must be reconciled first.",
+                      entity_references: {},
+                      allowed_resolution_actions: [],
+                    },
+                  ]
+                : [],
             }),
           ),
         );
@@ -837,11 +703,11 @@ describe("DraftEditorPage", () => {
       fireEvent.click(screen.getByRole("button", { name: "אישור העובדה ושימוש בה" }));
       if (outcome === "edit-during-confirmation") {
         await waitFor(() => expect(confirmed).toBe(true));
-        expect(editVersion).toBe(5);
+        expect(version).toBe(5);
         fireEvent.change(screen.getByRole("textbox", { name: "טקסט השורה" }), {
           target: { value: "Edited during confirmation." },
         });
-        await act(async () => finishConfirmation(jsonResponse({ fact_id: "f-captured", selection_plan_id: "sp-2" })));
+        await act(async () => finishConfirmation(jsonResponse({ fact_id: "f-captured" })));
       }
       expect(await screen.findByText("העובדה אושרה ונבחרה")).toBeInTheDocument();
       if (outcome.endsWith("error")) {
@@ -851,18 +717,19 @@ describe("DraftEditorPage", () => {
         fireEvent.click(retryButton);
         await waitFor(() => expect(screen.queryByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" })).toBeNull());
       }
-      if (outcome === "stale") {
-        expect(await screen.findByText("The fact changed the selection plan.")).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
-        expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/validate"))).toBe(false);
+      if (outcome === "blocked") {
+        /* The projection no longer offers the check, so none is sent: the blocker is the
+           answer, reported where the editor reports blockers. */
+        expect(await screen.findByText(/נדרשת השלמת התאמה של מאגר הידע/)).toBeInTheDocument();
+        expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/check`)).toBe(false);
         expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
       } else {
         await screen.findByRole("heading", {
           name: outcome === "failed" ? "נדרשים תיקונים בקובץ" : "הקובץ עבר בדיקה",
         });
-        const request = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/validate"));
+        const request = fetchMock.mock.calls.find((call) => String(call[0]) === `${DOC_PATH}/check`);
         expect(JSON.parse(String(request![1]!.body))).toEqual({
-          expected_edit_version: outcome === "edit-during-confirmation" ? 6 : 4,
+          expected_document_hash: hashAt(outcome === "edit-during-confirmation" ? 6 : 4),
         });
         if (outcome === "edit-during-confirmation")
           expect(screen.getByDisplayValue("Edited during confirmation.")).toBeInTheDocument();
@@ -873,7 +740,7 @@ describe("DraftEditorPage", () => {
       expect(fetchMock.mock.calls.filter((call) => String(call[0]).endsWith("/confirm-and-use"))).toHaveLength(1);
       expect(
         fetchMock.mock.calls.some(
-          (call) => String(call[0]).endsWith("/approve") || String(call[0]).endsWith("/generate"),
+          (call) => String(call[0]).endsWith("/approve") || String(call[0]).endsWith("/document/draft"),
         ),
       ).toBe(false);
       expect(screen.queryByRole("dialog", { name: "אישור והכנת PDF" })).toBeNull();
@@ -883,10 +750,9 @@ describe("DraftEditorPage", () => {
   it.each(["conflict", "failure"])("preserves local text and stops navigation after a save %s", async (outcome) => {
     const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       const url = String(input);
-      if (url === DRAFT_PATH && init?.method === "PATCH")
+      if (url === DOC_PATH && init?.method === "PATCH")
         return Promise.resolve(outcome === "conflict" ? conflictResponse() : jsonResponse({}, 503));
-      if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(facts()));
-      if (url === DRAFT_PATH) return Promise.resolve(jsonResponse(draft()));
+      if (url === DOC_PATH) return Promise.resolve(jsonResponse(draft()));
       if (url === "/api/v1/facts/history") return Promise.resolve(jsonResponse({ events: [] }));
       return Promise.resolve(jsonResponse(detail()));
     });
@@ -908,110 +774,80 @@ describe("DraftEditorPage", () => {
     }
   });
 
-  it("says plainly when there is no active draft instead of reading one that does not exist", async () => {
+  it("says plainly when there is no document to read yet, and reads nothing", async () => {
     const fetchMock = stubReads({
-      detail: () => jsonResponse(detail({ active_working_draft_id: null, working_draft_state: "none" })),
+      detail: () =>
+        jsonResponse(
+          detail({
+            document_id: null,
+            document_hash: null,
+            document_analysis_id: null,
+            document_state: "none",
+            preparation_state: "needs_analysis",
+          }),
+        ),
     });
 
     renderPage();
 
-    expect(await screen.findByText("אין כרגע טיוטה פעילה למועמדות הזו")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(true);
+    expect(await screen.findByText("לקורות החיים של המועמדות הזו אין עדיין טיוטה")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DOC_PATH))).toBe(true);
   });
 
-  it("keeps the approved revision render step after approval deactivates the draft", async () => {
-    const fetchMock = vi.fn((input: unknown) => {
-      const url = String(input);
-      if (url.includes("/approved-revisions/revision-1")) {
-        return Promise.resolve(
-          jsonResponse({
-            id: "revision-1",
-            application_id: "app-1",
-            ready_qualified: false,
-          }),
-        );
-      }
-      return Promise.resolve(
-        jsonResponse(
-          detail({
-            active_working_draft_id: null,
-            latest_approved_revision_id: "revision-1",
-            preparation_state: "approved",
-            working_draft_state: "none",
-          }),
-        ),
-      );
+  it("points a document without content back to where it is generated", async () => {
+    stubReads({
+      detail: () => jsonResponse(detail({ preparation_state: "ready_to_draft" })),
+      document: () =>
+        jsonResponse(cvDocument({ content: null, outline: null, content_check: "none", content_report: null })),
     });
-    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    expect(await screen.findByText("לקורות החיים של המועמדות הזו אין עדיין טיוטה")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "עריכת השורה" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "בדיקה והכנת PDF" })).not.toBeInTheDocument();
+  });
+
+  /* Approval is a state of the one document, not a record that replaces it: the editor
+     stays open beside the render step, and editing simply returns the document to draft. */
+  it("keeps the approved document editable beside its render step", async () => {
+    const fetchMock = stubReads({
+      detail: () =>
+        jsonResponse(detail({ document_state: "approved", preparation_state: "approved", content_check: "passed" })),
+      document: () => jsonResponse(draft({}, { document_state: "approved", content_check: "passed" })),
+    });
 
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "יצירת HTML ו־PDF" })).toBeEnabled());
-    expect(screen.queryByText("אין כרגע טיוטה פעילה למועמדות הזו")).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls.every((call) => !String(call[0]).startsWith(DRAFT_PATH))).toBe(true);
+    for (const button of await screen.findAllByRole("button", { name: "עריכת השורה" })) expect(button).toBeEnabled();
+    /* A visit to an approved document queues nothing by itself, and the finish action it
+       already passed is not offered a second time. */
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/render"))).toBe(false);
+    expect(screen.queryByRole("button", { name: "בדיקה והכנת PDF" })).not.toBeInTheDocument();
   });
 
-  it("reopens the approved content in the editor after render validation fails", async () => {
-    const failedRender: Operation = {
-      id: "op-render-failed",
-      application_id: "app-1",
-      operation_type: "render_document",
-      status: "failed",
-      phase: "completed",
-      is_terminal: true,
-      available_actions: ["retry"],
-      outputs: [],
-      message: "",
-      failure_code: "RENDER_FAILED",
-      safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
-      created_at: "2026-08-24T07:00:00Z",
-    };
-    const approvedDetail = detail({
-      active_working_draft_id: null,
-      available_actions: ["create_draft"],
-      latest_approved_revision_id: "revision-1",
-      latest_operation: failedRender,
-      preparation_state: "approved",
-      working_draft_state: "none",
-    });
-    const queuedDraft = {
-      ...failedRender,
-      id: "op-correction",
-      operation_type: "create_draft",
-      status: "queued",
-    };
-    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
-      const url = String(input);
-      if (url.endsWith("/working-draft/generate") && init?.method === "POST") {
-        return Promise.resolve(
-          new Response(JSON.stringify(queuedDraft), {
-            status: 202,
-            headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-correction" },
+  it("reports the last failed render on the approved document and keeps it editable", async () => {
+    stubReads({
+      detail: () =>
+        jsonResponse(
+          detail({
+            document_state: "approved",
+            preparation_state: "approved",
+            content_check: "passed",
+            last_render_error: { code: "RENDER_FAILED", detail: "Rendered PDF has 2 pages; maximum 1." },
           }),
-        );
-      }
-      if (url.startsWith("/api/v1/operations/")) return Promise.resolve(jsonResponse(failedRender));
-      return Promise.resolve(jsonResponse(approvedDetail));
+        ),
+      document: () => jsonResponse(draft({}, { document_state: "approved", content_check: "passed" })),
     });
-    vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
 
-    fireEvent.click(await screen.findByText("פירוט ההרצה"));
-    fireEvent.click(await screen.findByRole("button", { name: "חזרה לעריכת הטיוטה" }));
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/working-draft/generate"))).toBe(true),
-    );
-    const request = fetchMock.mock.calls.find((call) => String(call[0]).endsWith("/working-draft/generate"));
-    expect(JSON.parse(String((request?.[1] as RequestInit | undefined)?.body))).toEqual({
-      job_analysis_id: "an-1",
-      selection_plan_id: "sp-1",
-      parent_revision_id: "revision-1",
-    });
-    expect(((request?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
-      "resume-editing:revision-1:an-1:sp-1",
-    );
+    expect(await screen.findByText("יצירת הקובץ האחרונה נכשלה")).toBeInTheDocument();
+    expect(screen.getByText("Rendered PDF has 2 pages; maximum 1.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "יצירת HTML ו־PDF" })).toBeInTheDocument();
+    for (const button of await screen.findAllByRole("button", { name: "עריכת השורה" })) expect(button).toBeEnabled();
   });
 
   it("states why a structural line stays instead of offering a removal that would be refused", async () => {
@@ -1024,35 +860,40 @@ describe("DraftEditorPage", () => {
 });
 
 describe("DraftEditorPage selection changes", () => {
-  const omittedFacts = (): WorkingDraftFacts => ({
-    ...facts(),
-    facts: [
-      ...facts().facts,
+  /* The document as it stands after one earlier pin: the fact accounting shows it, and
+     the selection overlay records it - the overlay is what a new decision is added to. */
+  const omittedDraft = (): CVDocument =>
+    draft(
+      {},
       {
-        fact_id: "f-pinned",
-        text: "Built the reporting pipeline.",
-        linked_claim_ids: ["c-9"],
-        section: "Core Skills",
-        outcome: "pinned",
-        reason: null,
+        selection: { ...cvDocument().selection, pinned_fact_ids: ["f-pinned"] },
+        facts: [
+          ...baseFacts(),
+          {
+            fact_id: "f-pinned",
+            text: "Built the reporting pipeline.",
+            linked_claim_ids: ["c-9"],
+            section: "Core Skills",
+            outcome: "pinned",
+            reason: null,
+          },
+          {
+            fact_id: "f-out",
+            text: "Ran the partner onboarding programme.",
+            linked_claim_ids: [],
+            section: "Core Skills",
+            outcome: "omitted",
+            reason: "below_section_budget",
+          },
+        ],
       },
-      {
-        fact_id: "f-out",
-        text: "Ran the partner onboarding programme.",
-        linked_claim_ids: [],
-        section: "Core Skills",
-        outcome: "omitted",
-        reason: "below_section_budget",
-      },
-    ],
-  });
+    );
 
   it("refuses a selection change when saving local wording failed", async () => {
     const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       const url = String(input);
-      if (url === DRAFT_PATH && init?.method === "PATCH") return Promise.resolve(jsonResponse({}, 503));
-      if (url.startsWith(`${DRAFT_PATH}/facts`)) return Promise.resolve(jsonResponse(omittedFacts()));
-      if (url === DRAFT_PATH) return Promise.resolve(jsonResponse(draft()));
+      if (url === DOC_PATH && init?.method === "PATCH") return Promise.resolve(jsonResponse({}, 503));
+      if (url === DOC_PATH) return Promise.resolve(jsonResponse(omittedDraft()));
       if (url === "/api/v1/facts/history") return Promise.resolve(jsonResponse({ events: [] }));
       return Promise.resolve(jsonResponse(detail()));
     });
@@ -1065,30 +906,30 @@ describe("DraftEditorPage selection changes", () => {
     fireEvent.click(screen.getByRole("button", { name: "הכללת העובדה" }));
     await screen.findByText("שינוי הבחירה לא בוצע");
     expect(screen.getByDisplayValue("Keep before selection.")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
+    expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
   });
 
   it("includes an omitted fact as a pin, carrying every decision already recorded", async () => {
-    const fetchMock = stubReads({ facts: () => jsonResponse(omittedFacts()) });
+    const fetchMock = stubReads({ document: () => jsonResponse(omittedDraft()) });
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
 
     await waitFor(() =>
-      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(true),
+      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(true),
     );
-    const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/apply-selection-change"));
-    /* Absolute lists: the existing pin is resent alongside the new one, because the plan
-       is built from the overlay alone. */
+    const call = fetchMock.mock.calls.find((entry) => String(entry[0]) === `${DOC_PATH}/selection`);
+    /* Absolute lists: the existing pin is resent alongside the new one, because the
+       selection is rebuilt from the overlay alone. */
     expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({
-      expected_edit_version: 4,
+      expected_document_hash: HASH,
       pinned_fact_ids: ["f-pinned", "f-out"],
       excluded_fact_ids: [],
     });
   });
 
   it("asks for confirmation before removing a line, then stages it behind an undo window", async () => {
-    const fetchMock = stubReads({ facts: () => jsonResponse(omittedFacts()) });
+    const fetchMock = stubReads({ document: () => jsonResponse(omittedDraft()) });
     /* The undo timer is created by the confirmation click, so the fake clock must own
        timers before that click (and before render). Switching clocks after staging leaves
        the real timeout behind, where advancing the fake clock cannot settle it. */
@@ -1100,20 +941,20 @@ describe("DraftEditorPage selection changes", () => {
 
       /* A single click on the trash icon must not fire the removal by itself. */
       const dialog = await screen.findByRole("dialog", { name: "הסרת השורה?" });
-      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
+      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
 
       fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
 
       /* Confirming stages the removal instead of sending it straight away, offering an undo. */
       expect(await screen.findByRole("button", { name: "ביטול ההסרה" })).toBeVisible();
-      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
+      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
 
       await vi.advanceTimersByTimeAsync(6000);
 
       await waitFor(() =>
-        expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(true),
+        expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(true),
       );
-      const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/apply-selection-change"));
+      const call = fetchMock.mock.calls.find((entry) => String(entry[0]) === `${DOC_PATH}/selection`);
       expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body)).excluded_fact_ids).toEqual(["f-1"]);
       expect(fetchMock.mock.calls.some((entry) => (entry[1] as RequestInit)?.method === "PATCH")).toBe(false);
     } finally {
@@ -1122,7 +963,7 @@ describe("DraftEditorPage selection changes", () => {
   });
 
   it("cancels a staged removal with the undo action, never sending the exclusion", async () => {
-    const fetchMock = stubReads({ facts: () => jsonResponse(omittedFacts()) });
+    const fetchMock = stubReads({ document: () => jsonResponse(omittedDraft()) });
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "הסרת השורה" }));
@@ -1132,13 +973,13 @@ describe("DraftEditorPage selection changes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "ביטול ההסרה" }));
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "ביטול ההסרה" })).not.toBeInTheDocument());
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/apply-selection-change"))).toBe(false);
+    expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
   });
 
   it("presents the manual-wording refusal as the backend states it", async () => {
     stubReads({
-      facts: () => jsonResponse(omittedFacts()),
-      selectionChange: () =>
+      document: () => jsonResponse(omittedDraft()),
+      selection: () =>
         jsonResponse(
           {
             type: "about:blank#unrecognized-refusal",
@@ -1198,19 +1039,16 @@ describe("DraftEditorPage regeneration", () => {
     expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "טיוטה ואימות" })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
-    /* All three parts of the draft's identity: that is what makes a save landing mid
-       flight fail as SOURCE_CHANGED instead of overwriting the user's edit. */
+    /* The document's hash is its whole identity: a save landing mid flight changes it, so
+       activation discards the result instead of overwriting the user's edit. */
+    expect(String(call?.[0])).toBe(`${DOC_PATH}/regenerate-claim`);
     expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({
-      application_id: "app-1",
-      expected_edit_version: 4,
-      expected_content_hash: "hash-4",
-      job_analysis_id: "an-1",
-      selection_plan_id: "sp-1",
+      expected_document_hash: HASH,
       claim_id: "c-headline",
       keep_text: false,
     });
     expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
-      "wd-1:4:c-headline",
+      `${HASH}:c-headline`,
     );
 
     /* Hiding the run does not make the draft safe to change: every edit would be addressed
@@ -1221,8 +1059,12 @@ describe("DraftEditorPage regeneration", () => {
     for (const button of screen.getAllByRole("button", { name: "יצירה מחדש של השורה" })) expect(button).toBeDisabled();
   });
 
-  it("refreshes the draft version when regeneration activates its output", async () => {
-    let draftReads = 0;
+  it("reads the document back when regeneration activates its output", async () => {
+    let documentReads = 0;
+    let finishOperation!: (response: Response) => void;
+    const operationReply = new Promise<Response>((resolve) => {
+      finishOperation = resolve;
+    });
     const completed: Operation = {
       id: "op-complete",
       application_id: "app-1",
@@ -1231,28 +1073,30 @@ describe("DraftEditorPage regeneration", () => {
       phase: "completed",
       is_terminal: true,
       available_actions: [],
-      outputs: [{ active: true, output_id: "wd-1", output_type: "working_draft" }],
+      outputs: [],
       message: "",
       created_at: "2026-08-24T07:00:00Z",
     };
+    const running: Operation = { ...completed, status: "running", phase: "executing", is_terminal: false };
     stubReads({
       detail: () =>
         jsonResponse(
           detail({
-            latest_operation: completed,
+            latest_operation: running,
           }),
         ),
-      operation: () => jsonResponse(completed),
-      draft: () => {
-        draftReads += 1;
+      operation: () => operationReply,
+      document: () => {
+        documentReads += 1;
         return jsonResponse(draft());
       },
     });
 
     renderPage();
 
-    await screen.findByRole("heading", { name: "טיוטה ואימות" });
-    await waitFor(() => expect(draftReads).toBeGreaterThanOrEqual(2));
+    await screen.findByText("Owned the CRM migration.");
+    finishOperation(jsonResponse(completed));
+    await waitFor(() => expect(documentReads).toBeGreaterThanOrEqual(2));
   });
 
   it("withholds regeneration while an edit is still unsaved, and says why", async () => {
@@ -1279,11 +1123,13 @@ describe("DraftEditorPage preview", () => {
     renderPage();
 
     const frame = await screen.findByTitle("תצוגה מקדימה של הטיוטה");
-    expect(frame).toHaveAttribute("src", "/api/v1/working-drafts/wd-1/preview?v=4");
+    expect(frame).toHaveAttribute("src", `${DOC_PATH}/preview?v=${HASH}`);
     /* An empty sandbox is the point: no allow-same-origin and no allow-scripts, so the
        document renders in an opaque origin and cannot reach this page. */
     expect(frame).toHaveAttribute("sandbox", "");
-    expect(screen.getByText("טיוטה")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("heading", { name: "תצוגה מקדימה" }).closest("section")!).getByText("טיוטה"),
+    ).toBeInTheDocument();
   });
 
   it("offers the draft's own PDF in a new tab, before any approval", async () => {
@@ -1292,7 +1138,7 @@ describe("DraftEditorPage preview", () => {
     renderPage();
 
     const link = await screen.findByRole("link", { name: "PDF הטיוטה" });
-    expect(link).toHaveAttribute("href", "/api/v1/working-drafts/wd-1/preview.pdf?v=4");
+    expect(link).toHaveAttribute("href", `${DOC_PATH}/preview.pdf?v=${HASH}`);
     expect(link).toHaveAttribute("target", "_blank");
   });
 
@@ -1310,35 +1156,42 @@ describe("DraftEditorPage preview", () => {
     expect(screen.getByText("Owned the CRM migration end to end.")).toBeInTheDocument();
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
     /* The single finish action is pinned rather than left at the foot of a column. It
-       starts with validation and changes to explicit approval only after that passes. */
+       starts with the check and changes to explicit approval only after that passes. */
     expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
     expect(
-      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור ששומר גרסה קבועה. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
+      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור שמכין את ה־PDF. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
     ).toBeInTheDocument();
   });
 
-  it("keeps revalidation available when only the previous validation became stale", async () => {
+  it("keeps an outdated report on screen, marked as such, with the check still offered", async () => {
     stubReads({
-      detail: () =>
+      detail: () => jsonResponse(detail({ content_check: "outdated" })),
+      document: () =>
         jsonResponse(
-          detail({
-            stale_reasons: [
-              {
-                code: "DRAFT_EDITED_AFTER_VALIDATION",
-                message: "The working draft changed after its latest validation.",
-                entity_references: { working_draft_id: "wd-1" },
-                allowed_resolution_actions: ["replace_working_draft", "archive_working_draft"],
+          draft(
+            {},
+            {
+              content_check: "outdated",
+              content_report: {
+                passed: true,
+                groups: {},
+                evidence: {},
+                issues: [{ code: "SOFT", group: "copy", hard: false, message: "Earlier warning" }],
               },
-            ],
-          } as Partial<ApplicationDetail>),
+            },
+          ),
         ),
     });
 
     renderPage();
 
     expect(await screen.findByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
+    expect(screen.getByText("תוצאת הבדיקה אינה מעודכנת")).toBeInTheDocument();
     expect(
-      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור ששומר גרסה קבועה. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
+      within(screen.getByRole("heading", { name: "בדיקת הקובץ" }).closest("section")!).getByText("Earlier warning"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("זה הצעד הסופי: בדיקה ואז אישור שמכין את ה־PDF. כדי רק לראות PDF, פתחו את PDF הטיוטה."),
     ).toBeVisible();
   });
 

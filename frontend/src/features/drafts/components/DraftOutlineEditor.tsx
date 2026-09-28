@@ -1,4 +1,4 @@
-import type { WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { DocumentFacts, EditableDocument } from "../model/drafts.types";
 import type { ClaimFactContext, DraftClaimActions } from "../model/drafts.types";
 import { DraftIdentityCard } from "./DraftIdentityCard";
 import { DraftSectionCard } from "./DraftSectionCard";
@@ -6,9 +6,9 @@ import { DraftSectionNav } from "./DraftSectionNav";
 
 interface DraftOutlineEditorProps {
   actions: DraftClaimActions;
-  draft: WorkingDraft;
+  draft: EditableDocument;
   factContext: ClaimFactContext;
-  facts: WorkingDraftFacts | undefined;
+  facts: DocumentFacts | undefined;
   onRegenerateSection: (section: string) => void;
   onMoveClaim: (section: string, index: number, offset: -1 | 1) => void;
 }

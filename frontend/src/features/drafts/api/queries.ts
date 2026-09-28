@@ -1,36 +1,38 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
-import type { ApplicationDetail, Operation, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
-import { workingDraftFactsQueryOptions, workingDraftQueryOptions } from "@/api/drafts";
+import type { ApplicationDetail, CVDocument, Operation } from "@/api/contracts";
+import { documentQueryOptions } from "@/api/documents";
 import { useWatchedOperation } from "@/features/operations";
+import { type EditableDocument, isEditable } from "../model/drafts.types";
 
 export interface DraftDocument {
   applicationError: unknown;
   /* See `useWatchedOperation`. */
   awaitingRecord: boolean;
   detail: ApplicationDetail | undefined;
-  draft: WorkingDraft | undefined;
+  /* The document as read, with or without content. */
+  document: CVDocument | undefined;
+  /* The same document narrowed to one with content - the only shape the editor draws. */
+  draft: EditableDocument | undefined;
   draftError: unknown;
   /* The token that authorizes writing, taken from the same read as the content above it.
      Autosave sends it and never one captured elsewhere. */
   etag: string | null;
-  facts: WorkingDraftFacts | undefined;
-  /* Live work on this Application, reported over the draft it is rewriting. */
+  /* The projection names a document; before the first analysis there is none to read. */
+  hasDocument: boolean;
+  /* Live work on this Application, reported over the document it is rewriting. */
   operation: Operation | undefined;
   settled: boolean;
   watch: (operationId: string) => void;
-  workingDraftId: string | null;
 }
 
 /* Everything this screen reads, and nothing it writes.
 
-   It reads the §9 projection for which draft is active and what is blocking, and the
-   draft and its fact accounting for the structure the editor draws. Publishing the
-   workflow landmark stays with the page, where every other routed screen does it.
-
-   It derives no second workflow state machine (A.1): blockers are the projection's own
-   review reasons, and approval is refused by the backend, not by a rule invented here. */
+   It reads the §9 projection for where the document stands and what is blocking, and the
+   document itself - content, outline, selection and fact accounting in one read - for the
+   structure the editor draws. It derives no second workflow state machine (A.1): approval
+   and readiness are the projection's `document_state`, never computed here. */
 export const useDraftDocument = (applicationId: string): DraftDocument => {
   const applicationQuery = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = applicationQuery.data;
@@ -39,27 +41,24 @@ export const useDraftDocument = (applicationId: string): DraftDocument => {
      work against one Application. */
   const { awaitingRecord, operation, settled, watch } = useWatchedOperation(applicationId, detail);
 
-  const workingDraftId = detail?.active_working_draft_id ?? null;
-  const draftQuery = useQuery({
-    ...workingDraftQueryOptions(workingDraftId ?? ""),
-    enabled: workingDraftId !== null,
+  const hasDocument = detail?.document_id != null;
+  const documentQuery = useQuery({
+    ...documentQueryOptions(applicationId),
+    enabled: hasDocument,
   });
-  const factsQuery = useQuery({
-    ...workingDraftFactsQueryOptions(workingDraftId ?? ""),
-    enabled: workingDraftId !== null,
-  });
+  const document = documentQuery.data?.document;
 
   return {
     applicationError: applicationQuery.error,
     awaitingRecord,
     detail,
-    draft: draftQuery.data?.draft,
-    draftError: draftQuery.error,
-    etag: draftQuery.data?.etag ?? null,
-    facts: factsQuery.data,
+    document,
+    draft: document !== undefined && isEditable(document) ? document : undefined,
+    draftError: documentQuery.error,
+    etag: documentQuery.data?.etag ?? null,
+    hasDocument,
     operation,
     settled,
     watch,
-    workingDraftId,
   };
 };

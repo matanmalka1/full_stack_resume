@@ -1,42 +1,48 @@
-import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
+import type { ApplicationDetail } from "@/api/contracts";
 import { LtrText } from "@/ui/LtrText";
 import { StatusBadge } from "@/ui/StatusBadge";
-import { workingDraftStateLabels, workingDraftStateTones } from "@/features/preparation";
+import { contentCheckLabels, contentCheckTones, documentStateLabels, documentStateTones } from "@/features/preparation";
 import type { AutosaveState } from "../hooks/useDraftAutosave";
+import type { EditableDocument } from "../model/drafts.types";
 import { DraftSaveState } from "./DraftSaveState";
 
 interface DraftHeaderCardProps {
   detail: ApplicationDetail;
-  /* Undefined while there is no draft to edit, and then there is no save state either. */
-  draft: WorkingDraft | undefined;
+  /* Undefined while there is no content to edit, and then there is no save state either. */
+  draft: EditableDocument | undefined;
   dirty: boolean;
   saveState: AutosaveState | null;
 }
 
-/* A.4 frame 3: which version is being edited and whether it is saved - the line the
-   reader checks before navigating away.
+/* A.4 frame 3: which document is being edited, where it stands, and whether it is saved -
+   the line the reader checks before navigating away.
 
-   Which Application it belongs to is not repeated here. The card used to open with the
-   company and the target role, two lines under a breadcrumb trail that had just named the
-   same pair; the identity is the trail's to state, and what only this card can say is the
-   version, its hash, the draft's state and whether the last edit reached the server.
+   Both states are the projection's, never derived here: `document_state` restates the
+   approval stamps against the current basis, and `content_check` says whether the stored
+   report still describes this document. The short hash names the exact document; it is
+   the token every command carries.
 
    A status line under the heading, not a card: framed at the column's full width it held
-   two small tags and read as an empty panel. */
+   a few small tags and read as an empty panel. */
 export const DraftHeaderCard = ({ detail, dirty, draft, saveState }: DraftHeaderCardProps) => (
   <div className="flex flex-wrap items-center gap-2">
     {draft === undefined ? null : (
       <LtrText
         className="rounded-pill border border-cv-border bg-cv-surface-muted px-2.5 py-1 text-support text-cv-text-muted"
         mono
-        title={draft.content_hash}
+        title={draft.document_hash}
       >
-        v{draft.edit_version}
+        {draft.document_hash.slice(0, 8)}
       </LtrText>
     )}
-    <StatusBadge tone={workingDraftStateTones[detail.working_draft_state]}>
-      {workingDraftStateLabels[detail.working_draft_state]}
+    <StatusBadge tone={documentStateTones[detail.document_state]}>
+      {documentStateLabels[detail.document_state]}
     </StatusBadge>
+    {detail.content_check === "none" ? null : (
+      <StatusBadge tone={contentCheckTones[detail.content_check]}>
+        {contentCheckLabels[detail.content_check]}
+      </StatusBadge>
+    )}
     {saveState === null ? null : <DraftSaveState dirty={dirty} state={saveState} />}
   </div>
 );

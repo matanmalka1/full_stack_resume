@@ -1,79 +1,67 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { invalidateApplicationViews } from "@/api/applications";
 import { ApiProblem } from "@/api/client";
-import type { ApplicationDetail, WorkingDraft } from "@/api/contracts";
-import { workingDraftQueryKey } from "@/api/drafts";
-import { approveWorkingDraft, validationRunQueryOptions } from "@/api/validation";
+import type { ApplicationDetail, DocumentCheck } from "@/api/contracts";
+import { approveDocument, invalidateDocumentViews } from "@/api/documents";
 import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
 import { Dialog } from "@/ui/Dialog";
 import { SummaryList } from "@/ui/SummaryList";
+import type { EditableDocument } from "../model/drafts.types";
 
 interface DraftApprovalDialogProps {
   applicationId: string;
   detail: ApplicationDetail | undefined;
-  draft: WorkingDraft | undefined;
-  onApproved: (revisionId: string) => void;
+  draft: EditableDocument | undefined;
+  /* The approval landed: the document is approved at the hash the result names. */
+  onApproved: (result: DocumentCheck) => void;
+  /* The check ran again under approval and failed. The report is data (§15), shown by the
+     check panel once the document is read back. */
+  onCheckFailed: () => void;
   onClose: () => void;
-  /* Refused as stale: the editor shows the reason on its validation panel rather
-     than sending the user to a screen for it. */
+  /* Refused because the document changed: the editor shows the reason on its check panel
+     rather than sending the user to a screen for it. */
   onStale: () => void;
   open: boolean;
-  /* The exact passing run the validation panel confirmed. Approval is offered for no
-     other run, so the dialog cannot name a version the evidence does not describe. */
-  validationRunId: string | null;
 }
 
-/* A.4 frame 5's approval dialog. It was already specified as a dialog rather than a
-   screen; this is that dialog, opened from the editor holding the draft it approves.
-   The command, the idempotency key, and the `VALIDATION_STALE` path are unchanged. */
+/* A.4 frame 5's approval dialog, opened from the editor holding the document it approves.
+
+   §15 `approve_document` is synchronous and runs the check itself, so the dialog is the
+   one explicit confirmation - including of the non-blocking warnings the stored report
+   carries - and the command either approves this exact document or returns why not. */
 export const DraftApprovalDialog = ({
   applicationId,
   detail,
   draft,
   onApproved,
+  onCheckFailed,
   onClose,
   onStale,
   open,
-  validationRunId,
 }: DraftApprovalDialogProps) => {
   const queryClient = useQueryClient();
   const [acknowledged, setAcknowledged] = useState(false);
-
-  const runQuery = useQuery({
-    ...validationRunQueryOptions(validationRunId ?? ""),
-    enabled: validationRunId !== null,
-  });
-  const run = runQuery.data;
-  const warnings = run?.report.issues.filter((issue) => !issue.hard) ?? [];
-
-  const approvalKey = useMemo(
-    () =>
-      draft === undefined || validationRunId === null ? "" : `${draft.id}:${draft.edit_version}:${validationRunId}`,
-    [draft, validationRunId],
-  );
+  const warnings = draft?.content_report?.issues.filter((issue) => !issue.hard) ?? [];
 
   const approval = useMutation({
     mutationFn: async () => {
-      if (draft === undefined || validationRunId === null) {
-        throw new Error("Approval requires an exact draft and validation run");
+      if (draft === undefined) {
+        throw new Error("Approval requires the exact document on screen");
       }
-      return approveWorkingDraft(draft.id, draft.edit_version, validationRunId, approvalKey);
+      return approveDocument(applicationId, draft.document_hash);
     },
-    onSuccess: (result) => {
-      void invalidateApplicationViews(queryClient, applicationId);
-      onApproved(result.revision_id);
+    onSuccess: async (result) => {
+      await invalidateDocumentViews(queryClient, applicationId);
+      if (result.passed && result.document_state !== "draft") onApproved(result);
+      else onCheckFailed();
     },
     onError: (error) => {
-      if (error instanceof ApiProblem && error.problem.code === "VALIDATION_STALE") {
-        void invalidateApplicationViews(queryClient, applicationId);
-        if (draft !== undefined) {
-          void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(draft.id) });
-        }
+      if (error instanceof ApiProblem && error.problem.code === "DOCUMENT_CHANGED") {
+        void invalidateDocumentViews(queryClient, applicationId);
         onStale();
       }
     },
@@ -102,21 +90,23 @@ export const DraftApprovalDialog = ({
       open={open}
       title="אישור והכנת PDF"
     >
-      <p>בדקתי את קורות החיים ואני מאשר/ת את הגרסה הזו להפקת PDF. לאחר האישור לא ניתן לערוך את הגרסה הזו.</p>
-      {detail === undefined || draft === undefined || run === undefined ? null : (
+      <p>
+        בדקתי את קורות החיים ואני מאשר/ת את הגרסה הזו להפקת PDF. עריכה אחרי האישור תחזיר את המסמך לטיוטה ותדרוש אישור
+        חדש.
+      </p>
+      {detail === undefined || draft === undefined ? null : (
         <div className="flex flex-col gap-3">
           <SummaryList
             items={[
               { term: "חברה", value: detail.application.company },
               { term: "תפקיד", value: detail.application.target_role },
-              { term: "גרסת טיוטה", value: draft.edit_version, ltr: true },
-              { term: "תוצאת אימות", value: run.passed ? "עברה" : "נכשלה" },
+              { term: "מזהה המסמך", value: draft.document_hash.slice(0, 12), ltr: true },
             ]}
           />
         </div>
       )}
       {approval.error === null ||
-      (approval.error instanceof ApiProblem && approval.error.problem.code === "VALIDATION_STALE") ? null : (
+      (approval.error instanceof ApiProblem && approval.error.problem.code === "DOCUMENT_CHANGED") ? null : (
         <ErrorCallout
           className="mt-4"
           error={approval.error}

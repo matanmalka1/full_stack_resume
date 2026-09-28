@@ -1,10 +1,11 @@
-import type { ClaimAddition, ClaimPatch, WorkingDraft } from "@/api/contracts";
-import { outlineClaims } from "@/api/drafts";
+import type { ClaimAddition, ClaimPatch } from "@/api/contracts";
+import { outlineClaims } from "@/api/documents";
+import type { EditableDocument } from "../model/drafts.types";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 
 interface DraftConflictDialogProps {
-  current: WorkingDraft | undefined;
+  current: EditableDocument | undefined;
   onDiscardLocal: () => void;
   onReapplyLocal: () => void;
   open: boolean;
@@ -29,7 +30,7 @@ export const DraftConflictDialog = ({
   pendingClaimOrders,
 }: DraftConflictDialogProps) => {
   const texts = new Map(
-    (current === undefined ? [] : outlineClaims(current)).map((claim) => [claim.claim_id, claim.text]),
+    (current === undefined ? [] : outlineClaims(current.outline)).map((claim) => [claim.claim_id, claim.text]),
   );
 
   return (

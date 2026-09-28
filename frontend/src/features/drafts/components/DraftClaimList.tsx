@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import type { DraftClaim, WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { DraftClaim } from "@/api/contracts";
+import type { DocumentFacts, EditableDocument } from "../model/drafts.types";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import type { DraftClaimActions } from "../model/drafts.types";
@@ -15,12 +16,12 @@ const REMOVAL_UNDO_MS = 6000;
 interface DraftClaimListProps {
   actions: DraftClaimActions;
   claims: DraftClaim[];
-  draft: WorkingDraft;
+  draft: EditableDocument;
   /* Built only for a `pending` line, which is the only line that can be resolved into a
      fact. Passed as a function so the sections that have that context supply it and the
      identity card, which has no section to attach a fact to, simply does not. */
   factResolution?: (claim: DraftClaim) => ReactNode;
-  facts: WorkingDraftFacts | undefined;
+  facts: DocumentFacts | undefined;
   /* Rendered instead of the list when the outline names no claims here. */
   emptyLabel: string;
   onMove?: (index: number, offset: -1 | 1) => void;

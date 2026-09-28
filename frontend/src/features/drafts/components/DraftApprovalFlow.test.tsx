@@ -1,93 +1,118 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions } from "@/api/applications";
-import { workingDraftQueryOptions } from "@/api/drafts";
-import {
-  detail,
-  draft,
-  json,
-  operation,
-  renderRoute,
-  revision,
-  validation as validationFixture,
-} from "@/test/fixtures";
+import type { ApplicationDetail } from "@/api/contracts";
+import { documentQueryOptions } from "@/api/documents";
+import { HASH, OTHER_HASH, cvDocument, detail, documentCheck, json, operation, renderRoute } from "@/test/fixtures";
 import { DraftApprovalDialog } from "./DraftApprovalDialog";
 import { DraftApprovalBar } from "./DraftApprovalBar";
 import { DraftRenderPanel } from "./DraftRenderPanel";
 import { DraftValidationPanel } from "./DraftValidationPanel";
-import { useDraftValidation } from "../hooks/useDraftValidation";
-import { useRenderApprovedRevision } from "../hooks/useRenderApprovedRevision";
+import { useDocumentCheck } from "../hooks/useDocumentCheck";
+import { useRenderDocument } from "../hooks/useRenderDocument";
+import { isEditable } from "../model/drafts.types";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   sessionStorage.clear();
 });
 
-/* Validation, approval, and render are panels of the draft editor rather than screens
-   of their own. The behavior each one owns is unchanged, so these exercise the components
-   at the same boundaries the screens were held to: the exact payload sent, the exact run
-   approval is offered for, and the two refusal paths. */
+/* Checking, approval, and render are panels of the draft editor rather than screens of
+   their own. These exercise them at the boundaries the editor is held to: the exact hash
+   each command names, the report approval is offered on, and the refusal paths. */
 
-/* A harness standing in for the editor: it holds the draft, derives the exact passing run
-   from the same hook the editor uses, and owns the approval control and the dialog exactly
-   as DraftEditorPage does. */
+const isPost = (init?: RequestInit) => init?.method === "POST";
+const approvedDetail = detail({
+  document_state: "approved",
+  preparation_state: "approved",
+  available_actions: ["edit", "render"],
+  recommended_action: "render",
+  approved_at: "2026-08-24T00:00:00Z",
+});
+
+/* The render step as the editor composes it: the command held by the host, the panel
+   drawing its state. The editor's watch reports a queued render as `rendering`, so the
+   harness does the same with the id it was handed. */
+const RenderStep = ({
+  autoStart = false,
+  detail: projection,
+  onQueued,
+}: {
+  autoStart?: boolean;
+  detail: ApplicationDetail;
+  onQueued: (operationId: string) => void;
+}) => {
+  const [queued, setQueued] = useState<string | null>(null);
+  const state = useRenderDocument({
+    autoStart,
+    detail: projection,
+    onQueued: (operationId) => {
+      setQueued(operationId);
+      onQueued(operationId);
+    },
+    rendering: queued !== null,
+  });
+  return <DraftRenderPanel applicationId="app-1" lastRenderError={null} state={state} />;
+};
+
+/* A harness standing in for the editor: it holds the document, reads the stored check
+   through the same hook the editor uses, and owns the approval control and the dialog
+   exactly as DraftEditorPage does. */
 const DraftFlow = () => {
   const [open, setOpen] = useState(false);
-  const [approved, setApproved] = useState<string | null>(null);
-  /* The editor watches the work its panels queue rather than navigating to it, so the
-     harness records the queued id the same way. */
-  const [queued, setQueued] = useState<string | null>(null);
+  const [approved, setApproved] = useState(false);
   const detailQuery = useQuery(applicationDetailQueryOptions("app-1"));
-  const draftQuery = useQuery(workingDraftQueryOptions("draft-1"));
-  const validation = useDraftValidation("app-1", draftQuery.data?.draft);
+  const documentQuery = useQuery(documentQueryOptions("app-1"));
+  const document = documentQuery.data?.document;
+  const draft = document !== undefined && isEditable(document) ? document : undefined;
+  const check = useDocumentCheck("app-1", draft);
 
   return (
     <>
-      <DraftValidationPanel validation={validation} />
-      {/* The editor exposes one finish action: it validates first and opens the explicit
-          approval only when the exact displayed version has passed. */}
+      <DraftValidationPanel check={check} />
+      {/* The editor exposes one finish action: it checks first and opens the explicit
+          approval only when the stored report passed against the document on screen. */}
       <button
-        disabled={!validation.canValidate && validation.exactPassingRunId === null}
-        onClick={validation.exactPassingRunId === null ? validation.validate : () => setOpen(true)}
+        disabled={!check.canCheck && !check.passing}
+        onClick={check.passing ? () => setOpen(true) : check.check}
         type="button"
       >
-        {validation.exactPassingRunId === null ? "בדיקה והכנת PDF" : "אישור והכנת PDF"}
+        {check.passing ? "אישור והכנת PDF" : "בדיקה והכנת PDF"}
       </button>
       <DraftApprovalDialog
         applicationId="app-1"
         detail={detailQuery.data}
-        draft={draftQuery.data?.draft}
-        onApproved={(revisionId) => {
+        draft={draft}
+        onApproved={() => {
           setOpen(false);
-          setApproved(revisionId);
+          setApproved(true);
         }}
+        onCheckFailed={() => setOpen(false)}
         onClose={() => setOpen(false)}
         onStale={() => {
           setOpen(false);
-          validation.reportStaleRefusal();
+          check.reportStaleRefusal();
         }}
         open={open}
-        validationRunId={validation.exactPassingRunId}
       />
-      {approved === null ? null : <RenderStep approvedRevisionId={approved} onQueued={setQueued} />}
-      {queued === null ? null : <p>{`בעבודה: ${queued}`}</p>}
+      {approved ? <RenderStep detail={approvedDetail} onQueued={() => {}} /> : null}
     </>
   );
 };
 
 describe("DraftValidationPanel", () => {
-  it("keeps revalidation available after a stale approval refusal", () => {
+  it("keeps the check available after a stale approval refusal", () => {
     render(
       <MemoryRouter>
         <DraftApprovalBar
           applicationHref="/applications/app-1"
-          exactPassingRunId={null}
           onApprove={vi.fn()}
           onValidate={vi.fn()}
+          passing={false}
           reviewBlocked={false}
           stale
           validationPending={false}
@@ -99,129 +124,106 @@ describe("DraftValidationPanel", () => {
   });
 
   it("renders hard issues as blockers and soft issues as warnings without dropping unknown values", async () => {
-    const run = validationFixture({
+    const report = {
       passed: false,
-      report: {
-        passed: false,
-        groups: { unknown_group: false },
-        evidence: { opaque: true },
-        issues: [
-          { group: "unknown_group", code: "UNKNOWN_HARD", hard: true, message: "Hard issue" },
-          { group: "unknown_group", code: "UNKNOWN_SOFT", hard: false, message: "Soft issue" },
-        ],
-      },
-    });
+      groups: { unknown_group: false },
+      evidence: { opaque: true },
+      issues: [
+        { group: "unknown_group", code: "UNKNOWN_HARD", hard: true, message: "Hard issue" },
+        { group: "unknown_group", code: "UNKNOWN_SOFT", hard: false, message: "Soft issue" },
+      ],
+    };
     vi.stubGlobal(
       "fetch",
       vi.fn((input: string | URL | Request) =>
         Promise.resolve(
           json(
-            String(input).includes("validation-runs")
-              ? run
-              : String(input).includes("working-drafts")
-                ? draft()
-                : detail({ working_draft_state: "validation_failed" }),
+            String(input).endsWith("/document")
+              ? cvDocument({ content_check: "failed", content_report: report })
+              : detail({ content_check: "failed" }),
           ),
         ),
       ),
     );
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    /* The report waits for detail, draft, and validation-run queries. Parallel execution
-       of the full frontend suite can schedule that chain beyond the one-second default;
-       the focused timeout still fails promptly if the report never arrives. */
     expect(await screen.findByText("Hard issue", {}, { timeout: 5_000 })).toBeInTheDocument();
-    expect(screen.getByText("Soft issue")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("heading", { name: "נדרשים תיקונים בקובץ" }).closest("section")!).getByText("Soft issue"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "נדרשים תיקונים בקובץ" })).toBeInTheDocument();
     /* An unknown code is not dropped - its message is rendered above - but the code
-       itself is not shown: `UNKNOWN_HARD` names the failure in a vocabulary the reader
-       has no use for, and the message beside it already says what went wrong. */
+       itself is not shown: it names the failure in a vocabulary the reader has no use for. */
     expect(screen.queryByText(/UNKNOWN_HARD/)).toBeNull();
     expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeInTheDocument();
   });
 
-  it("posts the exact edit version and exposes approval only after a passing response", async () => {
+  it("checks the exact document hash and offers approval only once the stored report passed", async () => {
+    let checked = false;
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST") return Promise.resolve(json(validationFixture()));
+      if (isPost(init)) {
+        checked = true;
+        return Promise.resolve(json(documentCheck()));
+      }
       return Promise.resolve(
         json(
-          url.includes("working-drafts")
-            ? draft({ latest_validation_run_id: null })
-            : detail({ working_draft_state: "editing" }),
+          url.endsWith("/document")
+            ? cvDocument(checked ? {} : { content_check: "none", content_report: null })
+            : detail({ content_check: checked ? "passed" : "none" }),
         ),
       );
     });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
-    const validate = await screen.findByRole("button", { name: "בדיקה והכנת PDF" });
-    await waitFor(() => expect(validate).toBeEnabled());
-    /* Approval is closed until a passing run for this exact version exists. */
-    fireEvent.click(validate);
+    const checkButton = await screen.findByRole("button", { name: "בדיקה והכנת PDF" });
+    await waitFor(() => expect(checkButton).toBeEnabled());
+    fireEvent.click(checkButton);
     await screen.findByRole("button", { name: "אישור והכנת PDF" });
-    const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_edit_version: 4 });
+    const request = fetchMock.mock.calls.find((call) => isPost(call[1]));
+    expect(String(request?.[0])).toContain("/applications/app-1/document/check");
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_document_hash: HASH });
   });
-  it("hides a late passing validation after a newer edit and reads the newer failed run", async () => {
-    let finishValidation: (response: Response) => void = () => {};
+
+  it("does not let a late passing check describe a document edited since", async () => {
+    let finishCheck: (response: Response) => void = () => {};
     const response = new Promise<Response>((resolve) => {
-      finishValidation = resolve;
+      finishCheck = resolve;
     });
     let edited = false;
-    let newRun = false;
-    const fetchMock = vi.fn((input: unknown) => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       const url = String(input);
-      if (url.endsWith("/validate")) return response;
-      if (url.includes("validation-runs"))
+      if (isPost(init)) return response;
+      if (url.endsWith("/document"))
         return Promise.resolve(
           json(
-            validationFixture({
-              validation_run_id: "run-new",
-              edit_version: 5,
-              content_hash: "new-hash",
-              passed: false,
-            }),
+            edited
+              ? cvDocument({
+                  document_hash: OTHER_HASH,
+                  content_check: "failed",
+                  content_report: { passed: false, groups: {}, evidence: {}, issues: [] },
+                })
+              : cvDocument({ content_check: "none", content_report: null }),
           ),
         );
-      if (url.includes("working-drafts"))
-        return Promise.resolve(
-          json(
-            draft({
-              edit_version: edited ? 5 : 4,
-              content_hash: edited ? "new-hash" : "draft-hash",
-              latest_validation_run_id: newRun ? "run-new" : null,
-            }),
-          ),
-        );
-      return Promise.resolve(json(detail()));
+      return Promise.resolve(json(detail({ document_hash: edited ? OTHER_HASH : HASH })));
     });
     vi.stubGlobal("fetch", fetchMock);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter>
-          <DraftFlow />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    const validate = await screen.findByRole("button", { name: "בדיקה והכנת PDF" });
-    await waitFor(() => expect(validate).toBeEnabled());
-    fireEvent.click(validate);
+    renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
+    const checkButton = await screen.findByRole("button", { name: "בדיקה והכנת PDF" });
+    await waitFor(() => expect(checkButton).toBeEnabled());
+    fireEvent.click(checkButton);
     edited = true;
-    await act(async () => finishValidation(json(validationFixture())));
-    await waitFor(() => expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled());
-    expect(screen.queryByRole("heading", { name: "הקובץ עבר בדיקה" })).toBeNull();
-    newRun = true;
-    await act(async () => {
-      await client.invalidateQueries({ queryKey: workingDraftQueryOptions("draft-1").queryKey });
-    });
+    await act(async () => finishCheck(json(documentCheck())));
     expect(await screen.findByRole("heading", { name: "נדרשים תיקונים בקובץ" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "הקובץ עבר בדיקה" })).toBeNull();
     expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeEnabled();
   });
 });
 
 describe("DraftApprovalDialog", () => {
-  it("requires the local warning checkbox and never sends an acknowledgement field", async () => {
-    const warned = validationFixture({
-      report: {
+  it("requires the local warning checkbox and approves the exact document hash", async () => {
+    const warned = cvDocument({
+      content_report: {
         passed: true,
         groups: {},
         evidence: {},
@@ -230,23 +232,11 @@ describe("DraftApprovalDialog", () => {
     });
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === "POST")
+      if (isPost(init))
         return Promise.resolve(
-          json(
-            {
-              revision_id: "revision-1",
-              application_id: "app-1",
-              version: 1,
-              decision_record_id: "decision-1",
-              markdown_artifact_version_id: "md-1",
-              manifest_artifact_version_id: "manifest-1",
-            },
-            201,
-          ),
+          json(documentCheck({ document_state: "approved", approved_at: "2026-08-24T00:00:00Z" })),
         );
-      return Promise.resolve(
-        json(url.includes("validation-runs") ? warned : url.includes("working-drafts") ? draft() : detail()),
-      );
+      return Promise.resolve(json(url.endsWith("/document") ? warned : detail()));
     });
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
@@ -256,50 +246,36 @@ describe("DraftApprovalDialog", () => {
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("Acme");
     expect(dialog).toHaveTextContent("Engineer");
-    expect(dialog).toHaveTextContent("4");
-    /* The validation run id is no longer shown. What matters about it is that approval
-       is bound to that exact run, and the request assertion at the end of this test is
-       what proves it - the collapsed identifier only proved it had been printed. */
-    expect(screen.queryByText("run-1")).toBeNull();
-    const approve = within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" });
+    expect(dialog).toHaveTextContent(HASH.slice(0, 12));
+    const approve = within(dialog).getByRole("button", { name: "אישור והכנת PDF" });
     expect(approve).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(within(dialog).getByRole("checkbox"));
     fireEvent.click(approve);
-    /* Approval succeeded, so the editor moves to its render step in place. */
+    /* Approval is synchronous and succeeded, so the editor moves to its render step in place. */
     expect(await screen.findByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
-    const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
-      expected_edit_version: 4,
-      validation_run_id: "run-1",
-    });
+    const request = fetchMock.mock.calls.find((call) => isPost(call[1]));
+    expect(String(request?.[0])).toContain("/applications/app-1/document/approve");
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_document_hash: HASH });
   });
 
-  it("shows a non-stale approval failure inside the open trust-boundary dialog", async () => {
+  it("shows a blocker refusal inside the open approval dialog", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: string | URL | Request, init?: RequestInit) =>
-        init?.method === "POST"
+        isPost(init)
           ? Promise.resolve(
               json(
                 {
                   type: "about:blank",
-                  title: "Conflict",
-                  status: 409,
-                  code: "STATE_CONFLICT",
-                  detail: "approval changed",
+                  title: "Precondition Failed",
+                  status: 412,
+                  code: "KNOWLEDGE_RECONCILIATION_REQUIRED",
+                  detail: "reconcile first",
                 },
-                409,
+                412,
               ),
             )
-          : Promise.resolve(
-              json(
-                String(input).includes("validation-runs")
-                  ? validationFixture()
-                  : String(input).includes("working-drafts")
-                    ? draft()
-                    : detail(),
-              ),
-            ),
+          : Promise.resolve(json(String(input).endsWith("/document") ? cvDocument() : detail())),
       ),
     );
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
@@ -308,36 +284,21 @@ describe("DraftApprovalDialog", () => {
     fireEvent.click(openApproval);
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
     const dialog = await screen.findByRole("dialog");
-    /* STATE_CONFLICT is a known code, so the callout shows the client's own translation
-       rather than the server's literal `detail` - the assertion is on that text. */
-    expect(dialog).toHaveTextContent("הפעולה מתנגשת במצב העדכני. יש לרענן ולנסות שוב.");
+    /* A known code, so the callout shows the client's own translation. */
+    expect(await within(dialog).findByText("יש להשלים התאמה של מאגר העובדות לפני המשך התהליך.")).toBeInTheDocument();
     expect(dialog).toHaveAttribute("open");
   });
 
-  it("returns VALIDATION_STALE to the validation panel without retrying automatically", async () => {
+  it("returns DOCUMENT_CHANGED to the check panel without retrying automatically", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) =>
-      init?.method === "POST"
+      isPost(init)
         ? Promise.resolve(
             json(
-              {
-                type: "about:blank",
-                title: "Stale",
-                status: 412,
-                code: "VALIDATION_STALE",
-                detail: "stale",
-              },
-              412,
+              { type: "about:blank", title: "Conflict", status: 409, code: "DOCUMENT_CHANGED", detail: "changed" },
+              409,
             ),
           )
-        : Promise.resolve(
-            json(
-              String(input).includes("validation-runs")
-                ? validationFixture()
-                : String(input).includes("working-drafts")
-                  ? draft()
-                  : detail(),
-            ),
-          ),
+        : Promise.resolve(json(String(input).endsWith("/document") ? cvDocument() : detail())),
     );
     vi.stubGlobal("fetch", fetchMock);
     renderRoute("/applications/app-1/draft", "/applications/:applicationId/draft", <DraftFlow />);
@@ -345,116 +306,72 @@ describe("DraftApprovalDialog", () => {
     await waitFor(() => expect(openApproval).toBeEnabled());
     fireEvent.click(openApproval);
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "אישור והכנת PDF" }));
-    /* The panel says the draft moved on; nothing re-validated or re-approved by itself. */
+    /* The panel says the document moved on; nothing re-checked or re-approved by itself. */
     expect(await screen.findByText("הטיוטה השתנתה מאז הבדיקה")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter((call) => isPost(call[1]))).toHaveLength(1);
   });
 });
 
-/* The render step as the editor composes it: the command held by the host, the panel
-   drawing its state. No render Operation is being watched here, so `rendering` is false. */
-const RenderStep = ({
-  approvedRevisionId,
-  autoStart = false,
-  onQueued,
-}: {
-  approvedRevisionId: string;
-  autoStart?: boolean;
-  onQueued: (operationId: string) => void;
-}) => (
-  <DraftRenderPanel state={useRenderApprovedRevision({ approvedRevisionId, autoStart, onQueued, rendering: false })} />
-);
-
 describe("DraftRenderPanel", () => {
-  /* Rendering reports the Operation it queued to the screen holding the panel rather
-     than navigating to the Operation's own route: the approved draft stays on screen
-     while the file is produced. What the panel owes its host is the queued id, so that
-     is what this asserts, alongside the exact payload it sent. */
-  it("renders with the explicit application ID and hands the accepted Operation to its host", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) =>
-      init?.method === "POST"
+  const renderFetch = () =>
+    vi.fn((_input: string | URL | Request, init?: RequestInit) =>
+      isPost(init)
         ? Promise.resolve(json(operation(), 202, { Location: "/api/v1/operations/op-render" }))
-        : Promise.resolve(
-            json(
-              revision({
-                ready_qualified: false,
-                html_artifact_version_id: null,
-                pdf_artifact_version_id: null,
-              }),
-            ),
-          ),
+        : Promise.resolve(json(detail())),
     );
+
+  /* Rendering reports the Operation it queued to the screen holding the panel rather than
+     navigating to it: the approved document stays on screen while the file is produced. */
+  it("renders the approved document hash and hands the accepted Operation to its host", async () => {
+    const fetchMock = renderFetch();
     vi.stubGlobal("fetch", fetchMock);
     const onQueued = vi.fn();
     renderRoute(
       "/applications/app-1/draft",
       "/applications/:applicationId/draft",
-      <RenderStep approvedRevisionId="revision-1" onQueued={onQueued} />,
+      <RenderStep detail={approvedDetail} onQueued={onQueued} />,
     );
     const renderButton = await screen.findByRole("button", { name: "יצירת HTML ו־PDF" });
     await waitFor(() => expect(renderButton).toBeEnabled());
     fireEvent.click(renderButton);
     await waitFor(() => expect(onQueued).toHaveBeenCalledWith(operation().id));
-    const request = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ application_id: "app-1" });
+    const request = fetchMock.mock.calls.find((call) => isPost(call[1]));
+    expect(String(request?.[0])).toContain("/applications/app-1/document/render");
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ expected_document_hash: HASH });
+    expect(new Headers(request?.[1]?.headers).get("Idempotency-Key")).toBe(`render:${HASH}`);
   });
 
   it("starts rendering without another confirmation when reached from approval", async () => {
-    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) =>
-      init?.method === "POST"
-        ? Promise.resolve(json(operation(), 202, { Location: "/api/v1/operations/op-render" }))
-        : Promise.resolve(
-            json(
-              revision({
-                ready_qualified: false,
-                html_artifact_version_id: null,
-                pdf_artifact_version_id: null,
-              }),
-            ),
-          ),
-    );
+    const fetchMock = renderFetch();
     vi.stubGlobal("fetch", fetchMock);
     const onQueued = vi.fn();
 
     renderRoute(
       "/applications/app-1/draft",
       "/applications/:applicationId/draft",
-      <RenderStep approvedRevisionId="revision-1" autoStart onQueued={onQueued} />,
+      <RenderStep autoStart detail={approvedDetail} onQueued={onQueued} />,
     );
 
     await waitFor(() => expect(onQueued).toHaveBeenCalledWith(operation().id));
-    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter((call) => isPost(call[1]))).toHaveLength(1);
     /* While it renders the step says so, and offers no second way to start the same work. */
     expect(screen.getByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
     expect(screen.getByText(/יוצרים ממנה HTML ו־PDF/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת HTML ו־PDF" })).not.toBeInTheDocument();
   });
 
-  it("keeps the completed render transition in the wizard action bar", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve(
-          json(
-            revision({
-              ready_qualified: true,
-              html_artifact_version_id: "html-1",
-              pdf_artifact_version_id: "pdf-1",
-            }),
-          ),
-        ),
-      ),
-    );
+  it("offers the ready step once the projection says the document is Ready", async () => {
+    vi.stubGlobal("fetch", renderFetch());
 
     renderRoute(
       "/applications/app-1/draft",
       "/applications/:applicationId/draft",
-      <RenderStep approvedRevisionId="revision-1" onQueued={vi.fn()} />,
+      <RenderStep detail={detail({ document_state: "ready", preparation_state: "ready" })} onQueued={vi.fn()} />,
     );
 
-    expect(await screen.findByRole("link", { name: "מעבר לגרסה המוכנה" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "מעבר לקורות החיים המוכנים" })).toHaveAttribute(
       "href",
-      "/revisions/revision-1",
+      "/applications/app-1/ready",
     );
     expect(screen.getByText("שלב הטיוטה הושלם.")).toBeInTheDocument();
   });

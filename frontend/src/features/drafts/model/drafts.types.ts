@@ -1,4 +1,17 @@
-import type { DraftClaim } from "@/api/contracts";
+import type { CVDocument, DraftClaim } from "@/api/contracts";
+import type { DocumentOutline } from "@/api/documents";
+
+/* The document once it has content: the only shape the editor draws. The read carries
+   `outline: null` until content exists (`ready_to_draft`), so the editor narrows once, at
+   the read, instead of every component re-checking a field it cannot draw without. */
+export type EditableDocument = CVDocument & { outline: DocumentOutline };
+
+export const isEditable = (document: CVDocument): document is EditableDocument => document.outline != null;
+
+/* The fact accounting the editor reads beside the outline: what backs a line, and what
+   could be added to one. The document read carries both, so this is a view of it rather
+   than a second read. */
+export type DocumentFacts = Pick<CVDocument, "facts" | "language">;
 
 /* What may be done to any one line of the draft. The editor has one policy for every
    claim, whichever section it sits in, so the commands travel together rather than as

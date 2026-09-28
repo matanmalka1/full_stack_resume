@@ -14,10 +14,10 @@ const updateResponse = (editVersion: number, pending: string[] = []): Response =
   new Response(
     JSON.stringify({
       application_id: "app-1",
-      working_draft_id: "wd-1",
-      edit_version: editVersion,
-      content_hash: `hash-${editVersion}`,
-      selection_plan_id: "sp-1",
+      document_id: "doc-1",
+      document_hash: `hash-${editVersion}`,
+      document_state: "draft",
+      content_check: "outdated",
       pending_claim_ids: pending,
     }),
     {
@@ -33,7 +33,7 @@ const conflictResponse = (): Response =>
       title: "Conflict",
       status: 409,
       code: "STATE_CONFLICT",
-      detail: "working draft wd-1 has content hash hash-9, not hash-4",
+      detail: "document for app-1 has hash hash-9, not hash-4",
     }),
     { status: 409, headers: { "Content-Type": "application/problem+json" } },
   );
@@ -47,7 +47,7 @@ const deferred = () => {
 };
 
 const setup = (onSaved = vi.fn(), onConflict = vi.fn().mockResolvedValue('"9-hash-9"')) =>
-  renderHook(() => useDraftAutosave({ etag: '"4-hash-4"', onConflict, onSaved, workingDraftId: "wd-1" }));
+  renderHook(() => useDraftAutosave({ etag: '"4-hash-4"', onConflict, onSaved, applicationId: "app-1" }));
 
 const bodyOf = (call: unknown[] | undefined) => JSON.parse(String((call?.[1] as RequestInit)?.body));
 
@@ -294,14 +294,14 @@ describe("useDraftAutosave", () => {
   });
   it("restores a reload buffer without dropping local text on a server refresh", async () => {
     sessionStorage.setItem(
-      "cv-engine:autosave:wd-1",
+      "cv-engine:autosave:document:app-1",
       JSON.stringify({ edits: [patch("c-1", "unsaved local wording")], removals: [], additions: [] }),
     );
     const fetchMock = vi.fn().mockResolvedValue(updateResponse(6));
     vi.stubGlobal("fetch", fetchMock);
     const onSaved = vi.fn();
     const { result, rerender } = renderHook(
-      ({ etag }) => useDraftAutosave({ etag, onConflict: vi.fn(), onSaved, workingDraftId: "wd-1" }),
+      ({ etag }) => useDraftAutosave({ etag, onConflict: vi.fn(), onSaved, applicationId: "app-1" }),
       { initialProps: { etag: '"4-hash-4"' } },
     );
     expect(result.current.pending).toEqual([patch("c-1", "unsaved local wording")]);
@@ -312,6 +312,6 @@ describe("useDraftAutosave", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(headerOf(fetchMock.mock.calls[0], "If-Match")).toBe('"5-hash-5"');
     expect(bodyOf(fetchMock.mock.calls[0]).claim_edits).toEqual([patch("c-1", "unsaved local wording")]);
-    expect(sessionStorage.getItem("cv-engine:autosave:wd-1")).toBeNull();
+    expect(sessionStorage.getItem("cv-engine:autosave:document:app-1")).toBeNull();
   });
 });
