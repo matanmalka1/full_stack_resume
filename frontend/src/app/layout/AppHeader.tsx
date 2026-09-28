@@ -141,7 +141,6 @@ export const AppHeader = ({ collapsed, onToggleCollapsed }: { collapsed: boolean
                 <span className="hidden sm:inline">משרה חדשה</span>
               </Link>
             )}
-
           </div>
         </div>
       </div>
