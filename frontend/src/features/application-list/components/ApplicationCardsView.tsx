@@ -128,7 +128,9 @@ const ApplicationCard = ({
 
       {hasNext ? (
         <div>
-          <p className="mb-1 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
+          {/* Named for assistive tech only: drawn on every card it said nothing the
+              action under it does not already say. */}
+          <p className="sr-only">פעולה מומלצת הבאה</p>
           <ApplicationCardNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
         </div>
       ) : (
@@ -142,7 +144,7 @@ const ApplicationCard = ({
           onClick={() => onRequestUpdate(item)}
           type="button"
         >
-          ניהול גיוס
+          עדכון סטטוס ומשימות
         </button>
       </div>
     </article>
@@ -183,7 +185,9 @@ export const ApplicationCardsView = ({
   );
 };
 
-const skeletonCards = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "skeleton-5", "skeleton-6"];
+/* One row of the widest grid: enough to hold the layout, and a phone does not sweep
+   through a column of placeholders that the first page may not fill. */
+const skeletonCards = ["skeleton-1", "skeleton-2", "skeleton-3"];
 
 /* The first load reserves the card grid it will be replaced by, block for block: the
    identity and menu, the progress block, the next-action block, and the footer. Drawn

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryOptions, applicationListQueryOptions } from "@/api/applications";
 import type { ApplicationDetail, ApplicationListItem, ApplicationListResponse, Reason } from "@/api/contracts";
+import { PAGE_SIZE } from "../model/applicationListParams";
 import { ApplicationListPage } from "./ApplicationListPage";
 
 const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem => {
@@ -97,7 +98,7 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
     items,
     matched,
     total: counts.total ?? matched,
-    limit: 25,
+    limit: PAGE_SIZE,
     offset: 0,
     preset_counts,
     recruitment_status_counts,
@@ -162,7 +163,7 @@ const stubList = (items: ApplicationListItem[], counts: Counts = {}) => {
 const boardReadCount = (fetchMock: ReturnType<typeof vi.fn>): number =>
   fetchMock.mock.calls.filter(([url, options]) => {
     const requestUrl = new URL(String(url), "http://localhost");
-    return options?.method !== "POST" && requestUrl.searchParams.get("limit") === "25";
+    return options?.method !== "POST" && requestUrl.searchParams.get("limit") === String(PAGE_SIZE);
   }).length;
 
 const HistoryBack = () => {
@@ -495,7 +496,7 @@ describe("ApplicationListPage", () => {
     expect(screen.getAllByText("Follow up")).toHaveLength(2);
     expect(screen.getAllByText(/באיחור/)).toHaveLength(2);
     expect(screen.getAllByText("פעולה מומלצת הבאה")).toHaveLength(4);
-    expect(screen.getAllByRole("button", { name: "ניהול גיוס" })).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: "עדכון סטטוס ומשימות" })).toHaveLength(4);
     expect(screen.getByRole("button", { name: "פעולות נוספות עבור Acme" })).toBeInTheDocument();
     /* The leading edge says what asks for the reader before a word is read: a blocking
        reason over an overdue reminder, nothing for a card that is fine, and nothing for
@@ -656,7 +657,7 @@ describe("ApplicationListPage", () => {
         fetchMock.mock.calls.some(([url]) => {
           const requestUrl = new URL(String(url), "http://localhost");
           return (
-            requestUrl.searchParams.get("limit") === "25" &&
+            requestUrl.searchParams.get("limit") === String(PAGE_SIZE) &&
             // getAll returns a fresh array; the project targets ES2022.
             // oxlint-disable-next-line unicorn/no-array-sort
             requestUrl.searchParams.getAll("recruitment_status").sort().join(",") === "assignment,interview"
@@ -672,7 +673,7 @@ describe("ApplicationListPage", () => {
       expect(
         fetchMock.mock.calls.some(([url]) => {
           const value = String(url);
-          return value.includes("limit=25") && value.includes("preset=ready_to_send");
+          return value.includes(`limit=${PAGE_SIZE}`) && value.includes("preset=ready_to_send");
         }),
       ).toBe(true),
     );
@@ -770,28 +771,30 @@ describe("ApplicationListPage", () => {
      load; the test's own timeout must exceed that budget, or the outer clock can end the
      test before the inner wait it deliberately allows gets the chance to. */
   it("moves through server pages and writes page-boundary offsets to the URL query", async () => {
-    const firstPage = Array.from({ length: 25 }, (_, index) =>
+    /* One full page and one Application past it. */
+    const matched = PAGE_SIZE + 1;
+    const firstPage = Array.from({ length: PAGE_SIZE }, (_, index) =>
       item({ id: `app-${index + 1}`, company: `Company ${index + 1}` }),
     );
-    const firstPageBody = listBody(firstPage, { matched: 26, total: 26, recruitmentStatusCounts: { saved: 26 } });
-    const lastPageBody = listBody([item({ id: "app-26", company: "Last Company" })], {
-      matched: 26,
-      total: 26,
-      recruitmentStatusCounts: { saved: 26 },
+    const firstPageBody = listBody(firstPage, { matched, total: matched, recruitmentStatusCounts: { saved: matched } });
+    const lastPageBody = listBody([item({ id: `app-${matched}`, company: "Last Company" })], {
+      matched,
+      total: matched,
+      recruitmentStatusCounts: { saved: matched },
     });
     const fetchMock = vi.fn(async (url: unknown) =>
-      jsonResponse(String(url).includes("offset=25") ? lastPageBody : firstPageBody),
+      jsonResponse(String(url).includes(`offset=${PAGE_SIZE}`) ? lastPageBody : firstPageBody),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage();
 
     expect(await screen.findByRole("navigation", { name: "ניווט בין דפי המועמדויות" })).toBeInTheDocument();
-    expect(screen.getByText("1–25 מתוך 26")).toBeInTheDocument();
+    expect(screen.getByText(`1–${PAGE_SIZE} מתוך ${matched}`)).toBeInTheDocument();
     /* The stages view holds one page too, so a column says how much of its stage that is. */
     fireEvent.click(screen.getByRole("button", { name: "שלבים" }));
     const pipeline = screen.getByRole("list", { name: "מועמדויות לפי שלב גיוס" });
-    expect(within(pipeline).getByText("25 מתוך 26")).toBeInTheDocument();
+    expect(within(pipeline).getByText(`${PAGE_SIZE} מתוך ${matched}`)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "עמוד 1" })).toHaveAttribute("aria-current", "page");
 
     fireEvent.click(screen.getByRole("button", { name: "עמוד 2" }));
@@ -801,9 +804,9 @@ describe("ApplicationListPage", () => {
        though the mocked response is immediate. Keep the longer budget local to this
        multi-render transition rather than weakening every assertion. */
     expect(await screen.findByText("Last Company", {}, { timeout: 5_000 })).toBeInTheDocument();
-    expect(screen.getByText("26–26 מתוך 26")).toBeInTheDocument();
+    expect(screen.getByText(`${matched}–${matched} מתוך ${matched}`)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith(
-      expect.stringContaining("offset=25"),
+      expect.stringContaining(`offset=${PAGE_SIZE}`),
       expect.objectContaining({ method: "GET" }),
     );
     expect(screen.getByRole("button", { name: "הבא" })).toBeDisabled();
@@ -841,7 +844,7 @@ describe("ApplicationListPage", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((url: unknown) => {
-        if (new URL(String(url), "http://localhost").searchParams.get("limit") !== "25") {
+        if (new URL(String(url), "http://localhost").searchParams.get("limit") !== String(PAGE_SIZE)) {
           return Promise.resolve(jsonResponse(listBody([item()])));
         }
         boardReads += 1;

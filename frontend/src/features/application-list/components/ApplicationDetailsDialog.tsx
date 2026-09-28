@@ -187,7 +187,11 @@ export const ApplicationDetailsDialog = ({
         {hasNextStep ? (
           <section aria-label="פעולה מומלצת הבאה" className="rounded-control border border-cv-border p-4">
             <p className="mb-1.5 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
-            <ApplicationCardNextAction clearing={clearing} item={withoutReadyCv} onClearNextAction={onClearNextAction} />
+            <ApplicationCardNextAction
+              clearing={clearing}
+              item={withoutReadyCv}
+              onClearNextAction={onClearNextAction}
+            />
           </section>
         ) : null}
 

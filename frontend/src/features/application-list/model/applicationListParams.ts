@@ -19,7 +19,9 @@ import type {
    arbitrary value in the URL must not become an arbitrary request, so every field is read
    back through the closed sets below and anything unrecognised falls to the default. */
 
-const PAGE_SIZE = 25;
+/* Divisible by both widths of the card grid - two columns and three - so a full page
+   ends on a full row rather than one card alone. */
+const PAGE_SIZE = 24;
 
 /* Exhaustive over the generated unions rather than a list written a second time: a filter
    or ordering added to the backend fails the build here instead of being silently dropped
