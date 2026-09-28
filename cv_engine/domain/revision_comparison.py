@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from .contracts.drafts import ClaimLine, DraftDocument
+from .contracts.drafts import ClaimLine, ClaimStyle, DraftDocument
 
 SectionKind = Literal["headline", "contacts", "section"]
 ChangeKind = Literal["added", "removed", "reworded", "moved"]
@@ -34,7 +34,7 @@ SectionStatus = Literal["added", "removed", "changed", "unchanged"]
 @dataclass(frozen=True)
 class ClaimChange:
     kind: ChangeKind
-    style: str
+    style: ClaimStyle
     before_text: str | None
     after_text: str | None
     fact_ids: tuple[str, ...]
