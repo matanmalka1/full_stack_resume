@@ -567,7 +567,9 @@ def test_the_pdf_preview_is_stamped_and_leaves_no_trace(ai_api_worker) -> None:
     assert all("DRAFT, NOT APPROVED" in page.extract_text() for page in pages)
     after = _read(ai_api_worker, working_draft_id)
     assert after.headers["ETag"] == read.headers["ETag"]
-    revisions = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}/approved-revisions")
+    revisions = ai_api_worker.client.get(
+        f"{API_PREFIX}/applications/{application_id}/approved-revisions"
+    )
     assert revisions.status_code == 200, revisions.text
     assert revisions.json()["items"] == []
 

@@ -24,14 +24,17 @@ def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
     assert report.report_schema_version == "2.0"
     assert set(report.groups) == {"content", "profile", "structure", "headline_safety"}
 
-
     # A section out of place is one finding. Each section is still checked against its own
     # spec, so its facts are not all reported as misplaced against its neighbour's.
     draft.sections[0], draft.sections[1] = draft.sections[1], draft.sections[0]
     moved = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     codes = {issue.code for issue in moved.issues}
     assert "section-order" in codes
-    assert not codes & {"fact-outside-profile-section", "section-budget-exceeded", "pinned-fact-dropped"}
+    assert not codes & {
+        "fact-outside-profile-section",
+        "section-budget-exceeded",
+        "pinned-fact-dropped",
+    }
 
 
 def test_an_unsafe_or_misplaced_headline_is_blocked(
@@ -82,7 +85,9 @@ def test_an_unsafe_or_misplaced_headline_is_blocked(
     assert restored.headline.claim_type == "headline"
     restored.content_hash = draft_content_hash(restored)
     markdown, _text = store_draft(project_root, restored)
-    report = validate_draft(restored, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
+    report = validate_draft(
+        restored, markdown.read_text(encoding="utf-8"), facts, profile, analysis
+    )
     assert report.passed, report.model_dump()
 
     facts, profile, analysis, draft, _markdown = draft_factory(
