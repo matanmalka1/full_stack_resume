@@ -8,7 +8,7 @@ import { ApplicationPreparationStatus } from "./ApplicationListStatuses";
 
    It exists so a caller outside the board - the global search palette - can show a
    result without restating how a company, a role, and the two statuses are drawn. The
-   board's own rows link from the company name; a result that is itself one control
+   board's own records carry a link; a result that is itself one control
    must not, so the identity is plain text here. */
 export const ApplicationSummary = ({ item }: { item: ApplicationListItem }) => (
   <>

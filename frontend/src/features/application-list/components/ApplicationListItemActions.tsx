@@ -69,8 +69,8 @@ export const ApplicationRecordActions = ({
   }, [open]);
 
   return (
-    /* Open, the menu's container rises to the dropdown layer: every row's container
-       shares the raised layer, so a later row's trigger would otherwise paint over it. */
+    /* Open, the menu's container rises to the dropdown layer: every record's container
+       shares the raised layer, so a later record's trigger would otherwise paint over it. */
     <div
       className={cx("relative shrink-0", open ? "z-(--cv-z-sticky)" : "z-(--cv-z-content-raised)")}
       ref={containerRef}

@@ -42,7 +42,7 @@ describe("relative update dates", () => {
   });
 });
 
-/* The row's step bar reads its order from the label map. This pins that order to the
+/* The card's step bar reads its order from the label map. This pins that order to the
    one the specification lists (§4), so reordering the labels cannot silently reorder
    the bar. */
 describe("preparation progress", () => {

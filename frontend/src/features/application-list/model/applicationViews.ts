@@ -12,7 +12,6 @@ export const viewModeOptions = [
 ] as const;
 
 const VIEW_MODE_STORAGE_KEY = "cv:application-list:view-mode";
-/* A value stored before the table view was removed reads as unknown and falls to cards. */
 const isViewMode = (value: string | null): value is ViewMode => value === "cards" || value === "pipeline";
 
 /* The last view the reader picked in this tab, so a record's own page doesn't spend it

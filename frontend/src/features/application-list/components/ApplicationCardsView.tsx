@@ -13,7 +13,7 @@ import {
 import { ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
 import { ApplicationProgress, fitScoreText } from "./ApplicationListStatuses";
-import { ApplicationRowNextAction, nextActionHeading } from "./ApplicationRowNextAction";
+import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
 
 const cardGridClasses = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
 
@@ -68,7 +68,7 @@ const ApplicationCard = ({
       onClick={open.onClick}
     >
       <div className="flex items-start justify-between gap-3">
-        <ApplicationIdentity ambiguous={ambiguous} item={item} variant="row" />
+        <ApplicationIdentity ambiguous={ambiguous} item={item} variant="card" />
         <ApplicationRecordActions
           item={item}
           onRequestClose={onRequestClose}
@@ -85,7 +85,7 @@ const ApplicationCard = ({
       {hasNext ? (
         <div className="rounded-control border border-cv-border bg-cv-surface p-3">
           <p className="mb-1 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
-          <ApplicationRowNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
+          <ApplicationCardNextAction clearing={clearing} item={item} onClearNextAction={onClearNextAction} />
         </div>
       ) : (
         <p className="rounded-control border border-dashed border-cv-border p-3 text-center text-support text-cv-text-muted">

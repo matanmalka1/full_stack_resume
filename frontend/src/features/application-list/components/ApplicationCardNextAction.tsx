@@ -19,7 +19,7 @@ import { applicationAttention, formatApplicationDate, isNextActionOverdue } from
 import { reportedOperation } from "./ApplicationListItemActions";
 
 /* The command opens the step where the work is done; it does not do the work. "בצע"
-   promised the latter - on a row whose analysis could not run for want of a provider, it
+   promised the latter - on a card whose analysis could not run for want of a provider, it
    read as a button that would run it. */
 const STEP_COMMAND = "מעבר לשלב";
 
@@ -36,11 +36,11 @@ interface Heading {
   title: string;
 }
 
-/* What the row asks for next, in the order the reader should see it: a failed run
+/* What a record asks for next, in the order the reader should see it: a failed run
    first, since nothing moves until it is dealt with; then a run still going; then the
    step the server recommends; then a finished CV; and only then the reader's own
    recruitment reminder. The first that applies is the heading - the rest stays below it
-   as detail, so nothing the old column showed is dropped. */
+   as detail. */
 export const nextActionHeading = (item: ApplicationListItem, attentive: boolean): Heading | null => {
   const operation = reportedOperation(item);
   if (operation !== null && (operation.status === "failed" || operation.status === "interrupted")) {
@@ -126,7 +126,7 @@ export const AttentionLink = ({
 
 /* The card's next-action block, drawn after demo_re: a title and one line of detail
    on the reading side, the command and the reminder's dismissal at the far edge. */
-export const ApplicationRowNextAction = ({
+export const ApplicationCardNextAction = ({
   clearing,
   item,
   onClearNextAction,

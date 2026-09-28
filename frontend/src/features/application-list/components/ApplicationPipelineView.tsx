@@ -10,7 +10,7 @@ import { applicationAttention } from "../model/applicationListPresentation";
 import { closedStage, recruitmentStages } from "../model/recruitmentStages";
 import { ApplicationIdentity } from "./ApplicationIdentity";
 import { ApplicationNextAction } from "./ApplicationNextAction";
-import { AttentionLink, nextActionHeading } from "./ApplicationRowNextAction";
+import { AttentionLink, nextActionHeading } from "./ApplicationCardNextAction";
 
 interface ApplicationPipelineViewProps {
   items: readonly ApplicationListItem[];
@@ -89,7 +89,7 @@ const PipelineCard = ({
   const head = nextActionHeading(item, attention !== null);
 
   return (
-    // The card opens its details on a click like the row does; its company link stays the keyboard route.
+    // The card opens its details on a click; its company link stays the keyboard route.
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <article
       className="group flex cursor-pointer flex-col gap-2.5 rounded-control border border-cv-border bg-cv-surface p-3.5 shadow-surface transition-all hover:border-cv-border-strong"
