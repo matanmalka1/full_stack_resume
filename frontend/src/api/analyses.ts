@@ -121,9 +121,8 @@ export interface Requirement {
   text: string;
   importance: RequirementImportance;
   coverage: RequirementCoverage;
-  /* Missing only on immutable analyses created before this field existed. */
-  shortfallSeverity?: ShortfallSeverity | null;
-  shortfallReason?: string | null;
+  shortfallSeverity: ShortfallSeverity | null;
+  shortfallReason: string | null;
   supportingFactIds: string[];
   boundaryFactIds: string[];
 }

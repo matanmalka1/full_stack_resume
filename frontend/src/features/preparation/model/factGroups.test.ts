@@ -45,6 +45,17 @@ describe("the fact selection the screen shows", () => {
     expect(factGroups(plan, [], [], "nothing here")).toHaveLength(0);
   });
 
+  it("narrows to included, omitted or explicitly marked facts without losing section order", () => {
+    const ids = (filter: Parameters<typeof factGroups>[4]) =>
+      factGroups(plan, ["exp.omitted"], ["exp.selected"], "", filter).flatMap((group) =>
+        group.items.map((item) => item.fact_id),
+      );
+
+    expect(ids("included")).toEqual(["role.title", "exp.omitted", "skill.pinned"]);
+    expect(ids("omitted")).toEqual(["exp.selected", "exp.excluded"]);
+    expect(ids("overridden")).toEqual(["exp.selected", "exp.omitted"]);
+  });
+
   /* A bulk include may only name facts it would actually change, and never a structural
      component: excluding or pinning a heading is refused by the server. */
   it("offers a bulk include only for the selectable facts that are not already included", () => {

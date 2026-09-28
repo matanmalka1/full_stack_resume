@@ -1,33 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { createSelectionPlan, selectionPlanQueryOptions } from "@/api/analyses";
+import { type Requirement, createSelectionPlan, selectionPlanQueryOptions } from "@/api/analyses";
 import { invalidateApplicationViews } from "@/api/applications";
 import type { ApplicationDetail, CreateSelectionPlanRequest } from "@/api/contracts";
-import { isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
+import { operationQueryKey } from "@/api/operations";
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
+import { Disclosure } from "@/ui/Disclosure";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { QueryState } from "@/ui/QueryState";
 import { surfaceClasses } from "@/ui/surface";
-import { factTotals } from "../../model/factGroups";
+import { type FactFilter, factTotals } from "../../model/factGroups";
+import { requirementsByFact } from "../../model/requirementGroups";
+import { factRankings, includedFactIds, selectionChanges } from "../../model/selectionManifest";
 import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
+import { AiSelectionProposal } from "./AiSelectionProposal";
+import type { FactChoice } from "./FactRow";
 import { FactSelectionList } from "./FactSelectionList";
+import { useSelectionProposal } from "./useSelectionProposal";
 
 const sameMembers = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((item) => right.includes(item));
 
-/* The reader's own overrides, and the plan they were taken against.
+const rankingSteps = [
+  "עובדות שמעידות על דרישת חובה במשרה קודמות לכל השאר, ואחריהן עובדות שמעידות על דרישה מועדפת.",
+  "בתוך כל רמה, עובדה שתגיותיה מתאימות יותר לפרופיל ולדגש שנבחרו מדורגת גבוה יותר.",
+  "אחר כך נספרות מילות המפתח מהמשרה שמופיעות בעובדה.",
+  "לכל סעיף בקורות החיים יש מכסה. מה שלא נכנס למכסה לא נכלל, אלא אם הוא נדרש כדי לכסות תגית שהפרופיל מחייב.",
+];
 
-   Held as one value rather than three because they are one decision: an override only
-   means anything against the plan it was made on. That is also what removes the effect
-   this panel used to run - a plan arriving under the reader (a save, a refetch, another
-   Application) made a stored `pinned`/`excluded` pair describe candidates that were no
-   longer on screen, and an effect had to notice and reset it. Keeping the plan id beside
-   the marks answers the same question by comparison at render: edits that name a plan
-   other than the loaded one are simply not this plan's. */
 interface FactOverrides {
   excluded: string[];
   pinned: string[];
@@ -39,13 +43,13 @@ export const SelectionPlanPanel = ({
   detail,
   onQueued,
   operationLive,
+  requirements,
 }: {
   action: NonNullable<WorkflowActionPlan["createSelectionPlan"]>;
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
-  /* Whether this Application's work is under way, by `isOperationLive`: the actions that
-     change what a run replaces wait for it, whether or not its overlay is showing. */
   operationLive: boolean;
+  requirements: readonly Requirement[];
 }) => {
   const queryClient = useQueryClient();
   const activePlanId = action.selectionPlanId;
@@ -55,10 +59,12 @@ export const SelectionPlanPanel = ({
   });
   const { settings } = useSettings();
   const aiAvailable = aiRegenerationAvailable(settings);
+  const proposal = useSelectionProposal(detail.application.id);
   const [edits, setEdits] = useState<FactOverrides | null>(null);
-  const [queuedId, setQueuedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FactFilter>("all");
 
   const plan = planQuery.data;
+  const candidates = plan?.candidates ?? [];
   const loadedPlanId = plan?.id ?? null;
   const baseline: FactOverrides = {
     excluded: plan?.excluded_fact_ids ?? [],
@@ -68,11 +74,20 @@ export const SelectionPlanPanel = ({
   const overrides = edits !== null && loadedPlanId !== null && edits.planId === loadedPlanId ? edits : baseline;
   const { excluded, pinned } = overrides;
 
-  const queuedQuery = useQuery({
-    ...operationQueryOptions(queuedId ?? ""),
-    enabled: queuedId !== null,
-  });
-  const queuedStillRunning = queuedId !== null && !isTerminalOperation(queuedQuery.data);
+  const rankings = useMemo(() => factRankings(plan?.plan), [plan]);
+  const supportsByFact = useMemo(() => requirementsByFact(requirements), [requirements]);
+
+  // The AI diff is shown only while the proposal's own plan is the active one.
+  const proposalResultVisible =
+    proposal.status.kind === "done" &&
+    proposal.status.resultPlanId !== null &&
+    proposal.status.resultPlanId === loadedPlanId;
+  const proposalFirstPlan = proposal.baseline?.fromPlanId === null;
+  const proposalChanges =
+    proposalResultVisible && proposal.baseline !== null && !proposalFirstPlan
+      ? selectionChanges(proposal.baseline.included, candidates, baseline.pinned, baseline.excluded)
+      : [];
+  const changeIndex = new Map(proposalChanges.map((change) => [change.candidate.fact_id, change.direction]));
 
   const request = (mode: CreateSelectionPlanRequest["mode"]): CreateSelectionPlanRequest => ({
     application_id: detail.application.id,
@@ -91,7 +106,10 @@ export const SelectionPlanPanel = ({
   };
   const deterministic = useMutation({
     mutationFn: async () => createSelectionPlan(action.analysisId, request("deterministic")),
-    onSuccess: finish,
+    onSuccess: async () => {
+      proposal.dismiss();
+      await finish();
+    },
   });
   const ai = useMutation({
     mutationFn: async () => {
@@ -101,7 +119,11 @@ export const SelectionPlanPanel = ({
     onSuccess: async (created) => {
       if (created.kind === "queued") {
         queryClient.setQueryData(operationQueryKey(created.operation.id), created.operation);
-        setQueuedId(created.operation.id);
+        proposal.remember({
+          fromPlanId: loadedPlanId,
+          included: includedFactIds(candidates, baseline.pinned, baseline.excluded),
+          operationId: created.operation.id,
+        });
         onQueued(created.operation.id);
       }
       await finish();
@@ -109,33 +131,26 @@ export const SelectionPlanPanel = ({
   });
 
   const busy =
-    operationLive || detail.active_operation != null || queuedStillRunning || deterministic.isPending || ai.isPending;
+    operationLive ||
+    detail.active_operation != null ||
+    proposal.status.kind === "running" ||
+    deterministic.isPending ||
+    ai.isPending;
   const manualReady = activePlanId !== null && loadedPlanId === activePlanId;
   const changed = manualReady && (!sameMembers(pinned, baseline.pinned) || !sameMembers(excluded, baseline.excluded));
   const mutationError = deterministic.error ?? ai.error;
 
   const applyOverrides = (next: { excluded: string[]; pinned: string[] }) =>
     setEdits({ ...next, planId: loadedPlanId ?? "" });
-  const togglePinned = (factId: string, checked: boolean) =>
+  const choose = (factId: string, choice: FactChoice) =>
     applyOverrides({
-      excluded: checked ? excluded.filter((id) => id !== factId) : excluded,
-      pinned: checked ? [...new Set([...pinned, factId])] : pinned.filter((id) => id !== factId),
-    });
-  const toggleExcluded = (factId: string, checked: boolean) =>
-    applyOverrides({
-      excluded: checked ? [...new Set([...excluded, factId])] : excluded.filter((id) => id !== factId),
-      pinned: checked ? pinned.filter((id) => id !== factId) : pinned,
+      excluded: choice === "exclude" ? [...new Set([...excluded, factId])] : excluded.filter((id) => id !== factId),
+      pinned: choice === "include" ? [...new Set([...pinned, factId])] : pinned.filter((id) => id !== factId),
     });
 
-  /* A whole section at once, expressed in the same two overrides a row uses.
-
-     Lifting the reader's own exclusion is enough for a fact the engine had chosen -
-     the plan goes back to selecting it. A fact the engine itself left out needs the pin,
-     or the rebuilt plan would omit it again for the reason it already recorded. The
-     omission reason is what tells the two apart, so neither is over-decided: this never
-     pins a fact that was only excluded by hand. */
+  // An engine-omitted fact needs a pin to come back; a hand-excluded one only needs the exclusion lifted.
   const includeAll = (factIds: readonly string[]) => {
-    const engineOmitted = (plan?.candidates ?? [])
+    const engineOmitted = candidates
       .filter((candidate) => factIds.includes(candidate.fact_id) && candidate.reason !== "excluded_by_user")
       .map((candidate) => candidate.fact_id);
 
@@ -145,93 +160,108 @@ export const SelectionPlanPanel = ({
     });
   };
 
-  const totals = factTotals(plan?.candidates ?? [], pinned, excluded);
-  /* Provenance is recorded only for plans activated from an AI proposal. A null here
-     means "not recorded" - an engine or manual plan, or one saved before provenance
-     existed - so nothing is labelled from it. */
-  const aiProposal = plan?.proposed_by === "ai" ? plan : null;
-  const aiMarked = aiProposal === null ? [] : [...aiProposal.pinned_fact_ids, ...aiProposal.excluded_fact_ids];
+  const totals = factTotals(candidates, pinned, excluded);
+  // Recorded only on plans activated from an AI proposal; null means "not recorded", never "not AI".
+  const aiProposed = plan?.proposed_by === "ai";
 
   return (
-    <>
-      <section
-        aria-labelledby="selection-plan-heading"
-        className={surfaceClasses("flex flex-col gap-4 bg-cv-surface p-5")}
-      >
-        <div>
-          <h2 className="text-body font-semibold text-cv-text" id="selection-plan-heading">
-            בחירת העובדות לקורות החיים
-          </h2>
-          <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            {activePlanId === null
-              ? "לניתוח הפעיל אין תוכנית בחירה. אפשר ליצור את בחירת ברירת המחדל או לבקש מ־AI להציע אחת."
-              : "זו בחירת העובדות הפעילה. אפשר לקבע או להחריג עובדות לפני יצירת הטיוטה, או לבקש מ־AI הצעה חלופית."}
-          </p>
+    <section
+      aria-labelledby="selection-plan-heading"
+      className={surfaceClasses("flex flex-col gap-5 bg-cv-surface p-5")}
+    >
+      <div className="flex flex-col gap-3 border-b border-cv-border pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            <h2 className="text-heading-sm font-bold text-cv-text" id="selection-plan-heading">
+              בחירת העובדות לקורות החיים
+            </h2>
+            <p className="mt-1 max-w-2xl text-support text-cv-text-muted">
+              {activePlanId === null
+                ? "לניתוח הפעיל אין עדיין בחירת עובדות. אפשר ליצור את בחירת המנוע, או לבקש מ־AI להציע אחת."
+                : "המנוע דירג את כל העובדות המאושרות מול המשרה ובחר מה ייכנס לכל סעיף. אפשר להשאיר לו את ההחלטה, לכלול או להחריג עובדה במפורש, או לבקש הצעה מ־AI."}
+            </p>
+          </div>
+          {plan === undefined ? null : (
+            <div className="text-end">
+              <p className="text-heading-sm font-bold text-cv-text">
+                {totals.included}/{totals.total}
+              </p>
+              <p className="text-caption text-cv-text-muted">עובדות בקורות החיים</p>
+            </div>
+          )}
         </div>
+        <Disclosure summary="איך המנוע בוחר עובדות?">
+          <ol className="flex list-decimal flex-col gap-1 ps-4">
+            {rankingSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          <p className="mt-2">
+            ליד כל עובדה מוצגים השיקולים שהובילו להחלטה. עובדה שנכללה או הוחרגה במפורש - ידנית או בהצעת AI - גוברת על
+            הדירוג. שינוי כאן חל גם בעורך הטיוטה, בכרטיס "ביסוס עובדתי".
+          </p>
+        </Disclosure>
+      </div>
 
-        {activePlanId === null ? null : (
-          <QueryState
-            error={planQuery.error}
-            fallbackDetail="לא ניתן לקרוא את העובדות שהתוכנית שקלה. התוכנית הפעילה לא השתנתה."
-            fallbackTitle="בחירת העובדות לא נטענה"
-            loading={plan === undefined}
-            loadingLabel="טוען את בחירת העובדות…"
-          >
-            {aiProposal === null ? null : (
-              <div className="rounded-surface border border-cv-border bg-cv-surface-muted p-4">
-                <h3 className="text-support font-semibold text-cv-text">נימוק הצעת ה־AI</h3>
-                {aiProposal.proposal_rationale === null ? (
-                  <p className="mt-1 text-support text-cv-text-muted">ההצעה לא כללה נימוק כתוב.</p>
-                ) : (
-                  <p className="mt-1 whitespace-pre-line text-support leading-6 text-cv-text" dir="auto">
-                    {aiProposal.proposal_rationale}
-                  </p>
-                )}
-              </div>
-            )}
-            {plan === undefined ? null : (
-              <FactSelectionList
-                aiMarked={aiMarked}
-                busy={busy}
-                candidates={plan.candidates}
-                excluded={excluded}
-                onIncludeAll={includeAll}
-                onToggleExcluded={toggleExcluded}
-                onTogglePinned={togglePinned}
-                pinned={pinned}
-              />
-            )}
-          </QueryState>
-        )}
+      <AiSelectionProposal
+        aiAvailable={aiAvailable}
+        busy={busy}
+        changes={proposalChanges}
+        firstPlan={proposalFirstPlan}
+        onDismiss={proposal.dismiss}
+        onPropose={() => ai.mutate()}
+        pending={ai.isPending}
+        rankings={rankings}
+        rationale={aiProposed ? (plan?.proposal_rationale ?? null) : undefined}
+        resultVisible={proposalResultVisible}
+        settingsLoaded={settings !== undefined}
+        status={proposal.status}
+        supportsByFact={supportsByFact}
+      />
 
-        {mutationError === null ? null : (
-          <ErrorCallout
-            error={mutationError}
-            fallbackDetail="תוכנית הבחירה הפעילה לא השתנתה. אפשר לרענן ולנסות שוב."
-            fallbackTitle="בחירת העובדות לא נשמרה"
-          />
-        )}
+      {activePlanId === null ? null : (
+        <QueryState
+          error={planQuery.error}
+          fallbackDetail="לא ניתן לקרוא את העובדות שהתוכנית שקלה. התוכנית הפעילה לא השתנתה."
+          fallbackTitle="בחירת העובדות לא נטענה"
+          loading={plan === undefined}
+          loadingLabel="טוען את בחירת העובדות…"
+        >
+          {plan === undefined ? null : (
+            <FactSelectionList
+              aiProposed={aiProposed}
+              busy={busy}
+              candidates={candidates}
+              changes={changeIndex}
+              excluded={excluded}
+              filter={filter}
+              onChoose={choose}
+              onFilterChange={setFilter}
+              onIncludeAll={includeAll}
+              pinned={pinned}
+              rankings={rankings}
+              savedExcluded={baseline.excluded}
+              savedPinned={baseline.pinned}
+              supportsByFact={supportsByFact}
+            />
+          )}
+        </QueryState>
+      )}
 
-        {!aiAvailable && settings !== undefined ? (
-          <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
-        ) : null}
-      </section>
+      {mutationError === null ? null : (
+        <ErrorCallout
+          error={mutationError}
+          fallbackDetail="תוכנית הבחירה הפעילה לא השתנתה. אפשר לרענן ולנסות שוב."
+          fallbackTitle="בחירת העובדות לא נשמרה"
+        />
+      )}
 
-      {/* This saves a refinement inside the preparation step; it does not advance the
-          wizard. Keep it local and non-sticky so it cannot compete with the step's one
-          viewport commit bar. */}
       <ActionBar
         primary={
           <>
-            {aiAvailable ? (
-              <Button
-                disabled={busy || settings === undefined}
-                onClick={() => ai.mutate()}
-                pending={ai.isPending}
-                pendingLabel="מבקש הצעת AI…"
-                variant="secondary"
-              >
-                הצעת בחירה באמצעות AI
+            {changed ? (
+              <Button disabled={busy} onClick={() => setEdits(null)} variant="ghost">
+                ביטול השינויים
               </Button>
             ) : null}
             <Button
@@ -247,13 +277,16 @@ export const SelectionPlanPanel = ({
         }
         secondary={
           <p className="text-support font-medium text-cv-text-muted">
-            {plan === undefined
-              ? "בחירת העובדות עדיין נטענת."
-              : `${totals.included} מתוך ${totals.total} עובדות ייכנסו לטיוטה.`}
-            {changed ? " יש שינוי שטרם נשמר." : ""}
+            {activePlanId === null
+              ? "אין עדיין בחירה שמורה."
+              : plan === undefined
+                ? "בחירת העובדות עדיין נטענת."
+                : changed
+                  ? `${totals.included} מתוך ${totals.total} עובדות ייכנסו לטיוטה · יש שינוי שטרם נשמר.`
+                  : `${totals.included} מתוך ${totals.total} עובדות ייכנסו לטיוטה.`}
           </p>
         }
       />
-    </>
+    </section>
   );
 };
