@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { invalidateApplicationViews } from "@/api/applications";
-import type { ApprovedRevision } from "@/api/contracts";
+import { invalidateDocumentViews } from "@/api/documents";
+
 import { recordInternalSubmission } from "@/api/tracking";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
@@ -16,24 +16,28 @@ import { formatDateTime } from "@/utils/formatDateTime";
 import { isoFromLocalDateTimeInput } from "@/utils/isoFromLocalDateTimeInput";
 import { localDateTimeInputValue } from "@/utils/localDateTimeInputValue";
 
-interface RevisionSubmissionDialogProps {
+interface SubmissionDialogProps {
+  applicationId: string;
+  /* The Ready document on screen. The submission names this exact hash (§18), so a document
+     that changed after the reader looked at it is refused rather than recorded as sent. */
+  documentHash: string;
   onClose: () => void;
   onRecorded: () => void;
   open: boolean;
-  /* When this revision is already on record as submitted. Its presence turns the dialog
-     from the plain recording into the exception it now is, and the acknowledgement below
-     is what the reader has to state before a second one can be written. */
+  /* When this exact document is already on record as submitted. Its presence turns the
+     dialog from the plain recording into the exception it now is, and the acknowledgement
+     below is what the reader has to state before a second one can be written. */
   previousSubmittedAt: string | null;
-  revision: ApprovedRevision;
 }
 
-export const RevisionSubmissionDialog = ({
+export const SubmissionDialog = ({
+  applicationId,
+  documentHash,
   onClose,
   onRecorded,
   open,
   previousSubmittedAt,
-  revision,
-}: RevisionSubmissionDialogProps) => {
+}: SubmissionDialogProps) => {
   const queryClient = useQueryClient();
   const [repeatAcknowledged, setRepeatAcknowledged] = useState(false);
   /* The native dialog keeps painting for its 0.18s exit transition after `open` turns
@@ -52,12 +56,11 @@ export const RevisionSubmissionDialog = ({
   const submission = useMutation({
     mutationFn: ({ submittedAt }: { submittedAt: string }) => {
       const submittedAtIso = isoFromLocalDateTimeInput(submittedAt);
-      if (revision.pdf_artifact_version_id == null || submittedAtIso === null) {
-        throw new Error("Submission requires the exact Ready revision, PDF, and a valid date and time");
+      if (submittedAtIso === null) {
+        throw new Error("Submission requires a valid date and time");
       }
-      return recordInternalSubmission(revision.application_id, {
-        approved_revision_id: revision.id,
-        pdf_artifact_version_id: revision.pdf_artifact_version_id,
+      return recordInternalSubmission(applicationId, {
+        expected_document_hash: documentHash,
         submitted_at: submittedAtIso,
         metadata: {},
       });
@@ -66,7 +69,7 @@ export const RevisionSubmissionDialog = ({
       setRepeatAcknowledged(false);
       onClose();
       onRecorded();
-      void invalidateApplicationViews(queryClient, revision.application_id);
+      void invalidateDocumentViews(queryClient, applicationId);
     },
   });
 
@@ -87,7 +90,7 @@ export const RevisionSubmissionDialog = ({
           </Button>
           <Button
             disabled={!submittedAtValid || (previousShown !== null && !repeatAcknowledged)}
-            form="revision-submission-form"
+            form="document-submission-form"
             pending={submission.isPending}
             pendingLabel="רושם…"
             type="submit"
@@ -99,15 +102,16 @@ export const RevisionSubmissionDialog = ({
       headingId="submission-dialog-heading"
       onClose={close}
       open={open}
-      title={previousShown === null ? "רישום הגשה קבועה" : "רישום הגשה נוספת של אותה גרסה"}
+      title={previousShown === null ? "רישום הגשה קבועה" : "רישום הגשה נוספת של אותם קורות חיים"}
     >
-      <form id="revision-submission-form" onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}>
+      <form id="document-submission-form" onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}>
         <p className="mb-4">
-          הרישום קבוע ומתייחס לגרסה ולקובץ ה־PDF המוצגים במסך הזה. הוא לא יפתור גרסה אחרת או קובץ אחר בזמן השמירה.
+          הרישום קבוע: הוא שומר עותק של התוכן ושל קובצי ה־HTML וה־PDF המוצגים במסך הזה. אם המסמך השתנה מאז שנפתח, הרישום
+          יסורב ולא יירשם מסמך אחר.
         </p>
         {previousShown === null ? null : (
           <div className="mb-4 flex flex-col gap-3">
-            <Callout title="הגרסה הזו כבר נרשמה כמוגשת" tone="warning">
+            <Callout title="קורות החיים האלה כבר נרשמו כמוגשים" tone="warning">
               {`ההגשה הקיימת נרשמה ${formatDateTime(previousShown)}. הרישום הקיים לא ישתנה — יתווסף לו אירוע הגשה נוסף.`}
             </Callout>
             <Checkbox
@@ -115,7 +119,7 @@ export const RevisionSubmissionDialog = ({
               hint="למשל הגשה חוזרת דרך ערוץ אחר. אם ההגשה כבר נרשמה, אין צורך לרשום אותה שוב."
               onChange={(event) => setRepeatAcknowledged(event.target.checked)}
             >
-              אני מבקש לרשום הגשה נוספת של אותה גרסה
+              אני מבקש לרשום הגשה נוספת של אותם קורות חיים
             </Checkbox>
           </div>
         )}

@@ -4,7 +4,7 @@ import { type ReactNode, useMemo } from "react";
 
 import type { Fact } from "@/api/contracts";
 import { factsQueryOptions } from "@/api/facts";
-import type { DecisionMarkdownDownload } from "@/api/revisions";
+import type { DecisionExport } from "@/api/contracts";
 import { factLabelInLanguage, factSourceLabel } from "@/features/facts";
 import { emphasisLabels, fitLevelLabel, languageLabels, profileLabels, trackLabel } from "@/features/preparation";
 import { Button } from "@/ui/Button";
@@ -234,16 +234,17 @@ const SelectedFacts = ({ ids, language }: { ids: string[]; language: string | nu
 };
 
 interface DecisionDocumentProps {
-  decision: DecisionMarkdownDownload | undefined;
+  decision: DecisionExport | undefined;
   onDownload: () => void;
   pending: boolean;
 }
 
-/* The approved revision's decision record, read-only: it is part of what was approved, so
-   this view offers reading and a download of the original and nothing that edits it. */
+/* §16 `export_decision_markdown`: the provenance of the current document - its analysis,
+   selection, the facts it depends on and its content report. It writes nothing, so this
+   view offers reading and a download and nothing that edits it. */
 export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocumentProps) => {
   /* A response without text content is a missing document, not a crash. */
-  const content = typeof decision?.content === "string" ? decision.content : null;
+  const content = typeof decision?.markdown === "string" ? decision.markdown : null;
   const parsed = useMemo(() => (content === null ? null : parseDecisionMarkdown(content)), [content]);
 
   if (pending) {
@@ -258,7 +259,7 @@ export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocu
 
   if (parsed === null || (parsed.title === null && parsed.sections.length === 0)) {
     return (
-      <EmptyState className="text-support text-cv-text-muted">מסמך ההחלטה של הגרסה הזו אינו זמין כרגע.</EmptyState>
+      <EmptyState className="text-support text-cv-text-muted">מסמך ההחלטה של המסמך הזה אינו זמין כרגע.</EmptyState>
     );
   }
 
@@ -276,7 +277,7 @@ export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocu
     <article aria-labelledby="decision-document-title" className="flex flex-col gap-4 text-support text-cv-text">
       <header className="flex flex-col gap-2">
         <h3 className="font-semibold text-cv-text" id="decision-document-title">
-          למה הגרסה נראית כך
+          למה קורות החיים נראים כך
         </h3>
         {reading.summary === null ? null : (
           <p className="text-body leading-7 text-cv-text" dir="auto">
@@ -292,7 +293,7 @@ export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocu
       )}
 
       {reading.selectedFactIds === null ? null : (
-        <Part title="העובדות שנבחרו לגרסה">
+        <Part title="העובדות שנבחרו לקורות החיים">
           <SelectedFacts ids={reading.selectedFactIds} language={reading.language} />
         </Part>
       )}
@@ -302,7 +303,7 @@ export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocu
       {reading.rest.length === 0 ? null : (
         <div className="border-t border-cv-border pt-4">
           <Disclosure summary="שרשרת המקור והאישור">
-            <p className="mb-3">מזהי הרשומות וחתימות התוכן שהגרסה נבנתה מהם, ומי אישר אותה.</p>
+            <p className="mb-3">מזהי הרשומות וחתימות התוכן שהמסמך נבנה מהם, ומי אישר אותו.</p>
             <div className="flex flex-col gap-4">
               {reading.rest.map((section, index) => (
                 <RawSection key={index} section={section} />
@@ -317,7 +318,7 @@ export const DecisionDocument = ({ decision, onDownload, pending }: DecisionDocu
           <Download aria-hidden="true" className="size-icon-md" />
           הורדת מסמך ההחלטה
         </Button>
-        <p className="text-caption text-cv-text-muted">הקובץ המקורי, כפי שנשמר עם אישור הגרסה.</p>
+        <p className="text-caption text-cv-text-muted">הקובץ כפי שהשרת מפיק אותו מהמסמך הנוכחי.</p>
       </footer>
     </article>
   );
