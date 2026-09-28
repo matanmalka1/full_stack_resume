@@ -36,7 +36,6 @@ from ..application.services.operations import (
     AnalysisOperationHandler,
     DraftOperationHandler,
     OperationLifecycleService,
-    OperationReplacementService,
     OperationSubmissionService,
     RegenerationOperationHandler,
     RenderOperationHandler,
@@ -72,7 +71,6 @@ from ..infrastructure.persistence.documents import (
 from ..infrastructure.persistence.draft_history_sources import (
     SqlAlchemyDraftHistoryApplicationReader,
 )
-from ..infrastructure.persistence.idempotency import SqlAlchemyIdempotencyRepository
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from ..infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
@@ -144,7 +142,6 @@ class Services:
     knowledge_queries: KnowledgeQueryService
     operation_submissions: OperationSubmissionService
     operation_lifecycle: OperationLifecycleService
-    operation_replacements: OperationReplacementService
     operation_runner: OperationRunner
     operation_worker: OperationWorker
     settings: SettingsService
@@ -291,15 +288,6 @@ def build_services(
     )
     operation_lifecycle = OperationLifecycleService(
         transactions, operation_client, documents=documents
-    )
-    # Temporary: the revision-replacement flow it served is gone. Wave 3 deletes it
-    # with its router; until then it is built only so `ApiServices` stays complete.
-    operation_replacements = OperationReplacementService(
-        transactions=transactions,
-        operations=operation_client,
-        receipts=SqlAlchemyIdempotencyRepository(transactions),
-        submissions=operation_submissions,
-        draft_history=draft_history,
     )
     selection_service = SelectionChangeService(
         transactions=transactions,
@@ -458,7 +446,6 @@ def build_services(
         knowledge_queries=knowledge_queries,
         operation_submissions=operation_submissions,
         operation_lifecycle=operation_lifecycle,
-        operation_replacements=operation_replacements,
         operation_runner=runner,
         operation_worker=worker,
         settings=settings_service,
@@ -489,6 +476,7 @@ def build_api_services(
         applications=services.applications,
         queries=services.queries,
         analysis=services.analysis,
+        selection=services.selection,
         drafts=services.drafts,
         draft_validation=services.draft_validation,
         draft_history=services.draft_history,
@@ -501,7 +489,6 @@ def build_api_services(
         maintenance=services.maintenance,
         operation_submissions=services.operation_submissions,
         operation_lifecycle=services.operation_lifecycle,
-        operation_replacements=services.operation_replacements,
         settings=services.settings,
         identity=InstanceIdentity(
             product_version=__version__,

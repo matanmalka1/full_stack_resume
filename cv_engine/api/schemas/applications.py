@@ -245,17 +245,6 @@ class ArtifactVersionsResponse(HttpSchema):
     items: list[ArtifactVersionResponse]
 
 
-class DecisionRecordResponse(HttpSchema):
-    id: str
-    approved_revision_id: str
-    application_id: str
-    job_snapshot_id: str
-    job_analysis_id: str
-    structured: dict[str, Any]
-    summary: str
-    created_at: str
-
-
 class CloseApplicationResponse(HttpSchema):
     application_id: str
     current_status: str

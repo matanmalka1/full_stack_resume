@@ -1,4 +1,4 @@
-"""Durable Operation submission, lifecycle, replacement, and execution handlers."""
+"""Durable Operation submission, lifecycle, and execution handlers."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from .handlers import (
     SelectionPlanOperationHandler,
 )
 from .lifecycle import OperationLifecycleService
-from .replacement import OperationReplacementService
 from .service import OperationSubmissionService
 
 __all__ = [
@@ -27,7 +26,6 @@ __all__ = [
     "AnalysisOperationHandler",
     "DraftOperationHandler",
     "OperationLifecycleService",
-    "OperationReplacementService",
     "OperationSubmissionService",
     "RegenerationOperationHandler",
     "RenderOperationHandler",

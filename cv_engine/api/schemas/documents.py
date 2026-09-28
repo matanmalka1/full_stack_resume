@@ -2,8 +2,7 @@
 
 The document's `document_hash` is its concurrency token. A read returns it as the
 ETag; the autosave `PATCH` takes it as `If-Match`, and every action carries it in the
-body as `expected_document_hash` - the same split the working-draft routes used: an
-action on a resource is not a conditional replacement of it, and an action that
+body as `expected_document_hash`: an action on a resource is not a conditional replacement of it, and an action that
 accepted `If-Match: *` would be the lost update the token exists to prevent.
 
 Nothing here carries a filesystem path.
@@ -19,9 +18,9 @@ from ...domain.contracts.selection import OmissionReason, ProposalSource, Select
 from ...domain.contracts.taxonomy import Emphasis
 from ...domain.document import ContentCheck, DocumentState
 from .drafts import (
+    ContentPatchRequest,
     DraftFactResponse,
     DraftOutlineResponse,
-    UpdateWorkingDraftRequest,
     ValidationReportResponse,
 )
 from .health import HttpSchema
@@ -35,10 +34,10 @@ class DocumentActionRequest(HttpSchema):
     expected_document_hash: str = Sha256
 
 
-class UpdateDocumentRequest(UpdateWorkingDraftRequest):
+class UpdateDocumentRequest(ContentPatchRequest):
     """What `PATCH /applications/{id}/document` applies as one edit (§14).
 
-    The same structured patch the working draft accepted; the token is `If-Match`.
+    The token is `If-Match`, not a body field.
     """
 
 

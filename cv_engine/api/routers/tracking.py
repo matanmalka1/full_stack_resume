@@ -92,24 +92,23 @@ def correct_status(
     "/{application_id}/submissions",
     response_model=SubmissionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Record an internal submission of one exact qualified revision",
+    summary="Record that the Ready document was sent",
 )
 def submit_application(
     application_id: str,
     request: SubmitApplicationRequest,
     services: Services,
 ) -> SubmissionResponse:
-    """`201`: an immutable Submission, refused unless the evidence still qualifies.
+    """`201`: an immutable Submission of the content and rendered files (§18).
 
-    Ready qualification is re-derived from stored evidence at submission time,
-    so a revision whose PDF was replaced or whose hashes no longer match is a
-    `412` rather than a recorded claim that something was sent.
+    Refused with `412` unless the document is Ready when the request is answered and
+    still carries `expected_document_hash`, rather than recording a claim that
+    something the user never saw was sent.
     """
     result = services.submission.submit_application(
         SubmissionCommand(
             application_id=application_id,
-            approved_revision_id=request.approved_revision_id,
-            pdf_artifact_version_id=request.pdf_artifact_version_id,
+            expected_document_hash=request.expected_document_hash,
             submitted_at=request.submitted_at,
             metadata=request.metadata,
             actor_type="user",
@@ -130,12 +129,11 @@ def record_external_submission(
     request: ExternalSubmissionRequest,
     services: Services,
 ) -> SubmissionResponse:
-    """`201`: recorded without inventing a revision or an artifact that never was."""
+    """`201`: recorded without inventing content or files that never passed through here."""
     result = services.submission.record_external_submission(
         ExternalSubmissionCommand(
             application_id=application_id,
             submitted_at=request.submitted_at,
-            artifact_version_id=request.artifact_version_id,
             metadata=request.metadata,
             actor_type="user",
             client="web",

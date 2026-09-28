@@ -9,10 +9,8 @@ from ...application.commands import (
     CloseApplicationCommand,
     CreateJobSnapshotCommand,
     DeleteApplicationCommand,
-    DraftCommand,
     DuplicateCheckCommand,
     IngestCommand,
-    ReplaceWorkingDraftCommand,
     UpdateApplicationNotesCommand,
 )
 from ...application.queries import (
@@ -36,7 +34,6 @@ from ..schemas.applications import (
     CreateApplicationResponse,
     CreateJobSnapshotRequest,
     CreateJobSnapshotResponse,
-    DecisionRecordResponse,
     DeleteApplicationResponse,
     DuplicateCheckRequest,
     DuplicateCheckResponse,
@@ -45,8 +42,6 @@ from ..schemas.applications import (
     UpdateApplicationNotesRequest,
     UpdateApplicationNotesResponse,
 )
-from ..schemas.artifacts import ApprovedRevisionsResponse
-from ..schemas.drafts import GenerateWorkingDraftRequest, ReplaceWorkingDraftRequest
 from ..schemas.operations import OperationResponse
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -166,26 +161,6 @@ def artifact_versions(application_id: str, services: Services) -> ArtifactVersio
 
 
 @router.get(
-    "/{application_id}/approved-revisions",
-    response_model=ApprovedRevisionsResponse,
-    summary="List immutable approved revisions for an application",
-)
-def approved_revisions(application_id: str, services: Services) -> ApprovedRevisionsResponse:
-    result = services.queries.approved_revisions(application_id)
-    return ApprovedRevisionsResponse.model_validate(result.model_dump(mode="json"))
-
-
-@router.get(
-    "/{application_id}/decision",
-    response_model=DecisionRecordResponse,
-    summary="Read the latest decision record for an application",
-)
-def latest_decision(application_id: str, services: Services) -> DecisionRecordResponse:
-    result = services.queries.latest_decision(application_id)
-    return DecisionRecordResponse.model_validate(result.model_dump(mode="json"))
-
-
-@router.get(
     "/{application_id}/job-snapshots",
     response_model=JobSnapshotHistoryResponse,
     summary="Read immutable job snapshot history",
@@ -233,8 +208,8 @@ def create_analysis(
     """`202` and a `Location`: analysis is a durable Operation (§13).
 
     NeedsReview is not an error here or anywhere else. An analysis that needs a
-    decision is a *successful* Operation whose JobAnalysis and initial
-    SelectionPlan were both committed; what needs deciding is reported by the
+    decision is a *successful* Operation whose JobAnalysis - and, for the first
+    analysis, the document's initial selection - were committed; what needs deciding is reported by the
     Application's review reasons, and is resolved through
     `POST /analyses/{id}/apply-decisions`.
 
@@ -250,75 +225,6 @@ def create_analysis(
         ),
         idempotency_key=idempotency_key or new_id(),
         analysis_service=services.analysis,
-    )
-    return accepted_operation(response, queued)
-
-
-@router.post(
-    "/{application_id}/working-draft/generate",
-    response_model=OperationResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Generate the active working draft from an exact analysis and plan",
-)
-def generate_working_draft(
-    application_id: str,
-    request: GenerateWorkingDraftRequest,
-    services: Services,
-    response: Response,
-    idempotency_key: IdempotencyKey = None,
-) -> OperationResponse:
-    """`202` and a `Location`: generation is a durable Operation (§14).
-
-    Both sources are named by the client. The Operation freezes them, so an
-    analysis or plan that moves before activation fails the source check as
-    `SOURCE_CHANGED` instead of silently drafting from something else.
-    """
-    queued = services.operation_submissions.submit_draft(
-        DraftCommand(
-            application_id=application_id,
-            **request.model_dump(mode="python"),
-        ),
-        idempotency_key=idempotency_key or new_id(),
-        draft_service=services.drafts,
-    )
-    return accepted_operation(response, queued)
-
-
-@router.post(
-    "/{application_id}/working-draft/replace",
-    response_model=OperationResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Replace the active working draft from an explicit analysis and plan",
-)
-def replace_working_draft(
-    application_id: str,
-    request: ReplaceWorkingDraftRequest,
-    services: Services,
-    response: Response,
-    idempotency_key: IdempotencyKey = None,
-) -> OperationResponse:
-    """`202` and a `Location`: replacement is the draft Operation (§14).
-
-    Addressed to the Application, beside `generate`, because the Application is
-    what owns the one active draft. The body still names the exact draft and the
-    exact version being replaced, and a draft belonging to another Application
-    is a `412` naming the broken lineage rather than a replacement landing
-    somewhere nobody asked for.
-
-    Nothing is deleted first. The Operation commits the new document over the
-    same active record, so a failure leaves the existing draft untouched, and
-    `keep_previous` materializes the historical snapshot before any of it
-    starts.
-    """
-    queued = services.operation_replacements.submit_replacement_draft(
-        ReplaceWorkingDraftCommand(
-            application_id=application_id,
-            **request.model_dump(mode="python"),
-            actor_type="user",
-            client="web",
-        ),
-        idempotency_key=idempotency_key or new_id(),
-        draft_service=services.drafts,
     )
     return accepted_operation(response, queued)
 
@@ -348,8 +254,8 @@ def delete_application(application_id: str, services: Services) -> DeleteApplica
     """No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).
 
     Callable from any current status, including `closed`. Every immutable
-    JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision,
-    Artifact, Submission, and Operation the application produced is untouched;
+    JobSnapshot, JobAnalysis, Artifact, Submission, and Operation the
+    application produced is untouched;
     only default list/Dashboard projections and duplicate detection stop
     surfacing it. The detail endpoint still returns it by ID.
     """
