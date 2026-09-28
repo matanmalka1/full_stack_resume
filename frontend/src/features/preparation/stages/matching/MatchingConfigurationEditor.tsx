@@ -28,10 +28,6 @@ import {
   matchingValuesFrom,
 } from "../../model/matchingConfiguration";
 
-/* Each setting, with what it decides and what changing it costs. The cost is stated on
-   the field rather than only after a change: a reader choosing between "try another
-   emphasis" and "try another profile" should know before touching either that one only
-   reselects facts and the other re-runs the analysis. */
 const fields: Record<
   MatchingKey,
   { cost: string; description: string; label: string; labels: Record<string, string> }
@@ -62,14 +58,6 @@ const fields: Record<
   },
 };
 
-/* The classification the step stands on, as the one place it can be changed.
-
-   It used to open as four selects under a heading, a sentence saying "only what you
-   change is saved", and a line reading "לא בוצעו שינויים" - the reader had to infer which
-   value the analysis proposed, which one they had set themselves, and what a change would
-   cost. Each field now says all three: where its value came from, what it controls, and
-   whether changing it re-runs the analysis or only reselects facts. The consequence for
-   the work already done appears only once there is a change to consequence. */
 export const MatchingConfigurationEditor = ({
   classification,
   detail,
@@ -108,11 +96,6 @@ export const MatchingConfigurationEditor = ({
   const navigate = useNavigate();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
-  /* No autosave: a choice sits only in `values` until it is saved, so leaving with a
-     change would drop it silently. `beforeunload` covers close/refresh; the click
-     interceptor catches in-app navigation, one level up at `document` because this is a
-     card inside the step rather than the step's own root. Both stand down once a save
-     lands, since `changed` is derived from the server's own classification. */
   useEffect(() => {
     if (!changed) return;
     const handler = (event: BeforeUnloadEvent) => event.preventDefault();

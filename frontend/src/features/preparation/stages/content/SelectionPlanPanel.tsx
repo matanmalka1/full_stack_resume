@@ -25,9 +25,6 @@ import { useSelectionProposal } from "./useSelectionProposal";
 const sameMembers = (left: readonly string[], right: readonly string[]): boolean =>
   left.length === right.length && left.every((item) => right.includes(item));
 
-/* The engine's ranking, in the order it applies it. Stated once, beside the list it
-   explains, so the per-fact reasons below read as terms of one rule rather than as
-   unrelated remarks. */
 const rankingSteps = [
   "עובדות שמעידות על דרישת חובה במשרה קודמות לכל השאר, ואחריהן עובדות שמעידות על דרישה מועדפת.",
   "בתוך כל רמה, עובדה שתגיותיה מתאימות יותר לפרופיל ולדגש שנבחרו מדורגת גבוה יותר.",
@@ -35,12 +32,6 @@ const rankingSteps = [
   "לכל סעיף בקורות החיים יש מכסה. מה שלא נכנס למכסה לא נכלל, אלא אם הוא נדרש כדי לכסות תגית שהפרופיל מחייב.",
 ];
 
-/* The reader's own overrides, and the plan they were taken against.
-
-   Held as one value rather than three because they are one decision: an override only
-   means anything against the plan it was made on. Edits that name a plan other than the
-   loaded one are simply not this plan's, so a plan arriving under the reader (a save, a
-   refetch, a finished AI proposal) resets them by comparison rather than by an effect. */
 interface FactOverrides {
   excluded: string[];
   pinned: string[];
@@ -57,10 +48,7 @@ export const SelectionPlanPanel = ({
   action: NonNullable<WorkflowActionPlan["createSelectionPlan"]>;
   detail: ApplicationDetail;
   onQueued: (operationId: string) => void;
-  /* Whether this Application's work is under way, by `isOperationLive`: the actions that
-     change what a run replaces wait for it, whether or not its overlay is showing. */
   operationLive: boolean;
-  /* The active analysis' requirements, so each fact can say which of them it answers. */
   requirements: readonly Requirement[];
 }) => {
   const queryClient = useQueryClient();
@@ -89,9 +77,7 @@ export const SelectionPlanPanel = ({
   const rankings = useMemo(() => factRankings(plan?.plan), [plan]);
   const supportsByFact = useMemo(() => requirementsByFact(requirements), [requirements]);
 
-  /* The finished proposal's changes, against the selection the reader had when asking.
-     Only while its plan is the one on screen: once another plan replaces it (a manual
-     save, a second proposal), "what the AI changed" is no longer what this list shows. */
+  // The AI diff is shown only while the proposal's own plan is the active one.
   const proposalResultVisible =
     proposal.status.kind === "done" &&
     proposal.status.resultPlanId !== null &&
@@ -162,13 +148,7 @@ export const SelectionPlanPanel = ({
       pinned: choice === "include" ? [...new Set([...pinned, factId])] : pinned.filter((id) => id !== factId),
     });
 
-  /* A whole section at once, expressed in the same two overrides a row uses.
-
-     Lifting the reader's own exclusion is enough for a fact the engine had chosen - the
-     plan goes back to selecting it. A fact the engine itself left out needs the pin, or
-     the rebuilt plan would omit it again for the reason it already recorded. The omission
-     reason is what tells the two apart, so this never pins a fact that was only excluded
-     by hand. */
+  // An engine-omitted fact needs a pin to come back; a hand-excluded one only needs the exclusion lifted.
   const includeAll = (factIds: readonly string[]) => {
     const engineOmitted = candidates
       .filter((candidate) => factIds.includes(candidate.fact_id) && candidate.reason !== "excluded_by_user")
@@ -272,9 +252,6 @@ export const SelectionPlanPanel = ({
         />
       )}
 
-      {/* This saves a refinement inside the preparation step; it does not advance the
-          wizard. Kept local and non-sticky so it cannot compete with the step's one
-          viewport commit bar. */}
       <ActionBar
         primary={
           <>

@@ -28,9 +28,6 @@ const inclusionLabels: Record<EvidenceInclusion, string | null> = {
   unknown: null,
 };
 
-/* One cited fact, and whether the saved selection carries it into the CV. That second
-   half is what ties the analysis to the document: a requirement "covered" by a fact the
-   selection then left out is covered on paper and missing from the CV. */
 const EvidenceFact = ({ factId, evidence }: { evidence: RequirementEvidence; factId: string }) => {
   const inclusion = evidence.inclusion(factId);
   const label = inclusionLabels[inclusion];
@@ -51,20 +48,12 @@ const EvidenceFact = ({ factId, evidence }: { evidence: RequirementEvidence; fac
   );
 };
 
-/* One requirement: the ask, its verdict, and - folded - the facts behind the verdict.
-
-   The row states only what a reader acts on at a glance: the requirement in the posting's
-   own words, how well it is covered, and for anything short of covered, why. Evidence is
-   a press away on every row, matched or not, so a list of twenty requirements reads as
-   twenty lines rather than twenty paragraphs. */
 export const RequirementRow = ({
   evidence,
   gapReason,
   requirement,
 }: {
   evidence: RequirementEvidence;
-  /* The gap projection's reason, for an analysis written before requirements carried
-     their own shortfall reason. */
   gapReason: string | undefined;
   requirement: Requirement;
 }) => {
@@ -95,8 +84,6 @@ export const RequirementRow = ({
             <span className="font-semibold text-cv-text">
               {shortfallLabels[requirement.shortfallSeverity ?? "unknown"]}:{" "}
             </span>
-            {/* Isolated from the Hebrew label before it: an English reason would otherwise
-                inherit the paragraph's direction and land its period on the wrong end. */}
             <bdi>{shortfall}</bdi>
           </p>
         )}

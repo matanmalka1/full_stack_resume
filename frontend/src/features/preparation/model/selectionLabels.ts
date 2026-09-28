@@ -24,9 +24,7 @@ export const omissionReasonLabels: Record<OmissionReason, string> = {
   excluded_by_user: "הוחרגה על ידך",
 };
 
-/* Who placed a fact where it is, as the fact selection names it. Pinned and excluded
-   facts are an overlay on the engine's ranking; the server stores a manual mark and an AI
-   proposal in the same two lists, so the words say "explicitly" rather than guessing who. */
+// A manual mark and an AI proposal are stored in the same lists, so neither is named.
 export const decisionSourceLabels: Record<DecisionSource, string> = {
   engine: "לפי דירוג המנוע",
   pinned: "נכללה במפורש",

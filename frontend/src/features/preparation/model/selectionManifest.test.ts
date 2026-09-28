@@ -19,6 +19,8 @@ const requirement = (overrides: Partial<Requirement> = {}): Requirement => ({
   text: "B2B sales",
   importance: "mandatory",
   coverage: "matched",
+  shortfallSeverity: null,
+  shortfallReason: null,
   supportingFactIds: ["fact.a"],
   boundaryFactIds: [],
   ...overrides,

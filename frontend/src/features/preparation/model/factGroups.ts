@@ -46,9 +46,6 @@ const matches = (candidate: SelectionPlanCandidate, needle: string): boolean =>
   (candidate.text ?? "").toLowerCase().includes(needle) ||
   candidate.section.toLowerCase().includes(needle);
 
-/* A narrower view of the same plan. "overridden" is every fact the plan carries an
-   explicit mark for - the reader's own or an AI proposal's - which is the set a reader
-   reviews to see where the selection departs from the engine's ranking. */
 export type FactFilter = "all" | "included" | "omitted" | "overridden";
 
 const passesFilter = (

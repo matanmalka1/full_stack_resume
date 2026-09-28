@@ -2,12 +2,6 @@ import type { JobAnalysisRecord } from "@/api/contracts";
 import { LtrText } from "@/ui/LtrText";
 import { formatDateTime } from "@/utils/formatDateTime";
 
-/* The panel's masthead: what this is, and which run produced it.
-
-   The fit verdict is not repeated here. The step banner states it once, above this panel,
-   with what it means; a badge here said the same level a second time a few centimetres
-   lower. Provenance is the record's own - the model id and when it ran - rather than
-   anything the analysis document claims about itself. */
 export const AnalysisHeader = ({ record }: { record: JobAnalysisRecord | null }) => (
   <div className="border-b border-cv-border pb-4">
     <div className="min-w-0">

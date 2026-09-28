@@ -10,20 +10,12 @@ import { type RequirementFilter, needsAttention, requirementGroups } from "../..
 import { RequirementRow } from "./RequirementRow";
 import { useRequirementEvidence } from "./useRequirementEvidence";
 
-/* A posting that never says whether something is required is not thereby saying it is
-   optional, so `unknown` is worded as exactly that rather than folded into "preferred". */
 const importanceTitles: Record<RequirementImportance, string> = {
   mandatory: "דרישות חובה",
   preferred: "דרישות מועדפות",
   unknown: "דרישות ללא חשיבות מוצהרת",
 };
 
-/* Every requirement the analysis read from the posting, grouped by how much the employer
-   insists on it, with the facts that answer each one a press away.
-
-   One list, not a summary above it and a second list below: the group headers carry the
-   counts a separate "coverage picture" used to repeat, and the filter answers "what needs
-   my attention" without a second copy of the same rows. */
 export const RequirementList = ({
   detail,
   gaps,
@@ -34,8 +26,6 @@ export const RequirementList = ({
   requirements: Requirement[];
 }) => {
   const attentionCount = requirements.filter(needsAttention).length;
-  /* Opens on the rows that need a look when there are any: that is the part a reader
-     came to check. "הכל" is one press away. */
   const [filter, setFilter] = useState<RequirementFilter>(attentionCount > 0 ? "attention" : "all");
   const evidence = useRequirementEvidence(detail, requirements);
   const gapReasons = useMemo(() => new Map(gaps.map((gap) => [gap.requirementId, gap.reason])), [gaps]);
@@ -73,8 +63,6 @@ export const RequirementList = ({
         />
       )}
       {evidence.loading ? (
-        // role="status" is a Callout prop, not a DOM role; Callout already renders an
-        // <output> for it.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout role="status" title="טוען את הראיות התומכות…" tone="progress" />
       ) : null}

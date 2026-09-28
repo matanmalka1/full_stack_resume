@@ -6,8 +6,6 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { factsQueryOptions } from "@/api/facts";
 import { candidateIncluded } from "../../model/factGroups";
 
-/* Whether a fact cited as evidence will actually appear in the CV, by the saved selection.
-   "unknown" when there is no plan yet, or the plan never considered the fact. */
 export type EvidenceInclusion = "included" | "omitted" | "unknown";
 
 export interface RequirementEvidence {
@@ -17,14 +15,6 @@ export interface RequirementEvidence {
   loading: boolean;
 }
 
-/* The two things a requirement's evidence needs beyond the analysis itself: the current
-   wording of each cited fact, and whether the active selection carries it into the CV.
-
-   The analysis names evidence by id, not by text - a fact's wording can change after the
-   analysis was written - so the wording is read from the facts store, falling back to the
-   plan's own rendering. The plan is the same query the fact selection below reads, so the
-   two panels never disagree about what "in the CV" means. Both reads are defensive: an id
-   nothing resolves is named as such rather than hidden. */
 export const useRequirementEvidence = (
   detail: ApplicationDetail,
   requirements: readonly Requirement[],
@@ -47,14 +37,12 @@ export const useRequirementEvidence = (
   const planIndex = useMemo(() => {
     const plan = planQuery.data;
     const index = new Map<string, { included: boolean; text: string | null }>();
-    if (plan === undefined || !Array.isArray(plan.candidates)) {
+    if (plan === undefined) {
       return index;
     }
-    const pinned = Array.isArray(plan.pinned_fact_ids) ? plan.pinned_fact_ids : [];
-    const excluded = Array.isArray(plan.excluded_fact_ids) ? plan.excluded_fact_ids : [];
     for (const candidate of plan.candidates) {
       index.set(candidate.fact_id, {
-        included: candidateIncluded(candidate, pinned, excluded),
+        included: candidateIncluded(candidate, plan.pinned_fact_ids, plan.excluded_fact_ids),
         text: candidate.text ?? null,
       });
     }

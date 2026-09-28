@@ -8,6 +8,8 @@ const requirement = (id: string, overrides: Partial<Requirement> = {}): Requirem
   text: id,
   importance: "mandatory",
   coverage: "matched",
+  shortfallSeverity: null,
+  shortfallReason: null,
   supportingFactIds: [],
   boundaryFactIds: [],
   ...overrides,

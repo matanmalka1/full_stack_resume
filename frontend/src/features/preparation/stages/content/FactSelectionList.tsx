@@ -29,13 +29,6 @@ interface FactSelectionListProps {
   supportsByFact: ReadonlyMap<string, readonly Requirement[]>;
 }
 
-/* The plan's candidates, grouped by the CV section they belong to.
-
-   Each section carries a live count and can be opened on its own; the search and the
-   filter run across every group, so a fact can be found without knowing where it lives,
-   and "what did I (or the AI) change" is one press rather than a scan of every row.
-   A narrowed view opens every group it leaves, since a filter that then hid its own
-   results behind closed sections would answer nothing. */
 export const FactSelectionList = ({
   busy,
   candidates,
@@ -86,8 +79,6 @@ export const FactSelectionList = ({
             aria-hidden="true"
             className="pointer-events-none absolute start-3.5 top-1/2 size-icon-md -translate-y-1/2 text-cv-text-muted"
           />
-          {/* Physical padding: the icon stays on the right while `dir="auto"` turns a
-              Latin query left-to-right. */}
           <Input
             className="rtl-placeholder w-56 max-w-full pr-10"
             dir="auto"

@@ -9,18 +9,6 @@ import { AnalysisOverview } from "./AnalysisOverview";
 import { RequirementList } from "./RequirementList";
 import { RoleSummary } from "./RoleSummary";
 
-/* What the analysis concluded, read in the order a candidate checks it:
-
-   1. what the role is (the analysis' own summary and the posting's keywords),
-   2. how the approved facts cover it, split by mandatory and preferred asks,
-   3. each requirement, with the facts that answer it and whether the CV carries them,
-   4. folded at the foot, where the engine narrowed the reading.
-
-   It reports the analysis and decides nothing. The classification it was built from -
-   track, profile, emphasis, language - is not restated here: the matching configuration
-   beside this panel shows those values as the controls that change them, and a second,
-   read-only copy was one of the things that made the step read as cluttered. The fit
-   verdict is the step banner's, for the same reason. */
 export const AnalysisPanel = ({
   classification,
   detail,
@@ -28,8 +16,6 @@ export const AnalysisPanel = ({
 }: {
   classification: Classification;
   detail: ApplicationDetail;
-  /* A last band inside the panel, for a control that acts on the analysis itself -
-     re-running it. */
   footer?: ReactNode;
 }) => (
   <section aria-labelledby="analysis-heading" className={surfaceClasses("bg-cv-surface p-5")}>

@@ -8,12 +8,6 @@ import { candidateIncluded, candidateLocked } from "../../model/factGroups";
 import { type FactRanking, type FactSignal, decisionSource, factSignals } from "../../model/selectionManifest";
 import { decisionSourceLabels, omissionReasonLabels, selectionOutcomeLabels } from "../../model/selectionLabels";
 
-/* The reader's decision about one fact, as one choice of three. "אוטומטי" leaves the fact
-   to the engine's ranking; "הכללה" and "החרגה" are the plan's two overrides. They were two
-   checkboxes, which let a reader tick both and left "neither" unnamed - yet "neither" is
-   the most common and most meaningful state: the engine decides. A single choice keeps
-   the distinction between "the engine chose this" and "I chose this" and makes it
-   visible. */
 export type FactChoice = "auto" | "include" | "exclude";
 
 const choices: readonly { label: string; value: FactChoice }[] = [
@@ -28,8 +22,6 @@ const signalClasses: Record<FactSignal["tone"], string> = {
   negative: "bg-cv-surface-muted text-cv-text-muted",
 };
 
-/* Why the plan placed the fact where it did, in one sentence: the engine's outcome and,
-   for an omission, its recorded reason. */
 const outcomeSentence = (candidate: SelectionPlanCandidate): string =>
   candidate.reason == null
     ? selectionOutcomeLabels[candidate.outcome]
@@ -52,13 +44,11 @@ export const FactRow = ({
 }: {
   busy: boolean;
   candidate: SelectionPlanCandidate;
-  /* How the last AI proposal moved this fact, while its result is on screen. */
   change: "added" | "removed" | undefined;
   excluded: readonly string[];
   onChoose: (factId: string, choice: FactChoice) => void;
   pinned: readonly string[];
   ranking: FactRanking | undefined;
-  /* The saved plan's own overlay, to mark a row whose choice has not been saved yet. */
   savedExcluded: readonly string[];
   savedPinned: readonly string[];
   supports: readonly Requirement[];

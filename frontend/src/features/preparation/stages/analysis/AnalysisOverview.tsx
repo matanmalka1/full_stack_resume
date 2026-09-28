@@ -20,11 +20,6 @@ const Metric = ({ caption, label, value }: { caption?: string; label: string; va
   </div>
 );
 
-/* The analysis at a glance, without restating the verdict: the fit level and score are
-   the step banner's, above this panel, and a second copy here is what made the two read
-   as separate claims. What this adds is the split the banner cannot carry - how the
-   mandatory and the preferred asks are covered, and how much of what was read is
-   anchored in the posting's own text. */
 export const AnalysisOverview = ({ classification }: { classification: Classification }) => {
   const { requirements } = classification;
   if (requirements.length === 0) {
@@ -65,9 +60,6 @@ export const AnalysisOverview = ({ classification }: { classification: Classific
         )}
       </div>
 
-      {/* The whole requirement set as one bar: the proportion a reader would otherwise
-          have to add up from four separate numbers. The legend states every count in
-          words, so the colours are never the only carrier (A.2). */}
       <div>
         <div aria-hidden="true" className="flex h-2 overflow-hidden rounded-pill bg-cv-surface-muted">
           {segmentOrder.map((coverage) =>

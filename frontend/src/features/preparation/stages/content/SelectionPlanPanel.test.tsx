@@ -147,6 +147,8 @@ const panelFor = (client: QueryClient, value: ApplicationDetail, onQueued: (id: 
             text: "Priority ERP",
             importance: "mandatory",
             coverage: "matched",
+            shortfallSeverity: null,
+            shortfallReason: null,
             supportingFactIds: ["fact.omitted"],
             boundaryFactIds: [],
           },

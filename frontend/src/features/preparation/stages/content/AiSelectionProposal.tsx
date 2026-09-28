@@ -8,11 +8,6 @@ import { cx } from "@/ui/cx";
 import { type FactRanking, type SelectionChange, factSignals } from "../../model/selectionManifest";
 import type { ProposalStatus } from "./useSelectionProposal";
 
-/* The proposal's process, stated before the press rather than discovered after it. Each
-   step is what the server actually does: the provider sees the analysis, the pool the
-   profile allows and the engine's own selection, and may only answer with the same two
-   lists a reader edits by hand; the engine then rebuilds the plan from them under its
-   own rules and refuses an answer that breaks one. */
 const processSteps = [
   "ה־AI מקבל את ניתוח המשרה (דרישות, פערים ומילות מפתח), את העובדות שהפרופיל מתיר ואת הבחירה שהמנוע כבר עשה.",
   "הוא מציע אילו עובדות להוסיף לבחירה ואילו להחריג ממנה - רק מתוך העובדות המאושרות, בלי לנסח או לשנות אותן.",
@@ -88,15 +83,12 @@ export const AiSelectionProposal = ({
 }: {
   aiAvailable: boolean;
   busy: boolean;
-  /* What the finished proposal changed, once its plan is the one on screen. */
   changes: readonly SelectionChange[];
-  /* The proposal created the Application's first plan, so there was nothing to compare. */
   firstPlan: boolean;
   onDismiss: () => void;
   onPropose: () => void;
   pending: boolean;
   rankings: ReadonlyMap<string, FactRanking>;
-  /* The finished proposal's plan is loaded and is still the active one. */
   resultVisible: boolean;
   settingsLoaded: boolean;
   status: ProposalStatus;

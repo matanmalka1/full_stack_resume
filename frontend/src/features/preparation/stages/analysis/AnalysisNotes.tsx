@@ -2,13 +2,6 @@ import type { AnalysisIssue } from "@/api/analyses";
 import { Disclosure } from "@/ui/Disclosure";
 import { analysisIssueLabel } from "../../model/analysisLabels";
 
-/* Where the engine narrowed the provider's reading, and what could not be shown at all.
-
-   This answers "why does the analysis claim less than the posting seems to ask for" - a
-   citation dropped, a coverage lowered, a record that was unreadable. It explains and
-   gates nothing, so it sits folded at the foot of the panel rather than between the
-   summary and the requirements it qualifies. Repeated codes collapse to one line with a
-   count. */
 export const AnalysisNotes = ({
   issues,
   unreadableRequirementCount,
