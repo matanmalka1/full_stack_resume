@@ -71,7 +71,6 @@ export type Reason = ApiSchemas["ReasonResponse"];
    carries it as `expected_document_hash`. `content` stays the opaque versioned document;
    `outline` is the editable structure derived from it on each read. */
 export type CVDocument = ApiSchemas["DocumentResponse"];
-export type DocumentSelection = ApiSchemas["DocumentSelectionResponse"];
 export type DocumentCandidate = ApiSchemas["DocumentCandidateResponse"];
 export type DocumentMutation = ApiSchemas["DocumentMutationResponse"];
 export type DocumentCheck = ApiSchemas["DocumentCheckResponse"];
