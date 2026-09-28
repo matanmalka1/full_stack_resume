@@ -392,24 +392,29 @@ def test_path_containment_has_one_implementation() -> None:
     ]
     assert not offenders, offenders
 
-    # Approved HTML is a different transport policy over the existing verified
-    # artifact delivery, not a second verifier in the router or service. Keep
-    # these two delegation edges explicit: Stage B previously regressed when an
-    # API helper reimplemented storage checks beside the application service.
-    approved_router = (ENGINE / "api/routers/approved_revisions.py").read_text(encoding="utf-8")
-    rendering_service = (ENGINE / "application/services/rendering.py").read_text(encoding="utf-8")
-    assert "services.rendering.preview_approved_html(" in approved_router
-    assert "return self.download_artifact(html_artifact_version_id)" in rendering_service
-    # Read the code, not the prose. This scanned the whole file once, so a
-    # docstring explaining what `content_hash` means to a client failed as
-    # though the router were computing one.
-    approved_router_code = "\n".join(
-        line for _number, line in _code_lines(ENGINE / "api/routers/approved_revisions.py")
+    files = ast.parse((ENGINE / "infrastructure/document_files.py").read_text())
+    resolver = next(
+        n for n in ast.walk(files) if isinstance(n, ast.FunctionDef) and n.name == "_resolve"
     )
-    assert not any(
-        token in approved_router_code
-        for token in ("content_hash", ".resolve(", ".read_bytes(", ".is_file(")
+    assert any(
+        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "resolve_within"
+        for n in ast.walk(resolver)
     )
+    rendering = ast.parse((ENGINE / "application/services/rendering.py").read_text())
+    previews = [
+        n
+        for n in ast.walk(rendering)
+        if isinstance(n, ast.FunctionDef) and n.name.startswith("preview_document")
+    ]
+    assert previews
+    for preview in previews:
+        calls = [
+            n.func.attr
+            for n in ast.walk(preview)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+        ]
+        assert "_previewable" in calls
+        assert not {"read_bytes", "write_bytes", "resolve", "is_file"} & set(calls)
 
 
 def test_numbered_migrations_are_registered_once() -> None:
@@ -539,62 +544,77 @@ def test_routers_hold_no_domain_types() -> None:
 
 
 def test_every_application_lock_precedes_the_reads_it_protects() -> None:
-    """The lock has to precede the read it protects, in every writer and in activation.
+    """Derive document mutations and require locked reads before their writes.
 
-    `create_selection_plan` reads the standing acceptances and allocates the
-    version number; both have to happen under the Application row lock, or two
-    writers merge onto the same plan and one acceptance is lost. `save_analysis`
-    inserts a plan too, so it locks as well - a path that skips the lock is not
-    serialized by the others taking it.
-
-    Asserted on the order of statements, not merely on the lock being present
-    somewhere in the function: locking after the read would satisfy a presence
-    check and protect nothing.
-
-    The runner's activation snapshot has to begin where the lock does. A unit of
-    work runs at REPEATABLE READ, so its first statement fixes its snapshot.
-    Activation used to read the Operation, write two phase rows and run the source
-    checks before the write it was all leading to took the Application lock - so
-    the lock was taken under a snapshot that predated it. A writer that waited
-    then found the row updated by whoever held the lock and failed to serialize,
-    having already done the work. So the lock must be the first call in the block.
+    Creation has no document row to lock; the unique constraint serializes it.
+    Updates must enter through a locked read. The runner separately locks the
+    Application before establishing the activation snapshot.
     """
-    persistence = ENGINE / "infrastructure" / "persistence"
-    writers = []
-    for path in persistence.rglob("*.py"):
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.FunctionDef)
-                and node.name != "_insert_selection_plan"
-                and "_insert_selection_plan(" in (ast.get_source_segment(source, node) or "")
+    source = (ENGINE / "infrastructure/persistence/documents.py").read_text()
+    tree = ast.parse(source)
+    functions = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    # Discover direct SQL writes throughout persistence. Only creation and the
+    # shared mutation helper may issue them; a new bypass fails this guard.
+    direct_writers = set()
+    for path in (ENGINE / "infrastructure/persistence").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            if any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id in {"insert", "update", "delete"}
+                and call.args
+                and ast.unparse(call.args[0]) == "cv_documents"
+                for call in ast.walk(node)
             ):
-                writers.append(node)
-    assert writers, "no selection-plan writers discovered"
-    for node in writers:
-        calls = [
-            (inner.lineno, getattr(inner.func, "attr", None) or getattr(inner.func, "id", None))
-            for inner in ast.walk(node)
-            if isinstance(inner, ast.Call)
-        ]
-        lock = next((line for line, name in calls if name == "_lock_application"), None)
-        insert = next((line for line, name in calls if name == "_insert_selection_plan"), None)
-        standing = next((line for line, name in calls if name == "_standing_acceptances"), None)
-        assert lock is not None, f"{node.name} writes a plan without taking the lock"
-        assert insert is not None and lock < insert, f"{node.name} locks after inserting"
-        if standing is not None:
-            assert lock < standing, f"{node.name} reads the standing acceptances before locking"
-        # Every statement, not only the ones named above. The version number was
-        # allocated by a `select(max(...))` before the lock, so under a snapshot
-        # taken before it: the highest version seen was whatever the snapshot
-        # held, and the insert collided on the unique constraint rather than
-        # taking the next number.
-        executed = [line for line, name in calls if name == "execute" and line != lock]
-        assert all(lock < line for line in executed), (
-            f"{node.name} runs a statement before taking the lock; every read it makes "
-            "has to be under the lock, not only the ones this guard could name"
+                direct_writers.add((path.name, node.name))
+    assert direct_writers == {
+        ("documents.py", "create_document"),  # no existing row at creation
+        ("documents.py", "_write"),  # guarded callers checked below
+    }
+    sql_writers = {name for _, name in direct_writers}
+    mutation_helpers = sql_writers - {"create_document"}  # no existing row at creation
+    callers = [
+        n
+        for n in functions.values()
+        if any(
+            isinstance(c, ast.Call)
+            and isinstance(c.func, ast.Name)
+            and c.func.id in mutation_helpers
+            for c in ast.walk(n)
         )
+    ]
+    assert callers
+    for writer in callers:
+        calls = sorted(
+            (c for c in ast.walk(writer) if isinstance(c, ast.Call)), key=lambda c: c.lineno
+        )
+        writes = [
+            c for c in calls if isinstance(c.func, ast.Name) and c.func.id in mutation_helpers
+        ]
+        locked = [
+            c
+            for c in calls
+            if isinstance(c.func, ast.Name)
+            and (
+                c.func.id == "_locked"
+                or c.func.id == "_row"
+                and any(
+                    k.arg == "lock" and isinstance(k.value, ast.Constant) and k.value.value is True
+                    for k in c.keywords
+                )
+            )
+        ]
+        assert locked and all(locked[0].lineno < c.lineno for c in writes), writer.name
+        reads = [
+            c
+            for c in calls
+            if isinstance(c.func, ast.Name) and c.func.id == "_require_owned_analysis"
+        ]
+        assert all(locked[0].lineno < c.lineno for c in reads), writer.name
+    assert "lock=True" in ast.unparse(functions["_locked"])
+    assert ".with_for_update()" in ast.unparse(functions["_row"])
 
     runner_source = (ENGINE / "application" / "operation_runner.py").read_text(encoding="utf-8")
     activation = next(
@@ -642,7 +662,7 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
             return "document"
         return "none"
 
-    def bodies(source: str, kind) -> dict[str, str]:
+    def bodies(source: str, kind: type[ast.ClassDef] | type[ast.FunctionDef]) -> dict[str, str]:
         tree = ast.parse(source)
         return {
             f"{outer.name}.{node.name}" if outer is not None else node.name: (
@@ -805,6 +825,7 @@ def test_persistence_adapters_are_independent_and_token_explicit() -> None:
                 assert method.name not in {"bind", "transaction", "read_connection"}
                 args = method.args.args
                 assert len(args) >= 2 and args[1].arg == "tx", (node.name, method.name)
+                assert args[1].annotation is not None
                 assert ast.unparse(args[1].annotation) in {"ReadTransaction", "WriteTransaction"}
             for inner in ast.walk(node):
                 if isinstance(inner, ast.Attribute):
@@ -821,6 +842,7 @@ def test_persistence_adapters_are_independent_and_token_explicit() -> None:
                 n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == "__init__"
             )
             for argument in [*init.args.args[1:], *init.args.kwonlyargs]:
+                assert argument.annotation is not None
                 assert ast.unparse(argument.annotation) == "SqlAlchemyTransactionManager"
             assignments = [inner for inner in ast.walk(node) if isinstance(inner, ast.Assign)]
             for assignment in assignments:
@@ -897,7 +919,6 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "OperationRunner",
         "OperationSubmissionService",
         "OperationLifecycleService",
-        "OperationReplacementService",
         "DraftValidationService",
         "DraftHistoryService",
         "DraftApprovalService",
@@ -946,13 +967,7 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
 
     application = ENGINE / "application"
     services = application / "services" / "operations"
-    migrated = [
-        services / "service.py",
-        services / "lifecycle.py",
-        services / "replacement.py",
-        services / "handlers.py",
-        application / "operation_runner.py",
-    ]
+    migrated = [*sorted(services.glob("*.py")), application / "operation_runner.py"]
     for path in migrated:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source)

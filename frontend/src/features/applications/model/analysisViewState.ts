@@ -42,13 +42,13 @@ export const analysisViewState = ({
   }
 
   /* Success belongs to processing until the projection exposes the exact product. This
-     also covers re-analysis: the presence of an older active analysis is not evidence
+     also covers re-analysis: the presence of an older analysis is not evidence
      that the projection has caught up with the Operation that just replaced it. */
   const activatedAnalysisId = operation.outputs.find(
     (output) => output.active && output.output_type === "job_analysis",
   )?.output_id;
   if (activatedAnalysisId !== undefined) {
-    if (detail.active_analysis_id === activatedAnalysisId) {
+    if (detail.latest_analysis_id === activatedAnalysisId) {
       return "content";
     }
 
@@ -63,7 +63,7 @@ export const analysisViewState = ({
        neither, and then took the timestamp off nothing. That is the catch-up window this
        function exists for, so the comparison states the record's presence itself. */
     const activeAnalysisTime =
-      activeAnalysis != null && activeAnalysis.id === detail.active_analysis_id
+      activeAnalysis != null && activeAnalysis.id === detail.latest_analysis_id
         ? Date.parse(activeAnalysis.created_at)
         : NaN;
     const operationFinishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
@@ -78,5 +78,5 @@ export const analysisViewState = ({
     return "processing";
   }
 
-  return detail.active_analysis_id === null || detail.active_analysis_id === undefined ? "processing" : "content";
+  return detail.latest_analysis_id === null || detail.latest_analysis_id === undefined ? "processing" : "content";
 };

@@ -8,7 +8,7 @@ from ..util import sha256_text
 from .contracts.analysis import JobAnalysis
 from .contracts.drafts import ClaimLine, DraftDocument
 from .contracts.knowledge import Profile
-from .contracts.selection import SelectionPlan
+from .contracts.selection import SelectionManifest
 from .contracts.validation import ValidationIssue, ValidationReport
 from .draft_markdown import serialize_markdown
 from .drafts import draft_content_hash, render_composite_claim, validate_derived_wording
@@ -54,11 +54,10 @@ class _ValidationContext:
     facts: FactStore
     profile: Profile
     analysis: JobAnalysis
-    #: The plan the draft was built from, so validation can see the decisions
-    #: recorded against it. Optional only so a caller with no plan in hand -
-    #: none in the product today - degrades to reporting the gap rather than
-    #: crashing.
-    plan: SelectionPlan | None
+    #: The CV document's selection, the authoritative record of the decisions
+    #: the content was built from. Optional only so a caller with no document in
+    #: hand degrades to skipping the comparison rather than crashing.
+    selection: SelectionManifest | None
     policies: EmphasisPolicyStore | None
     presentations: PresentationStore | None
     issues: list[ValidationIssue] = field(default_factory=list)
@@ -346,11 +345,11 @@ def _profile_matches(context: _ValidationContext) -> None:
         context.add_issue("profile", "profile-mismatch", "Draft and selected Profile disagree.")
     if draft.emphasis not in profile.allowed_emphases:
         context.add_issue("profile", "emphasis-not-allowed", draft.emphasis.value)
-    if context.plan is not None and draft.emphasis is not context.plan.plan.emphasis:
+    if context.selection is not None and draft.emphasis is not context.selection.emphasis:
         context.add_issue(
             "profile",
             "selection-plan-emphasis-mismatch",
-            "Draft Emphasis differs from its authoritative SelectionPlan.",
+            "Draft Emphasis differs from the document's authoritative selection.",
         )
     # Neither low Fit nor an unaccepted hard gap is a validation finding. Both
     # say the candidate is a poor match for this posting, which is the user's
@@ -524,7 +523,7 @@ def validate_draft(
     profile: Profile,
     analysis: JobAnalysis,
     *,
-    plan: SelectionPlan | None = None,
+    selection: SelectionManifest | None = None,
     policies: EmphasisPolicyStore | None = None,
     presentations: PresentationStore | None = None,
 ) -> ValidationReport:
@@ -546,7 +545,7 @@ def validate_draft(
         facts=facts,
         profile=profile,
         analysis=analysis,
-        plan=plan,
+        selection=selection,
         policies=policies,
         presentations=presentations,
     )

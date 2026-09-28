@@ -13,13 +13,10 @@ from ...application.knowledge_mutations import (
     PrepareKnowledgeMutation,
 )
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
-from ...domain.contracts.drafts import WorkingDraft
-from ...domain.contracts.selection import SelectionManifest, SelectionPlan
 from ...util import canonical_json, new_id, sha256_text, utc_now
-from .analysis_sql import _analysis_record, _create_selection_plan, _selection_plan_record
+from .analysis_sql import _analysis_record
 from .connection import SqlAlchemyTransactionManager
-from .drafts_sql import _active_working_draft
-from .tables import fact_events, job_analyses, knowledge_mutation_journal, selection_plans
+from .tables import fact_events, job_analyses, knowledge_mutation_journal
 
 
 class SqlAlchemyKnowledgeLifecycleRepository:
@@ -251,80 +248,3 @@ class SqlAlchemyKnowledgeLifecycleRepository:
         if row is None:
             raise UnknownRecord(f"no job analysis {analysis_id}")
         return _analysis_record(row)
-
-    def active_working_draft(self, tx: ReadTransaction, application_id: str) -> WorkingDraft:
-        return _active_working_draft(self._transactions.connection_for(tx), application_id)
-
-    def create_selection_plan(
-        self,
-        tx: WriteTransaction,
-        application_id: str,
-        job_analysis_id: str,
-        plan: SelectionManifest,
-        *,
-        candidate_context_version: str,
-        candidate_context_hash: str,
-        profile_version: str,
-        selection_policy_version: str,
-        track_emphasis_dependencies: dict[str, str],
-        plan_id: str | None = None,
-        created_at: str | None = None,
-    ) -> SelectionPlan:
-        connection = self._transactions.connection_for(tx, access="write")
-        if plan_id is not None:
-            existing_row = (
-                connection.execute(select(selection_plans).where(selection_plans.c.id == plan_id))
-                .mappings()
-                .one_or_none()
-            )
-            if existing_row is not None:
-                existing = _selection_plan_record(existing_row)
-                expected = {
-                    "application_id": application_id,
-                    "job_analysis_id": job_analysis_id,
-                    "plan": plan,
-                    "candidate_context_version": candidate_context_version,
-                    "candidate_context_hash": candidate_context_hash,
-                    "profile_version": profile_version,
-                    "selection_policy_version": selection_policy_version,
-                    "track_emphasis_dependencies": track_emphasis_dependencies,
-                    "created_at": created_at,
-                }
-                actual = {
-                    "application_id": existing.application_id,
-                    "job_analysis_id": existing.job_analysis_id,
-                    "plan": existing.plan,
-                    "candidate_context_version": existing.candidate_context_version,
-                    "candidate_context_hash": existing.candidate_context_hash,
-                    "profile_version": existing.profile_version,
-                    "selection_policy_version": existing.selection_policy_version,
-                    "track_emphasis_dependencies": existing.track_emphasis_dependencies,
-                    "created_at": existing.created_at,
-                }
-                if actual != expected:
-                    raise StateConflict("selection plan identity already has different content")
-                return existing
-        return _create_selection_plan(
-            connection,
-            application_id,
-            job_analysis_id,
-            plan,
-            candidate_context_version=candidate_context_version,
-            candidate_context_hash=candidate_context_hash,
-            profile_version=profile_version,
-            selection_policy_version=selection_policy_version,
-            track_emphasis_dependencies=track_emphasis_dependencies,
-            plan_id=plan_id,
-            created_at=created_at,
-        )
-
-    def selection_plan(self, tx: ReadTransaction, selection_plan_id: str) -> SelectionPlan:
-        row = (
-            self._transactions.connection_for(tx)
-            .execute(select(selection_plans).where(selection_plans.c.id == selection_plan_id))
-            .mappings()
-            .one_or_none()
-        )
-        if row is None:
-            raise UnknownRecord(f"no selection plan {selection_plan_id}")
-        return _selection_plan_record(row)

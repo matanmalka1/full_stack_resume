@@ -86,14 +86,16 @@ def test_only_fencing_is_authoritative_over_a_lease(services, lease_transactions
     assert _lease_row(lease_transactions, renewed)["state"] == "pending"
 
 
-def test_revision_group_commit_rolls_back_as_one_transaction(services, lease_transactions) -> None:
+def test_submission_group_commit_rolls_back_as_one_transaction(
+    services, lease_transactions
+) -> None:
     leases = services.maintenance.leases
-    group = "revision:app:revision"
+    group = "submission:app:submission"
     keys = [
         services.payloads.reference_for(
-            services.payloads.revision_path("app", "revision", "attempt", format=fmt)
+            services.payloads.submission_path("app", "submission", suffix=fmt)
         )
-        for fmt in ("json", "md")
+        for fmt in ("html", "pdf")
     ]
     with lease_transactions.write() as tx:
         leases.acquire(tx, group, "attempt", keys=keys, ttl_seconds=300)
@@ -112,17 +114,17 @@ def test_revision_group_commit_rolls_back_as_one_transaction(services, lease_tra
     assert _lease_row(lease_transactions, group)["state"] == "committed"
 
 
-def test_revision_retry_cannot_claim_or_register_a_prior_attempts_keys(
+def test_payload_retry_cannot_claim_or_register_a_prior_attempts_keys(
     services, lease_transactions
 ) -> None:
     leases = services.maintenance.leases
     payloads = services.payloads
-    group = "revision:app:revision"
+    group = "submission:app:submission"
 
     def keys_for(attempt: str) -> list[str]:
         return [
-            payloads.reference_for(payloads.revision_path("app", "revision", attempt, format=fmt))
-            for fmt in ("json", "md")
+            payloads.reference_for(payloads.submission_path("app", attempt, suffix=fmt))
+            for fmt in ("html", "pdf")
         ]
 
     old_keys = keys_for("old")
@@ -141,14 +143,14 @@ def test_revision_retry_cannot_claim_or_register_a_prior_attempts_keys(
     assert _lease_row(lease_transactions, group)["state"] == "pending"
 
 
-def test_render_group_binds_both_artifact_keys(services, lease_transactions) -> None:
+def test_submission_group_binds_both_file_keys(services, lease_transactions) -> None:
     leases = services.maintenance.leases
     payloads = services.payloads
-    attempt = "html-id:pdf-id"
-    group = f"render:app:revision:{attempt}"
+    attempt = "submission"
+    group = f"submission:app:{attempt}"
     keys = [
-        payloads.reference_for(payloads.output_path("app", "revision", "html-id", suffix="html")),
-        payloads.reference_for(payloads.output_path("app", "revision", "pdf-id", suffix="pdf")),
+        payloads.reference_for(payloads.submission_path("app", attempt, suffix="html")),
+        payloads.reference_for(payloads.submission_path("app", attempt, suffix="pdf")),
     ]
     with lease_transactions.write() as tx:
         leases.acquire(tx, group, attempt, keys=keys, ttl_seconds=300)
@@ -163,7 +165,7 @@ def test_render_group_binds_both_artifact_keys(services, lease_transactions) -> 
 def test_reclaim_removes_only_abandoned_unreferenced_payloads(services, lease_transactions) -> None:
     """Each scenario uses its own application, so one sweep cannot answer for another.
 
-    A retry reclaims only its own expired revision group and then claims it
+    A retry reclaims only its own expired payload group and then claims it
     afresh. A sweep removes an expired group's payload, and a late leaseless
     write from the fenced writer is removed by the next sweep. An unexpired
     writer is hidden from inspection and left alone. A stale reclaiming row
@@ -172,15 +174,15 @@ def test_reclaim_removes_only_abandoned_unreferenced_payloads(services, lease_tr
     leases = services.maintenance.leases
     payloads = services.payloads
 
-    def revision_keys(app: str, attempt: str) -> list[str]:
+    def submission_keys(app: str, attempt: str) -> list[str]:
         return [
-            payloads.reference_for(payloads.revision_path(app, "revision", attempt, format=fmt))
-            for fmt in ("json", "md")
+            payloads.reference_for(payloads.submission_path(app, attempt, suffix=fmt))
+            for fmt in ("html", "pdf")
         ]
 
-    group = "revision:retry:revision"
-    old_path = payloads.revision_path("retry", "revision", "old", format="json")
-    old_keys = revision_keys("retry", "old")
+    group = "submission:retry:old"
+    old_path = payloads.submission_path("retry", "old", suffix="html")
+    old_keys = submission_keys("retry", "old")
     with lease_transactions.write() as tx:
         leases.acquire(tx, group, "old", keys=old_keys, ttl_seconds=1, now=_past())
     payloads.commit(old_path, payload=b"{}", validate=lambda _: True)
@@ -188,7 +190,7 @@ def test_reclaim_removes_only_abandoned_unreferenced_payloads(services, lease_tr
     assert old_keys[0] in services.maintenance.reclaim_group(group).removed
     assert not old_path.exists()
     with lease_transactions.write() as tx:
-        leases.acquire(tx, group, "new", keys=revision_keys("retry", "new"), ttl_seconds=300)
+        leases.acquire(tx, group, "new", keys=submission_keys("retry", "new"), ttl_seconds=300)
     assert _lease_row(lease_transactions, group)["attempt_id"] == "new"
 
     writer_path = payloads.snapshot_path("writer", "snapshot")
@@ -197,10 +199,8 @@ def test_reclaim_removes_only_abandoned_unreferenced_payloads(services, lease_tr
         leases.acquire(tx, writer_key, writer_key, keys=[writer_key], ttl_seconds=300)
     payloads.commit(writer_path, payload=b"still writing", validate=lambda _: True)
 
-    group = "revision:sweep:revision"
-    paths = [
-        payloads.revision_path("sweep", "revision", "attempt", format=fmt) for fmt in ("json", "md")
-    ]
+    group = "submission:sweep:submission"
+    paths = [payloads.submission_path("sweep", "submission", suffix=fmt) for fmt in ("html", "pdf")]
     keys = [payloads.reference_for(path) for path in paths]
     with lease_transactions.write() as tx:
         leases.acquire(tx, group, "attempt", keys=keys, ttl_seconds=1, now=_past())

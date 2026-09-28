@@ -13,6 +13,7 @@ runtime never looks for it.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -27,7 +28,7 @@ def build_test_app() -> FastAPI:
     root = os.environ.get("CV_TEST_ASGI_ROOT")
     if not root:
         raise RuntimeError("CV_TEST_ASGI_ROOT must name the test project root")
-    paths = AppPaths.from_root(root)
+    paths = AppPaths.from_root(Path(root))
     # No `config=`: composition resolves it against `paths.root`, so the test
     # project's own `.env` and config apply rather than the installation's.
     services = build_services(paths)

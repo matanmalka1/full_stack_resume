@@ -47,15 +47,7 @@ describe("relative update dates", () => {
    the bar. */
 describe("preparation progress", () => {
   it("places each CV state in the specification's order", () => {
-    const specOrder = [
-      "needs_analysis",
-      "needs_review",
-      "ready_to_draft",
-      "draft_in_progress",
-      "ready_for_approval",
-      "approved",
-      "ready",
-    ] as const;
+    const specOrder = ["needs_analysis", "ready_to_draft", "draft_in_progress", "approved", "ready"] as const;
 
     specOrder.forEach((state, index) => {
       expect(preparationProgress(state)).toEqual({ step: index + 1, total: specOrder.length });

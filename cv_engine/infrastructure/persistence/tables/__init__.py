@@ -9,15 +9,7 @@ from __future__ import annotations
 
 from ._metadata import metadata
 from .knowledge import fact_events, knowledge_mutation_journal
-from .prep import (
-    approved_revisions,
-    decision_records,
-    job_analyses,
-    job_snapshots,
-    selection_plans,
-    validation_runs,
-    working_drafts,
-)
+from .prep import cv_documents, job_analyses, job_snapshots
 from .shared import (
     OPERATION_FAILURE_CODES,
     app_settings,
@@ -25,7 +17,6 @@ from .shared import (
     artifact_versions,
     artifacts,
     audit_records,
-    idempotency_receipts,
     operation_outputs,
     operation_resource_leases,
     operations,
@@ -42,11 +33,7 @@ __all__ = [
     "applications",
     "job_snapshots",
     "job_analyses",
-    "selection_plans",
-    "working_drafts",
-    "approved_revisions",
-    "decision_records",
-    "validation_runs",
+    "cv_documents",
     "recruitment_events",
     "submissions",
     "artifacts",
@@ -55,7 +42,6 @@ __all__ = [
     "operations",
     "operation_resource_leases",
     "operation_outputs",
-    "idempotency_receipts",
     "payload_write_leases",
     "app_settings",
     "fact_events",

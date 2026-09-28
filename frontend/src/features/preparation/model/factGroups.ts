@@ -1,4 +1,4 @@
-import type { SelectionPlanCandidate } from "@/api/contracts";
+import type { DocumentCandidate } from "@/api/contracts";
 
 /* Whether a candidate is on its way into the CV, as the screen currently stands.
 
@@ -8,7 +8,7 @@ import type { SelectionPlanCandidate } from "@/api/contracts";
    is a derivation rather than a stored flag: nothing here is sent to the server, and the
    pinned/excluded lists remain exactly what the plan is rebuilt from. */
 export const candidateIncluded = (
-  candidate: SelectionPlanCandidate,
+  candidate: DocumentCandidate,
   pinned: readonly string[],
   excluded: readonly string[],
 ): boolean => {
@@ -24,11 +24,11 @@ export const candidateIncluded = (
 /* A structural component of the document - a role heading, a date line - rather than a
    claim. The plan ranked it like anything else, but excluding it would delete a heading,
    so the server refuses the attempt and the row carries no override controls at all. */
-export const candidateLocked = (candidate: SelectionPlanCandidate): boolean => !candidate.user_selectable;
+export const candidateLocked = (candidate: DocumentCandidate): boolean => !candidate.user_selectable;
 
 export interface FactGroup {
   included: number;
-  items: SelectionPlanCandidate[];
+  items: DocumentCandidate[];
   locked: number;
   section: string;
   total: number;
@@ -41,7 +41,7 @@ export interface FactTotals {
   total: number;
 }
 
-const matches = (candidate: SelectionPlanCandidate, needle: string): boolean =>
+const matches = (candidate: DocumentCandidate, needle: string): boolean =>
   needle === "" ||
   (candidate.text ?? "").toLowerCase().includes(needle) ||
   candidate.section.toLowerCase().includes(needle);
@@ -49,7 +49,7 @@ const matches = (candidate: SelectionPlanCandidate, needle: string): boolean =>
 export type FactFilter = "all" | "included" | "omitted" | "overridden";
 
 const passesFilter = (
-  candidate: SelectionPlanCandidate,
+  candidate: DocumentCandidate,
   pinned: readonly string[],
   excluded: readonly string[],
   filter: FactFilter,
@@ -72,7 +72,7 @@ const passesFilter = (
    translated here, since the set is open and a guessed Hebrew name would be a fact this
    screen invented. */
 export const factGroups = (
-  candidates: readonly SelectionPlanCandidate[],
+  candidates: readonly DocumentCandidate[],
   pinned: readonly string[],
   excluded: readonly string[],
   query: string,
@@ -107,7 +107,7 @@ export const factGroups = (
 };
 
 export const factTotals = (
-  candidates: readonly SelectionPlanCandidate[],
+  candidates: readonly DocumentCandidate[],
   pinned: readonly string[],
   excluded: readonly string[],
 ): FactTotals => {

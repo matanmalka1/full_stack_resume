@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { type Requirement, selectionPlanQueryOptions } from "@/api/analyses";
+import type { Requirement } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
+import { documentQueryOptions } from "@/api/documents";
 import { factsQueryOptions } from "@/api/facts";
 import { candidateIncluded } from "../../model/factGroups";
 
@@ -22,9 +23,13 @@ export const useRequirementEvidence = (
   const cited = requirements.some(
     (requirement) => requirement.supportingFactIds.length > 0 || requirement.boundaryFactIds.length > 0,
   );
-  const planId = detail.active_selection_plan_id ?? null;
+  /* Whether a cited fact is in the CV is the document's selection's answer. */
+  const hasDocument = detail.document_id != null;
   const factsQuery = useQuery({ ...factsQueryOptions(), enabled: cited });
-  const planQuery = useQuery({ ...selectionPlanQueryOptions(planId ?? ""), enabled: cited && planId !== null });
+  const documentQuery = useQuery({
+    ...documentQueryOptions(detail.application.id),
+    enabled: cited && hasDocument,
+  });
 
   const meanings = useMemo(() => {
     const result = new Map<string, string>();
@@ -35,19 +40,19 @@ export const useRequirementEvidence = (
   }, [factsQuery.data]);
 
   const planIndex = useMemo(() => {
-    const plan = planQuery.data;
+    const selection = documentQuery.data?.document.selection;
     const index = new Map<string, { included: boolean; text: string | null }>();
-    if (plan === undefined) {
+    if (selection === undefined) {
       return index;
     }
-    for (const candidate of plan.candidates) {
+    for (const candidate of selection.candidates) {
       index.set(candidate.fact_id, {
-        included: candidateIncluded(candidate, plan.pinned_fact_ids, plan.excluded_fact_ids),
+        included: candidateIncluded(candidate, selection.pinned_fact_ids, selection.excluded_fact_ids),
         text: candidate.text ?? null,
       });
     }
     return index;
-  }, [planQuery.data]);
+  }, [documentQuery.data]);
 
   return {
     error: factsQuery.error,

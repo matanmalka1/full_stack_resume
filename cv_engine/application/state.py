@@ -1,73 +1,96 @@
-"""Pure Application state and action-policy projection.
+"""Pure Application state and action-policy projection (state-and-use-cases.md §4–§9).
 
-The query service assembles one consistent context.  This module interprets it once:
-reasons feed states, and those same values feed actions without a second state machine.
+The query service captures one consistent read - the Application, its snapshots and
+analyses, the CV document, the Operations, and the Knowledge the basis is computed
+from. This module interprets it once: the basis feeds the states, the states and the
+review reasons feed the actions, and nothing here writes.
+
+`document_review_reasons` is also what the synchronous commands call before they
+approve, render or submit, so a blocker the projection shows is the same blocker the
+command refuses with.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from ..domain.contracts.analysis import JobAnalysis
-from ..domain.contracts.drafts import WorkingDraft
+from ..domain.contracts.document import CVDocument
 from ..domain.contracts.knowledge import FactStatus
-from ..domain.contracts.records import ApprovedRevision
-from ..domain.contracts.selection import SelectionPlan
-from ..domain.drafts import render_composite_claim, validate_derived_wording
-from ..domain.facts import FactStoreError
-from ..domain.knowledge import Knowledge
-from .operations import OperationView
-from .queries import (
-    ApplicationStateView,
-    BlockedActionView,
+from ..domain.document import (
+    ContentCheck,
+    DocumentState,
     PreparationState,
-    ReasonView,
-    WarningView,
-    WorkingDraftState,
+    basis,
+    content_check,
+    current_approved_at,
+    dependent_fact_ids,
+    document_state,
+    preparation_state,
 )
-
-STALE_PRECEDENCE = (
-    "JOB_SNAPSHOT_CHANGED",
-    "ANALYSIS_REPLACED",
-    "SELECTION_PLAN_REPLACED",
-    "FACT_CHANGED",
-    "PROFILE_CHANGED",
-    "POLICY_CHANGED",
-    "DRAFT_EDITED_AFTER_VALIDATION",
-)
+from ..domain.knowledge import Knowledge
+from .operations import OperationType, OperationView
+from .queries import ApplicationStateView, BlockedActionView, ReasonView, WarningView
 
 PREPARATION_ACTIONS = (
     "analyze",
     "edit_matching_configuration",
-    "create_selection_plan",
+    "build_from_analysis",
+    "update_selection",
+    "propose_selection",
     "confirm_and_use_fact",
     "create_draft",
-    "update_working_draft",
-    "apply_selection_change",
+    "edit",
     "regenerate_section",
     "regenerate_claim",
-    "archive_working_draft",
-    "replace_working_draft",
-    "validate",
+    "check",
     "approve",
     "render",
+    "submit",
+    "download_pdf",
 )
+
+#: Commands that change the document. While an Operation that mutates the document
+#: is queued or running, none of them is offered (§9).
+DOCUMENT_MUTATING_ACTIONS = frozenset(
+    {
+        "build_from_analysis",
+        "update_selection",
+        "propose_selection",
+        "confirm_and_use_fact",
+        "create_draft",
+        "edit",
+        "regenerate_section",
+        "regenerate_claim",
+        "check",
+        "approve",
+        "render",
+    }
+)
+
+#: Operations that carry `expected_document_hash` and write the document (§11).
+DOCUMENT_OPERATION_TYPES = frozenset(
+    {
+        OperationType.PROPOSE_SELECTION,
+        OperationType.CREATE_DRAFT,
+        OperationType.REGENERATE_SECTION,
+        OperationType.REGENERATE_CLAIM,
+        OperationType.RENDER_DOCUMENT,
+    }
+)
+
+_TERMINAL_RECRUITMENT = frozenset({"accepted", "rejected", "withdrawn", "closed"})
 
 
 @dataclass(frozen=True)
 class ProjectionContext:
     application: dict[str, Any]
     active_job_snapshot_id: str
-    active_analysis_id: str | None
-    active_analysis: JobAnalysis | None
-    active_selection_plan: SelectionPlan | None
-    draft_selection_plan: SelectionPlan | None
-    active_working_draft: WorkingDraft | None
-    latest_validation: dict[str, Any] | None
-    approved_revisions: tuple[ApprovedRevision, ...]
-    ready_revision_ids: frozenset[str]
+    #: Every analysis of the Application, oldest first.
+    analyses: tuple[dict[str, Any], ...]
+    document: CVDocument | None
     knowledge: Knowledge
     today: date
     active_operation: OperationView | None = None
@@ -89,302 +112,125 @@ def _reason(
     )
 
 
-def derive_staleness(context: ProjectionContext) -> list[ReasonView]:
-    draft = context.active_working_draft
-    if draft is None:
-        return []
-    reasons: dict[str, ReasonView] = {}
+def document_review_reasons(
+    document: CVDocument, knowledge: Knowledge, requested_fact_ids: Iterable[str] = ()
+) -> list[ReasonView]:
+    """§7 review reasons over the `facts_hash` fact set, plus a requested selection.
 
-    def add(code: str, message: str, references: dict[str, str] | None = None) -> None:
-        reasons[code] = _reason(
-            code,
-            message,
-            references,
-            ["replace_working_draft", "archive_working_draft"],
-        )
-
-    if draft.source.job_snapshot_id != context.active_job_snapshot_id:
-        add(
-            "JOB_SNAPSHOT_CHANGED",
-            "The active job snapshot changed after this draft was created.",
-            {
-                "working_draft_id": draft.id,
-                "job_snapshot_id": context.active_job_snapshot_id,
-            },
-        )
-    if (
-        context.active_analysis_id is not None
-        and draft.job_analysis_id != context.active_analysis_id
-    ):
-        add(
-            "ANALYSIS_REPLACED",
-            "A newer analysis replaced the analysis used by this draft.",
-            {"working_draft_id": draft.id, "job_analysis_id": context.active_analysis_id},
-        )
-    active_plan = context.active_selection_plan
-    if active_plan is not None and draft.selection_plan_id != active_plan.id:
-        add(
-            "SELECTION_PLAN_REPLACED",
-            "A newer selection plan replaced the plan used by this draft.",
-            {"working_draft_id": draft.id, "selection_plan_id": active_plan.id},
-        )
-
-    draft_plan = context.draft_selection_plan
-    if draft_plan is not None:
-        if draft_plan.profile_version != context.knowledge.profiles.version:
-            add("PROFILE_CHANGED", "The Profile used by this draft has changed.")
-        if draft_plan.selection_policy_version != context.knowledge.policies.version:
-            add("POLICY_CHANGED", "The selection policy used by this draft has changed.")
-
-    claims = (
-        draft.source.headline,
-        *draft.source.contacts,
-        *(claim for section in draft.source.sections for claim in section.claims),
+    The set is the document's selection united with the facts its claims cite, so a
+    fact can never block a document without also being able to change its basis. A
+    pending or deleted fact outside it does not affect the Application.
+    """
+    facts = knowledge.facts.facts
+    dependent = set(dependent_fact_ids(document.selection, document.content)) | set(
+        requested_fact_ids
     )
-    referenced = {fact_id for claim in claims for fact_id in claim.fact_ids}
-    replacements = {
-        fact.replaces
-        for fact in context.knowledge.facts.facts.values()
-        if fact.status is FactStatus.CANONICAL and fact.replaces
-    }
-    fact_dependency_changed = False
-    for claim in claims:
-        try:
-            for fact_id in claim.fact_ids:
-                context.knowledge.facts.get(fact_id, canonical_only=True)
-            if claim.claim_type == "canonical":
-                fact_dependency_changed = claim.text != context.knowledge.facts.rendering(
-                    claim.fact_ids[0], draft.source.language
-                )
-            elif claim.claim_type == "composite":
-                fact_dependency_changed = claim.text != render_composite_claim(
-                    claim.fact_ids,
-                    context.knowledge.facts,
-                    draft.source.language,
-                    claim.style,
-                    claim.template_id or "",
-                    claim.template_version or "",
-                    context.knowledge.presentations,
-                )
-            elif claim.claim_type == "derived":
-                validate_derived_wording(
-                    claim.text,
-                    claim.fact_ids,
-                    context.knowledge.facts,
-                    draft.source.language,
-                    claim.style,
-                    claim.derivation_id or "",
-                    claim.derivation_version or "",
-                    context.knowledge.presentations,
-                )
-        except (FactStoreError, IndexError, ValueError):
-            fact_dependency_changed = True
-        if fact_dependency_changed:
-            break
-    if draft_plan is not None and (
-        draft_plan.candidate_context_hash != context.knowledge.candidate.version_hash
-    ):
-        fact_dependency_changed = True
-    if fact_dependency_changed or bool(referenced & replacements):
-        add("FACT_CHANGED", "A fact used by this draft changed or was superseded.")
-
-    validation = context.latest_validation
-    if validation is not None and (
-        validation["edit_version"] != draft.edit_version
-        or validation["content_hash"] != draft.content_hash
-    ):
-        add(
-            "DRAFT_EDITED_AFTER_VALIDATION",
-            "The working draft changed after its latest validation.",
-            {"working_draft_id": draft.id},
-        )
-    return [reasons[code] for code in STALE_PRECEDENCE if code in reasons]
-
-
-def derive_review_reasons(context: ProjectionContext, stale: list[ReasonView]) -> list[ReasonView]:
-    del stale  # Staleness alone is deliberately not a review decision.
-    analysis = context.active_analysis
-    plan = context.active_selection_plan
-    draft = context.active_working_draft
     reasons: list[ReasonView] = []
-    # An incomplete reading is no longer a review reason. The analysis is kept
-    # and shown with its issues; nothing about how much of the posting it read
-    # asks the user for a decision before they may see a document.
-    # Low Fit and hard gaps are shown, not asked about. Both describe how well
-    # the candidate matches this posting, which is theirs to weigh; neither
-    # says the document would be untrue, and a decision the user cannot get
-    # wrong is not a decision worth blocking on.
-    if analysis is not None and plan is None:
-        reasons.append(
-            _reason(
-                "FACT_SELECTION_UNRESOLVED",
-                "The active analysis has no active SelectionPlan.",
-                {"job_analysis_id": context.active_analysis_id or ""},
-                ["create_selection_plan"],
-            )
-        )
-    if draft is not None and any(
-        claim.claim_type == "pending"
-        for claim in (
-            draft.source.headline,
-            *draft.source.contacts,
-            *(claim for section in draft.source.sections for claim in section.claims),
-        )
-    ):
+    pending = sorted(
+        fact_id
+        for fact_id in dependent
+        if fact_id in facts and facts[fact_id].status in {FactStatus.PENDING, FactStatus.CONFIRMED}
+    )
+    if pending:
         reasons.append(
             _reason(
                 "PENDING_FACT_REQUIRES_RESOLUTION",
-                "A claim in the active draft depends on a pending fact.",
-                {"working_draft_id": draft.id},
-                ["confirm_and_use_fact", "update_working_draft"],
+                "The document depends on a fact that is not canonical yet.",
+                {"document_id": document.id, "fact_id": pending[0]},
+                ["confirm_and_use_fact", "update_selection", "edit"],
             )
         )
-    # A deleted fact never blocks unrelated Applications (state-and-use-
-    # cases.md §7); only an active dependency does. "Active dependency" here
-    # is the active SelectionPlan's selected facts plus, once a draft exists,
-    # the facts its claims actually cite - mirroring the referenced-fact sets
-    # `derive_staleness`/`derive_warnings` already compute for FACT_CHANGED
-    # and FACT_SUPERSEDED.
-    dependent_fact_ids: set[str] = set(plan.plan.selected_fact_ids) if plan is not None else set()
-    if draft is not None:
-        dependent_fact_ids |= {
-            fact_id
-            for claim in (
-                draft.source.headline,
-                *draft.source.contacts,
-                *(claim for section in draft.source.sections for claim in section.claims),
-            )
-            for fact_id in claim.fact_ids
-        }
-    deleted_dependencies = sorted(
+    deleted = sorted(
         fact_id
-        for fact_id in dependent_fact_ids
-        if fact_id in context.knowledge.facts.facts
-        and context.knowledge.facts.facts[fact_id].status is FactStatus.DELETED
+        for fact_id in dependent
+        if fact_id in facts and facts[fact_id].status is FactStatus.DELETED
     )
-    if deleted_dependencies:
+    if deleted:
         reasons.append(
             _reason(
                 "FACT_DELETED_REQUIRES_RESOLUTION",
-                "The active selection depends on a fact that has been deleted.",
-                {
-                    "job_analysis_id": context.active_analysis_id or "",
-                    "fact_id": deleted_dependencies[0],
-                },
-                ["confirm_and_use_fact", "apply_selection_change", "update_working_draft"],
+                "The document depends on a fact that has been deleted.",
+                {"document_id": document.id, "fact_id": deleted[0]},
+                ["update_selection", "edit", "regenerate_section", "regenerate_claim"],
             )
         )
     return reasons
 
 
-def _exact_validation(context: ProjectionContext) -> tuple[bool, bool]:
-    draft = context.active_working_draft
-    validation = context.latest_validation
-    if draft is None or validation is None:
-        return False, False
-    exact = (
-        validation["edit_version"] == draft.edit_version
-        and validation["content_hash"] == draft.content_hash
-        and validation["job_analysis_id"] == draft.job_analysis_id
-        and validation["selection_plan_id"] == draft.selection_plan_id
+def current_render_error(document: CVDocument | None) -> dict[str, Any] | None:
+    """The stored render failure, only while the document is the one that failed (§9).
+
+    A render records the hash it failed against inside the error; once the document
+    changes, the failure describes content that no longer exists and is not shown.
+    """
+    if document is None or document.last_render_error is None:
+        return None
+    error = document.last_render_error
+    if error.get("document_hash") not in {None, document.document_hash}:
+        return None
+    return error
+
+
+def _analysis_snapshot(context: ProjectionContext, analysis_id: str) -> str | None:
+    return next(
+        (row["job_snapshot_id"] for row in context.analyses if row["id"] == analysis_id), None
     )
-    return exact, exact and validation["report"].passed
 
 
-def derive_states(
-    context: ProjectionContext,
-    stale: list[ReasonView],
-    review: list[ReasonView],
-) -> tuple[PreparationState, WorkingDraftState]:
-    draft = context.active_working_draft
-    exact_validation, passing_validation = _exact_validation(context)
-    source_stale = any(reason.code != "DRAFT_EDITED_AFTER_VALIDATION" for reason in stale)
-    if draft is None:
-        draft_state = WorkingDraftState.NONE
-    elif source_stale:
-        draft_state = WorkingDraftState.STALE
-    elif exact_validation and passing_validation:
-        draft_state = WorkingDraftState.VALIDATED
-    elif exact_validation:
-        draft_state = WorkingDraftState.VALIDATION_FAILED
-    else:
-        draft_state = WorkingDraftState.EDITING
-
-    compatible_analysis = context.active_analysis is not None
-    compatible_ready = any(
-        revision.id in context.ready_revision_ids
-        and revision.job_snapshot_id == context.active_job_snapshot_id
-        and revision.job_analysis_id == context.active_analysis_id
-        and context.active_selection_plan is not None
-        and revision.selection_plan_id == context.active_selection_plan.id
-        for revision in context.approved_revisions
-    )
-    compatible_approved = any(
-        revision.job_snapshot_id == context.active_job_snapshot_id
-        and revision.job_analysis_id == context.active_analysis_id
-        and context.active_selection_plan is not None
-        and revision.selection_plan_id == context.active_selection_plan.id
-        for revision in context.approved_revisions
-    )
-    if not compatible_analysis:
-        preparation = PreparationState.NEEDS_ANALYSIS
-    elif compatible_ready:
-        preparation = PreparationState.READY
-    elif compatible_approved:
-        preparation = PreparationState.APPROVED
-    elif review:
-        preparation = PreparationState.NEEDS_REVIEW
-    elif source_stale:
-        preparation = PreparationState.READY_TO_DRAFT
-    elif passing_validation:
-        preparation = PreparationState.READY_FOR_APPROVAL
-    elif draft is not None:
-        preparation = PreparationState.DRAFT_IN_PROGRESS
-    else:
-        preparation = PreparationState.READY_TO_DRAFT
-    return preparation, draft_state
-
-
-def derive_warnings(
-    context: ProjectionContext, latest_ready: ApprovedRevision | None
-) -> list[WarningView]:
+def derive_warnings(context: ProjectionContext) -> list[WarningView]:
     warnings: list[WarningView] = []
-    if latest_ready is not None and latest_ready.job_snapshot_id != context.active_job_snapshot_id:
-        warnings.append(
-            WarningView(
-                code="READY_REVISION_FOR_OLDER_SNAPSHOT",
-                message="The latest Ready revision belongs to an older job snapshot.",
-                entity_references={"approved_revision_id": latest_ready.id},
-            )
+    document = context.document
+    knowledge = context.knowledge
+    latest = context.analyses[-1] if context.analyses else None
+    if document is not None:
+        on_older = (latest is not None and latest["id"] != document.analysis_id) or (
+            _analysis_snapshot(context, document.analysis_id) != context.active_job_snapshot_id
         )
-    elif latest_ready is not None and latest_ready.job_analysis_id != context.active_analysis_id:
-        warnings.append(
-            WarningView(
-                code="READY_REVISION_FOR_OLDER_ANALYSIS",
-                message="The latest Ready revision belongs to an older analysis.",
-                entity_references={"approved_revision_id": latest_ready.id},
+        if on_older:
+            warnings.append(
+                WarningView(
+                    code="DOCUMENT_ON_OLDER_ANALYSIS",
+                    message="The document was built on an older analysis or job snapshot.",
+                    entity_references={
+                        "document_id": document.id,
+                        "job_analysis_id": document.analysis_id,
+                    },
+                )
             )
-        )
-    elif (
-        latest_ready is not None
-        and context.active_selection_plan is not None
-        and latest_ready.selection_plan_id != context.active_selection_plan.id
-    ):
-        warnings.append(
-            WarningView(
-                code="READY_REVISION_FOR_OLDER_SELECTION_PLAN",
-                message="The latest Ready revision belongs to an older selection plan.",
-                entity_references={"approved_revision_id": latest_ready.id},
+        if document.built_with.profile_version != knowledge.profiles.version:
+            warnings.append(
+                WarningView(
+                    code="PROFILE_CHANGED",
+                    message="The document was built with an older Profile version.",
+                    entity_references={"document_id": document.id},
+                )
             )
+        if document.built_with.selection_policy_version != knowledge.policies.version:
+            warnings.append(
+                WarningView(
+                    code="POLICY_CHANGED",
+                    message="The document was built with an older selection policy.",
+                    entity_references={"document_id": document.id},
+                )
+            )
+        dependent = dependent_fact_ids(document.selection, document.content)
+        superseded = sorted(
+            fact.fact_id
+            for fact in knowledge.facts.facts.values()
+            if fact.status is FactStatus.CANONICAL
+            and fact.replaces is not None
+            and fact.replaces in dependent
         )
+        if superseded:
+            warnings.append(
+                WarningView(
+                    code="FACT_SUPERSEDED",
+                    message="A fact the document uses has a canonical replacement.",
+                    entity_references={"replacement_fact_id": superseded[0]},
+                )
+            )
     next_date = context.application.get("next_action_date")
-    terminal = context.application.get("current_status") in {
-        "accepted",
-        "rejected",
-        "withdrawn",
-        "closed",
-    }
-    if next_date and not terminal:
+    if next_date and context.application.get("current_status") not in _TERMINAL_RECRUITMENT:
         try:
             overdue = date.fromisoformat(next_date) < context.today
         except ValueError:
@@ -393,219 +239,189 @@ def derive_warnings(
             warnings.append(
                 WarningView(code="NEXT_ACTION_OVERDUE", message="The next action is overdue.")
             )
-    draft = context.active_working_draft
-    if draft is not None:
-        referenced = {
-            fact_id
-            for claim in (
-                draft.source.headline,
-                *draft.source.contacts,
-                *(claim for section in draft.source.sections for claim in section.claims),
-            )
-            for fact_id in claim.fact_ids
-        }
-        superseded = sorted(
-            fact.fact_id
-            for fact in context.knowledge.facts.facts.values()
-            if fact.status is FactStatus.CANONICAL
-            and fact.replaces is not None
-            and fact.replaces in referenced
-        )
-        if superseded:
-            warnings.append(
-                WarningView(
-                    code="FACT_SUPERSEDED",
-                    message="A fact used by the active draft has a canonical replacement.",
-                    entity_references={"replacement_fact_id": superseded[0]},
-                )
-            )
-        deleted = sorted(
-            fact_id
-            for fact_id in referenced
-            if fact_id in context.knowledge.facts.facts
-            and context.knowledge.facts.facts[fact_id].status is FactStatus.DELETED
-        )
-        if deleted:
-            # Informational only: an ApprovedRevision that already rendered
-            # the fact is immutable and unaffected (state-and-use-cases.md
-            # §8). The blocking case is FACT_DELETED_REQUIRES_RESOLUTION (§7).
-            warnings.append(
-                WarningView(
-                    code="FACT_DELETED",
-                    message="A fact used by the active draft has been deleted.",
-                    entity_references={"fact_id": deleted[0]},
-                )
-            )
     return warnings
+
+
+def _blocked_reasons(
+    action: str,
+    context: ProjectionContext,
+    *,
+    state: DocumentState,
+    check: ContentCheck,
+    review_codes: list[str],
+    document_operation_active: bool,
+    analyze_active: bool,
+    has_newer_analysis: bool,
+) -> list[str]:
+    document = context.document
+    if context.application.get("deleted_at") is not None:
+        return ["APPLICATION_DELETED"]
+    if action == "analyze":
+        return ["ANALYSIS_IN_PROGRESS"] if analyze_active else ["ANALYSIS_EXISTS"]
+    if action == "edit_matching_configuration":
+        if not context.analyses:
+            return ["ANALYSIS_REQUIRED"]
+        return ["MATCHING_CONTEXT_OPERATION_IN_PROGRESS"]
+    if document is None:
+        return ["DOCUMENT_REQUIRED"]
+    if action in DOCUMENT_MUTATING_ACTIONS and document_operation_active:
+        return ["DOCUMENT_OPERATION_IN_PROGRESS"]
+    if action == "build_from_analysis":
+        return [] if has_newer_analysis else ["NO_NEWER_ANALYSIS"]
+    if action == "confirm_and_use_fact":
+        return ["NO_REVIEW_DECISION_REQUIRED"]
+    if action in {"create_draft", "propose_selection"}:
+        return ["CONTENT_EXISTS"]
+    if action in {"edit", "regenerate_section", "regenerate_claim", "check"}:
+        if document.content is None:
+            return ["CONTENT_REQUIRED"]
+        return ["CONTENT_CHECK_PASSED"]
+    if action == "approve":
+        if document.content is None:
+            return ["CONTENT_REQUIRED"]
+        if review_codes:
+            return review_codes
+        if check is ContentCheck.FAILED:
+            return ["VALIDATION_FAILED"]
+        return ["DOCUMENT_NOT_DRAFT"]
+    if action == "render":
+        if state is not DocumentState.APPROVED:
+            return (
+                ["DOCUMENT_NOT_APPROVED"]
+                if state is DocumentState.DRAFT
+                else ["DOCUMENT_ALREADY_RENDERED"]
+            )
+        return review_codes or ["ACTION_NOT_AVAILABLE"]
+    if action in {"submit", "download_pdf"}:
+        if state is not DocumentState.READY:
+            return ["DOCUMENT_NOT_READY"]
+        return review_codes or ["ACTION_NOT_AVAILABLE"]
+    return ["ACTION_NOT_AVAILABLE"]
 
 
 def derive_actions(
     context: ProjectionContext,
-    stale: list[ReasonView],
     review: list[ReasonView],
-    states: tuple[PreparationState, WorkingDraftState],
+    state: DocumentState,
+    check: ContentCheck,
 ) -> tuple[list[str], list[BlockedActionView], str | None]:
-    preparation, draft_state = states
-    draft = context.active_working_draft
-    available: set[str] = {"analyze"}
-    for reason in review:
-        available.update(reason.allowed_resolution_actions)
-    # Voluntary editing is not a review-resolution action. It is offered for
-    # every live active analysis, including Draft/Approved/Ready, except while
-    # an Operation can replace either CAS source under the same form.
-    if (
-        context.application.get("deleted_at") is None
-        and context.active_analysis is not None
-        and not context.matching_context_operation_active
-    ):
-        available.add("edit_matching_configuration")
-    # Before a draft exists, fact selection remains an explicit preparation choice: the
-    # current deterministic plan may be reviewed/replaced or an AI proposal may create a
-    # new immutable version. Once editing starts, selection changes belong to the draft's
-    # atomic `apply_selection_change` path instead.
-    if context.active_analysis is not None and draft is None:
-        available.add("create_selection_plan")
-    if (
-        context.active_analysis is not None
-        and context.active_selection_plan is not None
-        and not review
-    ):
-        available.add("create_draft")
-    if draft is not None:
-        available.update({"archive_working_draft", "replace_working_draft"})
-        if draft_state is not WorkingDraftState.STALE:
-            available.update(
-                {
-                    "update_working_draft",
-                    "apply_selection_change",
-                    "regenerate_section",
-                    "regenerate_claim",
-                    "validate",
-                }
-            )
-    if preparation is PreparationState.READY_FOR_APPROVAL:
-        available.add("approve")
-    compatible_approved = any(
-        revision.job_snapshot_id == context.active_job_snapshot_id
-        and revision.job_analysis_id == context.active_analysis_id
-        for revision in context.approved_revisions
+    document = context.document
+    deleted = context.application.get("deleted_at") is not None
+    active = context.active_operation
+    analyze_active = active is not None and active.operation_type is OperationType.ANALYZE_JOB
+    document_operation_active = (
+        active is not None and active.operation_type in DOCUMENT_OPERATION_TYPES
     )
-    if compatible_approved:
-        available.add("render")
-
-    blocked: list[BlockedActionView] = []
+    active_snapshot_analysed = any(
+        row["job_snapshot_id"] == context.active_job_snapshot_id for row in context.analyses
+    )
+    latest = context.analyses[-1] if context.analyses else None
+    has_newer_analysis = False
+    if document is not None and latest is not None and latest["id"] != document.analysis_id:
+        versions = {row["id"]: row.get("version_number", 0) for row in context.analyses}
+        has_newer_analysis = versions.get(latest["id"], 0) > versions.get(document.analysis_id, 0)
     review_codes = [reason.code for reason in review]
-    stale_codes = [reason.code for reason in stale]
-    for action in PREPARATION_ACTIONS:
-        if action in available:
-            continue
-        reasons: list[str]
-        if action == "edit_matching_configuration":
-            if context.active_analysis is None:
-                reasons = ["ANALYSIS_REQUIRED"]
-            elif context.matching_context_operation_active:
-                reasons = ["MATCHING_CONTEXT_OPERATION_IN_PROGRESS"]
-            elif context.application.get("deleted_at") is not None:
-                reasons = ["APPLICATION_DELETED"]
-            else:
-                reasons = ["ACTION_NOT_AVAILABLE"]
-        elif action in {
-            "create_selection_plan",
-            "confirm_and_use_fact",
-        }:
-            # These commands resolve selection or fact state, never a general
-            # workflow blocker reported by another projection.
-            reasons = ["NO_REVIEW_DECISION_REQUIRED"]
-        elif action == "create_draft":
-            reasons = review_codes or stale_codes or ["ANALYSIS_OR_SELECTION_PLAN_REQUIRED"]
-        elif action in {
-            "update_working_draft",
-            "apply_selection_change",
-            "regenerate_section",
-            "regenerate_claim",
-            "archive_working_draft",
-            "replace_working_draft",
-            "validate",
-        }:
-            reasons = stale_codes or ["WORKING_DRAFT_REQUIRED"]
-        elif action == "approve":
-            if draft_state is WorkingDraftState.VALIDATION_FAILED:
-                reasons = ["VALIDATION_FAILED"]
-            elif draft_state is WorkingDraftState.EDITING:
-                reasons = ["VALIDATION_REQUIRED"]
-            else:
-                reasons = review_codes or stale_codes or ["VALIDATED_DRAFT_REQUIRED"]
-        elif action == "render":
-            reasons = ["APPROVED_REVISION_REQUIRED"]
-        else:
-            reasons = ["ACTION_NOT_AVAILABLE"]
-        blocked.append(BlockedActionView(action=action, reasons=list(dict.fromkeys(reasons))))
 
-    recommended = {
-        PreparationState.NEEDS_ANALYSIS: "analyze",
-        # The first reason that *has* an action, not the first reason. A blocker
-        # with nothing to advertise must not suppress the recommendation for the
-        # decisions the user can still take.
-        PreparationState.NEEDS_REVIEW: next(
-            (
-                reason.allowed_resolution_actions[0]
-                for reason in review
-                if reason.allowed_resolution_actions
+    available: set[str] = set()
+    if not deleted:
+        if not active_snapshot_analysed and not analyze_active:
+            available.add("analyze")
+        if context.analyses and not context.matching_context_operation_active:
+            available.add("edit_matching_configuration")
+        if document is not None:
+            has_content = document.content is not None
+            candidates = {"update_selection"}
+            if has_newer_analysis:
+                candidates.add("build_from_analysis")
+            if not has_content:
+                candidates.update({"create_draft", "propose_selection"})
+            else:
+                candidates.update({"edit", "regenerate_section", "regenerate_claim"})
+                if check is not ContentCheck.PASSED:
+                    candidates.add("check")
+                if state is DocumentState.DRAFT and not review and check is not ContentCheck.FAILED:
+                    candidates.add("approve")
+            if state is DocumentState.APPROVED and not review:
+                candidates.add("render")
+            if state is DocumentState.READY and not review:
+                candidates.add("submit")
+            for reason in review:
+                candidates.update(
+                    action
+                    for action in reason.allowed_resolution_actions
+                    if action in PREPARATION_ACTIONS and (action not in {"edit"} or has_content)
+                )
+            if document_operation_active:
+                candidates -= DOCUMENT_MUTATING_ACTIONS
+            available |= candidates
+        if state is DocumentState.READY:
+            available.add("download_pdf")
+
+    blocked = [
+        BlockedActionView(
+            action=action,
+            reasons=list(
+                dict.fromkeys(
+                    _blocked_reasons(
+                        action,
+                        context,
+                        state=state,
+                        check=check,
+                        review_codes=review_codes,
+                        document_operation_active=document_operation_active,
+                        analyze_active=analyze_active,
+                        has_newer_analysis=has_newer_analysis,
+                    )
+                )
             ),
-            None,
-        ),
-        PreparationState.READY_TO_DRAFT: "create_draft",
-        PreparationState.DRAFT_IN_PROGRESS: "validate",
-        PreparationState.READY_FOR_APPROVAL: "approve",
-        PreparationState.APPROVED: "render",
-        PreparationState.READY: None,
-    }[preparation]
+        )
+        for action in PREPARATION_ACTIONS
+        if action not in available
+    ]
+
+    # §9 recommendation order, first match wins.
+    recommended: str | None = None
+    if document is None:
+        recommended = "analyze"
+    elif document.content is None:
+        recommended = "create_draft"
+    elif check in {ContentCheck.NONE, ContentCheck.OUTDATED}:
+        recommended = "check"
+    else:
+        recommended = next(
+            (action for action in ("approve", "render", "submit") if action in available), None
+        )
     if recommended not in available:
-        recommended = "replace_working_draft" if "replace_working_draft" in available else None
-    return (
-        [action for action in PREPARATION_ACTIONS if action in available],
-        blocked,
-        recommended,
-    )
+        recommended = None
+    return [action for action in PREPARATION_ACTIONS if action in available], blocked, recommended
 
 
 def project_application_state(context: ProjectionContext) -> ApplicationStateView:
-    stale = derive_staleness(context)
-    review = derive_review_reasons(context, stale)
-    states = derive_states(context, stale, review)
-    ready = [
-        revision
-        for revision in context.approved_revisions
-        if revision.id in context.ready_revision_ids
-    ]
-    latest_approved = context.approved_revisions[-1] if context.approved_revisions else None
-    latest_ready = ready[-1] if ready else None
-    available, blocked, recommended = derive_actions(context, stale, review, states)
-    draft = context.active_working_draft
-    # Approval atomically deactivates its WorkingDraft. Therefore any active
-    # draft observed beside an ApprovedRevision was explicitly created later;
-    # timestamps need not be used as an ordering surrogate (they are second-granular).
-    newer_draft = draft is not None and latest_approved is not None
+    document = context.document
+    current_basis = basis(document, context.knowledge.facts.facts) if document is not None else None
+    state = document_state(document, current_basis)
+    check = content_check(document, current_basis)
+    preparation: PreparationState = preparation_state(document, current_basis)
+    review = document_review_reasons(document, context.knowledge) if document is not None else []
+    available, blocked, recommended = derive_actions(context, review, state, check)
+    latest = context.analyses[-1] if context.analyses else None
     return ApplicationStateView(
         recruitment_status=context.application["current_status"],
         terminal_outcome=context.application.get("terminal_outcome"),
-        preparation_state=states[0],
-        working_draft_state=states[1],
+        preparation_state=preparation,
+        document_state=state,
+        content_check=check,
         review_reasons=review,
-        stale_reasons=stale,
-        primary_stale_reason=stale[0].code if stale else None,
-        warnings=derive_warnings(context, latest_ready),
+        warnings=derive_warnings(context),
         active_operation=context.active_operation,
         latest_operation=context.latest_operation,
         active_job_snapshot_id=context.active_job_snapshot_id,
-        active_analysis_id=context.active_analysis_id,
-        active_selection_plan_id=(
-            context.active_selection_plan.id if context.active_selection_plan else None
-        ),
-        active_working_draft_id=draft.id if draft else None,
-        latest_approved_revision_id=latest_approved.id if latest_approved else None,
-        latest_ready_revision_id=latest_ready.id if latest_ready else None,
-        newer_draft_in_progress=newer_draft,
+        latest_analysis_id=latest["id"] if latest is not None else None,
+        document_id=document.id if document is not None else None,
+        document_hash=document.document_hash if document is not None else None,
+        document_analysis_id=document.analysis_id if document is not None else None,
+        approved_at=current_approved_at(document, state),
+        last_render_error=current_render_error(document),
         available_actions=available,
         blocked_actions=blocked,
         recommended_action=recommended,

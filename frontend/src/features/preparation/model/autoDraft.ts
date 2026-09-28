@@ -1,9 +1,13 @@
 import type { ApplicationDetail, Operation, Settings } from "@/api/contracts";
 
+/* What an automatic generate is addressed to: the document the first analysis created,
+   at the exact hash the projection reports. `create_draft` activates only while the
+   document still carries that hash, so naming it here is what keeps the continuation
+   from drafting over anything the user has changed since. */
 export interface AutoDraftSources {
   analysisId: string;
   applicationId: string;
-  planId: string;
+  documentHash: string;
 }
 
 /* This is only the Web automation opt-in guard. It does not decide which lifecycle
@@ -24,50 +28,50 @@ export const autoDraftSources = (
     detail.preparation_state !== "ready_to_draft" ||
     !detail.available_actions.includes("create_draft") ||
     detail.blocked_actions.some(({ action }) => action === "create_draft") ||
-    detail.active_working_draft_id != null ||
     detail.review_reasons.length !== 0 ||
-    detail.working_draft_state !== "none" ||
     detail.active_operation != null ||
-    detail.active_analysis_id == null ||
-    detail.active_selection_plan_id == null
+    detail.document_hash == null ||
+    detail.document_analysis_id == null
   ) {
     return null;
   }
-  /* A historical successful analyze cannot authorize drafting a different active pair.
-     Inactive outputs (including those produced after cancellation) confer no authority. */
-  const activated = (type: string, id: string): boolean =>
-    operation.outputs.some((output) => output.active && output.output_type === type && output.output_id === id);
-  if (
-    !activated("job_analysis", detail.active_analysis_id) ||
-    !activated("selection_plan", detail.active_selection_plan_id)
-  ) {
+  /* A historical successful analyze cannot authorize drafting a document built on a
+     different analysis: only the run that produced the document's own analysis continues
+     into it. Inactive outputs (including those produced after cancellation) confer no
+     authority. */
+  const activated = operation.outputs.some(
+    (output) =>
+      output.active && output.output_type === "job_analysis" && output.output_id === detail.document_analysis_id,
+  );
+  if (!activated) {
     return null;
   }
   return {
     applicationId: detail.application.id,
-    analysisId: detail.active_analysis_id,
-    planId: detail.active_selection_plan_id,
+    analysisId: detail.document_analysis_id,
+    documentHash: detail.document_hash,
   };
 };
 
 /* The same opt-in guard, asked one step earlier: not "may the continuation be sent now"
    but "is one expected the moment this analysis lands". It is the announcement condition
    only - `autoDraftSources` above stays the sole authority on dispatch - so it reads the
-   two facts that are already true while the analysis runs and leaves the projection to
-   decide the rest. A draft appearing without a press is otherwise the reader's first news
-   that the setting is on, and the setting lives on another screen. */
+   facts that are already true while the analysis runs and leaves the projection to decide
+   the rest. A first analysis creates the document, so "no document yet" is the case the
+   notice is for. */
 export const autoDraftIsAnticipated = (
   settings: Settings | undefined,
   detail: ApplicationDetail | undefined,
 ): boolean =>
   settings?.auto_generate_when_review_not_required === true &&
   detail !== undefined &&
-  detail.working_draft_state === "none" &&
+  detail.document_id == null &&
   detail.active_operation?.operation_type === "analyze_job";
 
 /* The continuation announcement uses the same source guard as dispatch. In the narrow
-   catch-up window with no active analysis yet, only a durable activated analysis output
-   can anticipate it; a posting captured after that run ended is already a new context. */
+   catch-up window before the projection names the document the analysis created, only a
+   durable activated analysis output can anticipate it; a posting captured after that run
+   ended is already a new context. */
 export const autoDraftIsContinuing = (
   operation: Operation | undefined,
   settings: Settings | undefined,
@@ -81,9 +85,7 @@ export const autoDraftIsContinuing = (
     detail === undefined ||
     operation.application_id !== detail.application.id ||
     detail.application.deleted_at != null ||
-    detail.working_draft_state !== "none" ||
-    detail.active_working_draft_id != null ||
-    detail.active_analysis_id != null ||
+    detail.document_id != null ||
     detail.review_reasons.length !== 0 ||
     (detail.active_operation != null && detail.active_operation.id !== operation.id) ||
     detail.blocked_actions.some(({ action }) => action === "create_draft")

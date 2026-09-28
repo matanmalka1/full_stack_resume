@@ -37,10 +37,8 @@ const sorts: Record<ApplicationSort, true> = {
 
 const preparationStates: Record<PreparationState, true> = {
   needs_analysis: true,
-  needs_review: true,
   ready_to_draft: true,
   draft_in_progress: true,
-  ready_for_approval: true,
   approved: true,
   ready: true,
 };

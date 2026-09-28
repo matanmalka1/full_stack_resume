@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 
-import type { DraftClaim, WorkingDraft } from "@/api/contracts";
+import type { DraftClaim } from "@/api/contracts";
+import type { EditableDocument } from "../model/drafts.types";
 
 const HISTORY_LIMIT = 50;
 const TYPING_GROUP_MS = 900;
 
-type Outline = WorkingDraft["outline"];
+type Outline = EditableDocument["outline"];
 type HistoryEntry = { before: Outline; after: Outline; claimId: string | null; at: number };
 type HistoryState = {
   draftId: string | null;
@@ -26,7 +27,7 @@ const claimMap = (outline: Outline): Map<string, DraftClaim> =>
   );
 
 interface DraftHistoryOptions {
-  draft: WorkingDraft | undefined;
+  draft: EditableDocument | undefined;
   queueClaimOrder: (section: string, order: string[]) => void;
   queueEdit: (claim: DraftClaim, text: string) => void;
 }
@@ -35,10 +36,7 @@ export const useDraftHistory = ({ draft, queueClaimOrder, queueEdit }: DraftHist
   /* Include the outline as well as its server identity. A cache refresh may replace the
      structured projection without changing the hook instance, and that replacement must
      become the new visible base without discarding this draft's usable history. */
-  const sourceKey =
-    draft === undefined
-      ? null
-      : `${draft.id}:${draft.edit_version}:${draft.content_hash}:${JSON.stringify(draft.outline)}`;
+  const sourceKey = draft === undefined ? null : `${draft.id}:${draft.document_hash}:${JSON.stringify(draft.outline)}`;
   const [stored, setStored] = useState<HistoryState>(() => ({
     draftId: draft?.id ?? null,
     sourceKey,

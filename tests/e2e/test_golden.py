@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
+from helpers import approve_active_draft, seed_document, stored_document
+
+from cv_engine.application.commands import DraftCommand, RenderCommand
 from cv_engine.domain.draft_markdown import serialize_markdown
-from cv_engine.infrastructure.rendering import normalized_role_filename, render_html
+from cv_engine.infrastructure.rendering import render_html
 from cv_engine.util import sha256_text
 
 GOLDEN_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "golden"
@@ -30,23 +34,39 @@ def _golden_cases() -> list[tuple[Path, dict]]:
     ]
 
 
-def _build_case(draft_factory, case: dict):
+def _build_case(services, case: dict):
     overrides = case.get("overrides", {})
-    return draft_factory(
-        case["job"],
+    ingested, analysed = seed_document(
+        services,
+        f"Golden {case['profile']} {case['language']}",
+        job_text=case["job"],
         track_override=overrides.get("track") or case["track"],
         profile_override=overrides.get("profile") or case["profile"],
         emphasis_override=overrides.get("emphasis") or case["emphasis"],
         language_override=overrides.get("language") or case["language"],
-        application_id="00000000-0000-0000-0000-000000000001",
-        job_snapshot_id="00000000-0000-0000-0000-000000000002",
+    )
+    document = stored_document(services, ingested.application_id)
+    services.drafts.draft(
+        DraftCommand(
+            application_id=ingested.application_id, expected_document_hash=document.document_hash
+        )
+    )
+    document = stored_document(services, ingested.application_id)
+    knowledge = services.knowledge.load()
+    return SimpleNamespace(
+        facts=knowledge.facts,
+        analysis=analysed.analysis,
+        draft=document.content,
+        candidate=knowledge.candidate,
+        profile=knowledge.profiles.get(analysed.analysis.profile),
+        document=document,
     )
 
 
 def test_representative_profiles_match_their_golden_ready_outputs(
     project_root: Path,
     tmp_path: Path,
-    draft_factory,
+    services,
 ) -> None:
     """Pin content: analysis fields, Markdown, selection, and rendered HTML.
 
@@ -55,7 +75,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
     a separate test so this hash comparison runs in the default suite.
     """
     for fixture, case in _golden_cases():
-        setup = _build_case(draft_factory, case)
+        setup = _build_case(services, case)
         facts, analysis, draft = setup.facts, setup.analysis, setup.draft
         candidate = setup.candidate
         assert analysis.track.value == case["track"], fixture.stem
@@ -101,7 +121,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
 def test_golden_outputs_pass_render_validation(
     project_root: Path,
     tmp_path: Path,
-    draft_factory,
+    services,
     render_validator,
 ) -> None:
     """The same documents must survive PDF rendering and the layout/ATS report.
@@ -111,33 +131,37 @@ def test_golden_outputs_pass_render_validation(
     the exact bytes the hash test pinned rather than from a document that drifted.
     """
     for fixture, case in _golden_cases():
-        setup = _build_case(draft_factory, case)
-        draft, profile, candidate = setup.draft, setup.profile, setup.candidate
+        setup = _build_case(services, case)
 
-        target = tmp_path / fixture.stem
-        target.mkdir()
-        html = render_html(draft, project_root, target / "resume.html", candidate)
+        approved = approve_active_draft(services, setup.document.application_id)
+        assert approved.passed, approved.report
+        rendered = services.rendering.render(
+            RenderCommand(
+                application_id=setup.document.application_id,
+                expected_document_hash=setup.document.document_hash,
+            )
+        )
+        document = stored_document(services, setup.document.application_id)
+        assert document.html_path is not None
+        html = services.paths.root / document.html_path
         assert sha256_text(html.read_text(encoding="utf-8")) == case["snapshot"]["html_sha256"], (
             fixture.stem
         )
-
-        pdf = target / normalized_role_filename(profile.normalized_role, candidate)
-        _geometry, report = render_validator(draft, profile, html, pdf, candidate)
-        assert report.passed, f"{fixture.stem}: {report.model_dump()}"
-        assert report.evidence["page_count"] in {1, 2}
+        assert rendered.validation.passed, rendered.validation.model_dump()
+        assert rendered.validation.evidence["page_count"] in {1, 2}
 
 
-def test_persisted_plan_reproduces_the_computed_selection(
+def test_document_selection_reproduces_the_computed_selection(
     project_root: Path,
-    draft_factory,
+    services,
     fact_store,
     profile_store,
     policy_store,
     candidate_context,
 ) -> None:
-    """The plan path must render exactly what the computing path rendered.
+    """The document path must render exactly what the computing path rendered.
 
-    Production drafts from a persisted SelectionPlan, while the golden cases above
+    Production drafts from the document selection, while the golden cases above
     build their selection by computing it. Without this, the parity evidence would
     cover a path the product no longer takes: the two could drift — in section
     assignment or claim order — and every golden hash would still match.
@@ -148,13 +172,7 @@ def test_persisted_plan_reproduces_the_computed_selection(
     differences: list[str] = []
     for fixture in sorted(GOLDEN_DIR.glob("*.json")):
         case = json.loads(fixture.read_text(encoding="utf-8"))
-        overrides = case.get("overrides", {})
-        computed = draft_factory(
-            case["job"],
-            track_override=overrides.get("track") or case["track"],
-            profile_override=overrides.get("profile") or case["profile"],
-            emphasis_override=overrides.get("emphasis") or case["emphasis"],
-        )
+        computed = _build_case(services, case)
         rebuilt = build_draft(
             application_id=computed.draft.application_id,
             job_snapshot_id=computed.draft.job_snapshot_id,
@@ -165,7 +183,6 @@ def test_persisted_plan_reproduces_the_computed_selection(
             policies=policy_store,
             candidate=candidate_context,
             presentations=load_presentations(project_root, fact_store),
-            selection=computed.draft.selection,
         )
         if serialize_markdown(computed.draft) != serialize_markdown(rebuilt):
             differences.append(f"{fixture.name}: Markdown differs")

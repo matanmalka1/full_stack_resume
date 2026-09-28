@@ -6,7 +6,7 @@ describe("application list URL parameters", () => {
   it("reads every supported filter and rounds an offset down to a page boundary", () => {
     const params = new URLSearchParams([
       ["activity", "closed"],
-      ["stage", "needs_review"],
+      ["stage", "ready_to_draft"],
       ["stage", "not-a-stage"],
       ["stage", "ready"],
       ["recruitment_status", "interview"],
@@ -19,7 +19,7 @@ describe("application list URL parameters", () => {
 
     expect(queryFromParams(params)).toEqual({
       activity: "closed",
-      stages: ["needs_review", "ready"],
+      stages: ["ready_to_draft", "ready"],
       recruitmentStatuses: ["interview"],
       preset: "needs_attention",
       search: "platform engineer",
@@ -61,7 +61,7 @@ describe("application list URL parameters", () => {
   it("writes only non-default state and preserves repeated filters", () => {
     const params = paramsFromQuery({
       activity: "closed",
-      stages: ["needs_review", "ready"],
+      stages: ["ready_to_draft", "ready"],
       recruitmentStatuses: ["interview", "offer"],
       preset: "active_interviews",
       search: "Acme & Sons",
@@ -71,7 +71,7 @@ describe("application list URL parameters", () => {
     });
 
     expect(params.get("activity")).toBe("closed");
-    expect(params.getAll("stage")).toEqual(["needs_review", "ready"]);
+    expect(params.getAll("stage")).toEqual(["ready_to_draft", "ready"]);
     expect(params.getAll("recruitment_status")).toEqual(["interview", "offer"]);
     expect(params.get("preset")).toBe("active_interviews");
     expect(params.get("search")).toBe("Acme & Sons");

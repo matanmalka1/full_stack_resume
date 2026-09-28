@@ -192,7 +192,7 @@ describe("OperationReport", () => {
     renderPanel(
       failed({
         failure_code: "RENDER_FAILED",
-        operation_type: "render_revision",
+        operation_type: "render_document",
         safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
         failure_reason: { code: "pdf_page_limit", pages: 2, maximum: 1 },
       }),
@@ -242,7 +242,7 @@ describe("OperationReport", () => {
     renderPanel(
       failed({
         failure_code: "RENDER_FAILED",
-        operation_type: "render_revision",
+        operation_type: "render_document",
         safe_failure_detail: "Rendered PDF has 2 pages; maximum 1.",
       }),
     );

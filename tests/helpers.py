@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 from sqlalchemy import func, select
 
-from cv_engine.application.commands import AnalyzeCommand, ApproveDraftCommand, ValidateDraftCommand
-from cv_engine.application.ports import DraftPaths
+from cv_engine.application.commands import (
+    AnalyzeCommand,
+    ApproveDocumentCommand,
+    CheckDocumentCommand,
+    IngestCommand,
+)
 from cv_engine.application.services.analysis.preparation import PreparedAnalysis
-from cv_engine.application.services.analysis.selection_policy import AnalysisSelection
+from cv_engine.application.services.documents import build_document_selection, built_with
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
-from cv_engine.domain.draft_markdown import parse_draft
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
-from cv_engine.infrastructure.persistence.draft_lifecycle import (
-    SqlAlchemyDraftLifecycleRepository,
+from cv_engine.infrastructure.persistence.documents import (
+    SqlAlchemyDocumentStore,
+    SqlAlchemyDocumentSubmissionStore,
 )
 from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.runtime.composition import Services
@@ -38,12 +42,6 @@ def store_draft(root: Path, draft):
     return stored.paths.markdown, stored.markdown
 
 
-def working_draft_paths(services: Services, application_id: str) -> DraftPaths:
-    """Paths for one mutable working projection in the local test store."""
-    directory = services.paths.artifacts_root / "working" / application_id
-    return DraftPaths(directory / "resume.md", directory / "resume.claims.json")
-
-
 def artifact_path(services: Services, stored_path: str) -> Path:
     """Resolve a trusted stored reference so an integrity test can mutate its bytes."""
     return services.paths.root / stored_path
@@ -61,7 +59,11 @@ def seed_existing_analysis(
     activation_command: AnalyzeCommand | None = None,
     **overrides,
 ):
-    """Persist an already-existing analysis for downstream tests without invoking AI."""
+    """Persist an already-existing analysis for downstream tests without invoking AI.
+
+    The first analysis of an Application also creates its CV document, with the
+    analysis's deterministic selection and no content (§13).
+    """
     knowledge = services.analysis.load_knowledge()
     profile_name = ProfileName(overrides.pop("profile_override", "account-manager"))
     profile = knowledge.profiles.get(profile_name)
@@ -84,17 +86,10 @@ def seed_existing_analysis(
         ),
         PreparedAnalysis(
             result=analysis,
-            plan_manifest=AnalysisSelection.manifest(analysis, knowledge),
+            selection=build_document_selection(analysis, knowledge),
+            built_with=built_with(knowledge),
             provider="test",
             model="existing-analysis-fixture",
-            candidate_context_version=knowledge.candidate.context_version,
-            candidate_context_hash=knowledge.candidate.version_hash,
-            profile_version=knowledge.profiles.version,
-            selection_policy_version=knowledge.policies.version,
-            track_emphasis_dependencies={
-                "track": analysis.track.value,
-                "emphasis": analysis.emphasis.value,
-            },
             normalized_role=profile.normalized_role,
         ),
     )
@@ -183,53 +178,66 @@ def services_transactions(services: Services) -> SqlAlchemyTransactionManager:
     Building a fresh engine from `services.database_url` per call opened a pool
     that was never disposed; every caller wants the one already composed.
     """
-    return services.operation_runner.transactions
+    return cast(SqlAlchemyTransactionManager, services.operation_runner.transactions)
+
+
+def stored_document(services: Services, application_id: str):
+    transactions = services_transactions(services)
+    with transactions.read() as tx:
+        document = SqlAlchemyDocumentStore(transactions).document(tx, application_id)
+    assert document is not None
+    return document
+
+
+def seed_document(
+    services: Services,
+    company="Document Co",
+    *,
+    role="Account Manager",
+    job_text=ACCOUNT_MANAGER_JOB,
+    **analysis_values,
+):
+    ingested = services.applications.ingest(
+        IngestCommand(
+            company=company,
+            target_role=role,
+            job_text=job_text,
+            acknowledged_duplicates=True,
+            client="web",
+        )
+    )
+    return ingested, seed_existing_analysis(services, ingested, **analysis_values)
 
 
 def validate_active_draft(services: Services, application_id: str):
-    """Validate the Application's active draft and return the run result.
-
-    The v2 command takes a WorkingDraft ID and an exact edit version, so
-    resolving "the active one" is the caller's job. Every test that used to
-    call `validate_working(application_id)` resolves it the same way here
-    rather than each writing its own two lines.
-    """
-    transactions = services_transactions(services)
-    drafts = SqlAlchemyDraftLifecycleRepository(transactions)
-    with transactions.read() as tx:
-        working = drafts.active_working_draft(tx, application_id)
-    return services.draft_validation.validate_draft(
-        ValidateDraftCommand(
-            working_draft_id=working.id,
-            expected_edit_version=working.edit_version,
+    document = stored_document(services, application_id)
+    return services.draft_validation.check_document(
+        CheckDocumentCommand(
+            application_id=application_id,
+            expected_document_hash=document.document_hash,
         )
     )
 
 
-def approve_active_draft(services: Services, application_id: str, *, revision_id=None):
-    """Validate, then approve exactly what that run passed.
-
-    Approval no longer validates for itself, so a caller must obtain the exact
-    run first. Keeping that sequence in one helper prevents tests from quietly
-    bypassing the binding the product requires.
-    """
-    validated = validate_active_draft(services, application_id)
-    return services.draft_approval.approve_draft(
-        ApproveDraftCommand(
-            working_draft_id=validated.working_draft_id,
-            expected_edit_version=validated.edit_version,
-            validation_run_id=validated.validation_run_id,
+def approve_active_draft(services: Services, application_id: str):
+    document = stored_document(services, application_id)
+    return services.draft_approval.approve_document(
+        ApproveDocumentCommand(
+            application_id=application_id,
+            expected_document_hash=document.document_hash,
             client="web",
-        ),
-        revision_id=revision_id,
+        )
     )
 
 
 def working_claim(services: Services, application_id: str, fact_id: str):
-    manifest = working_draft_paths(services, application_id).manifest
-    draft = parse_draft(manifest.read_text(encoding="utf-8"))
+    document = stored_document(services, application_id)
+    assert document.content is not None
     return next(
-        claim for section in draft.sections for claim in section.claims if fact_id in claim.fact_ids
+        claim
+        for section in document.content.sections
+        for claim in section.claims
+        if fact_id in claim.fact_ids
     )
 
 
@@ -240,21 +248,6 @@ def claim_by_id(draft, claim_id: str):
         for claim in section.claims
         if claim.claim_id == claim_id
     )
-
-
-def artifact_version_and_path(
-    services: Services,
-    application_id: str,
-    artifact_type: str,
-    lifecycle_status: str,
-):
-    transactions = services_transactions(services)
-    catalog = SqlAlchemyArtifactCatalog(transactions)
-    with transactions.read() as tx:
-        version = catalog.latest_artifact_version(
-            tx, application_id, artifact_type, lifecycle_status
-        )
-    return version, artifact_path(services, version["path"])
 
 
 def persisted_counts(database_engine) -> dict[str, int]:
@@ -272,3 +265,23 @@ def persisted_counts(database_engine) -> dict[str, int]:
             table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
             for table in metadata.sorted_tables
         }
+
+
+def stored_submissions(services: Services, application_id: str):
+    transactions = services_transactions(services)
+    with transactions.read() as tx:
+        return SqlAlchemyDocumentSubmissionStore(transactions).submissions(tx, application_id)
+
+
+def edit_document_claim(
+    services: Services, application_id: str, claim_id: str, fact_ids: list[str], *, text: str
+):
+    from cv_engine.application.commands import ClaimPatch, UpdateDocumentCommand
+
+    return services.drafts.update_document(
+        UpdateDocumentCommand(
+            application_id=application_id,
+            expected_document_hash=stored_document(services, application_id).document_hash,
+            claim_edits=[ClaimPatch(claim_id=claim_id, fact_ids=fact_ids, text=text)],
+        )
+    )

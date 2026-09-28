@@ -191,9 +191,10 @@ One CandidateContext is loaded from Knowledge. It references canonical name/cont
 fact IDs and defines filename/display policy, timezone, and locale. It carries its own
 version/hash for provenance.
 
-Application rows do not contain `candidate_id`. ApprovedRevision metadata records the
-CandidateContext version/hash used. Renderers and filename policy take CandidateContext
-as an explicit dependency, eliminating candidate literals from code.
+Application rows do not contain `candidate_id`. Submission metadata records the
+CandidateContext version/hash used for the content it copied. Renderers and filename
+policy take CandidateContext as an explicit dependency, eliminating candidate literals
+from code.
 
 Existing semantic fact IDs are preserved. New facts use UUIDv4 technical identity;
 a human slug is optional metadata and never a foreign key.
@@ -211,12 +212,17 @@ PostgreSQL stores structured state and relationships:
 - Applications and current recruitment projections
 - immutable status and audit history
 - JobSnapshot metadata
-- JobAnalysis and SelectionPlan structured data
-- WorkingDraft structured source, `edit_version`, and content hash
-- ValidationRun structured reports and metadata
-- ApprovedRevision metadata
-- Artifact metadata
-- Submission records
+- JobAnalysis structured data (immutable)
+- `cv_documents`: one mutable row per Application — `analysis_id`, `selection`,
+  `content`, `built_with`, `document_hash`, `content_report`/`checked_basis`/`passed`,
+  `approved_basis`/`approved_at`, `rendered_basis`/`html_path`/`pdf_path`/
+  `last_render_error` (state-and-use-cases.md §3)
+- narrowed provider-response Artifact metadata (Artifact/ArtifactVersion no longer carry
+  `resume_pdf`, `resume_html`, `resume_markdown`, `claim_manifest`, or
+  `working_draft_snapshot`; `artifact_versions.revision_id` is removed)
+- Submission records (restructured: content, `document_hash`, `job_snapshot_id`
+  (FK `RESTRICT`), `html_path`+`html_sha256`, `pdf_path`+`pdf_sha256`; no
+  `approved_revision_id` or `artifact_version_id`)
 - Operation, lease, idempotency, failure, retry, and output metadata
 - safe settings
 - Knowledge audit and cross-store mutation journal
@@ -251,51 +257,58 @@ The key layout is the same either way:
 ```text
 {artifacts_root}/ or {bucket}/{prefix}/
   snapshots/{application_id}/{snapshot_id}.txt
-  revisions/{application_id}/{revision_id}/{attempt_id}/resume.json
-  revisions/{application_id}/{revision_id}/{attempt_id}/resume.md
-  drafts/{application_id}/{working_draft_id}-v{edit_version}.json
-  outputs/{application_id}/{revision_id}/{artifact_id}.html
-  outputs/{application_id}/{revision_id}/{artifact_id}.pdf
   provider/{application_id}/{operation_id}/{artifact_id}.json
-  manifests/{manifest_id}.json
+  submissions/{application_id}/{submission_id}/resume.html
+  submissions/{application_id}/{submission_id}/resume.pdf
 ```
 
+A Submission's sent content is stored inline in `submissions.content`; only its HTML and
+PDF are object-store payloads. `cv_documents.content` is likewise a mutable structured
+field stored inline in PostgreSQL, not an object-store payload: there is no per-edit-version draft file, because the document has
+no version history to address. The document's rendered `html_path`/`pdf_path` are
+mutable working outputs written to a unique per-attempt path outside this immutable
+layout (below); they are plain document fields, not registered artifacts, and are not
+addressed through this key scheme.
+
 **References are storage-neutral and their format is frozen.** PostgreSQL path fields,
-including `job_snapshots.payload_path`, the ApprovedRevision resume paths, and
+including `job_snapshots.payload_path`, the Submission file paths, and
 `artifact_versions.path`, store project-relative strings such as
 `artifacts/snapshots/{app}/{id}.txt`; an object key is the same string without the
-`artifacts/` prefix. ApprovedRevision resume references include the write attempt ID as
-shown above, so a retry can never overwrite or resurrect an earlier attempt's object. A
-row is identical under either backend, so storage can change without rewriting database
-rows.
+`artifacts/` prefix. A row is identical under either backend, so storage can change
+without rewriting database rows.
 
 Key validation is shared by both implementations rather than delegated to each. A
 crafted key - traversal, absolute, empty segment, backslash, drive prefix - is refused
 identically, because a payload's address must not depend on which backend is
 configured. "S3 has no `..`" is not a reason to skip the check.
 
-Three things stay on the local filesystem by decision: the mutable `artifacts/working/` draft,
-which is rewritten on every autosave and is not an immutable record; `RenderTargets`,
-because Chromium writes real files to real paths and cannot write to a bucket; and
-Knowledge sources, which are version-controlled inputs rather than artifacts.
+Three things stay on the local filesystem by decision: `RenderTargets`, the mutable
+per-attempt HTML/PDF `render_document` writes and activates as `html_path`/`pdf_path`,
+because Chromium writes real files to real paths and cannot write to a bucket and
+because these are working outputs rather than immutable records; the document content
+itself, which lives in PostgreSQL rather than on disk; and Knowledge sources, which are
+version-controlled inputs rather than artifacts.
 
-A rendered output is the one payload family that reaches storage as a location rather
-than as bytes. The store decides where it is written: on the local store that is the
-artifact path itself, so the rendered file *is* the stored object; on a remote store it
+A submitted rendered output is the one payload family that reaches storage as a location
+rather than as bytes. The store decides where it is written: on the local store that is
+the artifact path itself, so the copied file *is* the stored object; on a remote store it
 is scratch under `{temp_root}/render/`, uploaded and then removed. Deleting the render
 location is correct in the second case and would destroy the payload in the first,
 which is why the store answers the question rather than the caller.
 
-Additional manifests use immutable UUID-based names. Every payload has SHA-256 metadata
-in PostgreSQL. Recruiter-friendly names are Content-Disposition/export names, never the
-physical identity of an artifact. There is no `latest.pdf` artifact.
+Every payload has SHA-256 metadata in PostgreSQL. Recruiter-friendly names are
+Content-Disposition/export names, never the physical identity of an artifact. There is
+no `latest.pdf` artifact.
 
 JobSnapshot source is the exact text accepted by the backend. PostgreSQL keeps path, source
 hash, normalized dedupe hash, URL/provenance, timestamp, and prior-snapshot reference.
 
-ApprovedRevision content includes immutable structured JSON and Markdown projection.
-HTML, PDF, claim manifest, decision/provenance export, and sanitized
-provider response are separate registered artifacts where applicable.
+A Submission copies the document's exact `content` (as immutable structured JSON) plus
+its active `html_path`/`pdf_path` files to submission-owned paths, recording a SHA-256
+per file. Provider-response artifacts remain the only other registered `Artifact` kind;
+`resume_pdf`, `resume_html`, `resume_markdown`, `claim_manifest`, and
+`working_draft_snapshot` are removed, because none of them is an immutable record
+distinct from the document or a Submission any more.
 
 ### 6.3 Knowledge files
 
@@ -321,13 +334,19 @@ do not own connections or call driver transaction primitives.
 The Operation runner owns source-verification and activation scopes. Handlers,
 activators, and commit gateways receive tokens, never transaction managers. A commit
 gateway accepts prepared immutable data for an atomic fan-in; it makes no business
-decision and calls no external service. Approval uses this boundary for revision,
-artifact, decision, lifecycle, audit, and idempotency registration.
+decision and calls no external service. `propose_selection`, `create_draft`,
+`regenerate_section`, `regenerate_claim`, and `render_document` use this boundary,
+locking the document row and checking `expected_document_hash` at activation. `check_document`,
+`approve_document`, `update_selection`, `update_document`, `build_from_analysis`, and
+`submit_application` are synchronous application commands and do not go through the
+Operation runner; they take the document row lock directly inside their own write scope.
 
 AI, network, browser, filesystem writes, and object-store writes run outside database
 scopes. Outbound adapters enforce this through `assert_external_io_allowed()`. Metadata
-reads finish before payload verification or streaming. Working draft files are derived
-projections written after commit; validation input is produced in memory.
+reads finish before payload verification or streaming. The document's rendered
+HTML/PDF files are derived projections written to a unique per-attempt path before
+activation and swapped in by `render_document`'s commit; `content` itself is a database
+field, not a derived file. Validation input is produced in memory.
 
 Queries use minimal consumer-specific projections and explicit joins without hydrating
 ORM entities. Application/action-policy reads capture database and Ready metadata in
@@ -359,15 +378,20 @@ payload, and orphan inspection preserves that evidence for reconciliation.
 
 A write claims its destination through a `payload_write_leases` row before any bytes are
 stored. The row is keyed by a *group key* - one immutable payload, or the small file set
-one registration depends on, such as an ApprovedRevision's JSON and Markdown together -
-and records the current *attempt* claiming it: an `attempt_id` minted fresh each time the
-group key is acquired, an owner, and a bounded, renewable expiry, in `pending` state.
-`acquire` refuses a group key that already holds a live row, in `pending` (unexpired) or
-`reclaiming` state.
+one registration depends on, such as a provider-evidence Operation's raw response
+together with any sanitized companion file - and records the current *attempt* claiming
+it: an `attempt_id` minted fresh each time the group key is acquired, an owner, and a
+bounded, renewable expiry, in `pending` state. `acquire` refuses a group key that already
+holds a live row, in `pending` (unexpired) or `reclaiming` state. Decision record §4
+narrows this table's writers to JobSnapshot intake and provider-evidence payloads only;
+approval, history, and render no longer claim a lease, because approval and rendering no
+longer produce an immutable multi-file commit of their own — approval only stamps the
+document row, and a render's HTML/PDF are mutable working outputs.
 
 Every physical object key a write produces is derived from its group key **and** its
 attempt_id together (for example
-`revisions/{application_id}/{revision_id}/{attempt_id}/resume.json`), never from the
+`snapshots/{application_id}/{snapshot_id}.txt` or
+`provider/{application_id}/{operation_id}/{artifact_id}.json`), never from the
 group key alone. A later attempt against the same group key, including a legitimate
 retry, mints a new attempt_id and therefore new physical keys; it never reuses or
 overwrites a prior attempt's keys. Registration and the lease's flip to `committed`
@@ -387,7 +411,12 @@ nothing is ever registered under an attempt already declared abandoned, and noth
 ever registered under a key that does not belong to the attempt winning that
 transaction.
 
-Maintenance inventories registered snapshot, revision, and artifact references in one
+`submit_application` (state-and-use-cases.md §18) copies the document's content and
+its active HTML and PDF to submission-owned paths under a payload write lease, one group
+key per Submission, exactly as above; it registers those keys in the transaction that
+inserts the Submission.
+
+Maintenance inventories registered snapshot and artifact references in one
 read scope, closes it, then enumerates managed immutable object keys through the same
 backend-neutral Port on local and S3 stores. `inspect_orphans` lists an object key whose
 group key is absent from the database snapshot **and** holds no live lease row (`pending`
@@ -452,8 +481,13 @@ use a narrow durable journal:
 3. Persist a `PREPARED` journal entry with old/new hashes and paths, staged path, DB
    mutation identity, and recovery strategy.
 4. Atomically replace the Knowledge file.
-5. In one write scope, apply fact events, any related SelectionPlan, and the journal
-   transition to `COMMITTED`; all commit or roll back together.
+5. In one write scope, apply fact events, any resulting document selection update
+   (`confirm_and_use_fact`'s `update_selection` step, guarded by
+   `expected_document_hash` exactly as a direct `update_selection` call is), and the
+   journal transition to `COMMITTED`; all commit or roll back together. The journal
+   writes nothing else to the document: a fact edited, replaced, demoted, or deleted
+   changes `facts_hash` and is picked up on the document's next read, not by a journal
+   write to the document row (state-and-use-cases.md §6).
 6. Clean up staged/backup files outside the database scope. A cleanup failure may leave
    temporary files but does not undo the committed source or metadata.
 
@@ -471,32 +505,36 @@ not command semantics:
 
 ```python
 analyze_job(application_id, job_snapshot_id, provider)
-create_draft(application_id, job_analysis_id, selection_plan_id, provider)
-approve_draft(working_draft_id, expected_edit_version, validation_run_id)
-render_revision(application_id, approved_revision_id)
+create_draft(application_id, expected_document_hash, provider)
+approve_document(application_id, expected_document_hash)
+render_document(application_id, expected_document_hash)
+submit_application(application_id, expected_document_hash, submitted_at, metadata)
 ```
 
-WorkingDraft records source analysis and SelectionPlan. An edit from an approved
-revision also records `parent_revision_id`. ApprovedRevision freezes Application,
-JobSnapshot, JobAnalysis, SelectionPlan, Draft content/version/hash, CandidateContext,
-facts and Knowledge dependencies, policy versions, validation, and decision provenance.
+`CVDocument` records its own source: `analysis_id` (the JobAnalysis it is pinned to) and
+`selection`. There is no `parent_revision_id` and no draft/revision lineage, because
+editing an approved or Ready document changes it in place rather than branching a new
+entity. A Submission freezes the provenance that used to live on ApprovedRevision:
+Application, JobSnapshot, JobAnalysis (via the document's `analysis_id` at submission
+time), the document's `content`/`document_hash`, CandidateContext, the facts and
+Knowledge context the content actually depended on (`facts_hash`), and policy versions.
 
-The global Knowledge-store version is coarse audit/detection. Exact `knowledge_context`
-hashes determine dependency staleness. SelectionPlan additionally freezes candidate
-fact IDs/hashes, Profile, selection policy, and Track/Emphasis dependencies. An
-unrelated fact change does not invalidate every draft.
+The global Knowledge-store version is coarse audit/detection. `facts_hash` is the exact
+dependency hash: computed on read from the document's `selection` fact IDs united with
+the fact IDs its claims cite, so an unrelated fact change does not affect a document that
+does not depend on it. `built_with` (profile version, selection-policy version) is
+frozen on the document at creation/re-pin and drives the `PROFILE_CHANGED`/
+`POLICY_CHANGED` warnings by comparison; approval and rendering validate against current
+values regardless of `built_with`.
 
-Ready is computed, never stored as a second revision type. An ApprovedRevision becomes
-`ready_qualified` when its exact HTML/PDF artifacts exist, render/PDF/ATS
-validation passes, and current integrity verification passes. This projection is
-independent of the active context but may become false if registered artifacts are
-missing or corrupt. `PreparationState=ready` additionally requires compatibility with
-the active JobSnapshot + JobAnalysis, and
-`latest_ready_revision_id` is an ApprovedRevision ID.
-
-Ready compatibility follows the rule in state-and-use-cases.md §3 (JobSnapshot ID +
-JobAnalysis ID): a new snapshot or analysis demotes it only for the active context, and
-the immutable revision remains historical and downloadable regardless.
+Ready is computed, never stored as a second entity. `document_state = ready` when
+`rendered_basis == approved_basis == basis` (state-and-use-cases.md §3, §5): the basis
+already covers content, selection, analysis pin, and every fact the document depends on,
+so a change to any of them drops `ready` on the next read without a separate demotion
+step. There is no `newer_draft_in_progress` and no historical-versus-active Ready
+distinction, because there is exactly one document: `DOCUMENT_ON_OLDER_ANALYSIS`
+(state-and-use-cases.md §8) is the only warning a newer JobSnapshot/JobAnalysis produces,
+and it never changes `document_state` by itself.
 
 ## 9. Application services and action policy
 
@@ -504,12 +542,15 @@ Application services return Pydantic boundary DTOs. They enforce domain precondi
 load all explicit sources, call ports, record audit, and commit one outcome. They do not
 return database rows or paths.
 
-The action-policy projector computes PreparationState, WorkingDraftState, warnings,
-review reasons, stale reasons and primary reason, active Operation, available actions,
-blocked actions and reason codes, nullable recommended action, active-context IDs,
-milestone IDs, and `newer_draft_in_progress` from inputs captured in one consistent
-read transaction. Ready payload verification runs after that scope closes, and the
-final policy is computed from the captured metadata and verified evidence.
+The action-policy projector computes PreparationState, DocumentState, content_check,
+warnings, review reasons, active Operation, available actions, blocked actions and
+reason codes, and a nullable recommended action from inputs captured in one consistent
+read transaction — including the Knowledge needed to compute the document's `basis`
+(state-and-use-cases.md §9). There is no stale-reasons projection: outdated stamps are
+read directly off the basis comparison, not derived from a separate reason catalogue.
+Ready payload verification (that `html_path`/`pdf_path` still exist and are intact) runs
+after that scope closes, and the final policy is computed from the captured metadata and
+verified evidence.
 
 The API consumes this policy. React does not duplicate it.
 
@@ -550,8 +591,8 @@ resume an external call. Graceful shutdown stops claiming, requests cancellation
 waits briefly, stops heartbeat, and leaves durable state for recovery.
 
 Commit checks run before execution and before activation. `SOURCE_CHANGED` preserves
-any immutable output as inactive evidence and fails the Operation without replacing the
-WorkingDraft.
+any immutable output as inactive evidence and fails the Operation without changing the
+document.
 
 Provider execution and immutable payload preservation/verification happen outside
 scopes. Prepared evidence is registered durably as inactive before activation in short
@@ -649,24 +690,26 @@ continuation requires another user-selected command.
 The API prefix is `/api/v1`. Product v2 and API v1 are intentionally separate version
 spaces.
 
-Resources include Applications, JobSnapshots, analyses, SelectionPlans, WorkingDrafts,
-validations, ApprovedRevisions, artifacts, Operations, submissions, and contextual
-facts. True use-cases use action endpoints such as validate, approve, render, cancel,
-and retry rather than artificial CRUD.
+Resources include Applications, JobSnapshots, analyses, the Application's one CVDocument,
+provider-response artifacts, Operations, submissions, and contextual facts. True
+use-cases use action endpoints such as check, approve, render, cancel, and retry rather
+than artificial CRUD.
 
 Asynchronous commands return `202 Accepted` plus an Operation Location. Synchronous
-creation returns `201 Created`. SelectionPlan creation is `201` in deterministic mode
-and `202` with a Location when AI proposal mode is requested. NeedsReview and failed
-validation are successful domain outcomes.
+creation returns `201 Created`. `propose_selection` is `202` with a Location, since it
+is always an AI Operation; `update_selection` is synchronous. A review reason and a
+failed content check are successful domain outcomes.
 
 API schemas are separate from domain and persistence types. OpenAPI is generated and
 validated; TypeScript types are generated and checked for drift. The small handwritten
 `frontend/src/api/client.ts` module owns HTTP mechanics.
 
-WorkingDraft responses emit ETags. PATCH requires If-Match and maps to the application's
-expected version. Version mismatch is `409`; stale/missing domain prerequisites are
-`412`. Analyze, generate, approve, and render accept idempotency keys scoped by
-operation type + key. Reuse with another payload hash is
+The document resource emits `document_hash` as its ETag. The autosave `update_document`
+takes it as `If-Match`; every other document-mutating command carries it in the request
+body as `expected_document_hash`, because an action on a resource is not a conditional
+replacement of it (state-and-use-cases.md §21). A mismatch is `409`; a missing/blocked
+domain precondition is `412`. Analyze, generate, approve, and render accept idempotency
+keys scoped by operation type + key. Reuse with another payload hash is
 `409 IDEMPOTENCY_KEY_REUSED`.
 
 Problems follow RFC-style Problem Details with stable code and safe context. Internal

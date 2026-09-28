@@ -1,22 +1,24 @@
-"""Apply explicit user corrections and risk decisions to an existing analysis."""
+"""Apply explicit matching-configuration decisions: a new analysis, or a selection change."""
 
 from __future__ import annotations
 
 from ....domain.contracts.analysis import JobAnalysis, OverrideKey
-from ....domain.contracts.selection import SelectionPlan
 from ....domain.contracts.taxonomy import Emphasis
 from ....domain.profiles import classification_mismatch
+from ....util import utc_now
 from ...commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
-    CreateSelectionPlanCommand,
 )
-from ...errors import (
-    PreconditionFailed,
-    StateConflict,
-    UnknownRecord,
+from ...errors import PreconditionFailed, StateConflict
+from ..documents import (
+    build_document_selection,
+    built_with,
+    lock_document_source,
+    require_hash,
+    selection_change_body,
 )
 from .preparation import PreparedAnalysis
 from .selection_policy import AnalysisSelection
@@ -54,17 +56,18 @@ class AnalysisCorrection:
     def apply_analysis_decisions(
         service, command: ApplyAnalysisDecisionsCommand
     ) -> AnalysisDecisionsResult:
-        """Apply one explicit matching-configuration or fact-selection change.
+        """§13: apply one explicit matching-configuration or fact-selection decision.
 
-        Classification changed -> one new immutable JobAnalysis carrying the overrides,
-        together with its initial policy-derived SelectionPlan, committed
-        atomically by `save_analysis`. Only Emphasis, fact selection, or gap
-        acceptance changed -> one replacement SelectionPlan against the same
-        analysis. Neither branch touches the records the user edited against.
+        A change to requirement meaning or to the Track/Profile/language
+        classification creates one new immutable JobAnalysis and leaves the
+        document untouched (it raises `DOCUMENT_ON_OLDER_ANALYSIS` until
+        `build_from_analysis`); when no document exists, the new analysis creates it.
+        An Emphasis or fact-selection decision on the document's own analysis updates
+        the document selection in place, exactly as `update_selection` does.
 
-        Overrides accumulate. The submission is merged over the overrides the
-        source analysis already carried, so a second decision does not silently
-        drop the first, and withholding a field is not a retraction of it.
+        Overrides accumulate. The submission is merged over the overrides the source
+        analysis already carried, so a second decision does not silently drop the
+        first, and withholding a field is not a retraction of it.
         """
         if command.expected_analysis_id != command.job_analysis_id:
             raise StateConflict(
@@ -74,6 +77,13 @@ class AnalysisCorrection:
         record = service.selection_source(command.application_id, command.job_analysis_id)
         service.refuse_deleted(record.application_id, record.deleted_at)
         analysis: JobAnalysis = record.analysis
+        document = service.current_document(command.application_id)
+        if document is not None:
+            if command.expected_document_hash is None:
+                raise PreconditionFailed(
+                    "a decision made beside a CV document must name it (expected_document_hash)"
+                )
+            require_hash(document, command.expected_document_hash)
 
         candidates: dict[OverrideKey, str | None] = {
             "track": command.track_override,
@@ -84,24 +94,22 @@ class AnalysisCorrection:
             key: value for key, value in candidates.items() if value
         }
         merged = {**analysis.user_override, **submitted}
-        active_plan: SelectionPlan | None = None
-        if command.expected_selection_plan_id is not None:
-            try:
-                observed_plan = service.selection_plan(command.expected_selection_plan_id)
-            except UnknownRecord:
-                observed_plan = None
-            if (
-                observed_plan is not None
-                and observed_plan.application_id == command.application_id
-                and observed_plan.job_analysis_id == command.job_analysis_id
-            ):
-                active_plan = observed_plan
+        own_selection = (
+            document.selection
+            if document is not None and document.analysis_id == command.job_analysis_id
+            else None
+        )
         prior_emphasis_override = (
-            active_plan.plan.emphasis_override if active_plan is not None else None
+            own_selection.emphasis_override if own_selection is not None else None
         )
-        requested_emphasis_override = (
-            Emphasis(command.emphasis_override) if command.emphasis_override is not None else None
-        )
+        try:
+            requested_emphasis_override = (
+                Emphasis(command.emphasis_override)
+                if command.emphasis_override is not None
+                else None
+            )
+        except ValueError as exc:
+            raise PreconditionFailed(f"unknown Emphasis: {command.emphasis_override}") from exc
         emphasis_decision_changed = requested_emphasis_override is not None and (
             prior_emphasis_override != requested_emphasis_override
         )
@@ -113,79 +121,82 @@ class AnalysisCorrection:
         has_fact_overlay = bool(command.pinned_fact_ids or command.excluded_fact_ids)
         has_overlay = bool(has_fact_overlay or emphasis_decision_changed)
 
-        # A plan-level Emphasis decision is folded into a newly-created
-        # analysis only when another decision already requires that new
-        # analysis. Otherwise the JobAnalysis stays immutable and only the
-        # SelectionPlan changes.
+        # An Emphasis decision accompanying a classification change is carried into
+        # the new analysis's deterministic selection.
         carried_emphasis = requested_emphasis_override or prior_emphasis_override
         if changes_meaning and carried_emphasis is not None:
             merged["emphasis"] = carried_emphasis.value
 
         if changes_meaning and has_fact_overlay:
-            # A classification decision produces a *new* analysis whose initial
-            # plan is the deterministic one for that classification. Applying a
-            # *fact* overlay to it would silently attach decisions the user made
-            # about the old candidate accounting to a new one they have not seen.
+            # Pinned and excluded facts are decided against candidate accounting the
+            # new analysis has not produced yet, so they stay a second command.
             raise PreconditionFailed(
-                "a classification decision creates a new analysis with its own initial "
-                "SelectionPlan; apply the fact overlay to that analysis in a second command"
-            )
-
-        if (changes_meaning or has_overlay) and command.expected_selection_plan_id is None:
-            # Two different failures, answered with two different codes. A
-            # decision that writes a SelectionPlan must say which plan the user
-            # was looking at; omitting that is a malformed request, refused
-            # here as a precondition. Naming a plan that has since been
-            # replaced is a genuine race, and `_active_plan` answers that one
-            # with a conflict. Letting the guard catch both reported a client
-            # that forgot the token as if it had lost a race it never entered.
-            raise PreconditionFailed(
-                "a decision that replaces the SelectionPlan must name the plan it was "
-                "made against (expected_selection_plan_id)"
+                "a classification decision creates a new analysis with its own "
+                "deterministic selection; apply the fact overlay in a second command"
             )
 
         if changes_meaning:
             result = AnalysisCorrection.revise_classification(
                 service, command, analysis, record, merged
             )
+            current = service.current_document(command.application_id)
             return AnalysisDecisionsResult(
                 application_id=command.application_id,
                 job_analysis_id=result.analysis_id,
-                selection_plan_id=result.selection_plan_id,
                 created_analysis=True,
                 analysis=result.analysis,
-                plan=service.selection_plan(result.selection_plan_id),
+                document_id=current.id if current is not None else None,
+                document_hash=current.document_hash if current is not None else None,
             )
 
         if not has_overlay:
-            # Refused rather than answered with the plan that already exists: an
-            # empty submission that created a second identical plan would put a
-            # decision in the history that nobody made.
+            # Refused rather than answered: an empty submission would put a decision
+            # in the history that nobody made.
             raise PreconditionFailed("the submitted decisions change nothing")
-
-        created = service.create_selection_plan(
-            CreateSelectionPlanCommand(
-                application_id=command.application_id,
-                job_analysis_id=command.job_analysis_id,
-                pinned_fact_ids=list(command.pinned_fact_ids),
-                excluded_fact_ids=list(command.excluded_fact_ids),
-                emphasis_override=(
-                    requested_emphasis_override.value
-                    if requested_emphasis_override is not None
-                    else None
-                ),
-                expected_selection_plan_id=command.expected_selection_plan_id,
-                enforce_expected_selection_plan=True,
-                refuse_matching_context_operation=True,
+        if own_selection is None or document is None or command.expected_document_hash is None:
+            raise PreconditionFailed(
+                "a selection decision applies to the analysis the document is built on; "
+                "build the document from this analysis first"
             )
+        knowledge = service.load_knowledge()
+        source = service.document_source(command.application_id)
+        require_hash(source.document, command.expected_document_hash)
+        body = selection_change_body(
+            source,
+            knowledge,
+            pinned_fact_ids=command.pinned_fact_ids,
+            excluded_fact_ids=command.excluded_fact_ids,
+            emphasis_override=command.emphasis_override,
         )
+        with service.transactions.write() as tx:
+            service.analyses.lock_application(tx, command.application_id)
+            service.analyses.refuse_matching_context_operation(tx, command.application_id)
+            locked = lock_document_source(
+                tx, service.documents, service.sources, command.application_id
+            )
+            if locked.latest_analysis_id != command.expected_analysis_id:
+                raise StateConflict(
+                    "the active JobAnalysis moved since this decision was made "
+                    "(expected_analysis_id)"
+                )
+            updated = service.documents.update_body(
+                tx,
+                command.application_id,
+                command.expected_document_hash,
+                body,
+                updated_at=utc_now(),
+            )
+            if emphasis_decision_changed:
+                service.analyses.set_matching_emphasis(
+                    tx, command.application_id, body.selection.emphasis.value
+                )
         return AnalysisDecisionsResult(
             application_id=command.application_id,
             job_analysis_id=command.job_analysis_id,
-            selection_plan_id=created.selection_plan_id,
             created_analysis=False,
             analysis=analysis,
-            plan=created.plan,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
         )
 
     @staticmethod
@@ -200,28 +211,20 @@ class AnalysisCorrection:
         knowledge = service.load_knowledge()
         revised = revise_classification(analysis, merged_overrides, knowledge.profiles)
         selected = AnalysisSelection.profile(revised, knowledge.profiles)
-        manifest = AnalysisSelection.manifest(revised, knowledge)
         return service.activate(
             AnalyzeCommand(
                 application_id=command.application_id,
                 job_snapshot_id=record.job_snapshot_id,
                 expected_analysis_id=command.expected_analysis_id,
-                expected_selection_plan_id=command.expected_selection_plan_id,
+                expected_document_hash=command.expected_document_hash,
                 refuse_matching_context_operation=True,
             ),
             PreparedAnalysis(
                 result=revised,
-                plan_manifest=manifest,
+                selection=build_document_selection(revised, knowledge),
+                built_with=built_with(knowledge),
                 provider="user",
                 model="classification-correction-v1",
-                candidate_context_version=knowledge.candidate.context_version,
-                candidate_context_hash=knowledge.candidate.version_hash,
-                profile_version=knowledge.profiles.version,
-                selection_policy_version=knowledge.policies.version,
-                track_emphasis_dependencies={
-                    "track": revised.track.value,
-                    "emphasis": revised.emphasis.value,
-                },
                 normalized_role=selected.normalized_role,
             ),
         )

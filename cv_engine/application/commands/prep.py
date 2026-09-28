@@ -1,23 +1,30 @@
-"""CV-preparation commands and results: snapshot -> analysis -> selection ->
-draft -> validation -> approval -> render.
+"""CV-preparation commands and results: snapshot -> analysis -> the one CV document.
 
 These models are deliberately storage-neutral. A client receives identities,
 validated domain documents, and workflow state; local paths are resolved only
 by an infrastructure adapter.
+
+The mutable CVDocument is named by its Application and guarded by the
+`expected_document_hash` the client last read (state-and-use-cases.md §1): a command
+that resolved "the current document" for itself could change something the user
+never saw.
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.selection import SelectionPlan
 from ...domain.contracts.validation import ValidationReport
+from ...domain.document import ContentCheck, DocumentState
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
 
 SOURCE_URL_MAX_CHARACTERS = 2048
+
+#: The document's concurrency token, as every command carries it.
+DocumentHash = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class IngestCommand(BoundaryDTO):
@@ -55,6 +62,8 @@ class UpdateApplicationNotesCommand(BoundaryDTO):
 
 
 class AnalyzeCommand(BoundaryDTO):
+    """§13 `analyze_job`, bound to its input JobSnapshot rather than to a document."""
+
     application_id: str
     job_snapshot_id: str
     track_override: str | None = None
@@ -62,12 +71,12 @@ class AnalyzeCommand(BoundaryDTO):
     emphasis_override: str | None = None
     language_override: str | None = None
     #: Present only when analysis is the write branch of an explicit decision
-    #: against an already active context. A fresh analysis has no prior
-    #: analysis to compare with.
+    #: against an already active context (`apply_analysis_decisions`). A fresh
+    #: analysis has no prior analysis or document to compare with.
     expected_analysis_id: str | None = None
-    expected_selection_plan_id: str | None = None
+    expected_document_hash: str | None = None
     #: Internal flag carried to persistence so an explicit decision is refused
-    #: while an Operation that can replace its Analysis/SelectionPlan is active.
+    #: while an Operation that can replace the analysis or the selection is active.
     refuse_matching_context_operation: bool = False
     provider: Literal["openai"] = "openai"
     model: str | None = None
@@ -77,64 +86,21 @@ class AnalyzeCommand(BoundaryDTO):
 class SelectionOverlay(BoundaryDTO):
     """One user's explicit fact decisions, laid over the deterministic engine.
 
-    Two lists, not three. `selected` is what the plan reports, not what a client
-    asks for: in a budgeted deterministic selection the only way to say "include
-    this" is to hold it, which is what a pin is.
+    Two lists, not three. `selected` is what the selection reports, not what a
+    client asks for: in a budgeted deterministic selection the only way to say
+    "include this" is to hold it, which is what a pin is.
     """
 
     pinned_fact_ids: list[str] = []
     excluded_fact_ids: list[str] = []
 
 
-class CreateSelectionPlanCommand(SelectionOverlay):
-    """The deterministic form of §13 `create_selection_plan`.
-
-    The `expected_*` versions are the optimistic check: they are what the client
-    had in front of it when the user decided. Left unset the plan is built
-    against whatever Knowledge currently says; set and no longer matching, the
-    command refuses rather than quietly planning against something the user never
-    saw.
-    """
-
-    application_id: str
-    job_analysis_id: str
-    #: Emphasis changes selection and presentation policy but not the meaning
-    #: of JobAnalysis. A value here creates a replacement plan and records the
-    #: explicit choice on its manifest.
-    emphasis_override: str | None = None
-    #: The plan the user was looking at when they decided. Set, and the active
-    #: plan has moved on, the command is refused rather than quietly rebased
-    #: onto a plan the user never saw - which is how an acceptance went missing
-    #: with no error at all.
-    expected_selection_plan_id: str | None = None
-    expected_candidate_context_hash: str | None = None
-    expected_facts_version: str | None = None
-    expected_profile_version: str | None = None
-    expected_selection_policy_version: str | None = None
-    #: Internal optimistic guard used by asynchronous selection proposals. Unlike the
-    #: public optional ID, this also distinguishes "there was no active plan" from "the
-    #: caller did not state an expectation", so a plan created while AI is running cannot
-    #: be silently replaced at activation.
-    enforce_expected_selection_plan: bool = False
-    #: Internal counterpart of AnalyzeCommand's guard, used by the plan-only
-    #: branch of apply_analysis_decisions.
-    refuse_matching_context_operation: bool = False
-    #: Internal: set only by the `propose_selection_plan` Operation, carrying the
-    #: provider's rationale onto the manifest it activates. Not a request field.
-    ai_proposal_rationale: str | None = None
-
-
 class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     """One local review-form submission (§13).
 
-    Carries both kinds of decision because one form does. Track/Profile/
-    language change analysis meaning; Emphasis and fact selection can replace
-    only SelectionPlan.
-
-    There is nothing here to accept. Low Fit and hard gaps describe how well
-    the candidate matches the posting and are shown rather than gated, and an
-    interpretation is no longer a separate thing a requirement carries, so
-    there is no correction for it to submit.
+    Carries both kinds of decision because one form does. Track/Profile/language
+    change analysis meaning and create a new JobAnalysis; Emphasis and fact
+    selection change only the document's selection, in place.
     """
 
     application_id: str
@@ -143,115 +109,67 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     #: inferred from job_analysis_id: naming what to mutate and naming what was
     #: observed are separate claims at an optimistic boundary.
     expected_analysis_id: str
+    #: The document the form was read beside; required whenever a document exists.
+    expected_document_hash: str | None = None
     track_override: str | None = None
     profile_override: str | None = None
     emphasis_override: str | None = None
     language_override: str | None = None
-    expected_selection_plan_id: str | None = None
 
 
-class ProposeSelectionPlanCommand(SelectionOverlay):
-    """The AI form of §13 `create_selection_plan`.
+class UpdateSelectionCommand(SelectionOverlay):
+    """§14 `update_selection`: a deterministic change to the document's selection.
 
-    Carries the same optimistic `expected_*` versions as the deterministic
-    form, because activation runs the deterministic command: a Proposal built
-    against Knowledge that has since moved is refused there, not here.
-
-    It inherits the overlay lists but does not use them as input - the provider
-    proposes the overlay. They are inherited rather than removed so a client
-    cannot send them under a name the command silently ignores: an overlay sent
-    here is a `422` from the HTTP schema, which declares only what this command
-    reads.
+    `emphasis_override` null means "leave the effective Emphasis as it is", not
+    "clear the override".
     """
 
     application_id: str
-    job_analysis_id: str
-    expected_candidate_context_hash: str | None = None
-    expected_facts_version: str | None = None
-    expected_profile_version: str | None = None
-    expected_selection_policy_version: str | None = None
-    expected_selection_plan_id: str | None = None
-    enforce_expected_selection_plan: bool = False
+    expected_document_hash: str = DocumentHash
+    emphasis_override: str | None = None
+
+
+class ProposeSelectionCommand(BoundaryDTO):
+    """§14 `propose_selection`: the provider proposes the overlay; activation decides."""
+
+    application_id: str
+    expected_document_hash: str = DocumentHash
+    provider: Literal["openai"] = "openai"
     model: str | None = None
     reasoning_effort: str | None = None
 
 
-class DraftCommand(BoundaryDTO):
-    """§14 `create_draft`, in either mode.
+class BuildFromAnalysisCommand(BoundaryDTO):
+    """§14 `build_from_analysis`: re-pin the document to an explicitly named analysis."""
 
-    `provider` is explicit and has no `auto` value (§12). Deterministic is the
-    default because the deterministic workflow must reach Ready with no key
-    configured; asking for `openai` without a configured provider is a refusal,
-    never a silent fall back to the default.
+    application_id: str
+    analysis_id: str = Field(min_length=1)
+    expected_document_hash: str = DocumentHash
+    actor_type: Literal["user", "system"] = "user"
+    client: WriteClient = "web"
+
+
+class DraftCommand(BoundaryDTO):
+    """§14 `create_draft`, in either mode, against the document the client read.
+
+    `provider` is explicit and has no `auto` value. Deterministic is the default
+    because the deterministic workflow must reach Ready with no key configured;
+    asking for `openai` without a configured provider is a refusal, never a silent
+    fall back to the default.
     """
 
     application_id: str
-    job_analysis_id: str
-    selection_plan_id: str
-    parent_revision_id: str | None = None
-    #: §14 replacement: the exact draft version this generation is replacing.
-    #:
-    #: Absent for a first draft, where there is nothing to replace. Present for a
-    #: replacement, and then carried all the way to the write: the Operation freezes this
-    #: identity, re-checks it at activation, and the update is conditional on it. Without
-    #: it the worker committed over "whatever is active", so a draft edited or archived
-    #: between the `202` and the write was overwritten or silently replaced by a new
-    #: record with a new id.
-    #:
-    #: It is also what makes two replacements of different versions two different
-    #: commands: the payload hash decides idempotency, and a payload that omitted the
-    #: version made a second, distinct replacement look like a replay of the first.
-    replaces_working_draft_id: str | None = None
-    replaces_expected_edit_version: int | None = None
-    #: The Keep decision this generation was submitted under.
-    #:
-    #: Carried purely so it reaches the Operation payload, which is what the idempotency
-    #: check hashes. Keep decides whether an immutable historical snapshot is written, so
-    #: the same key sent once with Keep and once without is two materially different
-    #: commands - and without this field they hashed identically and the second was served
-    #: back as a replay of the first, silently ignoring the changed decision.
-    replaces_keep_previous: bool = False
-
-    @model_validator(mode="after")
-    def complete_replacement_identity(self) -> DraftCommand:
-        """A replacement is all three fields or none of them.
-
-        Mirrors the rule `OperationSources` already applies to the frozen identity, and
-        for the same reason: a half-stated replacement is not a weaker command, it is an
-        unanswerable one. An id without a version cannot be guarded, a version without an
-        id names nothing, and Keep without a replacement asks for a historical snapshot of
-        a draft this command is not replacing.
-        """
-        if (self.replaces_working_draft_id is None) != (
-            self.replaces_expected_edit_version is None
-        ):
-            raise ValueError(
-                "draft replacement requires both a working draft id and its edit version"
-            )
-        if self.replaces_keep_previous and self.replaces_working_draft_id is None:
-            raise ValueError("keep_previous is a decision about a draft being replaced")
-        return self
-
+    expected_document_hash: str = DocumentHash
     provider: Literal["deterministic", "openai"] = "deterministic"
     model: str | None = None
     reasoning_effort: str | None = None
 
 
 class RegenerateSectionCommand(BoundaryDTO):
-    """§14 `regenerate_section`: one exact draft version, one named section.
-
-    The draft's identity is stated in all three parts the specification names -
-    ID, `edit_version`, and content hash - because that is what the Operation
-    freezes. A regeneration that named only the ID could activate over content
-    the user changed while it was running.
-    """
+    """§14 `regenerate_section`: one named section of the document the client read."""
 
     application_id: str
-    working_draft_id: str
-    expected_edit_version: int
-    expected_content_hash: str
-    job_analysis_id: str
-    selection_plan_id: str
+    expected_document_hash: str = DocumentHash
     section: str
     instruction: str = ""
     model: str | None = None
@@ -259,14 +177,10 @@ class RegenerateSectionCommand(BoundaryDTO):
 
 
 class RegenerateClaimCommand(BoundaryDTO):
-    """§14 `regenerate_claim`: one exact draft version, one named claim."""
+    """§14 `regenerate_claim`: one named claim of the document the client read."""
 
     application_id: str
-    working_draft_id: str
-    expected_edit_version: int
-    expected_content_hash: str
-    job_analysis_id: str
-    selection_plan_id: str
+    expected_document_hash: str = DocumentHash
     claim_id: str
     instruction: str = ""
     #: Review the user's own wording instead of writing new wording: no writer runs,
@@ -278,7 +192,7 @@ class RegenerateClaimCommand(BoundaryDTO):
 
 
 class ClaimPatch(BoundaryDTO):
-    """One claim's new content inside a structured WorkingDraft patch.
+    """One claim's new content inside a structured document patch.
 
     Free text with no fact behind it is not refused here. The domain edit path
     keeps it as a `pending` claim carrying the reason it could not be
@@ -305,123 +219,57 @@ class ClaimAddition(BoundaryDTO):
     text: str
 
 
-class UpdateWorkingDraftCommand(BoundaryDTO):
-    """§14 autosave: one exact draft version, and a structured patch.
+class UpdateDocumentCommand(BoundaryDTO):
+    """§14 `update_document`: autosave one structured patch against one exact hash."""
 
-    Both halves of the ETag are stated, not just the version. The version alone
-    proves nobody else has saved since; the content hash proves the client was
-    editing the document this command is about to change, which is what an
-    `If-Match` header actually promised.
-    """
-
-    working_draft_id: str
-    expected_edit_version: int
-    expected_content_hash: str
+    application_id: str
+    expected_document_hash: str = DocumentHash
     claim_edits: list[ClaimPatch] = []
     claim_removals: list[str] = []
     claim_additions: list[ClaimAddition] = []
     claim_orders: dict[str, list[str]] = {}
 
     @model_validator(mode="after")
-    def validate_patch(self) -> UpdateWorkingDraftCommand:
-        """A patch has to change something, and may not contradict itself.
-
-        Removal and ordering ride on this command rather than commands of their own because
-        product-spec §10 makes removal one of the three ways an unsupported
-        claim is resolved, and §14 commits an autosave patch as a single edit
-        against a single expected version. A separate command would need its own
-        token and could interleave with the save the user is already making.
-        """
+    def validate_patch(self) -> UpdateDocumentCommand:
+        """A patch has to change something, and may not contradict itself."""
         if (
             not self.claim_edits
             and not self.claim_removals
             and not self.claim_additions
             and not self.claim_orders
         ):
-            raise ValueError("a working draft patch must edit, remove, add, or reorder content")
+            raise ValueError("a document patch must edit, remove, add, or reorder content")
         both = {edit.claim_id for edit in self.claim_edits} & set(self.claim_removals)
         if both:
             raise ValueError(f"a patch cannot both edit and remove the same claim: {sorted(both)}")
         return self
 
 
-class ApplySelectionChangeCommand(SelectionOverlay):
-    """§14: a deterministic fact-selection change against one exact draft."""
+class CheckDocumentCommand(BoundaryDTO):
+    """§15 `check_document`: validate the content without approving."""
 
-    working_draft_id: str
-    expected_edit_version: int
-
-
-class ArchiveWorkingDraftCommand(BoundaryDTO):
-    """§14: materialize the historical snapshot, then clear the active pointer.
-
-    `actor_type` and `client` are carried rather than assumed, because this
-    command writes an audit record. A Web archive recorded as anything else is
-    a false statement in the one place that exists to answer who did it.
-    """
-
-    working_draft_id: str
-    expected_edit_version: int
-    actor_type: Literal["user", "system"] = "user"
-    client: WriteClient
+    application_id: str
+    expected_document_hash: str = DocumentHash
 
 
-class ReplaceWorkingDraftCommand(BoundaryDTO):
-    """§14: replace one exact draft from an explicit compatible analysis and plan.
+class ApproveDocumentCommand(BoundaryDTO):
+    """§15 `approve_document`: check and approve in one synchronous action.
 
-    `application_id` is stated by the caller rather than read off the draft. The
-    client says which Application it believes it is replacing a draft for, and a
-    draft that belongs to another one is a `412` naming the broken lineage -
-    the same rule Stage D applied to `apply_analysis_decisions`.
-
-    `keep_previous` is the user's Keep decision. It materializes the immutable
-    historical snapshot *before* the replacement is attempted, which is safe in
-    both directions: a snapshot of content that existed is true whether or not
-    the replacement then succeeds, and nothing is discarded before the new
-    draft is committed.
+    `actor_type` and `client` reach the audit record. Getting them wrong is a
+    permanent record saying a person at a terminal approved something a browser did.
     """
 
     application_id: str
-    working_draft_id: str
-    expected_edit_version: int
-    job_analysis_id: str
-    selection_plan_id: str
-    keep_previous: bool = False
-    provider: Literal["deterministic", "openai"] = "deterministic"
-    actor_type: Literal["user", "system"] = "user"
-    client: WriteClient
-
-
-class ValidateDraftCommand(BoundaryDTO):
-    """§15: validate one exact WorkingDraft version."""
-
-    working_draft_id: str
-    expected_edit_version: int
-
-
-class ApproveDraftCommand(BoundaryDTO):
-    """§15: approve exactly the content one exact ValidationRun passed.
-
-    All three identities are the caller's. Approval re-checks the binding
-    between them; it never runs its own validation, because a validation
-    approval creates for itself can only ever agree with approval.
-
-    `actor_type` and `client` reach the ApprovedRevision's `decision_provenance`,
-    which is immutable. Getting them wrong is not a mislabelled log line: it is
-    a permanent record saying a person at a terminal approved something a
-    browser did.
-    """
-
-    working_draft_id: str
-    expected_edit_version: int
-    validation_run_id: str
+    expected_document_hash: str = DocumentHash
     actor_type: Literal["user", "system"] = "user"
     client: WriteClient
 
 
 class RenderCommand(BoundaryDTO):
+    """§16 `render_document`: render the approved document the client read."""
+
     application_id: str
-    approved_revision_id: str
+    expected_document_hash: str = DocumentHash
 
 
 class DuplicateMatch(BoundaryDTO):
@@ -448,136 +296,72 @@ class CreatedJobSnapshot(BoundaryDTO):
 
 
 class AnalysisResult(BoundaryDTO):
+    """One activated JobAnalysis and the document it created, if it created one."""
+
     application_id: str
     job_snapshot_id: str
     analysis_id: str
-    selection_plan_id: str
+    document_id: str | None = None
+    created_document: bool = False
     analysis: JobAnalysis
-
-
-class SelectionPlanResult(BoundaryDTO):
-    application_id: str
-    job_analysis_id: str
-    selection_plan_id: str
-    plan: SelectionPlan
 
 
 class AnalysisDecisionsResult(BoundaryDTO):
     """What the review form produced, and which of the two branches produced it.
 
     `job_analysis_id` is the analysis in force *after* the command: the new one
-    when meaning changed, the original one when only the overlay did. The source
-    analysis is untouched either way, so `created_analysis` is what tells a
-    client whether it is now looking at a different record.
+    when meaning changed, the original one when only the selection did. The
+    document is re-pinned by neither branch; `document_hash` is its token now.
     """
 
     application_id: str
     job_analysis_id: str
-    selection_plan_id: str
     created_analysis: bool
     analysis: JobAnalysis
-    plan: SelectionPlan
+    document_id: str | None = None
+    document_hash: str | None = None
+
+
+class DocumentMutationResult(BoundaryDTO):
+    """What a synchronous document change returns: the new token and state."""
+
+    application_id: str
+    document_id: str
+    document_hash: str
+    document_state: DocumentState
+    content_check: ContentCheck
+    #: Claims this change saved as pending, so a client need not diff to find them.
+    pending_claim_ids: list[str] = []
+
+
+class DocumentCheckResult(DocumentMutationResult):
+    """`check` and `approve`. A failed check is data, not an exception (§22)."""
+
+    passed: bool
+    report: ValidationReport
+    approved_at: str | None = None
 
 
 class DraftResult(BoundaryDTO):
     application_id: str
-    job_analysis_id: str
-    selection_plan_id: str
-    working_draft_id: str
-    edit_version: int
-    validation: ValidationReport
-
-
-class EditResult(BoundaryDTO):
-    application_id: str
-    working_draft_id: str
-    edit_version: int
-    validation: ValidationReport
-
-
-class WorkingDraftUpdateResult(BoundaryDTO):
-    """The new optimistic token, plus what could not be authorized.
-
-    `pending_claim_ids` names the claims saved as pending: the text is stored,
-    and the client is told which lines still need a fact rather than having to
-    diff the document to find out.
-    """
-
-    application_id: str
-    working_draft_id: str
-    edit_version: int
-    content_hash: str
-    selection_plan_id: str
-    pending_claim_ids: list[str] = []
+    document_id: str
+    document_hash: str
 
 
 class RegenerationResult(BoundaryDTO):
-    """What one AI regeneration committed, and what produced it.
-
-    `provider_artifact_version_id` names the registered sanitized response, so a
-    client - and a later reader of the record - can reach the exact evidence for
-    the wording that landed without going through the Operation's outputs.
-    """
+    """What one AI regeneration committed, and the evidence that produced it."""
 
     application_id: str
-    working_draft_id: str
-    edit_version: int
-    content_hash: str
-    selection_plan_id: str
+    document_id: str
+    document_hash: str
     regenerated_claim_ids: list[str]
     provider_artifact_version_id: str
 
 
-class SelectionChangeResult(BoundaryDTO):
-    """The immutable plan the change created, and the draft now built on it."""
-
-    application_id: str
-    working_draft_id: str
-    edit_version: int
-    content_hash: str
-    selection_plan_id: str
-    plan: SelectionPlan
-
-
-class ArchivedWorkingDraftResult(BoundaryDTO):
-    """The registered historical snapshot, and the draft it froze."""
-
-    application_id: str
-    working_draft_id: str
-    edit_version: int
-    content_hash: str
-    artifact_version_id: str
-
-
-class ValidationRunResult(BoundaryDTO):
-    """One immutable ValidationRun, whether or not it passed.
-
-    `passed=false` is a successful outcome (§22). The run ID is returned
-    because approval takes it as an argument: a client that could not name the
-    run it read could not prove which content it was approving.
-    """
-
-    application_id: str
-    working_draft_id: str
-    validation_run_id: str
-    edit_version: int
-    content_hash: str
-    passed: bool
-    report: ValidationReport
-
-
-class ApprovalResult(BoundaryDTO):
-    application_id: str
-    revision_id: str
-    version: int
-    markdown_artifact_version_id: str
-    manifest_artifact_version_id: str
-    decision_record_id: str
-
-
 class RenderResult(BoundaryDTO):
     application_id: str
-    pdf_artifact_version_id: str
+    document_id: str
+    document_hash: str
     validation: ValidationReport
 
 
@@ -589,7 +373,7 @@ class UpdatedApplicationNotes(BoundaryDTO):
 
 class DecisionMarkdownExport(BoundaryDTO):
     application_id: str
-    approved_revision_id: str
+    document_id: str
     filename: str
     content: str
     content_hash: str

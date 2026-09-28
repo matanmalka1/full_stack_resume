@@ -21,18 +21,21 @@ from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     analysis_proposal,
+    edit_document_claim,
     seed_analysis_for_command,
+    services_transactions,
+    stored_document,
 )
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
     CreateJobSnapshotCommand,
-    CreateSelectionPlanCommand,
     DraftCommand,
     IngestCommand,
-    ProposeSelectionPlanCommand,
+    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
+    UpdateSelectionCommand,
 )
 from cv_engine.application.errors import StateConflict
 from cv_engine.application.operations import OperationFailureCode
@@ -95,12 +98,10 @@ def _drafted(services, company: str, transaction_manager, application_projection
     services.drafts.draft(
         DraftCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=stored_document(services, ingested.application_id).document_hash,
         )
     )
-    with transaction_manager.read() as tx:
-        working = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    working = stored_document(services, ingested.application_id)
     return ingested, analysed, working
 
 
@@ -111,7 +112,7 @@ def _canonical_claim(working):
     supported, so a test about the *mechanism* is not really a test about
     whether some invented sentence happens to be derivable.
     """
-    for section in working.source.sections:
+    for section in working.content.sections:
         for claim in section.claims:
             if claim.claim_type == "canonical" and len(claim.fact_ids) == 1:
                 return section, claim
@@ -134,7 +135,7 @@ def _analysis_operation(
     services,
     ingested,
     *,
-    model: str = "gpt-5.6-terra",
+    model: str | None = "gpt-5.6-terra",
     fake_openai: FakeOpenAI | None = None,
     **overrides,
 ):
@@ -187,22 +188,23 @@ def test_a_proposal_commits_through_its_operation(
 
         assert completed.status.value == "succeeded", completed.safe_failure_detail
         outputs = {output.output_type for output in completed.outputs}
-        assert {"job_analysis", "selection_plan"} <= outputs
+        assert {"job_analysis", "cv_document"} <= outputs
         return
 
     ingested, analysed = _analyzed(ai_services, "Plan Co")
-    with transaction_manager.read() as tx:
-        plan = application_projection_reader.selection_plan(tx, analysed.selection_plan_id)
-    pinned = plan.plan.selected_fact_ids[:1]
+    plan = stored_document(ai_services, ingested.application_id)
+    pinned = plan.selection.selected_fact_ids[:1]
     fake_openai.script(
         "propose_selection_plan",
         SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r"),
     )
 
-    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
-        ProposeSelectionPlanCommand(
+    queued = ai_services.operation_submissions.submit_selection_proposal(
+        ProposeSelectionCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
+            expected_document_hash=stored_document(
+                ai_services, ingested.application_id
+            ).document_hash,
         ),
         idempotency_key=new_id(),
         analysis_service=ai_services.analysis,
@@ -210,17 +212,17 @@ def test_a_proposal_commits_through_its_operation(
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    plans = [output for output in completed.outputs if output.output_type == "selection_plan"]
+    plans = [output for output in completed.outputs if output.output_type == "cv_document"]
     assert len(plans) == 1
-    with transaction_manager.read() as tx:
-        committed = application_projection_reader.selection_plan(tx, plans[0].output_id)
-    assert committed.id != analysed.selection_plan_id
-    assert set(pinned) <= set(committed.plan.selected_fact_ids)
-    assert (committed.plan.proposed_by, committed.plan.proposal_rationale) == ("ai", "r")
+    committed = stored_document(ai_services, ingested.application_id)
+    assert committed.id == plan.id
+    assert committed.document_hash != plan.document_hash
+    assert set(pinned) <= set(committed.selection.selected_fact_ids)
+    assert (committed.selection.proposed_by, committed.selection.proposal_rationale) == ("ai", "r")
     # Unset provenance is absent from the serialized manifest, so manifests and the
     # drafts that embed and fingerprint them keep the bytes they had before it existed.
-    assert plan.plan.proposed_by is None
-    assert {"proposed_by", "proposal_rationale"}.isdisjoint(plan.plan.model_dump(mode="json"))
+    assert plan.selection.proposed_by is None
+    assert {"proposed_by", "proposal_rationale"}.isdisjoint(plan.selection.model_dump(mode="json"))
 
 
 def test_ai_preferences_are_frozen_before_settings_can_change(
@@ -281,17 +283,17 @@ def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
     application_projection_reader,
 ) -> None:
     ingested, analysed = _analyzed(ai_services, "Selection Race Co")
-    with transaction_manager.read() as tx:
-        original_plan = application_projection_reader.selection_plan(tx, analysed.selection_plan_id)
+    original_plan = stored_document(ai_services, ingested.application_id)
     fake_openai.script(
         "propose_selection_plan",
         SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
     )
-    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
-        ProposeSelectionPlanCommand(
+    queued = ai_services.operation_submissions.submit_selection_proposal(
+        ProposeSelectionCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            expected_selection_plan_id=original_plan.id,
+            expected_document_hash=stored_document(
+                ai_services, ingested.application_id
+            ).document_hash,
         ),
         idempotency_key=new_id(),
         analysis_service=ai_services.analysis,
@@ -302,14 +304,14 @@ def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
     def prepare_then_replace(command, *, operation_id):
         nonlocal replacement_id
         prepared = prepare(command, operation_id=operation_id)
-        replacement = ai_services.analysis.create_selection_plan(
-            CreateSelectionPlanCommand(
+        replacement = ai_services.selection.update_selection(
+            UpdateSelectionCommand(
                 application_id=ingested.application_id,
-                job_analysis_id=analysed.analysis_id,
-                expected_selection_plan_id=original_plan.id,
+                expected_document_hash=original_plan.document_hash,
+                emphasis_override=original_plan.selection.emphasis.value,
             )
         )
-        replacement_id = replacement.selection_plan_id
+        replacement_id = replacement.document_hash
         return prepared
 
     monkeypatch.setattr(ai_services.analysis, "prepare_selection_proposal", prepare_then_replace)
@@ -317,11 +319,8 @@ def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.SOURCE_CHANGED
-    with transaction_manager.read() as tx:
-        latest_plan = application_projection_reader.latest_selection_plan(
-            tx, ingested.application_id
-        )
-    assert latest_plan.id == replacement_id
+    latest_plan = stored_document(ai_services, ingested.application_id)
+    assert latest_plan.document_hash == replacement_id
 
 
 @pytest.mark.parametrize("change_composite", [False, True])
@@ -333,7 +332,7 @@ def test_draft_resume_commits_wording_its_facts_support(
     application_projection_reader,
 ) -> None:
     ingested = _ingested(ai_services, "Draft Co")
-    analysed = seed_analysis_for_command(
+    seed_analysis_for_command(
         ai_services,
         AnalyzeCommand(
             application_id=ingested.application_id,
@@ -345,18 +344,21 @@ def test_draft_resume_commits_wording_its_facts_support(
     )
     # Build a supported document from the existing analysis first, so the
     # proposal can echo wording the validation contract accepts.
-    ai_services.drafts.draft(
+    prepared = ai_services.drafts.prepare(
         DraftCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=stored_document(
+                ai_services, ingested.application_id
+            ).document_hash,
         )
     )
-    with transaction_manager.read() as tx:
-        working = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    working = stored_document(ai_services, ingested.application_id).model_copy(
+        update={"content": prepared.content}
+    )
+    assert working.content is not None
     composite = next(
         claim
-        for section in working.source.sections
+        for section in working.content.sections
         for claim in section.claims
         if claim.claim_type == "composite"
     )
@@ -375,7 +377,7 @@ def test_draft_resume_commits_wording_its_facts_support(
                                 claim_quote=changed_text,
                                 fact_ids=list(composite.fact_ids),
                                 source_quotes=[
-                                    facts.rendering(fact_id, working.source.language)
+                                    facts.rendering(fact_id, working.content.language)
                                     for fact_id in composite.fact_ids
                                 ],
                             )
@@ -399,7 +401,7 @@ def test_draft_resume_commits_wording_its_facts_support(
                     ),
                     fact_ids=list(claim.fact_ids),
                 )
-                for section in working.source.sections
+                for section in working.content.sections
                 for claim in section.claims
             ],
             rationale="r",
@@ -409,8 +411,9 @@ def test_draft_resume_commits_wording_its_facts_support(
     queued = ai_services.operation_submissions.submit_draft(
         DraftCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=stored_document(
+                ai_services, ingested.application_id
+            ).document_hash,
             provider="openai",
         ),
         idempotency_key=new_id(),
@@ -420,10 +423,9 @@ def test_draft_resume_commits_wording_its_facts_support(
     if change_composite:
         assert completed.status.value == "failed"
         assert completed.failure_code is OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED
-        with transaction_manager.read() as tx:
-            actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
-        assert actual.content_hash == working.content_hash
-        assert actual.edit_version == working.edit_version
+        actual = stored_document(ai_services, ingested.application_id)
+        assert actual.content is None
+        assert actual.document_hash == working.document_hash
         return
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     draft_call = fake_openai.calls_for("draft_resume")[-1]
@@ -434,11 +436,11 @@ def test_draft_resume_commits_wording_its_facts_support(
     assert any(
         fact_id not in section["allowed_fact_ids"]
         for section in draft_call.payload["sections"]
-        for fact_id in working.source.selected_fact_ids
+        for fact_id in working.content.selected_fact_ids
     )
-    with transaction_manager.read() as tx:
-        actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
-    assert actual.source.sections == working.source.sections
+    actual = stored_document(ai_services, ingested.application_id)
+    assert actual.content is not None
+    assert actual.content.sections == working.content.sections
 
 
 def test_draft_resume_accepts_separately_reviewed_paraphrase(
@@ -448,25 +450,28 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     application_projection_reader,
 ) -> None:
     ingested = _ingested(ai_services, "Reviewed Draft Co")
-    analysed = seed_analysis_for_command(
+    seed_analysis_for_command(
         ai_services,
         AnalyzeCommand(
             application_id=ingested.application_id,
             job_snapshot_id=ingested.job_snapshot_id,
         ),
     )
-    ai_services.drafts.draft(
+    prepared = ai_services.drafts.prepare(
         DraftCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=stored_document(
+                ai_services, ingested.application_id
+            ).document_hash,
         )
     )
-    with transaction_manager.read() as tx:
-        working = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    working = stored_document(ai_services, ingested.application_id).model_copy(
+        update={"content": prepared.content}
+    )
+    assert working.content is not None
     section, claim = next(
         (section, claim)
-        for section in working.source.sections
+        for section in working.content.sections
         for claim in section.claims
         if claim.claim_type == "canonical" and claim.style in {"paragraph", "bullet", "item"}
     )
@@ -507,8 +512,9 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     queued = ai_services.operation_submissions.submit_draft(
         DraftCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=stored_document(
+                ai_services, ingested.application_id
+            ).document_hash,
             provider="openai",
         ),
         idempotency_key=new_id(),
@@ -518,20 +524,20 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     assert sum(output.output_type == "provider_response" for output in completed.outputs) == 2
-    assert any(output.output_type == "working_draft" for output in completed.outputs)
+    assert any(output.output_type == "cv_document" for output in completed.outputs)
     assert len(fake_openai.calls_for("assess_claim_support")) == 1
-    with transaction_manager.read() as tx:
-        actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    actual = stored_document(ai_services, ingested.application_id)
+    assert actual.content is not None
     reviewed = next(
         item
-        for section in actual.source.sections
+        for section in actual.content.sections
         for item in section.claims
         if item.claim_id == claim.claim_id
     )
     assert reviewed.text == wording
     assert reviewed.claim_type == "reviewed"
     assert reviewed.review_evidence is not None
-    public = ai_services.queries.working_draft(actual.id)
+    public = ai_services.queries.document(ingested.application_id)
     public_reviewed = next(
         item
         for section in public.outline.sections
@@ -549,11 +555,7 @@ def _regenerate_section(services, ingested, analysed, working, section, claims):
     return services.operation_submissions.submit_regeneration(
         RegenerateSectionCommand(
             application_id=ingested.application_id,
-            working_draft_id=working.id,
-            expected_edit_version=working.edit_version,
-            expected_content_hash=working.content_hash,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=working.document_hash,
             section=section.name,
         ),
         idempotency_key=new_id(),
@@ -565,11 +567,7 @@ def _regenerate_claim(services, ingested, analysed, working, claim):
     return services.operation_submissions.submit_regeneration(
         RegenerateClaimCommand(
             application_id=ingested.application_id,
-            working_draft_id=working.id,
-            expected_edit_version=working.edit_version,
-            expected_content_hash=working.content_hash,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=working.document_hash,
             claim_id=claim.claim_id,
         ),
         idempotency_key=new_id(),
@@ -620,9 +618,11 @@ def test_regeneration_commits_against_the_exact_frozen_version(
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    with transaction_manager.read() as tx:
-        updated = application_projection_reader.active_working_draft(tx, ingested.application_id)
-    assert updated.edit_version == working.edit_version + 1
+    updated = stored_document(ai_services, ingested.application_id)
+    assert updated.id == working.id
+    assert any(
+        output.output_type == "cv_document" and output.active for output in completed.outputs
+    )
 
 
 def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
@@ -639,24 +639,26 @@ def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
     ingested, analysed, working = _drafted(
         ai_services, "Own Wording Co", transaction_manager, application_projection_reader
     )
+    assert working.content is not None
     edited = [
         claim
-        for section in working.source.sections
+        for section in working.content.sections
         for claim in section.claims
         if claim.claim_type == "canonical" and len(claim.fact_ids) == 1
     ][:2]
     assert len(edited) == 2
     for claim in edited:
-        ai_services.drafts.edit_claim(
+        edit_document_claim(
+            ai_services,
             ingested.application_id,
             claim.claim_id,
             list(claim.fact_ids),
             text=f"In short: {claim.text}",
         )
-    with transaction_manager.read() as tx:
-        working = application_projection_reader.active_working_draft(tx, ingested.application_id)
+    working = stored_document(ai_services, ingested.application_id)
+    assert working.content is not None
     target, other = (
-        next(item for item in draft_claims(working.source) if item.claim_id == claim.claim_id)
+        next(item for item in draft_claims(working.content) if item.claim_id == claim.claim_id)
         for claim in edited
     )
     assert target.claim_type == other.claim_type == "pending"
@@ -682,11 +684,7 @@ def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
     queued = ai_services.operation_submissions.submit_regeneration(
         RegenerateClaimCommand(
             application_id=ingested.application_id,
-            working_draft_id=working.id,
-            expected_edit_version=working.edit_version,
-            expected_content_hash=working.content_hash,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
+            expected_document_hash=working.document_hash,
             claim_id=target.claim_id,
             keep_text=True,
         ),
@@ -698,9 +696,9 @@ def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     assert fake_openai.calls_for("regenerate_claim") == []
     assert len(fake_openai.calls_for("assess_claim_support")) == 1
-    with transaction_manager.read() as tx:
-        actual = application_projection_reader.active_working_draft(tx, ingested.application_id)
-    claims = {item.claim_id: item for item in draft_claims(actual.source)}
+    actual = stored_document(ai_services, ingested.application_id)
+    assert actual.content is not None
+    claims = {item.claim_id: item for item in draft_claims(actual.content)}
     assert claims[target.claim_id].claim_type == "reviewed"
     assert claims[target.claim_id].text == target.text
     assert claims[other.claim_id].claim_type == "pending"
@@ -765,10 +763,9 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
 
     assert completed.status.value == "failed"
     assert completed.failure_code is expected_code
-    with transaction_manager.read() as tx:
-        unchanged = application_projection_reader.active_working_draft(tx, ingested.application_id)
-    assert unchanged.edit_version == working.edit_version
-    assert unchanged.content_hash == working.content_hash
+    unchanged = stored_document(ai_services, ingested.application_id)
+    assert unchanged.document_hash == working.document_hash
+    assert unchanged.document_hash == working.document_hash
 
     # §6 invariant 15: the refused output exists, and never becomes current.
     # One lifecycle status for every provider response. Whether the answer was
@@ -993,10 +990,8 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
         assert not any(output.output_type == "job_analysis" for output in completed.outputs)
         with transaction_manager.read() as tx:
             assert application_projection_reader.analyses(tx, ingested.application_id) == []
-            assert (
-                application_projection_reader.latest_selection_plan(tx, ingested.application_id)
-                is None
-            )
+        with services_transactions(ai_services).read() as tx:
+            assert ai_services.drafts.documents.document(tx, ingested.application_id) is None
 
     calls_before = len(fake_openai.calls_for("propose_analysis"))
     ingested = _ingested(ai_services, "Raced Co")
@@ -1057,10 +1052,12 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
         "propose_selection_plan",
         SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
     )
-    queued = ai_services.operation_submissions.submit_selection_plan_proposal(
-        ProposeSelectionPlanCommand(
+    queued = ai_services.operation_submissions.submit_selection_proposal(
+        ProposeSelectionCommand(
             application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
+            expected_document_hash=stored_document(
+                ai_services, ingested.application_id
+            ).document_hash,
         ),
         idempotency_key=new_id(),
         analysis_service=ai_services.analysis,
@@ -1178,7 +1175,7 @@ def test_a_stale_draft_version_is_refused_before_any_provider_call(
         ai_services, "Stale Co", transaction_manager, application_projection_reader
     )
     _section, claim = _canonical_claim(working)
-    stale = working.model_copy(update={"edit_version": working.edit_version + 5})
+    stale = working.model_copy(update={"document_hash": "0" * 64})
     with pytest.raises(StateConflict):
         _regenerate_claim(ai_services, ingested, analysed, stale, claim)
     assert fake_openai.calls == []
@@ -1255,9 +1252,12 @@ def analysis_selection_operation(ai_services, fake_openai):
             "propose_selection_plan",
             SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
         )
-        queued = ai_services.operation_submissions.submit_selection_plan_proposal(
-            ProposeSelectionPlanCommand(
-                application_id=ingested.application_id, job_analysis_id=analysed.analysis_id
+        queued = ai_services.operation_submissions.submit_selection_proposal(
+            ProposeSelectionCommand(
+                application_id=ingested.application_id,
+                expected_document_hash=stored_document(
+                    ai_services, ingested.application_id
+                ).document_hash,
             ),
             idempotency_key=new_id(),
             analysis_service=ai_services.analysis,
@@ -1281,11 +1281,11 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
 ) -> None:
     from sqlalchemy import func, select
 
-    from cv_engine.infrastructure.persistence import analysis_sql
+    from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
     from cv_engine.infrastructure.persistence.operation_execution import (
         SqlAlchemyOperationExecutionStore,
     )
-    from cv_engine.infrastructure.persistence.tables import job_analyses, selection_plans
+    from cv_engine.infrastructure.persistence.tables import cv_documents, job_analyses
 
     ingested, queued = analysis_selection_operation(kind)
 
@@ -1297,18 +1297,19 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
                     .select_from(table)
                     .where(table.c.application_id == ingested.application_id)
                 ).scalar_one()
-                for table in (job_analyses, selection_plans)
+                for table in (job_analyses, cv_documents)
             )
 
     baseline = counts()
     if failure_at == "plan":
-        original = analysis_sql._insert_selection_plan
+        method = "create_document" if kind == "analysis" else "update_body"
+        original = getattr(SqlAlchemyDocumentStore, method)
 
         def fail_after_insert(*args, **kwargs):
             original(*args, **kwargs)
             raise RuntimeError("activation rollback")
 
-        monkeypatch.setattr(analysis_sql, "_insert_selection_plan", fail_after_insert)
+        monkeypatch.setattr(SqlAlchemyDocumentStore, method, fail_after_insert)
     else:
         method = "activate_operation_output" if failure_at == "evidence" else "complete_operation"
         original = getattr(SqlAlchemyOperationExecutionStore, method)
@@ -1353,7 +1354,7 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
         transaction_is_active,
     )
     from cv_engine.infrastructure.object_store import LocalObjectStore
-    from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
+    from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
     from cv_engine.infrastructure.persistence.operation_execution import (
         SqlAlchemyOperationExecutionStore,
     )
@@ -1387,11 +1388,11 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
 
         return call
 
-    plan_method = "save_analysis" if kind == "analysis" else "create_selection_plan"
+    plan_method = "create_document" if kind == "analysis" else "update_body"
     monkeypatch.setattr(
-        SqlAlchemyAnalysisPlanRepository,
+        SqlAlchemyDocumentStore,
         plan_method,
-        tracked(getattr(SqlAlchemyAnalysisPlanRepository, plan_method)),
+        tracked(getattr(SqlAlchemyDocumentStore, plan_method)),
     )
     for method in ("activate_operation_output", "complete_operation"):
         monkeypatch.setattr(
@@ -1425,7 +1426,7 @@ def test_selection_cancelled_before_activation_registers_no_new_plan(
 ) -> None:
     from sqlalchemy import func, select
 
-    from cv_engine.infrastructure.persistence.tables import job_analyses, selection_plans
+    from cv_engine.infrastructure.persistence.tables import cv_documents, job_analyses
 
     ingested, queued = analysis_selection_operation("selection")
     method = "prepare_selection_proposal"
@@ -1442,7 +1443,7 @@ def test_selection_cancelled_before_activation_registers_no_new_plan(
     assert len(completed.outputs) == 1 and not completed.outputs[0].active
     assert completed.outputs[0].output_type == "provider_response"
     with database_engine.connect() as connection:
-        for table in (job_analyses, selection_plans):
+        for table in (job_analyses, cv_documents):
             count = connection.execute(
                 select(func.count())
                 .select_from(table)

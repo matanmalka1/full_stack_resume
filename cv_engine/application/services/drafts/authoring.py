@@ -1,49 +1,59 @@
+"""§14 document content: generation, autosave, and targeted regeneration.
+
+Every command names the document by its Application and carries the
+`expected_document_hash` the client last read. Generation and regeneration are
+Operations: they prepare outside any transaction and activate only while the hash
+still matches, so work landing on a document the user changed meanwhile is
+discarded rather than written over it.
+"""
+
 from __future__ import annotations
 
 from ....domain.contracts.analysis import JobAnalysis
-from ....domain.contracts.drafts import DraftDocument, WorkingDraft
+from ....domain.contracts.drafts import DraftDocument
 from ....domain.contracts.providers import ProposedClaim
-from ....domain.contracts.selection import SelectionPlan
-from ....domain.draft_markdown import parse_draft, serialize_markdown
+from ....domain.document import content_check, document_state
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....domain.knowledge import Knowledge
-from ....domain.validation import validate_draft as run_draft_validation
-from ...chain import ChainError, check_loaded_draft_chain, draft_source_mismatch
+from ....util import utc_now
 from ...commands import (
+    DocumentMutationResult,
     DraftCommand,
     DraftResult,
-    EditResult,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RegenerationResult,
-    UpdateWorkingDraftCommand,
-    WorkingDraftUpdateResult,
+    UpdateDocumentCommand,
 )
 from ...errors import (
     ApplicationError,
     InfrastructureFailure,
-    LineageBroken,
     PreconditionFailed,
     ProposalRejected,
     ProviderNotConfigured,
-    StateConflict,
     UnknownRecord,
 )
 from ...ports import (
     AIProvider,
-    ArtifactStore,
     AssessClaimSupportContext,
     DraftResumeContext,
-    KnowledgeStore,
     RegenerateClaimContext,
     RegenerateSectionContext,
     SnapshotPayloadStore,
     TransactionManager,
 )
-from ...ports.analysis_plans import AnalysisPlanStore
-from ...ports.drafts import DraftAuthoringSourceReader, DraftEvidencePreserver, DraftLifecycleStore
-from ...ports.validation_store import ValidationStore
-from ..analysis.service import load_analysis_knowledge
+from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.documents import DocumentBody, DocumentStore
+from ...ports.drafts import DraftEvidencePreserver
+from ..documents import (
+    DocumentSource,
+    compose_content,
+    current_basis,
+    load_knowledge,
+    read_document_source,
+    refuse_deleted,
+    require_hash,
+)
 from ..proposals import (
     ProviderEvidence,
     apply_proposed_claims,
@@ -52,15 +62,7 @@ from ..proposals import (
     fact_context,
 )
 from .activation import DraftActivation
-from .inputs import (
-    PreparedDraft,
-    PreparedRegeneration,
-    compose,
-    require_content_hash,
-    require_working_version,
-    validation_lineage,
-)
-from .selection import SelectionChangeService
+from .inputs import PreparedDraft, PreparedRegeneration
 
 
 def _changed_claim_ids(before: DraftDocument, after: DraftDocument) -> set[str]:
@@ -82,29 +84,21 @@ class DraftAuthoringService:
         self,
         *,
         transactions: TransactionManager,
-        drafts: DraftLifecycleStore,
-        plans: AnalysisPlanStore,
-        validations: ValidationStore,
-        sources: DraftAuthoringSourceReader,
-        knowledge: KnowledgeStore,
-        artifacts: ArtifactStore,
+        documents: DocumentStore,
+        sources: AnalysisSelectionSourceReader,
+        knowledge: AnalysisKnowledgeSource,
         provider: AIProvider | None,
         evidence: DraftEvidencePreserver,
-        selection_changes: SelectionChangeService,
         snapshot_payloads: SnapshotPayloadStore | None = None,
     ):
         self.transactions = transactions
-        self.drafts = drafts
-        self.plans = plans
-        self.validations = validations
+        self.documents = documents
         self.sources = sources
         self._knowledge = knowledge
-        self.artifacts = artifacts
         self._provider = provider
         self.evidence = evidence
-        self.selection_changes = selection_changes
         self.snapshot_payloads = snapshot_payloads
-        self.activation = DraftActivation(drafts, plans, validations)
+        self.activation = DraftActivation(documents)
 
     @property
     def provider(self) -> AIProvider:
@@ -113,211 +107,74 @@ class DraftAuthoringService:
         return self._provider
 
     def load_knowledge(self) -> Knowledge:
-        return load_analysis_knowledge(self._knowledge)
+        return load_knowledge(self._knowledge)
 
-    def load_active_application(self, application_id: str) -> None:
+    def document_source(self, application_id: str) -> DocumentSource:
         with self.transactions.read() as tx:
-            deleted_at = self.sources.deleted_at(tx, application_id)
-        if deleted_at is not None:
-            raise StateConflict(f"application is deleted: {application_id}")
+            return read_document_source(tx, self.documents, self.sources, application_id)
 
-    def _working(self, working_draft_id: str, expected_version: int) -> WorkingDraft:
-        with self.transactions.read() as tx:
-            try:
-                working = self.drafts.working_draft(tx, working_draft_id)
-            except UnknownRecord as exc:
-                raise UnknownRecord(f"unknown working draft: {working_draft_id}") from exc
-        require_working_version(working, expected_version)
-        return working
-
-    def active_working_draft(self, application_id: str) -> WorkingDraft:
-        with self.transactions.read() as tx:
-            return self.drafts.active_working_draft(tx, application_id)
-
-    def working_draft(self, working_draft_id: str) -> WorkingDraft:
-        with self.transactions.read() as tx:
-            return self.drafts.working_draft(tx, working_draft_id)
-
-    def _commit_edit(self, working: WorkingDraft, source: DraftDocument) -> WorkingDraft:
-        with self.transactions.write() as tx:
-            return self.drafts.update_working_draft(tx, working.id, working.edit_version, source)
-
-    def store_working_draft(self, draft: DraftDocument):
-        try:
-            return self.artifacts.write_working_draft(draft)
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not store working draft: {exc}") from exc
-
-    def analysis_record(self, analysis_id: str) -> dict:
-        with self.transactions.read() as tx:
-            return self.sources.analysis_source(tx, analysis_id)
-
-    def selection_plan(self, plan_id: str) -> SelectionPlan:
-        with self.transactions.read() as tx:
-            return self.plans.selection_plan(tx, plan_id)
-
-    def approved_revision(self, revision_id: str):
-        with self.transactions.read() as tx:
-            return self.drafts.approved_revision(tx, revision_id)
-
-    def latest_snapshot(self, application_id: str) -> dict:
-        with self.transactions.read() as tx:
-            return {"id": self.sources.active_snapshot_id(tx, application_id)}
+    def _target(self, application_id: str, expected_document_hash: str) -> DocumentSource:
+        source = self.document_source(application_id)
+        refuse_deleted(application_id, source.deleted_at)
+        require_hash(source.document, expected_document_hash)
+        return source
 
     def snapshot_source(self, snapshot_id: str) -> dict:
         with self.transactions.read() as tx:
-            return self.sources.snapshot_source(tx, snapshot_id)
-
-    def bound_analysis(self, application_id, draft, profiles, facts):
-        with self.transactions.read() as tx:
-            source = self.sources.chain_source(tx, application_id, draft)
-        chain = check_loaded_draft_chain(source, application_id, draft, profiles, facts)
-        try:
-            return chain.bound()
-        except ChainError as exc:
-            raise LineageBroken(f"draft chain rejected: {exc}") from exc
-
-    def record_validation(self, application_id, stage, report, *, lineage):
-        with self.transactions.write() as tx:
-            current = self.drafts.lock_working_draft(tx, lineage.working_draft_id)
-            if current.application_id != application_id:
-                raise LineageBroken(
-                    f"working draft {current.id} does not belong to application {application_id}"
-                )
-            require_working_version(current, lineage.edit_version)
-            require_content_hash(current, lineage.content_hash)
-            return self.validations.record_validation(
-                tx, application_id, stage, report, lineage=lineage
-            )
+            analysis_source = self.sources.analysis_source(tx, snapshot_id)
+        return {
+            "id": analysis_source.job_snapshot_id,
+            "payload_path": analysis_source.payload_path,
+            "source_hash": analysis_source.source_hash,
+        }
 
     def preserve(self, application_id, operation_id, task, provenance):
         return self.evidence.preserve(application_id, operation_id, task, provenance)
 
-    def activate(self, command: DraftCommand, prepared: PreparedDraft) -> DraftResult:
+    def activate(self, prepared: PreparedDraft) -> DraftResult:
         with self.transactions.write() as tx:
-            result = self.activation.activate_generation(tx, command, prepared)
-        self.store_working_draft(prepared.source)
-        return result
+            return self.activation.activate_generation(tx, prepared)
 
     def activate_regeneration(self, prepared: PreparedRegeneration) -> RegenerationResult:
         with self.transactions.write() as tx:
-            result = self.activation.activate_regeneration(tx, prepared)
-        self.store_working_draft(prepared.source)
-        return result
-
-    def apply_selection_change(self, command, *, analysis_service):
-        return self.selection_changes.apply(command, analysis_service=analysis_service)
-
-    _lineage = staticmethod(validation_lineage)
-    _compose = staticmethod(compose)
-    _require_content_hash = staticmethod(require_content_hash)
+            return self.activation.activate_regeneration(tx, prepared)
 
     def draft(self, command: DraftCommand) -> DraftResult:
-        """Build the working draft from one exact analysis.
+        """The deterministic `create_draft`, prepared and activated in the caller.
 
-        The analysis is named by the caller for the same reason the snapshot is
-        in `analyze`: a command that resolves `latest` itself can draft from an
-        analysis the caller never saw.
+        The Operation is the product path; this is the same two phases without a
+        runner, used where the deterministic chain is driven directly. AI mode has
+        no synchronous form.
         """
-        self.load_active_application(command.application_id)
-        prepared = self.prepare(command)
-        return self.activate(command, prepared)
+        if command.provider != "deterministic":
+            raise PreconditionFailed(
+                "AI generation runs as an Operation; there is no synchronous form"
+            )
+        return self.activate(self.prepare(command))
 
     def prepare(self, command: DraftCommand, *, operation_id: str | None = None) -> PreparedDraft:
-        """Build and validate the inputs for a draft without changing durable state.
+        """Compose the document's content without changing durable state.
 
-        `operation_id` is required in AI mode and unused otherwise: it is where
-        the sanitized provider response is preserved. The deterministic branch
-        never reaches a provider, which is what keeps generation working with
-        `OPENAI_API_KEY` unset.
+        The deterministic path builds the canonical DraftDocument from the document's
+        analysis and selection. AI mode asks `draft_resume` for wording over that
+        composition; `operation_id` is where its sanitized response is preserved.
         """
+        source = self._target(command.application_id, command.expected_document_hash)
+        document = source.document
+        if document.content is not None:
+            raise PreconditionFailed(
+                "the document already has content; edit or regenerate it, or build it "
+                "again from its analysis"
+            )
         knowledge = self.load_knowledge()
-        profiles, policies = (knowledge.profiles, knowledge.policies)
-        analysis_id = command.job_analysis_id
-        try:
-            record = self.analysis_record(analysis_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown job analysis: {analysis_id}") from exc
-        try:
-            plan = self.selection_plan(command.selection_plan_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown selection plan: {command.selection_plan_id}") from exc
-        mismatch = draft_source_mismatch(command.application_id, analysis_id, record, plan)
-        if mismatch == "analysis":
-            raise LineageBroken(
-                f"analysis {analysis_id} does not belong to application {command.application_id}"
-            )
-        if mismatch == "selection_plan":
-            raise LineageBroken(
-                f"selection plan {plan.id} does not belong to application {command.application_id} and analysis {analysis_id}"
-            )
-        parent = None
-        if command.parent_revision_id is not None:
-            try:
-                parent = self.approved_revision(command.parent_revision_id)
-            except UnknownRecord as exc:
-                raise UnknownRecord(
-                    f"unknown parent approved revision: {command.parent_revision_id}"
-                ) from exc
-            if parent.application_id != command.application_id:
-                raise LineageBroken(
-                    f"approved revision {parent.id} does not belong to application {command.application_id}"
-                )
-            if parent.job_analysis_id != analysis_id or parent.selection_plan_id != plan.id:
-                raise StateConflict(
-                    "approved revision does not match the analysis and selection plan named for editing"
-                )
-        if plan.profile_version != profiles.version:
-            raise StateConflict(
-                f"selection plan {plan.id} froze profile version {plan.profile_version}, but knowledge now reports {profiles.version}; analyze again to obtain a plan for the current Profile"
-            )
-        if plan.selection_policy_version != policies.version:
-            raise StateConflict(
-                f"selection plan {plan.id} froze selection policy version {plan.selection_policy_version}, but knowledge now reports {policies.version}; analyze again to obtain a plan for the current selection policy"
-            )
-        analysis = record["analysis"]
-        try:
-            latest_snapshot = self.latest_snapshot(command.application_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown application: {command.application_id}") from exc
-        if record["job_snapshot_id"] != latest_snapshot["id"]:
-            raise StateConflict(
-                f"job snapshot {latest_snapshot['id']} is newer than the analysis in hand; analyze the new snapshot before drafting against it"
-            )
-        if parent is None:
-            draft = self._compose(
-                application_id=command.application_id,
-                job_snapshot_id=record["job_snapshot_id"],
-                job_analysis_id=analysis_id,
-                analysis=analysis,
-                plan=plan,
-                knowledge=knowledge,
-            )
-        else:
-            if self.snapshot_payloads is None:
-                raise InfrastructureFailure("approved draft payload storage is unavailable")
-            integrity = self.snapshot_payloads.verify_payload(
-                parent.resume_json_reference,
-                parent.resume_json_hash,
-            )
-            if integrity != "ok":
-                raise InfrastructureFailure(
-                    f"approved draft payload failed integrity verification: {integrity}"
-                )
-            try:
-                draft = parse_draft(
-                    self.snapshot_payloads.read_payload_text(parent.resume_json_reference)
-                )
-            except (OSError, ValueError) as exc:
-                raise InfrastructureFailure(
-                    "could not load the approved draft for editing"
-                ) from exc
-            if (
-                draft.application_id != command.application_id
-                or draft.job_snapshot_id != parent.job_snapshot_id
-                or draft.job_analysis_id != parent.job_analysis_id
-            ):
-                raise LineageBroken("approved draft payload does not match its frozen lineage")
+        content = compose_content(
+            command.application_id,
+            document.analysis_id,
+            source.job_snapshot_id,
+            source.analysis,
+            document.selection,
+            knowledge,
+        )
         evidence: ProviderEvidence | None = None
         review_evidence: ProviderEvidence | None = None
         if command.provider == "openai":
@@ -325,20 +182,19 @@ class DraftAuthoringService:
                 raise PreconditionFailed(
                     "AI generation runs as an Operation; there is no synchronous form"
                 )
-            draft, evidence, review_evidence = self._propose_wording(
+            content, evidence, review_evidence = self._propose_wording(
                 command.application_id,
                 operation_id,
-                draft,
-                analysis,
+                content,
+                source.analysis,
                 knowledge,
                 model=command.model,
                 reasoning_effort=command.reasoning_effort,
             )
         return PreparedDraft(
-            source=draft,
-            analysis=analysis,
-            plan_id=plan.id,
-            knowledge=knowledge,
+            application_id=command.application_id,
+            expected_document_hash=command.expected_document_hash,
+            content=content,
             evidence=evidence,
             review_evidence=review_evidence,
         )
@@ -356,12 +212,11 @@ class DraftAuthoringService:
     ) -> tuple[DraftDocument, ProviderEvidence, ProviderEvidence | None]:
         """`draft_resume`: ask for wording over a document the engine composed.
 
-        The provider never decides *which* facts appear - the SelectionPlan
-        already did, and the document handed to it is the plan's own. It
-        proposes how the selected facts are worded, and every line comes back
-        through `apply_claim_edit`. Wording its own facts do not support is
-        refused as `ProposalRejected`, not saved as a pending claim: §14's
-        pending rule is for a person mid-edit, not for a wrong answer.
+        The provider never decides *which* facts appear - the document's selection
+        already did. It proposes how the selected facts are worded, and every line
+        comes back through `apply_claim_edit`. Wording its own facts do not support is
+        refused as `ProposalRejected`, not saved as a pending claim: §14's pending rule
+        is for a person mid-edit, not for a wrong answer.
         """
         selected = sorted(
             {
@@ -437,76 +292,22 @@ class DraftAuthoringService:
         )
         return (updated, evidence, review_evidence)
 
-    def edit_claim(
-        self,
-        application_id: str,
-        claim_id: str,
-        fact_ids: list[str],
-        *,
-        text: str | None = None,
-        template_id: str | None = None,
-        template_version: str | None = None,
-    ) -> EditResult:
-        self.load_active_application(application_id)
-        knowledge = self.load_knowledge()
-        facts, profiles, policies = (knowledge.facts, knowledge.profiles, knowledge.policies)
-        working = self.active_working_draft(application_id)
-        draft = working.source
-        _, analysis = self.bound_analysis(application_id, draft, profiles, facts)
-        try:
-            updated = apply_claim_edit(
-                draft,
-                claim_id,
-                fact_ids,
-                facts,
-                text=text,
-                template_id=template_id,
-                template_version=template_version,
-            )
-        except KeyError as exc:
-            raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
-        except ValueError as exc:
-            raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
-        changed = self._commit_edit(working, updated)
-        self.store_working_draft(changed.source)
-        report = run_draft_validation(
-            changed.source,
-            serialize_markdown(changed.source),
-            facts,
-            profiles.get(updated.profile),
-            analysis,
-            plan=self.selection_plan(changed.selection_plan_id),
-            policies=policies,
-            presentations=knowledge.presentations,
-        )
-        self.record_validation(
-            application_id, "manual-claim-edit", report, lineage=self._lineage(changed, knowledge)
-        )
-        return EditResult(
-            application_id=application_id,
-            working_draft_id=changed.id,
-            edit_version=changed.edit_version,
-            validation=report,
-        )
+    def update_document(self, command: UpdateDocumentCommand) -> DocumentMutationResult:
+        """§14 autosave: apply one structured patch against one exact hash.
 
-    def update_working_draft(self, command: UpdateWorkingDraftCommand) -> WorkingDraftUpdateResult:
-        """§14 autosave: apply one structured patch to one exact draft version.
-
-        The whole patch commits as a single edit. Applying each claim as its own
-        version would hand the client a version it never asked about and make a
-        half-applied patch indistinguishable from a completed one.
-
-        Nothing here validates. §15 owns ValidationRuns, and a run recorded on
-        every keystroke would fill the record with evidence nobody asked for and
-        make `validated` mean "recently saved" instead of "recently checked".
+        The whole patch commits as a single write. Nothing here validates: §15 owns
+        the content report, and a check on every keystroke would make a passed report
+        mean "recently saved" instead of "recently checked". Editing an approved or
+        ready document is allowed; it changes the basis, so the document returns to
+        draft on the next read.
         """
-        working = self._working(command.working_draft_id, command.expected_edit_version)
-        self.load_active_application(working.application_id)
-        self._require_content_hash(working, command.expected_content_hash)
+        source = self._target(command.application_id, command.expected_document_hash)
+        document = source.document
+        if document.content is None:
+            raise PreconditionFailed("the document has no content to edit yet; create a draft")
         knowledge = self.load_knowledge()
-        facts, profiles = (knowledge.facts, knowledge.profiles)
-        self.bound_analysis(working.application_id, working.source, profiles, facts)
-        patched = working.source
+        facts = knowledge.facts
+        patched = document.content
         for edit in command.claim_edits:
             try:
                 patched = apply_claim_edit(
@@ -519,14 +320,14 @@ class DraftAuthoringService:
                     template_version=edit.template_version,
                 )
             except KeyError as exc:
-                raise UnknownRecord(f"unknown claim in the working draft: {edit.claim_id}") from exc
+                raise UnknownRecord(f"unknown claim in the document: {edit.claim_id}") from exc
             except ValueError as exc:
                 raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
         for claim_id in command.claim_removals:
             try:
                 patched = remove_claim(patched, claim_id, facts)
             except KeyError as exc:
-                raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
+                raise UnknownRecord(f"unknown claim in the document: {claim_id}") from exc
             except ValueError as exc:
                 raise PreconditionFailed(f"claim removal rejected: {exc}") from exc
         added_claim_ids: set[str] = set()
@@ -534,68 +335,51 @@ class DraftAuthoringService:
             try:
                 patched, new_claim_id = add_claim(patched, addition.section, addition.text, facts)
             except KeyError as exc:
-                raise UnknownRecord(
-                    f"unknown section in the working draft: {addition.section}"
-                ) from exc
+                raise UnknownRecord(f"unknown section in the document: {addition.section}") from exc
             except ValueError as exc:
                 raise PreconditionFailed(f"claim addition rejected: {exc}") from exc
             added_claim_ids.add(new_claim_id)
         try:
             patched = reorder_draft(patched, claim_orders=command.claim_orders)
         except KeyError as exc:
-            raise UnknownRecord(f"unknown section in the working draft: {exc.args[0]}") from exc
+            raise UnknownRecord(f"unknown section in the document: {exc.args[0]}") from exc
         except ValueError as exc:
-            raise PreconditionFailed(f"draft reorder rejected: {exc}") from exc
-        changed = self._commit_edit(working, patched)
-        self.store_working_draft(changed.source)
+            raise PreconditionFailed(f"document reorder rejected: {exc}") from exc
+        with self.transactions.write() as tx:
+            updated = self.documents.update_body(
+                tx,
+                command.application_id,
+                command.expected_document_hash,
+                DocumentBody(
+                    analysis_id=document.analysis_id,
+                    selection=document.selection,
+                    content=patched,
+                ),
+                updated_at=utc_now(),
+            )
         edited = {edit.claim_id for edit in command.claim_edits} | added_claim_ids
-        return WorkingDraftUpdateResult(
-            application_id=changed.application_id,
-            working_draft_id=changed.id,
-            edit_version=changed.edit_version,
-            content_hash=changed.content_hash,
-            selection_plan_id=changed.selection_plan_id,
+        new_basis = current_basis(updated, knowledge)
+        return DocumentMutationResult(
+            application_id=command.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
+            document_state=document_state(updated, new_basis),
+            content_check=content_check(updated, new_basis),
             pending_claim_ids=sorted(
                 claim.claim_id
-                for claim in draft_claims(changed.source)
+                for claim in draft_claims(patched)
                 if claim.claim_type == "pending" and claim.claim_id in edited
             ),
         )
 
     def _regeneration_target(
-        self,
-        application_id: str,
-        working_draft_id: str,
-        expected_edit_version: int,
-        expected_content_hash: str,
-        job_analysis_id: str,
-        selection_plan_id: str,
-    ) -> tuple[WorkingDraft, Knowledge, JobAnalysis]:
-        """The exact draft version a regeneration named, or the refusal that says why.
-
-        All three parts of the draft's identity are checked, plus the analysis
-        and plan the client stated. §14 requires regeneration to receive exact
-        WorkingDraft ID, version, and hash - so a regeneration launched against
-        one version and activated against another is a `409`, not a silent
-        overwrite of whatever the draft became in between.
-        """
-        working = self._working(working_draft_id, expected_edit_version)
-        if working.application_id != application_id:
-            raise LineageBroken(
-                f"working draft {working.id} does not belong to application {application_id}"
-            )
-        self._require_content_hash(working, expected_content_hash)
-        if working.job_analysis_id != job_analysis_id:
-            raise LineageBroken(
-                f"working draft {working.id} was built from analysis {working.job_analysis_id}, not {job_analysis_id}"
-            )
-        if working.selection_plan_id != selection_plan_id:
-            raise LineageBroken(
-                f"working draft {working.id} was built from selection plan {working.selection_plan_id}, not {selection_plan_id}"
-            )
-        knowledge = self.load_knowledge()
-        record = self.analysis_record(working.job_analysis_id)
-        return (working, knowledge, record["analysis"])
+        self, application_id: str, expected_document_hash: str
+    ) -> tuple[DocumentSource, DraftDocument, Knowledge]:
+        """The exact document a regeneration named, or the refusal that says why."""
+        source = self._target(application_id, expected_document_hash)
+        if source.document.content is None:
+            raise PreconditionFailed("the document has no content to regenerate yet")
+        return source, source.document.content, self.load_knowledge()
 
     def _review_pending_claims(
         self,
@@ -659,18 +443,13 @@ class DraftAuthoringService:
         self, command: RegenerateSectionCommand, *, operation_id: str
     ) -> PreparedRegeneration:
         """§14 `regenerate_section`: propose replacement wording for one section."""
-        working, knowledge, analysis = self._regeneration_target(
-            command.application_id,
-            command.working_draft_id,
-            command.expected_edit_version,
-            command.expected_content_hash,
-            command.job_analysis_id,
-            command.selection_plan_id,
+        source, draft, knowledge = self._regeneration_target(
+            command.application_id, command.expected_document_hash
         )
-        draft = working.source
+        analysis = source.analysis
         section = next((item for item in draft.sections if item.name == command.section), None)
         if section is None:
-            raise UnknownRecord(f"unknown section in the working draft: {command.section}")
+            raise UnknownRecord(f"unknown section in the document: {command.section}")
         allowed = sorted({fact_id for claim in section.claims for fact_id in claim.fact_ids})
         answered = self.provider.regenerate_section(
             RegenerateSectionContext(
@@ -720,8 +499,9 @@ class DraftAuthoringService:
             reasoning_effort=command.reasoning_effort,
         )
         return PreparedRegeneration(
-            working=working,
-            source=updated,
+            application_id=command.application_id,
+            expected_document_hash=command.expected_document_hash,
+            content=updated,
             claim_ids=[str(claim.claim_id) for claim in proposed.claims],
             evidence=evidence,
             review_evidence=review_evidence,
@@ -731,15 +511,10 @@ class DraftAuthoringService:
         self, command: RegenerateClaimCommand, *, operation_id: str
     ) -> PreparedRegeneration:
         """§14 `regenerate_claim`: propose replacement wording for one claim."""
-        working, knowledge, analysis = self._regeneration_target(
-            command.application_id,
-            command.working_draft_id,
-            command.expected_edit_version,
-            command.expected_content_hash,
-            command.job_analysis_id,
-            command.selection_plan_id,
+        source, draft, knowledge = self._regeneration_target(
+            command.application_id, command.expected_document_hash
         )
-        draft = working.source
+        analysis = source.analysis
         located = next(
             (
                 (section, claim)
@@ -750,7 +525,7 @@ class DraftAuthoringService:
             None,
         )
         if located is None:
-            raise UnknownRecord(f"unknown claim in the working draft: {command.claim_id}")
+            raise UnknownRecord(f"unknown claim in the document: {command.claim_id}")
         section, claim = located
         allowed = sorted(claim.fact_ids)
         if command.keep_text:
@@ -776,8 +551,9 @@ class DraftAuthoringService:
             if review_evidence is None:
                 raise ProposalRejected("semantic review produced no evidence")
             return PreparedRegeneration(
-                working=working,
-                source=reviewed,
+                application_id=command.application_id,
+                expected_document_hash=command.expected_document_hash,
+                content=reviewed,
                 claim_ids=[claim.claim_id],
                 evidence=review_evidence,
             )
@@ -830,8 +606,9 @@ class DraftAuthoringService:
             reasoning_effort=command.reasoning_effort,
         )
         return PreparedRegeneration(
-            working=working,
-            source=updated,
+            application_id=command.application_id,
+            expected_document_hash=command.expected_document_hash,
+            content=updated,
             claim_ids=[proposed.claim_id],
             evidence=evidence,
             review_evidence=review_evidence,

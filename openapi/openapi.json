@@ -67,7 +67,7 @@
       },
       "AnalysisDecisionsResponse": {
         "additionalProperties": false,
-        "description": "Which analysis is in force after the decision, and whether it is a new one.\n\n`job_analysis_id` names the analysis the client should work from now: the\nnew one when the decision changed meaning, the original when only the fact\noverlay moved. `created_analysis` is what tells the two apart.",
+        "description": "Which analysis is in force after the decision, and whether it is a new one.\n\n`job_analysis_id` names the analysis the client should work from now: the\nnew one when the decision changed meaning, the original when only the\nselection moved. `created_analysis` is what tells the two apart. Neither\nbranch re-pins the document; `document_hash` is its token now.",
         "properties": {
           "analysis": {
             "additionalProperties": true,
@@ -82,15 +82,30 @@
             "title": "Created Analysis",
             "type": "boolean"
           },
+          "document_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Hash"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
           "job_analysis_id": {
             "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "plan": {
-            "$ref": "#/components/schemas/SelectionPlanResponse"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
             "type": "string"
           },
           "state": {
@@ -100,10 +115,8 @@
         "required": [
           "application_id",
           "job_analysis_id",
-          "selection_plan_id",
           "created_analysis",
           "analysis",
-          "plan",
           "state"
         ],
         "title": "AnalysisDecisionsResponse",
@@ -112,17 +125,6 @@
       "ApplicationDetailResponse": {
         "additionalProperties": false,
         "properties": {
-          "active_analysis_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Analysis Id"
-          },
           "active_job_snapshot_id": {
             "title": "Active Job Snapshot Id",
             "type": "string"
@@ -136,28 +138,6 @@
                 "type": "null"
               }
             ]
-          },
-          "active_selection_plan_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Selection Plan Id"
-          },
-          "active_working_draft_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Working Draft Id"
           },
           "allowed_recruitment_transitions": {
             "items": {
@@ -181,6 +161,17 @@
           "application": {
             "$ref": "#/components/schemas/ApplicationResponse"
           },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
           "available_actions": {
             "items": {
               "type": "string"
@@ -195,6 +186,57 @@
             "title": "Blocked Actions",
             "type": "array"
           },
+          "content_check": {
+            "$ref": "#/components/schemas/ContentCheck"
+          },
+          "document_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Analysis Id"
+          },
+          "document_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Hash"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "document_state": {
+            "$ref": "#/components/schemas/DocumentState"
+          },
+          "last_render_error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Render Error"
+          },
           "latest_analysis": {
             "anyOf": [
               {
@@ -205,7 +247,7 @@
               }
             ]
           },
-          "latest_approved_revision_id": {
+          "latest_analysis_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -214,7 +256,7 @@
                 "type": "null"
               }
             ],
-            "title": "Latest Approved Revision Id"
+            "title": "Latest Analysis Id"
           },
           "latest_operation": {
             "anyOf": [
@@ -226,37 +268,11 @@
               }
             ]
           },
-          "latest_ready_revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Ready Revision Id"
-          },
           "latest_snapshot": {
             "$ref": "#/components/schemas/JobSnapshotResponse"
           },
-          "newer_draft_in_progress": {
-            "title": "Newer Draft In Progress",
-            "type": "boolean"
-          },
           "preparation_state": {
             "$ref": "#/components/schemas/PreparationState"
-          },
-          "primary_stale_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Primary Stale Reason"
           },
           "recommended_action": {
             "anyOf": [
@@ -287,13 +303,6 @@
             "title": "Review Reasons",
             "type": "array"
           },
-          "stale_reasons": {
-            "items": {
-              "$ref": "#/components/schemas/ReasonResponse"
-            },
-            "title": "Stale Reasons",
-            "type": "array"
-          },
           "terminal_outcome": {
             "anyOf": [
               {
@@ -311,20 +320,16 @@
             },
             "title": "Warnings",
             "type": "array"
-          },
-          "working_draft_state": {
-            "$ref": "#/components/schemas/WorkingDraftState"
           }
         },
         "required": [
           "recruitment_status",
           "preparation_state",
-          "working_draft_state",
+          "document_state",
+          "content_check",
           "review_reasons",
-          "stale_reasons",
           "warnings",
           "active_job_snapshot_id",
-          "newer_draft_in_progress",
           "available_actions",
           "blocked_actions",
           "application",
@@ -338,17 +343,6 @@
       "ApplicationListItemResponse": {
         "additionalProperties": false,
         "properties": {
-          "active_analysis_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Analysis Id"
-          },
           "active_job_snapshot_id": {
             "title": "Active Job Snapshot Id",
             "type": "string"
@@ -363,7 +357,7 @@
               }
             ]
           },
-          "active_selection_plan_id": {
+          "approved_at": {
             "anyOf": [
               {
                 "type": "string"
@@ -372,18 +366,7 @@
                 "type": "null"
               }
             ],
-            "title": "Active Selection Plan Id"
-          },
-          "active_working_draft_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Working Draft Id"
+            "title": "Approved At"
           },
           "available_actions": {
             "items": {
@@ -403,6 +386,9 @@
             "title": "Company",
             "type": "string"
           },
+          "content_check": {
+            "$ref": "#/components/schemas/ContentCheck"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -421,6 +407,42 @@
               }
             ],
             "title": "Deleted At"
+          },
+          "document_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Analysis Id"
+          },
+          "document_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Hash"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "document_state": {
+            "$ref": "#/components/schemas/DocumentState"
           },
           "emphasis": {
             "anyOf": [
@@ -474,7 +496,19 @@
             ],
             "title": "Language"
           },
-          "latest_approved_revision_id": {
+          "last_render_error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Render Error"
+          },
+          "latest_analysis_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -483,7 +517,7 @@
                 "type": "null"
               }
             ],
-            "title": "Latest Approved Revision Id"
+            "title": "Latest Analysis Id"
           },
           "latest_operation": {
             "anyOf": [
@@ -494,21 +528,6 @@
                 "type": "null"
               }
             ]
-          },
-          "latest_ready_revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Ready Revision Id"
-          },
-          "newer_draft_in_progress": {
-            "title": "Newer Draft In Progress",
-            "type": "boolean"
           },
           "next_action": {
             "anyOf": [
@@ -549,17 +568,6 @@
           },
           "preparation_state": {
             "$ref": "#/components/schemas/PreparationState"
-          },
-          "primary_stale_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Primary Stale Reason"
           },
           "profile": {
             "anyOf": [
@@ -605,13 +613,6 @@
             ],
             "title": "Source Url"
           },
-          "stale_reasons": {
-            "items": {
-              "$ref": "#/components/schemas/ReasonResponse"
-            },
-            "title": "Stale Reasons",
-            "type": "array"
-          },
           "target_role": {
             "title": "Target Role",
             "type": "string"
@@ -648,20 +649,16 @@
             },
             "title": "Warnings",
             "type": "array"
-          },
-          "working_draft_state": {
-            "$ref": "#/components/schemas/WorkingDraftState"
           }
         },
         "required": [
           "recruitment_status",
           "preparation_state",
-          "working_draft_state",
+          "document_state",
+          "content_check",
           "review_reasons",
-          "stale_reasons",
           "warnings",
           "active_job_snapshot_id",
-          "newer_draft_in_progress",
           "available_actions",
           "blocked_actions",
           "id",
@@ -1024,19 +1021,8 @@
       },
       "ApplicationStateResponse": {
         "additionalProperties": false,
-        "description": "The §9 action policy projection, and nothing wider.\n\nThe two lifecycle states are typed as the application enums rather than\nflattened to `str`, the same way `OperationResponse` spells its closed sets.\n`preparation_state` drives the workflow landmark and the Hebrew label a user\nreads; flattened to `string` the generated TypeScript cannot key a label map\nby it, so a state added to the projection would reach a screen untranslated\ninstead of failing the frontend build.\n\nThe action fields stay `str` deliberately. They are not a closed set at this\nboundary the way the states are - `available_actions` mixes preparation\ncommands with review-reason resolution actions - and a client that meets an\naction it has no screen for reports exactly that, which is a correct\npresentation rather than a failure.",
+        "description": "The §9 action policy projection, and nothing wider.\n\nThe lifecycle states are typed as the domain enums rather than\nflattened to `str`, the same way `OperationResponse` spells its closed sets.\n`preparation_state` drives the workflow landmark and the Hebrew label a user\nreads; flattened to `string` the generated TypeScript cannot key a label map\nby it, so a state added to the projection would reach a screen untranslated\ninstead of failing the frontend build.\n\nThe action fields stay `str` deliberately. They are not a closed set at this\nboundary the way the states are - `available_actions` mixes preparation\ncommands with review-reason resolution actions - and a client that meets an\naction it has no screen for reports exactly that, which is a correct\npresentation rather than a failure.",
         "properties": {
-          "active_analysis_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Analysis Id"
-          },
           "active_job_snapshot_id": {
             "title": "Active Job Snapshot Id",
             "type": "string"
@@ -1051,7 +1037,7 @@
               }
             ]
           },
-          "active_selection_plan_id": {
+          "approved_at": {
             "anyOf": [
               {
                 "type": "string"
@@ -1060,18 +1046,7 @@
                 "type": "null"
               }
             ],
-            "title": "Active Selection Plan Id"
-          },
-          "active_working_draft_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Working Draft Id"
+            "title": "Approved At"
           },
           "available_actions": {
             "items": {
@@ -1087,7 +1062,10 @@
             "title": "Blocked Actions",
             "type": "array"
           },
-          "latest_approved_revision_id": {
+          "content_check": {
+            "$ref": "#/components/schemas/ContentCheck"
+          },
+          "document_analysis_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -1096,7 +1074,55 @@
                 "type": "null"
               }
             ],
-            "title": "Latest Approved Revision Id"
+            "title": "Document Analysis Id"
+          },
+          "document_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Hash"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "document_state": {
+            "$ref": "#/components/schemas/DocumentState"
+          },
+          "last_render_error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Render Error"
+          },
+          "latest_analysis_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Analysis Id"
           },
           "latest_operation": {
             "anyOf": [
@@ -1108,34 +1134,8 @@
               }
             ]
           },
-          "latest_ready_revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Ready Revision Id"
-          },
-          "newer_draft_in_progress": {
-            "title": "Newer Draft In Progress",
-            "type": "boolean"
-          },
           "preparation_state": {
             "$ref": "#/components/schemas/PreparationState"
-          },
-          "primary_stale_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Primary Stale Reason"
           },
           "recommended_action": {
             "anyOf": [
@@ -1159,13 +1159,6 @@
             "title": "Review Reasons",
             "type": "array"
           },
-          "stale_reasons": {
-            "items": {
-              "$ref": "#/components/schemas/ReasonResponse"
-            },
-            "title": "Stale Reasons",
-            "type": "array"
-          },
           "terminal_outcome": {
             "anyOf": [
               {
@@ -1183,20 +1176,16 @@
             },
             "title": "Warnings",
             "type": "array"
-          },
-          "working_draft_state": {
-            "$ref": "#/components/schemas/WorkingDraftState"
           }
         },
         "required": [
           "recruitment_status",
           "preparation_state",
-          "working_draft_state",
+          "document_state",
+          "content_check",
           "review_reasons",
-          "stale_reasons",
           "warnings",
           "active_job_snapshot_id",
-          "newer_draft_in_progress",
           "available_actions",
           "blocked_actions"
         ],
@@ -1222,7 +1211,7 @@
       },
       "ApplyAnalysisDecisionsRequest": {
         "additionalProperties": false,
-        "description": "One review-form submission (§13).\n\nCarries analysis and selection-policy decisions because one form may submit\nboth. Which immutable records are created is decided by what changed.",
+        "description": "One review-form submission (§13).\n\nCarries analysis and selection decisions because one form may submit both.\nTrack/Profile/language create a new JobAnalysis; Emphasis and the fact overlay\nchange only the document's selection, in place. Two overlay lists, not three:\nexplicit inclusion is a pin.",
         "properties": {
           "application_id": {
             "title": "Application Id",
@@ -1250,16 +1239,17 @@
             "title": "Expected Analysis Id",
             "type": "string"
           },
-          "expected_selection_plan_id": {
+          "expected_document_hash": {
             "anyOf": [
               {
+                "pattern": "^[0-9a-f]{64}$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Expected Selection Plan Id"
+            "title": "Expected Document Hash"
           },
           "language_override": {
             "anyOf": [
@@ -1310,266 +1300,6 @@
           "expected_analysis_id"
         ],
         "title": "ApplyAnalysisDecisionsRequest",
-        "type": "object"
-      },
-      "ApplySelectionChangeRequest": {
-        "additionalProperties": false,
-        "description": "The user's explicit fact decisions for a deterministic re-selection.\n\nTwo lists, not three, on the same reasoning as the analysis review form:\n`selected` is what the resulting plan reports, and explicit inclusion is a\npin.",
-        "properties": {
-          "excluded_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Excluded Fact Ids",
-            "type": "array"
-          },
-          "expected_edit_version": {
-            "title": "Expected Edit Version",
-            "type": "integer"
-          },
-          "pinned_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Pinned Fact Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "expected_edit_version"
-        ],
-        "title": "ApplySelectionChangeRequest",
-        "type": "object"
-      },
-      "ApprovalResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "decision_record_id": {
-            "title": "Decision Record Id",
-            "type": "string"
-          },
-          "manifest_artifact_version_id": {
-            "title": "Manifest Artifact Version Id",
-            "type": "string"
-          },
-          "markdown_artifact_version_id": {
-            "title": "Markdown Artifact Version Id",
-            "type": "string"
-          },
-          "revision_id": {
-            "title": "Revision Id",
-            "type": "string"
-          },
-          "version": {
-            "title": "Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "application_id",
-          "revision_id",
-          "version",
-          "markdown_artifact_version_id",
-          "manifest_artifact_version_id",
-          "decision_record_id"
-        ],
-        "title": "ApprovalResponse",
-        "type": "object"
-      },
-      "ApproveDraftRequest": {
-        "additionalProperties": false,
-        "description": "Approval names the ValidationRun whose result it is relying on.\n\nThe run is not created here. Approval verifies that the run describes this\nexact draft version and content and that it passed; a run approval created\nfor itself could only ever agree with approval.",
-        "properties": {
-          "expected_edit_version": {
-            "title": "Expected Edit Version",
-            "type": "integer"
-          },
-          "validation_run_id": {
-            "title": "Validation Run Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_edit_version",
-          "validation_run_id"
-        ],
-        "title": "ApproveDraftRequest",
-        "type": "object"
-      },
-      "ApprovedRevisionResponse": {
-        "additionalProperties": false,
-        "description": "One immutable ApprovedRevision and its re-derived Ready qualification.\n\n`ready_qualified` is a property of this revision's own stored evidence.\nWhether it is the *active* Ready milestone is `preparation_state` on\n`GET /applications/{id}`, and the two are separate on purpose: a revision\nstays qualified and downloadable after a newer JobSnapshot has moved the\nApplication off it.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "approved_at": {
-            "title": "Approved At",
-            "type": "string"
-          },
-          "decision_provenance": {
-            "additionalProperties": true,
-            "title": "Decision Provenance",
-            "type": "object"
-          },
-          "draft_content_hash": {
-            "title": "Draft Content Hash",
-            "type": "string"
-          },
-          "draft_edit_version": {
-            "title": "Draft Edit Version",
-            "type": "integer"
-          },
-          "facts_version": {
-            "title": "Facts Version",
-            "type": "string"
-          },
-          "html_artifact_version_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Html Artifact Version Id"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "job_snapshot_id": {
-            "title": "Job Snapshot Id",
-            "type": "string"
-          },
-          "parent_revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Revision Id"
-          },
-          "pdf_artifact_version_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pdf Artifact Version Id"
-          },
-          "ready_qualified": {
-            "title": "Ready Qualified",
-            "type": "boolean"
-          },
-          "ready_validation": {
-            "$ref": "#/components/schemas/ValidationReportResponse"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
-          },
-          "validation_run_id": {
-            "title": "Validation Run Id",
-            "type": "string"
-          },
-          "version_number": {
-            "title": "Version Number",
-            "type": "integer"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "application_id",
-          "version_number",
-          "working_draft_id",
-          "job_snapshot_id",
-          "job_analysis_id",
-          "selection_plan_id",
-          "validation_run_id",
-          "draft_edit_version",
-          "draft_content_hash",
-          "facts_version",
-          "approved_at",
-          "decision_provenance",
-          "ready_qualified",
-          "ready_validation"
-        ],
-        "title": "ApprovedRevisionResponse",
-        "type": "object"
-      },
-      "ApprovedRevisionsResponse": {
-        "additionalProperties": false,
-        "description": "Every immutable ApprovedRevision belonging to one Application.",
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ApprovedRevisionResponse"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "ApprovedRevisionsResponse",
-        "type": "object"
-      },
-      "ArchivedWorkingDraftResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "artifact_version_id": {
-            "title": "Artifact Version Id",
-            "type": "string"
-          },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
-          "edit_version": {
-            "title": "Edit Version",
-            "type": "integer"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application_id",
-          "working_draft_id",
-          "edit_version",
-          "content_hash",
-          "artifact_version_id"
-        ],
-        "title": "ArchivedWorkingDraftResponse",
         "type": "object"
       },
       "ArtifactVersionDetailResponse": {
@@ -1656,17 +1386,6 @@
               }
             ],
             "title": "Profile"
-          },
-          "revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision Id"
           },
           "size": {
             "anyOf": [
@@ -1801,17 +1520,6 @@
             ],
             "title": "Profile"
           },
-          "revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision Id"
-          },
           "track": {
             "anyOf": [
               {
@@ -1906,9 +1614,50 @@
         "title": "BlockedActionResponse",
         "type": "object"
       },
+      "BuildFromAnalysisRequest": {
+        "additionalProperties": false,
+        "description": "Re-pin the document to an explicitly named analysis (§14 `build_from_analysis`).",
+        "properties": {
+          "analysis_id": {
+            "minLength": 1,
+            "title": "Analysis Id",
+            "type": "string"
+          },
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_document_hash",
+          "analysis_id"
+        ],
+        "title": "BuildFromAnalysisRequest",
+        "type": "object"
+      },
+      "BuiltWithResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "profile_version": {
+            "title": "Profile Version",
+            "type": "string"
+          },
+          "selection_policy_version": {
+            "title": "Selection Policy Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_version",
+          "selection_policy_version"
+        ],
+        "title": "BuiltWithResponse",
+        "type": "object"
+      },
       "CaptureClaimFactRequest": {
         "additionalProperties": false,
-        "description": "A fact created from an unsupported manual claim in a working draft.\n\nThe claim's exact text is copied without AI rewriting, so `renderings` is\nabsent: the English rendering comes from the claim itself. Everything the\nclaim cannot supply - meaning, tags, provenance - is explicit input.",
+        "description": "A fact created from an unsupported manual claim in the document.\n\nThe claim's exact text is copied without AI rewriting, so `renderings` is\nabsent: the English rendering comes from the claim itself. Everything the\nclaim cannot supply - meaning, tags, provenance - is explicit input.",
         "properties": {
           "application_id": {
             "title": "Application Id",
@@ -2209,6 +1958,11 @@
             "title": "Application Id",
             "type": "string"
           },
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
+            "type": "string"
+          },
           "job_analysis_id": {
             "title": "Job Analysis Id",
             "type": "string"
@@ -2231,15 +1985,24 @@
           "application_id",
           "job_analysis_id",
           "profile",
-          "section"
+          "section",
+          "expected_document_hash"
         ],
         "title": "ConfirmAndUseFactRequest",
         "type": "object"
       },
       "ConfirmAndUseFactResponse": {
         "additionalProperties": false,
-        "description": "The one logical command's whole outcome: promoted, attached, selected.",
+        "description": "The one logical command's whole outcome: promoted, attached, selected.\n\nThe document whose selection the fact joined, and its token afterwards.",
         "properties": {
+          "document_hash": {
+            "title": "Document Hash",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
           "event_ids": {
             "items": {
               "type": "string"
@@ -2261,21 +2024,29 @@
           "profile_store_version": {
             "title": "Profile Store Version",
             "type": "string"
-          },
-          "selection_plan": {
-            "$ref": "#/components/schemas/SelectionPlan"
           }
         },
         "required": [
           "fact",
           "event_ids",
-          "selection_plan",
+          "document_id",
+          "document_hash",
           "facts_version",
           "lifecycle_version",
           "profile_store_version"
         ],
         "title": "ConfirmAndUseFactResponse",
         "type": "object"
+      },
+      "ContentCheck": {
+        "enum": [
+          "none",
+          "outdated",
+          "failed",
+          "passed"
+        ],
+        "title": "ContentCheck",
+        "type": "string"
       },
       "CorrectStatusRequest": {
         "additionalProperties": false,
@@ -2475,6 +2246,30 @@
         "title": "CreateApplicationResponse",
         "type": "object"
       },
+      "CreateDraftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
+            "type": "string"
+          },
+          "provider": {
+            "default": "deterministic",
+            "enum": [
+              "deterministic",
+              "openai"
+            ],
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_document_hash"
+        ],
+        "title": "CreateDraftRequest",
+        "type": "object"
+      },
       "CreateJobSnapshotRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2527,217 +2322,28 @@
         "title": "CreateJobSnapshotResponse",
         "type": "object"
       },
-      "CreateSelectionPlanRequest": {
-        "additionalProperties": false,
-        "description": "What `POST /analyses/{id}/selection-plans` accepts, in both modes.\n\n`mode` is what makes the route answer `201` or `202`. It is explicit and has\nno `auto` value (§12): the deterministic form commits a plan inside the\nrequest, the AI form queues an Operation, and a client is never left\nguessing which of the two it got.\n\nThe overlay lists are the user's own decisions and belong to the\ndeterministic form. In AI mode the provider proposes the overlay, so\nsending both would be two answers to the same question - which is why the\nrouter refuses that combination rather than silently preferring one.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "emphasis_override": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Emphasis"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "excluded_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Excluded Fact Ids",
-            "type": "array"
-          },
-          "expected_candidate_context_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Candidate Context Hash"
-          },
-          "expected_facts_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Facts Version"
-          },
-          "expected_profile_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Profile Version"
-          },
-          "expected_selection_plan_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Selection Plan Id"
-          },
-          "expected_selection_policy_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected Selection Policy Version"
-          },
-          "mode": {
-            "default": "deterministic",
-            "enum": [
-              "deterministic",
-              "ai"
-            ],
-            "title": "Mode",
-            "type": "string"
-          },
-          "pinned_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Pinned Fact Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "application_id"
-        ],
-        "title": "CreateSelectionPlanRequest",
-        "type": "object"
-      },
-      "CreateSelectionPlanResponse": {
+      "DecisionExportResponse": {
         "additionalProperties": false,
         "properties": {
           "application_id": {
             "title": "Application Id",
             "type": "string"
           },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
+          "document_id": {
+            "title": "Document Id",
             "type": "string"
           },
-          "plan": {
-            "$ref": "#/components/schemas/SelectionPlanResponse"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
+          "markdown": {
+            "title": "Markdown",
             "type": "string"
           }
         },
         "required": [
           "application_id",
-          "job_analysis_id",
-          "selection_plan_id",
-          "plan"
+          "document_id",
+          "markdown"
         ],
-        "title": "CreateSelectionPlanResponse",
-        "type": "object"
-      },
-      "DecisionMarkdownResponse": {
-        "additionalProperties": false,
-        "description": "One revision's provenance as a human-readable document.\n\nThe suggested save name travels in `Content-Disposition`, the way the\nrecruiter PDF's does, rather than as a body field: a download name is a\ntransport concern, and a schema property shaped like a filename is\nindistinguishable from a stored location to anything reading the contract.\n\n`content_hash` names exactly what was produced, so a saved copy stays\ncheckable against the record it came from.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "approved_revision_id": {
-            "title": "Approved Revision Id",
-            "type": "string"
-          },
-          "content": {
-            "title": "Content",
-            "type": "string"
-          },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application_id",
-          "approved_revision_id",
-          "content",
-          "content_hash"
-        ],
-        "title": "DecisionMarkdownResponse",
-        "type": "object"
-      },
-      "DecisionRecordResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "approved_revision_id": {
-            "title": "Approved Revision Id",
-            "type": "string"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "job_snapshot_id": {
-            "title": "Job Snapshot Id",
-            "type": "string"
-          },
-          "structured": {
-            "additionalProperties": true,
-            "title": "Structured",
-            "type": "object"
-          },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "approved_revision_id",
-          "application_id",
-          "job_snapshot_id",
-          "job_analysis_id",
-          "structured",
-          "summary",
-          "created_at"
-        ],
-        "title": "DecisionRecordResponse",
+        "title": "DecisionExportResponse",
         "type": "object"
       },
       "DeleteApplicationResponse": {
@@ -2803,6 +2409,401 @@
         ],
         "title": "DeleteApplicationResponse",
         "type": "object"
+      },
+      "DocumentActionRequest": {
+        "additionalProperties": false,
+        "description": "The document the client was looking at when the user acted.",
+        "properties": {
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_document_hash"
+        ],
+        "title": "DocumentActionRequest",
+        "type": "object"
+      },
+      "DocumentCandidateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "pinned",
+              "selected",
+              "rescued",
+              "omitted"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "below_section_budget",
+                  "not_relevant_to_emphasis",
+                  "evicted_by_required_tag_rescue",
+                  "not_in_profile_pool",
+                  "excluded_by_user"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "user_selectable": {
+            "title": "User Selectable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fact_id",
+          "section",
+          "outcome",
+          "user_selectable"
+        ],
+        "title": "DocumentCandidateResponse",
+        "type": "object"
+      },
+      "DocumentCheckResponse": {
+        "additionalProperties": false,
+        "description": "`check` and `approve`. A failed check is `200` with `passed=false` (§22).",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "content_check": {
+            "$ref": "#/components/schemas/ContentCheck"
+          },
+          "document_hash": {
+            "title": "Document Hash",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_state": {
+            "$ref": "#/components/schemas/DocumentState"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "pending_claim_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Claim Ids",
+            "type": "array"
+          },
+          "report": {
+            "$ref": "#/components/schemas/ValidationReportResponse"
+          }
+        },
+        "required": [
+          "application_id",
+          "document_id",
+          "document_hash",
+          "document_state",
+          "content_check",
+          "passed",
+          "report"
+        ],
+        "title": "DocumentCheckResponse",
+        "type": "object"
+      },
+      "DocumentMutationResponse": {
+        "additionalProperties": false,
+        "description": "What a synchronous document change returns: the new token and state.",
+        "properties": {
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "content_check": {
+            "$ref": "#/components/schemas/ContentCheck"
+          },
+          "document_hash": {
+            "title": "Document Hash",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_state": {
+            "$ref": "#/components/schemas/DocumentState"
+          },
+          "pending_claim_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Claim Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "application_id",
+          "document_id",
+          "document_hash",
+          "document_state",
+          "content_check"
+        ],
+        "title": "DocumentMutationResponse",
+        "type": "object"
+      },
+      "DocumentResponse": {
+        "additionalProperties": false,
+        "description": "`GET /applications/{id}/document`. `document_hash` is also the ETag.",
+        "properties": {
+          "analysis_id": {
+            "title": "Analysis Id",
+            "type": "string"
+          },
+          "application_id": {
+            "title": "Application Id",
+            "type": "string"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "built_with": {
+            "$ref": "#/components/schemas/BuiltWithResponse"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "content_check": {
+            "$ref": "#/components/schemas/ContentCheck"
+          },
+          "content_report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationReportResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_hash": {
+            "title": "Document Hash",
+            "type": "string"
+          },
+          "document_state": {
+            "$ref": "#/components/schemas/DocumentState"
+          },
+          "facts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DraftFactResponse"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "last_render_error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Render Error"
+          },
+          "outline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftOutlineResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selection": {
+            "$ref": "#/components/schemas/DocumentSelectionResponse"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "application_id",
+          "analysis_id",
+          "document_hash",
+          "built_with",
+          "language",
+          "selection",
+          "document_state",
+          "content_check",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DocumentResponse",
+        "type": "object"
+      },
+      "DocumentSelectionResponse": {
+        "additionalProperties": false,
+        "description": "The selection with its candidate accounting (§20).",
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentCandidateResponse"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "emphasis": {
+            "$ref": "#/components/schemas/Emphasis"
+          },
+          "emphasis_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Emphasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Fact Ids",
+            "type": "array"
+          },
+          "pinned_fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pinned Fact Ids",
+            "type": "array"
+          },
+          "proposal_rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Rationale"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "const": "ai",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "selected_fact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Fact Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "emphasis",
+          "selected_fact_ids",
+          "pinned_fact_ids",
+          "excluded_fact_ids",
+          "candidates"
+        ],
+        "title": "DocumentSelectionResponse",
+        "type": "object"
+      },
+      "DocumentState": {
+        "enum": [
+          "none",
+          "draft",
+          "approved",
+          "ready"
+        ],
+        "title": "DocumentState",
+        "type": "string"
       },
       "DraftClaimResponse": {
         "additionalProperties": false,
@@ -2882,7 +2883,7 @@
       },
       "DraftFactResponse": {
         "additionalProperties": false,
-        "description": "One fact this draft uses, or one its SelectionPlan considered.\n\n`text` is nullable: a fact the store can no longer resolve is already\nreported as a stale reason by the state projection, and a read that raised\nover it would turn an explainable staleness into a `500`.\n\n`outcome` is null for a fact no SelectionPlan ranked - a contact, or a fact\na manual relink attached. That null is what says no include/exclude decision\napplies to it, so no second flag is needed to say the same thing.",
+        "description": "One fact the content uses, or one the document's selection considered.\n\n`text` is nullable: a fact the store can no longer resolve is already\nreported as a stale reason by the state projection, and a read that raised\nover it would turn an explainable staleness into a `500`.\n\n`outcome` is null for a fact the selection never ranked - a contact, or a fact\na manual relink attached. That null is what says no include/exclude decision\napplies to it, so no second flag is needed to say the same thing.",
         "properties": {
           "fact_id": {
             "title": "Fact Id",
@@ -2962,7 +2963,7 @@
       },
       "DraftOutlineResponse": {
         "additionalProperties": false,
-        "description": "The document's editable structure, derived from `source` on every read.\n\nNot a competing copy of the draft: it stores nothing, it is computed from\nthe same object `source` carries, and it holds only what an edit can\naddress. `source` remains the whole versioned document for anything that\nneeds more than the editor does.",
+        "description": "The document's editable structure, derived from `content` on every read.\n\nNot a competing copy of the content: it stores nothing, it is computed from\nthe same object `content` carries, and it holds only what an edit can\naddress. `content` remains the whole versioned document for anything that\nneeds more than the editor does.",
         "properties": {
           "contacts": {
             "items": {
@@ -3123,19 +3124,8 @@
       },
       "ExternalSubmissionRequest": {
         "additionalProperties": false,
-        "description": "A submission made outside the system, recorded without inventing evidence.\n\n`artifact_version_id` may name an already registered artifact, and stays\nabsent when there is none: a field that cannot be derived stays null rather\nthan being filled with a value the record never carried.",
+        "description": "A submission made outside the system, recorded without inventing evidence.\n\nIt carries no document content or files: nothing here sent them.",
         "properties": {
-          "artifact_version_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Artifact Version Id"
-          },
           "metadata": {
             "additionalProperties": true,
             "default": {},
@@ -3794,46 +3784,6 @@
         "title": "GapResponse",
         "type": "object"
       },
-      "GenerateWorkingDraftRequest": {
-        "additionalProperties": false,
-        "description": "What `POST /applications/{id}/working-draft/generate` accepts.\n\nBoth source IDs are explicit. A generate that resolved the latest analysis\nand plan for itself could build from a plan the user has never seen -\n§5.4's fifth acceptance item is exactly that commands take explicit source\nIDs.",
-        "properties": {
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "parent_revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Revision Id"
-          },
-          "provider": {
-            "default": "deterministic",
-            "enum": [
-              "deterministic",
-              "openai"
-            ],
-            "title": "Provider",
-            "type": "string"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "job_analysis_id",
-          "selection_plan_id"
-        ],
-        "title": "GenerateWorkingDraftRequest",
-        "type": "object"
-      },
       "HealthResponse": {
         "additionalProperties": false,
         "description": "Health and version surfaces for the local process.",
@@ -4215,6 +4165,11 @@
             "type": "string"
           },
           "output_type": {
+            "enum": [
+              "job_analysis",
+              "cv_document",
+              "provider_response"
+            ],
             "title": "Output Type",
             "type": "string"
           }
@@ -4521,11 +4476,11 @@
       "OperationType": {
         "enum": [
           "analyze_job",
-          "propose_selection_plan",
+          "propose_selection",
           "create_draft",
           "regenerate_section",
           "regenerate_claim",
-          "render_revision"
+          "render_document"
         ],
         "title": "OperationType",
         "type": "string"
@@ -4579,10 +4534,8 @@
       "PreparationState": {
         "enum": [
           "needs_analysis",
-          "needs_review",
           "ready_to_draft",
           "draft_in_progress",
-          "ready_for_approval",
           "approved",
           "ready"
         ],
@@ -4638,6 +4591,27 @@
         ],
         "title": "ProfileName",
         "type": "string"
+      },
+      "ProposeSelectionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
+            "type": "string"
+          },
+          "provider": {
+            "const": "openai",
+            "default": "openai",
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_document_hash"
+        ],
+        "title": "ProposeSelectionRequest",
+        "type": "object"
       },
       "ReasonResponse": {
         "additionalProperties": false,
@@ -4743,28 +4717,6 @@
             ],
             "title": "Actor Type"
           },
-          "approved_revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Approved Revision Id"
-          },
-          "artifact_version_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Artifact Version Id"
-          },
           "client": {
             "anyOf": [
               {
@@ -4790,6 +4742,17 @@
               }
             ],
             "title": "Corrects Event Id"
+          },
+          "document_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Hash"
           },
           "from_status": {
             "anyOf": [
@@ -4914,35 +4877,23 @@
         "title": "RecruitmentTimelineItemResponse",
         "type": "object"
       },
-      "RegenerateClaimRequest": {
+      "RegenerateDocumentClaimRequest": {
         "additionalProperties": false,
-        "description": "What `POST /working-drafts/{id}/regenerate-claim` accepts (§14).",
         "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
           "claim_id": {
             "maxLength": 200,
             "title": "Claim Id",
             "type": "string"
           },
-          "expected_content_hash": {
-            "title": "Expected Content Hash",
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
             "type": "string"
-          },
-          "expected_edit_version": {
-            "title": "Expected Edit Version",
-            "type": "integer"
           },
           "instruction": {
             "default": "",
             "maxLength": 2000,
             "title": "Instruction",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
             "type": "string"
           },
           "keep_text": {
@@ -4950,38 +4901,22 @@
             "description": "Keep the claim's current wording and only run semantic review of it against its own linked facts. The claim must be pending and linked to at least one fact.",
             "title": "Keep Text",
             "type": "boolean"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
           }
         },
         "required": [
-          "application_id",
-          "expected_edit_version",
-          "expected_content_hash",
-          "job_analysis_id",
-          "selection_plan_id",
+          "expected_document_hash",
           "claim_id"
         ],
-        "title": "RegenerateClaimRequest",
+        "title": "RegenerateDocumentClaimRequest",
         "type": "object"
       },
-      "RegenerateSectionRequest": {
+      "RegenerateDocumentSectionRequest": {
         "additionalProperties": false,
-        "description": "What `POST /working-drafts/{id}/regenerate-section` accepts (§14).\n\nThe draft's exact version and content hash are in the body rather than in\n`If-Match`, on the same reasoning as `validate` and `approve`: this is an\naction on a resource, not a conditional replacement of it, and an action\nthat accepted `If-Match: *` would be the lost update the header exists to\nprevent.\n\nThe analysis and plan are explicit. A regeneration that resolved them for\nitself could rewrite a section against a plan the user never saw.",
         "properties": {
-          "application_id": {
-            "title": "Application Id",
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
             "type": "string"
-          },
-          "expected_content_hash": {
-            "title": "Expected Content Hash",
-            "type": "string"
-          },
-          "expected_edit_version": {
-            "title": "Expected Edit Version",
-            "type": "integer"
           },
           "instruction": {
             "default": "",
@@ -4989,29 +4924,17 @@
             "title": "Instruction",
             "type": "string"
           },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
           "section": {
             "maxLength": 200,
             "title": "Section",
             "type": "string"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
           }
         },
         "required": [
-          "application_id",
-          "expected_edit_version",
-          "expected_content_hash",
-          "job_analysis_id",
-          "selection_plan_id",
+          "expected_document_hash",
           "section"
         ],
-        "title": "RegenerateSectionRequest",
+        "title": "RegenerateDocumentSectionRequest",
         "type": "object"
       },
       "RenderCheckReason": {
@@ -5039,873 +4962,6 @@
           "code"
         ],
         "title": "RenderCheckReason",
-        "type": "object"
-      },
-      "RenderRevisionRequest": {
-        "additionalProperties": false,
-        "description": "The Application the client believes it is rendering for.\n\nExplicit rather than inferred from the revision, for the same reason\n`apply-decisions` states it: a client that names both is telling the server\nwhat it believes, and a mismatch is a `412` naming the broken lineage\ninstead of a render landing on another Application's revision.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application_id"
-        ],
-        "title": "RenderRevisionRequest",
-        "type": "object"
-      },
-      "ReplaceWorkingDraftRequest": {
-        "additionalProperties": false,
-        "description": "Replacement names its own compatible analysis and plan (§14).\n\nThe route is `POST /applications/{id}/working-draft/replace`, so the path\ncarries the Application and the body carries the draft. Both are explicit\nand neither is inferred from the other: the client states which draft of\nwhich Application it means, and a pair that does not match is a `412`.\n\n`keep_previous` is the Keep decision: it materializes the immutable\nhistorical snapshot before the replacement is attempted.",
-        "properties": {
-          "expected_edit_version": {
-            "title": "Expected Edit Version",
-            "type": "integer"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "keep_previous": {
-            "default": false,
-            "title": "Keep Previous",
-            "type": "boolean"
-          },
-          "provider": {
-            "default": "deterministic",
-            "enum": [
-              "deterministic",
-              "openai"
-            ],
-            "title": "Provider",
-            "type": "string"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_edit_version",
-          "working_draft_id",
-          "job_analysis_id",
-          "selection_plan_id"
-        ],
-        "title": "ReplaceWorkingDraftRequest",
-        "type": "object"
-      },
-      "RevisionChangeSummaryResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "added": {
-            "title": "Added",
-            "type": "integer"
-          },
-          "moved": {
-            "title": "Moved",
-            "type": "integer"
-          },
-          "removed": {
-            "title": "Removed",
-            "type": "integer"
-          },
-          "reworded": {
-            "title": "Reworded",
-            "type": "integer"
-          },
-          "unchanged": {
-            "title": "Unchanged",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "added",
-          "removed",
-          "reworded",
-          "moved",
-          "unchanged"
-        ],
-        "title": "RevisionChangeSummaryResponse",
-        "type": "object"
-      },
-      "RevisionClaimChangeResponse": {
-        "additionalProperties": false,
-        "description": "One resume line that differs between two revisions.",
-        "properties": {
-          "after_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "After Text"
-          },
-          "before_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Before Text"
-          },
-          "fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Fact Ids",
-            "type": "array"
-          },
-          "from_section": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "From Section"
-          },
-          "kind": {
-            "enum": [
-              "added",
-              "removed",
-              "reworded",
-              "moved"
-            ],
-            "title": "Kind",
-            "type": "string"
-          },
-          "style": {
-            "enum": [
-              "paragraph",
-              "heading",
-              "date",
-              "bullet",
-              "item",
-              "contact",
-              "headline"
-            ],
-            "title": "Style",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "style"
-        ],
-        "title": "RevisionClaimChangeResponse",
-        "type": "object"
-      },
-      "RevisionComparisonResponse": {
-        "additionalProperties": false,
-        "description": "What changed from one approved revision to another of the same Application.\n\nLines are followed by claim and fact identity, not by text position, so a\nreworded statement is one `reworded` change rather than a removal and an\naddition. Derived from the two immutable payloads on every read.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "base_revision_id": {
-            "title": "Base Revision Id",
-            "type": "string"
-          },
-          "base_version_number": {
-            "title": "Base Version Number",
-            "type": "integer"
-          },
-          "emphasis_changed": {
-            "title": "Emphasis Changed",
-            "type": "boolean"
-          },
-          "facts_version_changed": {
-            "title": "Facts Version Changed",
-            "type": "boolean"
-          },
-          "job_analysis_changed": {
-            "title": "Job Analysis Changed",
-            "type": "boolean"
-          },
-          "job_snapshot_changed": {
-            "title": "Job Snapshot Changed",
-            "type": "boolean"
-          },
-          "language_changed": {
-            "title": "Language Changed",
-            "type": "boolean"
-          },
-          "profile_changed": {
-            "title": "Profile Changed",
-            "type": "boolean"
-          },
-          "sections": {
-            "items": {
-              "$ref": "#/components/schemas/RevisionSectionComparisonResponse"
-            },
-            "title": "Sections",
-            "type": "array"
-          },
-          "selection_plan_changed": {
-            "title": "Selection Plan Changed",
-            "type": "boolean"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/RevisionChangeSummaryResponse"
-          },
-          "target_revision_id": {
-            "title": "Target Revision Id",
-            "type": "string"
-          },
-          "target_version_number": {
-            "title": "Target Version Number",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "application_id",
-          "base_revision_id",
-          "base_version_number",
-          "target_revision_id",
-          "target_version_number",
-          "job_snapshot_changed",
-          "job_analysis_changed",
-          "selection_plan_changed",
-          "facts_version_changed",
-          "profile_changed",
-          "emphasis_changed",
-          "language_changed",
-          "summary",
-          "sections"
-        ],
-        "title": "RevisionComparisonResponse",
-        "type": "object"
-      },
-      "RevisionSectionComparisonResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "changes": {
-            "items": {
-              "$ref": "#/components/schemas/RevisionClaimChangeResponse"
-            },
-            "title": "Changes",
-            "type": "array"
-          },
-          "kind": {
-            "enum": [
-              "headline",
-              "contacts",
-              "section"
-            ],
-            "title": "Kind",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "added",
-              "removed",
-              "changed",
-              "unchanged"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "unchanged_count": {
-            "title": "Unchanged Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "kind",
-          "name",
-          "status",
-          "changes",
-          "unchanged_count"
-        ],
-        "title": "RevisionSectionComparisonResponse",
-        "type": "object"
-      },
-      "SelectionCandidate": {
-        "additionalProperties": false,
-        "description": "One fact's full accounting in the selection decision.\n\nRecorded so a later reader can answer not only which policy ran but why\nfact A beat fact B: the ranking is the lexicographic tuple\n(requirement_rank, semantic_score, keyword_hits, -pool_index).\n\n`requirement_rank` is 2 where the fact bears on a mandatory requirement, 1\nfor a preferred one, 0 where the posting never asked. `gap_substitute` held\nthat slot under policy 1.0.0 and is still recorded: it says something the\ntier does not - that the fact was offered as a stand-in for something\nmissing rather than as evidence of something held - and manifests already\nwritten carry it. Reading either field on an older record means reading\n`policy_version` first.",
-        "properties": {
-          "emphasis_score": {
-            "title": "Emphasis Score",
-            "type": "integer"
-          },
-          "fact_id": {
-            "title": "Fact Id",
-            "type": "string"
-          },
-          "gap_substitute": {
-            "title": "Gap Substitute",
-            "type": "boolean"
-          },
-          "keyword_hits": {
-            "title": "Keyword Hits",
-            "type": "integer"
-          },
-          "outcome": {
-            "enum": [
-              "pinned",
-              "selected",
-              "rescued",
-              "omitted"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          },
-          "pool_index": {
-            "title": "Pool Index",
-            "type": "integer"
-          },
-          "profile_score": {
-            "title": "Profile Score",
-            "type": "integer"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "enum": [
-                  "below_section_budget",
-                  "not_relevant_to_emphasis",
-                  "evicted_by_required_tag_rescue",
-                  "not_in_profile_pool",
-                  "excluded_by_user"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "requirement_rank": {
-            "default": 0,
-            "maximum": 2.0,
-            "minimum": 0.0,
-            "title": "Requirement Rank",
-            "type": "integer"
-          },
-          "section": {
-            "title": "Section",
-            "type": "string"
-          },
-          "semantic_score": {
-            "title": "Semantic Score",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "fact_id",
-          "section",
-          "pool_index",
-          "profile_score",
-          "emphasis_score",
-          "semantic_score",
-          "keyword_hits",
-          "gap_substitute",
-          "outcome"
-        ],
-        "title": "SelectionCandidate",
-        "type": "object"
-      },
-      "SelectionChangeResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
-          "edit_version": {
-            "title": "Edit Version",
-            "type": "integer"
-          },
-          "plan": {
-            "additionalProperties": true,
-            "title": "Plan",
-            "type": "object"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application_id",
-          "working_draft_id",
-          "edit_version",
-          "content_hash",
-          "selection_plan_id",
-          "plan"
-        ],
-        "title": "SelectionChangeResponse",
-        "type": "object"
-      },
-      "SelectionManifest": {
-        "additionalProperties": false,
-        "description": "The engine's selection decision, as decided at build time.\n\nManual claim edits afterwards do not rewrite this record; they set\n`superseded_by_manual_edit` so the audit trail keeps the original decision\ninstead of quietly reshaping itself around the edit.",
-        "properties": {
-          "candidates": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SelectionCandidate"
-            },
-            "title": "Candidates",
-            "type": "array"
-          },
-          "emphasis": {
-            "$ref": "#/components/schemas/Emphasis"
-          },
-          "emphasis_override": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Emphasis"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "emphasis_policy_version": {
-            "title": "Emphasis Policy Version",
-            "type": "string"
-          },
-          "excluded_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Excluded Fact Ids",
-            "type": "array"
-          },
-          "pinned_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Pinned Fact Ids",
-            "type": "array"
-          },
-          "policy_version": {
-            "title": "Policy Version",
-            "type": "string"
-          },
-          "preferred_tag_coverage": {
-            "additionalProperties": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "default": {},
-            "title": "Preferred Tag Coverage",
-            "type": "object"
-          },
-          "proposal_rationale": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposal Rationale"
-          },
-          "proposed_by": {
-            "anyOf": [
-              {
-                "const": "ai",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposed By"
-          },
-          "required_tag_coverage": {
-            "additionalProperties": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "default": {},
-            "title": "Required Tag Coverage",
-            "type": "object"
-          },
-          "selected_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Selected Fact Ids",
-            "type": "array"
-          },
-          "superseded_by_manual_edit": {
-            "default": false,
-            "title": "Superseded By Manual Edit",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "policy_version",
-          "emphasis",
-          "emphasis_policy_version"
-        ],
-        "title": "SelectionManifest",
-        "type": "object"
-      },
-      "SelectionPlan": {
-        "additionalProperties": false,
-        "description": "One immutable, versioned fact-selection decision for an analysis.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "candidate_context_hash": {
-            "title": "Candidate Context Hash",
-            "type": "string"
-          },
-          "candidate_context_version": {
-            "title": "Candidate Context Version",
-            "type": "string"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "plan": {
-            "$ref": "#/components/schemas/SelectionManifest"
-          },
-          "profile_version": {
-            "title": "Profile Version",
-            "type": "string"
-          },
-          "selection_policy_version": {
-            "title": "Selection Policy Version",
-            "type": "string"
-          },
-          "track_emphasis_dependencies": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "title": "Track Emphasis Dependencies",
-            "type": "object"
-          },
-          "version_number": {
-            "title": "Version Number",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "application_id",
-          "job_analysis_id",
-          "version_number",
-          "plan",
-          "candidate_context_version",
-          "candidate_context_hash",
-          "profile_version",
-          "selection_policy_version",
-          "track_emphasis_dependencies",
-          "created_at"
-        ],
-        "title": "SelectionPlan",
-        "type": "object"
-      },
-      "SelectionPlanCandidateResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "fact_id": {
-            "title": "Fact Id",
-            "type": "string"
-          },
-          "outcome": {
-            "enum": [
-              "pinned",
-              "selected",
-              "rescued",
-              "omitted"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "enum": [
-                  "below_section_budget",
-                  "not_relevant_to_emphasis",
-                  "evicted_by_required_tag_rescue",
-                  "not_in_profile_pool",
-                  "excluded_by_user"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "section": {
-            "title": "Section",
-            "type": "string"
-          },
-          "text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Text"
-          },
-          "user_selectable": {
-            "title": "User Selectable",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "fact_id",
-          "section",
-          "outcome",
-          "user_selectable"
-        ],
-        "title": "SelectionPlanCandidateResponse",
-        "type": "object"
-      },
-      "SelectionPlanDetailResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "candidate_context_hash": {
-            "title": "Candidate Context Hash",
-            "type": "string"
-          },
-          "candidate_context_version": {
-            "title": "Candidate Context Version",
-            "type": "string"
-          },
-          "candidates": {
-            "items": {
-              "$ref": "#/components/schemas/SelectionPlanCandidateResponse"
-            },
-            "title": "Candidates",
-            "type": "array"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "excluded_fact_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Excluded Fact Ids",
-            "type": "array"
-          },
-          "facts_version": {
-            "title": "Facts Version",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "language": {
-            "title": "Language",
-            "type": "string"
-          },
-          "pinned_fact_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Pinned Fact Ids",
-            "type": "array"
-          },
-          "plan": {
-            "additionalProperties": true,
-            "title": "Plan",
-            "type": "object"
-          },
-          "profile_version": {
-            "title": "Profile Version",
-            "type": "string"
-          },
-          "proposal_rationale": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposal Rationale"
-          },
-          "proposed_by": {
-            "anyOf": [
-              {
-                "const": "ai",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposed By"
-          },
-          "selection_policy_version": {
-            "title": "Selection Policy Version",
-            "type": "string"
-          },
-          "track_emphasis_dependencies": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "title": "Track Emphasis Dependencies",
-            "type": "object"
-          },
-          "version_number": {
-            "title": "Version Number",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "application_id",
-          "job_analysis_id",
-          "version_number",
-          "plan",
-          "candidate_context_version",
-          "candidate_context_hash",
-          "profile_version",
-          "selection_policy_version",
-          "track_emphasis_dependencies",
-          "created_at",
-          "language",
-          "facts_version",
-          "pinned_fact_ids",
-          "excluded_fact_ids",
-          "proposed_by",
-          "proposal_rationale",
-          "candidates"
-        ],
-        "title": "SelectionPlanDetailResponse",
-        "type": "object"
-      },
-      "SelectionPlanResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "candidate_context_hash": {
-            "title": "Candidate Context Hash",
-            "type": "string"
-          },
-          "candidate_context_version": {
-            "title": "Candidate Context Version",
-            "type": "string"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "plan": {
-            "additionalProperties": true,
-            "title": "Plan",
-            "type": "object"
-          },
-          "profile_version": {
-            "title": "Profile Version",
-            "type": "string"
-          },
-          "selection_policy_version": {
-            "title": "Selection Policy Version",
-            "type": "string"
-          },
-          "track_emphasis_dependencies": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "title": "Track Emphasis Dependencies",
-            "type": "object"
-          },
-          "version_number": {
-            "title": "Version Number",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "application_id",
-          "job_analysis_id",
-          "version_number",
-          "plan",
-          "candidate_context_version",
-          "candidate_context_hash",
-          "profile_version",
-          "selection_policy_version",
-          "track_emphasis_dependencies",
-          "created_at"
-        ],
-        "title": "SelectionPlanResponse",
         "type": "object"
       },
       "SettingsResponse": {
@@ -6026,13 +5082,17 @@
       },
       "SubmissionResponse": {
         "additionalProperties": false,
-        "description": "A recorded submission, with any staleness the caller should see.\n\n`warnings` carries the `READY_REVISION_FOR_OLDER_*` codes: the submission\nsucceeded, and the active snapshot or analysis has moved on since the\nrevision was approved. They are reported, not raised - active-context\ncompatibility is not a precondition for submitting a qualified revision.",
+        "description": "A recorded submission, with any warning the caller should see.\n\n`warnings` carries `DOCUMENT_ON_OLDER_ANALYSIS` when the active snapshot or\nanalysis has moved on from the document's (§18). It is reported, not raised.",
         "properties": {
           "application_id": {
             "title": "Application Id",
             "type": "string"
           },
-          "approved_revision_id": {
+          "current_status": {
+            "title": "Current Status",
+            "type": "string"
+          },
+          "document_hash": {
             "anyOf": [
               {
                 "type": "string"
@@ -6041,11 +5101,7 @@
                 "type": "null"
               }
             ],
-            "title": "Approved Revision Id"
-          },
-          "current_status": {
-            "title": "Current Status",
-            "type": "string"
+            "title": "Document Hash"
           },
           "event_id": {
             "anyOf": [
@@ -6079,17 +5135,6 @@
               }
             ],
             "title": "Next Action Date"
-          },
-          "pdf_artifact_version_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pdf Artifact Version Id"
           },
           "submission_id": {
             "title": "Submission Id",
@@ -6125,11 +5170,11 @@
       },
       "SubmitApplicationRequest": {
         "additionalProperties": false,
-        "description": "One exact qualified revision and the exact PDF that was sent.\n\nBoth IDs are explicit. A submission that resolved the latest revision for\nitself could record having sent something the user never saw, which is the\none claim in this system that cannot be re-derived afterwards.",
+        "description": "Record that the Ready document the client was showing was sent (§18).\n\n`expected_document_hash` is explicit. A submission against whatever the document\nholds now could record having sent something the user never saw, which is the\none claim in this system that cannot be re-derived afterwards.",
         "properties": {
-          "approved_revision_id": {
-            "minLength": 1,
-            "title": "Approved Revision Id",
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
             "type": "string"
           },
           "metadata": {
@@ -6138,11 +5183,6 @@
             "title": "Metadata",
             "type": "object"
           },
-          "pdf_artifact_version_id": {
-            "minLength": 1,
-            "title": "Pdf Artifact Version Id",
-            "type": "string"
-          },
           "submitted_at": {
             "minLength": 1,
             "title": "Submitted At",
@@ -6150,8 +5190,7 @@
           }
         },
         "required": [
-          "approved_revision_id",
-          "pdf_artifact_version_id",
+          "expected_document_hash",
           "submitted_at"
         ],
         "title": "SubmitApplicationRequest",
@@ -6252,6 +5291,93 @@
         "title": "UpdateApplicationNotesResponse",
         "type": "object"
       },
+      "UpdateDocumentRequest": {
+        "additionalProperties": false,
+        "description": "What `PATCH /applications/{id}/document` applies as one edit (§14).\n\nThe token is `If-Match`, not a body field.",
+        "properties": {
+          "claim_additions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClaimAdditionRequest"
+            },
+            "title": "Claim Additions",
+            "type": "array"
+          },
+          "claim_edits": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClaimPatchRequest"
+            },
+            "title": "Claim Edits",
+            "type": "array"
+          },
+          "claim_orders": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "default": {},
+            "description": "Complete claim-ID order for each named section being reordered.",
+            "title": "Claim Orders",
+            "type": "object"
+          },
+          "claim_removals": {
+            "default": [],
+            "description": "Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming the selection change, and the headline and contacts are structural.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Claim Removals",
+            "type": "array"
+          }
+        },
+        "title": "UpdateDocumentRequest",
+        "type": "object"
+      },
+      "UpdateSelectionRequest": {
+        "additionalProperties": false,
+        "description": "A deterministic selection change (§14 `update_selection`).\n\nTwo lists, not three: explicit inclusion is a pin, and what ends up selected is a\nresponse field. `emphasis_override` null means \"leave the effective Emphasis as it\nis\", not \"clear the override\".",
+        "properties": {
+          "emphasis_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Emphasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "excluded_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Fact Ids",
+            "type": "array"
+          },
+          "expected_document_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Document Hash",
+            "type": "string"
+          },
+          "pinned_fact_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Pinned Fact Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "expected_document_hash"
+        ],
+        "title": "UpdateSelectionRequest",
+        "type": "object"
+      },
       "UpdateSettingsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6334,51 +5460,6 @@
         "title": "UpdateSettingsRequest",
         "type": "object"
       },
-      "UpdateWorkingDraftRequest": {
-        "additionalProperties": false,
-        "description": "The structured patch `PATCH /working-drafts/{id}` applies as one edit.\n\nRemovals travel with the edits rather than in a command of their own.\nProduct spec §10 makes removal one of the three resolutions for free text\nnothing could authorize, and §14 commits an autosave patch as a single edit\nagainst a single expected version - a second command would need its own\ntoken and could interleave with the save already in flight.\n\nAt least one content operation has to be present. Reordering uses complete\npermutations, so an omitted order means \"leave this structure alone\" while\nan empty order is meaningful only for an already empty section. Only claims\nwithin a section reorder: section order is Profile policy (product spec §10),\nso the patch has no field that could move a section.",
-        "properties": {
-          "claim_additions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ClaimAdditionRequest"
-            },
-            "title": "Claim Additions",
-            "type": "array"
-          },
-          "claim_edits": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/ClaimPatchRequest"
-            },
-            "title": "Claim Edits",
-            "type": "array"
-          },
-          "claim_orders": {
-            "additionalProperties": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            "default": {},
-            "description": "Complete claim-ID order for each named section being reordered.",
-            "title": "Claim Orders",
-            "type": "object"
-          },
-          "claim_removals": {
-            "default": [],
-            "description": "Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming apply-selection-change, and the headline and contacts are structural.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Claim Removals",
-            "type": "array"
-          }
-        },
-        "title": "UpdateWorkingDraftRequest",
-        "type": "object"
-      },
       "ValidationIssueResponse": {
         "additionalProperties": false,
         "properties": {
@@ -6455,98 +5536,6 @@
         "title": "ValidationReportResponse",
         "type": "object"
       },
-      "ValidationRunDetailResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "edit_version": {
-            "title": "Edit Version",
-            "type": "integer"
-          },
-          "passed": {
-            "title": "Passed",
-            "type": "boolean"
-          },
-          "report": {
-            "$ref": "#/components/schemas/ValidationReportResponse"
-          },
-          "validation_run_id": {
-            "title": "Validation Run Id",
-            "type": "string"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application_id",
-          "working_draft_id",
-          "validation_run_id",
-          "edit_version",
-          "content_hash",
-          "passed",
-          "report",
-          "created_at"
-        ],
-        "title": "ValidationRunDetailResponse",
-        "type": "object"
-      },
-      "ValidationRunResponse": {
-        "additionalProperties": false,
-        "description": "A ValidationRun as data. `passed=false` arrives as `200` (§22).",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
-          "edit_version": {
-            "title": "Edit Version",
-            "type": "integer"
-          },
-          "passed": {
-            "title": "Passed",
-            "type": "boolean"
-          },
-          "report": {
-            "$ref": "#/components/schemas/ValidationReportResponse"
-          },
-          "validation_run_id": {
-            "title": "Validation Run Id",
-            "type": "string"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application_id",
-          "working_draft_id",
-          "validation_run_id",
-          "edit_version",
-          "content_hash",
-          "passed",
-          "report"
-        ],
-        "title": "ValidationRunResponse",
-        "type": "object"
-      },
       "WarningResponse": {
         "additionalProperties": false,
         "properties": {
@@ -6573,210 +5562,6 @@
         ],
         "title": "WarningResponse",
         "type": "object"
-      },
-      "WorkingDraftFactsResponse": {
-        "additionalProperties": false,
-        "description": "§20 candidate accounting: the union of linked facts and plan candidates.\n\nNeither set covers the other. Contacts come from the candidate context and\nappear in no SelectionPlan; an omitted candidate appears in no claim. The\neditor needs both - one to say what backs a line, the other to say what\ncould be added to one.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "facts": {
-            "items": {
-              "$ref": "#/components/schemas/DraftFactResponse"
-            },
-            "title": "Facts",
-            "type": "array"
-          },
-          "language": {
-            "title": "Language",
-            "type": "string"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "working_draft_id",
-          "application_id",
-          "selection_plan_id",
-          "language",
-          "facts"
-        ],
-        "title": "WorkingDraftFactsResponse",
-        "type": "object"
-      },
-      "WorkingDraftResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "edit_version": {
-            "title": "Edit Version",
-            "type": "integer"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "job_analysis_id": {
-            "title": "Job Analysis Id",
-            "type": "string"
-          },
-          "latest_validation_passed": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Validation Passed"
-          },
-          "latest_validation_run_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Validation Run Id"
-          },
-          "outline": {
-            "$ref": "#/components/schemas/DraftOutlineResponse"
-          },
-          "parent_revision_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Revision Id"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
-          },
-          "source": {
-            "additionalProperties": true,
-            "title": "Source",
-            "type": "object"
-          },
-          "updated_at": {
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "application_id",
-          "job_analysis_id",
-          "selection_plan_id",
-          "source",
-          "outline",
-          "edit_version",
-          "content_hash",
-          "active",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "WorkingDraftResponse",
-        "type": "object"
-      },
-      "WorkingDraftState": {
-        "enum": [
-          "none",
-          "editing",
-          "validation_failed",
-          "validated",
-          "stale"
-        ],
-        "title": "WorkingDraftState",
-        "type": "string"
-      },
-      "WorkingDraftUpdateResponse": {
-        "additionalProperties": false,
-        "description": "The new token, and which claims were saved as pending.",
-        "properties": {
-          "application_id": {
-            "title": "Application Id",
-            "type": "string"
-          },
-          "content_hash": {
-            "title": "Content Hash",
-            "type": "string"
-          },
-          "edit_version": {
-            "title": "Edit Version",
-            "type": "integer"
-          },
-          "pending_claim_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Pending Claim Ids",
-            "type": "array"
-          },
-          "selection_plan_id": {
-            "title": "Selection Plan Id",
-            "type": "string"
-          },
-          "working_draft_id": {
-            "title": "Working Draft Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application_id",
-          "working_draft_id",
-          "edit_version",
-          "content_hash",
-          "selection_plan_id"
-        ],
-        "title": "WorkingDraftUpdateResponse",
-        "type": "object"
-      },
-      "WorkingDraftVersionRequest": {
-        "additionalProperties": false,
-        "description": "The exact version a command is addressed to.",
-        "properties": {
-          "expected_edit_version": {
-            "title": "Expected Edit Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "expected_edit_version"
-        ],
-        "title": "WorkingDraftVersionRequest",
-        "type": "object"
       }
     }
   },
@@ -6788,7 +5573,7 @@
   "paths": {
     "/api/v1/analyses/{analysis_id}/apply-decisions": {
       "post": {
-        "description": "`201`: both branches create an immutable record and neither mutates one.\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and the command, the recorded `user_override`, and the stored\nanalysis all hold plain strings. Handing the member across would make the\nstored value's exact type depend on how Pydantic coerces a `str` subclass.",
+        "description": "`201`: a meaning change creates an immutable JobAnalysis; a selection-only\nchange updates the document's selection in place (§13).\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and the command, the recorded `user_override`, and the stored\nanalysis all hold plain strings. Handing the member across would make the\nstored value's exact type depend on how Pydantic coerces a `str` subclass.",
         "operationId": "apply_analysis_decisions_api_v1_analyses__analysis_id__apply_decisions_post",
         "parameters": [
           {
@@ -6834,87 +5619,6 @@
           }
         },
         "summary": "Apply one review-form submission to an analysis",
-        "tags": [
-          "analyses"
-        ]
-      }
-    },
-    "/api/v1/analyses/{analysis_id}/selection-plans": {
-      "post": {
-        "description": "`201` and the plan itself in deterministic mode; `202` in AI mode (§13).\n\nOne route, two statuses, decided per request rather than per route - which\nis why the acceptance helper sets its own status instead of the decorator\ndoing it. `201` means the immutable plan exists and is in the body; `202`\nmeans a provider will be asked and the `Location` is what to poll.\n\nNo provider call happens inside this request in either branch. That is the\n§13 rule, and it is why the AI branch queues an Operation rather than\nawaiting an answer.",
-        "operationId": "create_selection_plan_api_v1_analyses__analysis_id__selection_plans_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "analysis_id",
-            "required": true,
-            "schema": {
-              "title": "Analysis Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSelectionPlanRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreateSelectionPlanResponse"
-                }
-              }
-            },
-            "description": "SelectionPlan created."
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "AI proposal Operation accepted."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Create a replacement SelectionPlan for an analysis",
         "tags": [
           "analyses"
         ]
@@ -7189,7 +5893,7 @@
     },
     "/api/v1/applications/{application_id}/analyses": {
       "post": {
-        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis and initial\nSelectionPlan were both committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/apply-decisions`.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and this command is persisted as the Operation's request payload. A\npayload holding enum members rather than plain strings would depend on how\nPydantic coerces a `str` subclass to survive the round trip.",
+        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis - and, for the first\nanalysis, the document's initial selection - were committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/apply-decisions`.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and this command is persisted as the Operation's request payload. A\npayload holding enum members rather than plain strings would depend on how\nPydantic coerces a `str` subclass to survive the round trip.",
         "operationId": "create_analysis_api_v1_applications__application_id__analyses_post",
         "parameters": [
           {
@@ -7253,48 +5957,6 @@
           }
         },
         "summary": "Analyze one exact job snapshot",
-        "tags": [
-          "applications"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/approved-revisions": {
-      "get": {
-        "operationId": "approved_revisions_api_v1_applications__application_id__approved_revisions_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovedRevisionsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "List immutable approved revisions for an application",
         "tags": [
           "applications"
         ]
@@ -7384,51 +6046,9 @@
         ]
       }
     },
-    "/api/v1/applications/{application_id}/decision": {
-      "get": {
-        "operationId": "latest_decision_api_v1_applications__application_id__decision_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DecisionRecordResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Read the latest decision record for an application",
-        "tags": [
-          "applications"
-        ]
-      }
-    },
     "/api/v1/applications/{application_id}/delete": {
       "post": {
-        "description": "No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).\n\nCallable from any current status, including `closed`. Every immutable\nJobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision,\nArtifact, Submission, and Operation the application produced is untouched;\nonly default list/Dashboard projections and duplicate detection stop\nsurfacing it. The detail endpoint still returns it by ID.",
+        "description": "No hard delete and no `undelete` in this phase (state-and-use-cases.md §12).\n\nCallable from any current status, including `closed`. Every immutable\nJobSnapshot, JobAnalysis, Artifact, Submission, and Operation the\napplication produced is untouched;\nonly default list/Dashboard projections and duplicate detection stop\nsurfacing it. The detail endpoint still returns it by ID.",
         "operationId": "delete_application_api_v1_applications__application_id__delete_post",
         "parameters": [
           {
@@ -7469,9 +6089,854 @@
         ]
       }
     },
+    "/api/v1/applications/{application_id}/document": {
+      "get": {
+        "description": "`200` with the document and its `document_hash` as the ETag; `404` before analysis.",
+        "operationId": "read_document_api_v1_applications__application_id__document_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Read the Application's CV document",
+        "tags": [
+          "documents"
+        ]
+      },
+      "patch": {
+        "description": "`200` with the new hash; `409` when `If-Match` no longer describes the document.\n\nFree text no fact authorizes is saved as a pending claim rather than refused (§14);\nit blocks approval, not the save.",
+        "operationId": "update_document_api_v1_applications__application_id__document_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required. The ETag returned by the matching document read. A value that no longer describes the stored document is a 409 and changes nothing.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "description": "Required. The ETag returned by the matching document read. A value that no longer describes the stored document is a 409 and changes nothing.",
+              "title": "If-Match",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Save a structured content patch",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/approve": {
+      "post": {
+        "description": "`200` with the report; approved only when it passed. `412` names a blocker.",
+        "operationId": "approve_document_api_v1_applications__application_id__document_approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Check and approve",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/build-from-analysis": {
+      "post": {
+        "description": "`200` with a document that has a fresh selection and no content.",
+        "operationId": "build_from_analysis_api_v1_applications__application_id__document_build_from_analysis_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildFromAnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Re-pin the document to a newer analysis",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/check": {
+      "post": {
+        "description": "`200` whether or not the check passed; the report is data (§22).",
+        "operationId": "check_document_api_v1_applications__application_id__document_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCheckResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Check the content without approving",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/decision-markdown": {
+      "get": {
+        "operationId": "export_decision_markdown_api_v1_applications__application_id__document_decision_markdown_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionExportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Export the document's provenance as Markdown",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/draft": {
+      "post": {
+        "description": "`202` and a `Location`; activation writes content only while the hash still holds.",
+        "operationId": "create_draft_api_v1_applications__application_id__document_draft_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Generate the document's content",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/pdf": {
+      "get": {
+        "description": "`412` unless the document is Ready when the request is answered (§16).\n\nThe rendered files are mutable working outputs, so the ETag is the document's hash\nand caching is refused: the same URL answers for whatever is Ready now.",
+        "operationId": "download_pdf_api_v1_applications__application_id__document_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The rendered PDF, when the document is Ready at request time."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Download the Ready document's PDF",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/preview": {
+      "get": {
+        "description": "`200` and the document itself; `412` before content exists. Nothing is stored.",
+        "operationId": "preview_document_api_v1_applications__application_id__document_preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The content through the same composition the render uses."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Render the document's current content to HTML for an isolated preview",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/preview.pdf": {
+      "get": {
+        "description": "`200` and the PDF inline; needs no approval and touches no approval stamp.",
+        "operationId": "preview_document_pdf_api_v1_applications__application_id__document_preview_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The content through the same composition and browser the render uses, stamped as unapproved on every page. Nothing is stored."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Render the document's current content to a stamped preview PDF",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/regenerate-claim": {
+      "post": {
+        "description": "`202`. The provider is given the claim's own supporting facts and nothing else.",
+        "operationId": "regenerate_claim_api_v1_applications__application_id__document_regenerate_claim_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateDocumentClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Regenerate or review one claim",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/regenerate-section": {
+      "post": {
+        "description": "`202`. A provider failure never falls back to a deterministic rebuild.",
+        "operationId": "regenerate_section_api_v1_applications__application_id__document_regenerate_section_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateDocumentSectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Regenerate one section",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/render": {
+      "post": {
+        "description": "`202`; admission refuses with `412` unless the document is approved.",
+        "operationId": "render_document_api_v1_applications__application_id__document_render_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Render the approved document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/selection": {
+      "post": {
+        "description": "`200`; `412` when the change needs wording judgment and a regeneration instead.\n\nDumped as JSON: `emphasis_override` is a `StrEnum` on the schema and a plain string\non the command and in the stored selection.",
+        "operationId": "update_selection_api_v1_applications__application_id__document_selection_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMutationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Change the document's fact selection deterministically",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/applications/{application_id}/document/selection-proposals": {
+      "post": {
+        "description": "`202` and a `Location`. No provider call happens inside this request.",
+        "operationId": "propose_selection_api_v1_applications__application_id__document_selection_proposals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "application_id",
+            "required": true,
+            "schema": {
+              "title": "Application Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request did not match the API contract."
+          }
+        },
+        "summary": "Ask the provider to propose a selection",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
     "/api/v1/applications/{application_id}/external-submissions": {
       "post": {
-        "description": "`201`: recorded without inventing a revision or an artifact that never was.",
+        "description": "`201`: recorded without inventing content or files that never passed through here.",
         "operationId": "record_external_submission_api_v1_applications__application_id__external_submissions_post",
         "parameters": [
           {
@@ -7827,7 +7292,7 @@
     },
     "/api/v1/applications/{application_id}/submissions": {
       "post": {
-        "description": "`201`: an immutable Submission, refused unless the evidence still qualifies.\n\nReady qualification is re-derived from stored evidence at submission time,\nso a revision whose PDF was replaced or whose hashes no longer match is a\n`412` rather than a recorded claim that something was sent.",
+        "description": "`201`: an immutable Submission of the content and rendered files (§18).\n\nRefused with `412` unless the document is Ready when the request is answered and\nstill carries `expected_document_hash`, rather than recording a claim that\nsomething the user never saw was sent.",
         "operationId": "submit_application_api_v1_applications__application_id__submissions_post",
         "parameters": [
           {
@@ -7872,479 +7337,9 @@
             "description": "The request did not match the API contract."
           }
         },
-        "summary": "Record an internal submission of one exact qualified revision",
+        "summary": "Record that the Ready document was sent",
         "tags": [
           "tracking"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/working-draft/generate": {
-      "post": {
-        "description": "`202` and a `Location`: generation is a durable Operation (§14).\n\nBoth sources are named by the client. The Operation freezes them, so an\nanalysis or plan that moves before activation fails the source check as\n`SOURCE_CHANGED` instead of silently drafting from something else.",
-        "operationId": "generate_working_draft_api_v1_applications__application_id__working_draft_generate_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GenerateWorkingDraftRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Generate the active working draft from an exact analysis and plan",
-        "tags": [
-          "applications"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/working-draft/replace": {
-      "post": {
-        "description": "`202` and a `Location`: replacement is the draft Operation (§14).\n\nAddressed to the Application, beside `generate`, because the Application is\nwhat owns the one active draft. The body still names the exact draft and the\nexact version being replaced, and a draft belonging to another Application\nis a `412` naming the broken lineage rather than a replacement landing\nsomewhere nobody asked for.\n\nNothing is deleted first. The Operation commits the new document over the\nsame active record, so a failure leaves the existing draft untouched, and\n`keep_previous` materializes the historical snapshot before any of it\nstarts.",
-        "operationId": "replace_working_draft_api_v1_applications__application_id__working_draft_replace_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReplaceWorkingDraftRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Replace the active working draft from an explicit analysis and plan",
-        "tags": [
-          "applications"
-        ]
-      }
-    },
-    "/api/v1/approved-revisions/{approved_revision_id}": {
-      "get": {
-        "description": "`200` with the immutable record and a freshly re-derived qualification (§20).\n\nA revision superseded by a newer JobSnapshot still answers here, still\nreports `ready_qualified`, and is still exportable. What it stops being is\nthe Application's active `preparation_state`, which is a different question\nasked at a different resource.",
-        "operationId": "approved_revision_detail_api_v1_approved_revisions__approved_revision_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approved_revision_id",
-            "required": true,
-            "schema": {
-              "title": "Approved Revision Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovedRevisionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Read one approved revision and its Ready qualification",
-        "tags": [
-          "approved-revisions"
-        ]
-      }
-    },
-    "/api/v1/approved-revisions/{approved_revision_id}/comparison": {
-      "get": {
-        "description": "`200` with the changes; `404` for an unknown revision; `409` across Applications.",
-        "operationId": "compare_approved_revisions_api_v1_approved_revisions__approved_revision_id__comparison_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approved_revision_id",
-            "required": true,
-            "schema": {
-              "title": "Approved Revision Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "The revision to compare against, usually this revision's parent or the version before it. Named by the caller rather than inferred, so the comparison is between exactly the two records the reader chose.",
-            "in": "query",
-            "name": "base_revision_id",
-            "required": true,
-            "schema": {
-              "description": "The revision to compare against, usually this revision's parent or the version before it. Named by the caller rather than inferred, so the comparison is between exactly the two records the reader chose.",
-              "title": "Base Revision Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RevisionComparisonResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Compare one approved revision with an earlier one of the same application",
-        "tags": [
-          "approved-revisions"
-        ]
-      }
-    },
-    "/api/v1/approved-revisions/{approved_revision_id}/decision-markdown": {
-      "get": {
-        "description": "`200` and the document; `409` when the revision belongs elsewhere.\n\nReturned as content rather than streamed as a file. This is the\nhuman-readable provenance record - what was selected, which gaps were\naccepted, which overrides were recorded - and a client that receives it as\ntext can show it beside the revision it explains. The suggested save name\ntravels in `Content-Disposition`, and `content_hash` names exactly what was\nproduced, so a caller that saves it can prove later which export it holds.",
-        "operationId": "export_decision_markdown_api_v1_approved_revisions__approved_revision_id__decision_markdown_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approved_revision_id",
-            "required": true,
-            "schema": {
-              "title": "Approved Revision Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "The Application this revision is expected to belong to. Stated by the caller rather than inferred, so a mismatch is a refusal naming the broken lineage instead of an export of another Application's provenance.",
-            "in": "query",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "description": "The Application this revision is expected to belong to. Stated by the caller rather than inferred, so a mismatch is a refusal naming the broken lineage instead of an export of another Application's provenance.",
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DecisionMarkdownResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Export human-readable provenance for one approved revision",
-        "tags": [
-          "approved-revisions"
-        ]
-      }
-    },
-    "/api/v1/approved-revisions/{approved_revision_id}/preview": {
-      "get": {
-        "operationId": "preview_approved_revision_api_v1_approved_revisions__approved_revision_id__preview_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approved_revision_id",
-            "required": true,
-            "schema": {
-              "title": "Approved Revision Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "html_artifact_version_id",
-            "required": true,
-            "schema": {
-              "title": "Html Artifact Version Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "The exact approved HTML, safe to frame in an isolated iframe."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Preview one exact verified rendered HTML artifact",
-        "tags": [
-          "approved-revisions"
-        ]
-      }
-    },
-    "/api/v1/approved-revisions/{approved_revision_id}/recruiter-pdf": {
-      "get": {
-        "description": "`200` and the PDF; `412` when this exact pair is not Ready-qualified.\n\nBoth IDs are checked against each other before qualification is computed,\nso a PDF belonging to another revision is `412 LINEAGE_BROKEN` rather than\na qualification run against a mismatched pair.",
-        "operationId": "export_recruiter_pdf_api_v1_approved_revisions__approved_revision_id__recruiter_pdf_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approved_revision_id",
-            "required": true,
-            "schema": {
-              "title": "Approved Revision Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "The exact rendered PDF to export. Required and explicit: an export that resolved the latest PDF for itself could hand over a different document than the one the caller verified.",
-            "in": "query",
-            "name": "pdf_artifact_version_id",
-            "required": true,
-            "schema": {
-              "description": "The exact rendered PDF to export. Required and explicit: an export that resolved the latest PDF for itself could hand over a different document than the one the caller verified.",
-              "title": "Pdf Artifact Version Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/pdf": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "The rendered PDF, named as a recruiter should see it."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Export the exact Ready PDF under its recruiter-facing filename",
-        "tags": [
-          "approved-revisions"
-        ]
-      }
-    },
-    "/api/v1/approved-revisions/{approved_revision_id}/render": {
-      "post": {
-        "description": "`202` and a `Location`: rendering is a durable Operation (§16).\n\nA failed render leaves the ApprovedRevision approved. Nothing in the render\npath writes to the revision - it is immutable - so the failure is recorded\non the Operation and in a `rendered-invalid` artifact lifecycle, and the\nrevision is exactly as approvable-from as it was. Retrying is\n`POST /operations/{id}/retry`, which creates a *new* Operation rather than\nreopening the failed one.\n\nThe same `Idempotency-Key` with the same payload returns the Operation it\nalready created instead of queueing a second render.",
-        "operationId": "render_revision_api_v1_approved_revisions__approved_revision_id__render_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "approved_revision_id",
-            "required": true,
-            "schema": {
-              "title": "Approved Revision Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenderRevisionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Render one exact approved revision",
-        "tags": [
-          "approved-revisions"
         ]
       }
     },
@@ -8798,7 +7793,7 @@
     },
     "/api/v1/facts/{fact_id}/confirm-and-use": {
       "post": {
-        "description": "One logical command: it promotes, attaches, and creates the replacement\nplan, or it reports a complete failure. There is no partial outcome to\nreport, so there is no partial success status.",
+        "description": "One logical command: it promotes, attaches, and adds the fact to the\ndocument's selection, or it reports a complete failure. There is no partial outcome to\nreport, so there is no partial success status.",
         "operationId": "confirm_and_use_fact_api_v1_facts__fact_id__confirm_and_use_post",
         "parameters": [
           {
@@ -8851,7 +7846,7 @@
     },
     "/api/v1/facts/{fact_id}/delete": {
       "post": {
-        "description": "One-way; `confirm: false` is refused rather than interpreted.\n\nAlways permitted, even for a fact attached to a Profile section or\nreferenced by an active SelectionPlan/claim/gap resolution: this command\ndoes not pre-check those, the review reason and warning it produces do\n(state-and-use-cases.md §17).",
+        "description": "One-way; `confirm: false` is refused rather than interpreted.\n\nAlways permitted, even for a fact attached to a Profile section or\nreferenced by a document selection, claim, or gap resolution: this command\ndoes not pre-check those, the review reason and warning it produces do\n(state-and-use-cases.md §17).",
         "operationId": "delete_fact_api_v1_facts__fact_id__delete_post",
         "parameters": [
           {
@@ -9269,48 +8264,6 @@
         ]
       }
     },
-    "/api/v1/selection-plans/{selection_plan_id}": {
-      "get": {
-        "operationId": "selection_plan_detail_api_v1_selection_plans__selection_plan_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "selection_plan_id",
-            "required": true,
-            "schema": {
-              "title": "Selection Plan Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SelectionPlanDetailResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Read one SelectionPlan and its candidate accounting",
-        "tags": [
-          "selection-plans"
-        ]
-      }
-    },
     "/api/v1/settings": {
       "get": {
         "operationId": "read_settings_api_v1_settings_get",
@@ -9407,655 +8360,6 @@
         "summary": "Update safe application settings",
         "tags": [
           "settings"
-        ]
-      }
-    },
-    "/api/v1/validation-runs/{validation_run_id}": {
-      "get": {
-        "operationId": "validation_run_api_v1_validation_runs__validation_run_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "validation_run_id",
-            "required": true,
-            "schema": {
-              "title": "Validation Run Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationRunDetailResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Read one immutable ValidationRun, including stale historical evidence",
-        "tags": [
-          "validation-runs"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}": {
-      "get": {
-        "description": "`200` plus an `ETag` built from `edit_version` and `content_hash` (§20).",
-        "operationId": "read_working_draft_api_v1_working_drafts__working_draft_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkingDraftResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Read one working draft and its ETag",
-        "tags": [
-          "working-drafts"
-        ]
-      },
-      "patch": {
-        "description": "`200` and the new `ETag`; a mismatch is `409` and changes nothing (§14).\n\nThe header is parsed into the two arguments the command declares rather\nthan handed through as a string, so the application layer is never asked to\nunderstand an HTTP header.\n\nEdits and removals are one patch and one version bump. Product spec §10\nmakes removal one of the three resolutions for unsupported free text, and it\nis the only one no other command can reach - a `pending` claim has no fact\nfor `apply-selection-change` to exclude, and its presence is what refuses\nthat command in the first place.",
-        "operationId": "update_working_draft_api_v1_working_drafts__working_draft_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Required. The ETag returned by the matching working-draft read. A value that no longer describes the stored draft is a 409 and changes nothing.",
-            "in": "header",
-            "name": "If-Match",
-            "required": true,
-            "schema": {
-              "description": "Required. The ETag returned by the matching working-draft read. A value that no longer describes the stored draft is a 409 and changes nothing.",
-              "title": "If-Match",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateWorkingDraftRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkingDraftUpdateResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Autosave one structured patch against an exact draft version",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/apply-selection-change": {
-      "post": {
-        "description": "`201`: the change creates an immutable SelectionPlan (§14, §22).\n\nA draft carrying manual wording is refused with a `412` naming the\nregeneration commands, because a deterministic rebuild would replace the\nuser's sentences with the engine's.",
-        "operationId": "apply_selection_change_api_v1_working_drafts__working_draft_id__apply_selection_change_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplySelectionChangeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SelectionChangeResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Re-select facts deterministically and rebuild the draft",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/approve": {
-      "post": {
-        "description": "`201`: approval creates the immutable ApprovedRevision (§15, §22).\n\nThe same key with the same payload returns the same revision; the same key\nwith a different draft, version, run, or content hash is\n`409 IDEMPOTENCY_KEY_REUSED`.",
-        "operationId": "approve_working_draft_api_v1_working_drafts__working_draft_id__approve_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApproveDraftRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApprovalResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Approve exactly the content one ValidationRun passed",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/archive": {
-      "post": {
-        "description": "`200`: the snapshot is registered before the active pointer is cleared.",
-        "operationId": "archive_working_draft_api_v1_working_drafts__working_draft_id__archive_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorkingDraftVersionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ArchivedWorkingDraftResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Archive the draft as an immutable historical snapshot",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/facts": {
-      "get": {
-        "description": "`200` with one row per fact, in the draft's own language (§20).\n\nThe renderings are here rather than left to the client because a browser\nthat had to name a fact by its ID could only show the identifier the M4 gate\nsays a user must never need.",
-        "operationId": "read_working_draft_facts_api_v1_working_drafts__working_draft_id__facts_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkingDraftFactsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Read the facts this draft links and the candidates its plan considered",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/preview": {
-      "get": {
-        "description": "`200` and the document itself (architecture §13).\n\nThe response is built to be framed and nothing else. The CSP allows the one\ninline stylesheet every CV template carries and refuses every other source,\nso a preview cannot run a script or fetch anything; `nosniff` keeps it from\nbeing interpreted as another type; `no-store` keeps a superseded edit out of\nthe browser cache. The client frames it with `sandbox` and no\n`allow-same-origin`, which is what puts it in an opaque origin - but the\nresponse does not depend on the client remembering to.",
-        "operationId": "preview_working_draft_api_v1_working_drafts__working_draft_id__preview_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "The draft rendered by the same composition the approved render uses."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Render this exact draft version to HTML for an isolated preview",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/preview.pdf": {
-      "get": {
-        "description": "`200` and the PDF itself, shown inline.\n\nSeeing the PDF used to require approving, and every approval is a new immutable\nrevision - so every look cost a version and a reopened draft. This answers the look\nwithout touching the approval boundary: the file is stamped as a draft and is not an\nartifact of anything.",
-        "operationId": "preview_working_draft_pdf_api_v1_working_drafts__working_draft_id__preview_pdf_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/pdf": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "The draft through the same composition and browser the approved render uses, stamped as unapproved on every page. Nothing is stored."
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Render this exact draft version to a stamped preview PDF, before approval",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/regenerate-claim": {
-      "post": {
-        "description": "`202` and a `Location`, on the same contract as section regeneration (§14).\n\nThe claim is the unit: the provider is given that claim's own supporting\nfacts and nothing else, so a proposal cannot reach for a fact this line was\nnever built from.",
-        "operationId": "regenerate_claim_api_v1_working_drafts__working_draft_id__regenerate_claim_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegenerateClaimRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Regenerate one claim's wording from its own supporting facts",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/regenerate-section": {
-      "post": {
-        "description": "`202` and a `Location`: regeneration is an AI Operation (§14).\n\nThe exact draft version and content hash are frozen onto the Operation, so\nan autosave that lands while the provider is answering makes activation\nfail as `SOURCE_CHANGED` instead of overwriting the user's edit.\n\nA provider failure never falls back to a deterministic rebuild. The draft is\nleft exactly as it was, and continuing deterministically is\n`apply-selection-change`, which the user issues themselves.",
-        "operationId": "regenerate_section_api_v1_working_drafts__working_draft_id__regenerate_section_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegenerateSectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Regenerate one section's wording from the analysis and plan",
-        "tags": [
-          "working-drafts"
-        ]
-      }
-    },
-    "/api/v1/working-drafts/{working_draft_id}/validate": {
-      "post": {
-        "description": "`200` whether or not it passed: a failed validation is an outcome (§22).\n\nOnly a validator that could not execute is an error, and that surfaces as\n`500`/`503` from the application taxonomy rather than as a report nobody\nproduced.",
-        "operationId": "validate_working_draft_api_v1_working_drafts__working_draft_id__validate_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "working_draft_id",
-            "required": true,
-            "schema": {
-              "title": "Working Draft Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/WorkingDraftVersionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationRunResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Validate one exact working draft version",
-        "tags": [
-          "working-drafts"
         ]
       }
     }

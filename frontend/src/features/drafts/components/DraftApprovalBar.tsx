@@ -10,9 +10,10 @@ interface DraftApprovalBarProps {
      panels - so going back was a different gesture depending on what the reader happened
      to be looking at. */
   applicationHref: string;
-  /* Null until a passing run describes the exact version on screen. Approval also waits for saved edits,
-     current context and the projection's blockers to clear. */
-  exactPassingRunId: string | null;
+  /* True while the stored check passed against the exact document on screen (§5
+     `content_check = passed`). Approval also waits for saved edits and the projection's
+     blockers to clear. */
+  passing: boolean;
   onApprove: () => void;
   onValidate: () => void;
   validationPending: boolean;
@@ -20,7 +21,7 @@ interface DraftApprovalBarProps {
      the bar owes the reader is the reason it is shut, not a second rule. */
   reviewBlocked: boolean;
   unavailable?: boolean;
-  /* An approval was refused because the draft moved after the run it named. */
+  /* An approval was refused because the document changed after the check it relied on. */
   stale: boolean;
   validationResult?: string;
 }
@@ -34,11 +35,11 @@ interface DraftApprovalBarProps {
    same surface the preparation and ready steps close with, so the answer to "what do I do
    now" is in one position across the whole flow rather than three.
 
-   It decides nothing. `exactPassingRunId` is the panel's own report about the exact
-   version, the blockers are the projection's, and the approval itself is the dialog's. */
+   It decides nothing. `passing` is the projection's report about the exact document, the
+   blockers are the projection's, and the approval itself is the dialog's. */
 export const DraftApprovalBar = ({
   applicationHref,
-  exactPassingRunId,
+  passing,
   onApprove,
   onValidate,
   reviewBlocked,
@@ -53,11 +54,11 @@ export const DraftApprovalBar = ({
       ? "הטיוטה השתנתה מאז הבדיקה. יש לבדוק את הגרסה הנוכחית מחדש."
       : unavailable
         ? "יש להשלים את שמירת העריכות לפני בדיקת הקובץ."
-        : exactPassingRunId === null
-          ? "זה הצעד הסופי: בדיקה ואז אישור ששומר גרסה קבועה. כדי רק לראות PDF, פתחו את PDF הטיוטה."
-          : "הבדיקה עברה. האישור שומר גרסה קבועה ומכין את ה־PDF הסופי.";
+        : !passing
+          ? "זה הצעד הסופי: בדיקה ואז אישור שמכין את ה־PDF. כדי רק לראות PDF, פתחו את PDF הטיוטה."
+          : "הבדיקה עברה. האישור מכין את ה־PDF הסופי; עריכה אחריו תחזיר את המסמך לטיוטה.";
 
-  const readyForApproval = exactPassingRunId !== null && !reviewBlocked && !stale && !unavailable;
+  const readyForApproval = passing && !reviewBlocked && !stale && !unavailable;
 
   return (
     <CommitBar

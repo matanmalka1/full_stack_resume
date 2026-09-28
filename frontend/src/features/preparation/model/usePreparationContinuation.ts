@@ -1,10 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import type { AutoDraftSources } from "./autoDraft";
 
 export interface PreparationContinuation {
   applicationId: string;
-  decisionSources?: AutoDraftSources;
   draftOperationId?: string;
 }
 

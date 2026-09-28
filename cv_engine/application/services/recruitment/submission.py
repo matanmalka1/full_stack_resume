@@ -1,28 +1,51 @@
+"""§18: recording a send that already happened, and freezing what was sent.
+
+An internal Submission copies the document's content and its rendered files to
+submission-owned, immutable paths, with a SHA-256 per file. The copy happens under
+a payload write lease, before the database transaction; the transaction then
+re-checks the document under its row lock and inserts the Submission, the status
+transition and the audit record together. It is not a validation gate: it requires
+the document to be Ready at the basis computed now, and nothing else.
+"""
+
 from __future__ import annotations
 
-from typing import Literal, Protocol
+from typing import Literal
 
+from ....domain.contracts.document import DocumentSubmission
 from ....domain.contracts.records import AuditRecord
 from ....domain.contracts.recruitment import ApplicationStatus
-from ....domain.contracts.validation import ReadyQualification
+from ....domain.document import DocumentState, document_state
 from ....domain.recruitment import terminal_outcome_after
 from ....util import new_id
 from ...commands import ExternalSubmissionCommand, SubmissionCommand, SubmissionResult, WriteClient
-from ...errors import StateConflict, UnknownRecord, ValidationBlocked
+from ...errors import (
+    DOCUMENT_NOT_READY,
+    ApplicationError,
+    InfrastructureFailure,
+    PreconditionFailed,
+    StateConflict,
+    UnknownRecord,
+)
+from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
 from ...ports.application_intake import AuditLogWriter
-from ...ports.artifact_catalog import ArtifactCatalog
+from ...ports.documents import (
+    DocumentFileStore,
+    DocumentStore,
+    DocumentSubmissionStore,
+    RenderedFiles,
+)
+from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
 from ...ports.recruitment import RecruitmentStore
-from ...ports.submission import SubmissionContextReader
-from ...ports.transactions import TransactionManager
-
-
-class ReadyQualifier(Protocol):
-    def ready_qualification(
-        self,
-        application_id: str,
-        approved_revision_id: str | None = None,
-        pdf_artifact_version_id: str | None = None,
-    ) -> ReadyQualification: ...
+from ...ports.transactions import TransactionManager, WriteTransaction
+from ..documents import (
+    current_basis,
+    load_knowledge,
+    read_document_source,
+    refuse_deleted,
+    refuse_review_reasons,
+    require_hash,
+)
 
 
 class SubmissionService:
@@ -30,76 +53,149 @@ class SubmissionService:
         self,
         *,
         transactions: TransactionManager,
-        contexts: SubmissionContextReader,
+        documents: DocumentStore,
+        sources: AnalysisSelectionSourceReader,
+        submissions: DocumentSubmissionStore,
+        files: DocumentFileStore,
+        leases: PayloadWriteLeaseStore,
         recruitment: RecruitmentStore,
-        artifacts: ArtifactCatalog,
         audit: AuditLogWriter,
-        ready: ReadyQualifier,
+        knowledge: AnalysisKnowledgeSource,
     ):
-        self._transactions, self._contexts, self._recruitment = transactions, contexts, recruitment
-        self._artifacts, self._audit, self._ready = artifacts, audit, ready
+        self._transactions = transactions
+        self._documents = documents
+        self._sources = sources
+        self._submissions = submissions
+        self._files = files
+        self._leases = leases
+        self._recruitment = recruitment
+        self._audit = audit
+        self._knowledge = knowledge
 
-    def _context(self, application_id: str, revision_id: str | None):
-        with self._transactions.read() as tx:
-            context = self._contexts.load(tx, application_id, revision_id)
-        if context.application.get("deleted_at") is not None:
-            raise StateConflict(f"application is deleted: {application_id}")
-        return context
+    def _active_application(self, application_id: str) -> dict:
+        try:
+            with self._transactions.read() as tx:
+                application = self._recruitment.application(tx, application_id)
+        except UnknownRecord as exc:
+            raise UnknownRecord(f"unknown application: {application_id}") from exc
+        refuse_deleted(application_id, application.get("deleted_at"))
+        return application
 
     def submit_application(self, command: SubmissionCommand) -> SubmissionResult:
-        context = self._context(command.application_id, command.approved_revision_id)
-        revision = context.revision
-        if revision is None or revision.application_id != command.application_id:
-            raise StateConflict("approved revision belongs to another application")
-        qualification = self._ready.ready_qualification(
-            command.application_id, revision.id, command.pdf_artifact_version_id
-        )
-        if (
-            not qualification.ready_qualified
-            or qualification.pdf_artifact_version_id != command.pdf_artifact_version_id
-        ):
-            raise ValidationBlocked(
-                "submission blocked by tampered Ready evidence (stale or mismatched)",
-                qualification.validation,
+        """§18: freeze the Ready document the client showed, and record that it was sent."""
+        self._active_application(command.application_id)
+        with self._transactions.read() as tx:
+            source = read_document_source(
+                tx, self._documents, self._sources, command.application_id
             )
-        warnings = []
-        if context.latest_snapshot_id != revision.job_snapshot_id:
-            warnings.append("READY_REVISION_FOR_OLDER_SNAPSHOT")
-        if context.latest_analysis_id != revision.job_analysis_id:
-            warnings.append("READY_REVISION_FOR_OLDER_ANALYSIS")
-        if context.latest_selection_plan_id != revision.selection_plan_id:
-            warnings.append("READY_REVISION_FOR_OLDER_SELECTION_PLAN")
+        document = source.document
+        require_hash(document, command.expected_document_hash)
+        knowledge = load_knowledge(self._knowledge)
+        submitted_basis = current_basis(document, knowledge)
+        if (
+            document_state(document, submitted_basis) is not DocumentState.READY
+            or document.html_path is None
+            or document.pdf_path is None
+            or document.content is None
+        ):
+            raise PreconditionFailed(
+                "only a Ready document can be recorded as submitted", code=DOCUMENT_NOT_READY
+            )
+        refuse_review_reasons(document, knowledge)
+        submission_id = new_id()
+        targets = sorted(self._files.submission_targets(command.application_id, submission_id))
+        # A Submission's files are one registration group; the Submission ID keys both
+        # the group and the attempt, so a retried submit is a new Submission.
+        group_key = f"submission:{command.application_id}:{submission_id}"
+        with self._transactions.write() as tx:
+            self._leases.acquire(
+                tx, group_key, submission_id, keys=targets, ttl_seconds=DEFAULT_LEASE_TTL_SECONDS
+            )
+        try:
+            copied = self._files.copy_for_submission(
+                command.application_id,
+                submission_id,
+                RenderedFiles(html=document.html_path, pdf=document.pdf_path),
+            )
+        except (ApplicationError, OSError, ValueError) as exc:
+            with self._transactions.write() as tx:
+                self._leases.release(tx, group_key, submission_id)
+            if isinstance(exc, ApplicationError):
+                raise
+            raise InfrastructureFailure(f"could not copy the submitted files: {exc}") from exc
+        if sorted([copied.html_path, copied.pdf_path]) != targets:
+            raise InfrastructureFailure("submitted files did not land where they were reserved")
+        warnings = ["DOCUMENT_ON_OLDER_ANALYSIS"] if source.on_older_analysis else []
+
+        def insert(tx: WriteTransaction) -> None:
+            self._leases.mark_committed(tx, group_key, submission_id, keys=targets)
+            locked = self._documents.lock_document(tx, command.application_id)
+            if locked is None:
+                raise StateConflict("the document no longer exists")
+            require_hash(locked, command.expected_document_hash)
+            if not (
+                locked.rendered_basis == submitted_basis
+                and locked.approved_basis == submitted_basis
+                and locked.html_path == document.html_path
+                and locked.pdf_path == document.pdf_path
+            ):
+                raise PreconditionFailed(
+                    "the document stopped being Ready while it was submitted",
+                    code=DOCUMENT_NOT_READY,
+                )
+            self._submissions.insert_submission(
+                tx,
+                DocumentSubmission(
+                    id=submission_id,
+                    application_id=command.application_id,
+                    submission_type="internal",
+                    job_snapshot_id=source.job_snapshot_id,
+                    document_hash=locked.document_hash,
+                    content=locked.content,
+                    html_path=copied.html_path,
+                    html_sha256=copied.html_sha256,
+                    pdf_path=copied.pdf_path,
+                    pdf_sha256=copied.pdf_sha256,
+                    submitted_at=command.submitted_at,
+                    metadata=command.metadata,
+                ),
+            )
+
         return self._record(
-            context.application,
+            command.application_id,
+            submission_id,
             "internal",
-            revision.id,
-            command.pdf_artifact_version_id,
+            insert,
             command.submitted_at,
-            command.metadata,
             command.actor_type,
             command.client,
             warnings,
+            document_hash=document.document_hash,
         )
 
     def record_external_submission(self, command: ExternalSubmissionCommand) -> SubmissionResult:
-        context = self._context(command.application_id, None)
-        if command.artifact_version_id is not None:
-            with self._transactions.read() as tx:
-                try:
-                    artifact = self._artifacts.artifact_version(tx, command.artifact_version_id)
-                except UnknownRecord as exc:
-                    raise UnknownRecord(
-                        f"unknown external submission source: {exc.args[0]}"
-                    ) from exc
-            if artifact["application_id"] != command.application_id:
-                raise StateConflict("external submission artifact belongs to another application")
+        """§18: a submission made outside the system; it carries no content or files."""
+        self._active_application(command.application_id)
+        submission_id = new_id()
+
+        def insert(tx: WriteTransaction) -> None:
+            self._submissions.insert_submission(
+                tx,
+                DocumentSubmission(
+                    id=submission_id,
+                    application_id=command.application_id,
+                    submission_type="external",
+                    submitted_at=command.submitted_at,
+                    metadata=command.metadata,
+                ),
+            )
+
         return self._record(
-            context.application,
+            command.application_id,
+            submission_id,
             "external",
-            None,
-            command.artifact_version_id,
+            insert,
             command.submitted_at,
-            command.metadata,
             command.actor_type,
             command.client,
             [],
@@ -107,29 +203,24 @@ class SubmissionService:
 
     def _record(
         self,
-        application: dict,
+        application_id: str,
+        submission_id: str,
         submission_type: str,
-        revision_id: str | None,
-        artifact_id: str | None,
+        insert,
         submitted_at: str,
-        metadata: dict,
         actor_type: Literal["user", "system"],
         client: WriteClient,
         warnings: list[str],
+        *,
+        document_hash: str | None = None,
     ) -> SubmissionResult:
-        application_id, submission_id = application["id"], new_id()
-        current, event_id = ApplicationStatus(application["current_status"]), None
+        """Insert the Submission, transition to `applied` once, and audit, atomically."""
+        event_id = None
         with self._transactions.write() as tx:
-            self._recruitment.insert_submission(
-                tx,
-                submission_id,
-                application_id,
-                submission_type,
-                revision_id,
-                artifact_id,
-                submitted_at,
-                metadata,
-            )
+            application = self._recruitment.application(tx, application_id)
+            refuse_deleted(application_id, application.get("deleted_at"))
+            current = ApplicationStatus(application["current_status"])
+            insert(tx)
             if current is ApplicationStatus.SAVED:
                 event_id = self._recruitment.insert_event(
                     tx,
@@ -158,11 +249,7 @@ class SubmissionService:
                     actor_type=actor_type,
                     client=client,
                     occurred_at=submitted_at,
-                    details={
-                        "submission_type": submission_type,
-                        "approved_revision_id": revision_id,
-                        "artifact_version_id": artifact_id,
-                    },
+                    details={"submission_type": submission_type, "document_hash": document_hash},
                 ),
             )
         with self._transactions.read() as tx:
@@ -170,8 +257,7 @@ class SubmissionService:
         return SubmissionResult(
             application_id=application_id,
             submission_id=submission_id,
-            approved_revision_id=revision_id,
-            pdf_artifact_version_id=artifact_id,
+            document_hash=document_hash,
             current_status=updated["current_status"],
             terminal_outcome=updated.get("terminal_outcome"),
             next_action=updated.get("next_action"),

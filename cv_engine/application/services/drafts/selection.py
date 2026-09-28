@@ -1,87 +1,137 @@
-"""§14: changing selection, committing the plan and rebuilt draft together."""
+"""§14: deterministic, synchronous changes to the document's selection and its pin.
+
+`update_selection` changes the selection in place (and the content with it, when
+that is deterministic). `build_from_analysis` is the only command that changes the
+document's `analysis_id`: it re-pins, rebuilds the selection, drops the content, and
+clears every stamp in the same write.
+"""
 
 from __future__ import annotations
 
-from ....domain.drafts import manually_edited
-from ...commands import (
-    ApplySelectionChangeCommand,
-    CreateSelectionPlanCommand,
-    SelectionChangeResult,
+from ....domain.document import content_check, document_state
+from ....util import utc_now
+from ...commands import BuildFromAnalysisCommand, DocumentMutationResult, UpdateSelectionCommand
+from ...errors import LineageBroken, PreconditionFailed
+from ...ports import TransactionManager
+from ...ports.analysis_plans import (
+    AnalysisKnowledgeSource,
+    AnalysisSelectionSourceReader,
+    AnalysisStore,
 )
-from ...errors import InfrastructureFailure, PreconditionFailed, StateConflict
-from ...ports import (
-    ArtifactStore,
-    KnowledgeStore,
-    TransactionManager,
+from ...ports.documents import DocumentBody, DocumentFileStore, DocumentStore
+from ..documents import (
+    build_document_selection,
+    built_with,
+    current_basis,
+    load_knowledge,
+    read_document_source,
+    refuse_deleted,
+    require_hash,
+    selection_change_body,
 )
-from ...ports.selection_drafts import SelectionDraftStore
-from ..analysis.service import AnalysisService, load_analysis_knowledge
-from .inputs import compose
 
 
 class SelectionChangeService:
-    """Own the atomic selection-plan and working-draft change transaction."""
+    """Own the synchronous selection and re-pin transactions."""
 
     def __init__(
         self,
+        *,
         transactions: TransactionManager,
-        drafts: SelectionDraftStore,
-        knowledge: KnowledgeStore,
-        artifacts: ArtifactStore,
+        documents: DocumentStore,
+        sources: AnalysisSelectionSourceReader,
+        analyses: AnalysisStore,
+        files: DocumentFileStore,
+        knowledge: AnalysisKnowledgeSource,
     ):
         self.transactions = transactions
-        self.drafts = drafts
+        self.documents = documents
+        self.sources = sources
+        self.analyses = analyses
+        self.files = files
         self.knowledge = knowledge
-        self.artifacts = artifacts
 
-    def apply(
-        self, command: ApplySelectionChangeCommand, *, analysis_service: AnalysisService
-    ) -> SelectionChangeResult:
+    def update_selection(self, command: UpdateSelectionCommand) -> DocumentMutationResult:
+        """§14 `update_selection`: pin, exclude, or set the Emphasis override.
+
+        Validated against the document's analysis and the current Knowledge. With no
+        content only the selection changes; with content the change is applied
+        atomically when deterministic, and refused with `REGENERATION_REQUIRED`
+        (writing nothing) when it needs wording judgment.
+        """
         with self.transactions.read() as tx:
-            working = self.drafts.working_draft(tx, command.working_draft_id)
-        if not working.active:
-            raise PreconditionFailed(f"working draft {working.id} is no longer the active draft")
-        if working.edit_version != command.expected_edit_version:
-            raise StateConflict(
-                f"working draft {working.id} is at edit version {working.edit_version}, not {command.expected_edit_version}"
-            )
-        source = analysis_service.selection_source(working.application_id, working.job_analysis_id)
-        analysis_service.refuse_deleted(source.application_id, source.deleted_at)
-        if manually_edited(working.source):
-            raise PreconditionFailed(
-                "this draft carries manual wording that a deterministic rebuild would discard; use regenerate_section or regenerate_claim to change its selection"
-            )
-        knowledge = load_analysis_knowledge(self.knowledge)
-        prepared = analysis_service.prepare_selection_plan(
-            CreateSelectionPlanCommand(
-                application_id=working.application_id,
-                job_analysis_id=working.job_analysis_id,
-                pinned_fact_ids=list(command.pinned_fact_ids),
-                excluded_fact_ids=list(command.excluded_fact_ids),
-            )
+            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+        refuse_deleted(command.application_id, source.deleted_at)
+        require_hash(source.document, command.expected_document_hash)
+        knowledge = load_knowledge(self.knowledge)
+        body = selection_change_body(
+            source,
+            knowledge,
+            pinned_fact_ids=command.pinned_fact_ids,
+            excluded_fact_ids=command.excluded_fact_ids,
+            emphasis_override=command.emphasis_override,
+        )
+        emphasis_changed = (
+            command.emphasis_override is not None
+            and body.selection.emphasis_override != source.document.selection.emphasis_override
         )
         with self.transactions.write() as tx:
-            created = analysis_service.activation.activate_selection_plan(tx, prepared)
-            document = compose(
-                application_id=working.application_id,
-                job_snapshot_id=source.job_snapshot_id,
-                job_analysis_id=working.job_analysis_id,
-                analysis=source.analysis,
-                plan=created.plan,
-                knowledge=knowledge,
+            updated = self.documents.update_body(
+                tx,
+                command.application_id,
+                command.expected_document_hash,
+                body,
+                updated_at=utc_now(),
             )
-            changed = self.drafts.update_selection(
-                tx, working.id, working.edit_version, document, created.selection_plan_id
+            if emphasis_changed:
+                self.analyses.set_matching_emphasis(
+                    tx, command.application_id, body.selection.emphasis.value
+                )
+        new_basis = current_basis(updated, knowledge)
+        return DocumentMutationResult(
+            application_id=command.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
+            document_state=document_state(updated, new_basis),
+            content_check=content_check(updated, new_basis),
+        )
+
+    def build_from_analysis(self, command: BuildFromAnalysisCommand) -> DocumentMutationResult:
+        """§14 `build_from_analysis`: re-pin the document to a named analysis.
+
+        The previous rendered files are released by the same write and deleted
+        best-effort after commit: nothing references them any more.
+        """
+        with self.transactions.read() as tx:
+            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+            target = self.sources.selection_source(tx, command.analysis_id)
+        refuse_deleted(command.application_id, source.deleted_at)
+        require_hash(source.document, command.expected_document_hash)
+        if target.application_id != command.application_id:
+            raise LineageBroken(
+                f"job analysis {command.analysis_id} does not belong to application "
+                f"{command.application_id}"
             )
-        try:
-            self.artifacts.write_working_draft(changed.source)
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not store working draft: {exc}") from exc
-        return SelectionChangeResult(
-            application_id=changed.application_id,
-            working_draft_id=changed.id,
-            edit_version=changed.edit_version,
-            content_hash=changed.content_hash,
-            selection_plan_id=changed.selection_plan_id,
-            plan=created.plan,
+        if target.job_analysis_id == source.document.analysis_id:
+            raise PreconditionFailed("the document is already built on this analysis")
+        knowledge = load_knowledge(self.knowledge)
+        selection = build_document_selection(target.analysis, knowledge)
+        with self.transactions.write() as tx:
+            updated, released = self.documents.repin(
+                tx,
+                command.application_id,
+                command.expected_document_hash,
+                DocumentBody(analysis_id=command.analysis_id, selection=selection, content=None),
+                built_with(knowledge),
+                updated_at=utc_now(),
+            )
+        if released is not None:
+            self.files.discard(released)
+        new_basis = current_basis(updated, knowledge)
+        return DocumentMutationResult(
+            application_id=command.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
+            document_state=document_state(updated, new_basis),
+            content_check=content_check(updated, new_basis),
         )

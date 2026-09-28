@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { Requirement } from "@/api/analyses";
-import type { SelectionPlanCandidate } from "@/api/contracts";
-import { decisionSource, factRankings, factSignals, includedFactIds, selectionChanges } from "./selectionManifest";
+import type { DocumentCandidate } from "@/api/contracts";
+import { decisionSource, factSignals, includedFactIds, selectionChanges } from "./selectionManifest";
 
-const candidate = (overrides: Partial<SelectionPlanCandidate> = {}): SelectionPlanCandidate => ({
+const candidate = (overrides: Partial<DocumentCandidate> = {}): DocumentCandidate => ({
   fact_id: "fact.a",
   outcome: "selected",
   reason: null,
@@ -26,48 +26,15 @@ const requirement = (overrides: Partial<Requirement> = {}): Requirement => ({
   ...overrides,
 });
 
-describe("the plan manifest the fact selection explains itself from", () => {
-  it("reads each candidate's ranking terms and ignores what it cannot read", () => {
-    const rankings = factRankings({
-      candidates: [
-        {
-          fact_id: "fact.a",
-          requirement_rank: 2,
-          profile_score: 3,
-          emphasis_score: 1,
-          keyword_hits: 2,
-          gap_substitute: false,
-        },
-        { fact_id: "fact.b", keyword_hits: "many" },
-        { requirement_rank: 1 },
-        "not a candidate",
-      ],
-    });
+describe("the selection the fact list explains itself from", () => {
+  it("states the requirements a fact is evidence for, mandatory first", () => {
+    const preferred = requirement({ requirementId: "requirement-2", importance: "preferred" });
 
-    expect(rankings.get("fact.a")).toEqual({
-      emphasisScore: 1,
-      gapSubstitute: false,
-      keywordHits: 2,
-      profileScore: 3,
-      requirementRank: 2,
-    });
-    expect(rankings.get("fact.b")).toMatchObject({ keywordHits: 0, requirementRank: 0 });
-    expect(rankings.size).toBe(2);
-    expect(factRankings(null).size).toBe(0);
-    expect(factRankings({ candidates: "none" }).size).toBe(0);
-  });
-
-  it("states each term of the ranking as a signal, strongest first", () => {
-    const ranking = { emphasisScore: 1, gapSubstitute: false, keywordHits: 2, profileScore: 3, requirementRank: 2 };
-
-    expect(factSignals(ranking, [requirement()]).map((signal) => signal.text)).toEqual([
+    expect(factSignals([requirement(), preferred]).map((signal) => signal.text)).toEqual([
       "ראיה לדרישת חובה",
-      "רלוונטית לפרופיל ולדגש (ציון 4)",
-      "מכילה 2 מילות מפתח מהמשרה",
+      "ראיה לדרישה נוספת במשרה",
     ]);
-    expect(
-      factSignals({ ...ranking, profileScore: 0, emphasisScore: 0, keywordHits: 0, requirementRank: 0 }, []),
-    ).toEqual([{ text: "לא רלוונטית לפרופיל ולדגש הנוכחיים", tone: "negative" }]);
+    expect(factSignals([])).toEqual([]);
   });
 
   it("names who placed a fact: the engine, an explicit mark, or the document structure", () => {
@@ -77,7 +44,7 @@ describe("the plan manifest the fact selection explains itself from", () => {
     expect(decisionSource(candidate({ user_selectable: false }), [], ["fact.a"])).toBe("locked");
   });
 
-  it("reports what a new plan added and removed against the facts included before it", () => {
+  it("reports what a new selection added and removed against the facts included before it", () => {
     const candidates = [
       candidate({ fact_id: "kept" }),
       candidate({ fact_id: "added", outcome: "pinned" }),

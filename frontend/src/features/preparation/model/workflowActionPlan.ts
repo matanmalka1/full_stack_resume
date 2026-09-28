@@ -6,181 +6,147 @@ import { actionDestination } from "./actionDestinations";
 
    This is the reading of the projection, separated from the rendering of it. It decides
    nothing the backend has not already decided - every field below is `available_actions`,
-   `recommended_action`, or an id the projection carries - which is precisely why it is
-   worth testing without a DOM: the rules it encodes are about what the workflow permits,
-   and they were previously spread through a 312-line component where the only way to ask
-   whether approval outranks validation was to render a screen and read its buttons. */
+   `recommended_action`, or an id/hash the projection carries - which is precisely why it
+   is worth testing without a DOM: the rules it encodes are about what the workflow
+   permits, and asking whether approval outranks checking should not need a screen. */
 export interface WorkflowActionPlan {
   /* `analyze` is offered as re-analysis once an analysis is already in force. */
   analyze: { emphasized: boolean; reanalysis: boolean } | null;
-  createSelectionPlan: { analysisId: string; emphasized: boolean; selectionPlanId: string | null } | null;
-  /* The generate command, with the two ids it must carry. */
-  createDraft: { analysisId: string; emphasized: boolean; selectionPlanId: string } | null;
-  /* §14: generate writes over the one active WorkingDraft. With one in hand, discarding it
-     is a choice `replace_working_draft` carries rather than one `create_draft` makes
-     silently, so generate is withheld and the two explicit commands below take over. */
-  draftWouldReplace: boolean;
-  /* §14: the two ways out of a stale draft, and the only actions on this screen addressed
-     to a specific version of one. Both carry `active_working_draft_id`; the version itself
-     is not in the projection and is read separately by whoever sends the command.
-
-     Offered on two conditions, not one. `available_actions` is the authority on whether
-     the workflow permits the command at all; the second condition is why this screen puts
-     it in front of the reader, and it is "this draft cannot be validated as it stands" -
-     either `stale_reasons`, or a `working_draft_state` of `validation_failed`.
-
-     The failed-validation half is not symmetry for its own sake. Editing a claim's text
-     detaches it from its canonical fact, which fails validation without producing a stale
-     reason, and the only other repair offered in that state is an AI regeneration that can
-     fail. Withholding the deterministic rebuild there leaves a draft that cannot be
-     approved and cannot be rebuilt from any screen. Archiving keeps the `stale_reasons`
-     gate: discarding the work is not a repair. */
-  archiveDraft: { workingDraftId: string } | null;
-  replaceDraft: { analysisId: string; emphasized: boolean; selectionPlanId: string; workingDraftId: string } | null;
-  /* `update_working_draft`, `validate`, `approve`, and `render` all resolve to the draft
-     editor: validation and rendering are panels there and approval is a dialog opened
-     from it. Offered side by side they read as destinations that all arrive at one URL,
-     so they collapse to one control wearing the furthest-along name - that being the one
-     the workflow is waiting on. The recommendation decides emphasis only; it never picks
-     a different URL. */
+  /* The fact selection screen: the document's own selection, which exists from the first
+     analysis on. */
+  selection: { emphasized: boolean } | null;
+  /* The generate command, addressed to the document at the hash the projection reports. */
+  createDraft: { documentHash: string; emphasized: boolean } | null;
+  /* §14 `build_from_analysis`: a newer analysis exists than the one the document is pinned
+     to. Explicit, because it replaces the selection and clears content and every stamp -
+     `discardsContent` says whether that loses written work, which is what decides whether
+     the press asks first. */
+  buildFromAnalysis: {
+    analysisId: string;
+    discardsContent: boolean;
+    documentHash: string;
+    emphasized: boolean;
+  } | null;
+  /* `edit`, `check`, `approve`, and `render` all resolve to the draft editor: the check is
+     a panel there, approval a dialog, render a panel. Offered side by side they read as
+     destinations that all arrive at one URL, so they collapse to one control wearing the
+     furthest-along name. The recommendation decides emphasis only. */
   draftScreen: { emphasized: boolean; href: string; label: string } | null;
-  readyRevision: { emphasized: boolean; href: string } | null;
+  /* The ready step, offered only while the projection says the document is Ready. */
+  ready: { emphasized: boolean; href: string } | null;
   /* A recommended action with no control here and no destination anywhere. It is a claim
      about existence, not availability, so it asks the same route table the reason callouts
-     ask: gating it on availability would let this say a screen does not exist while a
-     callout beside it links to that very screen. */
+     ask. */
   unbuiltRecommendation: string | null;
 }
 
 /* Whether `WorkflowActions` has anything to put inside its surface. Some actions are
-   deliberately handled elsewhere on the preparation screen: review decisions in their
-   decision panel, fact selection in its tab, and re-analysis beside the diagnostics.
-   Treating those as content here leaves an emphasized but empty card behind. */
+   deliberately handled elsewhere on the preparation screen: the fact selection in its own
+   panel and re-analysis beside the diagnostics. Treating those as content here leaves an
+   emphasized but empty card behind. */
 export const hasWorkflowActionsContent = (plan: WorkflowActionPlan): boolean =>
   (plan.analyze !== null && !plan.analyze.reanalysis) ||
   plan.createDraft !== null ||
-  plan.replaceDraft !== null ||
-  plan.archiveDraft !== null ||
+  plan.buildFromAnalysis !== null ||
   plan.draftScreen !== null ||
-  plan.readyRevision !== null ||
+  plan.ready !== null ||
   plan.unbuiltRecommendation !== null;
 
 export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPlan => {
   const applicationId = detail.application.id;
   const recommended = detail.recommended_action ?? null;
-  const readyMilestoneCurrent = detail.preparation_state === "ready" && detail.latest_ready_revision_id != null;
   const available = (action: string): boolean => detail.available_actions.includes(action);
-  const analysisId = detail.active_analysis_id ?? null;
-  const selectionPlanId = detail.active_selection_plan_id ?? null;
-  const draftWouldReplace = detail.working_draft_state !== "none";
+  const documentHash = detail.document_hash ?? null;
+  const hasContent =
+    detail.document_id != null &&
+    detail.preparation_state !== "needs_analysis" &&
+    detail.preparation_state !== "ready_to_draft";
 
-  const canAnalyze = available("analyze");
-  const analyze = canAnalyze ? { emphasized: recommended === "analyze", reanalysis: recommended !== "analyze" } : null;
+  const analyze = available("analyze")
+    ? { emphasized: recommended === "analyze", reanalysis: recommended !== "analyze" }
+    : null;
 
-  const createSelectionPlan =
-    available("create_selection_plan") && analysisId !== null
-      ? {
-          analysisId,
-          emphasized: recommended === "create_selection_plan",
-          selectionPlanId,
-        }
+  const selection =
+    documentHash !== null && (available("update_selection") || available("propose_selection"))
+      ? { emphasized: recommended === "update_selection" || recommended === "propose_selection" }
       : null;
 
   const createDraft =
-    !readyMilestoneCurrent &&
-    available("create_draft") &&
-    analysisId !== null &&
-    selectionPlanId !== null &&
-    !draftWouldReplace
-      ? { analysisId, emphasized: recommended === "create_draft", selectionPlanId }
+    available("create_draft") && documentHash !== null
+      ? { documentHash, emphasized: recommended === "create_draft" }
+      : null;
+
+  const newerAnalysisId = detail.latest_analysis_id ?? null;
+  const buildFromAnalysis =
+    available("build_from_analysis") && documentHash !== null && newerAnalysisId !== null
+      ? {
+          analysisId: newerAnalysisId,
+          discardsContent: hasContent,
+          documentHash,
+          emphasized: recommended === "build_from_analysis",
+        }
       : null;
 
   const destinationFor = (action: string): string | null =>
     available(action) ? actionDestination(action, applicationId) : null;
-  const editHref = destinationFor("update_working_draft");
-  const validationHref = destinationFor("validate");
+  const editHref = destinationFor("edit");
+  const checkHref = destinationFor("check");
   const approvalHref = destinationFor("approve");
   const renderHref = destinationFor("render");
-  /* Furthest along wins the label: if approval is offered the draft is validated and
-     approving is what the workflow is waiting on; after approval, rendering is the next
-     explicit step recovered by that same screen. */
+  const readyNow = detail.document_state === "ready";
+  /* Furthest along wins the label: if rendering is offered the document is approved and
+     the files are what the workflow is waiting on; before that, approval. A Ready document
+     stays editable, so the editor is still offered beside it - as the way back, not as
+     what the workflow is waiting on. */
   const draftScreenTarget =
     renderHref !== null
       ? { href: renderHref, label: "יצירת קובץ קורות החיים" }
       : approvalHref !== null
         ? { href: approvalHref, label: "אישור הגרסה" }
-        : validationHref !== null
-          ? { href: validationHref, label: "אימות הטיוטה" }
+        : checkHref !== null
+          ? { href: checkHref, label: "בדיקת הטיוטה" }
           : editHref !== null
-            ? { href: editHref, label: "עריכת הטיוטה" }
+            ? { href: editHref, label: readyNow ? "חזרה לעריכת הטיוטה" : "עריכת הטיוטה" }
             : null;
   const draftScreen =
-    draftScreenTarget === null || (readyMilestoneCurrent && !detail.newer_draft_in_progress)
+    draftScreenTarget === null
       ? null
       : {
           ...draftScreenTarget,
-          label: readyMilestoneCurrent ? "המשך עבודה על הטיוטה החדשה" : draftScreenTarget.label,
           emphasized:
-            !readyMilestoneCurrent &&
-            (recommended === "render" ||
-              recommended === "approve" ||
-              recommended === "validate" ||
-              recommended === "update_working_draft"),
+            recommended === "render" || recommended === "approve" || recommended === "check" || recommended === "edit",
         };
 
-  const readyRevision =
-    detail.latest_ready_revision_id == null
-      ? null
-      : {
-          emphasized: detail.preparation_state === "ready",
-          href: routePaths.revision(detail.latest_ready_revision_id),
-        };
-
-  const workingDraftId = detail.active_working_draft_id ?? null;
-  const stale = detail.stale_reasons.length > 0;
-  const rebuildable = stale || detail.working_draft_state === "validation_failed";
-  const replaceDraft =
-    rebuildable &&
-    available("replace_working_draft") &&
-    workingDraftId !== null &&
-    analysisId !== null &&
-    selectionPlanId !== null
-      ? { analysisId, emphasized: recommended === "replace_working_draft", selectionPlanId, workingDraftId }
-      : null;
-  const archiveDraft =
-    stale && available("archive_working_draft") && workingDraftId !== null ? { workingDraftId } : null;
+  const ready = readyNow
+    ? { emphasized: detail.preparation_state === "ready", href: routePaths.ready(applicationId) }
+    : null;
 
   const handledHere = new Set(
     [
       analyze === null ? null : "analyze",
-      createSelectionPlan === null ? null : "create_selection_plan",
+      selection === null ? null : "update_selection",
+      selection === null ? null : "propose_selection",
       createDraft === null ? null : "create_draft",
-      replaceDraft === null ? null : "replace_working_draft",
-      archiveDraft === null ? null : "archive_working_draft",
-      editHref === null ? null : "update_working_draft",
-      validationHref === null ? null : "validate",
+      buildFromAnalysis === null ? null : "build_from_analysis",
+      editHref === null ? null : "edit",
+      checkHref === null ? null : "check",
       approvalHref === null ? null : "approve",
       renderHref === null ? null : "render",
     ].filter((action): action is string => action !== null),
   );
 
   const unbuiltRecommendation =
-    !readyMilestoneCurrent &&
-    recommended !== null &&
-    !handledHere.has(recommended) &&
-    actionDestination(recommended, applicationId) === null
+    recommended !== null && !handledHere.has(recommended) && actionDestination(recommended, applicationId) === null
       ? recommended
       : null;
 
   return {
     analyze,
-    archiveDraft,
+    buildFromAnalysis,
     createDraft,
-    createSelectionPlan,
-    draftWouldReplace,
-    replaceDraft,
     draftScreen,
-    readyRevision,
+    ready,
+    selection,
     unbuiltRecommendation,
   };
 };

@@ -1,6 +1,6 @@
 import { FileText } from "lucide-react";
 
-import type { WorkingDraft, WorkingDraftFacts } from "@/api/contracts";
+import type { DocumentFacts, EditableDocument } from "../model/drafts.types";
 import { Card } from "@/ui/Card";
 import { SectionHeader } from "@/ui/SectionHeader";
 import type { DraftClaimActions } from "../model/drafts.types";
@@ -8,8 +8,8 @@ import { DraftClaimList } from "./DraftClaimList";
 
 interface DraftIdentityCardProps {
   actions: DraftClaimActions;
-  draft: WorkingDraft;
-  facts: WorkingDraftFacts | undefined;
+  draft: EditableDocument;
+  facts: DocumentFacts | undefined;
 }
 
 /* The document's opening lines: the headline and the contact details. They come from the

@@ -25,24 +25,12 @@ export type ApplicationSort = ApiSchemas["ApplicationSort"];
 export type ApplicationPreset = ApiSchemas["ApplicationPreset"];
 export type ApplicationListItem = ApiSchemas["ApplicationListItemResponse"];
 export type Operation = ApiSchemas["OperationResponse"];
+export type OperationOutput = ApiSchemas["OperationOutputResponse"];
 export type OperationStatus = ApiSchemas["OperationStatus"];
 export type OperationPhase = ApiSchemas["OperationPhase"];
 export type OperationType = ApiSchemas["OperationType"];
 export type OperationFailureCode = ApiSchemas["OperationFailureCode"];
-export type WorkingDraft = ApiSchemas["WorkingDraftResponse"];
-export type ValidationRun = ApiSchemas["ValidationRunResponse"];
-export type ValidationRunDetail = ApiSchemas["ValidationRunDetailResponse"];
 export type ValidationReport = ApiSchemas["ValidationReportResponse"];
-export type Approval = ApiSchemas["ApprovalResponse"];
-export type ApprovedRevision = ApiSchemas["ApprovedRevisionResponse"];
-export type ApprovedRevisions = ApiSchemas["ApprovedRevisionsResponse"];
-/* What changed from one approved revision to another of the same Application, followed
-   by claim and fact identity rather than by line position. */
-export type RevisionComparison = ApiSchemas["RevisionComparisonResponse"];
-export type RevisionSectionComparison = ApiSchemas["RevisionSectionComparisonResponse"];
-export type RevisionClaimChange = ApiSchemas["RevisionClaimChangeResponse"];
-export type RevisionChangeSummary = ApiSchemas["RevisionChangeSummaryResponse"];
-export type DecisionMarkdown = ApiSchemas["DecisionMarkdownResponse"];
 /* §20 the artifact registry, read by ID. The list carries the registration; the detail
    adds the three answers only a verification can give, so the two are separate types
    rather than one optional-field union. `artifact_type` and `lifecycle_status` are
@@ -70,27 +58,33 @@ export type DuplicateCheckResult = ApiSchemas["DuplicateCheckResponse"];
 export type DuplicateMatch = ApiSchemas["DuplicateMatchResponse"];
 export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];
 
-/* The §9 action policy projection. The two lifecycle states are real unions rather
+/* The §9 action policy projection. The lifecycle states are real unions rather
    than `string`, so a label map keyed by them stays exhaustive; the action fields are
    `string` at the boundary and are treated as open here on purpose. */
 export type PreparationState = ApiSchemas["PreparationState"];
-export type WorkingDraftState = ApiSchemas["WorkingDraftState"];
+export type DocumentState = ApiSchemas["DocumentState"];
+export type ContentCheck = ApiSchemas["ContentCheck"];
 export type Reason = ApiSchemas["ReasonResponse"];
 
+/* §3/§14-§16 the one CV document per Application. `document_hash` is its token: the
+   read returns it as the ETag, the autosave PATCH sends it as If-Match, and every action
+   carries it as `expected_document_hash`. `content` stays the opaque versioned document;
+   `outline` is the editable structure derived from it on each read. */
+export type CVDocument = ApiSchemas["DocumentResponse"];
+export type DocumentCandidate = ApiSchemas["DocumentCandidateResponse"];
+export type DocumentMutation = ApiSchemas["DocumentMutationResponse"];
+export type DocumentCheck = ApiSchemas["DocumentCheckResponse"];
+export type DocumentActionRequest = ApiSchemas["DocumentActionRequest"];
+export type UpdateDocumentRequest = ApiSchemas["UpdateDocumentRequest"];
+export type UpdateSelectionRequest = ApiSchemas["UpdateSelectionRequest"];
+export type ProposeSelectionRequest = ApiSchemas["ProposeSelectionRequest"];
+export type BuildFromAnalysisRequest = ApiSchemas["BuildFromAnalysisRequest"];
+export type CreateDraftRequest = ApiSchemas["CreateDraftRequest"];
+export type RegenerateDocumentSectionRequest = ApiSchemas["RegenerateDocumentSectionRequest"];
+export type RegenerateDocumentClaimRequest = ApiSchemas["RegenerateDocumentClaimRequest"];
+export type DecisionExport = ApiSchemas["DecisionExportResponse"];
+
 export type CreateAnalysisRequest = ApiSchemas["CreateAnalysisRequest"];
-export type CreateSelectionPlanRequest = ApiSchemas["CreateSelectionPlanRequest"];
-export type CreatedSelectionPlan = ApiSchemas["CreateSelectionPlanResponse"];
-export type SelectionPlanDetail = ApiSchemas["SelectionPlanDetailResponse"];
-export type SelectionPlanCandidate = ApiSchemas["SelectionPlanCandidateResponse"];
-export type GenerateWorkingDraftRequest = ApiSchemas["GenerateWorkingDraftRequest"];
-export type WorkingDraftVersionRequest = ApiSchemas["WorkingDraftVersionRequest"];
-/* §14 the two ways out of a stale draft. `keep_previous` on the replacement is the Keep
-   decision - the immutable historical snapshot is materialized before the replacement is
-   attempted - and archiving produces that same snapshot without a replacement. */
-export type ReplaceWorkingDraftRequest = ApiSchemas["ReplaceWorkingDraftRequest"];
-export type ArchivedWorkingDraft = ApiSchemas["ArchivedWorkingDraftResponse"];
-export type ApproveDraftRequest = ApiSchemas["ApproveDraftRequest"];
-export type RenderRevisionRequest = ApiSchemas["RenderRevisionRequest"];
 
 /* §13 `apply_analysis_decisions`: one synchronous matching-configuration commit, not an
    Operation. The classification overrides are real unions rather than `string`, so the
@@ -105,21 +99,19 @@ export type ProfileName = ApiSchemas["ProfileName"];
 export type Emphasis = ApiSchemas["Emphasis"];
 export type Language = NonNullable<ApplyAnalysisDecisionsRequest["language_override"]>;
 
-/* §14/§20 the WorkingDraft the editor holds. `outline` is the editable structure derived
-   from `source` on each read; `source` stays the opaque versioned document, on the same
-   reasoning `JobAnalysisResponse.analysis` does. `ClaimType` is a real union,
+/* §14/§20 the document content the editor holds. `outline` is the editable structure
+   derived from `content` on each read; `content` stays the opaque versioned document, on
+   the same reasoning `JobAnalysisResponse.analysis` does. `ClaimType` is a real union,
    so the Hebrew status labels keyed by it stay exhaustive. */
 export type DraftClaim = ApiSchemas["DraftClaimResponse"];
 export type ClaimType = DraftClaim["claim_type"];
 
-export type WorkingDraftFacts = ApiSchemas["WorkingDraftFactsResponse"];
 export type DraftFact = ApiSchemas["DraftFactResponse"];
 export type SelectionOutcome = NonNullable<DraftFact["outcome"]>;
 export type OmissionReason = NonNullable<DraftFact["reason"]>;
 
 export type ClaimPatch = ApiSchemas["ClaimPatchRequest"];
 export type ClaimAddition = ApiSchemas["ClaimAdditionRequest"];
-export type WorkingDraftUpdate = ApiSchemas["WorkingDraftUpdateResponse"];
 
 export type Fact = ApiSchemas["FactResponse"];
 export type FactStatus = ApiSchemas["FactStatus"];
@@ -135,11 +127,5 @@ export type FactTransitionRequest = ApiSchemas["FactTransitionRequest"];
 export type AttachFactRequest = ApiSchemas["AttachFactRequest"];
 export type ConfirmAndUseFactRequest = ApiSchemas["ConfirmAndUseFactRequest"];
 export type ConfirmAndUseFact = ApiSchemas["ConfirmAndUseFactResponse"];
-
-export type ApplySelectionChangeRequest = ApiSchemas["ApplySelectionChangeRequest"];
-export type SelectionChange = ApiSchemas["SelectionChangeResponse"];
-
-export type RegenerateSectionRequest = ApiSchemas["RegenerateSectionRequest"];
-export type RegenerateClaimRequest = ApiSchemas["RegenerateClaimRequest"];
 
 export type JobSnapshotHistory = ApiSchemas["JobSnapshotHistoryResponse"];

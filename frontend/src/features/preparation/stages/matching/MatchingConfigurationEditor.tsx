@@ -53,14 +53,16 @@ export const MatchingConfigurationEditor = ({
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!canEdit || current === null || values === null || detail.active_analysis_id == null || !changed) {
+      /* The analysis the form shows is the latest one of the active posting
+         (`classificationFromAnalysis`), so that is the one the decision addresses. */
+      if (!canEdit || current === null || values === null || detail.latest_analysis_id == null || !changed) {
         throw new Error("matching configuration is not available for this context");
       }
       return applyAnalysisDecisions(
-        detail.active_analysis_id,
+        detail.latest_analysis_id,
         detail.application.id,
+        detail.document_hash ?? null,
         matchingSubmission(current, values),
-        detail.active_selection_plan_id ?? null,
       );
     },
     onSuccess: async (result) => {
@@ -97,6 +99,12 @@ export const MatchingConfigurationEditor = ({
     save.reset();
     setValues((existing) => (existing === null ? existing : { ...existing, [key]: value }));
   };
+
+  /* Written content is what a change can affect, so it is what raises the tone. */
+  const hasContent =
+    detail.preparation_state === "draft_in_progress" ||
+    detail.preparation_state === "approved" ||
+    detail.preparation_state === "ready";
 
   const lockedByOperation = detail.blocked_actions
     .find((blocked) => blocked.action === "edit_matching_configuration")
@@ -170,7 +178,7 @@ export const MatchingConfigurationEditor = ({
       {changed ? (
         <Callout
           title={createsAnalysis(changes) ? "השמירה תריץ ניתוח מחדש" : "השמירה תבחר את העובדות מחדש"}
-          tone={detail.active_working_draft_id != null ? "warning" : "info"}
+          tone={hasContent ? "warning" : "info"}
         >
           {matchingConsequence(detail, createsAnalysis(changes))}
         </Callout>

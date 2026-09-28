@@ -20,7 +20,7 @@ const operation = (overrides: Partial<Operation> = {}): Operation =>
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   ({
-    active_analysis_id: null,
+    latest_analysis_id: null,
     ...overrides,
   }) as ApplicationDetail;
 
@@ -48,7 +48,7 @@ describe("analysisViewState", () => {
     expect(
       analysisViewState({
         analysisWasQueuedOnCreate: true,
-        detail: detail({ active_analysis_id: "analysis-1" }),
+        detail: detail({ latest_analysis_id: "analysis-1" }),
         operation: operation({ status: "succeeded", is_terminal: true }),
       }),
     ).toBe("content");
@@ -65,14 +65,14 @@ describe("analysisViewState", () => {
     expect(
       analysisViewState({
         analysisWasQueuedOnCreate: false,
-        detail: detail({ active_analysis_id: "analysis-1" }),
+        detail: detail({ latest_analysis_id: "analysis-1" }),
         operation: succeeded,
       }),
     ).toBe("processing");
     expect(
       analysisViewState({
         analysisWasQueuedOnCreate: false,
-        detail: detail({ active_analysis_id: "analysis-2" }),
+        detail: detail({ latest_analysis_id: "analysis-2" }),
         operation: succeeded,
       }),
     ).toBe("content");
@@ -83,7 +83,7 @@ describe("analysisViewState", () => {
       analysisViewState({
         analysisWasQueuedOnCreate: false,
         detail: detail({
-          active_analysis_id: "analysis-2",
+          latest_analysis_id: "analysis-2",
           latest_analysis: {
             id: "analysis-2",
             created_at: "2026-09-10T08:00:11Z",
@@ -112,7 +112,7 @@ describe("analysisViewState", () => {
     expect(
       analysisViewState({
         analysisWasQueuedOnCreate: false,
-        detail: detail({ active_analysis_id: "analysis-2" }),
+        detail: detail({ latest_analysis_id: "analysis-2" }),
         operation: operation({ status: "failed", is_terminal: true }),
       }),
     ).toBe("analysis_failed");

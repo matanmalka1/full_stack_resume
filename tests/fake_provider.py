@@ -19,6 +19,8 @@ import urllib.error
 import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass, field
+from email.message import Message
+from io import BytesIO
 from typing import Any
 
 from cv_engine.infrastructure.providers import OpenAIProvider, OpenAIResponsesProvider
@@ -119,8 +121,8 @@ class FakeOpenAI:
                 "https://api.openai.com/v1/responses",
                 answer.code,
                 "scripted",
-                {},
-                _Response(answer.body.encode()),
+                Message(),
+                BytesIO(answer.body.encode()),
             )
         if isinstance(answer, OSError):
             raise answer

@@ -36,6 +36,7 @@ from cv_engine.application.ports import (
     RegenerateSectionContext,
     SelectionPlanContext,
 )
+from cv_engine.application.ports.outbound import SelectionSectionContext
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.providers import (
     ClaimProposal,
@@ -46,6 +47,7 @@ from cv_engine.domain.contracts.providers import (
     SectionProposal,
     SelectionProposal,
 )
+from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.infrastructure.providers import TASK_OUTPUT_MODELS
 from cv_engine.util import canonical_json, sha256_text
 
@@ -53,18 +55,19 @@ ANALYSIS_CONTEXT = AnalysisContext(
     job_text="...",
     candidate_facts=[],
 )
+
 SELECTION_CONTEXT = SelectionPlanContext(
     job_analysis={"track": "sales"},
     allowed_facts=[{"fact_id": "a.b"}],
     deterministic_selection={"selected_fact_ids": ["a.b"], "non_excludable_fact_ids": []},
     sections=[
-        {
-            "section": "Professional Summary",
-            "fact_ids": ["a.b"],
-            "max_claims": 1,
-            "fixed_fact_ids": [],
-            "max_additional_pins": 1,
-        }
+        SelectionSectionContext(
+            section="Professional Summary",
+            fact_ids=["a.b"],
+            max_claims=1,
+            fixed_fact_ids=[],
+            max_additional_pins=1,
+        )
     ],
 )
 DRAFT_CONTEXT = DraftResumeContext(
@@ -97,9 +100,9 @@ CLAIM_CONTEXT = RegenerateClaimContext(
 )
 
 ANALYSIS = AnalysisProposal(
-    track="sales",
-    profile="account-manager",
-    emphasis="account-growth",
+    track=Track.SALES,
+    profile=ProfileName.ACCOUNT_MANAGER,
+    emphasis=Emphasis.ACCOUNT_GROWTH,
     language="en",
     requirements=[],
     summary="r",

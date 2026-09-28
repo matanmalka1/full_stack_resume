@@ -4,8 +4,10 @@ import threading
 import time
 
 import pytest
+from helpers import seed_document, stored_document
 from pydantic import ValidationError
 from sqlalchemy import create_engine, delete, func, insert, inspect, select, text, update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.pool import NullPool
 
@@ -15,20 +17,21 @@ from cv_engine.application.knowledge_mutations import (
     KnowledgeMutationState,
     PrepareKnowledgeMutation,
 )
+from cv_engine.application.ports.documents import DocumentBody
 from cv_engine.application.settings import UpdateSettings
-from cv_engine.domain.contracts.drafts import WorkingDraft
-from cv_engine.domain.contracts.records import AuditRecord, ValidationRunLineage
+from cv_engine.domain.contracts.document import DocumentSubmission
+from cv_engine.domain.contracts.records import AuditRecord
 from cv_engine.domain.contracts.recruitment import ApplicationStatus
-from cv_engine.domain.contracts.selection import SelectionManifest, SelectionPlan
-from cv_engine.domain.contracts.validation import ValidationReport
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
-from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
+from cv_engine.infrastructure.persistence.documents import (
+    SqlAlchemyDocumentStore,
+    SqlAlchemyDocumentSubmissionStore,
+)
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
@@ -41,11 +44,11 @@ from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettin
 from cv_engine.infrastructure.persistence.tables import (
     app_settings,
     applications,
+    cv_documents,
     job_snapshots,
     knowledge_mutation_journal,
     metadata,
-    selection_plans,
-    working_drafts,
+    submissions,
 )
 from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 
@@ -57,19 +60,16 @@ from cv_engine.util import new_id, normalized_text, sha256_text, utc_now
 MUTABLE_TABLES = frozenset(
     {
         "applications",  # the current recruitment projection and tracking fields
-        "working_drafts",  # the one mutable resume document (product invariant 3)
+        "cv_documents",  # the one mutable resume document (product invariant 3)
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
         "operation_resource_leases",  # ephemeral claim/heartbeat coordination
         "operation_outputs",  # permits exactly one inactive-to-active transition
-        "idempotency_receipts",  # permits exactly one pending-to-completed transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
         "payload_write_leases",  # pending/committed/reclaiming coordination state
     }
 )
-DELETE_ONLY_TABLES = frozenset(
-    {"operations", "operation_outputs", "idempotency_receipts", "knowledge_mutation_journal"}
-)
+DELETE_ONLY_TABLES = frozenset({"operations", "operation_outputs", "knowledge_mutation_journal"})
 
 IMMUTABLE_MESSAGE = "immutable record"
 
@@ -88,11 +88,11 @@ def test_analysis_plan_adapter_rejects_read_closed_and_foreign_tokens(
         with pytest.raises(TypeError, match="write transaction"):
             analysis_plan_store.lock_application(tx, "application")
     with pytest.raises(RuntimeError, match="transaction is closed"):
-        analysis_plan_store.selection_plan(tx, "plan")
+        analysis_plan_store.lock_application(tx, "application")
     foreign = SqlAlchemyTransactionManager(database_engine)
-    with foreign.read() as tx:
+    with foreign.write() as tx:
         with pytest.raises(TypeError, match="another transaction manager"):
-            analysis_plan_store.selection_plan(tx, "plan")
+            analysis_plan_store.lock_application(tx, "application")
 
 
 def _create_application(
@@ -145,44 +145,6 @@ def _create_application(
     else:
         insert_records(tx)
     return application_id, snapshot_id
-
-
-def _save_analysis(transactions, application_id: str, snapshot_id: str, analysis):
-    plan = SelectionManifest(
-        policy_version="test-selection-v1",
-        emphasis=analysis.emphasis,
-        emphasis_policy_version="test-emphasis-v1",
-    )
-    plans = SqlAlchemyAnalysisPlanRepository(transactions)
-    with transactions.write() as tx:
-        return plans.save_analysis(
-            tx,
-            application_id,
-            snapshot_id,
-            analysis,
-            plan,
-            provider="test",
-            model="fixture",
-            candidate_context_version="candidate-v1",
-            candidate_context_hash="candidate-hash",
-            profile_version="profile-v1",
-            selection_policy_version=plan.policy_version,
-            track_emphasis_dependencies={
-                "track": analysis.track.value,
-                "emphasis": analysis.emphasis.value,
-            },
-        )
-
-
-def _create_selection_plan(transactions_or_engine, *args, **kwargs):
-    transactions = (
-        transactions_or_engine
-        if isinstance(transactions_or_engine, SqlAlchemyTransactionManager)
-        else SqlAlchemyTransactionManager(transactions_or_engine)
-    )
-    plans = SqlAlchemyAnalysisPlanRepository(transactions)
-    with transactions.write() as tx:
-        return plans.create_selection_plan(tx, *args, **kwargs)
 
 
 def test_non_3_analysis_documents_are_rejected_without_an_adapter() -> None:
@@ -314,9 +276,9 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
 
     `ready` and `preparing` are workflow projections, never stored statuses; the
     removed `cli` client is refused by the command and record contracts and by the
-    event CHECK; and an internal submission must name its revision. Multiple
-    immutable external submissions may reference the same artifact or carry no
-    artifact at all, matching the append-only recruitment-history contract.
+    event CHECK; and an internal submission must carry the document and both
+    immutable file copies. Repeated external submissions carry no invented
+    document or artifact references.
     """
     for status in ("preparing", "ready"):
         with pytest.raises(ValueError):
@@ -345,29 +307,7 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
         transactions, company="Constraint Matrix", target_role="Developer", text="Python role"
     )
     recruitment = SqlAlchemyRecruitmentRepository(transactions)
-    catalog = SqlAlchemyArtifactCatalog(transactions)
-    with transactions.read() as tx:
-        history = [
-            (row["from_status"], row["to_status"], row["actor_type"], row["client"])
-            for row in SqlAlchemyApplicationProjectionReader(transactions).recruitment_events(
-                tx, app_id
-            )
-        ]
-    assert history == [(None, "saved", "user", "web")]
-    with transactions.write() as tx:
-        pdf_id = catalog.register_artifact_version(
-            tx,
-            app_id,
-            "resume_pdf",
-            "resume",
-            "artifacts/constraints/v001/resume.pdf",
-            "c" * 64,
-            "rendered",
-            job_snapshot_id=snapshot_id,
-        )
-        recruitment.insert_submission(
-            tx, new_id(), app_id, "external", None, pdf_id, "2026-08-18T10:00:00+00:00", {}
-        )
+    submission_store = SqlAlchemyDocumentSubmissionStore(transactions)
 
     def current_status_ready(tx) -> None:
         transactions.connection_for(tx, access="write").execute(
@@ -385,47 +325,42 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
             occurred_at="2026-08-30T12:00:00+00:00",
         )
 
-    def internal_without_revision(tx) -> None:
-        recruitment.insert_submission(
-            tx, new_id(), app_id, "internal", None, pdf_id, "2026-08-18T11:00:00+00:00", {}
+    def internal_without_content(tx):
+        transactions.connection_for(tx, access="write").execute(
+            insert(submissions).values(
+                id=new_id(),
+                application_id=app_id,
+                submission_type="internal",
+                submitted_at=utc_now(),
+                metadata_json={},
+            )
         )
 
-    def repeat_external_submission_for_one_artifact(tx) -> None:
-        recruitment.insert_submission(
-            tx, new_id(), app_id, "external", None, pdf_id, "2026-08-18T12:00:00+00:00", {}
-        )
-
-    refused = [
+    for write, constraint in (
         (current_status_ready, "ck_applications_current_status"),
         (cli_client_event, "ck_recruitment_events_client"),
-        (internal_without_revision, None),
-    ]
-    for write, constraint in refused:
+        (internal_without_content, None),
+    ):
         with pytest.raises(IntegrityError, match=constraint):
             with transactions.write() as tx:
                 write(tx)
-
-    with transactions.write() as tx:
-        repeat_external_submission_for_one_artifact(tx)
-
-    for index in (1, 2):
+    for _ in range(2):
         with transactions.write() as tx:
-            recruitment.insert_submission(
+            submission_store.insert_submission(
                 tx,
-                new_id(),
-                app_id,
-                "external",
-                None,
-                None,
-                f"2026-08-18T1{index}:30:00+00:00",
-                {},
+                DocumentSubmission(
+                    id=new_id(),
+                    application_id=app_id,
+                    submission_type="external",
+                    submitted_at=utc_now(),
+                ),
             )
-    projections = SqlAlchemyApplicationProjectionReader(transactions)
     with transactions.read() as tx:
-        assert len(projections.submissions(tx, app_id)) == 4
-        application = SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)
-    assert application["current_status"] == "saved"
-    assert application["next_action"] is None
+        assert len(submission_store.submissions(tx, app_id)) == 2
+        assert (
+            SqlAlchemyApplicationStore(transactions).get_application(tx, app_id)["current_status"]
+            == "saved"
+        )
 
 
 def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -> None:
@@ -708,18 +643,16 @@ def test_immutability_triggers_refuse_real_repository_writes(
     with transaction_manager.read() as tx:
         application_id = application_projection_reader.applications(tx)[0]["id"]
     transactions = transaction_manager
-    recruitment = SqlAlchemyRecruitmentRepository(transactions)
     external_submission_id = new_id()
     with transactions.write() as tx:
-        recruitment.insert_submission(
+        SqlAlchemyDocumentSubmissionStore(transactions).insert_submission(
             tx,
-            external_submission_id,
-            application_id,
-            "external",
-            None,
-            None,
-            "2026-08-19T10:00:00+00:00",
-            {},
+            DocumentSubmission(
+                id=external_submission_id,
+                application_id=application_id,
+                submission_type="external",
+                submitted_at="2026-08-19T10:00:00+00:00",
+            ),
         )
     with transaction_manager.write() as tx:
         audit_log.insert_audit(
@@ -744,331 +677,69 @@ def test_immutability_triggers_refuse_real_repository_writes(
                     connection.execute(statement)
 
 
-def test_typed_preparation_records_round_trip_and_refuse_stale_edits(
-    database_engine,
-    draft_factory,
-    analysis_document,
-    transaction_manager,
-    application_projection_reader,
-    analysis_plan_store,
-    draft_lifecycle_store,
-    validation_store,
-) -> None:
-    repository = transaction_manager
-    app_id, snapshot_id = _create_application(
-        repository,
-        company="Typed Records",
-        target_role="Developer",
-        text="Python backend developer API React",
-    )
-    with transaction_manager.read() as tx:
-        assert set(
-            next(
-                row
-                for row in application_projection_reader.snapshots(tx, app_id)
-                if row["id"] == snapshot_id
-            )
-        ) == {
-            "id",
-            "application_id",
-            "version_number",
-            "payload_path",
-            "source_hash",
-            "normalized_hash",
-            "source_url",
-            "captured_at",
-            "source_metadata_json",
-        }
-    analysis = analysis_document()
-    analysis_id, _initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
-    document = draft_factory(
-        "Python backend developer API React",
-        profile_override="development",
-        application_id=app_id,
-        job_snapshot_id=snapshot_id,
-        job_analysis_id=analysis_id,
-    ).draft
-    assert document.selection is not None
-
-    plan = _create_selection_plan(
-        repository,
-        app_id,
-        analysis_id,
-        document.selection,
-        candidate_context_version="candidate-v1",
-        candidate_context_hash="candidate-hash",
-        profile_version="profile-v1",
-        selection_policy_version=document.selection.policy_version,
-        track_emphasis_dependencies={
-            "track": analysis.track.value,
-            "emphasis": analysis.emphasis.value,
-        },
-    )
-    assert isinstance(plan, SelectionPlan)
-    with transaction_manager.read() as tx:
-        assert analysis_plan_store.selection_plan(tx, plan.id) == plan
-
-    with transaction_manager.write() as tx:
-        working = draft_lifecycle_store.create_working_draft(
-            tx,
-            app_id,
-            analysis_id,
-            plan.id,
-            document,
-        )
-    assert isinstance(working, WorkingDraft)
-    with transaction_manager.read() as tx:
-        assert draft_lifecycle_store.active_working_draft(tx, app_id) == working
-
-    changed_source = document.model_copy(update={"content_hash": "changed-hash"})
-    with transaction_manager.write() as tx:
-        changed = draft_lifecycle_store.update_working_draft(
-            tx,
-            working.id,
-            working.edit_version,
-            changed_source,
-        )
-    assert changed.edit_version == working.edit_version + 1
-    assert changed.content_hash == "changed-hash"
-
-    with pytest.raises(StateConflict, match="edit version mismatch"):
-        with transaction_manager.write() as tx:
-            draft_lifecycle_store.update_working_draft(
-                tx,
-                working.id,
-                working.edit_version,
-                document.model_copy(update={"content_hash": "stale-write"}),
-            )
-    with transaction_manager.read() as tx:
-        assert draft_lifecycle_store.working_draft(tx, working.id) == changed
-
-    lineage = ValidationRunLineage(
-        working_draft_id=changed.id,
-        edit_version=changed.edit_version,
-        content_hash=changed.content_hash,
-        job_snapshot_id=snapshot_id,
-        job_analysis_id=analysis_id,
-        selection_plan_id=plan.id,
-        knowledge_context_hash="knowledge-hash",
-        validator_versions={"draft": "2.0"},
-    )
-    with transaction_manager.write() as tx:
-        validation_id = validation_store.record_validation(
-            tx,
-            app_id,
-            "pre-render",
-            ValidationReport.from_findings({"content": True}, []),
-            lineage=lineage,
-        )
-    with transaction_manager.read() as tx:
-        assert validation_store.validation_lineage(tx, validation_id) == lineage
-
-
-def test_selection_plan_is_immutable_and_only_one_working_draft_can_be_active(
-    database_engine, draft_factory, analysis_document, transaction_manager, draft_lifecycle_store
-) -> None:
-    """Product invariant 3, enforced by storage rather than by a filesystem path.
-
-    Before this boundary "one active draft" was an accident of every draft living
-    at `working/{application_id}/`, which a second writer would simply overwrite.
-    The partial unique index is what makes the invariant real, so it is asserted
-    through SQLAlchemy Core: a repository method could satisfy it by convention while the
-    table underneath still allowed two.
-    """
-    repository = transaction_manager
-    now = "2026-08-18T00:00:00+00:00"
-    app_id, snapshot_id = _create_application(
-        repository,
-        company="Constraint Records",
-        target_role="Developer",
-        text="Python backend developer API React",
-    )
-    analysis = analysis_document()
-    analysis_id, initial_plan = _save_analysis(repository, app_id, snapshot_id, analysis)
-    assert initial_plan.job_analysis_id == analysis_id
-    document = draft_factory(
-        "Python backend developer API React",
-        profile_override="development",
-        application_id=app_id,
-        job_snapshot_id=snapshot_id,
-        job_analysis_id=analysis_id,
-    ).draft
-    assert document.selection is not None
-    plan = _create_selection_plan(
-        repository,
-        app_id,
-        analysis_id,
-        document.selection,
-        candidate_context_version="candidate-v1",
-        candidate_context_hash="candidate-hash",
-        profile_version="profile-v1",
-        selection_policy_version=document.selection.policy_version,
-        track_emphasis_dependencies={},
-    )
-    with transaction_manager.write() as tx:
-        draft_lifecycle_store.create_working_draft(tx, app_id, analysis_id, plan.id, document)
-
-    with pytest.raises(ProgrammingError, match="immutable record"):
-        with database_engine.begin() as connection:
-            connection.execute(
-                update(selection_plans)
-                .where(selection_plans.c.id == plan.id)
-                .values(plan_json=selection_plans.c.plan_json)
-            )
-    with pytest.raises(ProgrammingError, match="immutable record"):
-        with database_engine.begin() as connection:
-            connection.execute(delete(selection_plans).where(selection_plans.c.id == plan.id))
-
-    def insert_draft(connection, draft_id: str, *, active: bool) -> None:
-        connection.execute(
-            insert(working_drafts).values(
-                id=draft_id,
-                application_id=app_id,
-                job_analysis_id=analysis_id,
-                selection_plan_id=plan.id,
-                source_json={},
-                edit_version=1,
-                content_hash="h",
-                active=active,
-                created_at=now,
-                updated_at=now,
-            )
-        )
-
-    with pytest.raises(IntegrityError, match="one_active_working_draft_per_application"):
-        with database_engine.begin() as connection:
-            insert_draft(connection, new_id(), active=True)
-
-    with database_engine.begin() as connection:
-        connection.execute(
-            update(working_drafts)
-            .where(working_drafts.c.application_id == app_id)
-            .values(active=False)
-        )
-        insert_draft(connection, new_id(), active=True)
+def test_one_document_per_application_is_enforced_by_the_database(services, database_engine):
+    ingested, _ = seed_document(services, "One Document")
     with database_engine.connect() as connection:
-        assert (
+        row = dict(
             connection.execute(
-                select(func.count())
-                .select_from(working_drafts)
-                .where(working_drafts.c.application_id == app_id)
-            ).scalar_one()
-            == 2
+                select(cv_documents).where(cv_documents.c.application_id == ingested.application_id)
+            )
+            .mappings()
+            .one()
         )
+    row["id"] = new_id()
+    with pytest.raises(IntegrityError):
+        with database_engine.begin() as connection:
+            connection.execute(insert(cv_documents).values(row))
 
 
-def test_a_stale_plan_write_is_refused_rather_than_silently_rebased(
-    database_engine, analysis_document, transaction_manager
-) -> None:
-    """The lost-update path, closed.
-
-    The version number is allocated inside the write, so two writers that read
-    the same plan do not collide: the later one gets a legal new version built
-    on a plan it never saw. The optimistic check makes that a refusal instead.
-
-    This used to be exercised through gap acceptances, which are gone. The
-    guard is not: it belongs to write consistency, and it was very nearly
-    removed together with the acceptance carry that happened to invoke it.
-    """
-    repository = transaction_manager
-    app_id, snapshot_id = _create_application(
-        repository,
-        company="Concurrent Plan Co",
-        target_role="Developer",
-        text="Python backend developer API React",
-    )
-    analysis = analysis_document()
-    analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
-
-    def write(expected: str | None):
-        return _create_selection_plan(
-            repository,
-            app_id,
-            analysis_id,
-            initial.plan,
-            candidate_context_version="candidate-v1",
-            candidate_context_hash="candidate-hash",
-            profile_version="profile-v1",
-            selection_policy_version=initial.plan.policy_version,
-            track_emphasis_dependencies={},
-            expected_selection_plan_id=expected,
-        )
-
-    first = write(initial.id)
-    assert first.id != initial.id
-
-    # A second writer that still believes `initial` is active is refused, rather
-    # than writing a new version on top of a plan it never saw.
-    with pytest.raises(StateConflict, match="moved since this decision was made"):
-        write(initial.id)
-
-    # Naming the plan that is actually active, the write goes through.
-    second = write(first.id)
-    assert second.version_number == first.version_number + 1
-
-
-def test_a_plan_write_blocks_on_the_application_lock(
-    database_engine, database_url, analysis_document, transaction_manager
-) -> None:
-    """Deterministic proof that the lock is taken, and taken before the read.
-
-    The earlier version of this raced two threads and asserted the outcome.
-    That was not a regression test: without the lock the threads are still free
-    to interleave harmlessly, so it passed against the broken implementation as
-    often as the fixed one.
-
-    Instead one connection holds the Application row and a second tries to write
-    a plan with a short `lock_timeout`. If the writer takes the lock it cannot
-    proceed and times out; if it does not, it writes happily. The timeout is the
-    assertion.
-    """
-    repository = transaction_manager
-    app_id, snapshot_id = _create_application(
-        repository,
-        company="Locked Application Co",
-        target_role="Developer",
-        text="Python backend developer API React",
-    )
-    analysis = analysis_document()
-    analysis_id, initial = _save_analysis(repository, app_id, snapshot_id, analysis)
-
+def test_document_write_blocks_on_its_row_lock(services, database_url):
+    ingested, _ = seed_document(services, "Locked Document")
+    document = stored_document(services, ingested.application_id)
     impatient = create_engine(
         database_url, connect_args={"options": "-c lock_timeout=250ms"}, poolclass=NullPool
     )
     holder = create_engine(database_url, poolclass=NullPool)
+    transactions = SqlAlchemyTransactionManager(impatient)
+    store = SqlAlchemyDocumentStore(transactions)
+    body = DocumentBody(
+        analysis_id=document.analysis_id, selection=document.selection, content=None
+    )
     try:
         with holder.begin() as held:
             held.execute(
-                select(applications.c.id).where(applications.c.id == app_id).with_for_update()
+                select(cv_documents.c.id).where(cv_documents.c.id == document.id).with_for_update()
             ).one()
-
             with pytest.raises(OperationalError, match="lock timeout"):
-                _create_selection_plan(
-                    impatient,
-                    app_id,
-                    analysis_id,
-                    initial.plan,
-                    candidate_context_version="candidate-v1",
-                    candidate_context_hash="candidate-hash",
-                    profile_version="profile-v1",
-                    selection_policy_version=initial.plan.policy_version,
-                    track_emphasis_dependencies={},
-                )
-
-        # The holder committed; the same write now goes through and the version
-        # it allocates is the one after whatever the lock was protecting.
-        after = _create_selection_plan(
-            impatient,
-            app_id,
-            analysis_id,
-            initial.plan,
-            candidate_context_version="candidate-v1",
-            candidate_context_hash="candidate-hash",
-            profile_version="profile-v1",
-            selection_policy_version=initial.plan.policy_version,
-            track_emphasis_dependencies={},
-        )
-        assert after.version_number > initial.version_number
+                with transactions.write() as tx:
+                    store.update_body(
+                        tx,
+                        ingested.application_id,
+                        document.document_hash,
+                        body,
+                        updated_at=utc_now(),
+                    )
+        with transactions.write() as tx:
+            assert (
+                store.update_body(
+                    tx, ingested.application_id, document.document_hash, body, updated_at=utc_now()
+                ).document_hash
+                == document.document_hash
+            )
     finally:
         impatient.dispose()
         holder.dispose()
+
+
+def test_nullable_document_json_columns_bind_none_as_sql_null():
+    """JSON null is a value; optional document fields must satisfy SQL IS NULL guards."""
+    columns = [
+        column
+        for table in (metadata.tables["cv_documents"], metadata.tables["submissions"])
+        for column in table.columns
+        if column.nullable and isinstance(column.type, JSONB)
+    ]
+    assert columns
+    for column in columns:
+        assert isinstance(column.type, JSONB)
+        assert column.type.none_as_null, str(column)

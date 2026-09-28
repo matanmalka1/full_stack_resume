@@ -1,26 +1,19 @@
-import { queryOptions } from "@tanstack/react-query";
-
-import { type ApiPath, type ApiResponse, apiRequest } from "./client";
+import { type ApiPath, apiRequest } from "./client";
 import type {
   AnalysisDecisions,
   ApplicationDetail,
   ApplyAnalysisDecisionsRequest,
-  CreatedSelectionPlan,
-  CreateSelectionPlanRequest,
   Emphasis,
   Language,
   ProfileName,
-  Operation,
-  SelectionPlanDetail,
   Track,
 } from "./contracts";
-import { type QueuedOperation, queuedOperation } from "./operations";
 import { type FitLevel, isEmphasis, isFitLevel, isLanguage, isProfileName, isTrack } from "./classificationValues";
 
 /* What this screen may submit: the four classification overrides. There is nothing to
    accept - low Fit and hard gaps are shown, not gated - so the form carries no acceptance
-   fields. The fact overlay is deliberately absent too: it has its own SelectionPlan query
-   and command, and the backend refuses a submission carrying a fact overlay together with
+   fields. The fact overlay is deliberately absent too: it has its own document selection
+   command, and the backend refuses a submission carrying a fact overlay together with
    a classification decision, so omitting the fields makes that refusal unreachable here by
    construction rather than by a client-side copy of a rule. */
 export type ClassificationDecisions = Pick<
@@ -31,50 +24,11 @@ export type ClassificationDecisions = Pick<
 const applyDecisionsPath = (analysisId: string): ApiPath =>
   `/api/v1/analyses/${encodeURIComponent(analysisId)}/apply-decisions`;
 
-const selectionPlansPath = (analysisId: string): ApiPath =>
-  `/api/v1/analyses/${encodeURIComponent(analysisId)}/selection-plans`;
-
-const selectionPlanPath = (selectionPlanId: string): ApiPath =>
-  `/api/v1/selection-plans/${encodeURIComponent(selectionPlanId)}`;
-
-const selectionPlanQueryKey = (selectionPlanId: string) => ["selection-plan", selectionPlanId] as const;
-
-export const selectionPlanQueryOptions = (selectionPlanId: string) =>
-  queryOptions({
-    queryKey: selectionPlanQueryKey(selectionPlanId),
-    queryFn: async ({ signal }): Promise<SelectionPlanDetail> => {
-      const response = await apiRequest<SelectionPlanDetail>(selectionPlanPath(selectionPlanId), { signal });
-      return response.data;
-    },
-  });
-
-export type SelectionPlanCreation =
-  { kind: "created"; result: CreatedSelectionPlan } | { kind: "queued"; operation: Operation };
-
-export const createSelectionPlan = async (
-  analysisId: string,
-  request: CreateSelectionPlanRequest,
-  idempotencyKey?: string,
-): Promise<SelectionPlanCreation> => {
-  const response = await apiRequest<CreatedSelectionPlan | Operation>(selectionPlansPath(analysisId), {
-    method: "POST",
-    body: request,
-    ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
-  });
-  if (response.status === 201 && request.mode === "deterministic") {
-    return { kind: "created", result: response.data as CreatedSelectionPlan };
-  }
-  if (response.status === 202 && request.mode === "ai") {
-    const queued: QueuedOperation = queuedOperation(response as ApiResponse<Operation>);
-    return { kind: "queued", operation: queued.operation };
-  }
-  throw new Error("SelectionPlan creation returned an unexpected status");
-};
-
 /* §13: synchronous, one commit, no Operation - so no `Idempotency-Key` and no
-   `202`/`Location` obligation. `application_id`, `expected_analysis_id`, and the active
-   plan are stated rather than inferred: the first names ownership and the latter two
-   are the exact context the form read.
+   `202`/`Location` obligation. `application_id`, `expected_analysis_id` and
+   `expected_document_hash` are stated rather than inferred: the first names ownership,
+   the second is the exact analysis the form read, and the third the document it was read
+   beside - required whenever a document exists, absent when none does.
 
    Only the decisions that were actually set are sent. A blank control is an absent
    field, not an empty string, because the application layer merges a submission over
@@ -83,8 +37,8 @@ export const createSelectionPlan = async (
 export const applyAnalysisDecisions = async (
   analysisId: string,
   applicationId: string,
+  expectedDocumentHash: string | null,
   decisions: ClassificationDecisions,
-  activeSelectionPlanId: string | null,
 ): Promise<AnalysisDecisions> => {
   /* The fact overlay is omitted by type, not merely left unset: it belongs to a dedicated
      control, and this classification form must not manufacture an empty decision for a
@@ -92,7 +46,7 @@ export const applyAnalysisDecisions = async (
   const body: Omit<ApplyAnalysisDecisionsRequest, "pinned_fact_ids" | "excluded_fact_ids"> = {
     application_id: applicationId,
     expected_analysis_id: analysisId,
-    ...(activeSelectionPlanId === null ? {} : { expected_selection_plan_id: activeSelectionPlanId }),
+    ...(expectedDocumentHash == null ? {} : { expected_document_hash: expectedDocumentHash }),
     ...(decisions.track_override == null ? {} : { track_override: decisions.track_override }),
     ...(decisions.profile_override == null ? {} : { profile_override: decisions.profile_override }),
     ...(decisions.emphasis_override == null ? {} : { emphasis_override: decisions.emphasis_override }),
@@ -244,16 +198,18 @@ const issuesFrom = (value: unknown): AnalysisIssue[] =>
    response. Unreadable requirements are counted so a partially malformed list cannot look
    complete; other unreadable fields stay absent.
 
-   It answers `null` unless the latest analysis *is* the active one. `latest_analysis` is the
-   newest analysis of any snapshot, while `active_analysis_id` is the newest for the active
-   snapshot; after a new JobSnapshot those diverge, and showing a superseded analysis's
-   classification as the one under decision would be a real defect. */
+   It answers `null` unless the latest analysis is the one of the active posting.
+   `latest_analysis` is the newest analysis of any snapshot; after a new JobSnapshot that
+   record describes a posting the Application no longer holds, and showing its
+   classification as the one under decision would be a real defect. Which analysis the
+   *document* is built on is a separate question, answered by `DOCUMENT_ON_OLDER_ANALYSIS`
+   and `build_from_analysis` rather than here. */
 export const classificationFromAnalysis = (detail: ApplicationDetail): Classification | null => {
   const record = detail.latest_analysis;
-  if (record == null || detail.active_analysis_id == null) {
+  if (record == null || detail.latest_analysis_id == null || record.id !== detail.latest_analysis_id) {
     return null;
   }
-  if (record.id !== detail.active_analysis_id) {
+  if (record.job_snapshot_id !== detail.active_job_snapshot_id) {
     return null;
   }
 
@@ -264,9 +220,9 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
   return {
     track: isTrack(analysis.track) ? analysis.track : null,
     profile: isProfileName(analysis.profile) ? analysis.profile : null,
-    /* Emphasis is effective at SelectionPlan level. The Application scalar is advanced
-       with that active plan, while the immutable analysis keeps the classification value it
-       originally carried. */
+    /* Emphasis is effective at document-selection level. The Application scalar follows
+       the document's selection, while the immutable analysis keeps the classification value
+       it originally carried. */
     emphasis: isEmphasis(detail.application.emphasis)
       ? detail.application.emphasis
       : isEmphasis(analysis.emphasis)

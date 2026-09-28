@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from ....domain.contracts.document import CVDocument
 from ....domain.contracts.providers import ProviderTaskResult
-from ....domain.contracts.selection import SelectionPlan
 from ....domain.knowledge import Knowledge
 from ....util import new_id
 from ...commands import (
@@ -9,44 +9,33 @@ from ...commands import (
     AnalysisResult,
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
-    CreateSelectionPlanCommand,
-    ProposeSelectionPlanCommand,
-    SelectionPlanResult,
+    ProposeSelectionCommand,
 )
-from ...errors import (
-    InfrastructureFailure,
-    KnowledgeRejected,
-    LineageBroken,
-    ProviderNotConfigured,
-    StateConflict,
-)
+from ...errors import InfrastructureFailure, LineageBroken, ProviderNotConfigured, StateConflict
 from ...ports import AIProvider, TransactionManager
 from ...ports.analysis_plans import (
     AnalysisKnowledgeSource,
     AnalysisPayloadStore,
-    AnalysisPlanStore,
     AnalysisSelectionSourceReader,
     AnalysisSnapshotSource,
+    AnalysisStore,
     SelectionSource,
 )
+from ...ports.documents import DocumentStore
 from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
 from ...ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
+from ...ports.transactions import WriteTransaction
 from ...transactions import assert_external_io_allowed
+from ..documents import DocumentSource, load_knowledge, read_document_source
 from ..proposals import ProviderEvidence
 from .activation import AnalysisActivation
 from .correction import AnalysisCorrection
 from .preparation import AnalysisPreparation, PreparedAnalysis
 from .selection_plans import AnalysisSelectionService
-from .selection_policy import PreparedSelectionPlan, PreparedSelectionProposal
+from .selection_policy import PreparedSelectionProposal
 
-
-def load_analysis_knowledge(source: AnalysisKnowledgeSource) -> Knowledge:
-    try:
-        return source.load()
-    except OSError as exc:
-        raise InfrastructureFailure(f"could not read Knowledge: {exc}") from exc
-    except ValueError as exc:
-        raise KnowledgeRejected(str(exc)) from exc
+#: Kept under its historical name for the modules that load Knowledge through it.
+load_analysis_knowledge = load_knowledge
 
 
 class AnalysisService:
@@ -56,8 +45,9 @@ class AnalysisService:
         self,
         *,
         transactions: TransactionManager,
-        plans: AnalysisPlanStore,
+        analyses: AnalysisStore,
         sources: AnalysisSelectionSourceReader,
+        documents: DocumentStore,
         evidence: ProviderEvidenceStore,
         knowledge: AnalysisKnowledgeSource,
         payloads: AnalysisPayloadStore,
@@ -65,14 +55,15 @@ class AnalysisService:
         provider: AIProvider | None,
     ):
         self.transactions = transactions
-        self.plans = plans
+        self.analyses = analyses
         self.sources = sources
+        self.documents = documents
         self.evidence = evidence
         self._knowledge = knowledge
         self.snapshot_payloads = payloads
         self._leases = leases
         self._provider = provider
-        self.activation = AnalysisActivation(plans, sources)
+        self.activation = AnalysisActivation(analyses, sources, documents)
 
     @staticmethod
     def refuse_deleted(application_id: str, deleted_at: str | None) -> None:
@@ -97,12 +88,16 @@ class AnalysisService:
             )
         return source
 
-    def selection_plan(self, selection_plan_id: str) -> SelectionPlan:
+    def current_document(self, application_id: str) -> CVDocument | None:
         with self.transactions.read() as tx:
-            return self.plans.selection_plan(tx, selection_plan_id)
+            return self.documents.document(tx, application_id)
+
+    def document_source(self, application_id: str) -> DocumentSource:
+        with self.transactions.read() as tx:
+            return read_document_source(tx, self.documents, self.sources, application_id)
 
     def load_knowledge(self) -> Knowledge:
-        return load_analysis_knowledge(self._knowledge)
+        return load_knowledge(self._knowledge)
 
     @staticmethod
     def assert_provider_io_allowed() -> None:
@@ -203,18 +198,9 @@ class AnalysisService:
         with self.transactions.write() as tx:
             return self.activation.activate(tx, command, prepared)
 
-    def prepare_selection_plan(self, command: CreateSelectionPlanCommand) -> PreparedSelectionPlan:
-        assert_external_io_allowed("selection preparation")
-        return AnalysisSelectionService.prepare_selection_plan(self, command)
-
-    def create_selection_plan(self, command: CreateSelectionPlanCommand) -> SelectionPlanResult:
-        prepared = self.prepare_selection_plan(command)
-        with self.transactions.write() as tx:
-            return self.activation.activate_selection_plan(tx, prepared)
-
     def prepare_selection_proposal(
         self,
-        command: ProposeSelectionPlanCommand,
+        command: ProposeSelectionCommand,
         *,
         operation_id: str,
     ) -> PreparedSelectionProposal:
@@ -222,6 +208,15 @@ class AnalysisService:
         return AnalysisSelectionService.prepare_selection_proposal(
             self, command, operation_id=operation_id
         )
+
+    def activate_selection_proposal(
+        self,
+        tx: WriteTransaction,
+        command: ProposeSelectionCommand,
+        prepared: PreparedSelectionProposal,
+        knowledge: Knowledge,
+    ) -> str:
+        return self.activation.activate_selection_proposal(tx, command, prepared, knowledge)
 
     def apply_analysis_decisions(
         self, command: ApplyAnalysisDecisionsCommand

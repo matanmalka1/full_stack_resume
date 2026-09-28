@@ -34,7 +34,7 @@ const renderResume = (
           <Route element={<ApplicationResumePage />} path="/applications/:applicationId/resume" />
           <Route element={<h1>ניתוח</h1>} path="/applications/:applicationId" />
           <Route element={<h1>טיוטה</h1>} path="/applications/:applicationId/draft" />
-          <Route element={<h1>מוכן</h1>} path="/revisions/revision-1" />
+          <Route element={<h1>מוכן</h1>} path="/applications/:applicationId/ready" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -44,15 +44,15 @@ const renderResume = (
 
 describe("ApplicationResumePage", () => {
   it("opens the draft screen selected by the current server projection", async () => {
-    renderResume(detail({ preparation_state: "ready_for_approval", recommended_action: "approve" }));
+    renderResume(detail({ preparation_state: "draft_in_progress", recommended_action: "approve" }));
 
     expect(await screen.findByRole("heading", { name: "טיוטה" })).toBeInTheDocument();
   });
 
-  it("opens the exact ready revision", async () => {
+  it("opens the Ready document", async () => {
     renderResume(
       detail({
-        latest_ready_revision_id: "revision-1",
+        document_state: "ready",
         preparation_state: "ready",
         recommended_action: null,
       }),
@@ -60,7 +60,7 @@ describe("ApplicationResumePage", () => {
 
     expect(await screen.findByRole("heading", { name: "מוכן" })).toBeInTheDocument();
   });
-  it.each(["needs_analysis", "needs_review", "ready_to_draft"] as const)(
+  it.each(["needs_analysis", "ready_to_draft"] as const)(
     "recovers %s without navigation state",
     async (preparation_state) => {
       renderResume(detail({ preparation_state, recommended_action: null }));
@@ -121,28 +121,28 @@ describe("ApplicationResumePage", () => {
     renderResume(
       detail(),
       fetchMock,
-      detail({ preparation_state: "ready", latest_ready_revision_id: "revision-1", recommended_action: null }),
+      detail({ preparation_state: "ready", document_state: "ready", recommended_action: null }),
     );
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("heading", { name: "מוכן" })).not.toBeInTheDocument();
     await act(async () =>
-      resolve(json(detail({ preparation_state: "needs_review", recommended_action: "edit_matching_configuration" }))),
+      resolve(json(detail({ preparation_state: "ready_to_draft", recommended_action: "edit_matching_configuration" }))),
     );
     expect(await screen.findByRole("heading", { name: "ניתוח" })).toBeInTheDocument();
   });
 
   it.each([
     ["analyze_job", "ניתוח"],
-    ["propose_selection_plan", "ניתוח"],
+    ["propose_selection", "ניתוח"],
     ["create_draft", "ניתוח"],
     ["regenerate_section", "טיוטה"],
     ["regenerate_claim", "טיוטה"],
-    ["render_revision", "טיוטה"],
+    ["render_document", "טיוטה"],
   ] as const)("restores active %s work ahead of a Ready milestone", async (operation_type, heading) => {
     renderResume(
       detail({
         preparation_state: "ready",
-        latest_ready_revision_id: "revision-1",
+        document_state: "ready",
         recommended_action: null,
         active_operation: { ...operation(), operation_type, status: "running", is_terminal: false },
       }),

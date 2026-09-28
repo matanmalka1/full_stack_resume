@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from fake_provider import FakeOpenAI
-from seed import V2_IDENTITY_FACT, write_canonical_sources
+from knowledge_seed import V2_IDENTITY_FACT, write_canonical_sources
 
 from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
 from cv_engine.domain.contracts.analysis import JobAnalysis

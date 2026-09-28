@@ -4,14 +4,21 @@ import uuid
 from pathlib import Path
 
 import pytest
-from helpers import approve_active_draft, seed_analysis_for_command, services_transactions
+from helpers import (
+    approve_active_draft,
+    edit_document_claim,
+    seed_analysis_for_command,
+    services_transactions,
+    stored_document,
+    validate_active_draft,
+)
 from helpers import working_claim as _working_claim
 from pydantic import ValidationError
 from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.api.schemas.facts import CaptureClaimFactRequest
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand
+from cv_engine.application.commands import AnalyzeCommand, BuildFromAnalysisCommand, DraftCommand
 from cv_engine.application.errors import (
     KnowledgeRejected,
     MissingFactRendering,
@@ -100,8 +107,12 @@ def test_create_fact_from_claim_preserves_exact_claim_text(drafted_application) 
     services, application_id = setup
     claim = _working_claim(services, application_id, "sales.cycle.account_management")
     exact_text = "Introduced a weekly pipeline review with the Sales team."
-    services.drafts.edit_claim(
-        application_id, claim.claim_id, ["sales.cycle.account_management"], text=exact_text
+    edit_document_claim(
+        services,
+        application_id,
+        claim.claim_id,
+        ["sales.cycle.account_management"],
+        text=exact_text,
     )
 
     created = services.knowledge_lifecycle.create_fact_from_claim(
@@ -324,7 +335,7 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
         approve_active_draft(services, application_id)
 
 
-def test_confirm_and_use_is_one_journaled_fact_profile_and_plan_command(
+def test_confirm_and_use_is_one_journaled_fact_profile_and_document_command(
     drafted_application,
 ) -> None:
     setup = drafted_application("Contextual Knowledge Co")
@@ -343,14 +354,16 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_plan_command(
         created.fact.fact_id,
         application_id=application_id,
         job_analysis_id=setup.analysis_id,
+        expected_document_hash=stored_document(services, application_id).document_hash,
         profile="account-manager",
         section="Work Experience",
     )
 
     assert result.fact.status is FactStatus.CANONICAL
-    assert created.fact.fact_id in result.selection_plan.plan.selected_fact_ids
-    assert result.selection_plan.id != setup.selection_plan_id
-    assert result.selection_plan.profile_version == result.profile_store_version
+    document = stored_document(services, application_id)
+    assert created.fact.fact_id in document.selection.selected_fact_ids
+    assert document.id == result.document_id
+    assert document.document_hash == result.document_hash != setup.document_hash
     events = services.knowledge_queries.fact_history(created.fact.fact_id).events
     assert [(event.from_status, event.to_status) for event in events] == [
         (None, "pending"),
@@ -387,6 +400,13 @@ def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
             language_override="he",
         ),
     )
+    services.selection.build_from_analysis(
+        BuildFromAnalysisCommand(
+            application_id=application_id,
+            analysis_id=hebrew.analysis_id,
+            expected_document_hash=stored_document(services, application_id).document_hash,
+        )
+    )
     fact_source = services.paths.knowledge_root / "base" / "sales.json"
     profile_source = services.paths.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
     before_fact = fact_source.read_bytes()
@@ -397,6 +417,7 @@ def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
             created.fact.fact_id,
             application_id=application_id,
             job_analysis_id=hebrew.analysis_id,
+            expected_document_hash=stored_document(services, application_id).document_hash,
             profile="account-manager",
             section="Work Experience",
         )
@@ -412,7 +433,7 @@ def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
         assert store.quarantined_mutations(tx) == []
 
 
-def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
+def test_document_selection_failure_restores_both_knowledge_files_and_quarantines(
     drafted_application, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     setup = drafted_application("Contextual Rollback Co")
@@ -432,15 +453,16 @@ def test_selection_plan_failure_restores_both_knowledge_files_and_quarantines(
     before_profile = profile_source.read_bytes()
 
     def refuse_plan(self, *_args, **_kwargs):
-        raise ValueError("simulated SelectionPlan constraint failure")
+        raise ValueError("simulated document selection constraint failure")
 
     _transactions, store = _knowledge_persistence(services)
-    monkeypatch.setattr(type(store), "create_selection_plan", refuse_plan)
-    with pytest.raises(KnowledgeRejected, match="SelectionPlan constraint failure"):
+    monkeypatch.setattr(type(services.drafts.documents), "update_body", refuse_plan)
+    with pytest.raises(KnowledgeRejected, match="document selection constraint failure"):
         services.knowledge_lifecycle.confirm_and_use_fact(
             created.fact.fact_id,
             application_id=application_id,
             job_analysis_id=setup.analysis_id,
+            expected_document_hash=stored_document(services, application_id).document_hash,
             profile="account-manager",
             section="Work Experience",
         )
@@ -641,11 +663,11 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     claim = _working_claim(services, app_id, "sales.cycle.account_management")
     text = "Introduced a weekly pipeline review with the Sales team."
 
-    edited = services.drafts.edit_claim(
-        app_id, claim.claim_id, ["sales.cycle.account_management"], text=text
+    edited = edit_document_claim(
+        services, app_id, claim.claim_id, ["sales.cycle.account_management"], text=text
     )
-    assert not edited.validation.passed
-    assert any(issue.code == "pending-claim" for issue in edited.validation.issues)
+    assert claim.claim_id in edited.pending_claim_ids
+    assert not validate_active_draft(services, app_id).passed
 
     captured = services.knowledge_lifecycle.capture_claim_fact(
         app_id,
@@ -666,21 +688,12 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
         "sales.leadership.pipeline_review", "canonical", explicitly_confirmed=True
     )
 
-    # Canonical is necessary but not sufficient: until a Profile section offers
-    # the fact, no draft may carry it and no claim may link to it.
-    rebuilt_draft = services.drafts.draft(
-        DraftCommand(
-            application_id=app_id,
-            job_analysis_id=setup.analysis_id,
-            selection_plan_id=setup.selection_plan_id,
-        )
+    edit_document_claim(
+        services, app_id, claim.claim_id, ["sales.leadership.pipeline_review"], text=text
     )
-    assert rebuilt_draft.validation.passed, rebuilt_draft.validation.model_dump()
-    rebuilt = _working_claim(services, app_id, "sales.cycle.account_management")
-    blocked = services.drafts.edit_claim(
-        app_id, rebuilt.claim_id, ["sales.leadership.pipeline_review"], text=text
-    )
-    assert any(issue.code == "fact-outside-profile-section" for issue in blocked.validation.issues)
+    checked = validate_active_draft(services, app_id)
+    assert not checked.passed
+    assert any(issue.code == "fact-outside-profile-section" for issue in checked.report.issues)
 
     services.knowledge_lifecycle.attach_fact(
         "sales.leadership.pipeline_review", "account-manager", "Work Experience", pin=True
@@ -692,15 +705,20 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
             job_snapshot_id=setup.snapshot_id,
         ),
     )
-    attached_draft = services.drafts.draft(
-        DraftCommand(
+    services.selection.build_from_analysis(
+        BuildFromAnalysisCommand(
             application_id=app_id,
-            job_analysis_id=refreshed.analysis_id,
-            selection_plan_id=refreshed.selection_plan_id,
+            analysis_id=refreshed.analysis_id,
+            expected_document_hash=stored_document(services, app_id).document_hash,
         )
     )
-
-    assert attached_draft.validation.passed, attached_draft.validation.model_dump()
+    services.drafts.draft(
+        DraftCommand(
+            application_id=app_id,
+            expected_document_hash=stored_document(services, app_id).document_hash,
+        )
+    )
+    assert validate_active_draft(services, app_id).passed
     selected = _working_claim(services, app_id, "sales.leadership.pipeline_review")
     assert selected.claim_type == "canonical"
     assert selected.text == text

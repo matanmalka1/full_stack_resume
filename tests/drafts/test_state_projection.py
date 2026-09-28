@@ -1,503 +1,431 @@
+"""The CV document's commands, driven through the application services and PostgreSQL.
+
+state-and-use-cases.md §3–§9 and §13–§18; test-and-acceptance-plan §5.1, §5.3, §5.5,
+§5.6 and §14. Each scenario asserts the projection a client would read after every
+step, because the projection - not the stored stamps - is what the document's state is.
+"""
+
 from __future__ import annotations
 
-from dataclasses import replace
-from datetime import date
+import json
+from pathlib import Path
 
 import pytest
-from helpers import ACCOUNT_MANAGER_JOB, approve_active_draft, seed_analysis_for_command
-from sqlalchemy import update
+from helpers import (
+    persisted_counts,
+    seed_document,
+    seed_existing_analysis,
+    stored_document,
+    stored_submissions,
+)
 
 from cv_engine.application.commands import (
-    AnalyzeCommand,
-    ApplyAnalysisDecisionsCommand,
+    ApproveDocumentCommand,
+    BuildFromAnalysisCommand,
+    CheckDocumentCommand,
+    ClaimAddition,
     DraftCommand,
-    IngestCommand,
+    IngestedApplication,
+    RenderCommand,
+    SubmissionCommand,
+    UpdateDocumentCommand,
+    UpdateSelectionCommand,
 )
-from cv_engine.application.queries import PreparationState, WorkingDraftState
-from cv_engine.application.state import ProjectionContext, derive_review_reasons
-from cv_engine.domain.contracts.analysis import JobAnalysis
-from cv_engine.domain.contracts.knowledge import FactStatus
-from cv_engine.domain.contracts.records import ValidationRunLineage
-from cv_engine.domain.contracts.validation import ValidationIssue, ValidationReport
-from cv_engine.domain.facts import FactStore
-from cv_engine.domain.knowledge import Knowledge
-from cv_engine.infrastructure.persistence.tables import applications
-from cv_engine.util import new_id, sha256_text, utc_now
+from cv_engine.application.errors import (
+    DOCUMENT_CHANGED,
+    REGENERATION_REQUIRED,
+    PreconditionFailed,
+    StateConflict,
+)
+from cv_engine.domain.document import ContentCheck, DocumentState, PreparationState
+from cv_engine.runtime.composition import Services
+from cv_engine.util import sha256_file, utc_now
 
 
-def test_application_projection_follows_the_preparation_lifecycle(services, knowledge) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="State Co",
-            target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
+def _detail(services: Services, application_id: str):
+    return services.queries.application_detail(application_id)
+
+
+def _draft(services: Services, application_id: str) -> str:
+    document = stored_document(services, application_id)
+    return services.drafts.draft(
+        DraftCommand(application_id=application_id, expected_document_hash=document.document_hash)
+    ).document_hash
+
+
+def _approve(services: Services, application_id: str, document_hash: str):
+    return services.draft_approval.approve_document(
+        ApproveDocumentCommand(
+            application_id=application_id, expected_document_hash=document_hash, client="web"
+        )
+    )
+
+
+def _render(services: Services, application_id: str, document_hash: str):
+    return services.rendering.render(
+        RenderCommand(application_id=application_id, expected_document_hash=document_hash)
+    )
+
+
+def _submit(services: Services, application_id: str, document_hash: str):
+    return services.submission.submit_application(
+        SubmissionCommand(
+            application_id=application_id,
+            expected_document_hash=document_hash,
+            submitted_at=utc_now(),
             client="web",
         )
     )
-    detail = services.queries.application_detail(ingested.application_id)
-    assert detail.preparation_state is PreparationState.NEEDS_ANALYSIS
-    assert detail.working_draft_state is WorkingDraftState.NONE
-    assert detail.active_job_snapshot_id == ingested.job_snapshot_id
-    assert detail.recommended_action == "analyze"
-    listed = services.queries.list_applications().items[0]
-    assert listed.id == ingested.application_id
-    assert listed.preparation_state is PreparationState.NEEDS_ANALYSIS
 
-    analysed = seed_analysis_for_command(
-        services,
-        AnalyzeCommand(
-            application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
-        ),
-    )
-    detail = services.queries.application_detail(ingested.application_id)
+
+def _ready(services: Services, company: str) -> tuple[str, str]:
+    ingested, _analysis = seed_document(services, company)
+    application_id = ingested.application_id
+    document_hash = _draft(services, application_id)
+    assert _approve(services, application_id, document_hash).passed
+    _render(services, application_id, document_hash)
+    return application_id, document_hash
+
+
+def test_document_journey_from_analysis_to_submission(
+    services: Services, deterministic_renderer, database_engine
+) -> None:
+    """§5.1 and §14: analysis creates the document; each step moves exactly one stamp.
+
+    The first analysis creates the document pinned to it with its deterministic
+    selection and no content. Draft, check, approve and render then reach Ready;
+    re-approving a current approval changes nothing; submitting copies what was sent
+    with a checksum per file, transitions to `applied` once, and leaves the document
+    exactly as it was.
+    """
+    ingested, analysis = seed_document(services, "Journey Co")
+    application_id = ingested.application_id
+    assert analysis.created_document and analysis.document_id is not None
+
+    document = stored_document(services, application_id)
+    assert document.analysis_id == analysis.analysis_id
+    assert document.content is None and document.selection.selected_fact_ids
+    detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.READY_TO_DRAFT
-    assert detail.active_analysis_id == analysed.analysis_id
-    assert detail.active_selection_plan_id == analysed.selection_plan_id
+    assert detail.document_state is DocumentState.DRAFT
     assert detail.recommended_action == "create_draft"
-    assert "create_selection_plan" in detail.available_actions
-    assert "edit_matching_configuration" in detail.available_actions
-
-    drafted = services.drafts.draft(
-        DraftCommand(
-            application_id=ingested.application_id,
-            job_analysis_id=analysed.analysis_id,
-            selection_plan_id=analysed.selection_plan_id,
-        )
+    assert {"create_draft", "update_selection", "propose_selection"} <= set(
+        detail.available_actions
     )
-    detail = services.queries.application_detail(ingested.application_id)
-    assert detail.preparation_state is PreparationState.READY_FOR_APPROVAL
-    assert detail.working_draft_state is WorkingDraftState.VALIDATED
-    assert detail.active_working_draft_id == drafted.working_draft_id
-    assert detail.recommended_action == "approve"
-    assert "approve" in detail.available_actions
-    assert "create_selection_plan" not in detail.available_actions
-    assert "edit_matching_configuration" in detail.available_actions
 
-    approved = approve_active_draft(services, ingested.application_id)
-    detail = services.queries.application_detail(ingested.application_id)
+    document_hash = _draft(services, application_id)
+    detail = _detail(services, application_id)
+    assert detail.document_hash == document_hash
+    assert detail.preparation_state is PreparationState.DRAFT_IN_PROGRESS
+    assert detail.content_check is ContentCheck.NONE
+    assert detail.recommended_action == "check"
+
+    # The preview needs no approval and writes nothing anywhere.
+    before = persisted_counts(database_engine)
+    preview = services.rendering.preview_document(application_id)
+    assert preview.document_hash == document_hash and preview.html
+    assert services.rendering.preview_document_pdf(application_id).pdf.startswith(b"%PDF")
+    assert persisted_counts(database_engine) == before
+
+    checked = services.draft_validation.check_document(
+        CheckDocumentCommand(application_id=application_id, expected_document_hash=document_hash)
+    )
+    assert checked.passed and checked.content_check is ContentCheck.PASSED
+    assert checked.document_hash == document_hash
+    assert _detail(services, application_id).recommended_action == "approve"
+
+    approved = _approve(services, application_id, document_hash)
+    assert approved.passed and approved.document_state is DocumentState.APPROVED
+    assert approved.approved_at is not None
+    before = persisted_counts(database_engine)
+    again = _approve(services, application_id, document_hash)
+    assert again.approved_at == approved.approved_at
+    assert persisted_counts(database_engine) == before
+    detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.APPROVED
-    assert detail.working_draft_state is WorkingDraftState.NONE
-    assert detail.latest_approved_revision_id == approved.revision_id
     assert detail.recommended_action == "render"
-    assert "edit_matching_configuration" in detail.available_actions
 
-    # An analysis with no plan offers the command that creates one.
-    reasons = _reasons_for(knowledge, _analysis_without_a_plan())
-    assert reasons["FACT_SELECTION_UNRESOLVED"] == ["create_selection_plan"]
+    rendered = _render(services, application_id, document_hash)
+    assert rendered.validation.passed and rendered.document_hash == document_hash
+    document = stored_document(services, application_id)
+    assert document.pdf_path is not None and document.html_path is not None
+    pdf = services.paths.root / document.pdf_path
+    assert pdf.is_file() and (services.paths.root / document.html_path).is_file()
+    detail = _detail(services, application_id)
+    assert detail.preparation_state is PreparationState.READY
+    assert detail.document_state is DocumentState.READY
+    assert detail.recommended_action == "submit"
+    assert "download_pdf" in detail.available_actions
+    delivery = services.rendering.export_recruiter_pdf(application_id)
+    assert delivery.document_hash == document_hash and delivery.size == pdf.stat().st_size
 
+    first = _submit(services, application_id, document_hash)
+    assert first.current_status == "applied" and first.event_id is not None
+    assert first.document_hash == document_hash and first.warnings == []
+    second = _submit(services, application_id, document_hash)
+    assert second.current_status == "applied" and second.event_id is None
 
-#: Requirements stated in prose that the scripted extractor does not read.
-#: The engine's honest answer is that it did not
-#: understand this posting - which is a blocker no decision settles.
-UNREADABLE_POSTING = (
-    "Account Executive.\n"
-    "You have experience closing complex B2B deals, understand enterprise "
-    "procurement, and negotiate with senior stakeholders.\n"
-)
+    sent = stored_submissions(services, application_id)
+    assert [item.submission_type for item in sent] == ["internal", "internal"]
+    for submission in sent:
+        assert submission.document_hash == document_hash
+        assert submission.content == document.content
+        assert submission.job_snapshot_id == ingested.job_snapshot_id
+        assert submission.pdf_path is not None and submission.pdf_sha256 is not None
+        assert submission.html_path is not None and submission.html_sha256 is not None
+        assert submission.pdf_sha256 == sha256_file(pdf)
+        assert services.payloads.verify_payload(submission.pdf_path, submission.pdf_sha256) == "ok"
+        assert (
+            services.payloads.verify_payload(submission.html_path, submission.html_sha256) == "ok"
+        )
+    assert len({submission.pdf_path for submission in sent}) == 2
+    assert stored_document(services, application_id) == document
+    assert _detail(services, application_id).preparation_state is PreparationState.READY
 
-
-@pytest.fixture
-def knowledge(
-    fact_store,
-    profile_store,
-    policy_store,
-    candidate_context,
-    presentation_store,
-    requirement_concepts,
-) -> Knowledge:
-    """The knowledge surface a projection runs against, without a database."""
-    return Knowledge(
-        facts=fact_store,
-        profiles=profile_store,
-        policies=policy_store,
-        candidate=candidate_context,
-        presentations=presentation_store,
-        requirement_concepts=requirement_concepts,
+    reconciled = services.maintenance.reconcile()
+    assert reconciled.problems == []
+    # Snapshot and provider records plus each immutable Submission file.
+    # Mutable document render attempts are not part of this inventory.
+    counts = persisted_counts(database_engine)
+    submission_files = sum(
+        path is not None for item in sent for path in (item.html_path, item.pdf_path)
+    )
+    assert reconciled.artifact_versions_checked == (
+        counts["job_snapshots"] + counts["artifact_versions"] + submission_files
     )
 
 
-def _reasons_for(knowledge: Knowledge, analysis: JobAnalysis) -> dict[str, list[str]]:
-    """The review reasons an analysis alone projects, and what each advertises.
+def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
+    services: Services, database_engine
+) -> None:
+    """§5.3, §5.6 and §7 race rows: an edit changes the basis, so nothing is reopened.
 
-    `derive_review_reasons` is pure, so the analysis is handed to it directly.
-    Reaching it through ingest and analyze would test which reasons the
-    classifier produces rather than what the projection does with them.
+    An unsupported free-text line is saved as pending, returns the approved document
+    to draft and outdates its check without any invalidating write, and blocks
+    approval through the fresh check approve runs itself. A stale token writes
+    nothing; a selection change needing wording judgment is refused. Removing the
+    line lets the document be approved again.
     """
-    context = ProjectionContext(
-        application={"current_status": "saved"},
-        active_job_snapshot_id="snapshot",
-        active_analysis_id="analysis",
-        active_analysis=analysis,
-        active_selection_plan=None,
-        draft_selection_plan=None,
-        active_working_draft=None,
-        latest_validation=None,
-        approved_revisions=(),
-        ready_revision_ids=frozenset(),
-        knowledge=knowledge,
-        today=date.today(),
-    )
-    return {
-        reason.code: reason.allowed_resolution_actions
-        for reason in derive_review_reasons(context, [])
-    }
+    ingested, _analysis = seed_document(services, "Editor Co")
+    application_id = ingested.application_id
+    document_hash = _draft(services, application_id)
+    assert _approve(services, application_id, document_hash).passed
+    content = stored_document(services, application_id).content
+    assert content is not None
+    section = content.sections[0].name
 
-
-def _analysis_without_a_plan() -> JobAnalysis:
-    return JobAnalysis.model_validate(
-        {
-            "track": "sales",
-            "profile": "account-executive",
-            "emphasis": "new-business",
-            "language": "en",
-            "summary": "projection fixture",
-        }
-    )
-
-
-def test_voluntary_matching_change_stales_the_existing_draft(drafted_application) -> None:
-    setup = drafted_application("Voluntary Matching Draft Co")
-    before = setup.services.queries.application_detail(setup.application_id)
-    working_id = before.active_working_draft_id
-
-    changed = setup.services.analysis.apply_analysis_decisions(
-        ApplyAnalysisDecisionsCommand(
-            application_id=setup.application_id,
-            job_analysis_id=before.active_analysis_id or "",
-            expected_analysis_id=before.active_analysis_id or "",
-            expected_selection_plan_id=before.active_selection_plan_id,
-            emphasis_override="new-business",
+    edited = services.drafts.update_document(
+        UpdateDocumentCommand(
+            application_id=application_id,
+            expected_document_hash=document_hash,
+            claim_additions=[ClaimAddition(section=section, text="Invented a claim nobody made.")],
         )
     )
-
-    after = setup.services.queries.application_detail(setup.application_id)
-    assert changed.created_analysis is False
-    assert changed.job_analysis_id == before.active_analysis_id
-    assert after.active_working_draft_id == working_id
-    assert after.working_draft_state is WorkingDraftState.STALE
-    assert after.stale_reasons[0].code == "SELECTION_PLAN_REPLACED"
-    assert after.application.emphasis == "new-business"
-
-
-def test_voluntary_matching_change_keeps_ready_immutable_and_historical(
-    ready_application,
-) -> None:
-    setup = ready_application("Voluntary Matching Ready Co")
-    before = setup.services.queries.application_detail(setup.application_id)
-
-    changed = setup.services.analysis.apply_analysis_decisions(
-        ApplyAnalysisDecisionsCommand(
-            application_id=setup.application_id,
-            job_analysis_id=before.active_analysis_id or "",
-            expected_analysis_id=before.active_analysis_id or "",
-            expected_selection_plan_id=before.active_selection_plan_id,
-            emphasis_override="new-business",
-        )
-    )
-
-    after = setup.services.queries.application_detail(setup.application_id)
-    assert changed.created_analysis is False
-    assert changed.job_analysis_id == before.active_analysis_id
-    assert after.preparation_state is PreparationState.READY_TO_DRAFT
-    assert after.latest_ready_revision_id == setup.approved.revision_id
-    assert {warning.code for warning in after.warnings} == {
-        "READY_REVISION_FOR_OLDER_SELECTION_PLAN"
-    }
-
-
-def test_new_snapshot_makes_ready_historical_and_requires_analysis(
-    ready_application, transaction_manager, job_snapshot_store
-) -> None:
-    setup = ready_application("Historical Ready State Co")
-    snapshot_id = new_id()
-    text = "A changed Account Manager role with a new territory."
-    payload = setup.services.payloads.commit_snapshot(setup.application_id, snapshot_id, text)
-    with transaction_manager.write() as tx:
-        job_snapshot_store.insert_next_snapshot(
-            tx,
-            application_id=setup.application_id,
-            payload_path=payload.reference,
-            source_hash=payload.sha256,
-            normalized_hash=sha256_text(text.lower()),
-            snapshot_id=snapshot_id,
-            source_url=None,
-            source_metadata={},
-            captured_at=utc_now(),
-        )
-
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert detail.preparation_state is PreparationState.NEEDS_ANALYSIS
-    assert detail.latest_ready_revision_id == setup.approved.revision_id
-    assert detail.active_analysis_id is None
-    assert {warning.code for warning in detail.warnings} == {"READY_REVISION_FOR_OLDER_SNAPSHOT"}
-
-
-def test_a_parallel_draft_keeps_ready_until_a_new_analysis_stales_it(
-    ready_application,
-) -> None:
-    """The Ready milestone survives a new draft for the same context, and a new
-    analysis stales that draft without erasing Ready history."""
-    setup = ready_application("Historical Analysis State Co")
-    before = setup.services.queries.application_detail(setup.application_id)
-    assert before.preparation_state is PreparationState.READY
-    assert before.latest_ready_revision_id == setup.approved.revision_id
-    assert before.newer_draft_in_progress is False
-    assert "edit_matching_configuration" in before.available_actions
-
-    setup.services.drafts.draft(
-        DraftCommand(
-            application_id=setup.application_id,
-            job_analysis_id=setup.analysis_id,
-            selection_plan_id=setup.selection_plan_id,
-        )
-    )
-    parallel = setup.services.queries.application_detail(setup.application_id)
-    assert parallel.preparation_state is PreparationState.READY
-    assert parallel.working_draft_state is WorkingDraftState.VALIDATED
-    assert parallel.latest_ready_revision_id == setup.approved.revision_id
-    assert parallel.newer_draft_in_progress is True
-
-    replacement = seed_analysis_for_command(
-        setup.services,
-        AnalyzeCommand(
-            application_id=setup.application_id,
-            job_snapshot_id=setup.snapshot_id,
-        ),
-    )
-
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert detail.preparation_state is PreparationState.READY_TO_DRAFT
-    assert detail.working_draft_state is WorkingDraftState.STALE
-    assert detail.active_analysis_id == replacement.analysis_id
-    assert [reason.code for reason in detail.stale_reasons[:2]] == [
-        "ANALYSIS_REPLACED",
-        "SELECTION_PLAN_REPLACED",
-    ]
-    assert detail.latest_ready_revision_id == setup.approved.revision_id
-    assert {warning.code for warning in detail.warnings} == {"READY_REVISION_FOR_OLDER_ANALYSIS"}
-
-
-def test_failed_exact_validation_drives_state_and_approve_blocker(
-    drafted_application,
-    transaction_manager,
-    draft_lifecycle_store,
-    application_projection_reader,
-    validation_store,
-) -> None:
-    setup = drafted_application("Failed Validation State Co")
-    with transaction_manager.read() as tx:
-        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
-    with transaction_manager.read() as tx:
-        analysis = application_projection_reader.analysis(tx, setup.analysis_id)
-    knowledge = setup.services.knowledge.load()
-    with transaction_manager.write() as tx:
-        validation_store.record_validation(
-            tx,
-            setup.application_id,
-            "pre-render",
-            ValidationReport.from_findings(
-                groups={"content": False},
-                issues=[ValidationIssue(group="content", code="test-failure", message="failed")],
-            ),
-            lineage=ValidationRunLineage(
-                working_draft_id=working.id,
-                edit_version=working.edit_version,
-                content_hash=working.content_hash,
-                job_snapshot_id=analysis["job_snapshot_id"],
-                job_analysis_id=working.job_analysis_id,
-                selection_plan_id=working.selection_plan_id,
-                knowledge_context_hash=knowledge.document_context_hash(),
-                validator_versions={"test": "1"},
-            ),
-        )
-
-    detail = setup.services.queries.application_detail(setup.application_id)
+    assert edited.document_hash != document_hash
+    assert edited.document_state is DocumentState.DRAFT
+    assert edited.content_check is ContentCheck.OUTDATED
+    assert len(edited.pending_claim_ids) == 1
+    detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.DRAFT_IN_PROGRESS
-    assert detail.working_draft_state is WorkingDraftState.VALIDATION_FAILED
-    blocked = {item.action: item.reasons for item in detail.blocked_actions}
-    assert blocked["approve"] == ["VALIDATION_FAILED"]
+    assert detail.recommended_action == "check"
 
-
-def test_edit_after_validation_is_a_reason_but_not_source_staleness(
-    drafted_application, transaction_manager, draft_lifecycle_store
-) -> None:
-    setup = drafted_application("Edited Validation State Co")
-    with transaction_manager.read() as tx:
-        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
-    edited_source = working.source.model_copy(update={"content_hash": "edited-content"})
-    with transaction_manager.write() as tx:
-        draft_lifecycle_store.update_working_draft(
-            tx,
-            working.id,
-            working.edit_version,
-            edited_source,
-        )
-
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert detail.preparation_state is PreparationState.DRAFT_IN_PROGRESS
-    assert detail.working_draft_state is WorkingDraftState.EDITING
-    assert detail.primary_stale_reason == "DRAFT_EDITED_AFTER_VALIDATION"
-    assert detail.recommended_action == "validate"
-
-
-def test_only_knowledge_the_draft_depends_on_stales_it(
-    drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager, draft_lifecycle_store
-) -> None:
-    """A canonical fact the draft does not reference moves nothing; a changed
-    Profile or policy version is a source-stale reason."""
-    setup = drafted_application("Knowledge Change State Co")
-    knowledge = setup.services.knowledge.load()
-    with transaction_manager.read() as tx:
-        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
-    referenced = {
-        fact_id
-        for claim in (
-            working.source.headline,
-            *working.source.contacts,
-            *(claim for section in working.source.sections for claim in section.claims),
-        )
-        for fact_id in claim.fact_ids
-    }
-    unrelated_id = next(fact_id for fact_id in knowledge.facts.facts if fact_id not in referenced)
-    facts = dict(knowledge.facts.facts)
-    facts[unrelated_id] = facts[unrelated_id].model_copy(
-        update={"meaning": f"{facts[unrelated_id].meaning} (changed)"}
+    before = persisted_counts(database_engine)
+    stale = UpdateDocumentCommand(
+        application_id=application_id,
+        expected_document_hash=document_hash,
+        claim_removals=edited.pending_claim_ids,
     )
-    changed_facts = FactStore(facts, dict(knowledge.facts.source_versions))
-    assert changed_facts.version != knowledge.facts.version
-    changed = replace(knowledge, facts=changed_facts)
-    monkeypatch.setattr(setup.services.knowledge, "load", lambda: changed)
-
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert "FACT_CHANGED" not in {reason.code for reason in detail.stale_reasons}
-    assert detail.working_draft_state is WorkingDraftState.VALIDATED
-
-    moved = setup.services.knowledge.load()
-    moved.profiles.version = "changed-profile-version"
-    moved.policies.version = "changed-policy-version"
-
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert detail.working_draft_state is WorkingDraftState.STALE
-    assert {reason.code for reason in detail.stale_reasons} >= {
-        "PROFILE_CHANGED",
-        "POLICY_CHANGED",
-    }
-
-
-def test_deleted_fact_dependency_blocks_review_and_warns_the_active_draft(
-    drafted_application, monkeypatch: pytest.MonkeyPatch, transaction_manager, draft_lifecycle_store
-) -> None:
-    """Mirrors `test_only_knowledge_the_draft_depends_on_stales_it`,
-    but the changed fact is one the active draft actually depends on: unlike a
-    generic change, a deletion of a *referenced* fact must produce the
-    dedicated blocking review reason (state-and-use-cases.md §7) and the
-    non-blocking warning (§8), not just staleness.
-    """
-    setup = drafted_application("Deleted Fact State Co")
-    knowledge = setup.services.knowledge.load()
-    with transaction_manager.read() as tx:
-        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
-    referenced = {
-        fact_id
-        for claim in (
-            working.source.headline,
-            *working.source.contacts,
-            *(claim for section in working.source.sections for claim in section.claims),
+    with pytest.raises(StateConflict) as conflict:
+        services.drafts.update_document(stale)
+    assert conflict.value.code == DOCUMENT_CHANGED
+    current = stored_document(services, application_id)
+    with pytest.raises(PreconditionFailed) as refused:
+        services.selection.update_selection(
+            UpdateSelectionCommand(
+                application_id=application_id,
+                expected_document_hash=edited.document_hash,
+                emphasis_override=current.selection.emphasis.value,
+            )
         )
-        for fact_id in claim.fact_ids
-    }
-    deleted_id = next(iter(referenced))
-    facts = dict(knowledge.facts.facts)
-    facts[deleted_id] = facts[deleted_id].model_copy(update={"status": FactStatus.DELETED})
-    changed_facts = FactStore(facts, dict(knowledge.facts.source_versions))
-    changed = replace(knowledge, facts=changed_facts)
-    monkeypatch.setattr(setup.services.knowledge, "load", lambda: changed)
+    assert refused.value.code == REGENERATION_REQUIRED
+    assert persisted_counts(database_engine) == before
+    assert stored_document(services, application_id) == current
 
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert detail.preparation_state is PreparationState.NEEDS_REVIEW
-    assert "FACT_DELETED_REQUIRES_RESOLUTION" in {reason.code for reason in detail.review_reasons}
-    assert "FACT_DELETED" in {warning.code for warning in detail.warnings}
+    blocked = _approve(services, application_id, edited.document_hash)
+    assert not blocked.passed and blocked.approved_at is None
+    assert blocked.document_state is DocumentState.DRAFT
+    assert blocked.content_check is ContentCheck.FAILED
+    detail = _detail(services, application_id)
     assert "approve" not in detail.available_actions
+    assert detail.recommended_action is None
 
-
-def test_pending_claim_recommends_its_resolution_action(
-    drafted_application, transaction_manager, draft_lifecycle_store
-) -> None:
-    setup = drafted_application("Pending Review State Co")
-    with transaction_manager.read() as tx:
-        working = draft_lifecycle_store.active_working_draft(tx, setup.application_id)
-    section = working.source.sections[0]
-    claim = section.claims[0]
-    pending = claim.model_copy(
-        update={
-            "text": "An unsupported manual statement.",
-            "text_hash": sha256_text("An unsupported manual statement."),
-            "fact_ids": [],
-            "claim_type": "pending",
-            "pending_reason": "manual wording has no canonical support",
-        }
+    resolved = services.drafts.update_document(
+        stale.model_copy(update={"expected_document_hash": edited.document_hash})
     )
-    changed_section = section.model_copy(update={"claims": [pending, *section.claims[1:]]})
-    changed_source = working.source.model_copy(
-        update={
-            "sections": [changed_section, *working.source.sections[1:]],
-            "content_hash": "pending-content",
-        }
-    )
-    with transaction_manager.write() as tx:
-        draft_lifecycle_store.update_working_draft(
-            tx,
-            working.id,
-            working.edit_version,
-            changed_source,
-        )
-
-    detail = setup.services.queries.application_detail(setup.application_id)
-    assert detail.preparation_state is PreparationState.NEEDS_REVIEW
-    assert {reason.code for reason in detail.review_reasons} == {"PENDING_FACT_REQUIRES_RESOLUTION"}
-    assert detail.recommended_action == "confirm_and_use_fact"
-    assert "confirm_and_use_fact" in detail.available_actions
+    assert resolved.content_check is ContentCheck.OUTDATED
+    approved = _approve(services, application_id, resolved.document_hash)
+    assert approved.passed and approved.document_state is DocumentState.APPROVED
 
 
-def test_projection_queries_share_one_database_snapshot(
-    services, transaction_manager, application_projection_reader, database_engine, monkeypatch
+def test_a_fact_edit_by_hand_moves_the_basis_without_a_write(
+    services: Services, project_root: Path, database_engine
 ) -> None:
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Snapshot Co", target_role="Developer", job_text="Python role", client="web"
+    """§3 and §6: a dependent fact changed in `base/` outdates every stamp on read.
+
+    Nothing is written to the document; restoring the fact restores the approval,
+    because the approval was only ever a stamp compared with a computed basis.
+    """
+    ingested, _analysis = seed_document(services, "Basis Co")
+    application_id = ingested.application_id
+    document_hash = _draft(services, application_id)
+    assert _approve(services, application_id, document_hash).passed
+    document = stored_document(services, application_id)
+    assert document.content is not None
+    fact_id = next(
+        fact_id
+        for section in document.content.sections
+        for claim in section.claims
+        for fact_id in claim.fact_ids
+    )
+    source = next(
+        path
+        for path in sorted((project_root / "base").glob("*.json"))
+        if any(
+            item.get("fact_id") == fact_id
+            for item in json.loads(path.read_text(encoding="utf-8")).get("facts", [])
         )
     )
-    with transaction_manager.read() as tx:
-        before = application_projection_reader.application(tx, ingested.application_id)
-        with database_engine.begin() as writer:
-            writer.execute(
-                update(applications)
-                .where(applications.c.id == ingested.application_id)
-                .values(next_action="Call recruiter")
-            )
-        during = application_projection_reader.application(tx, ingested.application_id)
+    original = source.read_text(encoding="utf-8")
+    data = json.loads(original)
+    fact = next(item for item in data["facts"] if item["fact_id"] == fact_id)
+    fact["meaning"] = f"{fact['meaning']} (edited by hand)"
+    before = persisted_counts(database_engine)
 
-    with transaction_manager.read() as tx:
-        after = application_projection_reader.application(tx, ingested.application_id)
-    assert before["next_action"] is None
-    assert during["next_action"] is None
-    assert after["next_action"] == "Call recruiter"
+    source.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    detail = _detail(services, application_id)
+    assert detail.document_state is DocumentState.DRAFT
+    assert detail.content_check is ContentCheck.OUTDATED
+    assert detail.document_hash == document_hash
 
-    original = type(application_projection_reader).application
+    source.write_text(original, encoding="utf-8")
+    assert _detail(services, application_id).document_state is DocumentState.APPROVED
+    assert persisted_counts(database_engine) == before
+    assert stored_document(services, application_id) == document
 
-    def change_after_identity_read(reader, tx, application_id):
-        record = original(reader, tx, application_id)
-        with database_engine.begin() as writer:
-            writer.execute(
-                update(applications)
-                .where(applications.c.id == application_id)
-                .values(next_action="Changed during projection")
-            )
-        return record
 
-    monkeypatch.setattr(
-        type(application_projection_reader), "application", change_after_identity_read
+def test_a_newer_analysis_warns_until_build_from_analysis_repins(
+    services: Services, deterministic_renderer
+) -> None:
+    """§5.5: a later analysis never touches the document; only the explicit re-pin does.
+
+    The Ready document stays Ready and submittable with `DOCUMENT_ON_OLDER_ANALYSIS`.
+    `build_from_analysis` then replaces the analysis and selection, drops the content
+    and every stamp, and deletes the old rendered files, while the Submission keeps
+    its own copies.
+    """
+    application_id, document_hash = _ready(services, "Newer Co")
+    ready = stored_document(services, application_id)
+    snapshot_id = services.analysis.document_source(application_id).job_snapshot_id
+    newer = seed_existing_analysis(
+        services,
+        IngestedApplication(application_id=application_id, job_snapshot_id=snapshot_id),
     )
-    detail = services.queries.application_detail(ingested.application_id)
-    assert detail.application.next_action == "Call recruiter"
+    assert not newer.created_document and newer.document_id == ready.id
+
+    assert stored_document(services, application_id) == ready
+    detail = _detail(services, application_id)
+    assert detail.preparation_state is PreparationState.READY
+    assert detail.latest_analysis_id == newer.analysis_id
+    assert detail.document_analysis_id == ready.analysis_id
+    assert "DOCUMENT_ON_OLDER_ANALYSIS" in {warning.code for warning in detail.warnings}
+    assert "build_from_analysis" in detail.available_actions
+
+    submitted = _submit(services, application_id, document_hash)
+    assert submitted.warnings == ["DOCUMENT_ON_OLDER_ANALYSIS"]
+
+    rebuilt = services.selection.build_from_analysis(
+        BuildFromAnalysisCommand(
+            application_id=application_id,
+            analysis_id=newer.analysis_id,
+            expected_document_hash=document_hash,
+        )
+    )
+    assert rebuilt.document_state is DocumentState.DRAFT
+    document = stored_document(services, application_id)
+    assert document.analysis_id == newer.analysis_id and document.content is None
+    assert (
+        document.checked_basis,
+        document.approved_basis,
+        document.rendered_basis,
+        document.html_path,
+        document.pdf_path,
+        document.last_render_error,
+    ) == (None,) * 6
+    assert ready.pdf_path is not None and ready.html_path is not None
+    assert not (services.paths.root / ready.pdf_path).exists()
+    assert not (services.paths.root / ready.html_path).exists()
+    detail = _detail(services, application_id)
+    assert detail.preparation_state is PreparationState.READY_TO_DRAFT
+    assert "DOCUMENT_ON_OLDER_ANALYSIS" not in {warning.code for warning in detail.warnings}
+
+    (sent,) = stored_submissions(services, application_id)
+    assert sent.content == ready.content
+    assert sent.pdf_path is not None and sent.pdf_sha256 is not None
+    assert services.payloads.verify_payload(sent.pdf_path, sent.pdf_sha256) == "ok"
+
+
+def test_profile_and_policy_changes_warn_without_changing_basis(approved_application, project_root):
+    """§3/§8: built_with changes are warnings; the basis is document plus facts."""
+    from cv_engine.application.services.documents import current_basis
+
+    setup = approved_application("Build Warnings")
+    services, app_id = setup
+    document = stored_document(services, app_id)
+    before = current_basis(document, services.knowledge.load())
+    profile = project_root / "profiles/sales/account-manager.yaml"
+    payload = json.loads(profile.read_text())
+    payload["version"] = "wave2-profile-change"
+    profile.write_text(json.dumps(payload))
+    knowledge = services.knowledge.load()
+    assert current_basis(document, knowledge) == before
+    detail = services.queries.application_detail(app_id)
+    assert "PROFILE_CHANGED" in {w.code for w in detail.warnings}
+    assert detail.document_state is DocumentState.APPROVED
+    assert stored_document(services, app_id) == document
+    policy = project_root / "config/emphasis.json"
+    payload = json.loads(policy.read_text())
+    payload["policy_version"] = "wave2-policy-change"
+    policy.write_text(json.dumps(payload))
+    assert current_basis(document, services.knowledge.load()) == before
+    detail = services.queries.application_detail(app_id)
+    assert {"PROFILE_CHANGED", "POLICY_CHANGED"} <= {w.code for w in detail.warnings}
+    assert detail.document_state is DocumentState.APPROVED
+    assert stored_document(services, app_id) == document
+
+
+def test_analysis_decisions_refuse_to_discard_manual_wording(drafted_application):
+    from helpers import edit_document_claim
+
+    from cv_engine.application.commands import ApplyAnalysisDecisionsCommand
+
+    setup = drafted_application("Decisions Preserve Wording")
+    services, app_id = setup
+    document = stored_document(services, app_id)
+    assert document.content is not None
+    claim = document.content.sections[0].claims[0]
+    edited = edit_document_claim(
+        services, app_id, claim.claim_id, list(claim.fact_ids), text="Unsupported wording"
+    )
+    before = stored_document(services, app_id)
+    with pytest.raises(PreconditionFailed) as error:
+        services.analysis.apply_analysis_decisions(
+            ApplyAnalysisDecisionsCommand(
+                application_id=app_id,
+                job_analysis_id=document.analysis_id,
+                expected_analysis_id=document.analysis_id,
+                expected_document_hash=edited.document_hash,
+                emphasis_override=document.selection.emphasis.value,
+            )
+        )
+    assert error.value.code == REGENERATION_REQUIRED
+    assert stored_document(services, app_id) == before

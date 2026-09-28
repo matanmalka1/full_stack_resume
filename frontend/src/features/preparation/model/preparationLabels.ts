@@ -1,14 +1,5 @@
-import type { PreparationState, WorkingDraftState } from "@/api/contracts";
-import {
-  BadgeCheck,
-  CircleCheck,
-  Clock,
-  FileCheck2,
-  FilePen,
-  FilePlus2,
-  FileSearch,
-  type LucideIcon,
-} from "lucide-react";
+import type { ContentCheck, DocumentState, PreparationState } from "@/api/contracts";
+import { BadgeCheck, CircleCheck, Clock, FilePen, FilePlus2, type LucideIcon } from "lucide-react";
 
 import type { Tone } from "@/ui/tone";
 
@@ -16,10 +7,8 @@ import type { Tone } from "@/ui/tone";
    frontend build instead of reaching the screen untranslated. */
 export const preparationStateLabels: Record<PreparationState, string> = {
   needs_analysis: "ממתין לניתוח המשרה",
-  needs_review: "ממתין להחלטה בסקירה",
   ready_to_draft: "מוכן ליצירת טיוטה",
   draft_in_progress: "טיוטה בעבודה",
-  ready_for_approval: "מוכן לאישור",
   approved: "אושר, ממתין ליצירת הקובץ",
   ready: "קורות החיים מוכנים",
 };
@@ -28,28 +17,43 @@ export const preparationStateLabels: Record<PreparationState, string> = {
    the badge already carries. */
 export const preparationStateTones: Record<PreparationState, Tone> = {
   needs_analysis: "neutral",
-  needs_review: "warning",
   ready_to_draft: "neutral",
   draft_in_progress: "neutral",
-  ready_for_approval: "neutral",
   approved: "success",
   ready: "success",
 };
 
-export const workingDraftStateLabels: Record<WorkingDraftState, string> = {
-  none: "אין טיוטה פעילה",
-  editing: "טיוטה בעריכה",
-  validation_failed: "האימות נכשל",
-  validated: "הטיוטה עברה אימות",
-  stale: "הטיוטה אינה מעודכנת מול המקורות",
+/* §5: the document's approval stamps, restated on their own. Derived by the server from
+   the basis on every read - never here - so "approved" disappears the moment an edit or a
+   fact the document depends on changes, without any command having reopened it. */
+export const documentStateLabels: Record<DocumentState, string> = {
+  none: "אין מסמך",
+  draft: "טיוטה",
+  approved: "אושר",
+  ready: "מוכן למסירה",
 };
 
-export const workingDraftStateTones: Record<WorkingDraftState, Tone> = {
+export const documentStateTones: Record<DocumentState, Tone> = {
   none: "neutral",
-  editing: "neutral",
-  validation_failed: "blocker",
-  validated: "success",
-  stale: "warning",
+  draft: "neutral",
+  approved: "success",
+  ready: "success",
+};
+
+/* §5: whether the stored content report still describes the document. An outdated report
+   is still shown - as outdated - and authorizes nothing. */
+export const contentCheckLabels: Record<ContentCheck, string> = {
+  none: "טרם נבדק",
+  outdated: "הבדיקה אינה מעודכנת",
+  failed: "הבדיקה נכשלה",
+  passed: "הבדיקה עברה",
+};
+
+export const contentCheckTones: Record<ContentCheck, Tone> = {
+  none: "neutral",
+  outdated: "warning",
+  failed: "blocker",
+  passed: "success",
 };
 
 /* Hebrew names for the actions the projection reports. Deliberately a partial map over
@@ -60,18 +64,19 @@ export const workingDraftStateTones: Record<WorkingDraftState, Tone> = {
 const actionLabels: Record<string, string> = {
   analyze: "ניתוח המשרה",
   edit_matching_configuration: "עריכת הגדרות ההתאמה",
-  create_selection_plan: "בחירת העובדות",
+  build_from_analysis: "בנייה מחדש מהניתוח החדש",
+  update_selection: "בחירת העובדות",
+  propose_selection: "הצעת בחירה מ־AI",
   confirm_and_use_fact: "אישור עובדה ושימוש בה",
   create_draft: "יצירת טיוטה",
-  update_working_draft: "עריכת הטיוטה",
-  apply_selection_change: "שינוי בחירת העובדות",
+  edit: "עריכת הטיוטה",
   regenerate_section: "יצירה מחדש של פרק",
   regenerate_claim: "יצירה מחדש של טענה",
-  archive_working_draft: "העברת הטיוטה לארכיון",
-  replace_working_draft: "החלפת הטיוטה",
-  validate: "אימות הטיוטה",
+  check: "בדיקת הטיוטה",
   approve: "אישור הגרסה",
   render: "יצירת קובץ קורות החיים",
+  submit: "רישום ההגשה",
+  download_pdf: "הורדת ה־PDF",
 };
 
 export const actionLabel = (action: string): string => actionLabels[action] ?? action;
@@ -83,18 +88,19 @@ export const actionLabel = (action: string): string => actionLabels[action] ?? a
 const actionDescriptions: Record<string, string> = {
   analyze: "קריאת דרישות המשרה ובדיקה אילו עובדות מאושרות עונות עליהן.",
   edit_matching_configuration: "עדכון הגדרות ההתאמה לפני בחירת העובדות.",
-  create_selection_plan: "בחירת העובדות המאושרות שייכנסו לקורות החיים עבור המשרה.",
+  build_from_analysis: "קיים ניתוח חדש יותר מזה שהמסמך בנוי עליו, ואפשר לבנות ממנו את המסמך מחדש.",
+  update_selection: "בחירת העובדות המאושרות שייכנסו לקורות החיים עבור המשרה.",
+  propose_selection: "בקשה מ־AI להציע אילו עובדות ייכנסו לקורות החיים.",
   confirm_and_use_fact: "עובדה ממתינה לאישור לפני שאפשר להשתמש בה בטיוטה.",
   create_draft: "יצירת טיוטה ראשונה מהעובדות שנבחרו.",
-  update_working_draft: "הטיוטה פתוחה לעריכה ועדיין לא עברה אימות.",
-  apply_selection_change: "בחירת העובדות השתנתה, וצריך להחיל את השינוי על הטיוטה.",
+  edit: "הטיוטה פתוחה לעריכה ועדיין לא אושרה.",
   regenerate_section: "יצירה מחדש של פרק בטיוטה מאותן עובדות.",
   regenerate_claim: "יצירה מחדש של טענה בטיוטה מאותה עובדה.",
-  archive_working_draft: "הטיוטה כבר לא תואמת להקשר, ואפשר לשמור אותה בארכיון.",
-  replace_working_draft: "הטיוטה כבר לא תואמת להקשר, ואפשר להחליף אותה בטיוטה חדשה.",
-  validate: "בדיקת הטיוטה מול העובדות לפני האישור.",
-  approve: "הטיוטה עברה אימות וממתינה לאישור שלך.",
+  check: "בדיקת הטיוטה מול העובדות לפני האישור.",
+  approve: "הטיוטה מוכנה לבדיקה ולאישור שלך.",
   render: "הגרסה אושרה, ונשאר להפיק ממנה את קובץ קורות החיים.",
+  submit: "קורות החיים מוכנים, ונשאר לרשום שההגשה בוצעה.",
+  download_pdf: "קובץ ה־PDF של קורות החיים מוכן להורדה.",
 };
 
 export const actionDescription = (action: string): string | null => actionDescriptions[action] ?? null;
@@ -107,24 +113,22 @@ export const actionDescription = (action: string): string | null => actionDescri
    codes that mean "not there yet" are deliberately absent here: an action the workflow
    has not reached is not offered at all rather than offered and explained.
 
-   What is left is the blocker that does not follow from the stage: a draft that exists
-   but failed validation, an approval waiting on a validation run. A code with no sentence
-   here disables the control without a tooltip rather than showing the reader a
-   `SCREAMING_SNAKE` identifier. */
+   What is left is the blocker that does not follow from the stage: content that failed
+   its check, a review reason that shuts approval. A code with no sentence here disables
+   the control without a tooltip rather than showing the reader a `SCREAMING_SNAKE`
+   identifier. */
 const blockedReasonLabels: Record<string, string> = {
-  VALIDATION_REQUIRED: "צריך להריץ אימות קודם.",
-  VALIDATION_FAILED: "האימות נכשל. צריך לתקן ולאמת מחדש.",
-  VALIDATION_STALE: "הטיוטה השתנתה מאז האימות.",
-  DRAFT_EDITED_AFTER_VALIDATION: "הטיוטה השתנתה מאז האימות.",
+  VALIDATION_FAILED: "הבדיקה נכשלה. צריך לתקן ולבדוק מחדש.",
   PENDING_FACT_REQUIRES_RESOLUTION: "יש טענה בלי עובדה מאושרת מאחוריה.",
+  FACT_DELETED_REQUIRES_RESOLUTION: "הטיוטה נשענת על עובדה שנמחקה.",
   KNOWLEDGE_RECONCILIATION_REQUIRED: "צריך להשלים התאמת עובדות.",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "צריך לאשר שזו מועמדות כפולה.",
 };
 
 export const blockedReasonLabel = (reason: string): string | null => blockedReasonLabels[reason] ?? null;
 
-/* The title a review or staleness reason is shown under, replacing the backend's own
-   `message` paragraph.
+/* The title a review reason is shown under, replacing the backend's own `message`
+   paragraph.
 
    The server's sentence stays in the payload - it is still what telemetry and a bug
    report need - but it is not what the screen renders: it is written to be complete
@@ -135,40 +139,33 @@ export const blockedReasonLabel = (reason: string): string | null => blockedReas
    missing translation shown to the wrong audience. */
 const reasonTitles: Record<string, string> = {
   PENDING_FACT_REQUIRES_RESOLUTION: "טענה בלי עובדה מאושרת",
+  FACT_DELETED_REQUIRES_RESOLUTION: "הטיוטה נשענת על עובדה שנמחקה",
   KNOWLEDGE_RECONCILIATION_REQUIRED: "נדרשת התאמת עובדות",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "מועמדות כפולה",
-  FACT_SELECTION_UNRESOLVED: "בחירת העובדות לא הוכרעה",
-  JOB_SNAPSHOT_CHANGED: "נוסח המשרה השתנה",
-  ANALYSIS_REPLACED: "הניתוח הוחלף",
-  SELECTION_PLAN_REPLACED: "בחירת העובדות הוחלפה",
-  FACT_CHANGED: "עובדה שמאחורי הטיוטה השתנתה",
-  PROFILE_CHANGED: "הפרופיל השתנה",
-  POLICY_CHANGED: "כללי הבדיקה השתנו",
-  SOURCE_CHANGED: "המקור השתנה",
-  DRAFT_EDITED_AFTER_VALIDATION: "הטיוטה השתנתה מאז האימות",
-  VALIDATION_STALE: "האימות אינו מעודכן",
 };
 
 export const reasonTitle = (code: string, fallback: string): string => reasonTitles[code] ?? fallback;
 
-/* Warnings carry the same problem and the same answer. */
+/* Warnings carry the same problem and the same answer (§8). None of them disables
+   approval; each says what moved and leaves the document as it is. */
 const warningTitles: Record<string, string> = {
   NEXT_ACTION_OVERDUE: "הפעולה הבאה באיחור",
+  DOCUMENT_ON_OLDER_ANALYSIS: "המסמך בנוי על ניתוח ישן יותר",
+  PROFILE_CHANGED: "הפרופיל השתנה מאז שהמסמך נבנה",
+  POLICY_CHANGED: "כללי הבחירה השתנו מאז שהמסמך נבנה",
   FACT_SUPERSEDED: "עובדה בטיוטה הוחלפה בגרסה חדשה יותר",
-  READY_REVISION_FOR_OLDER_SNAPSHOT: "הגרסה המוכנה שייכת לנוסח משרה ישן",
-  READY_REVISION_FOR_OLDER_ANALYSIS: "הגרסה המוכנה שייכת לניתוח ישן",
-  READY_REVISION_FOR_OLDER_SELECTION_PLAN: "הגרסה המוכנה שייכת לתוכנית בחירה ישנה",
+  FACT_KNOWN_INCORRECT: "עובדה בטיוטה סומנה כשגויה",
 };
 
 export const warningTitle = (code: string): string => warningTitles[code] ?? "כדאי לשים לב";
 
 const warningDetails: Record<string, string> = {
-  READY_REVISION_FOR_OLDER_SNAPSHOT:
-    "הגרסה המוכנה שייכת לתצלום משרה ישן יותר מהתצלום הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה.",
-  READY_REVISION_FOR_OLDER_ANALYSIS:
-    "הגרסה המוכנה שייכת לניתוח ישן יותר מהניתוח הפעיל. הקבצים שלה נשארים תקינים וזמינים להורדה.",
-  READY_REVISION_FOR_OLDER_SELECTION_PLAN:
-    "הגרסה המוכנה שייכת לתוכנית בחירה ישנה יותר מהתוכנית הפעילה. הקבצים שלה נשארים תקינים וזמינים להורדה.",
+  DOCUMENT_ON_OLDER_ANALYSIS:
+    "קיים ניתוח חדש יותר של המשרה. המסמך נשאר כפי שהוא עד שתבחרו לבנות אותו מחדש מהניתוח החדש - פעולה שמחליפה את בחירת העובדות ומוחקת את תוכן הטיוטה.",
+  PROFILE_CHANGED:
+    "המסמך נבנה עם גרסה קודמת של הפרופיל. הבדיקה והאישור נעשים מול הפרופיל הנוכחי, כך שהאזהרה אינה מתירה דבר שאינו תקף.",
+  POLICY_CHANGED:
+    "המסמך נבנה עם גרסה קודמת של כללי הבחירה. הבדיקה והאישור נעשים מול הכללים הנוכחיים, כך שהאזהרה אינה מתירה דבר שאינו תקף.",
 };
 
 export const warningDetail = (code: string, fallback: string): string => warningDetails[code] ?? fallback;
@@ -179,10 +176,8 @@ export const warningDetail = (code: string, fallback: string): string => warning
    generated union. */
 export const preparationStateIcons: Record<PreparationState, LucideIcon> = {
   needs_analysis: Clock,
-  needs_review: FileSearch,
   ready_to_draft: FilePlus2,
   draft_in_progress: FilePen,
-  ready_for_approval: FileCheck2,
   approved: CircleCheck,
   ready: BadgeCheck,
 };

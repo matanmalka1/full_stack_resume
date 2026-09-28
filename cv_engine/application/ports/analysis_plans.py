@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Protocol
 
 from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.selection import SelectionManifest, SelectionPlan
 from ...domain.contracts.taxonomy import Emphasis
 from ...domain.knowledge import Knowledge
 from .transactions import ReadTransaction, WriteTransaction
@@ -84,51 +83,35 @@ class AnalysisSelectionSourceReader(Protocol):
     def selection_source(self, tx: ReadTransaction, job_analysis_id: str) -> SelectionSource: ...
 
 
-class AnalysisPlanStore(Protocol):
+class AnalysisStore(Protocol):
+    """Analysis writes and the Application's current matching configuration.
+
+    Selection lives on the CV document; this store owns no selection state.
+    """
+
+    def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
+
     def save_analysis(
         self,
         tx: WriteTransaction,
         application_id: str,
         snapshot_id: str,
         analysis: JobAnalysis,
-        plan: SelectionManifest,
         *,
         provider: str,
         model: str,
-        candidate_context_version: str,
-        candidate_context_hash: str,
-        profile_version: str,
-        selection_policy_version: str,
-        track_emphasis_dependencies: dict[str, str],
         expected_analysis_id: str | None = None,
-        expected_selection_plan_id: str | None = None,
-        enforce_expected_selection_plan: bool = False,
         refuse_matching_context_operation: bool = False,
-    ) -> tuple[str, SelectionPlan]: ...
+    ) -> str: ...
 
-    def create_selection_plan(
-        self,
-        tx: WriteTransaction,
-        application_id: str,
-        job_analysis_id: str,
-        plan: SelectionManifest,
-        *,
-        candidate_context_version: str,
-        candidate_context_hash: str,
-        profile_version: str,
-        selection_policy_version: str,
-        track_emphasis_dependencies: dict[str, str],
-        expected_selection_plan_id: str | None = None,
-        enforce_expected_selection_plan: bool = False,
-        refuse_matching_context_operation: bool = False,
-        plan_id: str | None = None,
-        created_at: str | None = None,
-    ) -> SelectionPlan: ...
-
-    def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
-
-    def selection_plan(self, tx: ReadTransaction, selection_plan_id: str) -> SelectionPlan: ...
+    def refuse_matching_context_operation(
+        self, tx: WriteTransaction, application_id: str
+    ) -> None: ...
 
     def set_normalized_role(
         self, tx: WriteTransaction, application_id: str, normalized_role: str
+    ) -> None: ...
+
+    def set_matching_emphasis(
+        self, tx: WriteTransaction, application_id: str, emphasis: str
     ) -> None: ...

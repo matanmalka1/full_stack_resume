@@ -37,15 +37,22 @@ export const changedKeys = (current: MatchingValues, next: MatchingValues): Matc
 
 export const createsAnalysis = (keys: readonly MatchingKey[]): boolean => keys.some((key) => key !== "emphasis");
 
+/* What saving does to the document, per §13: a classification change creates a new
+   analysis and leaves the document where it is (it then carries
+   `DOCUMENT_ON_OLDER_ANALYSIS` until the user rebuilds it); an Emphasis-only change
+   updates the document's own selection in place. */
 export const matchingConsequence = (detail: ApplicationDetail, newAnalysis: boolean): string => {
-  const replacement = newAnalysis ? "ניתוח ובחירת עובדות חדשים" : "בחירת עובדות חדשה, בלי להחליף את הניתוח";
-  if (detail.active_working_draft_id != null) {
-    return `השמירה תיצור ${replacement}. הטיוטה הפעילה לא תימחק, אך לא תתאים להגדרות החדשות, ויהיה צריך להחליף אותה לפני האישור.`;
+  const hasDocument = detail.document_id != null;
+  const hasContent =
+    hasDocument && detail.preparation_state !== "needs_analysis" && detail.preparation_state !== "ready_to_draft";
+  if (newAnalysis) {
+    return hasDocument
+      ? "השמירה תיצור ניתוח חדש. המסמך יישאר בנוי על הניתוח הנוכחי עד שתבחרו לבנות אותו מחדש מהניתוח החדש."
+      : "השמירה תיצור ניתוח חדש. הקודם נשמר בהיסטוריה.";
   }
-  if (detail.latest_approved_revision_id != null || detail.latest_ready_revision_id != null) {
-    return `השמירה תיצור ${replacement}. הגרסאות שאושרו והקבצים המוכנים לא ישתנו ויישארו זמינים בהיסטוריה; העבודה תמשיך מההגדרות החדשות.`;
-  }
-  return `השמירה תיצור ${replacement}. הקודמים נשמרים בהיסטוריה.`;
+  return hasContent
+    ? "השמירה תעדכן את בחירת העובדות של המסמך, וייתכן שגם את תוכן הטיוטה. אישור קיים לא יחול עוד על המסמך שהשתנה."
+    : "השמירה תעדכן את בחירת העובדות של המסמך, בלי להחליף את הניתוח.";
 };
 
 type MatchingOrigin = "analysis" | "decided";

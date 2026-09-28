@@ -1,4 +1,11 @@
-import type { Operation, OperationFailureCode, OperationPhase, OperationStatus, OperationType } from "@/api/contracts";
+import type {
+  Operation,
+  OperationFailureCode,
+  OperationOutput,
+  OperationPhase,
+  OperationStatus,
+  OperationType,
+} from "@/api/contracts";
 import { type Tone } from "@/ui/tone";
 
 /* The Hebrew vocabulary of an Operation, in one module because two surfaces speak it: the
@@ -23,11 +30,11 @@ export const statusLabels: Record<OperationStatus, string> = {
    heading untranslated. */
 export const operationTypeLabels: Record<OperationType, string> = {
   analyze_job: "ניתוח המשרה",
-  propose_selection_plan: "בחירת העובדות",
+  propose_selection: "בחירת העובדות",
   create_draft: "יצירת הטיוטה",
   regenerate_section: "יצירה מחדש של פרק",
   regenerate_claim: "יצירה מחדש של טענה",
-  render_revision: "יצירת קובץ קורות החיים",
+  render_document: "יצירת קובץ קורות החיים",
 };
 
 export const statusTones: Record<OperationStatus, Tone> = {
@@ -52,18 +59,14 @@ export const phaseLabels: Record<OperationPhase, string> = {
   completed: "הושלמה",
 };
 
-/* What an operation produced, named for the reader. Deliberately a partial map over an
-   open string rather than a Record over an enum: `output_type` is `str` in the schema, so
-   a type this map does not know is skipped rather than printed raw - an internal token in
-   a success line teaches nothing and looks like a leak.
+/* What an operation produced, named for the reader.
 
    `provider_response` is deliberately absent. It is registered as an output, but it is
    the provider's own text, and this screen states elsewhere that it shows no provider
    text. It stays in the record and out of the result line. */
-const outputTypeLabels: Record<string, string> = {
+const outputTypeLabels: Partial<Record<OperationOutput["output_type"], string>> = {
   job_analysis: "ניתוח המשרה",
-  selection_plan: "תוכנית בחירת העובדות",
-  working_draft: "טיוטה",
+  cv_document: "קורות החיים",
 };
 
 /* §11 separates existence from activation: a failed or cancelled Operation can own an

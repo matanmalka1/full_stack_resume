@@ -1,4 +1,4 @@
-"""Recruitment tracking over HTTP.
+"""Recruitment HTTP contracts and service-level submission evidence.
 
 What these pin is what the trail is allowed to say. A submission records that
 something was sent, and that claim cannot be re-derived afterwards, so the
@@ -9,17 +9,14 @@ evidence still qualifies.
 
 from __future__ import annotations
 
+import pytest
 from api_harness import MUTATION_HEADERS
+from helpers import stored_document, stored_submissions
 
 from cv_engine.api.app import API_PREFIX
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-
-
-def _artifact(transaction_manager, application_id, artifact_type):
-    with transaction_manager.read() as tx:
-        return SqlAlchemyArtifactCatalog(transaction_manager).latest_artifact_version(
-            tx, application_id, artifact_type
-        )
+from cv_engine.application.commands import SubmissionCommand
+from cv_engine.application.errors import DOCUMENT_CHANGED, StateConflict
+from cv_engine.util import sha256_file
 
 
 def _post(harness, path: str, body: dict | None = None):
@@ -146,66 +143,61 @@ def test_recruitment_http_contract(api_paused) -> None:
     )
     assert external.status_code == 201, external.text
     assert external.json()["current_status"] == "applied"
-    assert external.json()["approved_revision_id"] is None
-    assert external.json()["pdf_artifact_version_id"] is None
+    # Nothing passed through the system, so no document content or files are claimed.
+    assert external.json()["document_hash"] is None
 
 
-def test_an_internal_submission_records_the_exact_revision_and_pdf(
-    api_paused, ready_application, transaction_manager
-) -> None:
-    """The claim that something was sent is not re-derivable, so it must be exact:
-    naming the wrong PDF is refused, and the right one moves the Application to
-    `applied` with the exact revision and PDF on the timeline."""
+def test_an_internal_submission_records_the_exact_document_and_files(ready_application) -> None:
+    """§18: only the observed Ready document can become immutable sent evidence."""
     setup = ready_application("Submission Co")
-    application_id = setup.application_id
-    revision_id = setup.approved.revision_id
-    pdf = _artifact(transaction_manager, application_id, "resume_pdf")
-    html = _artifact(transaction_manager, application_id, "resume_html")
-    submissions_path = f"/applications/{application_id}/submissions"
-
-    mismatched = _post(
-        api_paused,
-        submissions_path,
-        {
-            "approved_revision_id": revision_id,
-            "pdf_artifact_version_id": html["id"],
-            "submitted_at": "2026-08-30T09:00:00+00:00",
-        },
+    services, application_id = setup
+    document = stored_document(services, application_id)
+    assert document.html_path is not None and document.pdf_path is not None
+    command = SubmissionCommand(
+        application_id=application_id,
+        expected_document_hash=document.document_hash,
+        submitted_at="2026-08-30T09:00:00+00:00",
+        client="web",
     )
-    assert mismatched.status_code == 412, mismatched.text
-    assert _detail(api_paused, application_id)["application"]["current_status"] != "applied"
+    with pytest.raises(StateConflict) as refused:
+        services.submission.submit_application(
+            command.model_copy(update={"expected_document_hash": "0" * 64})
+        )
+    assert refused.value.code == DOCUMENT_CHANGED
+    assert stored_submissions(services, application_id) == []
+    assert services.queries.application_detail(application_id).application.current_status == "saved"
 
-    response = _post(
-        api_paused,
-        submissions_path,
-        {
-            "approved_revision_id": revision_id,
-            "pdf_artifact_version_id": pdf["id"],
-            "submitted_at": "2026-08-30T09:00:00+00:00",
-        },
-    )
-
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["submission_id"]
-    assert body["approved_revision_id"] == revision_id
-    assert body["pdf_artifact_version_id"] == pdf["id"]
-    # Submission is what moves an Application to `applied`.
-    assert body["current_status"] == "applied"
-    detail = _detail(api_paused, application_id)
-    assert detail["allowed_recruitment_transitions"] == [
+    result = services.submission.submit_application(command)
+    assert result.submission_id
+    assert result.document_hash == document.document_hash
+    assert result.current_status == "applied"
+    (sent,) = stored_submissions(services, application_id)
+    assert sent.id == result.submission_id
+    assert sent.document_hash == document.document_hash
+    assert sent.content == document.content
+    assert sent.job_snapshot_id == setup.snapshot_id
+    for original, copied, checksum in (
+        (document.html_path, sent.html_path, sent.html_sha256),
+        (document.pdf_path, sent.pdf_path, sent.pdf_sha256),
+    ):
+        assert copied is not None and checksum is not None
+        assert copied != original
+        source = services.paths.root / original
+        destination = services.paths.root / copied
+        assert destination.read_bytes() == source.read_bytes()
+        assert sha256_file(destination) == checksum == sha256_file(source)
+    assert stored_document(services, application_id) == document
+    detail = services.queries.application_detail(application_id)
+    assert detail.allowed_recruitment_transitions == [
         "recruiter_screen",
         "interview",
         "rejected",
         "withdrawn",
         "closed",
     ]
-    submitted = next(
-        item for item in detail["recruitment_timeline"] if item["id"] == body["submission_id"]
-    )
-    assert submitted["submission_type"] == "internal"
-    assert submitted["approved_revision_id"] == revision_id
-    assert submitted["artifact_version_id"] == pdf["id"]
+    submitted = next(item for item in detail.recruitment_timeline if item.id == sent.id)
+    assert submitted.submission_type == "internal"
+    assert submitted.document_hash == document.document_hash
 
 
 def _detail(harness, application_id: str) -> dict:

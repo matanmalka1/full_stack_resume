@@ -11,23 +11,10 @@ from ...application.operations import (
     as_operation_view,
 )
 from ...application.ports.transactions import ReadTransaction
-from .analysis_sql import _analysis_record, _selection_plan_record
-from .artifacts_sql import (
-    _artifact_version,
-    _artifact_versions,
-    _latest_decision,
-    _latest_validation_for_working_draft,
-    _validation_run,
-)
+from .analysis_sql import _analysis_record
+from .artifacts_sql import _artifact_version, _artifact_versions
 from .base import json_text_record
 from .connection import SqlAlchemyTransactionManager
-from .drafts_sql import (
-    _active_working_draft,
-    _approved_revision,
-    _approved_revision_parents,
-    _approved_revisions,
-    _working_draft,
-)
 from .operation_sql import _operation_record, _outputs
 from .tables import (
     applications,
@@ -36,7 +23,6 @@ from .tables import (
     job_snapshots,
     operations,
     recruitment_events,
-    selection_plans,
     submissions,
 )
 
@@ -126,63 +112,11 @@ class SqlAlchemyApplicationProjectionReader:
             raise UnknownRecord(f"no job analysis {analysis_id}")
         return _analysis_record(row)
 
-    def selection_plan(self, tx: ReadTransaction, selection_plan_id: str):
-        row = (
-            self._connection(tx)
-            .execute(select(selection_plans).where(selection_plans.c.id == selection_plan_id))
-            .mappings()
-            .one_or_none()
-        )
-        if row is None:
-            raise UnknownRecord(f"no selection plan {selection_plan_id}")
-        return _selection_plan_record(row)
-
-    def latest_selection_plan(self, tx: ReadTransaction, application_id: str):
-        row = (
-            self._connection(tx)
-            .execute(
-                select(selection_plans)
-                .where(selection_plans.c.application_id == application_id)
-                .order_by(selection_plans.c.version_number.desc())
-                .limit(1)
-            )
-            .mappings()
-            .one_or_none()
-        )
-        return None if row is None else _selection_plan_record(row)
-
-    def working_draft(self, tx: ReadTransaction, working_draft_id: str):
-        return _working_draft(self._connection(tx), working_draft_id)
-
-    def active_working_draft(self, tx: ReadTransaction, application_id: str):
-        try:
-            return _active_working_draft(self._connection(tx), application_id)
-        except UnknownRecord:
-            return None
-
-    def approved_revisions(self, tx: ReadTransaction, application_id: str):
-        return _approved_revisions(self._connection(tx), application_id)
-
-    def approved_revision(self, tx: ReadTransaction, revision_id: str):
-        return _approved_revision(self._connection(tx), revision_id)
-
-    def approved_revision_parents(self, tx: ReadTransaction, application_id: str):
-        return _approved_revision_parents(self._connection(tx), application_id)
-
-    def latest_validation_for_working_draft(self, tx: ReadTransaction, working_draft_id: str):
-        return _latest_validation_for_working_draft(self._connection(tx), working_draft_id)
-
-    def validation_run(self, tx: ReadTransaction, validation_id: str):
-        return _validation_run(self._connection(tx), validation_id)
-
     def artifact_versions(self, tx: ReadTransaction, application_id: str):
         return _artifact_versions(self._connection(tx), application_id)
 
     def artifact_version(self, tx: ReadTransaction, artifact_version_id: str):
         return _artifact_version(self._connection(tx), artifact_version_id)
-
-    def latest_decision(self, tx: ReadTransaction, application_id: str):
-        return _latest_decision(self._connection(tx), application_id)
 
     def recruitment_events(self, tx: ReadTransaction, application_id: str):
         cols = tuple(c for c in recruitment_events.c if c.name != "seq")

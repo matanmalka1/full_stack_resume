@@ -11,10 +11,11 @@ from __future__ import annotations
 from typing import Any
 
 from ....domain.contracts.knowledge import Fact, FactStatus
+from ....domain.drafts import manually_edited
 from ....domain.facts import FactStore, FactStoreError
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import ProfileStore
-from ....domain.selection import EmphasisPolicyStore, build_selection
+from ....domain.selection import EmphasisPolicyStore
 from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ....util import new_id, utc_now
 from ...commands import (
@@ -35,15 +36,19 @@ from ...commands import (
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
+    DOCUMENT_CHANGED,
     InfrastructureFailure,
     KnowledgeRejected,
     MissingFactRendering,
+    PreconditionFailed,
+    StateConflict,
     UnknownRecord,
 )
 from ...knowledge_mutations import PrepareKnowledgeMutation
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import TransactionManager
+from ..documents import build_document_selection, compose_content
 from .mutations import KnowledgeMutationEngine
 
 
@@ -182,10 +187,10 @@ class FactLifecycleService(KnowledgeMutationEngine):
     ) -> FactMutationResult:
         """One-way transition to `deleted`, through the same mutation journal.
 
-        Always permitted regardless of Profile attachment or active
-        SelectionPlan/claim/gap-resolution dependency; downstream review reason
-        (`FACT_DELETED_REQUIRES_RESOLUTION`) and warning (`FACT_DELETED`)
-        report the consequence rather than this command refusing it.
+        Always permitted regardless of Profile attachment or a document that depends
+        on the fact. It writes nothing to any document: the document's basis changes,
+        and the `FACT_DELETED_REQUIRES_RESOLUTION` review reason reports the
+        consequence rather than this command refusing it (§17).
         """
         self._ensure_mutations_allowed()
         if not explicitly_confirmed:
@@ -254,7 +259,10 @@ class FactLifecycleService(KnowledgeMutationEngine):
         so nothing is strengthened on the way in.
         """
         with self.transactions.read() as tx:
-            draft = self.store.active_working_draft(tx, application_id).source
+            document = self.documents.document(tx, application_id)
+        if document is None or document.content is None:
+            raise UnknownRecord(f"application {application_id} has no document content")
+        draft = document.content
         claims = [
             draft.headline,
             *draft.contacts,
@@ -263,7 +271,7 @@ class FactLifecycleService(KnowledgeMutationEngine):
         try:
             claim = next(item for item in claims if item.claim_id == claim_id)
         except StopIteration as exc:
-            raise UnknownRecord(f"unknown claim in the working draft: {claim_id}") from exc
+            raise UnknownRecord(f"unknown claim in the document: {claim_id}") from exc
         if claim.style == "headline" or claim.claim_type == "headline":
             raise KnowledgeRejected(
                 "the document headline is not a factual claim and cannot become a fact"
@@ -382,17 +390,38 @@ class FactLifecycleService(KnowledgeMutationEngine):
         job_analysis_id: str,
         profile: str,
         section: str,
+        expected_document_hash: str,
         reason: str = "",
     ) -> ConfirmAndUseFactResult:
-        """Promote, attach, and select one pending fact as one recoverable command."""
+        """Promote, attach, and select one pending fact as one recoverable command (§17).
+
+        The selection step is a document selection update guarded by
+        `expected_document_hash`, applied by the journal in the same commit as the
+        fact events. The document must be built on the named analysis; content the
+        engine composed is recomposed with the fact selected, and content carrying
+        wording a rebuild would discard refuses the whole command before anything is
+        written.
+        """
         self._ensure_mutations_allowed()
         try:
             with self.transactions.read() as tx:
+                document = self.documents.document(tx, application_id)
                 analysis_record = self.store.get_analysis(tx, job_analysis_id)
         except UnknownRecord as exc:
             raise UnknownRecord(str(exc)) from exc
         if analysis_record["application_id"] != application_id:
             raise KnowledgeRejected("job analysis belongs to another application")
+        if document is None:
+            raise KnowledgeRejected(f"application {application_id} has no CV document yet")
+        if document.document_hash != expected_document_hash:
+            raise StateConflict(
+                "the CV document changed since it was read (expected_document_hash)",
+                code=DOCUMENT_CHANGED,
+            )
+        if document.analysis_id != job_analysis_id:
+            raise KnowledgeRejected(
+                f"the document is built on analysis {document.analysis_id}, not {job_analysis_id}"
+            )
         analysis = analysis_record["analysis"]
         if analysis.profile.value != profile:
             raise KnowledgeRejected(
@@ -410,29 +439,39 @@ class FactLifecycleService(KnowledgeMutationEngine):
                 _profile_source,
                 proposed,
             ) = self._knowledge.stage_confirm_and_use_fact(mutation_id, fact_id, profile, section)
-            selected_profile = proposed.profiles.get(profile)
-            _selected, manifest = build_selection(
-                analysis=analysis,
-                profile=selected_profile,
-                policy=proposed.policies.get(analysis.emphasis),
-                policy_store_version=proposed.policies.version,
-                facts=proposed.facts,
-                line_groups=(
-                    proposed.presentations.line_groups(selected_profile, analysis.emphasis)
-                    if proposed.presentations is not None
-                    else None
-                ),
+            current = document.selection
+            selection = build_document_selection(
+                analysis,
+                proposed,
+                current=current,
+                pinned_fact_ids=current.pinned_fact_ids,
+                excluded_fact_ids=[item for item in current.excluded_fact_ids if item != fact_id],
             )
-            if fact_id not in manifest.selected_fact_ids:
-                raise ValueError("confirmed fact was not selected by the replacement plan")
+            if fact_id not in selection.selected_fact_ids:
+                raise ValueError("confirmed fact was not selected by the document's selection")
+            content = document.content
+            if content is not None:
+                if manually_edited(content):
+                    raise ValueError(
+                        "the document carries wording a deterministic rebuild would discard; "
+                        "select the fact after regenerating instead"
+                    )
+                content = compose_content(
+                    application_id,
+                    document.analysis_id,
+                    analysis_record["job_snapshot_id"],
+                    analysis,
+                    selection,
+                    proposed,
+                )
         except OSError as exc:
             raise InfrastructureFailure(f"could not prepare Knowledge mutation: {exc}") from exc
-        except DomainMissingFactRendering as exc:
+        except (DomainMissingFactRendering, MissingFactRendering) as exc:
             if "staged_files" in locals():
                 for staged in staged_files:
                     self._knowledge.discard_staged(staged)
             raise MissingFactRendering(exc.fact_id, exc.language) from exc
-        except (FactStoreError, ValueError) as exc:
+        except (FactStoreError, ValueError, PreconditionFailed, StateConflict) as exc:
             if "staged_files" in locals():
                 for staged in staged_files:
                     self._knowledge.discard_staged(staged)
@@ -469,29 +508,16 @@ class FactLifecycleService(KnowledgeMutationEngine):
                 application_id=application_id,
             ),
         ]
-        plan_id = new_id()
-        plan_created_at = utc_now()
-        # Promoting a fact changes which facts address a requirement, never
-        # whether the user chose to proceed past a gap. This adds no acceptance
-        # of its own; the standing ones are carried by the repository inside the
-        # write, where the analysis they were made against is checked. Reading
-        # them here also let a plan for one analysis inherit another's.
+        selection_step_id = new_id()
         actions.append(
             {
-                "type": "selection_plan",
-                "plan_id": plan_id,
+                "type": "document_selection",
                 "application_id": application_id,
-                "job_analysis_id": job_analysis_id,
-                "plan": manifest.model_dump(mode="json"),
-                "candidate_context_version": proposed.candidate.context_version,
-                "candidate_context_hash": proposed.candidate.version_hash,
-                "profile_version": proposed.profiles.version,
-                "selection_policy_version": proposed.policies.version,
-                "track_emphasis_dependencies": {
-                    "track": analysis.track.value,
-                    "emphasis": analysis.emphasis.value,
-                },
-                "created_at": plan_created_at,
+                "expected_document_hash": expected_document_hash,
+                "analysis_id": document.analysis_id,
+                "selection": selection.model_dump(mode="json"),
+                "content": None if content is None else content.model_dump(mode="json"),
+                "updated_at": utc_now(),
             }
         )
         payload = {
@@ -506,8 +532,8 @@ class FactLifecycleService(KnowledgeMutationEngine):
             staged_reference=primary.staged_reference,
             old_sha256=primary.old_sha256,
             new_sha256=primary.new_sha256,
-            db_mutation_type="selection_plan",
-            db_mutation_id=plan_id,
+            db_mutation_type="document_selection",
+            db_mutation_id=selection_step_id,
             db_mutation=payload,
             recovery_strategy="finish_or_restore",
         )
@@ -520,11 +546,14 @@ class FactLifecycleService(KnowledgeMutationEngine):
             raise
         self._complete_prepared(mutation)
         with self.transactions.read() as tx:
-            selection_plan = self.store.selection_plan(tx, plan_id)
+            updated = self.documents.document(tx, application_id)
+        if updated is None:
+            raise UnknownRecord(f"application {application_id} has no CV document")
         return ConfirmAndUseFactResult(
             fact=canonical,
             event_ids=[action["event_id"] for action in actions if action["type"] == "fact_event"],
-            selection_plan=selection_plan,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
             facts_version=facts_version,
             lifecycle_version=lifecycle_version,
             profile_store_version=proposed.profiles.version,

@@ -11,7 +11,7 @@ import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { useWorkflowCommands } from "../../api/mutations";
 import { actionLabel } from "../../model/preparationLabels";
 import type { WorkflowActionPlan } from "../../model/workflowActionPlan";
-import { ReplaceDraftDialog } from "./ReplaceDraftDialog";
+import { BuildFromAnalysisDialog } from "./BuildFromAnalysisDialog";
 
 interface WorkflowActionsProps {
   detail: ApplicationDetail;
@@ -34,25 +34,18 @@ interface WorkflowActionsProps {
 }
 
 export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operationLive, plan }: WorkflowActionsProps) => {
-  const { analyze, archive, commandsBlocked, draft, editVersion, error, provider, replace, settings, workInFlight } =
-    useWorkflowCommands(detail, plan, onQueued, operationLive);
+  const { analyze, commandsBlocked, draft, error, provider, rebuild, settings, workInFlight } = useWorkflowCommands(
+    detail,
+    plan,
+    onQueued,
+    operationLive,
+  );
 
-  /* The Keep decision is made in the dialog, not assumed by the button. Default on: a
-     draft carries manual wording that nothing regenerates, so the reader opts out of
-     keeping it rather than having to know to opt in.
-
-     It lives here rather than with the command it is sent with, because it is the
-     dialog's state and the dialog is this screen's: closing restores the default rather
-     than remembering the last answer, since an unchecked box carried over from a
-     cancelled dialog would make the next replacement silently discard history the reader
-     never chose to discard. */
-  const [replaceOpen, setReplaceOpen] = useState(false);
-  const [keepPrevious, setKeepPrevious] = useState(true);
+  /* The rebuild asks first only when it would discard written content; with no content
+     there is nothing to lose, and the press is the decision. */
+  const [rebuildOpen, setRebuildOpen] = useState(false);
   const analyzeReasonId = useId();
-  const closeReplace = () => {
-    setReplaceOpen(false);
-    setKeepPrevious(true);
-  };
+  const closeRebuild = () => setRebuildOpen(false);
 
   /* Keyed because the bar renders them from an array: with more than one secondary
      action, React needs each to be identifiable across renders.
@@ -104,34 +97,20 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
       </Button>
     );
 
-  /* Both wait on the version read: without it neither command can be addressed, and a
-     button that answers a press by throwing is worse than one that is plainly not ready
-     yet. */
-  const replaceButton =
-    plan.replaceDraft === null ? null : (
+  const rebuildButton =
+    plan.buildFromAnalysis === null ? null : (
       <Button
-        disabled={settings === undefined || editVersion === null || commandsBlocked}
-        key="replace"
-        onClick={() => setReplaceOpen(true)}
-        pending={replace.isPending}
-        pendingLabel="מחליף טיוטה…"
-        variant={plan.replaceDraft.emphasized ? "primary" : "secondary"}
+        disabled={commandsBlocked}
+        key="rebuild"
+        onClick={() => {
+          if (plan.buildFromAnalysis?.discardsContent === true) setRebuildOpen(true);
+          else rebuild.mutate();
+        }}
+        pending={rebuild.isPending}
+        pendingLabel="בונה מחדש…"
+        variant={plan.buildFromAnalysis.emphasized ? "primary" : "secondary"}
       >
-        החלפת הטיוטה
-      </Button>
-    );
-
-  const archiveButton =
-    plan.archiveDraft === null ? null : (
-      <Button
-        disabled={editVersion === null || commandsBlocked}
-        key="archive"
-        onClick={() => archive.mutate()}
-        pending={archive.isPending}
-        pendingLabel="מעביר לארכיון…"
-        variant="secondary"
-      >
-        העברת הטיוטה לארכיון
+        בנייה מחדש מהניתוח החדש
       </Button>
     );
 
@@ -146,20 +125,17 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
       : routeButton(
           "draft-screen",
           plan.draftScreen.href,
-          plan.draftScreen.label === "אישור הגרסה" ? "מעבר לעורך לאימות ואישור" : plan.draftScreen.label,
+          plan.draftScreen.label === "אישור הגרסה" ? "מעבר לעורך לבדיקה ואישור" : plan.draftScreen.label,
           /* The projection's own recommendation, not a constant. A generate queued here
-             now advances to the editor by itself, so this link is what a reader who
+             advances to the editor by itself, so this link is what a reader who
              deliberately returned to analysis presses - and when the workflow is waiting
-             on validation or approval, it is the action they came back for. Held at
-             `false` it was not merely unemphasized: beside a rendered revision the
-             fallback below handed the emphasis to "צפייה בגרסה המוכנה" while the
-             workflow was in fact waiting on the newer draft. */
+             on a check or approval, it is the action they came back for. */
           plan.draftScreen.emphasized,
         );
   const readyButton =
-    plan.readyRevision === null
+    plan.ready === null
       ? null
-      : routeButton("ready", plan.readyRevision.href, "צפייה בגרסה המוכנה", plan.readyRevision.emphasized);
+      : routeButton("ready", plan.ready.href, "צפייה בקורות החיים המוכנים", plan.ready.emphasized);
 
   /* Workflow order, and the same order every visit: analyze, draft, the draft screen,
      ready. The bar used to be sorted by how far along each action was, which moved a
@@ -172,11 +148,10 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
      waiting on. */
   const inWorkflowOrder = [
     { emphasized: plan.analyze?.emphasized === true, node: analyzeButton },
+    { emphasized: plan.buildFromAnalysis?.emphasized === true, node: rebuildButton },
     { emphasized: plan.createDraft?.emphasized === true, node: draftButton },
-    { emphasized: plan.replaceDraft?.emphasized === true, node: replaceButton },
-    { emphasized: false, node: archiveButton },
     { emphasized: plan.draftScreen?.emphasized === true, node: draftScreenButton },
-    { emphasized: plan.readyRevision?.emphasized === true, node: readyButton },
+    { emphasized: plan.ready?.emphasized === true, node: readyButton },
     { emphasized: true, node: settingsButton },
   ].filter((entry): entry is { emphasized: boolean; node: ReactElement } => entry.node !== null);
   const emphasizedEntry =
@@ -194,8 +169,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
     error !== null ||
     plan.unbuiltRecommendation !== null ||
     (plan.createDraft !== null && settings !== undefined) ||
-    plan.replaceDraft !== null ||
-    plan.archiveDraft !== null;
+    plan.buildFromAnalysis !== null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -211,9 +185,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
 
           {plan.unbuiltRecommendation === null ? null : (
             <Callout title={`הפעולה המומלצת כעת היא ${actionLabel(plan.unbuiltRecommendation)}`} tone="neutral">
-              {plan.unbuiltRecommendation === "create_draft" && plan.draftWouldReplace
-                ? "הטיוטה הפעילה נשמרת כפי שהיא. החלפתה דורשת החלטה מפורשת."
-                : "אין לה כרגע מסך שמבצע אותה, ולכן אין לאן להפנות. הפעולות שכן מוצעות למטה הן הדרך להמשיך מכאן."}
+              אין לה כרגע מסך שמבצע אותה, ולכן אין לאן להפנות. הפעולות שכן מוצעות למטה הן הדרך להמשיך מכאן.
             </Callout>
           )}
 
@@ -229,28 +201,15 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
             </p>
           )}
 
-          {/* What each of the two draft-level commands does. Beside a stale-draft alert both
-          are offered and what the reader has not been told is that they are not variants
-          of one another; after a failed validation only replacement is offered, and naming
-          an archive button that is not on the screen would send the reader looking for it.
-          So each sentence is tied to the button it explains. */}
-          {plan.replaceDraft === null && plan.archiveDraft === null ? null : (
+          {/* What the rebuild does, beside the button that does it: it is the one action
+          here whose effect is not obvious from its name. */}
+          {plan.buildFromAnalysis === null ? null : (
             <p className="text-support leading-6 text-cv-text-muted">
-              {plan.replaceDraft === null ? null : "החלפה בונה טיוטה חדשה מהניתוח ומתוכנית הבחירה הפעילים. "}
-              {plan.archiveDraft === null
-                ? null
-                : "העברה לארכיון שומרת עותק היסטורי ומשאירה את המועמדות בלי טיוטה פעילה."}
+              {plan.buildFromAnalysis.discardsContent
+                ? "בנייה מחדש מעבירה את המסמך לניתוח החדש ומוחקת את תוכן הטיוטה הנוכחית."
+                : "בנייה מחדש מעבירה את המסמך לניתוח החדש, עם בחירת העובדות שהמנוע מציע לו."}
             </p>
           )}
-
-          {/* Why the controls are inert rather than missing. A button that vanishes while work
-          runs reads as a command that is no longer offered; one that is disabled with the
-          reason beside it reads as the same command, later. */}
-          {workInFlight && (plan.replaceDraft !== null || plan.archiveDraft !== null) ? (
-            <p className="text-support leading-6 text-cv-text-muted">
-              פעולה על הטיוטה מתבצעת כעת. החלפה והעברה לארכיון יהיו זמינות שוב כשהיא תסתיים.
-            </p>
-          ) : null}
         </section>
       )}
 
@@ -283,14 +242,12 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
         </CommitBar>
       )}
 
-      <ReplaceDraftDialog
+      <BuildFromAnalysisDialog
         commandsBlocked={commandsBlocked}
-        keepPrevious={keepPrevious}
-        onClose={closeReplace}
-        onConfirm={() => replace.mutate({ keepPrevious }, { onSuccess: closeReplace })}
-        onKeepPreviousChange={setKeepPrevious}
-        open={replaceOpen}
-        pending={replace.isPending}
+        onClose={closeRebuild}
+        onConfirm={() => rebuild.mutate(undefined, { onSuccess: closeRebuild })}
+        open={rebuildOpen}
+        pending={rebuild.isPending}
       />
     </div>
   );

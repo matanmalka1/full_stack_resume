@@ -46,7 +46,7 @@ export const artifactVersionQueryOptions = (artifactVersionId: string) =>
    server names. It verifies containment and hash before it sends anything, and refuses
    with `412` when the payload moved or changed.
 
-   It is not the delivery path for a CV. That stays `recruiter-pdf` on the revision
-   screen, which is addressed to the approved revision the reader is looking at. */
+   It is not the delivery path for a CV. That is the document's own PDF on the ready
+   screen, which the server answers only while the document is Ready. */
 export const artifactDownloadHref = (artifactVersionId: string): string =>
   `${artifactPath(artifactVersionId)}/download`;

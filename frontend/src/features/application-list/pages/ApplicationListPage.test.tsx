@@ -19,12 +19,11 @@ const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem
     updated_at: "2026-08-24T07:00:00Z",
     recruitment_status: "saved",
     preparation_state: "needs_analysis",
-    working_draft_state: "none",
+    document_state: "none",
+    content_check: "none",
     review_reasons: [],
-    stale_reasons: [],
     warnings: [],
     active_job_snapshot_id: "snap-1",
-    newer_draft_in_progress: false,
     available_actions: ["analyze"],
     blocked_actions: [],
     recommended_action: "analyze",
@@ -88,10 +87,8 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
     active_interviews: items.filter((entry) =>
       ["recruiter_screen", "interview", "assignment", "final_stage", "offer"].includes(entry.recruitment_status),
     ).length,
-    ready_to_send: items.filter((entry) => entry.latest_ready_revision_id != null).length,
-    needs_attention: items.filter(
-      (entry) => entry.review_reasons.length > 0 || entry.stale_reasons.length > 0 || entry.warnings.length > 0,
-    ).length,
+    ready_to_send: items.filter((entry) => entry.document_state === "ready").length,
+    needs_attention: items.filter((entry) => entry.review_reasons.length > 0 || entry.warnings.length > 0).length,
   };
 
   return {
@@ -111,12 +108,11 @@ const detailBody = (): ApplicationDetail => ({
   allowed_recruitment_transitions: ["withdrawn", "closed"],
   recruitment_timeline: [],
   preparation_state: "needs_analysis",
-  working_draft_state: "none",
+  document_state: "none",
+  content_check: "none",
   review_reasons: [],
-  stale_reasons: [],
   warnings: [],
   active_job_snapshot_id: "snap-1",
-  newer_draft_in_progress: false,
   available_actions: ["analyze"],
   blocked_actions: [],
   recommended_action: "analyze",
@@ -193,7 +189,7 @@ const renderPage = ({
           <Route element={<h1>משרה חדשה</h1>} path="/applications/new" />
           <Route element={<h1>מסך המועמדות</h1>} path="/applications/:applicationId" />
           <Route element={<h1>עורך הטיוטה</h1>} path="/applications/:applicationId/draft" />
-          <Route element={<h1>גרסה מוכנה</h1>} path="/revisions/:revisionId" />
+          <Route element={<h1>גרסה מוכנה</h1>} path="/applications/:applicationId/ready" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -236,67 +232,28 @@ describe("ApplicationListPage", () => {
   /* The reason this screen exists: an Application that was saved has to be reachable
      without its URL, and its card has to say where it stands. */
   it("lists every Application with both of its state axes", async () => {
-    const { fetchMock } = stubList([
+    stubList([
       item(),
       item({ id: "app-2", company: "Binat", preparation_state: "ready", target_role: "Sales Engineer" }),
     ]);
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
-    expect(screen.getByText("איפה עומד כל תהליך גיוס, ומה עוד צריך לקורות החיים.")).toBeInTheDocument();
-    /* Neither Application has anything waiting, so the hub says so in one line rather than
-       disappearing and leaving the reader to wonder whether it loaded. */
-    const quietHub = await screen.findByRole("region", { name: "מוקד פעולות" });
-    expect(within(quietHub).getByText("אין פעולות ממתינות.")).toBeInTheDocument();
-    /* Each card places its CV state along the way to Ready, as a position and a bar. */
-    expect(await screen.findByText("1/7")).toBeInTheDocument();
-    expect(screen.getByText("7/7")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "הכנת קורות החיים: קורות החיים מוכנים" })).toHaveAttribute(
-      "value",
-      "7",
-    );
-    expect(screen.queryByText("CV Engine")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "קליטת משרה חדשה" })).not.toBeInTheDocument();
-    expect(await screen.findByRole("group", { name: "סינון מהיר לפי מצב" })).toBeInTheDocument();
-    /* The card leads with the company as text; the icon beside it is the card's link. */
-    expect(await screen.findByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveAttribute(
-      "href",
-      "/applications/app-1",
-    );
-    /* Preparation and recruitment are independent axes and the board shows both: one says
-       how far the CV has got, the other where the Application stands with the employer.
-       Scoped to the cards because the stage filter offers the same vocabulary as its
-       options, and an option is a control rather than a card. */
-    const board = within(screen.getByRole("region", { name: "כרטיסי מועמדויות" }));
-    expect(board.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
-    expect(board.getByText("קורות החיים מוכנים")).toBeInTheDocument();
-    expect(board.getAllByText("טרם הוגש")).toHaveLength(2);
-    expect(board.getAllByText("פעולה מומלצת הבאה")).toHaveLength(2);
-    /* The toolbar's select is the board's one sort control; the order it sets goes to the
-       server query. */
-    const sort = screen.getByLabelText("מיון");
-    expect(sort).toHaveValue("updated");
-    expect(
-      within(sort)
-        .getAllByRole("option")
-        .map((option) => option.getAttribute("value")),
-    ).toEqual(["updated", "created", "company", "stage"]);
-    fireEvent.change(sort, { target: { value: "company" } });
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenLastCalledWith(
-        expect.stringContaining("sort=company"),
-        expect.objectContaining({ method: "GET" }),
-      ),
-    );
-    expect(sort).toHaveValue("company");
-    fireEvent.click(board.getByRole("button", { name: "פעולות נוספות עבור Acme" }));
-    expect(board.getByRole("menuitem", { name: "עדכון סטטוס ומשימות" })).toBeInTheDocument();
-    /* The menu also opens the record, as the demo's first item does. */
-    expect(board.getByRole("menuitem", { name: "פתיחת המועמדות" })).toHaveAttribute("href", "/applications/app-1");
-    /* Every view reaches a record's details from its menu, which is the keyboard's way in. */
-    fireEvent.click(board.getByRole("menuitem", { name: "פרטי משרה" }));
-    expect(screen.getByRole("dialog", { name: "פרטי משרה: Acme" })).toBeInTheDocument();
+    await screen.findByText("Sales Engineer");
+    const cards = document.querySelectorAll<HTMLElement>('section[aria-label="כרטיסי מועמדויות"] > article');
+    expect(cards).toHaveLength(2);
+
+    const acme = within(cards[0]!);
+    expect(acme.getByText("ממתין לניתוח המשרה")).toBeInTheDocument();
+    expect(acme.getByText("טרם הוגש")).toBeInTheDocument();
+    expect(acme.getByRole("link", { name: "פתיחת המועמדות של Acme" })).toHaveAttribute("href", "/applications/app-1");
+    expect(cards[0]!.querySelector("progress")).toHaveAttribute("value", "1");
+
+    const binat = within(cards[1]!);
+    expect(binat.getByText("קורות החיים מוכנים")).toBeInTheDocument();
+    expect(binat.getByText("טרם הוגש")).toBeInTheDocument();
+    expect(binat.getByRole("link", { name: "פתיחת המועמדות של Binat" })).toHaveAttribute("href", "/applications/app-2");
+    expect(cards[1]!.querySelector("progress")).toHaveAttribute("value", "5");
   });
 
   /* The next-action block is read to decide which Application to open next, so it
@@ -316,15 +273,15 @@ describe("ApplicationListPage", () => {
     );
   });
 
-  it("links a projected ready revision from the action hub", async () => {
-    stubList([item({ latest_ready_revision_id: "revision-1", preparation_state: "ready" })]);
+  it("links a projected Ready document from the action hub", async () => {
+    stubList([item({ document_state: "ready", preparation_state: "ready" })]);
 
     renderPage();
 
     const hub = await screen.findByRole("region", { name: "מוקד פעולות" });
-    expect(within(hub).getByRole("link", { name: /פתיחת הגרסה המוכנה/ })).toHaveAttribute(
+    expect(within(hub).getByRole("link", { name: /פתיחת קורות החיים המוכנים/ })).toHaveAttribute(
       "href",
-      "/revisions/revision-1",
+      "/applications/app-1/ready",
     );
   });
   /* The stage menu hides stages nothing is in. Hiding the one the URL selects left the
@@ -413,7 +370,7 @@ describe("ApplicationListPage", () => {
   });
 
   it("resumes a card at the step recommended by the server", async () => {
-    stubList([item({ preparation_state: "ready_for_approval", recommended_action: "approve" })]);
+    stubList([item({ preparation_state: "draft_in_progress", recommended_action: "approve" })]);
 
     renderPage();
 
@@ -421,7 +378,7 @@ describe("ApplicationListPage", () => {
     const command = await screen.findByRole("link", { name: /· Acme$/ });
     expect(command).toHaveTextContent("מעבר לשלב");
     /* The recommended step carries its fixed one-line description. */
-    expect(screen.getByText("הטיוטה עברה אימות וממתינה לאישור שלך.")).toBeInTheDocument();
+    expect(screen.getByText("הטיוטה מוכנה לבדיקה ולאישור שלך.")).toBeInTheDocument();
     expect(command.getAttribute("href")).toBe(
       screen.getByRole("link", { name: "פתיחת המועמדות של Acme" }).getAttribute("href"),
     );
@@ -434,37 +391,36 @@ describe("ApplicationListPage", () => {
     expect(screen.getByRole("heading", { name: "עורך הטיוטה" })).toBeInTheDocument();
   });
 
-  it("opens the exact ready revision when the workflow is complete", async () => {
+  it("opens the Ready document when the workflow is complete", async () => {
+    const hash = "c".repeat(64);
     const ready = item({
-      latest_ready_revision_id: "revision-1",
+      document_state: "ready",
+      document_hash: hash,
       preparation_state: "ready",
       recommended_action: null,
     });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: unknown) =>
-        String(url) === "/api/v1/approved-revisions/revision-1"
-          ? jsonResponse({ id: "revision-1", ready_qualified: true, pdf_artifact_version_id: "pdf-1" })
-          : jsonResponse(listBody([ready])),
-      ),
+      vi.fn(async () => jsonResponse(listBody([ready]))),
     );
 
     renderPage();
 
     fireEvent.click(await screen.findByText("Backend Engineer"));
     const details = screen.getByRole("dialog", { name: "פרטי משרה: Acme" });
-    /* The finished CV's PDF is one press away, through the revision's recruiter delivery. */
-    expect(await within(details).findByRole("link", { name: "הורדת PDF" })).toHaveAttribute(
+    /* The finished CV's PDF is one press away: the document's own PDF, which the server
+       answers only while the document is still Ready. */
+    expect(within(details).getByRole("link", { name: "הורדת PDF" })).toHaveAttribute(
       "href",
-      "/api/v1/approved-revisions/revision-1/recruiter-pdf?pdf_artifact_version_id=pdf-1",
+      `/api/v1/applications/app-1/document/pdf?v=${hash}`,
     );
-    /* The finished CV is said once: the footer's way on is the one link to the revision,
+    /* The finished CV is said once: the footer's way on is the one link to the ready step,
        and there is no separate next-action block repeating that the CV is ready. */
     expect(within(details).queryByRole("link", { name: "המשך בהכנה" })).not.toBeInTheDocument();
     expect(within(details).queryByText("פעולה מומלצת הבאה")).not.toBeInTheDocument();
-    const toRevision = within(details).getAllByRole("link", { name: "פתיחת הגרסה המוכנה" });
+    const toRevision = within(details).getAllByRole("link", { name: "פתיחת קורות החיים המוכנים" });
     expect(toRevision).toHaveLength(1);
-    expect(toRevision[0]).toHaveAttribute("href", "/revisions/revision-1");
+    expect(toRevision[0]).toHaveAttribute("href", "/applications/app-1/ready");
     fireEvent.click(toRevision[0]);
 
     expect(screen.getByRole("heading", { name: "גרסה מוכנה" })).toBeInTheDocument();

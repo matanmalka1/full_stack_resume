@@ -4,9 +4,9 @@ import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 
-/* No active WorkingDraft, and none being rendered from an approval either. The screen
-   says so once and points at the one place that creates one, rather than reading a draft
-   that does not exist or leaving the reader on an empty page. */
+/* The document has no content yet (or no document exists before the first analysis). The
+   screen says so once and points at the one place that creates it, rather than drawing an
+   editor over nothing or leaving the reader on an empty page. */
 export const DraftEmptyState = ({ applicationId }: { applicationId: string }) => (
   <Callout
     action={
@@ -14,7 +14,7 @@ export const DraftEmptyState = ({ applicationId }: { applicationId: string }) =>
         חזרה לניתוח והתאמה
       </Link>
     }
-    title="אין כרגע טיוטה פעילה למועמדות הזו"
+    title="לקורות החיים של המועמדות הזו אין עדיין טיוטה"
     tone="neutral"
   >
     מסך המועמדות מציג את המצב המדויק ואת הפעולה שיוצרת טיוטה.

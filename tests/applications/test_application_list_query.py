@@ -16,10 +16,12 @@ from cv_engine.application.queries import (
     ApplicationListItemView,
     ApplicationListQuery,
     ApplicationSort,
+    ContentCheck,
+    DocumentState,
     PreparationState,
-    WorkingDraftState,
     narrow_application_list,
 )
+from cv_engine.domain.contracts.recruitment import ApplicationStatus
 
 
 def item(
@@ -47,7 +49,8 @@ def item(
         terminal_outcome=terminal_outcome,
         is_closed=is_closed,
         preparation_state=preparation_state,
-        working_draft_state=WorkingDraftState.NONE,
+        document_state=DocumentState.NONE,
+        content_check=ContentCheck.NONE,
         active_job_snapshot_id="snap-1",
         created_at=created_at,
         updated_at=updated_at,
@@ -113,13 +116,13 @@ def test_stages_narrow_to_the_named_states_and_an_empty_set_narrows_nothing() ->
     rows = [
         item("a", preparation_state=PreparationState.NEEDS_ANALYSIS),
         item("b", preparation_state=PreparationState.READY),
-        item("c", preparation_state=PreparationState.NEEDS_REVIEW),
+        item("c", preparation_state=PreparationState.DRAFT_IN_PROGRESS),
     ]
 
     named = narrow_application_list(
         rows,
         ApplicationListQuery(
-            stages=frozenset({PreparationState.READY, PreparationState.NEEDS_REVIEW})
+            stages=frozenset({PreparationState.READY, PreparationState.DRAFT_IN_PROGRESS})
         ),
     )
     assert sorted(ids(named.items)) == ["b", "c"]
@@ -300,7 +303,7 @@ def test_dashboard_facets_ignore_their_own_axis_and_keep_other_filters() -> None
         rows,
         ApplicationListQuery(
             activity=ActivityFilter.OPEN,
-            recruitment_statuses=frozenset({"interview"}),
+            recruitment_statuses=frozenset({ApplicationStatus.INTERVIEW}),
         ),
     )
 

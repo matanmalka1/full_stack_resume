@@ -2,16 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import {
-  applicationDetailQueryKey,
-  applicationListQueryPrefix,
-  invalidateApplicationViews,
-  replaceWorkingDraft,
-  startAnalysis,
-  startDraftGeneration,
-} from "@/api/applications";
+import { applicationListQueryPrefix, invalidateApplicationViews, startAnalysis } from "@/api/applications";
 import type { ApplicationDetail, Operation } from "@/api/contracts";
-import { archiveWorkingDraft, workingDraftQueryKey, workingDraftQueryOptions } from "@/api/drafts";
+import { buildFromAnalysis, createDraft, invalidateDocumentViews } from "@/api/documents";
 import { type QueuedOperation, isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
 import { executionProvider, settingsQueryOptions } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
@@ -21,15 +14,15 @@ import { usePreparationContinuation } from "../model/usePreparationContinuation"
 import type { WorkflowActionPlan } from "../model/workflowActionPlan";
 
 /* Every command the preparation screen sends, and the guards that say when each may be
-   sent. Nothing here holds screen state: the replace dialog's own decision belongs to
-   the screen that opens it and reaches the command as an argument. */
+   sent. Nothing here holds screen state: the rebuild dialog's confirmation belongs to the
+   screen that opens it. */
 
 /* The analyze command on its own, because two surfaces send it and only one of them
    needs anything else. The first analysis of an Application is offered among the
    workflow's next steps; a re-analysis is offered beside the analysis it would replace,
    in the diagnostics tab. Both send this exact command, and reaching it through the full
-   command hook mounted the stale-draft version read and the in-flight Operation query a
-   second time for a button that needs neither. */
+   command hook mounted the in-flight Operation query a second time for a button that needs
+   none of it. */
 export const useAnalyzeCommand = (detail: ApplicationDetail, onQueued: (operationId: string) => void) => {
   const queryClient = useQueryClient();
   const { settings } = useSettings();
@@ -85,15 +78,9 @@ export const useAutomaticDraft = ({
   const settingsQuery = useQuery(settingsQueryOptions);
   const { intent, mark } = usePreparationContinuation(applicationId);
 
-  /* One auto-draft per analysis-and-plan pair, whichever effect reaches it first.
-     Continuation after a plain analysis and continuation after a decision are two entry
-     conditions to the *same* generate, and both can be true in the same commit once a
-     decision has cleared the last review reason: the analysis is succeeded and the
-     projection now shows no open review. Keyed on the sources rather than on the trigger,
-     they used to dispatch two commands the server saw as different work - two concurrent
-     generates for one draft, which crashed the second. This ref is the shared latch that
-     lets exactly one through; the source-derived idempotency key below is the same guard at
-     the API boundary, for a race this ref cannot see across reloads. */
+  /* One auto-draft per document hash, whichever render reaches it first. The source-
+     derived idempotency key below is the same guard at the API boundary, for a race this
+     ref cannot see across reloads. */
   const dispatchedSourcesRef = useRef<string | null>(null);
   const scopeRef = useRef(applicationId);
   const mountedRef = useRef(true);
@@ -105,14 +92,11 @@ export const useAutomaticDraft = ({
     };
   }, [applicationId]);
 
+  /* The automatic path stays deterministic and offline: no provider is named, so the
+     server's default lane drafts it. */
   const automaticDraft = useMutation({
     mutationFn: ({ sources }: AutomaticDraftAttempt) =>
-      startDraftGeneration(
-        sources.applicationId,
-        sources.analysisId,
-        sources.planId,
-        `auto-draft:${sources.analysisId}:${sources.planId}`,
-      ),
+      createDraft(sources.applicationId, sources.documentHash, `auto-draft:${sources.documentHash}`),
     onSuccess: ({ operation: queued }, attempt) => {
       queryClient.setQueryData(operationQueryKey(queued.id), queued);
       void queryClient.invalidateQueries({ queryKey: applicationListQueryPrefix });
@@ -135,91 +119,42 @@ export const useAutomaticDraft = ({
     }
     const sources = autoDraftSources(operation, settingsQuery.data?.settings, detail);
     if (sources !== null && sources.applicationId === applicationId) {
-      const dispatchKey = `${sources.applicationId}:${sources.analysisId}:${sources.planId}`;
+      const dispatchKey = `${sources.applicationId}:${sources.documentHash}`;
       if (dispatchedSourcesRef.current === dispatchKey) return;
       dispatchedSourcesRef.current = dispatchKey;
       automaticDraft.mutate({ sources, triggerOperationId: operationId });
     }
   }, [applicationId, attemptedOperationId, automaticDraft, detail, operation, operationId, settingsQuery.data]);
 
-  /* Applying review decisions is synchronous, so there is no analyze Operation to
-     trigger the continuation above. Once the refreshed projection confirms that every
-     review reason closed, continue from its exact active analysis and plan. */
-  useEffect(() => {
-    if (
-      detail === undefined ||
-      detail.application.id !== applicationId ||
-      detail.application.deleted_at != null ||
-      !detail.available_actions.includes("create_draft") ||
-      detail.blocked_actions.some(({ action }) => action === "create_draft") ||
-      detail.active_working_draft_id != null ||
-      (operation !== undefined && (operation.application_id !== applicationId || !isTerminalOperation(operation))) ||
-      settingsQuery.data?.settings.auto_generate_when_review_not_required !== true ||
-      intent?.decisionSources?.applicationId !== applicationId ||
-      intent.decisionSources.analysisId !== detail.active_analysis_id ||
-      intent.decisionSources.planId !== detail.active_selection_plan_id ||
-      detail.preparation_state !== "ready_to_draft" ||
-      detail.review_reasons.length !== 0 ||
-      detail.working_draft_state !== "none" ||
-      detail.active_operation != null ||
-      detail.active_analysis_id == null ||
-      detail.active_selection_plan_id == null
-    ) {
-      return;
-    }
-    const triggerOperationId = `decision:${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
-    if (attemptedOperationId === triggerOperationId) return;
-    const dispatchKey = `${applicationId}:${detail.active_analysis_id}:${detail.active_selection_plan_id}`;
-    if (dispatchedSourcesRef.current === dispatchKey) return;
-    dispatchedSourcesRef.current = dispatchKey;
-    automaticDraft.mutate({
-      sources: {
-        applicationId,
-        analysisId: detail.active_analysis_id,
-        planId: detail.active_selection_plan_id,
-      },
-      triggerOperationId,
-    });
-  }, [applicationId, attemptedOperationId, automaticDraft, detail, intent, operation, settingsQuery.data]);
-
-  /* A navigation receipt is intent, not proof of activation. Wait for this exact
-     WorkingDraft in the current projection and never consume another URL's late result. */
-  const activatedDraftId = operation?.outputs.find(
-    (output) => output.active && output.output_type === "working_draft",
-  )?.output_id;
+  /* A navigation receipt is intent, not proof of activation. Wait until the projection
+     reports content for this Application, and never consume another URL's late result. */
   const navigationPending =
     operation?.application_id === applicationId &&
     operation.operation_type === "create_draft" &&
     operation.status === "succeeded" &&
     detail?.application.id === applicationId &&
     detail.application.deleted_at == null &&
-    detail.working_draft_state !== "stale" &&
-    detail.stale_reasons.length === 0 &&
     detail.review_reasons.length === 0 &&
     (detail.active_operation == null || detail.active_operation.id === operation.id) &&
-    activatedDraftId !== undefined &&
     intent?.draftOperationId === operation.id;
+  const contentArrived =
+    detail !== undefined &&
+    detail.preparation_state !== "needs_analysis" &&
+    detail.preparation_state !== "ready_to_draft";
 
   useEffect(() => {
-    if (!navigationPending || operation === undefined || detail?.active_working_draft_id !== activatedDraftId) return;
+    if (!navigationPending || !contentArrived) return;
     navigate(routePaths.draft(applicationId), { replace: true, state: null });
-  }, [activatedDraftId, applicationId, detail?.active_working_draft_id, navigate, navigationPending, operation]);
+  }, [applicationId, contentArrived, navigate, navigationPending]);
 
   /* What the screen reporting this Application's work should say instead of reporting a
-     finished run, while this hook is about to start or move to the next one.
-
-     The same two continuations the effects above own, asked one render earlier: between a
+     finished run, while this hook is about to start or move to the next one: between a
      succeeded analyze and the generate that follows it, and between a succeeded generate
-     and the editor this hook navigates to. Both windows last a poll or an effect tick, and
-     in both the Operation overlay must stay open rather than close on "הושלמה" and reopen
-     for what comes next - announcing a stop the flow never made, at the one moment the
-     reader had been waiting to look at.
+     and the editor this hook navigates to. In both the Operation overlay must stay open
+     rather than close on "הושלמה" and reopen for what comes next.
 
      A dispatch that failed ends the first: with no continuation coming, the analysis has
-     genuinely finished and its run settles like any other. The second is keyed on the
-     history entry intent rather than on the Operation's type, for the reason the effect above
-     gives - the marker says this screen started the generate, which a reload arriving at a
-     long-finished one does not, and only the screen that started it is going anywhere. */
+     genuinely finished and its run settles like any other. */
   const continuation =
     operation?.status !== "succeeded"
       ? undefined
@@ -236,11 +171,7 @@ export const useAutomaticDraft = ({
 
 /* A.1: which actions are offered comes from the projection, read by `workflowActionPlan`
    and handed in. What is left here is the commands the preparation screen sends and the
-   in-flight guard that says when they may be sent.
-
-   No screen state: the replace dialog's own decision belongs to the screen that opens it
-   and reaches the command as an argument, which is what keeps this a module of commands
-   rather than a hook holding half a dialog. */
+   in-flight guard that says when they may be sent. */
 export const useWorkflowCommands = (
   detail: ApplicationDetail,
   plan: WorkflowActionPlan,
@@ -253,23 +184,13 @@ export const useWorkflowCommands = (
   const queryClient = useQueryClient();
   const { mark } = usePreparationContinuation(detail.application.id);
 
-  /* Whether durable work is in flight for this Application, and therefore whether the
-     two stale-draft commands may be sent at all.
-
-     Neither `isPending` nor the projection answers this alone. `isPending` ends at the
+  /* Whether durable work is in flight for this Application. `isPending` ends at the
      accepted `202`, which is the moment the work *starts*; the projection reports the
-     Operation only on its next read. Between them sits a window in which the screen
-     showed two live buttons over a running replacement - long enough to archive the
-     draft that replacement was about to write to, or to queue a second one.
+     Operation only on its next read. The locally queued id closes that window, read from
+     the cache the command populated so it stops counting once the record is terminal.
 
-     So the locally queued id closes the near end and the projection covers the rest. The
-     seeded Operation is read from the cache the command populated, so the id stops
-     counting as in-flight once that record reaches a terminal status rather than staying
-     latched until the projection catches up.
-
-     This is a courtesy, not the safety mechanism. Another tab, a reload, or any other
-     client can still send a competing command, which is why the engine refuses a
-     replacement whose draft moved rather than trusting a disabled button. */
+     This is a courtesy, not the safety mechanism: every command carries the document hash
+     it was read with, and the engine refuses one addressed to a document that moved. */
   const [queuedId, setQueuedId] = useState<string | null>(null);
   const follow = useCallback(
     (operationId: string) => {
@@ -281,44 +202,9 @@ export const useWorkflowCommands = (
 
   const { analyze, settings } = useAnalyzeCommand(detail, follow);
 
-  /* The lane the two draft commands run in. Neither offers the reader a choice on the
-     screen, so both take the Settings default - which is the only place that choice is
-     made. It lives here rather than in `useAnalyzeCommand` because analysis stopped
-     reading it when it became AI-only. */
+  /* The lane the generate runs in. The screen offers the reader no choice, so it takes the
+     Settings default - the only place that choice is made. */
   const provider = executionProvider(settings);
-
-  /* The two commands that write a WorkingDraft, followed the same way and marked the same
-     way: the draft they produce is worked on in the editor, so the run is registered as
-     one that moves the reader there when it succeeds. `useAutomaticDraft`, mounted by the
-     same screen, owns that move for both this and the automatic continuation. Analyze is
-     not marked - it stays on this screen, which is where its verdict is read. */
-  const followQueued = ({ operation }: QueuedOperation) => {
-    queryClient.setQueryData(operationQueryKey(operation.id), operation);
-    if (!mark({ applicationId: operation.application_id, draftOperationId: operation.id })) return;
-    follow(operation.id);
-    void invalidateApplicationViews(queryClient, detail.application.id);
-  };
-
-  /* One key per source pair: a resent generate for the same analysis and plan is the
-     same command, and a different pair is a different one. */
-  const draftKey = `draft:${plan.createDraft?.analysisId}:${plan.createDraft?.selectionPlanId}`;
-
-  /* §14: the version the two stale-draft commands are addressed to.
-
-     `expected_edit_version` is optimistic concurrency, and it only does that job if it
-     comes from a read of the draft itself - the projection carries the draft's id but not
-     its version. Conditional, so an Application with nothing to replace opens no second
-     request, and shared with the editor's own read through one cache key.
-
-     Read on view rather than on press deliberately: fetching it inside the command would
-     make the guard describe the instant of sending rather than what the reader was looking
-     at, and a draft edited in another tab would be overwritten instead of refused. */
-  const staleDraftId = plan.replaceDraft?.workingDraftId ?? plan.archiveDraft?.workingDraftId ?? null;
-  const staleDraftQuery = useQuery({
-    ...workingDraftQueryOptions(staleDraftId ?? ""),
-    enabled: staleDraftId !== null,
-  });
-  const editVersion = staleDraftQuery.data?.draft.edit_version ?? null;
 
   const queuedOperationQuery = useQuery({
     ...operationQueryOptions(queuedId ?? ""),
@@ -327,102 +213,64 @@ export const useWorkflowCommands = (
   const queuedStillRunning = queuedId !== null && !isTerminalOperation(queuedOperationQuery.data);
   const workInFlight = operationLive || queuedStillRunning || detail.active_operation != null;
 
-  /* One key per replaced version: a resent answer for the same version is the same
-     command, and a new version is a different one. */
-  const replaceKey = `replace:${staleDraftId}:${editVersion}`;
+  /* The generate writes the document's content, which is worked on in the editor, so the
+     run is registered as one that moves the reader there when it succeeds.
+     `useAutomaticDraft`, mounted by the same screen, owns that move. */
+  const followQueued = ({ operation }: QueuedOperation) => {
+    queryClient.setQueryData(operationQueryKey(operation.id), operation);
+    if (!mark({ applicationId: operation.application_id, draftOperationId: operation.id })) return;
+    follow(operation.id);
+    void invalidateApplicationViews(queryClient, detail.application.id);
+  };
 
   const draft = useMutation({
     mutationFn: async () => {
-      /* Availability is the projection's answer, but the IDs are this call's arguments:
-         a generate without both of them is not a command this screen may send. */
+      /* Availability is the projection's answer, but the hash is this call's argument: a
+         generate without it is not a command this screen may send. */
       if (plan.createDraft === null) {
-        throw new Error("create_draft was offered without an active analysis and selection plan");
+        throw new Error("create_draft was offered without a document to address");
       }
-      return startDraftGeneration(
+      /* One key per document hash: a resent generate for the same document is the same
+         command, and a changed document is a different one. */
+      return createDraft(
         detail.application.id,
-        plan.createDraft.analysisId,
-        plan.createDraft.selectionPlanId,
-        draftKey,
-        { provider },
-      );
-    },
-    onSuccess: followQueued,
-  });
-
-  /* A stale version is the guard doing its job, not a failure to retry: the draft moved
-     since this screen read it, so the answer is to show the conflict and re-read, and let
-     the reader decide again against what is actually there. `retry: false` on mutations is
-     the standing policy (§8.6); this adds the re-read. */
-  const onVersionConflict = () => {
-    if (staleDraftId !== null) {
-      void queryClient.invalidateQueries({ queryKey: workingDraftQueryKey(staleDraftId) });
-    }
-    void queryClient.invalidateQueries({ queryKey: applicationDetailQueryKey(detail.application.id) });
-  };
-
-  /* The Keep decision arrives with the press rather than being read from state here: it
-     is the dialog's answer, and the dialog is the screen's, so the command takes it as
-     the argument it is. */
-  const replace = useMutation({
-    mutationFn: async ({ keepPrevious }: { keepPrevious: boolean }) => {
-      /* Availability is the projection's answer, the version is this call's argument, and
-         a replacement without either is not a command this screen may send. */
-      if (plan.replaceDraft === null || editVersion === null) {
-        throw new Error("replace_working_draft was offered without a draft version to address");
-      }
-      return replaceWorkingDraft(
-        detail.application.id,
+        plan.createDraft.documentHash,
+        `draft:${plan.createDraft.documentHash}`,
         {
-          expectedEditVersion: editVersion,
-          jobAnalysisId: plan.replaceDraft.analysisId,
-          keepPrevious,
-          selectionPlanId: plan.replaceDraft.selectionPlanId,
-          workingDraftId: plan.replaceDraft.workingDraftId,
+          provider,
         },
-        replaceKey,
-        { provider },
       );
     },
-    onError: onVersionConflict,
     onSuccess: followQueued,
   });
 
-  /* Synchronous, so there is no Operation to follow - only the caches whose answer it
-     changed: the draft it archived, and the projection that named it active. */
-  const archive = useMutation({
+  /* §14 `build_from_analysis`: synchronous, so there is no Operation to follow - only the
+     reads whose answer it changed. A refusal because the document moved is reported, and
+     the re-read shows the reader what is actually there before they decide again. */
+  const rebuild = useMutation({
     mutationFn: async () => {
-      if (plan.archiveDraft === null || editVersion === null) {
-        throw new Error("archive_working_draft was offered without a draft version to address");
+      if (plan.buildFromAnalysis === null) {
+        throw new Error("build_from_analysis was offered without an analysis and a document to address");
       }
-      return archiveWorkingDraft(plan.archiveDraft.workingDraftId, editVersion);
+      return buildFromAnalysis(
+        detail.application.id,
+        plan.buildFromAnalysis.documentHash,
+        plan.buildFromAnalysis.analysisId,
+      );
     },
-    onError: onVersionConflict,
-    onSuccess: () => {
-      onVersionConflict();
-    },
+    onSettled: () => invalidateDocumentViews(queryClient, detail.application.id),
   });
 
-  /* What actually holds the two stale-draft commands.
-
-     `workInFlight` covers durable work - an Operation queued here or reported by the
-     projection. Archiving is neither: it is synchronous, so it creates no Operation and
-     nothing above would notice it was running. Between its press and its answer both
-     buttons stayed live, which is the same competing-command window in miniature: long
-     enough to send a replacement addressed to a draft that is being archived. The two
-     in-flight mutations close it. */
-  const commandsBlocked = workInFlight || archive.isPending || replace.isPending;
-
-  const error = staleDraftQuery.error ?? analyze.error ?? draft.error ?? replace.error ?? archive.error;
+  const commandsBlocked = workInFlight || rebuild.isPending;
+  const error = analyze.error ?? draft.error ?? rebuild.error;
 
   return {
     analyze,
-    archive,
     commandsBlocked,
     draft,
-    editVersion,
     error,
     provider,
-    replace,
+    rebuild,
     settings,
     workInFlight,
   };

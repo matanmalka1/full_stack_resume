@@ -4,7 +4,7 @@
    This is the domain the Application hub composes a tab from, not the hub itself. The
    split matters in one direction: `applications` may reach in here, and nothing here
    reaches back - the labels below are preparation's own words, which is why the board,
-   the draft editor and the revision screen read them from here rather than from the
+   the draft editor and the ready screen read them from here rather than from the
    Application feature they used to sit in.
 
    A consumer that needs something not listed here needs it added here, not imported from
@@ -21,7 +21,8 @@ export { PreparationView } from "./components/PreparationView";
    The spine itself is reached only through here. */
 export { WizardStepShell } from "./components/WizardStepShell";
 /* What the projection is refusing and why, with the way to the control that answers it.
-   The draft editor reports the same review and stale reasons this screen does, so it
+   The draft editor and the ready screen report the same review reasons and warnings this
+   screen does, so it
    renders this region rather than a thinner copy of it that names a blocker without
    naming a way out. */
 export { PreparationAlerts } from "./stages/verification/PreparationAlerts";
@@ -51,15 +52,17 @@ export {
 export {
   actionDescription,
   actionLabel,
+  contentCheckLabels,
+  contentCheckTones,
+  documentStateLabels,
+  documentStateTones,
   preparationStateIcons,
   preparationStateLabels,
   preparationStateTones,
   reasonTitle,
   warningDetail,
   warningTitle,
-  workingDraftStateLabels,
-  workingDraftStateTones,
 } from "./model/preparationLabels";
-/* What the SelectionPlan decided about a fact. The draft editor names the same decisions
+/* What the document's selection decided about a fact. The draft editor names the same decisions
    beside the facts it offers to include, so the words are defined once. */
 export { omissionReasonLabels, selectionOutcomeLabels } from "./model/selectionLabels";

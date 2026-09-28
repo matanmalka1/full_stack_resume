@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from ....domain.analysis.normalize import normalize_analysis_proposal
 from ....domain.contracts.analysis import JobAnalysis, OverrideKey
+from ....domain.contracts.document import BuiltWith
 from ....domain.contracts.selection import SelectionManifest
 from ...commands import AnalyzeCommand
 from ...errors import (
@@ -21,15 +22,18 @@ from .selection_policy import AnalysisSelection
 
 @dataclass(frozen=True)
 class PreparedAnalysis:
+    """One analysis, computed but not written.
+
+    `selection` is the analysis's deterministic selection and `built_with` the
+    Knowledge versions it was built with: they become the CV document when this
+    analysis is the Application's first (§13), and are otherwise unused.
+    """
+
     result: JobAnalysis
-    plan_manifest: SelectionManifest
+    selection: SelectionManifest
+    built_with: BuiltWith
     provider: str
     model: str
-    candidate_context_version: str
-    candidate_context_hash: str
-    profile_version: str
-    selection_policy_version: str
-    track_emphasis_dependencies: dict[str, str]
     normalized_role: str
     evidence: ProviderEvidence | None = None
 
@@ -113,21 +117,17 @@ class AnalysisPreparation:
         # only leave the application classified by a combination the engine
         # refuses to act on.
         selected_profile = AnalysisSelection.profile(result, profiles)
-        plan_manifest = AnalysisSelection.manifest(result, knowledge)
+        selection = AnalysisSelection.manifest(result, knowledge)
 
         return PreparedAnalysis(
             result=result,
-            plan_manifest=plan_manifest,
+            selection=selection,
+            built_with=BuiltWith(
+                profile_version=profiles.version,
+                selection_policy_version=knowledge.policies.version,
+            ),
             provider=used_provider,
             model=used_model,
-            candidate_context_version=knowledge.candidate.context_version,
-            candidate_context_hash=knowledge.candidate.version_hash,
-            profile_version=profiles.version,
-            selection_policy_version=knowledge.policies.version,
-            track_emphasis_dependencies={
-                "track": result.track.value,
-                "emphasis": result.emphasis.value,
-            },
             normalized_role=selected_profile.normalized_role,
             evidence=evidence,
         )

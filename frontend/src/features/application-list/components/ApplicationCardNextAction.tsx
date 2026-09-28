@@ -74,9 +74,9 @@ export const nextActionHeading = (item: ApplicationListItem, attentive: boolean)
       title: actionLabel(item.recommended_action),
     };
   }
-  if (item.latest_ready_revision_id != null) {
+  if (item.document_state === "ready") {
     return {
-      command: { label: "פתיחה", strong: false, to: routePaths.revision(item.latest_ready_revision_id) },
+      command: { label: "פתיחה", strong: false, to: routePaths.ready(item.id) },
       description: null,
       failed: false,
       title: "קורות החיים מוכנים",
@@ -144,7 +144,7 @@ export const ApplicationCardNextAction = ({
 
   const reminderIsHeading = head.title === item.next_action && head.command === null;
   const overdue = !item.is_closed && isNextActionOverdue(item.next_action_date);
-  const showReadyRevision = item.latest_ready_revision_id != null && head.title !== "קורות החיים מוכנים";
+  const showReadyDocument = item.document_state === "ready" && head.title !== "קורות החיים מוכנים";
 
   return (
     <div className="flex w-full items-center gap-2">
@@ -175,12 +175,12 @@ export const ApplicationCardNextAction = ({
             )}
           </p>
         )}
-        {showReadyRevision && item.latest_ready_revision_id != null ? (
+        {showReadyDocument ? (
           <Link
             className="text-support font-medium text-cv-text-muted hover:text-cv-text hover:underline"
-            to={routePaths.revision(item.latest_ready_revision_id)}
+            to={routePaths.ready(item.id)}
           >
-            הגרסה המוכנה
+            קורות החיים המוכנים
           </Link>
         ) : null}
       </div>

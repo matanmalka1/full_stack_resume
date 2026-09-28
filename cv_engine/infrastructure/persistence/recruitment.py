@@ -9,7 +9,7 @@ from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import new_id
 from .base import json_text_record
 from .connection import SqlAlchemyTransactionManager
-from .tables import applications, recruitment_events, submissions
+from .tables import applications, recruitment_events
 
 
 class SqlAlchemyRecruitmentRepository:
@@ -170,26 +170,3 @@ class SqlAlchemyRecruitmentRepository:
             )
         )
         return event_id
-
-    def insert_submission(
-        self,
-        tx: WriteTransaction,
-        submission_id: str,
-        application_id: str,
-        submission_type: str,
-        approved_revision_id: str | None,
-        artifact_version_id: str | None,
-        submitted_at: str,
-        metadata: dict[str, Any],
-    ) -> None:
-        self._transactions.connection_for(tx, access="write").execute(
-            insert(submissions).values(
-                id=submission_id,
-                application_id=application_id,
-                submission_type=submission_type,
-                approved_revision_id=approved_revision_id,
-                artifact_version_id=artifact_version_id,
-                submitted_at=submitted_at,
-                metadata_json=metadata,
-            )
-        )

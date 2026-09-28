@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Index, Table, Text, text
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Table,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from ._helpers import IsoTimestamp, sequence_column, sql_values
@@ -56,6 +65,19 @@ Index(
     recruitment_events.c.seq,
 )
 
+# A Submission records a send that already happened (state-and-use-cases.md §18). An
+# internal one copies the document content and rendered files it sent, each file with
+# its own SHA-256; an external one carries none of them.
+_INTERNAL_REFERENCES = (
+    "job_snapshot_id",
+    "document_hash",
+    "content",
+    "html_path",
+    "html_sha256",
+    "pdf_path",
+    "pdf_sha256",
+)
+
 submissions = Table(
     "submissions",
     metadata,
@@ -63,16 +85,34 @@ submissions = Table(
     sequence_column("submissions"),
     Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id"), nullable=False),
     Column("submission_type", Text, nullable=False),
-    Column("approved_revision_id", UUID(as_uuid=False), ForeignKey("approved_revisions.id")),
-    Column("artifact_version_id", UUID(as_uuid=False), ForeignKey("artifact_versions.id")),
+    Column("job_snapshot_id", UUID(as_uuid=False)),
+    Column("document_hash", Text),
+    Column("content", JSONB(none_as_null=True)),
+    Column("html_path", Text, unique=True),
+    Column("html_sha256", Text),
+    Column("pdf_path", Text, unique=True),
+    Column("pdf_sha256", Text),
     Column("submitted_at", IsoTimestamp(), nullable=False),
     Column("metadata_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
     CheckConstraint("submission_type IN ('internal', 'external')", name="submission_type"),
     CheckConstraint(
-        "(submission_type = 'internal' AND approved_revision_id IS NOT NULL "
-        "AND artifact_version_id IS NOT NULL) OR "
-        "(submission_type = 'external' AND approved_revision_id IS NULL)",
+        "(submission_type = 'internal' AND "
+        + " AND ".join(f"{name} IS NOT NULL" for name in _INTERNAL_REFERENCES)
+        + ") OR (submission_type = 'external' AND "
+        + " AND ".join(f"{name} IS NULL" for name in _INTERNAL_REFERENCES)
+        + ")",
         name="references",
+    ),
+    CheckConstraint(
+        "(document_hash IS NULL OR length(document_hash) = 64) "
+        "AND (html_sha256 IS NULL OR length(html_sha256) = 64) "
+        "AND (pdf_sha256 IS NULL OR length(pdf_sha256) = 64)",
+        name="hash_length",
+    ),
+    ForeignKeyConstraint(
+        ("application_id", "job_snapshot_id"),
+        ("job_snapshots.application_id", "job_snapshots.id"),
+        ondelete="RESTRICT",
     ),
 )
 Index(

@@ -5,7 +5,7 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { cx } from "@/ui/cx";
-import { type FactRanking, type SelectionChange, factSignals } from "../../model/selectionManifest";
+import { type SelectionChange, factSignals } from "../../model/selectionManifest";
 import type { ProposalStatus } from "./useSelectionProposal";
 
 const processSteps = [
@@ -18,12 +18,10 @@ const processSteps = [
 const ChangeList = ({
   changes,
   direction,
-  rankings,
   supportsByFact,
 }: {
   changes: readonly SelectionChange[];
   direction: SelectionChange["direction"];
-  rankings: ReadonlyMap<string, FactRanking>;
   supportsByFact: ReadonlyMap<string, readonly Requirement[]>;
 }) => {
   const items = changes.filter((change) => change.direction === direction);
@@ -44,7 +42,7 @@ const ChangeList = ({
       <ul className="flex flex-col gap-2">
         {items.map(({ candidate }) => {
           const supports = supportsByFact.get(candidate.fact_id) ?? [];
-          const signals = factSignals(rankings.get(candidate.fact_id), supports);
+          const signals = factSignals(supports);
           return (
             <li className="rounded-control border border-cv-border bg-cv-surface p-3" key={candidate.fact_id}>
               <p className="text-support text-cv-text" dir="auto">
@@ -71,11 +69,10 @@ export const AiSelectionProposal = ({
   aiAvailable,
   busy,
   changes,
-  firstPlan,
+  offered,
   onDismiss,
   onPropose,
   pending,
-  rankings,
   rationale,
   resultVisible,
   settingsLoaded,
@@ -85,13 +82,14 @@ export const AiSelectionProposal = ({
   aiAvailable: boolean;
   busy: boolean;
   changes: readonly SelectionChange[];
-  firstPlan: boolean;
+  /* The projection offers `propose_selection` now. Whether it does is the server's answer
+     (§9); this panel only says so. */
+  offered: boolean;
   onDismiss: () => void;
   onPropose: () => void;
   pending: boolean;
-  rankings: ReadonlyMap<string, FactRanking>;
-  /* The active plan's recorded AI rationale: undefined when the plan did not come from an
-     AI proposal (or predates provenance), null when the proposal gave none. */
+  /* The selection's recorded AI rationale: undefined when the selection did not come from
+     an AI proposal, null when the proposal gave none. */
   rationale: string | null | undefined;
   resultVisible: boolean;
   settingsLoaded: boolean;
@@ -112,7 +110,7 @@ export const AiSelectionProposal = ({
           ה־AI עובר על העובדות מול דרישות המשרה ומציע אילו להוסיף ואילו להוציא. לאחר ההצעה יוצג בדיוק מה השתנה ולמה.
         </p>
       </div>
-      {aiAvailable ? (
+      {aiAvailable && offered ? (
         <Button
           disabled={busy || !settingsLoaded || status.kind === "running"}
           onClick={onPropose}
@@ -136,6 +134,8 @@ export const AiSelectionProposal = ({
 
     {!aiAvailable && settingsLoaded ? (
       <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
+    ) : aiAvailable && !offered ? (
+      <p className="text-support text-cv-text-muted">הצעת AI אינה זמינה למסמך במצבו הנוכחי.</p>
     ) : null}
 
     {rationale === undefined ? null : (
@@ -182,18 +182,16 @@ export const AiSelectionProposal = ({
       <div className="flex flex-col gap-3 rounded-control bg-cv-surface p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-support font-bold text-cv-text">
-            {firstPlan
-              ? "ההצעה יצרה את בחירת העובדות. עובדות שה־AI כלל או החריג מופיעות במסנן ״שינויים מפורשים״."
-              : changes.length === 0
-                ? "ההצעה לא שינתה אילו עובדות נכנסות לקורות החיים."
-                : `ההצעה שינתה ${changes.length === 1 ? "עובדה אחת" : `${changes.length} עובדות`} בקורות החיים:`}
+            {changes.length === 0
+              ? "ההצעה לא שינתה אילו עובדות נכנסות לקורות החיים."
+              : `ההצעה שינתה ${changes.length === 1 ? "עובדה אחת" : `${changes.length} עובדות`} בקורות החיים:`}
           </p>
           <Button onClick={onDismiss} variant="ghost">
             סגירה
           </Button>
         </div>
-        <ChangeList changes={changes} direction="added" rankings={rankings} supportsByFact={supportsByFact} />
-        <ChangeList changes={changes} direction="removed" rankings={rankings} supportsByFact={supportsByFact} />
+        <ChangeList changes={changes} direction="added" supportsByFact={supportsByFact} />
+        <ChangeList changes={changes} direction="removed" supportsByFact={supportsByFact} />
         {changes.length === 0 ? null : (
           <p className="text-caption text-cv-text-muted">
             השינויים מסומנים גם ברשימת העובדות למטה, ואפשר להחזיר כל עובדה להחלטת המנוע או לשנות אותה ידנית.

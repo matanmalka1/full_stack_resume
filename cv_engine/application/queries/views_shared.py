@@ -10,13 +10,15 @@ query already computed. This module necessarily depends on both
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import Field
 
 from ...domain.contracts.recruitment import ApplicationStatus
+from ...domain.document import ContentCheck, DocumentState, PreparationState
 from ..commands import BoundaryDTO
 from ..operations import OperationView
-from .views_prep import JobAnalysisView, JobSnapshotView, PreparationState, WorkingDraftState
+from .views_prep import JobAnalysisView, JobSnapshotView
 from .views_tracking import RecruitmentTimelineItemView
 
 
@@ -67,23 +69,24 @@ class BlockedActionView(BoundaryDTO):
 
 
 class ApplicationStateView(BoundaryDTO):
+    """The §9 action policy projection, derived from one consistent read."""
+
     recruitment_status: str
     terminal_outcome: str | None = None
     preparation_state: PreparationState
-    working_draft_state: WorkingDraftState
+    document_state: DocumentState
+    content_check: ContentCheck
     review_reasons: list[ReasonView] = []
-    stale_reasons: list[ReasonView] = []
-    primary_stale_reason: str | None = None
     warnings: list[WarningView] = []
     active_operation: OperationView | None = None
     latest_operation: OperationView | None = None
     active_job_snapshot_id: str
-    active_analysis_id: str | None = None
-    active_selection_plan_id: str | None = None
-    active_working_draft_id: str | None = None
-    latest_approved_revision_id: str | None = None
-    latest_ready_revision_id: str | None = None
-    newer_draft_in_progress: bool = False
+    latest_analysis_id: str | None = None
+    document_id: str | None = None
+    document_hash: str | None = None
+    document_analysis_id: str | None = None
+    approved_at: str | None = None
+    last_render_error: dict[str, Any] | None = None
     available_actions: list[str] = []
     blocked_actions: list[BlockedActionView] = []
     recommended_action: str | None = None
@@ -174,11 +177,11 @@ class ApplicationPreset(StrEnum):
     """
 
     NEEDS_ATTENTION = "needs_attention"
-    """Waiting on the user: a review decision to make, a source no longer current,
-    or a warning raised against the Application."""
+    """Waiting on the user: a review decision to make, or a warning raised against
+    the Application."""
 
     READY_TO_SEND = "ready_to_send"
-    """A rendered CV exists and can be collected and submitted."""
+    """The document is Ready: rendered at its current approved basis."""
 
     ACTIVE_INTERVIEWS = "active_interviews"
     """Live conversations with the employer, from first recruiter contact through

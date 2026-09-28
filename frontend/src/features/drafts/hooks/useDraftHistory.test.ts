@@ -1,8 +1,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DraftClaim, WorkingDraft } from "@/api/contracts";
-import { draft as draftFixture } from "@/test/fixtures";
+import type { DraftClaim } from "@/api/contracts";
+import { cvDocument } from "@/test/fixtures";
+import type { EditableDocument } from "../model/drafts.types";
 import { useDraftHistory } from "./useDraftHistory";
 
 const claim = (id: string, text = id): DraftClaim => ({
@@ -13,17 +14,17 @@ const claim = (id: string, text = id): DraftClaim => ({
   text,
 });
 
-const workingDraft = (): WorkingDraft =>
-  draftFixture({
-    outline: {
-      headline: claim("headline", "Engineer"),
-      contacts: [],
-      sections: [
-        { name: "experience", claims: [claim("a"), claim("b")] },
-        { name: "skills", claims: [claim("c")] },
-      ],
-    },
-  });
+const workingDraft = (): EditableDocument => ({
+  ...cvDocument(),
+  outline: {
+    headline: claim("headline", "Engineer"),
+    contacts: [],
+    sections: [
+      { name: "experience", claims: [claim("a"), claim("b")] },
+      { name: "skills", claims: [claim("c")] },
+    ],
+  },
+});
 
 const setup = () => {
   const queueClaimOrder = vi.fn();

@@ -1,102 +1,73 @@
-"""§15: recording what one exact working-draft version validated as."""
+"""§15 `check_document`: validate the content and store the report with its basis."""
 
 from __future__ import annotations
 
-from ....domain.contracts.drafts import WorkingDraft
-from ....domain.contracts.validation import ValidationReport
-from ....domain.draft_markdown import serialize_markdown
-from ....domain.knowledge import Knowledge
-from ....domain.validation import validate_draft as run_draft_validation
-from ...chain import ChainError, check_loaded_draft_chain
-from ...commands import ValidateDraftCommand, ValidationRunResult
-from ...errors import LineageBroken, StateConflict, UnknownRecord
-from ...ports import KnowledgeStore, TransactionManager
-from ...ports.drafts import DraftLifecycleStore, DraftValidationContext, DraftValidationSourceReader
-from ...ports.validation_store import ValidationStore
-from ..analysis.service import load_analysis_knowledge
-from .inputs import require_content_hash, require_working_version, validation_lineage
+from ....domain.document import content_check, document_state
+from ....util import utc_now
+from ...commands import CheckDocumentCommand, DocumentCheckResult
+from ...errors import PreconditionFailed
+from ...ports import TransactionManager
+from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.documents import DocumentStore
+from ..documents import (
+    current_basis,
+    load_knowledge,
+    read_document_source,
+    refuse_deleted,
+    require_hash,
+    validate_document,
+)
 
 
 class DraftValidationService:
-    """The pre-render validation run, recorded whether or not it passed."""
+    """The content check, stored whether or not it passed."""
 
     def __init__(
         self,
         *,
         transactions: TransactionManager,
-        drafts: DraftLifecycleStore,
-        sources: DraftValidationSourceReader,
-        validations: ValidationStore,
-        knowledge: KnowledgeStore,
+        documents: DocumentStore,
+        sources: AnalysisSelectionSourceReader,
+        knowledge: AnalysisKnowledgeSource,
     ):
         self.transactions = transactions
-        self.drafts = drafts
+        self.documents = documents
         self.sources = sources
-        self.validations = validations
         self.knowledge = knowledge
 
-    def validate_draft(self, command: ValidateDraftCommand) -> ValidationRunResult:
-        """§15: validate one exact WorkingDraft version, always recording the run.
+    def check_document(self, command: CheckDocumentCommand) -> DocumentCheckResult:
+        """§15: run the validation contract and store `content_report`, `passed`, basis.
 
-        `passed=false` is an outcome, not an error: the run is written either
-        way, because a failed validation is exactly the evidence the user needs
-        and the state projection reads. Only a validator that could not execute
-        is a failure, and that surfaces as an infrastructure refusal rather than
-        as a report nobody produced.
+        `passed=false` is an outcome, not an error: the report is stored either way,
+        because a failed check is exactly the evidence the user needs. A validator
+        that could not execute is an application/infrastructure error and stores
+        nothing. No provider is called.
         """
         with self.transactions.read() as tx:
-            try:
-                working = self.drafts.working_draft(tx, command.working_draft_id)
-            except UnknownRecord as exc:
-                raise UnknownRecord(f"unknown working draft: {command.working_draft_id}") from exc
-            require_working_version(working, command.expected_edit_version)
-            context = self.sources.validation_context(tx, working)
-        if context.deleted_at is not None:
-            raise StateConflict(f"application is deleted: {working.application_id}")
-        knowledge = load_analysis_knowledge(self.knowledge)
-        report = self._run_validation(working, knowledge, context)
+            source = read_document_source(tx, self.documents, self.sources, command.application_id)
+        refuse_deleted(command.application_id, source.deleted_at)
+        require_hash(source.document, command.expected_document_hash)
+        if source.document.content is None:
+            raise PreconditionFailed("the document has no content to check yet")
+        knowledge = load_knowledge(self.knowledge)
+        report = validate_document(source, knowledge)
+        checked = current_basis(source.document, knowledge)
         with self.transactions.write() as tx:
-            current = self.drafts.lock_working_draft(tx, working.id)
-            require_working_version(current, working.edit_version)
-            require_content_hash(current, working.content_hash)
-            validation_id = self.validations.record_validation(
+            updated = self.documents.stamp_check(
                 tx,
-                working.application_id,
-                "pre-render",
+                command.application_id,
+                command.expected_document_hash,
                 report,
-                lineage=validation_lineage(working, knowledge),
+                checked,
+                updated_at=utc_now(),
             )
-        return ValidationRunResult(
-            application_id=working.application_id,
-            working_draft_id=working.id,
-            validation_run_id=validation_id,
-            edit_version=working.edit_version,
-            content_hash=working.content_hash,
+        return DocumentCheckResult(
+            application_id=command.application_id,
+            document_id=updated.id,
+            document_hash=updated.document_hash,
+            document_state=document_state(updated, checked),
+            content_check=content_check(updated, checked),
             passed=report.passed,
             report=report,
+            approved_at=updated.approved_at if updated.approved_basis == checked else None,
         )
-
-    def _run_validation(
-        self, working: WorkingDraft, knowledge: Knowledge, context: DraftValidationContext
-    ) -> ValidationReport:
-        """Validate one loaded draft and record the immutable run for it."""
-        facts, profiles, policies = knowledge.facts, knowledge.profiles, knowledge.policies
-        draft = working.source
-        chain = check_loaded_draft_chain(
-            context.chain, working.application_id, draft, profiles, facts
-        )
-        try:
-            _, analysis = chain.bound()
-        except ChainError as exc:
-            raise LineageBroken(f"draft chain rejected: {exc}") from exc
-        report = run_draft_validation(
-            draft,
-            serialize_markdown(draft),
-            facts,
-            profiles.get(draft.profile),
-            analysis,
-            plan=context.plan,
-            policies=policies,
-            presentations=knowledge.presentations,
-        )
-        return report

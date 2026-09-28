@@ -40,17 +40,14 @@ from .problems import (
 from .routers import (
     analyses,
     applications,
-    approved_revisions,
     artifacts,
+    documents,
     facts,
     health,
     maintenance,
     operations,
-    selection_plans,
     settings,
     tracking,
-    validation_runs,
-    working_drafts,
 )
 from .services import ApiServices
 from .versioning import API_PREFIX, API_VERSION
@@ -131,15 +128,12 @@ def create_app(
         health.router,
         applications.router,
         analyses.router,
-        working_drafts.router,
-        approved_revisions.router,
         artifacts.router,
+        documents.router,
         operations.router,
-        selection_plans.router,
         facts.router,
         settings.router,
         tracking.router,
-        validation_runs.router,
         maintenance.router,
     ):
         app.include_router(

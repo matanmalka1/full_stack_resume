@@ -1,7 +1,7 @@
 import type { OmissionReason, SelectionOutcome } from "@/api/contracts";
 import type { DecisionSource } from "./selectionManifest";
 
-/* What the SelectionPlan decided about a fact, in words. Exhaustive over the generated
+/* What the document's selection decided about a fact, in words. Exhaustive over the generated
    unions: an outcome or omission reason added to the backend fails this build rather
    than reaching a screen as an untranslated value.
 

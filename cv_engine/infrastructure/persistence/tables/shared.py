@@ -5,9 +5,8 @@ it carries prep columns (`track`, `profile`, `emphasis`) and
 tracking columns (`current_status`, `next_action`, ...) side by side on
 purpose — see the architecture spec on `applications` as the authoritative
 current-state projection paired with append-only event tables. `artifacts`/
-`artifact_versions` are prep-produced but `submissions` (tracking) references
-`artifact_versions` directly for external-submission attachments, so it is a
-genuine shared reference target. `audit_records` is written from both prep and
+`artifact_versions` hold provider-response evidence, which the Operation runner
+(below) registers for any operation type. `audit_records` is written from both prep and
 tracking services. `operations`/its support tables are generic Operation-runner
 infrastructure read by the combined query projection (`active_operation`/
 `latest_operation` span both domains); every operation type it runs today
@@ -54,11 +53,11 @@ RECRUITMENT_STATUSES = (
 TERMINAL_OUTCOMES = ("accepted", "rejected", "withdrawn")
 OPERATION_TYPES = (
     "analyze_job",
-    "propose_selection_plan",
+    "propose_selection",
     "create_draft",
     "regenerate_section",
     "regenerate_claim",
-    "render_revision",
+    "render_document",
 )
 OPERATION_STATUSES = (
     "queued",
@@ -128,6 +127,9 @@ artifacts = Table(
     Column("artifact_type", Text, nullable=False),
     Column("logical_name", Text, nullable=False),
     Column("created_at", IsoTimestamp(), nullable=False),
+    # Rendered and approved outputs live on the document and on Submissions; the only
+    # artifact left is AI provenance.
+    CheckConstraint("artifact_type = 'provider_response'", name="artifact_type"),
     UniqueConstraint("application_id", "artifact_type", "logical_name"),
 )
 
@@ -147,16 +149,11 @@ artifact_versions = Table(
     Column("facts_version", Text),
     Column("job_snapshot_id", UUID(as_uuid=False), ForeignKey("job_snapshots.id")),
     Column("metadata_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
-    Column("revision_id", UUID(as_uuid=False), ForeignKey("approved_revisions.id")),
     CheckConstraint("version_number > 0", name="version_number_positive"),
-    CheckConstraint(
-        "lifecycle_status IN ('approved', 'archived', 'provider-output', 'rendered', 'rendered-invalid')",
-        name="lifecycle_status",
-    ),
+    CheckConstraint("lifecycle_status = 'provider-output'", name="lifecycle_status"),
     UniqueConstraint("artifact_id", "version_number"),
 )
 Index("idx_versions_artifact", artifact_versions.c.artifact_id)
-Index("idx_versions_revision", artifact_versions.c.revision_id)
 
 audit_records = Table(
     "audit_records",
@@ -342,27 +339,6 @@ Index(
     operation_outputs.c.operation_id,
     operation_outputs.c.created_at,
     operation_outputs.c.id,
-)
-
-idempotency_receipts = Table(
-    "idempotency_receipts",
-    metadata,
-    Column("id", UUID(as_uuid=False), primary_key=True),
-    Column("command_type", Text, nullable=False),
-    Column("idempotency_key", Text, nullable=False),
-    Column("payload_json", JSONB, nullable=False),
-    Column("payload_hash", Text, nullable=False),
-    Column("reserved_entity_id", UUID(as_uuid=False), nullable=False),
-    Column("status", Text, nullable=False),
-    Column("result_json", JSONB),
-    Column("created_at", IsoTimestamp(), nullable=False),
-    Column("completed_at", IsoTimestamp()),
-    CheckConstraint("length(trim(idempotency_key)) > 0", name="idempotency_key_nonempty"),
-    CheckConstraint("length(payload_hash) = 64", name="payload_hash_length"),
-    CheckConstraint("status IN ('pending', 'completed')", name="status"),
-    CheckConstraint("(status = 'completed') = (result_json IS NOT NULL)", name="result"),
-    CheckConstraint("(status = 'completed') = (completed_at IS NOT NULL)", name="completed_at"),
-    UniqueConstraint("command_type", "idempotency_key"),
 )
 
 app_settings = Table(

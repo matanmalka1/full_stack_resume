@@ -7,6 +7,7 @@ from ...application.operations import (
     FailureReason,
     OperationAction,
     OperationFailureCode,
+    OperationOutputType,
     OperationPhase,
     OperationStatus,
     OperationType,
@@ -24,7 +25,7 @@ class OperationOutputResponse(HttpSchema):
     reported rather than inferred from the status.
     """
 
-    output_type: str
+    output_type: OperationOutputType
     output_id: str
     active: bool
 

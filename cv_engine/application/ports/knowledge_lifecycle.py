@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from ...domain.contracts.drafts import WorkingDraft
-from ...domain.contracts.selection import SelectionManifest, SelectionPlan
 from ..knowledge_mutations import KnowledgeMutation, PrepareKnowledgeMutation
 from .transactions import ReadTransaction, WriteTransaction
 
@@ -55,23 +53,3 @@ class KnowledgeLifecycleStore(Protocol):
     def latest_fact_statuses(self, tx: ReadTransaction) -> dict[str, str]: ...
 
     def get_analysis(self, tx: ReadTransaction, analysis_id: str) -> dict[str, Any]: ...
-
-    def active_working_draft(self, tx: ReadTransaction, application_id: str) -> WorkingDraft: ...
-
-    def create_selection_plan(
-        self,
-        tx: WriteTransaction,
-        application_id: str,
-        job_analysis_id: str,
-        plan: SelectionManifest,
-        *,
-        candidate_context_version: str,
-        candidate_context_hash: str,
-        profile_version: str,
-        selection_policy_version: str,
-        track_emphasis_dependencies: dict[str, str],
-        plan_id: str | None = ...,
-        created_at: str | None = ...,
-    ) -> SelectionPlan: ...
-
-    def selection_plan(self, tx: ReadTransaction, selection_plan_id: str) -> SelectionPlan: ...

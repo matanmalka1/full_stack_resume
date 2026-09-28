@@ -2,10 +2,10 @@ import { Check, Lock, Minus, Plus, Sparkles } from "lucide-react";
 import { useId } from "react";
 
 import type { Requirement } from "@/api/analyses";
-import type { SelectionPlanCandidate } from "@/api/contracts";
+import type { DocumentCandidate } from "@/api/contracts";
 import { cx } from "@/ui/cx";
 import { candidateIncluded, candidateLocked } from "../../model/factGroups";
-import { type FactRanking, type FactSignal, decisionSource, factSignals } from "../../model/selectionManifest";
+import { type FactSignal, decisionSource, factSignals } from "../../model/selectionManifest";
 import { decisionSourceLabels, omissionReasonLabels, selectionOutcomeLabels } from "../../model/selectionLabels";
 
 export type FactChoice = "auto" | "include" | "exclude";
@@ -22,7 +22,7 @@ const signalClasses: Record<FactSignal["tone"], string> = {
   negative: "bg-cv-surface-muted text-cv-text-muted",
 };
 
-const outcomeSentence = (candidate: SelectionPlanCandidate): string =>
+const outcomeSentence = (candidate: DocumentCandidate): string =>
   candidate.reason == null
     ? selectionOutcomeLabels[candidate.outcome]
     : `${selectionOutcomeLabels[candidate.outcome]} · ${omissionReasonLabels[candidate.reason]}`;
@@ -38,19 +38,17 @@ export const FactRow = ({
   excluded,
   onChoose,
   pinned,
-  ranking,
   savedExcluded,
   savedPinned,
   supports,
 }: {
   aiProposed: boolean;
   busy: boolean;
-  candidate: SelectionPlanCandidate;
+  candidate: DocumentCandidate;
   change: "added" | "removed" | undefined;
   excluded: readonly string[];
   onChoose: (factId: string, choice: FactChoice) => void;
   pinned: readonly string[];
-  ranking: FactRanking | undefined;
   savedExcluded: readonly string[];
   savedPinned: readonly string[];
   supports: readonly Requirement[];
@@ -61,7 +59,7 @@ export const FactRow = ({
   const choice = choiceFor(candidate.fact_id, pinned, excluded);
   const pending = !locked && choice !== choiceFor(candidate.fact_id, savedPinned, savedExcluded);
   const source = decisionSource(candidate, pinned, excluded);
-  const signals = factSignals(ranking, supports);
+  const signals = factSignals(supports);
   const unreadable = candidate.text == null;
   // The AI's mark only while the reader still holds it; once changed, the decision is theirs.
   const fromAi = aiProposed && choice !== "auto" && !pending;
@@ -122,7 +120,7 @@ export const FactRow = ({
       </p>
 
       {signals.length === 0 ? null : (
-        <ul aria-label="שיקולי הדירוג" className="flex flex-wrap gap-1.5">
+        <ul aria-label="דרישות שהעובדה עונה עליהן" className="flex flex-wrap gap-1.5">
           {signals.map((signal) => (
             <li
               className={cx("rounded-control px-2 py-0.5 text-caption", signalClasses[signal.tone])}

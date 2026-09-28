@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { SelectionPlanCandidate } from "@/api/contracts";
+import type { DocumentCandidate } from "@/api/contracts";
 import { factGroups, factTotals, includableFactIds } from "./factGroups";
 
-const candidate = (overrides: Partial<SelectionPlanCandidate> = {}): SelectionPlanCandidate => ({
+const candidate = (overrides: Partial<DocumentCandidate> = {}): DocumentCandidate => ({
   fact_id: "fact.a",
   outcome: "selected",
   reason: null,
@@ -13,7 +13,7 @@ const candidate = (overrides: Partial<SelectionPlanCandidate> = {}): SelectionPl
   ...overrides,
 });
 
-const plan: SelectionPlanCandidate[] = [
+const plan: DocumentCandidate[] = [
   candidate({ fact_id: "role.title", outcome: "selected", text: "Team Leader", user_selectable: false }),
   candidate({ fact_id: "exp.selected" }),
   candidate({ fact_id: "exp.omitted", outcome: "omitted", reason: "below_section_budget" }),

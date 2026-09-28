@@ -9,36 +9,31 @@ from typing import Any
 from ...domain.analysis.projection import fit_level, fit_score
 from ...domain.analysis.projection import gaps as project_gaps
 from ...domain.contracts.analysis import JobAnalysis
+from ...domain.contracts.document import CVDocument, DocumentSubmission
 from ...domain.contracts.drafts import DraftDocument
-from ...domain.contracts.records import ApprovedRevision
-from ...domain.contracts.selection import SelectionPlan
+from ...domain.contracts.selection import SelectionManifest
+from ...domain.document import ContentCheck, DocumentState, current_approved_at
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
-from ...domain.revision_comparison import DraftComparison
 from ...domain.selection import ROLE_BLOCK_TAG, STRUCTURAL_STYLES
 from .narrowing import application_is_closed
 from .views_prep import (
-    ApprovedRevisionView,
     ArtifactVersionView,
+    BuiltWithView,
     ClaimReviewAssertionView,
     ClaimReviewEvidenceView,
-    DecisionRecordView,
+    DocumentCandidateView,
+    DocumentSelectionView,
+    DocumentView,
     DraftClaimView,
     DraftFactView,
     DraftOutlineView,
     DraftSectionView,
     JobAnalysisView,
     JobSnapshotView,
-    RevisionChangeSummaryView,
-    RevisionClaimChangeView,
-    RevisionComparisonView,
-    RevisionSectionComparisonView,
-    SelectionPlanCandidateView,
-    SelectionPlanDetailView,
-    WorkingDraftFactsView,
 )
 from .views_shared import ApplicationListItemView, ApplicationStateView, ApplicationView
-from .views_tracking import RecruitmentTimelineItemView
+from .views_tracking import RecruitmentTimelineItemView, SubmissionView
 
 
 def _fit_projection(analysis: JobAnalysis | None) -> dict[str, Any]:
@@ -97,62 +92,23 @@ def draft_outline_view(draft: DraftDocument) -> DraftOutlineView:
     )
 
 
-def draft_facts_view(
-    working_draft_id: str,
-    application_id: str,
-    selection_plan_id: str,
-    draft: DraftDocument,
-    facts: FactStore,
-) -> WorkingDraftFactsView:
-    """Return every linked fact and every candidate this draft considered.
+def _rendering(facts: FactStore, fact_id: str, language: str) -> str | None:
+    try:
+        return facts.rendering(fact_id, language)
+    except (KeyError, ValueError):
+        return None
 
-    Missing fact renderings remain a readable stale state instead of turning the
-    editor query into a technical failure.
+
+def document_selection_view(
+    selection: SelectionManifest, facts: FactStore, language: str
+) -> DocumentSelectionView:
+    """Pair the selection's ranking with readable current canonical fact renderings.
+
+    A fact that no longer resolves is shown without text and is not selectable,
+    rather than turning the read into a technical failure.
     """
-    linked: dict[str, list[str]] = {}
-    for claim in draft_claims(draft):
-        for fact_id in claim.fact_ids:
-            linked.setdefault(fact_id, []).append(claim.claim_id)
-
-    candidates = {
-        candidate.fact_id: candidate
-        for candidate in (draft.selection.candidates if draft.selection is not None else [])
-    }
-
-    def rendering(fact_id: str) -> str | None:
-        try:
-            return facts.rendering(fact_id, draft.language)
-        except (KeyError, ValueError):
-            return None
-
-    return WorkingDraftFactsView(
-        working_draft_id=working_draft_id,
-        application_id=application_id,
-        selection_plan_id=selection_plan_id,
-        language=draft.language,
-        facts=[
-            DraftFactView(
-                fact_id=fact_id,
-                text=rendering(fact_id),
-                linked_claim_ids=linked.get(fact_id, []),
-                section=candidates[fact_id].section if fact_id in candidates else None,
-                outcome=candidates[fact_id].outcome if fact_id in candidates else None,
-                reason=candidates[fact_id].reason if fact_id in candidates else None,
-            )
-            for fact_id in sorted(set(linked) | set(candidates))
-        ],
-    )
-
-
-def selection_plan_detail_view(
-    plan: SelectionPlan,
-    facts: FactStore,
-    language: str,
-) -> SelectionPlanDetailView:
-    """Pair the frozen ranking with readable current canonical fact renderings."""
-
-    candidates: list[SelectionPlanCandidateView] = []
-    for candidate in plan.plan.candidates:
+    candidates: list[DocumentCandidateView] = []
+    for candidate in selection.candidates:
         try:
             fact = facts.get(candidate.fact_id, canonical_only=True)
             text = facts.rendering(candidate.fact_id, language)
@@ -163,7 +119,7 @@ def selection_plan_detail_view(
             text = None
             user_selectable = False
         candidates.append(
-            SelectionPlanCandidateView(
+            DocumentCandidateView(
                 fact_id=candidate.fact_id,
                 text=text,
                 section=candidate.section,
@@ -172,16 +128,92 @@ def selection_plan_detail_view(
                 user_selectable=user_selectable,
             )
         )
-
-    return SelectionPlanDetailView(
-        **plan.model_dump(mode="json"),
-        language=language,
-        facts_version=facts.version,
-        pinned_fact_ids=list(plan.plan.pinned_fact_ids),
-        excluded_fact_ids=list(plan.plan.excluded_fact_ids),
-        proposed_by=plan.plan.proposed_by,
-        proposal_rationale=plan.plan.proposal_rationale,
+    return DocumentSelectionView(
+        emphasis=selection.emphasis,
+        emphasis_override=selection.emphasis_override,
+        selected_fact_ids=list(selection.selected_fact_ids),
+        pinned_fact_ids=list(selection.pinned_fact_ids),
+        excluded_fact_ids=list(selection.excluded_fact_ids),
+        proposed_by=selection.proposed_by,
+        proposal_rationale=selection.proposal_rationale,
         candidates=candidates,
+    )
+
+
+def document_facts_view(
+    selection: SelectionManifest, content: DraftDocument | None, facts: FactStore, language: str
+) -> list[DraftFactView]:
+    """§20 candidate accounting: every fact the content links, and every candidate.
+
+    The union of the two, because neither covers the other. Contacts come from the
+    candidate context and never appear in a selection, while an omitted candidate
+    appears in no claim.
+    """
+    linked: dict[str, list[str]] = {}
+    if content is not None:
+        for claim in draft_claims(content):
+            for fact_id in claim.fact_ids:
+                linked.setdefault(fact_id, []).append(claim.claim_id)
+    candidates = {candidate.fact_id: candidate for candidate in selection.candidates}
+    return [
+        DraftFactView(
+            fact_id=fact_id,
+            text=_rendering(facts, fact_id, language),
+            linked_claim_ids=linked.get(fact_id, []),
+            section=candidates[fact_id].section if fact_id in candidates else None,
+            outcome=candidates[fact_id].outcome if fact_id in candidates else None,
+            reason=candidates[fact_id].reason if fact_id in candidates else None,
+        )
+        for fact_id in sorted(set(linked) | set(candidates))
+    ]
+
+
+def document_view(
+    document: CVDocument,
+    *,
+    language: str,
+    facts: FactStore,
+    document_state: DocumentState,
+    content_check: ContentCheck,
+) -> DocumentView:
+    """Build the public document view field by field, so no stored path can leak."""
+    return DocumentView(
+        id=document.id,
+        application_id=document.application_id,
+        analysis_id=document.analysis_id,
+        document_hash=document.document_hash,
+        built_with=BuiltWithView(
+            profile_version=document.built_with.profile_version,
+            selection_policy_version=document.built_with.selection_policy_version,
+        ),
+        language=language,
+        selection=document_selection_view(document.selection, facts, language),
+        content=document.content,
+        outline=None if document.content is None else draft_outline_view(document.content),
+        facts=document_facts_view(document.selection, document.content, facts, language),
+        document_state=document_state,
+        content_check=content_check,
+        content_report=document.content_report,
+        approved_at=current_approved_at(document, document_state),
+        last_render_error=document.last_render_error,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+    )
+
+
+def submission_view(submission: DocumentSubmission) -> SubmissionView:
+    """What was sent, with each file's checksum and never its stored location."""
+    return SubmissionView(
+        id=submission.id,
+        application_id=submission.application_id,
+        submission_type=submission.submission_type,
+        submitted_at=submission.submitted_at,
+        job_snapshot_id=submission.job_snapshot_id,
+        document_hash=submission.document_hash,
+        content=submission.content,
+        html_sha256=submission.html_sha256,
+        pdf_sha256=submission.pdf_sha256,
+        metadata=submission.metadata,
     )
 
 
@@ -235,8 +267,7 @@ def recruitment_timeline_view(
                 actor_type=audit.get("actor_type"),
                 client=audit.get("client"),
                 submission_type=row["submission_type"],
-                approved_revision_id=row.get("approved_revision_id"),
-                artifact_version_id=row.get("artifact_version_id"),
+                document_hash=row.get("document_hash"),
                 metadata=json.loads(row.get("metadata_json") or "{}"),
             )
         )
@@ -292,84 +323,5 @@ def artifact_version_view(record: dict[str, Any]) -> ArtifactVersionView:
                 if key != "metadata"
             },
             "metadata": json.loads(record.get("metadata_json") or "{}"),
-        }
-    )
-
-
-def approved_revision_view(
-    revision: ApprovedRevision, qualification: Any, parent_revision_id: str | None = None
-) -> ApprovedRevisionView:
-    """Build the public view field by field so stored payload paths cannot leak."""
-    return ApprovedRevisionView(
-        id=revision.id,
-        application_id=revision.application_id,
-        version_number=revision.version_number,
-        working_draft_id=revision.working_draft_id,
-        job_snapshot_id=revision.job_snapshot_id,
-        job_analysis_id=revision.job_analysis_id,
-        selection_plan_id=revision.selection_plan_id,
-        validation_run_id=revision.validation_run_id,
-        draft_edit_version=revision.draft_edit_version,
-        draft_content_hash=revision.draft_content_hash,
-        facts_version=revision.facts_version,
-        approved_at=revision.approved_at,
-        decision_provenance=revision.decision_provenance,
-        ready_qualified=qualification.ready_qualified,
-        pdf_artifact_version_id=qualification.pdf_artifact_version_id,
-        html_artifact_version_id=qualification.html_artifact_version_id,
-        ready_validation=qualification.validation,
-        parent_revision_id=parent_revision_id,
-    )
-
-
-def revision_comparison_view(
-    base: ApprovedRevision, target: ApprovedRevision, comparison: DraftComparison
-) -> RevisionComparisonView:
-    return RevisionComparisonView(
-        application_id=target.application_id,
-        base_revision_id=base.id,
-        base_version_number=base.version_number,
-        target_revision_id=target.id,
-        target_version_number=target.version_number,
-        job_snapshot_changed=base.job_snapshot_id != target.job_snapshot_id,
-        job_analysis_changed=base.job_analysis_id != target.job_analysis_id,
-        selection_plan_changed=base.selection_plan_id != target.selection_plan_id,
-        facts_version_changed=base.facts_version != target.facts_version,
-        profile_changed=comparison.profile_changed,
-        emphasis_changed=comparison.emphasis_changed,
-        language_changed=comparison.language_changed,
-        summary=RevisionChangeSummaryView(**asdict(comparison.summary)),
-        sections=[
-            RevisionSectionComparisonView(
-                kind=section.kind,
-                name=section.name,
-                status=section.status,
-                changes=[
-                    RevisionClaimChangeView(
-                        kind=change.kind,
-                        style=change.style,
-                        before_text=change.before_text,
-                        after_text=change.after_text,
-                        fact_ids=list(change.fact_ids),
-                        from_section=change.from_section,
-                    )
-                    for change in section.changes
-                ],
-                unchanged_count=section.unchanged_count,
-            )
-            for section in comparison.sections
-        ],
-    )
-
-
-def decision_view(record: dict[str, Any]) -> DecisionRecordView:
-    return DecisionRecordView.model_validate(
-        {
-            **{
-                key: record.get(key)
-                for key in DecisionRecordView.model_fields
-                if key != "structured"
-            },
-            "structured": json.loads(record.get("structured_json") or "{}"),
         }
     )

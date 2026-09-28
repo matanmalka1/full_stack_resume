@@ -21,12 +21,9 @@ from cv_engine.infrastructure.persistence.application_projections import (
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from cv_engine.infrastructure.persistence.draft_lifecycle import (
-    SqlAlchemyDraftLifecycleRepository,
-)
+from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.tables import metadata
-from cv_engine.infrastructure.persistence.validation_store import SqlAlchemyValidationRepository
 from cv_engine.runtime.config import resolve_config
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -133,18 +130,13 @@ def analysis_plan_store(transaction_manager):
 
 
 @pytest.fixture
-def draft_lifecycle_store(transaction_manager):
-    return SqlAlchemyDraftLifecycleRepository(transaction_manager)
+def document_store(transaction_manager):
+    return SqlAlchemyDocumentStore(transaction_manager)
 
 
 @pytest.fixture
 def artifact_catalog(transaction_manager):
     return SqlAlchemyArtifactCatalog(transaction_manager)
-
-
-@pytest.fixture
-def validation_store(transaction_manager):
-    return SqlAlchemyValidationRepository(transaction_manager)
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ Status: DESIGNED, 2026-09-22 — coordination contract specified in
 (`inspect_orphans`/`reclaim_orphans` command contracts); implementation pending.
 
 A write lease now reserves a payload's destination (a group key, such as one
-ApprovedRevision's JSON+Markdown pair) before any bytes are written, under physical keys
+Submission's HTML+PDF pair) before any bytes are written, under physical keys
 scoped to that specific attempt_id. `reclaim_orphans` fences an expired lease first
 (`pending -> reclaiming`, the same conditional update a genuine registration needs, so
 the two serialize against each other), then checks - before deleting anything - that

@@ -10,18 +10,18 @@ import { settingsQueryKey } from "@/api/settings";
 import { ApplicationPage } from "./ApplicationPage";
 
 const ANALYSES_PATH = "/api/v1/applications/app-1/analyses";
+const HASH = "a".repeat(64);
 
 const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail => ({
   recruitment_status: "saved",
   allowed_recruitment_transitions: ["withdrawn", "closed"],
   recruitment_timeline: [],
   preparation_state: "needs_analysis",
-  working_draft_state: "none",
+  document_state: "none",
+  content_check: "none",
   review_reasons: [],
-  stale_reasons: [],
   warnings: [],
   active_job_snapshot_id: "snap-1",
-  newer_draft_in_progress: false,
   available_actions: ["analyze"],
   blocked_actions: [],
   recommended_action: "analyze",
@@ -60,15 +60,19 @@ const queued = (overrides: Partial<Operation> = {}): Operation => ({
   ...overrides,
 });
 
-/* An Application whose analysis is on record and active. The base fixture leaves both
-   fields absent, which is the pre-analysis state, so only the tests that opt in here
-   render the analysis panel. */
+/* An Application whose first analysis is on record and created its document: a selection
+   and no content. The base fixture leaves all of it absent, which is the pre-analysis
+   state, so only the tests that opt in here render the analysis panel. */
 const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   detail({
     preparation_state: "ready_to_draft",
+    document_state: "draft",
     available_actions: ["create_draft"],
     recommended_action: "create_draft",
-    active_analysis_id: "analysis-1",
+    latest_analysis_id: "analysis-1",
+    document_id: "doc-1",
+    document_hash: HASH,
+    document_analysis_id: "analysis-1",
     latest_analysis: {
       id: "analysis-1",
       application_id: "app-1",
@@ -251,10 +255,7 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [
-        { output_type: "job_analysis", output_id: "analysis-1", active: true },
-        { output_type: "selection_plan", output_id: "plan-1", active: true },
-      ],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -281,7 +282,6 @@ describe("ApplicationPage at the preparation route", () => {
           analyzed_detail({
             active_operation: draftQueued ? drafting : null,
             latest_operation: analyzed,
-            active_selection_plan_id: "plan-1",
           }),
         ),
       );
@@ -296,10 +296,8 @@ describe("ApplicationPage at the preparation route", () => {
     await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
     const posts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
     expect(posts).toHaveLength(1);
-    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({
-      job_analysis_id: "analysis-1",
-      selection_plan_id: "plan-1",
-    });
+    expect(String(posts[0]?.[0])).toBe("/api/v1/applications/app-1/document/draft");
+    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({ expected_document_hash: HASH });
   });
 
   it("moves to the editor after the automatically generated draft succeeds", async () => {
@@ -309,10 +307,7 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [
-        { output_type: "job_analysis", output_id: "analysis-1", active: true },
-        { output_type: "selection_plan", output_id: "plan-1", active: true },
-      ],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const drafted = queued({
@@ -322,7 +317,6 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [{ output_type: "working_draft", output_id: "draft-1", active: true }],
     });
     let draftActivated = false;
     vi.stubGlobal(
@@ -345,11 +339,10 @@ describe("ApplicationPage at the preparation route", () => {
           jsonResponse(
             analyzed_detail({
               active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
-              active_selection_plan_id: "plan-1",
               ...(draftActivated
                 ? {
-                    active_working_draft_id: "draft-1",
-                    working_draft_state: "editing",
+                    document_state: "draft",
+                    content_check: "outdated",
                     preparation_state: "draft_in_progress",
                   }
                 : {}),
@@ -384,7 +377,6 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [{ output_type: "working_draft", output_id: "draft-1", active: true }],
     });
     let draftActivated = false;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -399,11 +391,10 @@ describe("ApplicationPage at the preparation route", () => {
           analyzed_detail({
             available_actions: ["create_draft"],
             recommended_action: "create_draft",
-            active_selection_plan_id: "plan-1",
             ...(draftActivated
               ? {
-                  active_working_draft_id: "draft-1",
-                  working_draft_state: "editing",
+                  document_state: "draft",
+                  content_check: "outdated",
                   preparation_state: "draft_in_progress",
                 }
               : {}),
@@ -426,13 +417,13 @@ describe("ApplicationPage at the preparation route", () => {
      on deterministic was still being charged for every generated draft. */
   it.each([
     {
-      body: { job_analysis_id: "analysis-1", selection_plan_id: "plan-1" },
+      body: { expected_document_hash: HASH },
       name: "runs the draft deterministically while AI is enabled but the mode is not",
       note: "היא נוצרת ברקע, בלי קריאת AI.",
       settings: aiEnabledDeterministicLane,
     },
     {
-      body: { job_analysis_id: "analysis-1", provider: "openai", selection_plan_id: "plan-1" },
+      body: { expected_document_hash: HASH, provider: "openai" },
       name: "runs the draft through the provider once the mode names the AI lane",
       note: "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע.",
       settings: aiLaneSettings,
@@ -449,7 +440,6 @@ describe("ApplicationPage at the preparation route", () => {
             : analyzed_detail({
                 available_actions: ["create_draft"],
                 recommended_action: "create_draft",
-                active_selection_plan_id: "plan-1",
               }),
         ),
       );
@@ -465,7 +455,7 @@ describe("ApplicationPage at the preparation route", () => {
 
     await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
     const post = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
-    expect(String(post?.[0])).toContain("/applications/app-1/working-draft/generate");
+    expect(String(post?.[0])).toContain("/applications/app-1/document/draft");
     expect(JSON.parse(String(post?.[1]?.body))).toEqual(body);
   });
 
@@ -567,7 +557,7 @@ describe("ApplicationPage at the preparation route", () => {
   it("does not present a superseded analysis as the one in force", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(analyzed_detail({ active_analysis_id: "analysis-9" }))),
+      vi.fn().mockResolvedValue(jsonResponse(analyzed_detail({ latest_analysis_id: "analysis-9" }))),
     );
 
     renderPage();
@@ -723,7 +713,8 @@ describe("ApplicationPage at the preparation route", () => {
         jsonResponse(
           detail({
             preparation_state: "draft_in_progress",
-            working_draft_state: "validation_failed",
+            document_state: "draft",
+            content_check: "failed",
             blocked_actions: [
               {
                 action: "approve",
@@ -738,7 +729,7 @@ describe("ApplicationPage at the preparation route", () => {
     renderPage();
 
     expect(await screen.findByText("הפעולה אישור הגרסה חסומה כרגע")).toBeInTheDocument();
-    expect(screen.getByText("האימות נכשל. צריך לתקן ולאמת מחדש.")).toBeInTheDocument();
+    expect(screen.getByText("הבדיקה נכשלה. צריך לתקן ולבדוק מחדש.")).toBeInTheDocument();
     expect(screen.queryByText("WORKING_DRAFT_REQUIRED")).not.toBeInTheDocument();
   });
   it("recovers a terminal analysis failure without route state and retries only the server-offered Operation", async () => {
@@ -891,9 +882,7 @@ describe("ApplicationPage at the preparation route", () => {
     const { client } = renderPage(aiSettings, { createdApplication: { operationId: null } });
     expect(await screen.findByText("המועמדות נוצרה, אך הניתוח לא הופעל")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ניתוח המשרה" })).toBeEnabled();
-    act(() =>
-      client.setQueryData(applicationDetailQueryKey("app-1"), analyzed_detail({ active_selection_plan_id: "plan-1" })),
-    );
+    act(() => client.setQueryData(applicationDetailQueryKey("app-1"), analyzed_detail()));
     await waitFor(() => expect(screen.queryByText("המועמדות נוצרה, אך הניתוח לא הופעל")).not.toBeInTheDocument());
     expect(await screen.findByRole("button", { name: "יצירת טיוטה" })).toBeInTheDocument();
   });
@@ -903,10 +892,7 @@ describe("ApplicationPage at the preparation route", () => {
       status: "succeeded",
       is_terminal: true,
       available_actions: [],
-      outputs: [
-        { output_type: "job_analysis", output_id: "analysis-1", active: true },
-        { output_type: "selection_plan", output_id: "plan-1", active: true },
-      ],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return Promise.reject(new TypeError("response lost"));
@@ -915,9 +901,7 @@ describe("ApplicationPage at the preparation route", () => {
           jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
         );
       if (String(input).includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
-      return Promise.resolve(
-        jsonResponse(analyzed_detail({ latest_operation: analyzed, active_selection_plan_id: "plan-1" })),
-      );
+      return Promise.resolve(jsonResponse(analyzed_detail({ latest_operation: analyzed })));
     });
     vi.stubGlobal("fetch", fetchMock);
     const settings = { ...deterministicSettings, auto_generate_when_review_not_required: true };
@@ -930,7 +914,7 @@ describe("ApplicationPage at the preparation route", () => {
     const keys = fetchMock.mock.calls
       .filter(([, init]) => init?.method === "POST")
       .map(([, init]) => (init?.headers as Headers | undefined)?.get("Idempotency-Key"));
-    expect(keys).toEqual(["auto-draft:analysis-1:plan-1", "auto-draft:analysis-1:plan-1"]);
+    expect(keys).toEqual([`auto-draft:${HASH}`, `auto-draft:${HASH}`]);
   });
 
   it("isolates late watched analysis results across URL changes and Back / Forward", async () => {
@@ -974,10 +958,7 @@ describe("ApplicationPage at the preparation route", () => {
     const analyzed = queued({
       status: "succeeded",
       is_terminal: true,
-      outputs: [
-        { output_type: "job_analysis", output_id: "analysis-1", active: true },
-        { output_type: "selection_plan", output_id: "plan-1", active: true },
-      ],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -994,7 +975,7 @@ describe("ApplicationPage at the preparation route", () => {
         jsonResponse(
           url.endsWith("/app-2")
             ? detail({ application: { ...detail().application, id: "app-2", company: "Other" } })
-            : analyzed_detail({ latest_operation: analyzed, active_selection_plan_id: "plan-1" }),
+            : analyzed_detail({ latest_operation: analyzed }),
         ),
       );
     });
@@ -1008,7 +989,7 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.queryByRole("heading", { name: "הרצת יצירת טיוטה" })).not.toBeInTheDocument();
   });
 
-  it("waits for the exact activated draft on refresh and does not repeat completed navigation on Back", async () => {
+  it("waits for the document's content on refresh and does not repeat completed navigation on Back", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
     });
@@ -1020,9 +1001,8 @@ describe("ApplicationPage at the preparation route", () => {
       operation_type: "create_draft",
       status: "succeeded",
       is_terminal: true,
-      outputs: [{ output_type: "working_draft", output_id: "draft-1", active: true }],
     });
-    const projection = analyzed_detail({ active_selection_plan_id: "plan-1", latest_operation: generated });
+    const projection = analyzed_detail({ latest_operation: generated });
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) =>
@@ -1038,8 +1018,8 @@ describe("ApplicationPage at the preparation route", () => {
     act(() =>
       client.setQueryData(applicationDetailQueryKey("app-1"), {
         ...projection,
-        active_working_draft_id: "draft-1",
-        working_draft_state: "editing",
+        document_state: "draft",
+        content_check: "outdated",
         preparation_state: "draft_in_progress",
       }),
     );
@@ -1053,7 +1033,7 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
     expect(screen.queryByText("הטיוטה נוצרה. מעבר לעורך הטיוטה…")).not.toBeInTheDocument();
   });
-  it.each(["inactive", "stale", "newer-draft"])(
+  it.each(["review-blocked", "no-content", "other-operation"])(
     "does not consume a restored navigation receipt for %s work",
     async (scenario) => {
       const generated = queued({
@@ -1061,13 +1041,22 @@ describe("ApplicationPage at the preparation route", () => {
         operation_type: "create_draft",
         status: "succeeded",
         is_terminal: true,
-        outputs: [{ output_type: "working_draft", output_id: "draft-1", active: scenario !== "inactive" }],
       });
       const projection = analyzed_detail({
-        active_selection_plan_id: "plan-1",
         latest_operation: generated,
-        active_working_draft_id: scenario === "newer-draft" ? "draft-2" : "draft-1",
-        working_draft_state: scenario === "stale" ? "stale" : "editing",
+        ...(scenario === "no-content" ? {} : { preparation_state: "draft_in_progress" as const }),
+        ...(scenario === "review-blocked"
+          ? {
+              review_reasons: [
+                {
+                  code: "PENDING_FACT_REQUIRES_RESOLUTION",
+                  message: "a claim has no confirmed fact",
+                  entity_references: {},
+                  allowed_resolution_actions: ["confirm_and_use_fact"],
+                },
+              ],
+            }
+          : {}),
       });
       vi.stubGlobal(
         "fetch",
@@ -1076,7 +1065,10 @@ describe("ApplicationPage at the preparation route", () => {
         ),
       );
       renderPage(deterministicSettings, {
-        preparationContinuation: { applicationId: "app-1", draftOperationId: "op-draft" },
+        preparationContinuation: {
+          applicationId: "app-1",
+          draftOperationId: scenario === "other-operation" ? "op-other" : "op-draft",
+        },
       });
       expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
       expect(screen.queryByText("Draft editor route")).not.toBeInTheDocument();
@@ -1084,45 +1076,89 @@ describe("ApplicationPage at the preparation route", () => {
   );
 });
 
-it.each(["matching", "other-application", "other-analysis", "other-plan"] as const)(
-  "restores only an exact decision continuation with Storage blocked: %s",
-  async (scenario) => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("blocked");
-    });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("blocked");
-    });
-    const preferences = { ...deterministicSettings, auto_generate_when_review_not_required: true };
-    const projection = analyzed_detail({ active_selection_plan_id: "plan-1", latest_operation: null });
-    const drafting = queued({ id: "op-draft", operation_type: "create_draft", status: "queued", is_terminal: false });
-    const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
-      if (String(input).includes("/settings")) return Promise.resolve(jsonResponse(preferences));
-      if (String(input).includes("/operations/")) return Promise.resolve(jsonResponse(drafting));
-      return Promise.resolve(jsonResponse(projection));
-    });
-    vi.stubGlobal("fetch", fetch);
-    const { client } = renderPage(preferences, {
-      preparationContinuation: {
-        applicationId: scenario === "other-application" ? "app-2" : "app-1",
-        decisionSources: {
-          applicationId: "app-1",
-          analysisId: scenario === "other-analysis" ? "old-analysis" : "analysis-1",
-          planId: scenario === "other-plan" ? "old-plan" : "plan-1",
+/* §14 `build_from_analysis`: a newer analysis never changes the document by itself. The
+   projection warns, and re-pinning is an explicit press - confirmed first when it would
+   discard written content. */
+describe("a document built on an older analysis", () => {
+  const olderDocument = (overrides: Partial<ApplicationDetail> = {}) =>
+    analyzed_detail({
+      preparation_state: "draft_in_progress",
+      latest_analysis_id: "analysis-1",
+      document_analysis_id: "analysis-0",
+      available_actions: ["build_from_analysis", "edit"],
+      recommended_action: null,
+      warnings: [
+        {
+          code: "DOCUMENT_ON_OLDER_ANALYSIS",
+          message: "the document is pinned to an older analysis",
+          entity_references: {},
         },
-      },
+      ],
+      ...overrides,
     });
-    await screen.findByText("Acme — Backend Engineer");
-    if (scenario === "matching") {
-      await waitFor(() => expect(fetch.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
-      const request = fetch.mock.calls.find((call) => call[1]?.method === "POST");
-      expect((request?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
-        "auto-draft:analysis-1:plan-1",
-      );
-    } else {
-      await waitFor(() => expect(client.isFetching()).toBe(0));
-      expect(fetch.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(0);
-    }
-  },
-);
+
+  it("warns, and rebuilds only after confirming that the draft's content is discarded", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === "POST"
+          ? jsonResponse({
+              application_id: "app-1",
+              document_id: "doc-1",
+              document_hash: "b".repeat(64),
+              document_state: "draft",
+              content_check: "none",
+              pending_claim_ids: [],
+            })
+          : jsonResponse(olderDocument()),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    expect(await screen.findByText("המסמך בנוי על ניתוח ישן יותר")).toBeInTheDocument();
+    await clickEnabledButton("בנייה מחדש מהניתוח החדש");
+    const dialog = await screen.findByRole("dialog", { name: "בניית המסמך מחדש מהניתוח החדש" });
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(0);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "בנייה מחדש מהניתוח החדש" }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
+    const post = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
+    expect(String(post?.[0])).toBe("/api/v1/applications/app-1/document/build-from-analysis");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ expected_document_hash: HASH, analysis_id: "analysis-1" });
+  });
+
+  it("rebuilds without asking while the document has no content to lose", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === "POST"
+          ? jsonResponse({
+              application_id: "app-1",
+              document_id: "doc-1",
+              document_hash: "b".repeat(64),
+              document_state: "draft",
+              content_check: "none",
+              pending_claim_ids: [],
+            })
+          : jsonResponse(olderDocument({ preparation_state: "ready_to_draft" })),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    await clickEnabledButton("בנייה מחדש מהניתוח החדש");
+    await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
+    expect(screen.queryByRole("dialog", { name: "בניית המסמך מחדש מהניתוח החדש" })).not.toBeInTheDocument();
+  });
+
+  it("is not offered unless the projection offers it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(olderDocument({ available_actions: ["edit"] }))));
+
+    renderPage();
+
+    expect(await screen.findByText("המסמך בנוי על ניתוח ישן יותר")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "בנייה מחדש מהניתוח החדש" })).not.toBeInTheDocument();
+  });
+});

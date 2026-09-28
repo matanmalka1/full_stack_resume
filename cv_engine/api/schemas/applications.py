@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from ...application.commands.prep import SOURCE_URL_MAX_CHARACTERS
-from ...application.queries import PreparationState, WorkingDraftState
+from ...domain.document import ContentCheck, DocumentState, PreparationState
 from .health import HttpSchema
 from .operations import OperationResponse
 from .tracking import CorrectableStatus, RecruitmentTimelineItemResponse, TransitionableStatus
@@ -109,7 +109,7 @@ class BlockedActionResponse(HttpSchema):
 class ApplicationStateResponse(HttpSchema):
     """The §9 action policy projection, and nothing wider.
 
-    The two lifecycle states are typed as the application enums rather than
+    The lifecycle states are typed as the domain enums rather than
     flattened to `str`, the same way `OperationResponse` spells its closed sets.
     `preparation_state` drives the workflow landmark and the Hebrew label a user
     reads; flattened to `string` the generated TypeScript cannot key a label map
@@ -126,20 +126,19 @@ class ApplicationStateResponse(HttpSchema):
     recruitment_status: str
     terminal_outcome: str | None = None
     preparation_state: PreparationState
-    working_draft_state: WorkingDraftState
+    document_state: DocumentState
+    content_check: ContentCheck
     review_reasons: list[ReasonResponse]
-    stale_reasons: list[ReasonResponse]
-    primary_stale_reason: str | None = None
     warnings: list[WarningResponse]
     active_operation: OperationResponse | None = None
     latest_operation: OperationResponse | None = None
     active_job_snapshot_id: str
-    active_analysis_id: str | None = None
-    active_selection_plan_id: str | None = None
-    active_working_draft_id: str | None = None
-    latest_approved_revision_id: str | None = None
-    latest_ready_revision_id: str | None = None
-    newer_draft_in_progress: bool
+    latest_analysis_id: str | None = None
+    document_id: str | None = None
+    document_hash: str | None = None
+    document_analysis_id: str | None = None
+    approved_at: str | None = None
+    last_render_error: dict[str, Any] | None = None
     available_actions: list[str]
     blocked_actions: list[BlockedActionResponse]
     recommended_action: str | None = None
@@ -228,7 +227,6 @@ class ApplicationListResponse(HttpSchema):
 class ArtifactVersionResponse(HttpSchema):
     id: str
     artifact_id: str
-    revision_id: str | None = None
     artifact_type: str
     logical_name: str
     version_number: int
@@ -245,17 +243,6 @@ class ArtifactVersionResponse(HttpSchema):
 
 class ArtifactVersionsResponse(HttpSchema):
     items: list[ArtifactVersionResponse]
-
-
-class DecisionRecordResponse(HttpSchema):
-    id: str
-    approved_revision_id: str
-    application_id: str
-    job_snapshot_id: str
-    job_analysis_id: str
-    structured: dict[str, Any]
-    summary: str
-    created_at: str
 
 
 class CloseApplicationResponse(HttpSchema):

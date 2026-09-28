@@ -20,12 +20,12 @@ from ..application.services.applications.queries import ApplicationQueryService
 from ..application.services.drafts import DraftAuthoringService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
+from ..application.services.drafts.selection import SelectionChangeService
 from ..application.services.drafts.validation import DraftValidationService
 from ..application.services.knowledge import FactLifecycleService, KnowledgeQueryService
 from ..application.services.maintenance import MaintenanceService
 from ..application.services.operations import (
     OperationLifecycleService,
-    OperationReplacementService,
     OperationSubmissionService,
 )
 from ..application.services.recruitment.lifecycle import RecruitmentService
@@ -61,6 +61,7 @@ class ApiServices:
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
+    selection: SelectionChangeService
     drafts: DraftAuthoringService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService
@@ -73,7 +74,6 @@ class ApiServices:
     maintenance: MaintenanceService
     operation_submissions: OperationSubmissionService
     operation_lifecycle: OperationLifecycleService
-    operation_replacements: OperationReplacementService
     settings: SettingsService
     identity: InstanceIdentity
     limits: ApiLimits

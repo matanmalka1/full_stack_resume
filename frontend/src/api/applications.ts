@@ -21,8 +21,6 @@ import type {
   DuplicateCheckResult,
   DuplicateMatch,
   DuplicateMatchReason,
-  GenerateWorkingDraftRequest,
-  ReplaceWorkingDraftRequest,
   Operation,
   PreparationState,
   RecruitmentStatus,
@@ -211,12 +209,6 @@ const jobSnapshotsPath = (applicationId: string): ApiPath =>
 const analysesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/analyses`;
 
-const generateWorkingDraftPath = (applicationId: string): ApiPath =>
-  `/api/v1/applications/${encodeURIComponent(applicationId)}/working-draft/generate`;
-
-const replaceWorkingDraftPath = (applicationId: string): ApiPath =>
-  `/api/v1/applications/${encodeURIComponent(applicationId)}/working-draft/replace`;
-
 /* The one read the application context screen is built on. §9 computes the whole
    projection in one read transaction, so it arrives as one answer and is rendered as
    one; nothing here recombines it into a second view of the same state.
@@ -257,8 +249,8 @@ export const watchedApplicationDetailQueryOptions = (applicationId: string) =>
    recruitment status.
 
    Search, filter, and sort are the server's answer, not this client's. They narrow by
-   `preparation_state`, which §9 computes from a record's snapshots, drafts, validations,
-   and revisions rather than storing on it - a client that filtered or ordered by it would
+   `preparation_state`, which §9 computes from a record's snapshots, analyses and CV
+   document rather than storing on it - a client that filtered or ordered by it would
    be re-deriving state the projection already owns. The query goes out as query
    parameters and the narrowed rows come back with `total`, the count before narrowing,
    so the screen can say how much it is not showing without asking twice.
@@ -290,9 +282,9 @@ export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
 
 /* A posting that changed after the Application was opened: one more immutable snapshot,
    never an edit of the one on record. The existing snapshot, the analyses run against it,
-   and every approved revision stay exactly as they are; what changes is which snapshot the
-   projection calls active, and the consequences of that - a superseded analysis, a stale
-   draft - are the engine's answer rather than this client's.
+   and every Submission stay exactly as they are; what changes is which snapshot the
+   projection calls active, and the consequences of that - a document built on an older
+   analysis - are the engine's answer rather than this client's.
 
    `source_metadata` is omitted rather than sent empty: the server's default is the absence
    of the field, and the Web intake has no metadata of its own to state.
@@ -369,88 +361,10 @@ export const startAnalysis = async (
   );
 };
 
-/* §14 and §21: the no-review continuation. A successful analysis commits the JobAnalysis
-   and its initial deterministic SelectionPlan together, which is exactly what lets Draft
-   be called with explicit source IDs; both are named by the caller here rather than
-   resolved server-side, so a plan the user never saw cannot become the one that is
-   drafted from. The Operation freezes them, and a source that moves before activation
-   fails as `SOURCE_CHANGED` instead of drafting from something else.
-
-   Manual AI mode may name `openai`; auto-generation deliberately leaves provider absent
-   so that path stays deterministic and offline. */
-export const startDraftGeneration = async (
-  applicationId: string,
-  jobAnalysisId: string,
-  selectionPlanId: string,
-  idempotencyKey: string,
-  options: { parentRevisionId?: string; provider?: "openai" } = {},
-): Promise<QueuedOperation> => {
-  const body: Pick<GenerateWorkingDraftRequest, "job_analysis_id" | "selection_plan_id"> &
-    Partial<Pick<GenerateWorkingDraftRequest, "parent_revision_id" | "provider">> = {
-    job_analysis_id: jobAnalysisId,
-    selection_plan_id: selectionPlanId,
-    ...(options.parentRevisionId === undefined ? {} : { parent_revision_id: options.parentRevisionId }),
-    ...(options.provider === undefined ? {} : { provider: options.provider }),
-  };
-
-  return queuedOperation(
-    await apiRequest<Operation>(generateWorkingDraftPath(applicationId), {
-      method: "POST",
-      body,
-      idempotencyKey,
-    }),
-  );
-};
-
-/* §14: build a new draft in place of a stale one, from the analysis now in force.
-
-   It is `generate`'s sibling and answers `202` the same way, but it carries two arguments
-   generate does not. `working_draft_id` with `expected_edit_version` names the exact
-   version being replaced, so a draft edited in another tab since this screen read it is a
-   `412` rather than a silent overwrite; the pair is stated rather than inferred, and a
-   draft belonging to another Application is refused for the broken lineage.
-
-   `keep_previous` is the Keep decision, and it materializes the immutable historical
-   snapshot before the replacement is attempted. The existing draft is not removed until
-   the replacement succeeds. */
-export const replaceWorkingDraft = async (
-  applicationId: string,
-  request: {
-    expectedEditVersion: number;
-    jobAnalysisId: string;
-    keepPrevious: boolean;
-    selectionPlanId: string;
-    workingDraftId: string;
-  },
-  idempotencyKey: string,
-  options: { provider?: "openai" } = {},
-): Promise<QueuedOperation> => {
-  /* `provider` and `keep_previous` both carry server-side defaults, so the generated type
-     makes them required while the request may omit them. Sent as a partial for the same
-     reason `generate` is: the deterministic route is the absence of the field, not a value
-     this client invents. */
-  const body: Omit<ReplaceWorkingDraftRequest, "provider"> & Partial<Pick<ReplaceWorkingDraftRequest, "provider">> = {
-    expected_edit_version: request.expectedEditVersion,
-    job_analysis_id: request.jobAnalysisId,
-    keep_previous: request.keepPrevious,
-    selection_plan_id: request.selectionPlanId,
-    working_draft_id: request.workingDraftId,
-    ...(options.provider === undefined ? {} : { provider: options.provider }),
-  };
-
-  return queuedOperation(
-    await apiRequest<Operation>(replaceWorkingDraftPath(applicationId), {
-      method: "POST",
-      body,
-      idempotencyKey,
-    }),
-  );
-};
-
 /* §Tracking: archive one Application without deleting anything.
 
-   It is an append-only status transition, not a delete: the record, its snapshots, and
-   every approved revision stay exactly as they are, and the Application keeps its row.
+   It is an append-only status transition, not a delete: the record, its snapshots, its
+   document and every Submission stay exactly as they are, and the Application keeps its row.
    What changes is which board it appears on - a closed Application is not what a board
    of live work is asking about, so the default list filter stops returning it.
 
@@ -467,8 +381,7 @@ export const closeApplication = async (applicationId: string): Promise<ClosedApp
 
 /* §Tracking: soft-delete one Application, orthogonal to `RecruitmentStatus` and callable
    from any current status including `closed`. Every immutable record it produced -
-   JobSnapshot, JobAnalysis, SelectionPlan, ValidationRun, ApprovedRevision, Artifact,
-   Submission, Operation - stays exactly as it is; only the default list/Dashboard
+   JobSnapshot, JobAnalysis, Artifact, Submission, Operation - stays exactly as it is; only the default list/Dashboard
    projection and duplicate detection stop surfacing the Application. There is no
    undelete in this phase, so the caller confirms before this is sent. */
 export const deleteApplication = async (applicationId: string): Promise<DeletedApplication> => {

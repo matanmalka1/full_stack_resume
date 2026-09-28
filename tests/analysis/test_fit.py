@@ -67,7 +67,9 @@ def test_an_unstated_importance_is_weighted_as_a_preference() -> None:
         _requirement(importance="mandatory", coverage="unsupported"),
         _requirement(requirement_id="r2", coverage="matched"),
     ]
-    assert fit_score(unknown_importance) > fit_score(mandatory)
+    unknown_score, mandatory_score = fit_score(unknown_importance), fit_score(mandatory)
+    assert unknown_score is not None and mandatory_score is not None
+    assert unknown_score > mandatory_score
 
 
 @pytest.mark.parametrize(
@@ -144,7 +146,8 @@ def test_hard_gaps_cap_the_level_however_well_the_rest_scored(
             changes["shortfall_severity"] = shortfall_severity
         requirements.append(_requirement(**changes))
 
-    assert fit_score(requirements) > FIT_SCORE_HIGH_THRESHOLD
+    score = fit_score(requirements)
+    assert score is not None and score > FIT_SCORE_HIGH_THRESHOLD
     assert fit_level(requirements) is level
     assert [gap.requirement_id for gap in hard_gaps(requirements, fact_store)] == hard_gap_ids
 

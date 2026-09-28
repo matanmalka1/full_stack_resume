@@ -1,6 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { classificationFromAnalysis } from "@/api/analyses";
+import { documentQueryOptions } from "@/api/documents";
+import { QueryState } from "@/ui/QueryState";
 import { actionLabel } from "../model/preparationLabels";
 import { Callout } from "@/ui/Callout";
 import { WideRow } from "@/ui/WideRow";
@@ -8,7 +11,7 @@ import { cx } from "@/ui/cx";
 import type { AnalysisDecisions, ApplicationDetail } from "@/api/contracts";
 import { workflowActionPlan } from "../model/workflowActionPlan";
 import { AnalysisStage } from "../stages/analysis/AnalysisStage";
-import { SelectionPlanPanel } from "../stages/content/SelectionPlanPanel";
+import { DocumentSelectionPanel } from "../stages/content/DocumentSelectionPanel";
 import { VerificationStage } from "../stages/verification/VerificationStage";
 import { MatchingConfigurationEditor } from "../stages/matching/MatchingConfigurationEditor";
 import { AnalysisStatusBanner } from "./AnalysisStatusBanner";
@@ -24,17 +27,25 @@ export const PreparationView = ({
   operationLive: boolean;
 }) => {
   const [matchingSaved, setMatchingSaved] = useState<AnalysisDecisions | null>(null);
+  /* The confirmation describes the projection the save returned; once the screen's own
+     projection has moved past it, it is no longer news about what is on screen. */
   const matchingSaveInContext =
     matchingSaved?.application_id === detail.application.id &&
-    matchingSaved.job_analysis_id === detail.active_analysis_id &&
-    matchingSaved.selection_plan_id === detail.active_selection_plan_id;
+    matchingSaved.state.latest_analysis_id === detail.latest_analysis_id &&
+    matchingSaved.state.document_hash === detail.document_hash;
   const classification = classificationFromAnalysis(detail);
   const supersededAnalysis = classification === null && detail.latest_analysis != null;
 
   const plan = workflowActionPlan(detail);
   const hasRecommendation = detail.recommended_action != null;
-  const selectionPlanAction = plan.createSelectionPlan;
-  const hasMainColumn = classification !== null || selectionPlanAction !== null;
+  const selectionAction = plan.selection;
+  /* The fact selection is the document's own, so it is read from the document - which
+     exists from the first analysis on. */
+  const documentQuery = useQuery({
+    ...documentQueryOptions(detail.application.id),
+    enabled: selectionAction !== null,
+  });
+  const hasMainColumn = classification !== null || selectionAction !== null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -59,11 +70,11 @@ export const PreparationView = ({
             />
 
             {classification === null ? null : (
-              // A new analysis/plan pair remounts the form so stale choices are never submitted.
+              // A new analysis or document remounts the form so stale choices are never submitted.
               <MatchingConfigurationEditor
                 classification={classification}
                 detail={detail}
-                key={`${detail.active_analysis_id ?? "none"}:${detail.active_selection_plan_id ?? "none"}`}
+                key={`${detail.latest_analysis_id ?? "none"}:${detail.document_hash ?? "none"}`}
                 onSaved={setMatchingSaved}
               />
             )}
@@ -90,14 +101,25 @@ export const PreparationView = ({
                 />
               )}
 
-              {selectionPlanAction === null ? null : (
-                <SelectionPlanPanel
-                  action={selectionPlanAction}
-                  detail={detail}
-                  onQueued={onQueued}
-                  operationLive={operationLive}
-                  requirements={classification?.requirements ?? []}
-                />
+              {selectionAction === null ? null : (
+                <QueryState
+                  error={documentQuery.error}
+                  fallbackDetail="לא ניתן לקרוא את בחירת העובדות של המסמך. המסמך לא השתנה."
+                  fallbackTitle="בחירת העובדות לא נטענה"
+                  loading={documentQuery.data === undefined}
+                  loadingLabel="טוען את בחירת העובדות…"
+                >
+                  {documentQuery.data === undefined ? null : (
+                    <DocumentSelectionPanel
+                      detail={detail}
+                      document={documentQuery.data.document}
+                      emphasized={selectionAction.emphasized}
+                      onQueued={onQueued}
+                      operationLive={operationLive}
+                      requirements={classification?.requirements ?? []}
+                    />
+                  )}
+                </QueryState>
               )}
             </div>
           ) : null}

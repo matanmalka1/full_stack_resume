@@ -2,7 +2,7 @@ import { ChevronDown, Search } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { Requirement } from "@/api/analyses";
-import type { SelectionPlanCandidate } from "@/api/contracts";
+import type { DocumentCandidate } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
 import { Input } from "@/ui/Input";
@@ -10,14 +10,13 @@ import { LtrText } from "@/ui/LtrText";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { cx } from "@/ui/cx";
 import { type FactFilter, candidateIncluded, factGroups, includableFactIds } from "../../model/factGroups";
-import type { FactRanking } from "../../model/selectionManifest";
 import { type FactChoice, FactRow } from "./FactRow";
 
 interface FactSelectionListProps {
   /* The loaded plan was activated from an AI proposal, so its saved marks are the AI's. */
   aiProposed: boolean;
   busy: boolean;
-  candidates: readonly SelectionPlanCandidate[];
+  candidates: readonly DocumentCandidate[];
   changes: ReadonlyMap<string, "added" | "removed">;
   excluded: readonly string[];
   filter: FactFilter;
@@ -25,7 +24,6 @@ interface FactSelectionListProps {
   onFilterChange: (filter: FactFilter) => void;
   onIncludeAll: (factIds: readonly string[]) => void;
   pinned: readonly string[];
-  rankings: ReadonlyMap<string, FactRanking>;
   savedExcluded: readonly string[];
   savedPinned: readonly string[];
   supportsByFact: ReadonlyMap<string, readonly Requirement[]>;
@@ -42,7 +40,6 @@ export const FactSelectionList = ({
   onFilterChange,
   onIncludeAll,
   pinned,
-  rankings,
   savedExcluded,
   savedPinned,
   supportsByFact,
@@ -159,7 +156,6 @@ export const FactSelectionList = ({
                       key={candidate.fact_id}
                       onChoose={onChoose}
                       pinned={pinned}
-                      ranking={rankings.get(candidate.fact_id)}
                       savedExcluded={savedExcluded}
                       savedPinned={savedPinned}
                       supports={supportsByFact.get(candidate.fact_id) ?? []}
