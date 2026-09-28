@@ -20,7 +20,7 @@ const quietDotClasses: Record<Tone, string> = {
 };
 
 /* Fit as the board says it: the score where there is one, the level word where there
-   is not. `fitScoreText` is shared by the table's chip and the card's footer. */
+   is not. `fitScoreText` is shared by the chip and the card's footer. */
 export const fitScoreText = (item: ApplicationListItem): string | null =>
   item.fit_score == null ? null : confidenceText(item.fit_score);
 
@@ -95,7 +95,7 @@ const PreparationTrack = ({ state }: { state: ApplicationListItem["preparation_s
   );
 };
 
-/* "row" is the labelled track the table and the cards draw; "pipeline" is the compact
+/* "row" is the labelled track the cards draw; "pipeline" is the compact
    badge the global search palette shows beside a result. */
 export const ApplicationPreparationStatus = ({
   item,
@@ -116,7 +116,7 @@ export const ApplicationPreparationStatus = ({
     </StatusBadge>
   );
 
-/* The progress block shared by the table row and the card: the CV track, and under it
+/* The progress block the card draws: the CV track, and under it
    the employer's status with any run still going beside it. */
 export const ApplicationProgress = ({ item }: { item: ApplicationListItem }) => (
   <div className="flex w-full flex-col items-start gap-2">

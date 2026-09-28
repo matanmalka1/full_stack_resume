@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 
-import type { ActivityFilter, PreparationState } from "@/api/contracts";
+import type { ActivityFilter, ApplicationSort, PreparationState } from "@/api/contracts";
 import { preparationStateLabels } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Field } from "@/ui/Field";
@@ -17,6 +17,16 @@ const activityLabels: Record<ActivityFilter, string> = {
   all: "הכול",
 };
 
+/* Exhaustive over the generated union, so an order added to the list endpoint fails the
+   build here rather than being missing from the menu. Each order has one direction on
+   the server, and the label says which. */
+const sortLabels: Record<ApplicationSort, string> = {
+  updated: "עדכון אחרון",
+  created: "נוצרו לאחרונה",
+  company: "שם החברה",
+  stage: "התקדמות ההכנה",
+};
+
 // Let each select fit its options without pushing the other controls off the row.
 const fieldClasses = "w-full min-w-0 sm:w-auto sm:min-w-36 sm:max-w-64";
 
@@ -28,6 +38,7 @@ interface ApplicationListToolbarProps {
   recruitmentStageCounts: Partial<Record<RecruitmentStageId, number>>;
   resultSummary: string;
   search: string;
+  sort: ApplicationSort;
   stageCounts: Partial<Record<PreparationState, number>>;
   viewMode: ViewMode;
   onActivityChange: (activity: ActivityFilter) => void;
@@ -35,6 +46,7 @@ interface ApplicationListToolbarProps {
   onPreparationStateChange: (stage: PreparationState | undefined) => void;
   onRecruitmentStageChange: (stage: RecruitmentStageId | null) => void;
   onSearchChange: (search: string) => void;
+  onSortChange: (sort: ApplicationSort) => void;
   onViewModeChange: (view: ViewMode) => void;
 }
 
@@ -46,6 +58,7 @@ export const ApplicationListToolbar = ({
   recruitmentStageCounts,
   resultSummary,
   search,
+  sort,
   stageCounts,
   viewMode,
   onActivityChange,
@@ -53,6 +66,7 @@ export const ApplicationListToolbar = ({
   onPreparationStateChange,
   onRecruitmentStageChange,
   onSearchChange,
+  onSortChange,
   onViewModeChange,
 }: ApplicationListToolbarProps) => (
   <div className="flex flex-col gap-3">
@@ -150,9 +164,23 @@ export const ApplicationListToolbar = ({
         </Button>
       ) : null}
 
-      {/* The order is chosen from the table's own headers; there is no separate sort
-          control. The cards and stages views keep whichever order the table last set. */}
-      <div className="ms-auto">
+      {/* Sorting orders the page rather than narrowing it, so it sits beside the view
+          switch rather than among the filters, and every view keeps the order it sets. */}
+      <div className="cv-fields-compact ms-auto flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-support text-cv-text-muted">
+          מיון
+          <Select
+            className="w-auto"
+            onChange={(event) => onSortChange(event.target.value as ApplicationSort)}
+            value={sort}
+          >
+            {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
+              <option key={key} value={key}>
+                {sortLabels[key]}
+              </option>
+            ))}
+          </Select>
+        </label>
         <ViewSwitch
           label="בחירת תצוגת מועמדויות"
           onChange={onViewModeChange}

@@ -124,7 +124,7 @@ export const AttentionLink = ({
   );
 };
 
-/* The table row's next-action cell, drawn after demo_re: a title and one line of detail
+/* The card's next-action block, drawn after demo_re: a title and one line of detail
    on the reading side, the command and the reminder's dismissal at the far edge. */
 export const ApplicationRowNextAction = ({
   clearing,

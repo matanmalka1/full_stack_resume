@@ -1,14 +1,21 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { fitLevelLabel } from "@/features/preparation";
+import { Skeleton } from "@/ui/Skeleton";
 import { Tooltip } from "@/ui/Tooltip";
 import { surfaceClasses } from "@/ui/surface";
 import { useOpenRecord } from "../hooks/useOpenRecord";
-import { applicationAttention } from "../model/applicationListPresentation";
+import {
+  applicationAttention,
+  duplicatedApplicationIdentityIds,
+  formatApplicationDate,
+  formatRelativeUpdate,
+} from "../model/applicationListPresentation";
 import { ApplicationRecordActions } from "./ApplicationListItemActions";
 import { ApplicationIdentity } from "./ApplicationIdentity";
-import { UpdatedAt } from "./ApplicationListRow";
 import { ApplicationProgress, fitScoreText } from "./ApplicationListStatuses";
 import { ApplicationRowNextAction, nextActionHeading } from "./ApplicationRowNextAction";
+
+const cardGridClasses = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
 
 interface ApplicationCardsViewProps {
   clearingApplicationId: string | null;
@@ -20,11 +27,21 @@ interface ApplicationCardsViewProps {
   onRequestUpdate: (item: ApplicationListItem) => void;
 }
 
+/* The update time with both dates on the system tooltip. */
+const UpdatedAt = ({ item }: { item: ApplicationListItem }) => (
+  <Tooltip
+    label={`עודכנה ב־${formatApplicationDate(item.updated_at)} · נפתחה ב־${formatApplicationDate(item.created_at)}`}
+  >
+    <time dateTime={item.updated_at}>{formatRelativeUpdate(item.updated_at)}</time>
+  </Tooltip>
+);
+
 /* One Application as a card, laid out after demo_re: who and the menu, the progress
    block, what to do next, and a footer with when it last moved, how well it fits, and
-   the way into its recruitment record. Every block is the table row's own component, so
-   the two views cannot drift apart in what they say. */
+   the way into its recruitment record. Every block is a shared component, so the cards,
+   the details dialog and the action hub cannot drift apart in what they say. */
 const ApplicationCard = ({
+  ambiguous,
   clearing,
   item,
   onClearNextAction,
@@ -33,6 +50,7 @@ const ApplicationCard = ({
   onRequestDetails,
   onRequestUpdate,
 }: Omit<ApplicationCardsViewProps, "clearingApplicationId" | "items"> & {
+  ambiguous: boolean;
   clearing: boolean;
   item: ApplicationListItem;
 }) => {
@@ -41,7 +59,7 @@ const ApplicationCard = ({
   const score = fitScoreText(item);
 
   return (
-    // The card opens its details on a click like the row does; its link icon stays the keyboard route.
+    // The card opens its details on a click; its link icon and its menu stay the keyboard routes.
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <article
       className={surfaceClasses(
@@ -50,7 +68,7 @@ const ApplicationCard = ({
       onClick={open.onClick}
     >
       <div className="flex items-start justify-between gap-3">
-        <ApplicationIdentity item={item} variant="row" />
+        <ApplicationIdentity ambiguous={ambiguous} item={item} variant="row" />
         <ApplicationRecordActions
           item={item}
           onRequestClose={onRequestClose}
@@ -109,19 +127,59 @@ export const ApplicationCardsView = ({
   onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
-}: ApplicationCardsViewProps) => (
-  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-    {items.map((item) => (
-      <ApplicationCard
-        clearing={clearingApplicationId === item.id}
-        item={item}
-        key={item.id}
-        onClearNextAction={onClearNextAction}
-        onRequestClose={onRequestClose}
-        onRequestDelete={onRequestDelete}
-        onRequestDetails={onRequestDetails}
-        onRequestUpdate={onRequestUpdate}
-      />
+}: ApplicationCardsViewProps) => {
+  /* Two Applications for the same company and role would otherwise read as one card
+     drawn twice; each says there is another. */
+  const ambiguous = duplicatedApplicationIdentityIds(items);
+
+  /* Named, like the stages view's list, so the page's one grid of records is a region a
+     reader can jump to rather than an anonymous run of articles after the action hub. */
+  return (
+    <section aria-label="כרטיסי מועמדויות" className={cardGridClasses}>
+      {items.map((item) => (
+        <ApplicationCard
+          ambiguous={ambiguous.has(item.id)}
+          clearing={clearingApplicationId === item.id}
+          item={item}
+          key={item.id}
+          onClearNextAction={onClearNextAction}
+          onRequestClose={onRequestClose}
+          onRequestDelete={onRequestDelete}
+          onRequestDetails={onRequestDetails}
+          onRequestUpdate={onRequestUpdate}
+        />
+      ))}
+    </section>
+  );
+};
+
+const skeletonCards = ["skeleton-1", "skeleton-2", "skeleton-3", "skeleton-4", "skeleton-5", "skeleton-6"];
+
+/* The first load reserves the card grid it will be replaced by, block for block: the
+   identity and menu, the progress block, the next-action block, and the footer. Drawn
+   with the `Skeleton` primitive so it sweeps like every other waiting region and keeps
+   its `forced-colors` rule; radius comes from the primitive. */
+export const ApplicationCardsSkeleton = () => (
+  <output aria-label="טוען את המועמדויות" className={cardGridClasses}>
+    {skeletonCards.map((key) => (
+      <div className={surfaceClasses("flex min-h-72 flex-col gap-4 bg-cv-surface-raised p-5 shadow-surface")} key={key}>
+        <div className="flex items-start justify-between gap-3">
+          <span className="flex flex-1 gap-2">
+            <Skeleton className="block size-9 shrink-0" />
+            <span className="flex-1 space-y-2">
+              <Skeleton className="block h-4 w-4/5" />
+              <Skeleton className="block h-3 w-3/5" />
+            </span>
+          </span>
+          <Skeleton className="block size-9 shrink-0" />
+        </div>
+        <Skeleton className="block h-16 w-full" />
+        <Skeleton className="block h-14 w-full" />
+        <div className="mt-auto flex items-center justify-between gap-3 border-t border-cv-border pt-3">
+          <Skeleton className="block h-4 w-24" />
+          <Skeleton className="block h-4 w-16" />
+        </div>
+      </div>
     ))}
-  </div>
+  </output>
 );

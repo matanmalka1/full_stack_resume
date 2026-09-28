@@ -95,10 +95,10 @@ const Stamp = ({ value }: { value: string }) => <bdi dir="ltr">{formatDateTime(v
    primary command already goes there. The dialog's own
    close control and Escape close it; the footer holds only the two ways onward.
 
-   It is read from the board's own row - only a finished CV's revision is fetched, for
-   its PDF - and every block is the table's own component, so the modal cannot say
-   something the row does not. It opens from a click on a row or a card, Enter on a row,
-   and the "פרטי משרה" control every record carries. */
+   It is read from the board's own list item - only a finished CV's revision is fetched,
+   for its PDF - and every block is the card's own component, so the modal cannot say
+   something the card does not. It opens from a click on a card and from the "פרטי משרה"
+   control every record carries. */
 export const ApplicationDetailsDialog = ({
   application,
   clearing,
