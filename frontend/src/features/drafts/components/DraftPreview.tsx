@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, FileText, RefreshCw } from "lucide-react";
+import { CircleCheck, ExternalLink, FileText, RefreshCw } from "lucide-react";
 
 import type { WorkingDraft } from "@/api/contracts";
 import { draftPdfPreviewHref, draftPreviewSrc } from "@/api/drafts";
@@ -19,60 +19,66 @@ import { StatusBadge } from "@/ui/StatusBadge";
    around it neither imposes nor inherits that - which is exactly why it is a document in
    a frame rather than markup rendered into this one.
 
-   The `key` is the version: a save produces a different URL and a fresh document, so the
-   preview cannot go on showing an edit that has been superseded. The frame never renders
-   a PDF; the link beside the heading asks for one, on demand. */
+   The URL is the version: a save produces a different URL and the frame navigates to a
+   fresh document, so the preview cannot go on showing an edit that has been superseded.
+   The frame itself is not remounted, so the reader's zoom survives the save. The frame
+   never renders a PDF; the link beside the heading asks for one, on demand. */
 export const DraftPreview = ({ draft }: { draft: WorkingDraft }) => {
   /* Which version the frame has actually painted, rather than a flag an effect has to
-     reset every time the version moves. A save gives the frame a new `key` and a new URL,
+     reset every time the version moves. A save gives the frame a new URL,
      so the version it last loaded is no longer the version on screen and the pane says it
-     is refreshing - derived, with nothing to keep in step. */
-  const [loadedVersion, setLoadedVersion] = useState<number | null>(null);
-  const loading = loadedVersion !== draft.edit_version;
+     is refreshing - derived, with nothing to keep in step. `refreshed` is whether that
+     load replaced an earlier one: the first paint is not news, a refresh after a save is. */
+  const [loaded, setLoaded] = useState<{ refreshed: boolean; version: number } | null>(null);
+  const loading = loaded?.version !== draft.edit_version;
 
   return (
-    <section aria-labelledby="draft-preview-heading" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-preview-heading">
-            <FileText aria-hidden="true" className="size-icon-md text-cv-accent" />
-            תצוגה מקדימה
-          </h2>
-          <span className="mt-2 flex items-center gap-2 text-support text-cv-text-muted">
-            {loading ? <RefreshCw aria-hidden="true" className="size-icon-sm animate-spin" /> : null}
+    <section aria-labelledby="draft-preview-heading" className="flex flex-col gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="flex items-center gap-2 text-heading-sm font-bold text-cv-text" id="draft-preview-heading">
+              <FileText aria-hidden="true" className="size-icon-md text-cv-accent" />
+              תצוגה מקדימה
+            </h2>
+            <StatusBadge tone="neutral">טיוטה</StatusBadge>
+          </div>
+          <span className="flex items-center gap-1.5 text-caption text-cv-text-muted">
+            {loading ? (
+              <RefreshCw aria-hidden="true" className="size-icon-sm animate-spin" />
+            ) : (
+              <CircleCheck aria-hidden="true" className="size-icon-sm" />
+            )}
             {loading ? "מרענן את התצוגה…" : "מעודכן לגרסה השמורה"}
           </span>
-          <LiveRegion>{loading ? null : "התצוגה המקדימה עודכנה"}</LiveRegion>
+          <LiveRegion>{!loading && loaded?.refreshed ? "התצוגה המקדימה עודכנה" : null}</LiveRegion>
         </div>
-        <div className="flex items-center gap-2">
-          {/* The real PDF of the saved version, before any approval: stamped as a draft,
-              stored nowhere. Looking at the layout must not cost an approved version. */}
-          <a
-            className={buttonClasses("secondary")}
-            href={draftPdfPreviewHref(draft.id, draft.edit_version)}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <ExternalLink aria-hidden="true" className="size-icon-md" />
-            PDF הטיוטה
-          </a>
-          <StatusBadge tone="neutral">טיוטה</StatusBadge>
-        </div>
-      </div>
+        {/* The real PDF of the saved version, before any approval: stamped as a draft,
+            stored nowhere. Looking at the layout must not cost an approved version. */}
+        <a
+          className={buttonClasses("secondary", undefined, "compact")}
+          href={draftPdfPreviewHref(draft.id, draft.edit_version)}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          <ExternalLink aria-hidden="true" className="size-icon-md" />
+          PDF הטיוטה
+        </a>
+      </header>
 
-      {/* The document is the thing; a mat around it was a card wrapping a card. The frame
-          keeps its own hairline and nothing else sits between it and the page. */}
+      {/* The frame owns its toolbar, canvas and page; nothing else sits between it and
+          the document. */}
       <DocumentFrame
+        busy={loading}
         className="w-full"
-        key={draft.edit_version}
-        onLoad={() => setLoadedVersion(draft.edit_version)}
+        onLoad={() => setLoaded((previous) => ({ refreshed: previous !== null, version: draft.edit_version }))}
         src={draftPreviewSrc(draft.id, draft.edit_version)}
         title="תצוגה מקדימה של הטיוטה"
       />
 
-      <p className="text-support leading-6 text-cv-text-muted">
-        התצוגה נבנית בשרת מהגרסה השמורה, באותו מסלול שמייצר את הקובץ המאושר. "PDF הטיוטה" פותח את
-        הקובץ האמיתי עם חותמת טיוטה, בלי לאשר ובלי ליצור גרסה.
+      <p className="text-caption text-cv-text-muted">
+        נבנית בשרת מהגרסה השמורה, באותו מסלול שמייצר את הקובץ המאושר. "PDF הטיוטה" פותח את הקובץ עם חותמת טיוטה, בלי
+        אישור ובלי גרסה חדשה.
       </p>
     </section>
   );
