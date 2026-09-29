@@ -2,10 +2,14 @@
 
 ## Safe orphan deletion
 
-Status: DESIGNED, 2026-09-22 — coordination contract specified in
+Status: IMPLEMENTED (verified 2026-09-29); designed 2026-09-22 — coordination contract specified in
 [`../spec/architecture.md`](../spec/architecture.md) §7.1 (mechanism) and
 [`../spec/state-and-use-cases.md`](../spec/state-and-use-cases.md) §19b
-(`inspect_orphans`/`reclaim_orphans` command contracts); implementation pending.
+(`inspect_orphans`/`reclaim_orphans` command contracts). **Implemented:**
+`MaintenanceService.inspect_orphans`/`reclaim_orphans`/`reclaim_group`
+(`cv_engine/application/services/maintenance.py`), exposed under the maintenance router
+and covered by `tests/artifacts/test_payload_leases.py`. The only open item is the
+optional fenced object-store write described at the end of this entry.
 
 A write lease now reserves a payload's destination (a group key, such as one
 Submission's HTML+PDF pair) before any bytes are written, under physical keys

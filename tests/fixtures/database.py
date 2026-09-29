@@ -55,7 +55,10 @@ def _isolated_database_url(configured: str) -> str:
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    return _isolated_database_url(str(resolve_config(env=os.environ).get("database_url")))
+    # Resolved the way the runtime resolves it, `.env` included, so the suite derives
+    # its database from the one the API and worker would actually use.
+    configured = resolve_config(env=os.environ, project_root=SOURCE_ROOT).get("database_url")
+    return _isolated_database_url(str(configured))
 
 
 def alembic_head() -> str:
