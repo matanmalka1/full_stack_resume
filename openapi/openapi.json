@@ -4464,7 +4464,7 @@
       },
       "OrphanInventoryResponse": {
         "additionalProperties": false,
-        "description": "Observed candidates hold no database reference and no live write lease.",
+        "description": "Observed candidates have no database reference and were stored over an hour ago.",
         "properties": {
           "candidates": {
             "items": {
@@ -4627,7 +4627,7 @@
       },
       "ReclaimResultResponse": {
         "additionalProperties": false,
-        "description": "What one reclaim call removed. Not exhaustive - see architecture.md §7.1.",
+        "description": "What one reclaim call removed (architecture.md §7.1).",
         "properties": {
           "removed": {
             "items": {
@@ -7949,7 +7949,7 @@
     },
     "/api/v1/maintenance/orphans": {
       "get": {
-        "description": "Read-only observation; a candidate holds no database reference and no live lease.\n\nThis endpoint neither repairs nor deletes payloads.",
+        "description": "Read-only; a candidate has no database reference and was stored over an hour ago.\n\nThis endpoint neither repairs nor deletes payloads.",
         "operationId": "inspect_orphans_api_v1_maintenance_orphans_get",
         "responses": {
           "200": {
@@ -7981,7 +7981,7 @@
     },
     "/api/v1/maintenance/orphans/reclaim": {
       "post": {
-        "description": "Remove exactly the candidates this call can prove are safe (architecture.md §7.1).\n\nNever removes a payload a database record references, and never lets a\nreclaimed attempt's registration succeed afterward. Not exhaustive: an\nobject-store write behind an already-fenced lease can still land after\nthis call finishes, so `reclaim_orphans` is meant to be called on a\nschedule, not once. Idempotent and safe to call concurrently with itself.",
+        "description": "Remove the inspection candidates (architecture.md §7.1).\n\nNever removes a payload a database record references: the reference check\nruns again immediately before deleting. Idempotent.",
         "operationId": "reclaim_orphans_api_v1_maintenance_orphans_reclaim_post",
         "responses": {
           "200": {
@@ -8005,7 +8005,7 @@
             "description": "The request did not match the API contract."
           }
         },
-        "summary": "Remove orphan payloads whose write lease is fenced and unreferenced",
+        "summary": "Remove unreferenced payloads stored over an hour ago",
         "tags": [
           "maintenance"
         ]

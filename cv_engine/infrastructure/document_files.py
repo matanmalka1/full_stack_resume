@@ -38,10 +38,6 @@ class DocumentFilePaths(Protocol):
 class SubmissionPayloads(Protocol):
     """The part of `PayloadStore` a Submission copy needs."""
 
-    def submission_path(self, application_id: str, submission_id: str, *, suffix: str) -> Path: ...
-
-    def reference_for(self, destination: Path) -> str: ...
-
     def commit_submission_file(
         self, application_id: str, submission_id: str, *, suffix: str, payload: bytes
     ) -> SnapshotPayload: ...
@@ -142,25 +138,13 @@ class DocumentFiles:
 
         return ArtifactStream(size=len(payload), chunks=chunks)
 
-    def submission_targets(self, application_id: str, submission_id: str) -> tuple[str, str]:
-        """The references a Submission's two copies will receive, without writing."""
-        return (
-            self._payloads.reference_for(
-                self._payloads.submission_path(application_id, submission_id, suffix="html")
-            ),
-            self._payloads.reference_for(
-                self._payloads.submission_path(application_id, submission_id, suffix="pdf")
-            ),
-        )
-
     def copy_for_submission(
         self, application_id: str, submission_id: str, files: RenderedFiles
     ) -> SubmittedFiles:
         """Copy the rendered files into the Submission's immutable layout.
 
-        The payload write lease is the caller's: it is acquired against
-        `submission_targets` before this runs and marked committed in the same
-        transaction that inserts the Submission.
+        The caller registers the copies in the transaction that inserts the
+        Submission; a copy left unregistered is an orphan (architecture.md §7.1).
         """
         assert_external_io_allowed("submission file copy")
         html = self._payloads.commit_submission_file(

@@ -198,8 +198,8 @@ source files are valid inputs; a changed context produces `knowledge_changed` or
 PostgreSQL holds structured state and relationships: Applications and their recruitment
 projection, recruitment and audit history, JobSnapshot metadata, JobAnalyses, the one
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
-provider-evidence artifacts, Submissions, Operations and their resource leases, payload
-write leases, fact events, the Knowledge mutation journal, and safe settings.
+provider-evidence artifacts, Submissions, Operations and their resource leases, fact
+events, the Knowledge mutation journal, and safe settings.
 
 The database is addressed by `database_url` (`CV_DATABASE_URL`). Composition creates one
 `Engine` (`pool_pre_ping=True`) that owns pooling and connection health. Transaction
@@ -299,61 +299,38 @@ both. The API returns this policy; React does not duplicate it.
 State tables are authoritative current projections. Append-only events provide audit
 and provenance; the system is not event-sourced.
 
-### 7.1 Immutable payload commit and write leases
+### 7.1 Immutable payload commit and orphan reclaim
 
 The payload protocol is:
 
-`acquire write lease -> validate bytes -> conditional store -> register + commit lease`
+`validate bytes -> conditional store -> register`
 
 Validation runs on the bytes before the key is claimed, so a payload that fails it never
 occupies its key. The write refuses to replace an existing payload: `O_EXCL` locally, a
 conditional PUT (`IfNoneMatch: "*"`) on S3 and R2. The store hashes the bytes it stored
-in the same pass, and that digest is what the caller registers. Before registration a
-payload is invisible to queries; if registration fails, no row references it.
+in the same pass, and that digest is what the caller registers. Every physical key embeds
+a freshly minted ID (snapshot, artifact version, or Submission), so a retry writes new
+keys and never overwrites an earlier attempt's.
 
-**Write leases.** Every writer claims its keys in `payload_write_leases` before storing
-bytes. A row is keyed by a *group key* — the file set one registration depends on — and
-records the claiming `attempt_id`, the exact physical keys, an expiry, and a state
-(`pending`, `committed`, `reclaiming`). `acquire` refuses a group key with a live row.
-
-| Writer | Group key | Attempt | Keys |
-| --- | --- | --- | --- |
-| JobSnapshot intake | the snapshot reference | the same reference | the snapshot file |
-| Provider evidence | the provider reference | the same reference | the response file |
-| `submit_application` | `submission:{application_id}:{submission_id}` | `submission_id` | the Submission's HTML and PDF |
-
-Each physical key embeds a freshly minted ID, so a retry is a new attempt with new keys
-and never overwrites a prior attempt's. A failed store releases the lease.
-
-Registration and the lease's flip to `committed` happen in one transaction.
-`mark_committed` updates the row only if it is still `pending`, still held by the
-registering `attempt_id`, **and** records exactly the keys being registered. An attempt
-whose lease was fenced therefore cannot register anything, and a registration cannot
-name a key its attempt did not claim.
+Before registration a payload is invisible to queries. If registration fails, no row
+references it and it is an orphan.
 
 **Orphan inspection and reclaim** (`MaintenanceService`; routes in
-state-and-use-cases.md). `inspect_orphans` lists stored keys that are neither registered
-nor held by a live lease and deletes nothing. `reclaim_orphans` handles three cases:
+state-and-use-cases.md §19b). A candidate is a stored payload that no database row
+references and that was stored longer than `ORPHAN_MIN_AGE` (one hour) ago. Every writer
+— JobSnapshot intake, provider evidence, `submit_application` — stores and registers
+within one command, seconds apart, so a younger unregistered payload may still be on its
+way to registration and is left alone. The age comes from the store itself: file mtime
+locally, `LastModified` on S3.
 
-1. **Expired `pending` lease.** Reclaim fences it — a conditional update from `pending`
-   to `reclaiming` on the same `attempt_id`, stamped with a reclaim deadline. This is
-   the same update a registration needs, so the two serialize and only one wins. After
-   fencing, reclaim checks the database for a reference to any of the attempt's keys
-   *before* deleting; a reference is an integrity failure and reclaim raises. Otherwise
-   it deletes the keys, then the lease row.
-2. **`reclaiming` past its deadline.** A previous reclaim stopped between fencing and
-   row removal. The call resumes it: re-check, delete (idempotent), remove the row.
-   Without this the group key would be blocked from any new `acquire` forever.
-3. **Leaseless key.** A stored key with no lease row and no registration can never be
-   registered, because registration requires a live lease. After the same reference
-   check it is deleted. This catches a `put` that landed after case 1 removed its
-   attempt.
+`inspect_orphans` lists the candidates and deletes nothing. `reclaim_orphans` deletes
+them, after reading the registered references once more immediately before deleting; a
+candidate that became referenced is an integrity failure and reclaim stops without
+deleting anything. Deleting an absent key is a no-op, so reclaim is idempotent.
 
-Guarantees: a registration never points at a payload reclaim removed, and a fenced
-attempt never registers afterward. A single call is not exhaustive — a `put` in flight
-when its lease was fenced can land after the call, and a later call removes it under
-case 3. Reclaim is repeatable, not a fixed point; making it exhaustive would need the
-object store to refuse writes once a lease is gone, which is not implemented.
+The one limit: a registration that happened more than an hour after its `put` could find
+its payload reclaimed. No writer holds a payload unregistered that long; if one ever did,
+reconciliation reports the missing payload rather than hiding it.
 
 Reconciliation verifies every registered artifact's payload hash and the fact lifecycle,
 reporting both halves without short-circuiting.

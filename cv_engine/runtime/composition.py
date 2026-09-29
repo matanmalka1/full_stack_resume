@@ -78,7 +78,6 @@ from ..infrastructure.persistence.knowledge_lifecycle import (
 from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
-from ..infrastructure.persistence.payload_leases import SqlAlchemyPayloadLeaseStore
 from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from ..infrastructure.persistence.recruitment_store import (
@@ -236,7 +235,6 @@ def build_services(
     evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
     operation_client = SqlAlchemyOperationClientStore(transactions)
     operation_execution = SqlAlchemyOperationExecutionStore(transactions)
-    payload_leases = SqlAlchemyPayloadLeaseStore(transactions)
     knowledge_queries = KnowledgeQueryService(
         transactions=transactions, store=knowledge_lifecycle_store, knowledge=resolved_knowledge
     )
@@ -244,7 +242,6 @@ def build_services(
         payloads=resolved_payloads,
         transactions=transactions,
         inspection=SqlAlchemyMaintenanceInspection(transactions),
-        leases=payload_leases,
         knowledge=knowledge_queries,
     )
     # Activation probes recovery state through the runner token. This file-only
@@ -269,7 +266,6 @@ def build_services(
         evidence=evidence_store,
         knowledge=resolved_knowledge,
         payloads=resolved_payloads,
-        leases=payload_leases,
         provider=resolved_provider,
     )
     draft_catalog = SqlAlchemyArtifactCatalog(transactions)
@@ -338,7 +334,6 @@ def build_services(
         sources=analysis_sources,
         submissions=document_submissions,
         files=document_files,
-        leases=payload_leases,
         recruitment=recruitment_store,
         audit=intake_audit,
         knowledge=resolved_knowledge,
@@ -422,7 +417,6 @@ def build_services(
             recruitment=intake_recruitment,
             audit=intake_audit,
             payloads=resolved_payloads,
-            leases=payload_leases,
         ),
         queries=ApplicationQueryService(
             transactions=transactions,

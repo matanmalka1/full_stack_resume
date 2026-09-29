@@ -915,7 +915,7 @@ export interface paths {
         };
         /**
          * Inspect unreferenced immutable payload candidates
-         * @description Read-only observation; a candidate holds no database reference and no live lease.
+         * @description Read-only; a candidate has no database reference and was stored over an hour ago.
          *
          *     This endpoint neither repairs nor deletes payloads.
          */
@@ -938,14 +938,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Remove orphan payloads whose write lease is fenced and unreferenced
-         * @description Remove exactly the candidates this call can prove are safe (architecture.md §7.1).
+         * Remove unreferenced payloads stored over an hour ago
+         * @description Remove the inspection candidates (architecture.md §7.1).
          *
-         *     Never removes a payload a database record references, and never lets a
-         *     reclaimed attempt's registration succeed afterward. Not exhaustive: an
-         *     object-store write behind an already-fenced lease can still land after
-         *     this call finishes, so `reclaim_orphans` is meant to be called on a
-         *     schedule, not once. Idempotent and safe to call concurrently with itself.
+         *     Never removes a payload a database record references: the reference check
+         *     runs again immediately before deleting. Idempotent.
          */
         post: operations["reclaim_orphans_api_v1_maintenance_orphans_reclaim_post"];
         delete?: never;
@@ -2646,7 +2643,7 @@ export interface components {
         OperationType: "analyze_job" | "propose_selection" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document";
         /**
          * OrphanInventoryResponse
-         * @description Observed candidates hold no database reference and no live write lease.
+         * @description Observed candidates have no database reference and were stored over an hour ago.
          */
         OrphanInventoryResponse: {
             /** Candidates */
@@ -2714,7 +2711,7 @@ export interface components {
         };
         /**
          * ReclaimResultResponse
-         * @description What one reclaim call removed. Not exhaustive - see architecture.md §7.1.
+         * @description What one reclaim call removed (architecture.md §7.1).
          */
         ReclaimResultResponse: {
             /** Removed */

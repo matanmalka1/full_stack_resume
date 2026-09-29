@@ -178,9 +178,9 @@ def test_document_attempts_are_unique_and_submission_copies_are_managed(tmp_path
     with pytest.raises(FileExistsError):
         files.render_targets("app", "attempt")
     references = RenderedFiles(html=files.reference_for(html), pdf=files.reference_for(pdf))
-    targets = files.submission_targets("app", "submission")
     sent = files.copy_for_submission("app", "submission", references)
-    assert targets == (sent.html_path, sent.pdf_path)
+    assert sent.html_path == "artifacts/submissions/app/submission/resume.html"
+    assert sent.pdf_path == "artifacts/submissions/app/submission/resume.pdf"
     assert payloads.verify_payload(sent.html_path, sent.html_sha256) == "ok"
     assert payloads.verify_payload(sent.pdf_path, sent.pdf_sha256) == "ok"
     assert b"".join(files.open_rendered_pdf(references.pdf).chunks()) == b"%PDF-CV"

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import io
+import os
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +36,7 @@ class _FakeS3:
 
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
+        self.modified: dict[str, datetime] = {}
 
     def put_object(
         self, Bucket: str, Key: str, Body: bytes, IfNoneMatch: str | None = None
@@ -41,6 +44,7 @@ class _FakeS3:
         if IfNoneMatch == "*" and Key in self.objects:
             raise _ClientError("PreconditionFailed")
         self.objects[Key] = Body
+        self.modified[Key] = datetime.now(UTC)
         return {}
 
     def get_object(self, Bucket: str, Key: str) -> dict[str, Any]:
@@ -66,7 +70,10 @@ class _FakeS3:
         page = keys[start : start + 2]
         more = start + 2 < len(keys)
         return {
-            "Contents": [{"Key": key} for key in page],
+            "Contents": [
+                {"Key": key, "LastModified": self.modified.get(key, datetime.now(UTC))}
+                for key in page
+            ],
             "IsTruncated": more,
             **({"NextContinuationToken": str(start + 2)} if more else {}),
         }
@@ -173,6 +180,14 @@ def test_inventory_is_backend_neutral_paginated_and_read_only(local, s3, monkeyp
     # A listing that could not be read is a failure, never an empty inventory.
     def unavailable(**kwargs):
         raise _ClientError("AccessDenied")
+
+    # Orphan reclaim lists only what was stored before a cutoff.
+    old = datetime.now(UTC) - timedelta(hours=2)
+    cutoff = datetime.now(UTC) - timedelta(hours=1)
+    s3._client.modified["cv/" + keys[0]] = old  # type: ignore[attr-defined]
+    os.utime(local.root / keys[0], (old.timestamp(), old.timestamp()))
+    for store in _stores(local, s3):
+        assert list(store.keys_under("", modified_before=cutoff)) == [keys[0]]
 
     monkeypatch.setattr(s3._client, "list_objects_v2", unavailable)
     with pytest.raises(InfrastructureFailure, match="inventory could not be read"):

@@ -6,9 +6,9 @@ checked against its audit trail. Both must agree for an instance to be sound,
 so they are reported as one result rather than two a caller has to combine.
 
 Orphan reclaim (architecture.md §7.1) is the third: it removes a stored
-payload only after the payload write lease that reserved it is fenced, and
-only after re-checking - before deleting anything - that no database record
-references it. That check is what makes deletion safe, not fencing alone.
+payload only when no database record references it and it has been stored
+longer than `ORPHAN_MIN_AGE`, so a write still on its way to registration is
+left alone. The reference check runs again immediately before deleting.
 
 The service holds the payload store and a token-explicit inspection port. That is why
 this is a service and not a router helper: `ApiServices` deliberately carries
@@ -17,24 +17,17 @@ no repositories or stores, and reconciliation needs both.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import UTC, datetime
 
-from ...util import utc_now
 from ..commands import ReconciliationResult
 from ..errors import InfrastructureFailure
-from ..maintenance import OrphanInventory, ReclaimResult
+from ..maintenance import ORPHAN_MIN_AGE, OrphanInventory, ReclaimResult
 from ..ports import RevisionPayloadStore
 from ..ports.maintenance import MaintenanceInspection
-from ..ports.payload_leases import RECLAIM_GRACE_SECONDS, PayloadWriteLeaseStore
 from ..ports.transactions import TransactionManager
 from .knowledge import KnowledgeQueryService
 
 __all__ = ["MaintenanceService"]
-
-
-def _reclaim_deadline(now: str) -> str:
-    return (datetime.fromisoformat(now) + timedelta(seconds=RECLAIM_GRACE_SECONDS)).isoformat()
 
 
 class MaintenanceService:
@@ -46,13 +39,11 @@ class MaintenanceService:
         payloads: RevisionPayloadStore,
         transactions: TransactionManager,
         inspection: MaintenanceInspection,
-        leases: PayloadWriteLeaseStore,
         knowledge: KnowledgeQueryService,
     ) -> None:
         self.payloads = payloads
         self.transactions = transactions
         self.inspection = inspection
-        self.leases = leases
         self.knowledge = knowledge
 
     def reconcile(self) -> ReconciliationResult:
@@ -84,100 +75,35 @@ class MaintenanceService:
         )
 
     def inspect_orphans(self) -> OrphanInventory:
-        """Observe unreferenced, unleased payloads without deleting anything."""
-        with self.transactions.read() as tx:
-            registered = self.inspection.registered_payload_references(tx)
-            leased = self.leases.live_physical_keys(tx)
-        stored = self.payloads.payload_inventory()
-        return OrphanInventory(candidates=sorted(set(stored) - registered - leased))
+        """Observe unregistered payloads older than `ORPHAN_MIN_AGE`; delete nothing."""
+        return OrphanInventory(candidates=self._orphans())
 
     def reclaim_orphans(self) -> ReclaimResult:
-        """Remove every candidate this call can safely prove is abandoned.
+        """Remove every payload that is unregistered and older than `ORPHAN_MIN_AGE`.
 
-        Not a fixed point: a storage write behind an already-fenced lease is
-        not itself prevented, so it can still land after this call finishes,
-        producing a leaseless orphan only a later call observes and removes
-        (architecture.md §7.1).
+        The registered set is read again after listing and before any deletion.
+        A candidate that turned out to be referenced is an integrity failure:
+        nothing registers a payload that old, so reclaim stops rather than
+        delete evidence.
         """
-        now = utc_now()
-        removed: set[str] = set()
-
-        with self.transactions.write() as tx:
-            expired = self.leases.expired_pending(tx, now)
-        for entry in expired:
-            removed.update(self._fence_and_finish(entry, now))
-
-        with self.transactions.read() as tx:
-            stale = self.leases.stale_reclaiming(tx, now)
-        for entry in stale:
-            removed.update(
-                self._finish_reclaim(entry["group_key"], entry["attempt_id"], entry["keys"])
-            )
-
+        candidates = self._orphans()
+        if not candidates:
+            return ReclaimResult(removed=[])
         with self.transactions.read() as tx:
             registered = self.inspection.registered_payload_references(tx)
-            leased = self.leases.live_physical_keys(tx)
-        stored = self.payloads.payload_inventory()
-        for key in sorted(set(stored) - registered - leased):
-            removed.update(self._reclaim_leaseless(key, registered))
-
-        return ReclaimResult(removed=sorted(removed))
-
-    def reclaim_group(self, group_key: str) -> ReclaimResult:
-        """Resume an expired write for one logical group before a genuine retry."""
-        now = utc_now()
-        with self.transactions.read() as tx:
-            expired = [
-                entry
-                for entry in self.leases.expired_pending(tx, now)
-                if entry["group_key"] == group_key
-            ]
-            stale = [
-                entry
-                for entry in self.leases.stale_reclaiming(tx, now)
-                if entry["group_key"] == group_key
-            ]
-        removed: set[str] = set()
-        for entry in expired:
-            removed.update(self._fence_and_finish(entry, now))
-        for entry in stale:
-            removed.update(
-                self._finish_reclaim(entry["group_key"], entry["attempt_id"], entry["keys"])
-            )
-        return ReclaimResult(removed=sorted(removed))
-
-    def _fence_and_finish(self, entry: dict[str, Any], now: str) -> list[str]:
-        group_key, attempt_id, keys = entry["group_key"], entry["attempt_id"], entry["keys"]
-        with self.transactions.write() as tx:
-            fenced = self.leases.fence(
-                tx, group_key, attempt_id, now=now, reclaim_deadline=_reclaim_deadline(now)
-            )
-        if not fenced:
-            # Lost the race: committed, or already being reclaimed elsewhere.
-            return []
-        return self._finish_reclaim(group_key, attempt_id, keys)
-
-    def _finish_reclaim(self, group_key: str, attempt_id: str, keys: list[str]) -> list[str]:
-        with self.transactions.read() as tx:
-            registered = self.inspection.registered_payload_references(tx)
-        referenced = [key for key in keys if key in registered]
+        referenced = sorted(set(candidates) & registered)
         if referenced:
             raise InfrastructureFailure(
-                f"integrity failure: payload write lease {group_key} ({attempt_id}) was "
-                f"fenced, but the database still references {referenced}; fencing should "
-                "have made this impossible"
+                f"integrity failure: {referenced} became registered after being stored "
+                f"more than {ORPHAN_MIN_AGE} earlier; nothing was removed"
             )
-        for key in keys:
+        for key in candidates:
             self.payloads.delete_payload(key)
-        with self.transactions.write() as tx:
-            self.leases.delete_row(tx, group_key, attempt_id)
-        return list(keys)
+        return ReclaimResult(removed=candidates)
 
-    def _reclaim_leaseless(self, key: str, registered: set[str]) -> list[str]:
-        if key in registered:
-            raise InfrastructureFailure(
-                f"integrity failure: {key} has no write lease but the database "
-                "references it; a leaseless key must never be registered"
-            )
-        self.payloads.delete_payload(key)
-        return [key]
+    def _orphans(self) -> list[str]:
+        cutoff = datetime.now(UTC) - ORPHAN_MIN_AGE
+        stored = self.payloads.payload_inventory(modified_before=cutoff)
+        with self.transactions.read() as tx:
+            registered = self.inspection.registered_payload_references(tx)
+        return sorted(set(stored) - registered)

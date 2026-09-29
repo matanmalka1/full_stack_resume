@@ -52,7 +52,7 @@ class ReconciliationResponse(HttpSchema):
 
 
 class OrphanInventoryResponse(HttpSchema):
-    """Observed candidates hold no database reference and no live write lease."""
+    """Observed candidates have no database reference and were stored over an hour ago."""
 
     candidates: list[str]
 
@@ -62,7 +62,7 @@ class OrphanInventoryResponse(HttpSchema):
 
 
 class ReclaimResultResponse(HttpSchema):
-    """What one reclaim call removed. Not exhaustive - see architecture.md §7.1."""
+    """What one reclaim call removed (architecture.md §7.1)."""
 
     removed: list[str]
 

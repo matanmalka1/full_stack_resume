@@ -416,7 +416,7 @@ Input: company, target role, exact job text, optional source URL,
   the rejected value is never echoed.
 - Reruns duplicate detection; unacknowledged matches are
   `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` (412) with the matches.
-- Writes the JobSnapshot payload under a payload write lease, then creates the
+- Writes the JobSnapshot payload, then creates the
   Application in `saved` with its first snapshot in one transaction.
 - Returns the IDs and duplicate warnings.
 
@@ -765,7 +765,7 @@ them.
 
 Records a send that already happened. Requires the hash, `preparation_state = ready` with
 both files present (`DOCUMENT_NOT_READY`, 412), and no review reason. Copies the
-rendered HTML and PDF to submission-owned paths under a payload write lease, computing
+rendered HTML and PDF to submission-owned paths, computing
 a SHA-256 per file. Then, in one transaction under the document row lock, re-checks that
 the hash, stamps, and file paths are unchanged, inserts the immutable Submission,
 transitions `saved -> applied` when the Application is `saved`, and appends status and
@@ -870,35 +870,23 @@ mutable and not checked.
 ### `inspect_orphans()`
 
 `GET /api/v1/maintenance/orphans` returns `candidates`: a sorted list of managed
-immutable payload references found in storage whose group key (architecture.md §7.1)
-is absent from the database **and** holds no live lease row (`pending` or
-`reclaiming`). References cover JobSnapshots, Submission files, and every
-provider-response artifact version, including inactive evidence. Rendered document
-files and files outside managed layouts are excluded.
+immutable payload references found in storage that no database row references and that
+were stored longer than one hour ago (`ORPHAN_MIN_AGE`, architecture.md §7.1). A younger
+unregistered payload may still be on its way to registration and is not listed.
+References cover JobSnapshots, Submission files, and every provider-response artifact
+version, including inactive evidence. Rendered document files and files outside managed
+layouts are excluded.
 
-The database read closes before storage enumeration. The result is a read-only,
+Storage enumeration happens outside the database read. The result is a read-only,
 non-atomic observation; it changes no reconciliation verdict and deletes nothing.
 
 ### `reclaim_orphans()`
 
-`POST /api/v1/maintenance/orphans/reclaim` removes two kinds of candidate
-(architecture.md §7.1 defines both):
-
-- **Expired `pending` lease.** Reclaim fences it first (`pending -> reclaiming`,
-  conditioned on the same `attempt_id` a registration needs, so the two serialize) and
-  stamps a reclaim deadline. After fencing, and before deleting anything, it checks that
-  no database row references any key the attempt produced. A reference found here is an
-  integrity failure and reclaim stops. Otherwise it deletes the attempt's keys and then
-  the lease row. A group key already `reclaiming` past its deadline is resumed, not
-  re-fenced; deleting an absent key is a no-op.
-- **No lease row.** Registration for the key is already impossible, so no fence is
-  needed. Reclaim makes the same pre-deletion reference check and deletes. This removes a
-  key an old attempt wrote after an earlier call already reclaimed that attempt.
-
-It guarantees that it never removes a referenced payload and never lets a reclaimed
-attempt register afterward. It does not guarantee one call removes every orphan: a
-write behind a fenced lease can still land later and is removed by a later call. It is
-idempotent and safe to run concurrently and on a schedule.
+`POST /api/v1/maintenance/orphans/reclaim` deletes the `inspect_orphans` candidates and
+returns them as `removed`. Immediately before deleting it reads the registered
+references again; a candidate that became referenced is an integrity failure, and
+reclaim stops without deleting anything. It never removes a referenced payload, is
+idempotent, and is safe to run on a schedule.
 
 ## 20. Queries
 

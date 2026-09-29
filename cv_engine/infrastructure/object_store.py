@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -68,11 +69,14 @@ class ObjectStore(Protocol):
     discretion.
     """
 
-    def keys_under(self, prefix: str) -> Iterator[str]:
+    def keys_under(self, prefix: str, *, modified_before: datetime | None = None) -> Iterator[str]:
         """Enumerate stored keys beneath a prefix without changing any payload.
 
         Empty prefix inventories the whole store. Listing is observational:
         concurrent writers may add objects while enumeration is in progress.
+        `modified_before` keeps only objects last written before that instant,
+        which is how orphan reclaim leaves a write that has not registered yet
+        alone (architecture.md §7.1).
         """
         ...
 
@@ -107,11 +111,9 @@ class ObjectStore(Protocol):
     def delete(self, key: str) -> None:
         """Remove the object under `key`, or do nothing if it is not there.
 
-        Idempotent on purpose: `reclaim_orphans` (architecture.md §7.1) may
-        observe the same leaseless key on more than one call - a late write
-        that lands after an earlier reclaim already removed it once - and
-        deleting an already-absent key must stay a safe no-op rather than an
-        error.
+        Idempotent on purpose: an orphan removed by one `reclaim_orphans` call
+        (architecture.md §7.1) must stay a safe no-op, not an error, for any
+        caller that observed it before it was removed.
         """
         ...
 
@@ -231,7 +233,7 @@ class LocalObjectStore:
             raise ObjectNotFound(f"no object is stored under {key}")
         return StoredObject(key=key, sha256=sha256_bytes(path.read_bytes()), size=size)
 
-    def keys_under(self, prefix: str) -> Iterator[str]:
+    def keys_under(self, prefix: str, *, modified_before: datetime | None = None) -> Iterator[str]:
         """Every key stored beneath `prefix`, in sorted order.
 
         Only regular contained files are listed; symlinked directories and
@@ -240,9 +242,13 @@ class LocalObjectStore:
         base = resolve_within(self._root, validate_key(prefix)) if prefix else self._root
         if not base.is_dir():
             return
+        cutoff = None if modified_before is None else modified_before.timestamp()
         for path in sorted(base.rglob("*")):
-            if is_regular_file_within(self._root, path):
-                yield path.relative_to(self._root).as_posix()
+            if not is_regular_file_within(self._root, path):
+                continue
+            if cutoff is not None and path.stat().st_mtime >= cutoff:
+                continue
+            yield path.relative_to(self._root).as_posix()
 
     def delete(self, key: str) -> None:
         path = self._path(key)
@@ -252,6 +258,11 @@ class LocalObjectStore:
             return
         except OSError as exc:
             raise InfrastructureFailure(f"object could not be removed: {key}") from exc
+
+
+def _aware(moment: datetime) -> datetime:
+    """boto3 returns aware datetimes; a naive one is read as UTC rather than local time."""
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 class S3ObjectStore:
@@ -372,7 +383,7 @@ class S3ObjectStore:
         payload = self.get(key)
         return StoredObject(key=key, sha256=sha256_bytes(payload), size=len(payload))
 
-    def keys_under(self, prefix: str) -> Iterator[str]:
+    def keys_under(self, prefix: str, *, modified_before: datetime | None = None) -> Iterator[str]:
         requested = validate_key(prefix) if prefix else ""
         bucket_prefix = f"{self._prefix}/" if self._prefix else ""
         query_prefix = f"{bucket_prefix}{requested}/" if requested else bucket_prefix
@@ -388,6 +399,8 @@ class S3ObjectStore:
             for row in response.get("Contents", []):
                 key = row["Key"]
                 if not key.startswith(query_prefix) or key.endswith("/"):
+                    continue
+                if modified_before is not None and _aware(row["LastModified"]) >= modified_before:
                     continue
                 yield validate_key(key[len(bucket_prefix) :])
             if not response.get("IsTruncated", False):

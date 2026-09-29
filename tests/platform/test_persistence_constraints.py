@@ -66,7 +66,6 @@ MUTABLE_TABLES = frozenset(
         "operation_outputs",  # permits exactly one inactive-to-active transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
-        "payload_write_leases",  # pending/committed/reclaiming coordination state
     }
 )
 DELETE_ONLY_TABLES = frozenset({"operations", "operation_outputs", "knowledge_mutation_journal"})

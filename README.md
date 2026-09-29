@@ -255,10 +255,10 @@ cd openapi && npm ci && npm run generate
 ```
 
 Read-only storage inspection is available at `GET /api/v1/maintenance/orphans`.
-Its `candidates` are managed immutable payload references that are neither registered
-nor held by a live write lease, so an active writer's payload is never listed. It
-excludes mutable working outputs and performs no deletion.
-`POST /api/v1/maintenance/orphans/reclaim` removes the candidates it can prove abandoned
+Its `candidates` are managed immutable payload references that no record references and
+that were stored more than an hour ago, so a write still on its way to registration is
+never listed. It excludes mutable working outputs and performs no deletion.
+`POST /api/v1/maintenance/orphans/reclaim` removes those candidates
 (`docs/spec/architecture.md` section 7.1). Local and S3 stores share both contracts.
 
 ## Tests
