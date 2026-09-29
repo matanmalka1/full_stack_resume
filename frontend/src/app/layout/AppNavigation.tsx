@@ -14,7 +14,7 @@ const areas = () => [
 
 const linkClasses = (isActive: boolean, collapsed: boolean): string =>
   cx(
-    "inline-flex items-center gap-2 border-b-2 text-support transition-colors lg:border-b-0 lg:border-s-2",
+    "inline-flex items-center gap-2 rounded-control border-b-2 text-support transition-colors lg:border-b-0 lg:border-s-2",
     collapsed ? "size-11 justify-center" : "min-h-11 px-2 sm:px-3 lg:min-h-0 lg:py-2",
     isActive
       ? "border-cv-nav-active-indicator bg-cv-nav-active-bg font-bold text-cv-text"
