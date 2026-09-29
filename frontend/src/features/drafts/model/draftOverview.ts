@@ -1,4 +1,4 @@
-import type { ApplicationDetail, ClaimType, DraftClaim, OmissionReason } from "@/api/contracts";
+import type { ApplicationDetail, ClaimType, DraftClaim } from "@/api/contracts";
 import { outlineClaims } from "@/api/documents";
 import type { EditableDocument } from "./drafts.types";
 
@@ -22,8 +22,7 @@ const originByType: Record<ClaimType, ClaimOrigin> = {
 const claimOrigin = (claim: DraftClaim): ClaimOrigin => originByType[claim.claim_type];
 
 export interface ContentSummary {
-  /* Lines in the document's sections - the tailored body, not the headline and contacts. */
-  lines: number;
+  /* Counts over the document's sections - the tailored body, not the headline and contacts. */
   verbatim: number;
   reworded: number;
   unsupported: number;
@@ -36,7 +35,6 @@ export const summarizeContent = (draft: EditableDocument): ContentSummary => {
   const body = draft.outline.sections.flatMap((section) => section.claims);
   const count = (origin: ClaimOrigin) => body.filter((claim) => claimOrigin(claim) === origin).length;
   return {
-    lines: body.length,
     verbatim: count("verbatim"),
     reworded: count("reworded"),
     unsupported: count("unsupported"),
@@ -52,7 +50,6 @@ export interface SelectionSummary {
   /* Facts the selection weighed and left out, with nothing in the draft resting on them -
      the ones an include could still bring in. */
   omitted: EditableDocument["facts"];
-  omittedByReason: { reason: OmissionReason | null; count: number }[];
 }
 
 /* The selection's accounting, read from the document's own `facts`. Only facts the
@@ -60,20 +57,10 @@ export interface SelectionSummary {
    a contact line's source. */
 export const summarizeSelection = (draft: EditableDocument): SelectionSummary => {
   const ranked = draft.facts.filter((fact) => fact.outcome !== null && fact.outcome !== undefined);
-  const omitted = ranked.filter((fact) => fact.outcome === "omitted" && fact.linked_claim_ids.length === 0);
-  const reasons = new Map<OmissionReason | null, number>();
-  for (const fact of omitted) {
-    const reason = fact.reason ?? null;
-    reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
-  }
   return {
     included: ranked.filter((fact) => fact.outcome !== "omitted").length,
     pinned: ranked.filter((fact) => fact.outcome === "pinned").length,
-    omitted,
-    omittedByReason: Array.from(reasons, ([reason, count]) => ({ reason, count }))
-      // ES2022 has no toSorted; this array is newly created and belongs only to this call.
-      // oxlint-disable-next-line unicorn/no-array-sort
-      .sort((a, b) => b.count - a.count),
+    omitted: ranked.filter((fact) => fact.outcome === "omitted" && fact.linked_claim_ids.length === 0),
   };
 };
 

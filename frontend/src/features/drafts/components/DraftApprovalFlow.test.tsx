@@ -76,8 +76,13 @@ const DraftFlow = () => {
       {/* The editor exposes one finish action: it checks first and opens the explicit
           approval only when the stored report passed against the document on screen. */}
       <button
-        disabled={!check.canCheck && !check.passing}
-        onClick={check.passing ? () => setOpen(true) : check.check}
+        disabled={draft === undefined || check.isPending}
+        onClick={() => {
+          if (draft === undefined) return;
+          if (check.passing) setOpen(true);
+          // useDocumentCheck exposes the mutation error beside the preview.
+          else check.checkExact(draft).catch(() => {});
+        }}
         type="button"
       >
         {check.passing ? "אישור והכנת PDF" : "בדיקה והכנת PDF"}

@@ -7,9 +7,6 @@ import { checkDocument, documentQueryKey, documentQueryOptions } from "@/api/doc
 import type { EditableDocument } from "../model/drafts.types";
 
 export interface DocumentCheckState {
-  /* False until there is content to check, or while something makes a check meaningless
-     (unsaved edits, live work, an unresolved read). */
-  canCheck: boolean;
   /* The stored report's standing against the current document, as the server computed it
      (§5). `outdated` is still shown - as outdated - and authorizes nothing. */
   contentCheck: ContentCheck;
@@ -26,7 +23,6 @@ export interface DocumentCheckState {
      have been offered. Running a new check is the answer, so that is what clears it. */
   reportStaleRefusal: () => void;
   stale: boolean;
-  check: () => void;
   checkExact: (current: EditableDocument) => Promise<DocumentCheck>;
 }
 
@@ -62,7 +58,6 @@ export const useDocumentCheck = (
   const report = unavailable ? null : (draft?.content_report ?? null);
 
   return {
-    canCheck: draft !== undefined && !unavailable && !mutation.isPending,
     contentCheck: unavailable && contentCheck !== "none" ? "outdated" : contentCheck,
     error: mutation.error,
     isPending: mutation.isPending,
@@ -71,11 +66,6 @@ export const useDocumentCheck = (
     report,
     reportStaleRefusal: () => setStale(true),
     stale,
-    check: () => {
-      if (draft === undefined || unavailable) return;
-      setStale(false);
-      mutation.mutate(draft);
-    },
     checkExact: (current) => {
       setStale(false);
       return mutation.mutateAsync(current);

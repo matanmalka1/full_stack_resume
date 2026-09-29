@@ -169,16 +169,17 @@ export const DraftEditorPage = () => {
     onOperationQueued: watch,
     operationLive,
   });
-  const check = useDocumentCheck(
-    applicationId,
-    draft,
+  /* What makes the document on screen something neither a check nor an approval can speak
+     for: live work on it, unsaved edits, a resolution in flight or failed, an unresolved read.
+     Approval adds its own two conditions below. */
+  const documentUnsettled =
     operationLive ||
-      editing.dirty ||
-      resolving ||
-      resolutionError != null ||
-      applicationError != null ||
-      draftError != null,
-  );
+    editing.dirty ||
+    resolving ||
+    resolutionError != null ||
+    applicationError != null ||
+    draftError != null;
+  const check = useDocumentCheck(applicationId, draft, documentUnsettled);
 
   /* Hiding the rows must not strand text still sitting in the buffer, so the document
      view settles it first. */
@@ -271,15 +272,7 @@ export const DraftEditorPage = () => {
     return () => window.cancelAnimationFrame(frame);
   }, [requestedClaim, focusDocumentId]);
 
-  const approvalUnavailable =
-    operationLive ||
-    editing.dirty ||
-    resolving ||
-    resolutionError != null ||
-    applicationError != null ||
-    draftError != null ||
-    detail === undefined ||
-    detail.review_reasons.length > 0;
+  const approvalUnavailable = documentUnsettled || detail === undefined || detail.review_reasons.length > 0;
 
   // A blocker closes this explicit choice permanently; clearing it never reopens approval.
   if (approvalOpen && approvalUnavailable) setApprovalOpen(false);

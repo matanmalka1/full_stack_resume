@@ -41,7 +41,7 @@ describe("summarizeContent", () => {
       ]),
     );
 
-    expect(summary).toMatchObject({ lines: 5, verbatim: 1, reworded: 3, unsupported: 1 });
+    expect(summary).toMatchObject({ verbatim: 1, reworded: 3, unsupported: 1 });
     expect(summary.unsupportedClaims.map((claim) => claim.claim_id)).toEqual(["e"]);
   });
 
@@ -74,10 +74,6 @@ describe("summarizeSelection", () => {
     expect(summary.included).toBe(3);
     expect(summary.pinned).toBe(1);
     expect(summary.omitted.map((item) => item.fact_id)).toEqual(["budget", "budget-2", "user"]);
-    expect(summary.omittedByReason).toEqual([
-      { reason: "below_section_budget", count: 2 },
-      { reason: "excluded_by_user", count: 1 },
-    ]);
   });
 });
 
