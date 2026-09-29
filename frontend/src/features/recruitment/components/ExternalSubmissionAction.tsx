@@ -10,9 +10,10 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
-import { Input, Textarea } from "@/ui/Input";
+import { Textarea } from "@/ui/Input";
 import { isoFromLocalDateTimeInput } from "@/utils/isoFromLocalDateTimeInput";
 import { localDateTimeInputValue } from "@/utils/localDateTimeInputValue";
+import { SubmittedAtField, submittedAtRules } from "./SubmittedAtField";
 
 interface ExternalSubmissionFields {
   note: string;
@@ -80,19 +81,10 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
           <Callout title="הרישום קבוע" tone="warning">
             ההגשה תתווסף להיסטוריה בלי להמציא גרסת קורות חיים או קובץ שלא נוצרו במערכת.
           </Callout>
-          <Field error={form.formState.errors.submittedAt?.message} label="מועד ההגשה">
-            {(control) => (
-              <Input
-                {...control}
-                {...form.register("submittedAt", {
-                  required: "יש להזין מועד הגשה.",
-                  validate: (value) => isoFromLocalDateTimeInput(value) !== null || "יש להזין מועד הגשה תקין.",
-                })}
-                required
-                type="datetime-local"
-              />
-            )}
-          </Field>
+          <SubmittedAtField
+            error={form.formState.errors.submittedAt?.message}
+            registration={form.register("submittedAt", submittedAtRules)}
+          />
           <Field label="הערה" optional>
             {(control) => <Textarea {...control} {...form.register("note")} />}
           </Field>

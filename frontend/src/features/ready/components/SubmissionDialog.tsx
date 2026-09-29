@@ -4,6 +4,7 @@ import { useState } from "react";
 import { invalidateDocumentViews } from "@/api/documents";
 
 import { recordInternalSubmission } from "@/api/tracking";
+import { SubmittedAtField, submittedAtRules } from "@/features/recruitment";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
 import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
@@ -11,8 +12,6 @@ import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
 import { Dialog } from "@/ui/Dialog";
-import { Field } from "@/ui/Field";
-import { Input } from "@/ui/Input";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { isoFromLocalDateTimeInput } from "@/utils/isoFromLocalDateTimeInput";
 import { localDateTimeInputValue } from "@/utils/localDateTimeInputValue";
@@ -127,19 +126,10 @@ export const SubmissionDialog = ({
             </Checkbox>
           </div>
         )}
-        <Field error={form.formState.errors.submittedAt?.message} label="מועד ההגשה">
-          {(control) => (
-            <Input
-              {...control}
-              {...form.register("submittedAt", {
-                required: "יש להזין מועד הגשה.",
-                validate: (value) => isoFromLocalDateTimeInput(value) !== null || "יש להזין מועד הגשה תקין.",
-              })}
-              required
-              type="datetime-local"
-            />
-          )}
-        </Field>
+        <SubmittedAtField
+          error={form.formState.errors.submittedAt?.message}
+          registration={form.register("submittedAt", submittedAtRules)}
+        />
         {submission.error === null ? null : (
           <ErrorCallout
             error={submission.error}
