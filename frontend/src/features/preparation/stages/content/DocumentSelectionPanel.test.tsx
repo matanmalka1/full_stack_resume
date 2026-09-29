@@ -63,7 +63,7 @@ const mutation = {
   application_id: "app-1",
   document_id: "doc-1",
   document_hash: OTHER_HASH,
-  document_state: "draft",
+  preparation_state: "draft_in_progress",
   content_check: "none",
   pending_claim_ids: [],
 };

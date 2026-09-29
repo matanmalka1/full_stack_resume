@@ -65,7 +65,7 @@ describe("PreparationWorkflowSteps", () => {
       <MemoryRouter initialEntries={["/applications/app-1"]}>
         <PreparationWorkflowSteps
           applicationId="app-1"
-          detail={detail({ document_state: "ready", preparation_state: "ready" })}
+          detail={detail({ preparation_state: "ready" })}
           stage="analysis"
         />
       </MemoryRouter>,
@@ -81,11 +81,7 @@ describe("PreparationWorkflowSteps", () => {
   it("offers the way back from Ready to the draft", () => {
     render(
       <MemoryRouter initialEntries={["/applications/app-1/ready"]}>
-        <PreparationWorkflowSteps
-          applicationId="app-1"
-          detail={detail({ document_state: "ready", preparation_state: "ready" })}
-          stage="ready"
-        />
+        <PreparationWorkflowSteps applicationId="app-1" detail={detail({ preparation_state: "ready" })} stage="ready" />
       </MemoryRouter>,
     );
 

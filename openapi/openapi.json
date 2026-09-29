@@ -222,9 +222,6 @@
             ],
             "title": "Document Id"
           },
-          "document_state": {
-            "$ref": "#/components/schemas/DocumentState"
-          },
           "last_render_error": {
             "anyOf": [
               {
@@ -325,7 +322,6 @@
         "required": [
           "recruitment_status",
           "preparation_state",
-          "document_state",
           "content_check",
           "review_reasons",
           "warnings",
@@ -440,9 +436,6 @@
               }
             ],
             "title": "Document Id"
-          },
-          "document_state": {
-            "$ref": "#/components/schemas/DocumentState"
           },
           "emphasis": {
             "anyOf": [
@@ -654,7 +647,6 @@
         "required": [
           "recruitment_status",
           "preparation_state",
-          "document_state",
           "content_check",
           "review_reasons",
           "warnings",
@@ -1098,9 +1090,6 @@
             ],
             "title": "Document Id"
           },
-          "document_state": {
-            "$ref": "#/components/schemas/DocumentState"
-          },
           "last_render_error": {
             "anyOf": [
               {
@@ -1181,7 +1170,6 @@
         "required": [
           "recruitment_status",
           "preparation_state",
-          "document_state",
           "content_check",
           "review_reasons",
           "warnings",
@@ -2520,9 +2508,6 @@
             "title": "Document Id",
             "type": "string"
           },
-          "document_state": {
-            "$ref": "#/components/schemas/DocumentState"
-          },
           "passed": {
             "title": "Passed",
             "type": "boolean"
@@ -2535,6 +2520,9 @@
             "title": "Pending Claim Ids",
             "type": "array"
           },
+          "preparation_state": {
+            "$ref": "#/components/schemas/PreparationState"
+          },
           "report": {
             "$ref": "#/components/schemas/ValidationReportResponse"
           }
@@ -2543,7 +2531,7 @@
           "application_id",
           "document_id",
           "document_hash",
-          "document_state",
+          "preparation_state",
           "content_check",
           "passed",
           "report"
@@ -2570,9 +2558,6 @@
             "title": "Document Id",
             "type": "string"
           },
-          "document_state": {
-            "$ref": "#/components/schemas/DocumentState"
-          },
           "pending_claim_ids": {
             "default": [],
             "items": {
@@ -2580,13 +2565,16 @@
             },
             "title": "Pending Claim Ids",
             "type": "array"
+          },
+          "preparation_state": {
+            "$ref": "#/components/schemas/PreparationState"
           }
         },
         "required": [
           "application_id",
           "document_id",
           "document_hash",
-          "document_state",
+          "preparation_state",
           "content_check"
         ],
         "title": "DocumentMutationResponse",
@@ -2651,9 +2639,6 @@
             "title": "Document Hash",
             "type": "string"
           },
-          "document_state": {
-            "$ref": "#/components/schemas/DocumentState"
-          },
           "facts": {
             "default": [],
             "items": {
@@ -2692,6 +2677,9 @@
               }
             ]
           },
+          "preparation_state": {
+            "$ref": "#/components/schemas/PreparationState"
+          },
           "selection": {
             "$ref": "#/components/schemas/DocumentSelectionResponse"
           },
@@ -2708,7 +2696,7 @@
           "built_with",
           "language",
           "selection",
-          "document_state",
+          "preparation_state",
           "content_check",
           "created_at",
           "updated_at"
@@ -2794,16 +2782,6 @@
         ],
         "title": "DocumentSelectionResponse",
         "type": "object"
-      },
-      "DocumentState": {
-        "enum": [
-          "none",
-          "draft",
-          "approved",
-          "ready"
-        ],
-        "title": "DocumentState",
-        "type": "string"
       },
       "DraftClaimResponse": {
         "additionalProperties": false,

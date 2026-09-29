@@ -29,7 +29,7 @@ const guidance: Record<DraftStepId, string> = {
    Not a stepper. The workflow spine above the heading already draws where this step sits
    in the flow; a second row of steps inside it repeated that shape for the step's own
    parts. What the reader needs here is the next thing to do, read from the projection
-   (`document_state`, `content_check`, `review_reasons`) and the outline's claim types.
+   (`preparation_state`, `content_check`, `review_reasons`) and the outline's claim types.
    Nothing here decides whether a command is available. */
 export const DraftProgress = ({ actions, content, detail, dirty, draft, saveState }: DraftProgressProps) => {
   const focus = draftSteps(detail, content).find((step) => step.status === "blocked" || step.status === "current");

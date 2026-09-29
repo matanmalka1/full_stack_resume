@@ -1139,7 +1139,6 @@ export interface components {
             document_hash?: string | null;
             /** Document Id */
             document_id?: string | null;
-            document_state: components["schemas"]["DocumentState"];
             /** Last Render Error */
             last_render_error?: {
                 [key: string]: unknown;
@@ -1189,7 +1188,6 @@ export interface components {
             document_hash?: string | null;
             /** Document Id */
             document_id?: string | null;
-            document_state: components["schemas"]["DocumentState"];
             /** Emphasis */
             emphasis?: string | null;
             /** Fit Level */
@@ -1399,7 +1397,6 @@ export interface components {
             document_hash?: string | null;
             /** Document Id */
             document_id?: string | null;
-            document_state: components["schemas"]["DocumentState"];
             /** Last Render Error */
             last_render_error?: {
                 [key: string]: unknown;
@@ -1901,7 +1898,6 @@ export interface components {
             document_hash: string;
             /** Document Id */
             document_id: string;
-            document_state: components["schemas"]["DocumentState"];
             /** Passed */
             passed: boolean;
             /**
@@ -1909,6 +1905,7 @@ export interface components {
              * @default []
              */
             pending_claim_ids: string[];
+            preparation_state: components["schemas"]["PreparationState"];
             report: components["schemas"]["ValidationReportResponse"];
         };
         /**
@@ -1923,12 +1920,12 @@ export interface components {
             document_hash: string;
             /** Document Id */
             document_id: string;
-            document_state: components["schemas"]["DocumentState"];
             /**
              * Pending Claim Ids
              * @default []
              */
             pending_claim_ids: string[];
+            preparation_state: components["schemas"]["PreparationState"];
         };
         /**
          * DocumentResponse
@@ -1952,7 +1949,6 @@ export interface components {
             created_at: string;
             /** Document Hash */
             document_hash: string;
-            document_state: components["schemas"]["DocumentState"];
             /**
              * Facts
              * @default []
@@ -1967,6 +1963,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             outline?: components["schemas"]["DraftOutlineResponse"] | null;
+            preparation_state: components["schemas"]["PreparationState"];
             selection: components["schemas"]["DocumentSelectionResponse"];
             /** Updated At */
             updated_at: string;
@@ -1991,11 +1988,6 @@ export interface components {
             /** Selected Fact Ids */
             selected_fact_ids: string[];
         };
-        /**
-         * DocumentState
-         * @enum {string}
-         */
-        DocumentState: "none" | "draft" | "approved" | "ready";
         /**
          * DraftClaimResponse
          * @description One editable line: what a claim edit addresses, plus what it currently is.

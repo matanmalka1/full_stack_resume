@@ -74,7 +74,7 @@ export const nextActionHeading = (item: ApplicationListItem, attentive: boolean)
       title: actionLabel(item.recommended_action),
     };
   }
-  if (item.document_state === "ready") {
+  if (item.preparation_state === "ready") {
     return {
       command: { label: "פתיחה", strong: false, to: routePaths.ready(item.id) },
       description: null,
@@ -144,7 +144,7 @@ export const ApplicationCardNextAction = ({
 
   const reminderIsHeading = head.title === item.next_action && head.command === null;
   const overdue = !item.is_closed && isNextActionOverdue(item.next_action_date);
-  const showReadyDocument = item.document_state === "ready" && head.title !== "קורות החיים מוכנים";
+  const showReadyDocument = item.preparation_state === "ready" && head.title !== "קורות החיים מוכנים";
 
   return (
     <div className="flex w-full items-center gap-2">

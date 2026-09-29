@@ -52,7 +52,6 @@ describe("ApplicationResumePage", () => {
   it("opens the Ready document", async () => {
     renderResume(
       detail({
-        document_state: "ready",
         preparation_state: "ready",
         recommended_action: null,
       }),
@@ -118,11 +117,7 @@ describe("ApplicationResumePage", () => {
           resolve = settle;
         }),
     );
-    renderResume(
-      detail(),
-      fetchMock,
-      detail({ preparation_state: "ready", document_state: "ready", recommended_action: null }),
-    );
+    renderResume(detail(), fetchMock, detail({ preparation_state: "ready", recommended_action: null }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("heading", { name: "מוכן" })).not.toBeInTheDocument();
     await act(async () =>
@@ -142,7 +137,6 @@ describe("ApplicationResumePage", () => {
     renderResume(
       detail({
         preparation_state: "ready",
-        document_state: "ready",
         recommended_action: null,
         active_operation: { ...operation(), operation_type, status: "running", is_terminal: false },
       }),

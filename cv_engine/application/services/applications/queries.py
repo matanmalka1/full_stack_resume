@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from ....domain.contracts.recruitment import ApplicationStatus
-from ....domain.document import basis, content_check, document_state
+from ....domain.document import basis, content_check, preparation_state
 from ....domain.recruitment import user_transition_targets
 from ...artifacts import verify_artifact
 from ...errors import (
@@ -244,7 +244,7 @@ class ApplicationQueryService:
             document,
             language=analysis.language,
             facts=knowledge.facts,
-            document_state=document_state(document, current),
+            preparation_state=preparation_state(document, current),
             content_check=content_check(document, current),
         )
 

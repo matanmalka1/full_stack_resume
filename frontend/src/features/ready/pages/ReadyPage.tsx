@@ -71,7 +71,7 @@ export const ReadyPage = () => {
 
   const applicationQuery = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = applicationQuery.data;
-  const ready = detail?.document_state === "ready";
+  const ready = detail?.preparation_state === "ready";
   const documentHash = detail?.document_hash ?? null;
   const documentQuery = useQuery({
     ...documentQueryOptions(applicationId),

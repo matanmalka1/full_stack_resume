@@ -23,7 +23,7 @@ from cv_engine.application.commands import (
     RenderCommand,
     SubmissionCommand,
 )
-from cv_engine.domain.document import DocumentState
+from cv_engine.domain.document import PreparationState
 from cv_engine.runtime.composition import Services
 from cv_engine.util import new_id, utc_now
 from fixtures.models import WorkflowSetup
@@ -136,8 +136,8 @@ def ready_application(approved_application, deterministic_renderer):
         document = stored_document(setup.services, setup.application_id)
         assert document.pdf_path is not None
         assert (
-            setup.services.queries.application_detail(setup.application_id).document_state
-            is DocumentState.READY
+            setup.services.queries.application_detail(setup.application_id).preparation_state
+            is PreparationState.READY
         )
         return replace(
             setup,

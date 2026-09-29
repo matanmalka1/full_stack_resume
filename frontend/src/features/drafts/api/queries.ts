@@ -32,7 +32,7 @@ export interface DraftDocument {
    It reads the §9 projection for where the document stands and what is blocking, and the
    document itself - content, outline, selection and fact accounting in one read - for the
    structure the editor draws. It derives no second workflow state machine (A.1): approval
-   and readiness are the projection's `document_state`, never computed here. */
+   and readiness are the projection's `preparation_state`, never computed here. */
 export const useDraftDocument = (applicationId: string): DraftDocument => {
   const applicationQuery = useQuery(watchedApplicationDetailQueryOptions(applicationId));
   const detail = applicationQuery.data;

@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from ...application.commands.prep import SOURCE_URL_MAX_CHARACTERS
-from ...domain.document import ContentCheck, DocumentState, PreparationState
+from ...domain.document import ContentCheck, PreparationState
 from .health import HttpSchema
 from .operations import OperationResponse
 from .tracking import CorrectableStatus, RecruitmentTimelineItemResponse, TransitionableStatus
@@ -126,7 +126,6 @@ class ApplicationStateResponse(HttpSchema):
     recruitment_status: str
     terminal_outcome: str | None = None
     preparation_state: PreparationState
-    document_state: DocumentState
     content_check: ContentCheck
     review_reasons: list[ReasonResponse]
     warnings: list[WarningResponse]

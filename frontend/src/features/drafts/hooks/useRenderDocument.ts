@@ -12,7 +12,7 @@ import { operationQueryKey } from "@/api/operations";
    an Operation to watch. Only the holder of the command knows that window exists, so the
    command lives where the overlay does and the panel is handed what it shows.
 
-   Whether the document is approved or Ready is the projection's answer (`document_state`),
+   Whether the document is approved or Ready is the projection's answer (`preparation_state`),
    never this hook's: it renders the hash the projection reports as approved. */
 export const useRenderDocument = ({
   autoStart,
@@ -31,8 +31,8 @@ export const useRenderDocument = ({
   rendering: boolean;
 }) => {
   const queryClient = useQueryClient();
-  const approved = detail?.document_state === "approved";
-  const ready = detail?.document_state === "ready";
+  const approved = detail?.preparation_state === "approved";
+  const ready = detail?.preparation_state === "ready";
   const documentHash = approved ? (detail?.document_hash ?? null) : null;
 
   const render = useMutation({

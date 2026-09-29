@@ -9,7 +9,7 @@ from ...domain.contracts.drafts import ClaimStyle, ClaimType, DraftDocument
 from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
 from ...domain.contracts.taxonomy import Emphasis
 from ...domain.contracts.validation import ValidationReport
-from ...domain.document import ContentCheck, DocumentState
+from ...domain.document import ContentCheck, PreparationState
 from ..commands import BoundaryDTO
 
 
@@ -191,7 +191,7 @@ class DocumentView(BoundaryDTO):
     content: DraftDocument | None = None
     outline: DraftOutlineView | None = None
     facts: list[DraftFactView] = []
-    document_state: DocumentState
+    preparation_state: PreparationState
     content_check: ContentCheck
     content_report: ValidationReport | None = None
     approved_at: str | None = None

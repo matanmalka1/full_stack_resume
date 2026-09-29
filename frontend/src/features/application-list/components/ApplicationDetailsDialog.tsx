@@ -101,14 +101,14 @@ export const ApplicationDetailsDialog = ({
   const { step, total } = preparationProgress(application.preparation_state);
   const host = sourceHostname(application.source_url);
   const destination = preparationResumeDestination(application);
-  const readyHash = application.document_state === "ready" ? (application.document_hash ?? null) : null;
+  const readyHash = application.preparation_state === "ready" ? (application.document_hash ?? null) : null;
   const continuesToReady = readyHash !== null && destination === routePaths.ready(application.id);
   /* The finished CV has its own block below, so the next-action block reads the record
      as if it had none: it then names only a run, a recommended step or the reminder,
      and never a second "the CV is ready" or a second link to it. */
   const withoutReadyCv: ApplicationListItem = {
     ...application,
-    document_state: application.document_state === "ready" ? "approved" : application.document_state,
+    preparation_state: application.preparation_state === "ready" ? "approved" : application.preparation_state,
   };
   const hasNextStep = nextActionHeading(withoutReadyCv, applicationAttention(application) !== null) !== null;
 

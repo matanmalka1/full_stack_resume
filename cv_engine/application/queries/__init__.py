@@ -1,6 +1,6 @@
 """Stable public query boundary, re-exported from cohesive implementation modules."""
 
-from ...domain.document import ContentCheck, DocumentState, PreparationState
+from ...domain.document import ContentCheck, PreparationState
 from .mappers import (
     analysis_view,
     application_list_item_view,
@@ -78,7 +78,6 @@ __all__ = (
     "DocumentPdfPreviewView",
     "DocumentPreviewView",
     "DocumentSelectionView",
-    "DocumentState",
     "DocumentView",
     "DraftClaimView",
     "DraftFactView",

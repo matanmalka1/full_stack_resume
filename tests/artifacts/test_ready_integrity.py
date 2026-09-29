@@ -22,7 +22,7 @@ from cv_engine.application.errors import (
     PreconditionFailed,
     WorkflowError,
 )
-from cv_engine.domain.document import DocumentState
+from cv_engine.domain.document import PreparationState
 from cv_engine.infrastructure.document_files import DocumentFiles
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
@@ -113,7 +113,7 @@ def test_submission_copies_survive_edits_and_database_triggers_refuse_mutation(
             ],
         )
     )
-    assert services.queries.application_detail(app_id).document_state is DocumentState.DRAFT
+    assert services.queries.application_detail(app_id).preparation_state is PreparationState.DRAFT_IN_PROGRESS
     with pytest.raises(PreconditionFailed) as error:
         services.rendering.export_recruiter_pdf(app_id)
     assert error.value.code == DOCUMENT_NOT_READY

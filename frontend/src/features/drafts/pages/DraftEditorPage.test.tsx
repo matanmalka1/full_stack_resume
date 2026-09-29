@@ -124,7 +124,7 @@ const updateResponse = (version: number): Response =>
       application_id: "app-1",
       document_id: "doc-1",
       document_hash: hashAt(version),
-      document_state: "draft",
+      preparation_state: "draft_in_progress",
       content_check: "none",
       pending_claim_ids: [],
     },
@@ -137,7 +137,7 @@ const checkResponse = (documentHash: string, passed: boolean, issues: unknown[] 
     application_id: "app-1",
     document_id: "doc-1",
     document_hash: documentHash,
-    document_state: "draft",
+    preparation_state: "draft_in_progress",
     content_check: passed ? "passed" : "failed",
     pending_claim_ids: [],
     passed,
@@ -785,7 +785,6 @@ describe("DraftEditorPage", () => {
             document_id: null,
             document_hash: null,
             document_analysis_id: null,
-            document_state: "none",
             preparation_state: "needs_analysis",
           }),
         ),
@@ -815,9 +814,8 @@ describe("DraftEditorPage", () => {
      stays open beside the render step, and editing simply returns the document to draft. */
   it("keeps the approved document editable beside its render step", async () => {
     const fetchMock = stubReads({
-      detail: () =>
-        jsonResponse(detail({ document_state: "approved", preparation_state: "approved", content_check: "passed" })),
-      document: () => jsonResponse(draft({}, { document_state: "approved", content_check: "passed" })),
+      detail: () => jsonResponse(detail({ preparation_state: "approved", content_check: "passed" })),
+      document: () => jsonResponse(draft({}, { preparation_state: "approved", content_check: "passed" })),
     });
 
     renderPage();
@@ -836,7 +834,6 @@ describe("DraftEditorPage", () => {
       detail: () =>
         jsonResponse(
           detail({
-            document_state: "approved",
             preparation_state: "approved",
             content_check: "passed",
             last_render_error: {
@@ -848,7 +845,7 @@ describe("DraftEditorPage", () => {
             },
           }),
         ),
-      document: () => jsonResponse(draft({}, { document_state: "approved", content_check: "passed" })),
+      document: () => jsonResponse(draft({}, { preparation_state: "approved", content_check: "passed" })),
     });
 
     renderPage();

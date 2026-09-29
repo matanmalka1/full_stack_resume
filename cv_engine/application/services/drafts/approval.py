@@ -5,7 +5,7 @@ from __future__ import annotations
 from ....domain.contracts.document import CVDocument
 from ....domain.contracts.records import AuditRecord
 from ....domain.contracts.validation import ValidationReport
-from ....domain.document import content_check, document_state
+from ....domain.document import content_check, preparation_state
 from ....domain.knowledge import Knowledge
 from ....util import new_id, utc_now
 from ...commands import ApproveDocumentCommand, DocumentCheckResult
@@ -54,7 +54,7 @@ class DraftApprovalService:
             application_id=document.application_id,
             document_id=document.id,
             document_hash=document.document_hash,
-            document_state=document_state(document, knowledge_basis),
+            preparation_state=preparation_state(document, knowledge_basis),
             content_check=content_check(document, knowledge_basis),
             passed=report.passed,
             report=report,

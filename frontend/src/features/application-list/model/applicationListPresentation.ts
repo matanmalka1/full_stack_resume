@@ -173,7 +173,7 @@ export interface HubItem {
 
 /* This is a priority summary of the current server-projected page, not a second list
    filter. Attention comes from the projection's reason collections, Ready comes from
-   its `document_state`, and the date comparison is only a local presentation of a
+   its `preparation_state`, and the date comparison is only a local presentation of a
    stored reminder. One card per Application prevents a single Application from occupying the
    entire hub when it happens to satisfy several conditions. */
 export const attentionHubItems = (items: readonly ApplicationListItem[], today: Date = new Date()): HubItem[] => {
@@ -221,7 +221,7 @@ export const attentionHubItems = (items: readonly ApplicationListItem[], today: 
       continue;
     }
 
-    if (application.document_state === "ready") {
+    if (application.preparation_state === "ready") {
       ready.push({
         actionLabel: "פתיחת קורות החיים המוכנים",
         actionTo: routePaths.ready(application.id),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...domain.contracts.recruitment import ApplicationStatus
-from ...domain.document import DocumentState, PreparationState
+from ...domain.document import PreparationState
 from .views_shared import (
     ActivityFilter,
     ApplicationListItemView,
@@ -47,7 +47,7 @@ def _matches_preset(item: ApplicationListItemView, preset: ApplicationPreset | N
     if preset is ApplicationPreset.NEEDS_ATTENTION:
         return bool(item.review_reasons or item.warnings)
     if preset is ApplicationPreset.READY_TO_SEND:
-        return item.document_state is DocumentState.READY
+        return item.preparation_state is PreparationState.READY
     if preset is ApplicationPreset.ACTIVE_INTERVIEWS:
         return item.recruitment_status in _INTERVIEW_STATUSES
     raise ValueError(f"unsupported Application preset: {preset}")

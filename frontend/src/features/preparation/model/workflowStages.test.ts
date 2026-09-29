@@ -30,7 +30,7 @@ describe("workflowDestinations", () => {
   /* Approval still has one explicit action left: rendering. The ready destination must
      not claim that an unrendered document is ready. */
   it("keeps an approved document in the draft stage until it is rendered", () => {
-    const approved = detail({ document_id: "doc-1", document_state: "approved", preparation_state: "approved" });
+    const approved = detail({ document_id: "doc-1", preparation_state: "approved" });
 
     expect(stageForPreparationState.approved).toBe("draft");
     expect(workflowDestinations("app-1", approved)).toMatchObject({ draft: "/applications/app-1/draft" });
@@ -40,12 +40,7 @@ describe("workflowDestinations", () => {
   /* The reason the model changed: Ready is not the end of the road. The editor stays a
      destination beside it, so the rail offers the way back to the draft. */
   it("offers both the ready document and the way back to its draft", () => {
-    expect(
-      workflowDestinations(
-        "app-1",
-        detail({ document_id: "doc-1", document_state: "ready", preparation_state: "ready" }),
-      ),
-    ).toEqual({
+    expect(workflowDestinations("app-1", detail({ document_id: "doc-1", preparation_state: "ready" }))).toEqual({
       analysis: "/applications/app-1",
       draft: "/applications/app-1/draft",
       ready: "/applications/app-1/ready",

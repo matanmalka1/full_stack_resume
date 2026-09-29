@@ -184,7 +184,7 @@ def test_the_full_api_journey_reaches_ready_offline(
 
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "draft_in_progress"
-    assert detail["document_state"] == "draft"
+    assert detail["preparation_state"] == "draft_in_progress"
 
     read = _get(ai_api_worker, document_path)
     etag = read.headers["ETag"]
@@ -213,7 +213,7 @@ def test_the_full_api_journey_reaches_ready_offline(
     assert checked.status_code == 200, checked.text
     assert checked.json()["passed"] is True, checked.json()["report"]
     assert checked.json()["content_check"] == "passed"
-    assert checked.json()["document_state"] == "draft"
+    assert checked.json()["preparation_state"] == "draft_in_progress"
 
     # --- Approve --------------------------------------------------------
     approved = _post(ai_api_worker, f"{document_path}/approve", {"expected_document_hash": token})
@@ -237,7 +237,7 @@ def test_the_full_api_journey_reaches_ready_offline(
     # --- Ready ----------------------------------------------------------
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready"
-    assert detail["document_state"] == "ready"
+    assert detail["preparation_state"] == "ready"
     assert detail["document_hash"] == token
 
     # --- Download the Ready PDF (§16) -----------------------------------

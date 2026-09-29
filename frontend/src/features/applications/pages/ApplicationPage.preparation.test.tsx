@@ -17,7 +17,6 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
   allowed_recruitment_transitions: ["withdrawn", "closed"],
   recruitment_timeline: [],
   preparation_state: "needs_analysis",
-  document_state: "none",
   content_check: "none",
   review_reasons: [],
   warnings: [],
@@ -66,7 +65,6 @@ const queued = (overrides: Partial<Operation> = {}): Operation => ({
 const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   detail({
     preparation_state: "ready_to_draft",
-    document_state: "draft",
     available_actions: ["create_draft"],
     recommended_action: "create_draft",
     latest_analysis_id: "analysis-1",
@@ -341,7 +339,6 @@ describe("ApplicationPage at the preparation route", () => {
               active_operation: projectionReads === 1 ? queued({ status: "running" }) : null,
               ...(draftActivated
                 ? {
-                    document_state: "draft",
                     content_check: "outdated",
                     preparation_state: "draft_in_progress",
                   }
@@ -393,7 +390,6 @@ describe("ApplicationPage at the preparation route", () => {
             recommended_action: "create_draft",
             ...(draftActivated
               ? {
-                  document_state: "draft",
                   content_check: "outdated",
                   preparation_state: "draft_in_progress",
                 }
@@ -713,7 +709,6 @@ describe("ApplicationPage at the preparation route", () => {
         jsonResponse(
           detail({
             preparation_state: "draft_in_progress",
-            document_state: "draft",
             content_check: "failed",
             blocked_actions: [
               {
@@ -1018,7 +1013,6 @@ describe("ApplicationPage at the preparation route", () => {
     act(() =>
       client.setQueryData(applicationDetailQueryKey("app-1"), {
         ...projection,
-        document_state: "draft",
         content_check: "outdated",
         preparation_state: "draft_in_progress",
       }),
@@ -1105,7 +1099,7 @@ describe("a document built on an older analysis", () => {
               application_id: "app-1",
               document_id: "doc-1",
               document_hash: "b".repeat(64),
-              document_state: "draft",
+              preparation_state: "draft_in_progress",
               content_check: "none",
               pending_claim_ids: [],
             })
@@ -1137,7 +1131,7 @@ describe("a document built on an older analysis", () => {
               application_id: "app-1",
               document_id: "doc-1",
               document_hash: "b".repeat(64),
-              document_state: "draft",
+              preparation_state: "ready_to_draft",
               content_check: "none",
               pending_claim_ids: [],
             })

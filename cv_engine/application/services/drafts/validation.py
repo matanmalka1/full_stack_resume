@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ....domain.document import content_check, document_state
+from ....domain.document import content_check, preparation_state
 from ....util import utc_now
 from ...commands import CheckDocumentCommand, DocumentCheckResult
 from ...errors import PreconditionFailed
@@ -65,7 +65,7 @@ class DraftValidationService:
             application_id=command.application_id,
             document_id=updated.id,
             document_hash=updated.document_hash,
-            document_state=document_state(updated, checked),
+            preparation_state=preparation_state(updated, checked),
             content_check=content_check(updated, checked),
             passed=report.passed,
             report=report,

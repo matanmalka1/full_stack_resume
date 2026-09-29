@@ -14,7 +14,7 @@ from cv_engine.application.commands import (
     SubmissionCommand,
     UpdateDocumentCommand,
 )
-from cv_engine.domain.document import DocumentState
+from cv_engine.domain.document import PreparationState
 from cv_engine.util import utc_now
 
 
@@ -56,7 +56,7 @@ def test_deterministic_pipeline_reaches_ready_and_reconciles(
         RenderCommand(application_id=app_id, expected_document_hash=token)
     )
     assert rendered.validation.passed, rendered.validation
-    assert services.queries.application_detail(app_id).document_state is DocumentState.READY
+    assert services.queries.application_detail(app_id).preparation_state is PreparationState.READY
     services.submission.submit_application(
         SubmissionCommand(
             application_id=app_id,

@@ -12,7 +12,7 @@ from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.document import CVDocument, DocumentSubmission
 from ...domain.contracts.drafts import DraftDocument
 from ...domain.contracts.selection import SelectionManifest
-from ...domain.document import ContentCheck, DocumentState, current_approved_at
+from ...domain.document import ContentCheck, PreparationState, current_approved_at
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
 from ...domain.selection import ROLE_BLOCK_TAG, STRUCTURAL_STYLES
@@ -173,7 +173,7 @@ def document_view(
     *,
     language: str,
     facts: FactStore,
-    document_state: DocumentState,
+    preparation_state: PreparationState,
     content_check: ContentCheck,
 ) -> DocumentView:
     """Build the public document view field by field, so no stored path can leak."""
@@ -191,10 +191,10 @@ def document_view(
         content=document.content,
         outline=None if document.content is None else draft_outline_view(document.content),
         facts=document_facts_view(document.selection, document.content, facts, language),
-        document_state=document_state,
+        preparation_state=preparation_state,
         content_check=content_check,
         content_report=document.content_report,
-        approved_at=current_approved_at(document, document_state),
+        approved_at=current_approved_at(document, preparation_state),
         last_render_error=document.last_render_error,
         created_at=document.created_at,
         updated_at=document.updated_at,
