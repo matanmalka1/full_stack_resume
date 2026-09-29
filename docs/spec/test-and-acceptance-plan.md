@@ -38,7 +38,15 @@ Section numbers §5.1, §5.3, §5.5, and §6 are cited from code docstrings and
 - **Frontend** — Vitest with React Testing Library, colocated under `frontend/src/`;
   `npm run check` also runs typecheck, design-token lint, and strict oxlint. Playwright
   tests in `frontend/e2e/` normally run against the production build with the API
-  stubbed by `page.route`: they prove UI behavior, focus, and accessibility.
+  stubbed: they prove UI behavior, focus, and accessibility. Every spec takes `test`
+  from `frontend/e2e/fixtures.ts` (strict oxlint refuses the direct import). Its `api`
+  fixture answers each `/api/` request from the scenario's stubs, matched on method,
+  path, and the exact query in any order. It aborts any other request and fails the
+  test at teardown naming it (`Unstubbed API request: ...`), so an unstubbed read never
+  reaches a server and never passes as a handled error. `page.route` and
+  `context.route` refuse inside the suite, the preview serves no API proxy, and Service
+  Workers are blocked. Settings has one shared default; everything else a screen reads
+  is stated by its scenario.
   `frontend/e2e/integration/` instead runs against the production build served by
   real FastAPI and isolated PostgreSQL, without API interception. The browser-marked
   `tests/e2e/test_browser_api_journey.py` owns its build, database, and server lifecycle.
@@ -220,8 +228,7 @@ Application, Job Detail, and the Facts integrity check.
 Resume view's failure state (a successful read redirects to a screen scanned on its
 own), the Draft Editor with its approval dialog (its sandboxed preview frame, the
 server-rendered CV, is excluded), the Ready screen with its submission
-dialog, Settings, and Not Found; an API read it does not stub fails
-the test by name.
+dialog, Settings, and Not Found.
 
 `frontend/e2e/integration/intake.spec.ts` covers browser-to-API intake, persisted
 detail after reload, list navigation, duplicate detection and explicit acknowledgement,

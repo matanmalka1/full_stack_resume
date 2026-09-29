@@ -1,42 +1,22 @@
-import { expect, test } from "@playwright/test";
-
 import type { Settings } from "../src/api/contracts";
-
-const settings = {
-  edit_version: 0,
-  auto_generate_when_review_not_required: false,
-  ai_enabled: false,
-  ai_enabled_override: null,
-  default_ai_model: "gpt-5.6-terra",
-  default_execution_mode: "deterministic",
-  default_reasoning_effort: "medium",
-  available_ai_models: [
-    {
-      id: "gpt-5.6-terra",
-      label: "GPT-5.6 Terra",
-      input_per_million_usd: "2.00",
-      cached_input_per_million_usd: "0.20",
-      output_per_million_usd: "12.00",
-      recommended: true,
-      pricing_version: "openai-2026-09-03",
-      pricing_source: "https://developers.openai.com/api/docs/models/compare",
-    },
-  ],
-  provider_configured: false,
-  ui_density: "comfortable",
-  ui_text_size: "normal",
-  ui_theme: "system",
-  updated_at: null,
-} satisfies Settings;
+import { settings } from "../src/test/records";
+import { type Answer, expect, json, test } from "./fixtures";
 
 test.describe("the application shell", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.route("**/api/v1/settings", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: settings });
-    });
-  });
-
-  test("moves focus to the page heading after a route change", async ({ page }) => {
+  test("moves focus to the page heading after a route change", async ({ api, page }) => {
+    /* Landing on the board reads its list and, separately, its attention summary. */
+    const emptyList = {
+      items: [],
+      matched: 0,
+      total: 0,
+      limit: 24,
+      offset: 0,
+      preset_counts: {},
+      recruitment_status_counts: {},
+      stage_counts: {},
+    };
+    api.stub("GET /api/v1/applications?activity=open&limit=24&sort=updated", json(emptyList));
+    api.stub("GET /api/v1/applications?preset=needs_attention&limit=3", json({ ...emptyList, limit: 3 }));
     await page.goto("/settings");
     await page.getByRole("link", { name: "לוח המועמדויות" }).click();
 
@@ -97,9 +77,9 @@ test.describe("the application shell", () => {
   });
 });
 
-test("applies the saved theme from Settings and follows system changes", async ({ page }) => {
-  let saved: Settings = { ...settings, ui_theme: "system" };
-  await page.route("**/api/v1/settings", async (route) => {
+test("applies the saved theme from Settings and follows system changes", async ({ api, page }) => {
+  let saved: Settings = settings({ ui_theme: "system" });
+  const answer: Answer = async (route) => {
     if (route.request().method() === "PATCH")
       saved = { ...saved, ...route.request().postDataJSON(), edit_version: saved.edit_version + 1 };
     await route.fulfill({
@@ -107,7 +87,9 @@ test("applies the saved theme from Settings and follows system changes", async (
       headers: { ETag: `"settings-${saved.edit_version}"` },
       json: saved,
     });
-  });
+  };
+  api.stub("GET /api/v1/settings", answer);
+  api.stub("PATCH /api/v1/settings", answer);
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/settings");
   await expect(page.getByRole("switch", { name: "ערכת נושא לפי המערכת", exact: true })).toBeChecked();

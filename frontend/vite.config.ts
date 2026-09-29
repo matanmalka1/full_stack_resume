@@ -36,4 +36,8 @@ export default defineConfig({
       },
     },
   },
+  /* `vite preview` inherits `server.proxy` unless it names its own. The mocked Playwright
+     suite serves the build with no proxy at all, so a request its stubs miss cannot reach
+     an API running on this machine; an ordinary preview keeps the proxy. */
+  ...(process.env.CV_E2E_MOCKED_API === "1" ? { preview: { proxy: {} } } : {}),
 });

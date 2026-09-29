@@ -1,5 +1,5 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, json, test } from "./fixtures";
 
 const report = {
   passed: false,
@@ -18,14 +18,9 @@ const report = {
 };
 
 test.describe("the facts integrity check", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.route("**/api/v1/facts", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: { items: [] } });
-    });
-    await page.route("**/api/v1/maintenance/reconciliations", async (route) => {
-      expect(route.request().method()).toBe("POST");
-      await route.fulfill({ contentType: "application/json", json: report });
-    });
+  test.beforeEach(({ api }) => {
+    api.stub("GET /api/v1/facts", json({ items: [] }));
+    api.stub("POST /api/v1/maintenance/reconciliations", json(report));
   });
 
   test("runs the report and has no automatically detectable accessibility violations", async ({ page }) => {

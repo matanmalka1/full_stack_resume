@@ -16,6 +16,9 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     locale: "he-IL",
     trace: "on-first-retry",
+    /* Every API answer comes from the `api` fixture (e2e/fixtures.ts). The app registers
+       no Service Worker, and none may answer in its place. */
+    serviceWorkers: "block",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
@@ -25,6 +28,8 @@ export default defineConfig({
        and report failures for styles that are no longer in the source tree. Always
        start from the production build created by the command above. */
     reuseExistingServer: false,
+    /* The preview serves no API proxy in this suite (vite.config.ts). */
+    env: { CV_E2E_MOCKED_API: "1" },
     timeout: 120_000,
   },
 });
