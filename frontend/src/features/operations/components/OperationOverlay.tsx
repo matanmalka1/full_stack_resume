@@ -235,7 +235,11 @@ export const OperationOverlay = ({
         <section
           aria-labelledby={panelHeadingId}
           className={cx(
-            "cv-appear-late flex flex-col gap-2.5 rounded-surface border bg-cv-surface p-4",
+            "flex flex-col gap-2.5 rounded-surface border bg-cv-surface p-4",
+            /* Inline, the panel is the step's body, not a notice over it: held back like
+               the corner panel, it left the space under the heading empty for the delay
+               and then dropped a card into it. It settles in at once instead. */
+            inline ? "cv-settle-in" : "cv-appear-late",
             inline
               ? "shadow-surface"
               : "fixed inset-x-4 top-[4.5rem] z-(--cv-z-toast) shadow-floating lg:inset-x-auto lg:end-6 lg:top-6 lg:w-[22rem]",
