@@ -1,231 +1,180 @@
-# v2 Execution Protocol — lead agent and parallel executors
+# Execution Protocol — lead agent and parallel executors
 
-Status: **Active working protocol (2026-08-19)**
+Status: **Active working protocol (2026-09-29)**
 
-Scope: how multi-agent implementation work is organized in this repository. This document
-describes the *process*; it grants no authorization and overrides no product document.
-`AGENTS.md` and the approved specifications remain authoritative, and every rule they
-state applies to every lane. Only the multi-agent additions are written here.
+Use this protocol when implementation is split across agents. It covers coordination,
+file ownership, integration, and evidence handoff for refactors, features, and fixes.
+Use one agent when the work does not justify parallel lanes (section 7).
 
-It was derived from the M1 boundary refactor, which ran seven stages across three parallel
-lanes and one integration wave without a single cross-lane conflict. Use it whenever
-implementation is split across more than one agent. Skip it when one agent working serially
-is the honest answer — see section 7.
+This document grants no authorization. [AGENTS.md](../AGENTS.md) governs agent work,
+including who runs tests and which gates a diff owes. The [specifications](README.md)
+govern product behavior. Those rules apply to every lane; this document adds only the
+coordination rules below.
 
-## 1. Roles
+## 1. Roles and assignment
 
-| Role | Owns | Never does |
+| Role | Owns | Limits |
 | --- | --- | --- |
-| **Lead agent** | Sequencing, any declared lead-only files, integration, final verification, every judgment call, and deciding that a stop condition has triggered | Delegate a judgment call to an executor; decide a deviation the user owns |
-| **Executor** | One lane's exclusive file set, mechanically | Touch another lane's files; decide behaviour; coordinate with another executor |
-| **Reviewer** (optional) | Read-only audit of acceptance criteria; reports findings | Write anything; own any file |
+| **Lead** | Scope, lane contracts, ownership, sequencing, integration, evidence review, and stop decisions | Cannot authorize a product deviation the user owns |
+| **Executor** | Implementation within one lane's declared files and approved behavior | Escalates changes to scope, behavior, interfaces, or ownership; never edits another lane's files |
+| **Reviewer** (optional) | Read-only audit of the diff and acceptance evidence | Reports findings; does not edit files |
 
-Model allocation: strongest reasoning model as lead, mid-tier for executors, and the
-reviewer sized to the audit's difficulty. The reasoning burden concentrates in guardrail
-design and integration. Those activities are lead-owned when the package needs them; they
-are not mandatory phases for every package.
+Before dispatch, the lead declares the common baseline commit, each lane's owned and
+readable paths, any lead-only paths, expected behavior, interface strategy, acceptance
+criteria, focused checks, runtime resources, and merge order. Link the owning specification
+for an intended behavior change. Executors may make internal implementation choices within
+that contract; unresolved product decisions return to the lead and, when necessary, the user.
 
-## 2. Waves
+## 2. Waves and evidence handoff
 
-A wave does not begin until the previous one is green under its own gate. "Green" means
-the focused tests for what changed — not a full-suite run per step. The boundary's full
-gate runs once, when the boundary closes, over the merged tree.
-
-| Wave | Who | Content |
+| Wave | Owner | Work |
 | --- | --- | --- |
-| 0 (when owed) | lead, alone | New, widened, or newly non-vacuous guardrails; dead-code removal that must precede lane work |
-| 1 | executors, parallel | One work package per lane |
-| 2 | lead, alone | Integration: reconcile cross-lane call sites, remove any temporary compatibility shims, then one full verification at the end |
-| 3 | lead, with the user | Anything approval-gated. Never folded into wave 2 |
+| 0, only when needed | Lead | Prerequisite guards or deletions that lanes must build on |
+| 1 | Executors | Disjoint packages under the declared contracts |
+| 2 | Lead | Integration, removal of temporary shims, and boundary evidence review |
+| 3, only when required | Lead and user | An action requiring approval that has not already been given |
 
-Wave 0 is used only when a package owes a guardrail under section 9, or when a deletion must
-land before lanes start so they cannot depend on dead code. In that case it is serial and
-first: the enforcement every lane must keep green has to exist before the moves it guards.
-When existing guards already cover the change and no prerequisite deletion exists, start at
-wave 1. Do not invent a guardrail phase to make mechanical work look staged.
+Use wave 0 only when enforcement must exist before lane changes, or a prerequisite deletion
+prevents lanes from depending on code being removed. Otherwise start at wave 1. Establish
+the lanes' common baseline after prerequisite changes. Approval requirements come from the
+applicable instructions or task, not from the existence of wave 3.
 
-Widened architecture rules land with an **explicit allowlist of known offenders**, so the
-file records the debt and blocks new instances. The allowlist is populated once, when the
-guard is created or widened, from the offenders that already exist. From then on entries
-may only be removed as debt is paid: a new violation is a stop condition, never a new
-entry.
+A dependent wave waits for the prerequisite's required evidence. Locally, agents prepare
+focused commands and the user runs them; the cloud exception and its setup requirements
+are defined in AGENTS.md. A handoff may say **changes ready; verification pending**, with
+exact commands and outstanding checks. It must not claim a pass or verified completion.
+Independent work may continue while results are pending.
 
-## 3. Exclusive file ownership
+At boundary close, hand over the scoped gates once, in order, explaining what each proves.
+Parallel work does not itself require a full suite. AGENTS.md determines scope and any
+additional evidence; broaden only for a stated reason.
 
-Each lane is defined by the paths it **owns**, the paths it may **read**, and the paths it
-**must not touch without reassignment**. Uncoordinated cross-lane edits are a protocol
-violation, not a merge conflict to resolve later.
+## 3. Exclusive ownership and runtime isolation
 
-A **lead-only set**, if one is needed, is declared up front and edited by nobody else in wave
-1. It is derived from actual cross-lane coupling rather than file category: a composition
-root, shared fixture, or hub is not automatically lead-only. A trivial edit may
-be assigned to one lane when that keeps ownership disjoint.
+Each path has one owner during a wave. Derive lanes and any lead-only set from actual
+coupling: shared fixtures, composition roots, and other hubs are not automatically
+lead-only. If a lane needs an unowned file, it pauses that edit and asks the lead to assign
+it. If another lane owns it, the lead records a transfer before work resumes, moves the
+edit to integration, or stops the affected package. Ownership must never overlap.
 
-If a lane discovers that it needs a file outside its ownership, it pauses that edit and
-escalates to the lead. The lead may transfer that file's ownership, move the edit into wave
-2, or stop the package if neither preserves disjointness. The transfer is recorded before
-work resumes; two lanes never own the file at once.
+A worktree isolates files, not runtime resources. For checks that use them, give each
+concurrent lane its own database, payload tree or object-store prefix, temporary and
+rendered output directories, and bound ports. Provision only what that lane uses.
+When a resource cannot be isolated, serialize the operations that use it; independent
+editing can remain parallel if file ownership and contracts stay disjoint.
 
-Lanes are derived from the coupling graph, not from a target headcount. If the work is
-sequentially dependent, say so and run it serially.
+## 4. Interfaces between lanes
 
-### Runtime isolation
+Declare cross-lane interfaces before implementation. If a feature or fix cannot expose a
+stable contract for independent work, sequence the dependent packages.
 
-A separate git worktree separates the *files*. It does not separate what the tests touch,
-and that is what `AGENTS.md`'s concurrency rule is actually about: two lanes writing the
-same PostgreSQL database/schema, object-store namespace, or rendered output race the test
-runner, and the numbers
-they report become meaningless without either lane failing. So a lane also gets its own:
-
-- a separate git worktree, a dedicated PostgreSQL database, and a dedicated local
-  payload tree or S3-compatible bucket prefix;
-- temp roots and test output directories;
-- any bound port, when a lane runs the API or a browser.
-
-Anything a lane cannot isolate is shared state, and shared state means the lanes are not
-disjoint. Say so and run those packages serially.
-
-## 4. The interface contract that makes wave 1 parallel
-
-When a move has importers outside the lane, the lane **preserves its module's existing public
-import surface for the whole of wave 1** using an explicit temporary re-export in the module
-that used to hold the symbol, marked so it cannot be mistaken for permanent:
+For symbol moves with importers outside the lane, preserve the old import surface during
+wave 1 using an explicit temporary re-export, for example:
 
 ```python
 from .new_owner import moved_symbol  # temporary re-export: removed in Wave 2
 ```
 
-This keeps each lane's diff confined to its own files and moves cross-lane import churn to
-wave 2. The shims are removed there; they never survive into the final state.
+The lead removes these shims and updates cross-lane callers during integration. If one lane
+owns the move and all importers, it may update them directly and prove the old path unused.
+State the chosen strategy in the lane contract. A shim must not hide an unapproved behavior
+or public-interface change.
 
-The re-export is not required when all importers are in the same lane, or when one lane owns
-the move and every affected importer without creating overlapping edits. In that case update
-the importers once and prove the old import path is unused. The lane declaration states
-which strategy it uses so integration does not assume a shim exists.
+## 5. Worktrees and integration order
 
-## 5. Git protocol
+- Each lane uses its own branch and worktree at the declared common commit. Executors do
+  not commit to the long-lived branch.
+- Reuse a worktree only after checking its baseline and confirming it has no staged,
+  unstaged, or untracked residue. Preserve existing user work when preparing the baseline;
+  never clean it away to make a lane usable.
+- Executors do not rebase, squash, force-push, or run interactive Git operations.
+- The lead integrates in the declared order and inspects each resulting diff. Select
+  post-merge checks from the coupling actually affected, following AGENTS.md's execution
+  rules. A merge is not an automatic reason to repeat a lane's entire subset.
 
-`AGENTS.md`'s rules on small scoped commits, destructive operations, and isolated
-runtime resources apply unchanged to every lane. What multi-agent work adds:
-
-- One git worktree per lane, all based on the same commit. No executor commits to the
-  long-lived branch.
-- A clean existing lane worktree may be reused when its baseline is the declared common
-  commit and it contains no untracked or uncommitted residue. Otherwise create it fresh. The
-  lead verifies both conditions before assigning work; convenience is not evidence of a
-  valid baseline.
-- Executors never rebase, squash, force-push, or run interactive git.
-- The lead merges in a fixed, declared order. After each merge, run a smoke/import check plus
-  any focused check justified by actual coupling introduced at that merge. Run the full
-  relevant suite once, after the last merge. Re-run a lane's whole subset only when the merge
-  changes something that subset exercised or section 9's evidence checks fail.
-
-## 6. Definition of done
+## 6. Acceptance and reporting
 
 ### Per lane
 
-A lane reports done only when all of these hold, with command output quoted:
+The handoff identifies the baseline and resulting commits, intended behavior changes,
+remaining work, and passed, failed, or pending checks. Quote actual command results when
+available; never substitute expected output for evidence.
 
-1. Its own declared test subset passes. When section 4's shim strategy is used, importer
-   coverage is the lead's after merge, where the surface actually moves. When the lane owns
-   all affected importers and updates them directly, its subset includes those importers.
-2. The architecture test passes and its allowlist has **not** grown. This one check is
-   per lane rather than per boundary, because it is what enforces exclusive ownership
-   while lanes are still separate; the rest of the gate belongs to the boundary.
-3. `git diff --stat` lists only files the lane owns.
-4. An explicit statement of what did **not** change — for behaviour-preserving work: no
-   threshold, contracted message string, exception type, validation group name, status,
-   callable signature, stored shape, artifact-path policy, or fact semantic. Message text is
-   preserved byte-for-byte only when a specification, public interface, snapshot/golden, or
-   deliberate test assertion makes it a contract. Incidental prose is not promoted to an API
-   merely because it appears in the diff.
-5. Anything not achievable mechanically is reported as a finding, **not** worked around. A
-   lane that discovers it needs to change behaviour stops and reports.
+Verify the complete changed-path set against declared ownership. For a lane still based on
+its assigned baseline, use `git diff --name-status <baseline>` for tracked changes, including
+committed, staged, and unstaged work, and `git ls-files --others --exclude-standard` for
+untracked files. A plain `git diff --stat` can omit committed and staged work. Read the diff,
+not just the path list.
 
-Reporting follows `AGENTS.md`: passed / failed / remaining, with command evidence.
+Architecture checks protect code boundaries; they do not enforce lane ownership. Include
+relevant guards when the affected behavior owes them, rather than imposing a backend
+architecture test on every lane. Existing exception lists must not grow to accommodate a
+lane's new violations.
+
+For a refactor, report whether observable behavior and contracts were preserved. For a
+feature or fix, identify the approved differences and verify that unrelated behavior was
+preserved. Importer coverage belongs to the lane when it owns all callers, and to integration
+when cross-lane callers were deliberately deferred. A lane is verified only when its
+required evidence is available and passes.
 
 ### Lead integration
 
-1. Merge in the declared order, running the risk-based post-merge checks from section 5.
-2. Delete every temporary shim and repoint the real call sites; where no shim was used,
-   reconcile only the cross-lane call sites left to integration.
-3. Prove no module still imports a moved symbol from its old home (grep the old paths).
-4. One verification at boundary close: the gate `AGENTS.md` owes this boundary, run over
-   the merged tree, plus the semantic-parity check. `AGENTS.md` owns which checks those
-   are, including its three additional-evidence triggers; this protocol adds only *when*
-   they run — once, over the merged tree, never per lane.
-   This is not the re-run section 9 warns against — no lane produces a full-suite run, and
-   the merged tree is not the tree any lane tested. It is the boundary's only full run, and
-   the first one over the code as it will actually ship.
-5. Update the relevant record with what landed and what remains: a decision or delivery
-   state belongs in `docs/tailoring-decisions.md`, an open defect or task in
-   `docs/backlog/`. Closed trackers stay in Git history rather than in the tree.
-6. Report per package, with command evidence.
+1. Review each lane's scope and evidence before accepting it; distinguish pending gates
+   from failures and passes.
+2. Integrate in order, reconcile cross-lane callers, remove every temporary shim, and
+   search for remaining uses of retired import paths.
+3. Review the combined diff against acceptance criteria and the owning specifications.
+   Apply [semantic parity](spec/test-and-acceptance-plan.md#4-golden-matrix-and-semantic-parity):
+   unexplained differences are failures; approved intended changes are assessed against
+   their new contract.
+4. Select the boundary's gates from the combined diff under AGENTS.md. Track which earlier
+   evidence remains applicable and which checks the integrated changes still owe. Hand
+   over local commands or report cloud results as required; do not mark pending checks done.
+5. Record decisions or delivery state in `docs/tailoring-decisions.md` when relevant, and
+   open defects or tasks in `docs/backlog/`. Closed trackers stay in Git history.
+6. Report the result per package, including failures and anything still awaiting verification.
 
-## 7. When not to use this
+## 7. When to work serially
 
-Parallel lanes are justified only when file ownership can be made disjoint. They are the
-wrong shape when:
-
-- the work converges on one shared file;
-- the packages are sequentially dependent and cannot expose stable intermediate contracts;
-- the change is small enough that the coordination costs more than the work.
-
-Saying "this does not need three lanes" is a valid and expected outcome of planning.
+Use one agent when files cannot be owned disjointly, packages depend on unresolved changes
+in one another, or coordination costs more than the work. Choose the number of lanes from
+the dependency structure, not a target headcount. A reviewer is optional, not another
+mandatory stage.
 
 ## 8. Stop conditions
 
-`AGENTS.md`'s stop conditions hold for every agent in every wave. Lane work adds these,
-which are specific to moving code under exclusive ownership:
+AGENTS.md's stop conditions apply throughout. Pause the affected work and escalate when:
 
-- a move cannot be made without changing behaviour, or a test asserts on something the
-  change would alter;
-- the architecture allowlist would need a **new** entry;
-- a requested ownership transfer cannot preserve exclusive ownership or would invalidate
-  another lane's in-flight work;
-- the semantic-parity comparison reports any difference;
-- an acceptance criterion cannot be honestly ticked.
+- a lane needs behavior or interface changes beyond its approved contract;
+- a new architecture violation would require adding an exception;
+- an ownership transfer would overlap or invalidate another lane's in-flight work;
+- verification finds an unexplained semantic difference or an unmet acceptance criterion.
 
-Stopping is cheaper than a silent workaround, and it is the expected behaviour rather than a
-failure. Three of M1's stops were substantive and two changed the plan.
+An approved behavior change is not a stop condition. A refactor that unexpectedly needs one
+is. Do not weaken a test, refresh a golden, or change an acceptance criterion to conceal a
+failure. If a criterion was over-scoped, explain and record the correction against the
+approved scope; do not expand the task just to satisfy it.
 
-## 9. Verification checks what a report cannot prove about itself
+## 9. Verify evidence without repeating it by default
 
-An implementing agent's report is a claim, and the accepting side checks it. Checking is
-not re-running everything that already passed: a green suite re-run under the same
-conditions produces no new information, and M1's evidence section is what excess looks
-like — a fresh environment re-ran the browser-complete suite, the golden test, and the
-fact lifecycle, and an independent reviewer then reproduced the same runs a third time.
+The accepting side checks:
 
-The accepting side checks the four things a report cannot establish about itself:
+1. **Scope:** the commits exist, and the complete diff matches the claimed ownership and work.
+2. **Implementation:** the claimed change is present in the code, not only in the report.
+3. **Coverage:** compare test changes and counts with the baseline for the same selection;
+   explain additions, removals, or deselections. Counts are a review signal, not a quota.
+4. **Environment:** record the tested revision, local changes, commands, and relevant runtime
+   isolation. Use the worktree's own dependencies and the [README setup](../README.md),
+   including `./.venv/bin/python` for backend checks and frontend tooling where applicable.
+   Another worktree's editable Python environment is not accepted as evidence for this one.
 
-1. **The commits exist and their diffs match the claimed scope.** Read the diff.
-2. **The claimed structural change is present in the code.** Grep for it; a report saying
-   a symbol moved is not the symbol having moved.
-3. **The test count against a pre-change baseline.** A bare pass count cannot distinguish
-   added tests from lost ones.
-4. **The environment the numbers came from.** The canonical interpreter is this
-   worktree's dedicated environment, `./.venv/bin/python`, bootstrapped with
-   `python3 -m venv .venv`, `./.venv/bin/python -m pip install -e '.[test]'`, and
-   `./.venv/bin/playwright install chromium`. Evidence produced under another worktree's
-   editable environment is not accepted, even when import-order guards prove that v2 won.
+Request or perform a rerun, according to AGENTS.md, when evidence is missing or unreliable,
+when affected code or conditions changed, or when a failure or concrete uncovered risk
+requires it. Do not repeat a passing check under unchanged conditions merely because another
+agent is accepting the work.
 
-Re-run a gate only when one of those checks fails, when the report leaves a gate
-unproduced, or when the environment of the original run is itself in doubt — which is
-exactly what happened at M1, and is why that re-run was right and repeating it by default
-is not.
-
-A guard is worth more attention than a re-run: prove it fails on an injected violation.
-A passing guard that cannot fail is the defect a second suite run will never find.
-
-Inject once per guard, not once per boundary. The probe is owed when the guard is new, when
-its scope changed, and when it stops being vacuous — a guard that early-returns while its
-target does not exist passes green forever, so the first boundary where the target exists is
-the only chance to catch it. Boundary 1 owed all three: the SQL guard was widened past
-`infrastructure/` in wave 2, and two guards were inert until their targets landed. A guard
-untouched since its own probe is owed nothing; re-injecting it is the ceremony this section
-otherwise argues against.
-
-If a blocker raised during verification turns out to be an over-scoped acceptance bar rather
-than a real defect, correct the bar and record that it was over-scoped. Do not widen a
-milestone to satisfy a criterion it never stated.
+For a new or widened guard, or one whose target exists for the first time, include an
+injected-violation probe to prove it can fail. Restore the probe afterward. This evidence
+follows the same local/cloud execution rules as other checks and is owed once for that guard
+change, not at every boundary. Guards derive their targets from code or schema; any necessary
+exception list records existing debt explicitly and cannot grow to excuse new violations.
