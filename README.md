@@ -339,10 +339,10 @@ recorded no submission and preserved no evidence. The v1 source documents — `b
 canonical fact sources are `common.json`, `sales.json`, `development.json`, and
 `situational_skills.json`.
 
-`ai/prompts/` holds exactly the live prompt. The task contract in
-`ai/contracts/task_contracts.json` names it, and a superseded version is deleted rather
-than kept beside it: an ApprovedRevision records the prompt version and hash it was
-produced under, and the file behind that hash is recoverable from Git history.
+`ai/prompts/` holds exactly the live prompt, `ai/prompts/system.md`. A prompt change edits
+that file in place and bumps the prompt version in `ai/contracts/task_contracts.json`;
+no versioned copy is kept beside it. An ApprovedRevision records the prompt version and
+hash it was produced under, and the file behind that hash is recoverable from Git history.
 
 Facts migrated out of `cv_base.md` still cite it in their `provenance`. Those strings are
 the historical record of where a fact came from and are deliberately left unchanged; the

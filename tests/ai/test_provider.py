@@ -14,8 +14,10 @@ silent fallback, artifact registration, retries, injection - are in
 
 from __future__ import annotations
 
+import json
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
@@ -183,13 +185,24 @@ def _object_nodes(schema: dict) -> list[tuple[str, dict]]:
     return found
 
 
+def test_prompt_directory_holds_only_the_declared_prompt() -> None:
+    """A superseded prompt is deleted, not kept beside the live one (README)."""
+    root = Path(__file__).resolve().parents[2]
+    contracts = json.loads((root / "ai/contracts/task_contracts.json").read_text("utf-8"))
+    present = {
+        path.relative_to(root).as_posix()
+        for path in (root / "ai/prompts").iterdir()
+        if not path.name.startswith(".")
+    }
+    assert present == {contracts["prompt"]["file"]}
+
+
 def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
     fake_openai: FakeOpenAI, task_contracts
 ) -> None:
     """§6: strict schema generation, and task-specific Proposal parsing."""
     assert set(task_contracts.tasks) == set(TASK_OUTPUT_MODELS)
     assert {name for name, _context, _proposal in TASKS} == set(TASK_OUTPUT_MODELS)
-    assert task_contracts.prompt_version != "system-v4"
     assert {"propose_requirement_extraction", "propose_job_analysis"}.isdisjoint(
         task_contracts.tasks
     )

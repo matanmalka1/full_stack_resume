@@ -458,7 +458,7 @@ to draft) and submission.
 
 One OpenAI adapter implements the provider-neutral `AIProvider` port, using the
 Responses API with strict Structured Outputs. The task contract (`ai/contracts/
-task_contracts.json`, version `10.0.0`, prompt `system-v12`) defines six tasks:
+task_contracts.json`, with the prompt `ai/prompts/system.md`) defines six tasks:
 
 - `propose_analysis` — requirements with importance, evidence-linked coverage, shortfall
   severity and reason, and the Track/Profile/Emphasis/language classification, as one
