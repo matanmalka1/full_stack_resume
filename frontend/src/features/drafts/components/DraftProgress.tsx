@@ -17,11 +17,14 @@ interface DraftProgressProps {
   saveState: AutosaveState;
 }
 
-/* What the part of the draft step waiting on the reader asks of them. */
-const guidance: Record<DraftStepId, string> = {
+/* What the part of the draft step waiting on the reader asks of them - said here only
+   where it adds to the pinned bar. The bar already says what to do next for a document
+   that can go on to its check or its approval, and this line repeating it put the same
+   instruction at the top and the bottom of the screen; on a phone the two together took
+   half of the first screen. A blocked document is the exception: the bar says only that
+   something blocks, and this line says where. */
+const guidance: Partial<Record<DraftStepId, string>> = {
   review: "יש לטפל בשורות שאין מאחוריהן עובדה מאושרת. הן מסומנות למטה, והאישור חסום עד שיטופלו.",
-  check: "התוכן מבוסס. אפשר לעבור על הטיוטה, ואז הכפתור בתחתית בודק את הקובץ ופותח את האישור.",
-  approve: "הבדיקה עברה. האישור מפיק HTML ו־PDF סופיים; עריכה אחריו מחזירה את המסמך לטיוטה.",
 };
 
 /* One line under the heading: what to do now, and whether the work is saved.
@@ -34,10 +37,11 @@ const guidance: Record<DraftStepId, string> = {
 export const DraftProgress = ({ actions, content, detail, dirty, draft, saveState }: DraftProgressProps) => {
   const focus = draftSteps(detail, content).find((step) => step.status === "blocked" || step.status === "current");
   const blocked = focus?.status === "blocked";
+  const line = focus === undefined ? undefined : guidance[focus.id];
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-cv-hairline pb-4">
-      {focus === undefined ? (
+      {line === undefined ? (
         <span />
       ) : (
         <p className="flex min-w-0 items-start gap-2 text-support leading-6 text-cv-text">
@@ -48,7 +52,7 @@ export const DraftProgress = ({ actions, content, detail, dirty, draft, saveStat
           )}
           <span>
             <span className="font-semibold">מה עכשיו: </span>
-            {guidance[focus.id]}
+            {line}
           </span>
         </p>
       )}

@@ -21,6 +21,7 @@ interface ApplicationPipelineViewProps {
   recruitmentStatusFilter: readonly string[] | undefined;
   onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
+  returnedId: string | null;
 }
 
 interface PipelineColumn {
@@ -79,8 +80,10 @@ const PipelineCard = ({
   item,
   onRequestDetails,
   onRequestUpdate,
+  returned,
 }: {
   item: ApplicationListItem;
+  returned: boolean;
   onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
 }) => {
@@ -92,7 +95,11 @@ const PipelineCard = ({
     // The card opens its details on a click; its company link stays the keyboard route.
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <article
-      className="group flex cursor-pointer flex-col gap-2.5 rounded-control border border-cv-border bg-cv-surface p-3.5 shadow-surface transition-all hover:border-cv-border-strong"
+      className={cx(
+        "group flex cursor-pointer flex-col gap-2.5 rounded-control border border-cv-border bg-cv-surface p-3.5 shadow-surface transition-all hover:border-cv-border-strong",
+        returned && "cv-returned",
+      )}
+      data-application-id={item.id}
       onClick={open.onClick}
     >
       <ApplicationIdentity afterCompany={<AttentionMark item={item} />} item={item} variant="pipeline" />
@@ -166,6 +173,7 @@ export const ApplicationPipelineView = ({
   recruitmentStatusFilter,
   onRequestDetails,
   onRequestUpdate,
+  returnedId,
 }: ApplicationPipelineViewProps) => {
   /* A column holds only this page's Applications, but the board is paged. Its size is
      therefore the server's count over every page - limited to the statuses the stage
@@ -224,6 +232,7 @@ export const ApplicationPipelineView = ({
                     key={item.id}
                     onRequestDetails={onRequestDetails}
                     onRequestUpdate={onRequestUpdate}
+                    returned={returnedId === item.id}
                   />
                 ))
               )}

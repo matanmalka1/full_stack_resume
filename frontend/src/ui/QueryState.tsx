@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { NotFoundPage } from "@/app/layout/NotFoundPage";
 import { ApiProblem } from "@/api/client";
+import { Button } from "./Button";
 import { ErrorCallout } from "./ErrorCallout";
 import { LiveRegion } from "./LiveRegion";
 import { cx } from "./cx";
@@ -17,6 +18,9 @@ interface QueryStateProps {
   loading?: boolean;
   loadingLabel?: ReactNode;
   loadingState?: ReactNode;
+  /* Read the region again. Given, a failure offers it as its way out; without it the
+     reader's only recourse was reloading the whole page. */
+  onRetry?: () => void;
 }
 
 /* Query-backed regions always resolve in the same order and place: a failure replaces
@@ -34,6 +38,7 @@ export const QueryState = ({
   loading = false,
   loadingLabel,
   loadingState,
+  onRetry,
 }: QueryStateProps) => {
   if (error instanceof ApiProblem && error.problem.status === 404) {
     return <NotFoundPage />;
@@ -41,7 +46,22 @@ export const QueryState = ({
 
   const errorState =
     error !== null && error !== undefined && errorTitle !== undefined ? (
-      <ErrorCallout className={className} error={error} fallbackDetail={errorDetail} title={errorTitle} />
+      /* "שגיאה", not the blocker tone's "חסימה": a read that failed blocks nothing the
+         reader must decide, and a retry is usually all it takes. */
+      <ErrorCallout
+        action={
+          onRetry === undefined ? undefined : (
+            <Button onClick={onRetry} variant="secondary">
+              ניסיון חוזר
+            </Button>
+          )
+        }
+        className={className}
+        error={error}
+        fallbackDetail={errorDetail ?? (onRetry === undefined ? undefined : "הבקשה לא הושלמה. אפשר לנסות שוב.")}
+        label="שגיאה"
+        title={errorTitle}
+      />
     ) : null;
 
   /* The word is announced as well as printed. A region that hands its own `loadingState`

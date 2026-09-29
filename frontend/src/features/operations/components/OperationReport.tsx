@@ -131,11 +131,16 @@ export const OperationReport = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <StatusBadge tone={continuation === undefined ? statusTones[operation.status] : "progress"}>
-          {progressLabel}
-        </StatusBadge>
-      </div>
+      {/* A run that ended on a failure is stated once, by the callout below, which carries
+          the status word in place of its tone's. A badge saying "נכשלה" over a callout
+          saying "חסימה" was the same outcome twice, in two words and two shapes. */}
+      {!live && hasFailure ? null : (
+        <div>
+          <StatusBadge tone={continuation === undefined ? statusTones[operation.status] : "progress"}>
+            {progressLabel}
+          </StatusBadge>
+        </div>
+      )}
 
       {live ? (
         <div className="flex flex-col gap-2">
@@ -161,6 +166,7 @@ export const OperationReport = ({
           are the report. */}
       {!hasFailure ? null : (
         <Callout
+          label={live || failure === null ? undefined : statusLabels[operation.status]}
           role="alert"
           title={failure?.title ?? statusLabels[operation.status]}
           tone={failureTones[operation.status] ?? "warning"}

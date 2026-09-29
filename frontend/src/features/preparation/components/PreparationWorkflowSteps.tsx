@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { boardPath } from "@/app/boardReturn";
+import { boardPath, boardReturnState } from "@/app/boardReturn";
 import { type WorkflowStep, WorkflowStepsRail } from "./WorkflowStepsRail";
 import {
   type StageDestinations,
@@ -98,6 +98,7 @@ export const PreparationWorkflowSteps = ({ applicationId, detail, stage }: Prepa
     <div className="flex flex-col gap-2">
       <Link
         className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control px-1 text-support font-semibold text-cv-text-muted transition-colors duration-200 hover:text-cv-text"
+        state={boardReturnState(applicationId)}
         to={boardPath()}
       >
         <ArrowRight aria-hidden="true" className="size-icon-md shrink-0" />

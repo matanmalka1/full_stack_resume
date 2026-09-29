@@ -89,7 +89,7 @@ export const NewApplicationPage = () => {
       description="הזנת פרטי המשרה שומרת עותק של המודעה ומתחילה לבדוק עד כמה הניסיון והכישורים שלך מתאימים לדרישות התפקיד."
       stage="intake"
     >
-      {/* The form takes the wizard's own measure, the same width as the spine and heading
+      {/* The form takes the step's own measure, the same width as the spine and heading
           above it. A shorter inner measure left the card ending a third of the way short of
           every edge around it, so the step read as two misaligned columns; the job-text
           field, the one long input here, is also the one that gains from the width. */}

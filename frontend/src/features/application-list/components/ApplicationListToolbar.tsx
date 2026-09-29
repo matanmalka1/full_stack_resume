@@ -1,8 +1,10 @@
-import { Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
+import { useId, useState } from "react";
 
 import type { ActivityFilter, ApplicationSort, PreparationState } from "@/api/contracts";
 import { preparationStateLabels } from "@/features/preparation";
 import { Button } from "@/ui/Button";
+import { cx } from "@/ui/cx";
 import { Field } from "@/ui/Field";
 import { Input } from "@/ui/Input";
 import { Select } from "@/ui/Select";
@@ -68,126 +70,160 @@ export const ApplicationListToolbar = ({
   onSearchChange,
   onSortChange,
   onViewModeChange,
-}: ApplicationListToolbarProps) => (
-  <div className="flex flex-col gap-3">
-    <search
-      aria-label="סינון וחיפוש מועמדויות"
-      className={flatSurfaceClasses(
-        "cv-fields-compact flex flex-wrap items-center gap-2 rounded-control bg-cv-surface px-3 py-2.5",
-      )}
-    >
-      <Field className="w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1" label="חיפוש במועמדויות">
-        {(control) => (
-          <div className="relative">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
-            />
-            <Input
-              {...control}
-              className="!ps-9"
-              dir="rtl"
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="חברה או תפקיד"
-              type="search"
-              value={search}
-            />
-          </div>
-        )}
-      </Field>
+}: ApplicationListToolbarProps) => {
+  const filtersId = useId();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilters =
+    (activity === "open" ? 0 : 1) + (preparationState === undefined ? 0 : 1) + (recruitmentStage === null ? 0 : 1);
 
-      <Field className={fieldClasses} label="מועמדויות">
-        {(control) => (
-          <Select
-            {...control}
-            onChange={(event) => onActivityChange(event.target.value as ActivityFilter)}
-            value={activity}
-          >
-            {(Object.keys(activityLabels) as ActivityFilter[]).map((key) => (
-              <option key={key} value={key}>
-                {activityLabels[key]}
-              </option>
-            ))}
-          </Select>
+  return (
+    <div className="flex flex-col gap-3">
+      <search
+        aria-label="סינון וחיפוש מועמדויות"
+        className={flatSurfaceClasses(
+          "cv-fields-compact flex flex-wrap items-center gap-2 rounded-control bg-cv-surface px-3 py-2.5",
         )}
-      </Field>
+      >
+        <Field className="w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1" label="חיפוש במועמדויות">
+          {(control) => (
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
+              />
+              <Input
+                {...control}
+                className="!ps-9"
+                dir="rtl"
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder="חברה או תפקיד"
+                type="search"
+                value={search}
+              />
+            </div>
+          )}
+        </Field>
 
-      <Field className={fieldClasses} label="שלב הכנת קו״ח">
-        {(control) => (
-          <Select
-            {...control}
-            onChange={(event) =>
-              onPreparationStateChange(event.target.value === "" ? undefined : (event.target.value as PreparationState))
-            }
-            value={preparationState ?? ""}
-          >
-            <option value="">כל שלבי הכנת קו״ח</option>
-            {/* Keep the selected URL value visible even when its current count is zero. */}
-            {(Object.keys(preparationStateLabels) as PreparationState[])
-              .filter((stage) => (stageCounts[stage] ?? 0) > 0 || stage === preparationState)
-              .map((stage) => (
-                <option key={stage} value={stage}>
-                  {preparationStateLabels[stage]} ({stageCounts[stage] ?? 0})
+        {/* On a phone the three selects fold behind one control. Open, they stacked four
+          full-width fields between the board's title and its first card, so the card the
+          reader came back to started at the bottom of the screen. Only their visibility
+          folds: the filters themselves live in the address as before, and the count on
+          the control says when any is narrowing the board. From `sm` they sit in the row
+          as they always did. */}
+        <Button
+          aria-controls={filtersId}
+          aria-expanded={filtersOpen}
+          className="w-full justify-between sm:hidden"
+          onClick={() => setFiltersOpen((open) => !open)}
+          size="default"
+          variant="secondary"
+        >
+          <span>{activeFilters === 0 ? "סינון" : `סינון · ${activeFilters} פעילים`}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cx("size-icon-md transition-transform", filtersOpen && "rotate-180")}
+          />
+        </Button>
+
+        <div className={cx(filtersOpen ? "flex w-full flex-col gap-2" : "hidden", "sm:contents")} id={filtersId}>
+          <Field className={fieldClasses} label="מועמדויות">
+            {(control) => (
+              <Select
+                {...control}
+                onChange={(event) => onActivityChange(event.target.value as ActivityFilter)}
+                value={activity}
+              >
+                {(Object.keys(activityLabels) as ActivityFilter[]).map((key) => (
+                  <option key={key} value={key}>
+                    {activityLabels[key]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+
+          <Field className={fieldClasses} label="שלב הכנת קו״ח">
+            {(control) => (
+              <Select
+                {...control}
+                onChange={(event) =>
+                  onPreparationStateChange(
+                    event.target.value === "" ? undefined : (event.target.value as PreparationState),
+                  )
+                }
+                value={preparationState ?? ""}
+              >
+                <option value="">כל שלבי הכנת קו״ח</option>
+                {/* Keep the selected URL value visible even when its current count is zero. */}
+                {(Object.keys(preparationStateLabels) as PreparationState[])
+                  .filter((stage) => (stageCounts[stage] ?? 0) > 0 || stage === preparationState)
+                  .map((stage) => (
+                    <option key={stage} value={stage}>
+                      {preparationStateLabels[stage]} ({stageCounts[stage] ?? 0})
+                    </option>
+                  ))}
+              </Select>
+            )}
+          </Field>
+
+          <Field className={fieldClasses} label="שלב גיוס">
+            {(control) => (
+              <Select
+                {...control}
+                onChange={(event) =>
+                  onRecruitmentStageChange(
+                    event.target.value === "" ? null : (event.target.value as RecruitmentStageId),
+                  )
+                }
+                value={recruitmentStage ?? ""}
+              >
+                <option value="">כל שלבי הגיוס</option>
+                {recruitmentStages.map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.label} ({recruitmentStageCounts[stage.id] ?? 0})
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
+      </search>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
+          {resultSummary}
+        </p>
+        {filtered ? (
+          <Button onClick={onClearFilters} size="compact" variant="ghost">
+            ניקוי סינון
+          </Button>
+        ) : null}
+
+        {/* Sorting orders the page rather than narrowing it, so it sits beside the view
+          switch rather than among the filters, and every view keeps the order it sets. */}
+        <div className="cv-fields-compact ms-auto flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-support text-cv-text-muted">
+            מיון
+            <Select
+              className="w-auto"
+              onChange={(event) => onSortChange(event.target.value as ApplicationSort)}
+              value={sort}
+            >
+              {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
+                <option key={key} value={key}>
+                  {sortLabels[key]}
                 </option>
               ))}
-          </Select>
-        )}
-      </Field>
-
-      <Field className={fieldClasses} label="שלב גיוס">
-        {(control) => (
-          <Select
-            {...control}
-            onChange={(event) =>
-              onRecruitmentStageChange(event.target.value === "" ? null : (event.target.value as RecruitmentStageId))
-            }
-            value={recruitmentStage ?? ""}
-          >
-            <option value="">כל שלבי הגיוס</option>
-            {recruitmentStages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
-                {stage.label} ({recruitmentStageCounts[stage.id] ?? 0})
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
-    </search>
-
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <p aria-live="polite" className="text-support text-cv-text-muted tabular-nums">
-        {resultSummary}
-      </p>
-      {filtered ? (
-        <Button onClick={onClearFilters} size="compact" variant="ghost">
-          ניקוי סינון
-        </Button>
-      ) : null}
-
-      {/* Sorting orders the page rather than narrowing it, so it sits beside the view
-          switch rather than among the filters, and every view keeps the order it sets. */}
-      <div className="cv-fields-compact ms-auto flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-support text-cv-text-muted">
-          מיון
-          <Select
-            className="w-auto"
-            onChange={(event) => onSortChange(event.target.value as ApplicationSort)}
-            value={sort}
-          >
-            {(Object.keys(sortLabels) as ApplicationSort[]).map((key) => (
-              <option key={key} value={key}>
-                {sortLabels[key]}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <ViewSwitch
-          label="בחירת תצוגת מועמדויות"
-          onChange={onViewModeChange}
-          options={viewModeOptions}
-          value={viewMode}
-        />
+            </Select>
+          </label>
+          <ViewSwitch
+            label="בחירת תצוגת מועמדויות"
+            onChange={onViewModeChange}
+            options={viewModeOptions}
+            value={viewMode}
+          />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};

@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import { decisionExportQueryOptions, documentPdfHref, documentQueryOptions } from "@/api/documents";
-import { boardPath } from "@/app/boardReturn";
+import { boardPath, boardReturnState } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { applicationLabel } from "@/features/applications";
@@ -126,7 +126,7 @@ export const ReadyPage = () => {
       ? {
           note: "ההגשה נרשמה. תהליך הכנת קורות החיים הושלם.",
           primary: (
-            <Link className={buttonClasses("primary")} to={boardPath()}>
+            <Link className={buttonClasses("primary")} state={boardReturnState(applicationId)} to={boardPath()}>
               סיום וחזרה ללוח
             </Link>
           ),
@@ -163,10 +163,20 @@ export const ReadyPage = () => {
         errorTitle="לא ניתן לטעון את קורות החיים המוכנים"
         loading={detail === undefined}
         loadingState={readyLoading}
+        onRetry={() => void applicationQuery.refetch()}
       >
         {detail === undefined ? null : (
           <>
             <PreparationAlerts detail={detail} screen="ready" />
+
+            {/* The end of the flow, at the top of the step where the eye lands after the
+                dialog closes. It used to be an edge-marked line under the cards and the
+                folded extras, the same weight as any other notice on the page. */}
+            {submissionNoticeOpen ? (
+              <SuccessNotice emphasis="milestone" onDismiss={() => setSubmissionNoticeOpen(false)} title="ההגשה נרשמה">
+                התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
+              </SuccessNotice>
+            ) : null}
 
             {ready ? null : (
               /* Reached from a link or the rail after the document changed. Nothing here is
@@ -277,12 +287,6 @@ export const ReadyPage = () => {
                 </aside>
               </div>
             )}
-
-            {submissionNoticeOpen ? (
-              <SuccessNotice onDismiss={() => setSubmissionNoticeOpen(false)} title="ההגשה נרשמה">
-                התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
-              </SuccessNotice>
-            ) : null}
           </>
         )}
       </QueryState>
@@ -293,14 +297,10 @@ export const ReadyPage = () => {
         <CommitBar
           back={backLink}
           label={NEXT_STEP_LABEL}
-          primary={
-            nextStep === null ? undefined : (
-              <>
-                {downloadButton === null ? null : <div className="flex flex-wrap gap-3">{downloadButton}</div>}
-                {nextStep.primary}
-              </>
-            )
-          }
+          /* The step's one command. The download sat here too, beside the same button in
+             the file card just above it - two equal buttons for one action - and on a
+             phone the pair left the way back to the editor too little room to be read. */
+          primary={nextStep === null ? undefined : nextStep.primary}
         >
           {nextStep === null ? undefined : (
             <p className="text-support leading-6 text-cv-text-muted" dir="auto">

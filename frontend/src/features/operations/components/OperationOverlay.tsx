@@ -81,6 +81,7 @@ export const OperationOverlay = ({
   continuation,
   failureAction,
   inline = false,
+  inlineNote = "התוצאה תופיע כאן כשההרצה תסתיים. אפשר לעזוב את המסך בינתיים.",
   onQueued,
   operation,
   pending,
@@ -94,8 +95,19 @@ export const OperationOverlay = ({
   /* The live panel sits in the page flow instead of floating at the viewport's corner,
      and cannot be put away. For a host with nothing else to show while the run lasts -
      the analysis step before its first analysis - where a corner panel over an empty
-     page said less than the page itself could. */
+     page said less than the page itself could.
+
+     Inline is also how a host that already shows the run in its own body reports it
+     exactly once: the corner panel is not drawn while the page holds the same run. It
+     changes only where live work is shown - a failure still opens the report and leaves
+     a status row, and a success still shows before it goes - and a host on another
+     screen, which does not show the run inline, keeps the corner panel. */
   inline?: boolean;
+  /* What the inline panel says fills its place once the run ends. A host that shows its
+     own run inline because it would otherwise report it twice - the editor, whose render
+     used to have a banner of its own beside the corner panel - names where the reader
+     goes next instead. */
+  inlineNote?: ReactNode;
   /* A retry from inside the report belongs to the same watch the host screen keeps. */
   onQueued: (operationId: string) => void;
   operation: Operation | undefined;
@@ -250,10 +262,18 @@ export const OperationOverlay = ({
         <section
           aria-labelledby={panelHeadingId}
           className={cx(
-            "cv-appear-late flex flex-col gap-2.5 rounded-surface border bg-cv-surface p-4",
+            "flex flex-col gap-2.5 rounded-surface border bg-cv-surface p-4",
+            /* Inline, the panel is the step's body, not a notice over it: held back like
+               the corner panel, it left the space under the heading empty for the delay
+               and then dropped a card into it. It settles in at once instead. */
+            inline ? "cv-settle-in" : "cv-appear-late",
             inline
               ? "shadow-surface"
-              : "fixed inset-x-4 top-[4.5rem] z-(--cv-z-toast) shadow-floating lg:inset-x-auto lg:end-6 lg:top-6 lg:w-[22rem]",
+              : /* On a wide screen the corner is the lower one, above the step's pinned
+                   bar. The top corner sat over the end of the workflow spine, hiding the
+                   steps still ahead - what the reader checks while waiting - for as long
+                   as the run lasted. */
+                "fixed inset-x-4 top-[4.5rem] z-(--cv-z-toast) shadow-floating lg:inset-x-auto lg:end-6 lg:top-auto lg:bottom-28 lg:w-[22rem]",
             chipToneClasses[tone],
           )}
         >
@@ -287,11 +307,7 @@ export const OperationOverlay = ({
             <>
               <OperationPhaseSteps phase={record.phase} />
               {/* In place of the page's own content, the card says what fills it. */}
-              {inline ? (
-                <p className="text-support leading-6 text-cv-text-muted">
-                  התוצאה תופיע כאן כשההרצה תסתיים. אפשר לעזוב את המסך בינתיים.
-                </p>
-              ) : null}
+              {inline ? <p className="text-support leading-6 text-cv-text-muted">{inlineNote}</p> : null}
             </>
           )}
           {showingSuccess ? null : (

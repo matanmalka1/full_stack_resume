@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -166,7 +167,7 @@ const HistoryBack = () => {
 };
 
 interface RenderPageOptions {
-  entries?: string[];
+  entries?: ComponentProps<typeof MemoryRouter>["initialEntries"];
   initialIndex?: number;
   queryClient?: QueryClient;
   withHistoryBack?: boolean;
@@ -213,6 +214,63 @@ describe("ApplicationListPage", () => {
 
     expect(await screen.findByRole("heading", { name: "לוח מועמדויות" })).toBeInTheDocument();
     expect(window.sessionStorage.getItem("cv:board-query")).toBe("activity=all&stage=approved");
+  });
+
+  /* A board that failed to load is an error the reader can retry, not a blocker to
+     resolve, and trying again is one press rather than a reload of the whole page. */
+  it("offers to read the board again when it failed to load", async () => {
+    let failing = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => (failing ? jsonResponse({ detail: "boom" }, 500) : jsonResponse(listBody([item()])))),
+    );
+
+    renderPage();
+
+    const failure = await screen.findByRole("alert", {}, { timeout: 4_000 });
+    failing = false;
+    expect(failure).toHaveTextContent("שגיאה");
+    expect(failure).not.toHaveTextContent("חסימה");
+    fireEvent.click(within(failure).getByRole("button", { name: "ניסיון חוזר" }));
+    expect(await screen.findByRole("article", { name: "Backend Engineer אצל Acme" })).toBeInTheDocument();
+  });
+
+  /* Coming back from the flow, the card worked on is marked for a moment where it already
+     is - the board's order and filtering stay exactly as they were left. */
+  it("marks the card the reader came back to for a moment, without reordering the board", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      stubList([item(), item({ id: "app-2", company: "Binat", target_role: "Sales Engineer" })]);
+
+      renderPage({ entries: [{ pathname: "/", state: { returnedFrom: "app-2" } }] });
+
+      const returned = await screen.findByRole("article", { name: "Sales Engineer אצל Binat" });
+      expect(returned).toHaveClass("cv-returned");
+      expect(screen.getByRole("article", { name: "Backend Engineer אצל Acme" })).not.toHaveClass("cv-returned");
+      const cards = screen.getAllByRole("article").map((card) => card.getAttribute("aria-label"));
+      expect(cards).toEqual(["Backend Engineer אצל Acme", "Sales Engineer אצל Binat"]);
+
+      act(() => vi.advanceTimersByTime(2_400));
+      expect(returned).not.toHaveClass("cv-returned");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /* On a phone the three filter menus fold behind one control, so the board's cards are
+     not pushed below the first screen. Folding hides the controls; it never changes the
+     filtering, which the control's count reports. */
+  it("folds the filter menus behind one control that says how many are active", async () => {
+    stubList([item()]);
+
+    renderPage({ entries: ["/?activity=all&stage=approved"] });
+
+    const toggle = await screen.findByRole("button", { name: "סינון · 2 פעילים" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const menus = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+    expect(within(menus).getByLabelText("שלב הכנת קו״ח")).toHaveValue("approved");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
 
   it("reserves the list layout with card-shaped skeletons while the first request is pending", () => {

@@ -46,6 +46,7 @@ const renderPanel = (value: Operation, onQueued = vi.fn(), failureAction?: React
 
 interface OverlayProps {
   awaitingRecord?: boolean;
+  inline?: boolean;
   continuation?: string;
   operation?: Operation;
   pending?: PendingWork;
@@ -63,6 +64,7 @@ const renderOverlay = (initial: OverlayProps, settings?: ReturnType<typeof setti
         <OperationOverlay
           awaitingRecord={props.awaitingRecord ?? false}
           continuation={props.continuation}
+          inline={props.inline}
           onQueued={vi.fn()}
           operation={props.operation}
           pending={props.pending}
@@ -245,6 +247,10 @@ describe("OperationReport", () => {
     expect(alert).toHaveTextContent("הפרופיל מאפשר לכל היותר 1");
     expect(screen.getByRole("button", { name: "חזרה לעריכת הטיוטה" })).toBeInTheDocument();
     expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
+    /* The outcome is said once, by the alert, in the status's own word. */
+    expect(within(alert).getByText("נכשלה")).toBeInTheDocument();
+    expect(screen.getAllByText("נכשלה")).toHaveLength(1);
+    expect(alert).not.toHaveTextContent("חסימה");
   });
 
   /* The backend files "no provider configured" under PROVIDER_REFUSED. With Settings
@@ -479,6 +485,41 @@ describe("OperationOverlay", () => {
     /* The full report is still a press away while the run lasts. */
     fireEvent.click(within(panel()).getByRole("button", { name: "פירוט ההרצה" }));
     expect(overlay().open).toBe(true);
+  });
+
+  /* A screen that shows the run in its own body gets it once, there - never that plus the
+     corner panel. Only where live work is drawn changes: its outcome still reaches the
+     reader the way every other run's does. */
+  it("reports a run once, in the page, when its host shows it inline", () => {
+    const { update } = renderOverlay({ inline: true, operation: operation() });
+
+    expect(screen.getAllByRole("region")).toHaveLength(1);
+    expect(panel()).not.toHaveClass("fixed");
+    expect(panel()).toHaveTextContent("מתבצעת");
+    /* The page holds it, so it cannot be put away - but its report is still a press away. */
+    expect(within(panel()).queryByRole("button", { name: "סגירה" })).not.toBeInTheDocument();
+    expect(within(panel()).getByRole("button", { name: "פירוט ההרצה" })).toBeInTheDocument();
+
+    update({ inline: true, operation: failed({ failure_code: "VALIDATION_EXECUTION_FAILED" }), settled: true });
+    expect(overlay().open).toBe(true);
+    fireEvent.click(within(overlay()).getByRole("button", { name: "סגירה" }));
+    expect(chip()).toHaveTextContent("נכשלה");
+  });
+
+  it("still shows an inline run's success before it goes", () => {
+    const { update } = renderOverlay({ inline: true, operation: operation() });
+
+    update({ inline: true, operation: succeeded(), settled: true });
+    expect(panel()).toHaveTextContent("הושלמה");
+  });
+
+  /* A host that does not show the run in its own body - the analysis screen, once it hands
+     over to the draft it continues into - keeps the floating panel. */
+  it("keeps the corner panel for a host that does not show the run itself", () => {
+    renderOverlay({ operation: operation({ operation_type: "create_draft" }) });
+
+    expect(panel()).toHaveClass("fixed");
+    expect(within(panel()).getByRole("button", { name: "סגירה" })).toBeInTheDocument();
   });
 
   it("shows nothing for a success that was already finished when the screen read it", () => {

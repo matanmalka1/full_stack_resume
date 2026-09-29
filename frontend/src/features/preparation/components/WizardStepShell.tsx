@@ -28,9 +28,14 @@ interface WizardStepShellProps {
   /* The analysis, draft and ready steps each put the work beside the evidence for it - the
      facts checklist beside the diagnosis, the draft beside its rendered document, the
      approved record beside its validation - and that split of two readable columns needs
-     the wide frame. Intake, which asks one thing and shows nothing beside it, takes the
-     narrower wizard measure. */
-  measure?: "wide" | "wizard";
+     the wide frame.
+
+     Every step takes it, intake included. Intake used to take the narrower wizard
+     measure, and pressing "יצירת מועמדות" then widened the spine, the heading and the
+     body in the same paint that swapped the step - the one moment the flow should feel
+     like moving forward read as the page being thrown somewhere else. One measure keeps
+     the frame still while its contents change. */
+  measure?: "wide";
   /* Whether this step gives its body a `WideRow` target - see that component's doc.
      Only the analysis step sets this: its work/reasoning split reads there instead of
      inset beside the rail, so it can use the width the rail's reserved column would
@@ -62,7 +67,7 @@ export const WizardStepShell = ({
   description,
   detail,
   eyebrow,
-  measure = "wizard",
+  measure = "wide",
   queryError,
   stage,
   title,

@@ -17,6 +17,8 @@ interface ApplicationListResultsProps {
   pageSize: number;
   recruitmentStatusCounts: Readonly<Record<string, number>>;
   recruitmentStatusFilter: readonly string[] | undefined;
+  /* The Application the reader just came back from, marked for a moment. */
+  returnedId: string | null;
   viewMode: ViewMode;
   onClearFilters: () => void;
   onClearNextAction: (item: ApplicationListItem) => void;
@@ -43,6 +45,7 @@ export const ApplicationListResults = ({
   pageSize,
   recruitmentStatusCounts,
   recruitmentStatusFilter,
+  returnedId,
   viewMode,
   onClearFilters,
   onClearNextAction,
@@ -82,6 +85,7 @@ export const ApplicationListResults = ({
           onRequestUpdate={onRequestUpdate}
           recruitmentStatusCounts={recruitmentStatusCounts}
           recruitmentStatusFilter={recruitmentStatusFilter}
+          returnedId={returnedId}
         />
       ) : (
         <ApplicationCardsView
@@ -92,6 +96,7 @@ export const ApplicationListResults = ({
           onRequestDelete={onRequestDelete}
           onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
+          returnedId={returnedId}
         />
       )}
       <ApplicationListPagination

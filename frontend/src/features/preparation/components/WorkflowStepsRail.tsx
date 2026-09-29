@@ -26,9 +26,14 @@ interface WorkflowStepsRailProps {
 const railClasses =
   "w-full min-w-0 rounded-control border border-cv-border bg-cv-surface px-3 py-3 shadow-surface sm:px-4";
 
+/* Three shapes, heaviest for what is done: a filled mark with a tick, a ring around the
+   number of the step the work is at, a light outline for what is ahead. A completed step
+   used to sit in a pale outline hardly different from an upcoming one, so only the tick
+   told them apart, while the open step was the one filled solid - the spine read heaviest
+   at the step not yet done. */
 const stepMarkClasses: Record<WorkflowStepState, string> = {
-  complete: "border-cv-success/25 bg-cv-success-soft text-cv-success",
-  current: "border-cv-accent bg-cv-accent text-cv-on-accent",
+  complete: "border-cv-accent bg-cv-accent text-cv-on-accent",
+  current: "border-2 border-cv-accent bg-cv-surface text-cv-accent",
   upcoming: "border-cv-border bg-cv-surface text-cv-text-muted",
 };
 
@@ -91,10 +96,13 @@ const StepBody = ({ index, step }: { index: number; step: WorkflowStep }) => (
     >
       {step.label}
     </span>
+    {/* The press cue shows on hover and focus only. Drawn at rest, a `‹` beside every
+        reachable step sat against the connector after it, so between two completed steps
+        the spine read "line, chevron, line" where everywhere else it read "line". */}
     {step.href === undefined ? null : (
       <ChevronLeft
         aria-hidden="true"
-        className="hidden size-icon-md shrink-0 text-cv-text-muted transition-transform lg:block duration-200 group-hover:-translate-x-0.5 group-hover:text-cv-accent"
+        className="hidden size-icon-md shrink-0 text-cv-text-muted opacity-0 transition-[opacity,transform] lg:block duration-200 group-hover:-translate-x-0.5 group-hover:text-cv-accent group-hover:opacity-100 group-focus-visible:opacity-100"
       />
     )}
   </span>

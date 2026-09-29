@@ -94,13 +94,15 @@ export const DraftApprovalDialog = ({
         בדקתי את קורות החיים ואני מאשר/ת את הגרסה הזו להפקת PDF. עריכה אחרי האישור תחזיר את המסמך לטיוטה ותדרוש אישור
         חדש.
       </p>
+      {/* What is being approved, set apart from the sentence that approves it: it ran
+          straight on from the paragraph with no space between the two. */}
       {detail === undefined || draft === undefined ? null : (
-        <div className="flex flex-col gap-3">
+        <div className="mt-section-gap rounded-control border border-cv-border bg-cv-surface p-card-padding">
           <SummaryList
             items={[
               { term: "חברה", value: detail.application.company },
               { term: "תפקיד", value: detail.application.target_role },
-              { term: "מזהה המסמך", value: draft.document_hash.slice(0, 12), ltr: true },
+              { term: "מזהה המסמך", value: draft.document_hash.slice(0, 12), ltr: true, mono: true },
             ]}
           />
         </div>

@@ -59,9 +59,10 @@ describe("ReadyPage", () => {
     renderReady();
 
     expect(await screen.findByRole("heading", { name: "מוכן למסירה" })).toBeInTheDocument();
-    for (const link of await screen.findAllByRole("link", { name: "הורדת PDF" })) {
-      expect(link).toHaveAttribute("href", `/api/v1/applications/app-1/document/pdf?v=${HASH}`);
-    }
+    /* Once, in the file card: the pinned bar carries only the step's own command. */
+    const downloads = await screen.findAllByRole("link", { name: "הורדת PDF" });
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0]).toHaveAttribute("href", `/api/v1/applications/app-1/document/pdf?v=${HASH}`);
     /* Editing a Ready document is allowed; it is the way back, not a new record. */
     expect(screen.getByRole("link", { name: "חזרה לעריכת הטיוטה" })).toHaveAttribute(
       "href",
@@ -80,7 +81,13 @@ describe("ReadyPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "רישום ההגשה" }));
     fireEvent.click(screen.getByRole("button", { name: "אישור ורישום ההגשה" }));
 
-    await screen.findByText("ההגשה נרשמה");
+    /* The flow's end is announced at the top of the step, ahead of the file it sent. */
+    const done = (await screen.findByText("ההגשה נרשמה")).closest("output");
+    expect(done).not.toBeNull();
+    expect(
+      done!.compareDocumentPosition(screen.getByRole("heading", { name: "קובץ קורות החיים" })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByRole("link", { name: "סיום וחזרה ללוח" })).toHaveAttribute("href", "/");
     const request = fetchMock.mock.calls.find(
       (call) => call[1]?.method === "POST" && String(call[0]).endsWith("/submissions"),

@@ -152,7 +152,7 @@ const isDocumentRead = (url: string, init?: RequestInit) => url === DOC_PATH && 
 const stubReads = (
   answers: Partial<
     Record<
-      "detail" | "document" | "operation" | "selection" | "regenerate" | "check",
+      "detail" | "document" | "operation" | "selection" | "regenerate" | "check" | "render",
       () => Response | Promise<Response>
     >
   >,
@@ -168,6 +168,9 @@ const stubReads = (
     }
     if (url === `${DOC_PATH}/selection`) {
       return Promise.resolve(answers.selection?.() ?? updateResponse(5));
+    }
+    if (url === `${DOC_PATH}/render`) {
+      return Promise.resolve(answers.render?.() ?? jsonResponse({}, 500));
     }
     if (url === `${DOC_PATH}/check`) {
       return Promise.resolve(answers.check?.() ?? jsonResponse({}, 500));
@@ -832,6 +835,45 @@ describe("DraftEditorPage", () => {
        already passed is not offered a second time. */
     expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/render"))).toBe(false);
     expect(screen.queryByRole("button", { name: "בדיקה והכנת PDF" })).not.toBeInTheDocument();
+  });
+
+  /* The render is the step's own last act, so it is reported in the step, once. It used to
+     be a banner of the render panel's beside a corner panel of the overlay's, both
+     spinning over the same run. */
+  it("reports a running render once, in the step, rather than as a banner and a corner panel", async () => {
+    const renderRun = {
+      id: "op-render",
+      application_id: "app-1",
+      operation_type: "render_document",
+      status: "running",
+      is_terminal: false,
+      phase: "executing",
+      message: "",
+      created_at: "2026-08-24T07:00:00Z",
+      outputs: [],
+      available_actions: ["cancel"],
+    };
+    stubReads({
+      detail: () => jsonResponse(detail({ preparation_state: "approved", content_check: "passed" })),
+      document: () => jsonResponse(draft({}, { preparation_state: "approved", content_check: "passed" })),
+      render: () =>
+        new Response(JSON.stringify({ ...renderRun, status: "queued", phase: "queued" }), {
+          status: 202,
+          headers: { "Content-Type": "application/json", Location: "/api/v1/operations/op-render" },
+        }),
+      operation: () => jsonResponse(renderRun),
+    });
+
+    renderPage();
+    const start = await screen.findByRole("button", { name: "יצירת HTML ו־PDF" });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+
+    const report = await screen.findByRole("region", { name: "הרצת יצירת קובץ קורות החיים" });
+    expect(report).not.toHaveClass("fixed");
+    expect(report).toHaveTextContent("המסך יעבור לקורות החיים המוכנים למסירה");
+    expect(screen.queryByRole("heading", { name: "הגרסה אושרה" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "הרצת יצירת קובץ קורות החיים" })).toHaveLength(1);
   });
 
   it("reports the last failed render on the approved document and keeps it editable", async () => {

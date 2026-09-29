@@ -76,11 +76,14 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
           <Input
             {...control}
             {...register("source_url", { onChange: () => onInputChanged("source_url") })}
-            className="ltr-island pr-10"
+            /* Marked as an example like its two neighbours. A bare URL in muted grey read as
+               an address already filled in. The empty field sits on the RTL edge with them;
+               a typed address is still an LTR island. */
+            className="ltr-island rtl-placeholder pr-10"
             dir="ltr"
             inputMode="url"
             maxLength={SOURCE_URL_MAX_CHARACTERS}
-            placeholder="https://company.example/careers/job"
+            placeholder={examplePlaceholder("https://company.example/careers/job")}
             type="url"
           />
         </IconField>
