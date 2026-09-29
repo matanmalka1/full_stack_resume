@@ -1,4 +1,5 @@
 import type { ClaimType } from "@/api/contracts";
+import type { ClaimOrigin } from "./draftOverview";
 import type { Tone } from "@/ui/tone";
 
 /* Exhaustive over the generated union. A claim type added to the backend fails this
@@ -30,10 +31,19 @@ export const claimTypeTones: Record<ClaimType, Tone> = {
 };
 
 export const claimTypeExplanations: Record<ClaimType, string> = {
-  canonical: "הטקסט הוא הניסוח הקנוני של העובדה שמתחתיו.",
-  composite: "הטקסט מחבר כמה עובדות לפי תבנית קבועה.",
-  derived: "הטקסט נגזר מהעובדות שמתחתיו לפי כלל ניסוח.",
-  reviewed: "הטקסט נוסח מחדש ונבדק בביקורת סמנטית נפרדת מול המקורות הקנוניים.",
+  canonical: "השורה היא הנוסח המדויק של העובדה במאגר, בלי שינוי.",
+  composite: "השורה מחברת כמה עובדות מהמאגר לשורה אחת לפי תבנית קבועה. העובדות עצמן לא השתנו.",
+  derived: "השורה נגזרה מהעובדה לפי כלל ניסוח קבוע. המשמעות לא השתנתה.",
+  reviewed: "השורה נוסחה מחדש לתפקיד, והניסוח נבדק בנפרד מול העובדות במאגר כדי לוודא שהמשמעות זהה.",
   pending: "אין עובדה שמאשרת את הטקסט הזה. הוא נשמר כפי שנכתב, ואינו מאפשר אישור של הגרסה.",
-  headline: "שורת הכותרת של קורות החיים.",
+  headline: "שורת הכותרת של קורות החיים. היא נבנית מהפרופיל ולא מבחירת העובדות.",
+};
+
+/* Where a line came from, in the words the content summary counts it under. Keyed by
+   `ClaimOrigin`, which folds the claim types into what the reader asks. */
+export const claimOriginLabels: Record<ClaimOrigin, string> = {
+  verbatim: "כלשון העובדה",
+  reworded: "נוסח מחדש",
+  unsupported: "ללא עובדה מאחוריה",
+  structural: "מבנה המסמך",
 };

@@ -1,9 +1,8 @@
-import { Layers3, Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { DocumentFacts, EditableDocument } from "../model/drafts.types";
 import { Button } from "@/ui/Button";
-import { Card } from "@/ui/Card";
 import { Textarea } from "@/ui/Input";
 import type { ClaimFactContext, DraftClaimActions } from "../model/drafts.types";
 import { ClaimFactResolution } from "./ClaimFactResolution";
@@ -30,7 +29,11 @@ interface DraftSectionCardProps {
 
 /* A.4 frame 3: one section of the draft outline - its heading, its regenerate action, and
    the claims in it. The only thing it adds to the list below it is the section context an
-   unsupported line needs to become a fact. */
+   unsupported line needs to become a fact.
+
+   Drawn as the document's own section - a heading over a rule - rather than as a card:
+   every section was a framed, shadowed box, so the editor read as a stack of panels
+   instead of as the CV it is editing. */
 export const DraftSectionCard = ({
   actions,
   draft,
@@ -56,13 +59,9 @@ export const DraftSectionCard = ({
   };
 
   return (
-    <Card
-      aria-labelledby={headingId}
-      className="flex scroll-mt-24 flex-col gap-2 bg-cv-surface p-4 shadow-surface sm:p-5"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cv-border pb-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Layers3 aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
+    <section aria-labelledby={headingId} className="flex scroll-mt-24 flex-col gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-cv-border-strong pb-2">
+        <div className="flex min-w-0 items-baseline gap-2">
           <h3 className="truncate text-heading-sm font-bold text-cv-text" dir="auto" id={headingId}>
             {section.name}
           </h3>
@@ -72,11 +71,11 @@ export const DraftSectionCard = ({
         </div>
         {/* No up/down controls for the section itself: section order is the Profile's,
             and validation refuses any other, so a moved section could never be approved. */}
-        <Button disabled={actions.regenerationDisabled} onClick={onRegenerate} variant="secondary">
+        <Button disabled={actions.regenerationDisabled} onClick={onRegenerate} variant="ghost">
           <RefreshCw aria-hidden="true" className="size-icon-md" />
           יצירה מחדש של הפרק
         </Button>
-      </div>
+      </header>
 
       <DraftClaimList
         actions={actions}
@@ -102,7 +101,7 @@ export const DraftSectionCard = ({
       />
 
       {adding ? (
-        <div className="flex flex-col gap-2 border-t border-cv-border pt-3">
+        <div className="flex flex-col gap-2 rounded-control bg-cv-surface-muted p-3">
           <label className="text-support font-medium text-cv-text" htmlFor={textareaId}>
             טקסט השורה החדשה
           </label>
@@ -113,6 +112,9 @@ export const DraftSectionCard = ({
             onChange={(event) => setText(event.target.value)}
             value={text}
           />
+          <p className="text-caption text-cv-text-muted">
+            שורה חדשה נשמרת כפי שנכתבה ומסומנת כ"ללא ביסוס" עד שעובדה מאושרת תעמוד מאחוריה.
+          </p>
           <div className="flex items-center gap-2">
             <Button disabled={actions.locked || text.trim() === ""} onClick={submit}>
               הוספת השורה
@@ -129,13 +131,11 @@ export const DraftSectionCard = ({
           </div>
         </div>
       ) : (
-        <div className="border-t border-cv-border pt-3">
-          <Button onClick={() => setAdding(true)} variant="secondary">
-            <Plus aria-hidden="true" className="size-icon-md" />
-            הוספת שורה לפרק
-          </Button>
-        </div>
+        <Button className="self-start" onClick={() => setAdding(true)} variant="ghost">
+          <Plus aria-hidden="true" className="size-icon-md" />
+          הוספת שורה לפרק
+        </Button>
       )}
-    </Card>
+    </section>
   );
 };

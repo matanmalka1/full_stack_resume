@@ -172,8 +172,10 @@ export const ClaimFactResolution = ({
     });
 
   return (
-    <details className="mt-3 rounded-control border border-cv-border bg-cv-surface-muted p-4">
-      <summary className="cursor-pointer font-semibold text-cv-text">הפיכת הטקסט לעובדה מאושרת</summary>
+    <details className="rounded-control border border-cv-border px-3 py-2 open:bg-cv-surface-muted open:p-4">
+      <summary className="cursor-pointer text-support font-semibold text-cv-accent hover:text-cv-accent-hover">
+        הפיכת הטקסט לעובדה מאושרת
+      </summary>
       {error === null ? null : (
         <ErrorCallout
           className="mt-4"

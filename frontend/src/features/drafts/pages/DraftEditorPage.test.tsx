@@ -467,12 +467,18 @@ describe("DraftEditorPage", () => {
     expect(screen.queryByText(/\bpending\b|\bconfirmed\b/)).not.toBeInTheDocument();
   }, 10_000);
 
-  it("does not duplicate general fact lifecycle management inside the draft", async () => {
+  it("says how the content was built without duplicating fact lifecycle management", async () => {
     stubReads({});
 
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "ביסוס עובדתי" })).toBeInTheDocument();
+    const summary = (await screen.findByRole("heading", { name: "איך נבנה התוכן" })).closest("section")!;
+    /* The one body line is its fact's canonical wording: counted as taken verbatim, with
+       nothing reworded and nothing unsupported. */
+    expect(within(summary).getByText("כלשון העובדה").nextElementSibling).toHaveTextContent("1");
+    expect(within(summary).getByText("נוסח מחדש").nextElementSibling).toHaveTextContent("0");
+    expect(within(summary).getByText("ללא עובדה מאחוריה").nextElementSibling).toHaveTextContent("0");
+    expect(within(summary).getByText(/עובדה אחת נכנסה לקורות החיים/)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "מחזור חיי העובדות" })).not.toBeInTheDocument();
     expect(screen.queryByText("יצירת עובדה ממתינה חדשה")).not.toBeInTheDocument();
   });
@@ -1039,7 +1045,11 @@ describe("DraftEditorPage regeneration", () => {
     const fetchMock = stubReads({ regenerate: () => accepted() });
 
     renderPage();
-    fireEvent.click((await screen.findAllByRole("button", { name: "יצירה מחדש של השורה" }))[0]!);
+    const regenerate = await screen.findByRole("button", { name: "יצירה מחדש של השורה" });
+    const identity = screen.getByRole("heading", { name: "כותרת ופרטי קשר" }).closest("section")!;
+    expect(within(identity).queryByRole("button", { name: "יצירה מחדש של השורה" })).not.toBeInTheDocument();
+    expect(within(identity).getAllByRole("button", { name: "עריכת השורה" })).toHaveLength(2);
+    fireEvent.click(regenerate);
 
     /* The overlay, not the route: the editor's own heading is still on screen under it. */
     expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
@@ -1050,11 +1060,11 @@ describe("DraftEditorPage regeneration", () => {
     expect(String(call?.[0])).toBe(`${DOC_PATH}/regenerate-claim`);
     expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({
       expected_document_hash: HASH,
-      claim_id: "c-headline",
+      claim_id: "c-1",
       keep_text: false,
     });
     expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
-      `${HASH}:c-headline`,
+      `${HASH}:c-1`,
     );
 
     /* Hiding the run does not make the draft safe to change: every edit would be addressed
@@ -1148,18 +1158,21 @@ describe("DraftEditorPage preview", () => {
     expect(link).toHaveAttribute("target", "_blank");
   });
 
-  it("opens on the draft as text, with the facts behind each line already open", async () => {
+  it("opens on the draft as text, with the fact behind each line one disclosure away", async () => {
     stubReads({});
 
     renderPage();
 
     expect(await screen.findByText("Owned the CRM migration.")).toBeInTheDocument();
-    /* No field until a line is opened, and the evidence for the line is not folded away:
-       this is a page to read and sign, and the pencil is what turns one line into a
-       field. */
+    /* No field until a line is opened: this is a page to read and sign, and the pencil is
+       what turns one line into a field. The fact a line was built from is folded under
+       it, so sixty lines do not print sixty evidence lists, and opening it shows the
+       fact beside the wording the CV uses. */
     expect(screen.queryByLabelText("טקסט השורה")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "עריכת השורה" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Owned the CRM migration end to end.")).toBeInTheDocument();
+    const row = document.getElementById("draft-claim-c-1")!;
+    expect(within(row).getByText("המקור: עובדה אחת")).toBeVisible();
+    expect(within(row).getByText("Owned the CRM migration end to end.")).not.toBeVisible();
     expect(screen.getByTitle("תצוגה מקדימה של הטיוטה")).toBeInTheDocument();
     /* The single finish action is pinned rather than left at the foot of a column. It
        starts with the check and changes to explicit approval only after that passes. */

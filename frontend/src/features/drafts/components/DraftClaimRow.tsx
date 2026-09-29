@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, type LucideIcon, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
 import type { DraftClaim, DraftFact } from "@/api/contracts";
 import { Button } from "@/ui/Button";
@@ -8,6 +8,8 @@ import { Dialog } from "@/ui/Dialog";
 import { Disclosure } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Textarea } from "@/ui/Input";
+import { Tooltip } from "@/ui/Tooltip";
+import { cx } from "@/ui/cx";
 import type { DraftClaimActions } from "../model/drafts.types";
 import type { Removability } from "../model/draftClaims";
 import { claimTypeExplanations, claimTypeLabels, claimTypeTones } from "../model/draftLabels";
@@ -24,12 +26,123 @@ interface DraftClaimRowProps {
   move?: { canMoveDown: boolean; canMoveUp: boolean; onMove: (offset: -1 | 1) => void };
 }
 
-/* Icons instead of spelled-out labels: on sixty stacked rows the labels were wider than
-   the lines they acted on. */
-const rowActionClasses = "min-h-9 px-2";
+/* An icon button with its name in a tooltip: on sixty stacked rows spelled-out labels
+   were wider than the lines they acted on. */
+const RowAction = ({
+  className,
+  disabled,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  className?: string;
+  disabled?: boolean;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+}) => (
+  <Tooltip label={label}>
+    <Button aria-label={label} className="min-h-8 px-1.5" disabled={disabled} onClick={onClick} variant="ghost">
+      <Icon aria-hidden="true" className={cx("size-icon-md", className ?? "text-cv-text-muted")} />
+    </Button>
+  </Tooltip>
+);
 
-/* One line of the draft: status, text, backing facts, actions. Computes nothing about the
-   draft itself - removability and linked facts are the list's answers. */
+/* Whether a line's source has anything to say that the line and its badge do not: a fact
+   worded differently from the line, the evidence a reworded line was accepted on, or why
+   the line cannot be removed. A contact copied verbatim from its fact has none, and a
+   toggle that opens onto "identical" on every such row was noise. */
+const hasSource = (claim: DraftClaim, facts: DraftFact[], removalReason: string | undefined): boolean =>
+  removalReason !== undefined ||
+  claim.review_evidence != null ||
+  facts.some((fact) => fact.text !== claim.text) ||
+  facts.length > 1;
+
+/* Where the line came from, folded under the line: the fact behind it, how its wording
+   relates to that fact, and - for reworded lines - the evidence the review accepted.
+
+   This is the content swap the draft performed, made readable per line. It used to be a
+   list of bullets printed under every row whether or not anyone asked, which on a
+   sixty-line CV doubled the page. Its toggle sits on the row's status line, so a closed
+   source costs no line of its own. */
+const ClaimSourcePanel = ({
+  claim,
+  facts,
+  id,
+  open,
+  removalReason,
+}: {
+  claim: DraftClaim;
+  facts: DraftFact[];
+  id: string;
+  open: boolean;
+  removalReason?: string;
+}) => {
+  const reviewAssertions = new Map(
+    claim.review_evidence?.assertions.map(
+      (assertion) =>
+        [JSON.stringify([assertion.claim_quote, assertion.fact_ids, assertion.source_quotes]), assertion] as const,
+    ) ?? [],
+  );
+
+  return (
+    <div className="flex flex-col gap-2 border-s-2 border-cv-border ps-3 text-support leading-6" hidden={!open} id={id}>
+      {/* A pending line's callout already says this, right above. */}
+      {claim.claim_type === "pending" ? null : (
+        <p className="text-cv-text-muted">{claimTypeExplanations[claim.claim_type]}</p>
+      )}
+
+      {facts.length === 0 ? null : (
+        <ul
+          aria-label={facts.length === 1 ? "העובדה שמאחורי השורה" : "העובדות שמאחורי השורה"}
+          className="flex flex-col gap-1.5"
+        >
+          {facts.map((fact) => (
+            <li className="rounded-control bg-cv-surface-muted px-2.5 py-1.5" key={fact.fact_id}>
+              <p className="text-caption font-semibold text-cv-text-muted">העובדה במאגר</p>
+              {/* A fact identical to the line adds nothing beside it; saying so is the
+                  information. The text is not repeated. */}
+              {fact.text === claim.text ? (
+                <p className="text-cv-text-muted">הנוסח בקורות החיים זהה לנוסח העובדה.</p>
+              ) : (
+                <p className="text-cv-text" dir="auto">
+                  {fact.text ?? "לא ניתן לקרוא את העובדה הזו מהמאגר."}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {claim.claim_type === "reviewed" && claim.review_evidence != null ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="font-semibold text-cv-text">למה הניסוח אושר?</p>
+          <p className="text-cv-text-muted">
+            הניסוח נבדק סמנטית מול העובדות המקושרות. זו בדיקת תמיכה של המודל, לא הוכחה דטרמיניסטית.
+          </p>
+          <ul className="flex flex-col gap-1.5">
+            {Array.from(reviewAssertions, ([key, assertion]) => (
+              <li className="rounded-control bg-cv-surface-muted px-2.5 py-1.5" key={key}>
+                <p dir="auto">טענה: {assertion.claim_quote}</p>
+                {Array.from(new Set(assertion.source_quotes), (quote) => (
+                  <p className="mt-1 text-cv-text-muted" dir="auto" key={quote}>
+                    מקור: {quote}
+                  </p>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {removalReason === undefined ? null : <p className="text-cv-text-muted">{removalReason}</p>}
+    </div>
+  );
+};
+
+/* One line of the draft: its text, where it came from, and what can be done to it.
+   Computes nothing about the draft itself - removability and linked facts are the list's
+   answers. */
 export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, removal }: DraftClaimRowProps) => {
   const [text, setText] = useState(claim.text);
   /* The server's text wins on an underlying change (regeneration, rebuild, conflict
@@ -53,249 +166,197 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
   const [editOriginal, setEditOriginal] = useState<string | null>(null);
   const revertTarget = editing && editOriginal !== null && text !== editOriginal ? editOriginal : null;
 
-  const evidenceLabel = facts.length === 1 ? "העובדה שמאחורי השורה" : `${facts.length} עובדות שמאחורי השורה`;
-  const distinctFacts = facts.filter((fact) => fact.text !== null && fact.text !== claim.text);
-  const editingReviewedClaim = claim.claim_type === "reviewed";
-  const reviewAssertions = new Map(
-    claim.review_evidence?.assertions.map(
-      (assertion) =>
-        [JSON.stringify([assertion.claim_quote, assertion.fact_ids, assertion.source_quotes]), assertion] as const,
-    ) ?? [],
-  );
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const sourceId = `draft-claim-source-${claim.claim_id}`;
+  const removalReason = removal.route === "none" ? removal.reason : undefined;
+  /* A pending line with nothing behind it has no source to open; its callout is the
+     whole story. */
+  const showSource = !(claim.claim_type === "pending" && facts.length === 0) && hasSource(claim, facts, removalReason);
+  const sourceLabel =
+    facts.length === 0 ? "פרטי השורה" : facts.length === 1 ? "המקור: עובדה אחת" : `המקור: ${facts.length} עובדות`;
 
-  const rowActions = (
-    <div className="flex shrink-0 items-center gap-1">
-      {move === undefined ? null : (
-        <>
-          <Button
-            aria-label="הזזת השורה למעלה"
-            className={rowActionClasses}
-            disabled={actions.locked || !move.canMoveUp}
-            onClick={() => move.onMove(-1)}
-            title="הזזת השורה למעלה"
-            variant="ghost"
-          >
-            <ArrowUp aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-          </Button>
-          <Button
-            aria-label="הזזת השורה למטה"
-            className={rowActionClasses}
-            disabled={actions.locked || !move.canMoveDown}
-            onClick={() => move.onMove(1)}
-            title="הזזת השורה למטה"
-            variant="ghost"
-          >
-            <ArrowDown aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-          </Button>
-        </>
-      )}
-      <Button
-        aria-label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
-        className={rowActionClasses}
-        disabled={actions.locked && !editing}
-        onClick={() => {
-          if (editing) {
-            actions.onCommit();
-            setEditOriginal(null);
-          } else {
-            setEditOriginal(text);
-          }
-          setEditing(!editing);
-        }}
-        title={editing ? "סיום עריכת השורה" : "עריכת השורה"}
-        variant="ghost"
-      >
-        {editing ? (
-          <Check aria-hidden="true" className="size-icon-md text-cv-accent" />
-        ) : (
-          <Pencil aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-        )}
-      </Button>
-      <Button
-        aria-label="יצירה מחדש של השורה"
-        className={rowActionClasses}
-        disabled={actions.regenerationDisabled}
-        onClick={() => actions.onRegenerate(claim)}
-        title="יצירה מחדש של השורה"
-        variant="ghost"
-      >
-        <RefreshCw aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-      </Button>
-      {removal.route === "none" ? null : (
-        <Button
-          aria-label="הסרת השורה"
-          className={rowActionClasses}
-          disabled={actions.locked}
-          onClick={() => setConfirmingRemoval(true)}
-          title={
-            removal.route === "selection"
-              ? "הסרת השורה מחריגה את העובדה שמאחוריה ובונה את הטיוטה מחדש בלעדיה."
-              : "הסרת השורה"
-          }
-          variant="ghost"
-        >
-          <Trash2 aria-hidden="true" className="size-icon-md text-cv-text-muted" />
-        </Button>
-      )}
-    </div>
-  );
+  const editingReviewedClaim = claim.claim_type === "reviewed";
+  const pending = claim.claim_type === "pending";
+  /* A line linked to facts can be checked as written. The headline and the contacts are
+     not factual claims, and an unlinked line has nothing to be checked against - it is
+     resolved below, as a fact. */
+  // Regeneration addresses section claims only; identity lines are edited manually.
+  const regeneratable = claim.style !== "headline" && claim.style !== "contact";
+  const reviewable = claim.fact_ids.length > 0 && regeneratable;
+
+  const toggleEditing = () => {
+    if (editing) {
+      actions.onCommit();
+      setEditOriginal(null);
+    } else {
+      setEditOriginal(text);
+    }
+    setEditing(!editing);
+  };
 
   return (
     <li
+      className={cx(
+        "group/row flex scroll-mt-24 flex-col gap-2 py-3 first:pt-0 focus-visible:outline-offset-4",
+        pending && "border-s-2 border-s-cv-blocker ps-3",
+      )}
       id={`draft-claim-${claim.claim_id}`}
       tabIndex={-1}
-      className="scroll-mt-24 flex flex-col gap-1.5 py-3 first:pt-0"
     >
-      {/* Status and actions share one line above the text, which takes the row's whole
-          width. Beside the status column and five icon buttons, the text was left a
-          strip about a hundred pixels wide - one word to a line down the editor. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <StatusBadge tone={claimTypeTones[claim.claim_type]}>{claimTypeLabels[claim.claim_type]}</StatusBadge>
-        {rowActions}
-      </div>
+      {/* `text`, not `claim.text`: an edit still in the autosave buffer is what the user
+          last typed. The text takes the row's whole width; everything about it sits on
+          the line below. */}
+      {editing ? (
+        <Textarea
+          aria-label="טקסט השורה"
+          className="min-h-16 resize-y"
+          dir="auto"
+          onBlur={actions.onCommit}
+          onChange={(event) => {
+            setText(event.target.value);
+            actions.onEdit(claim, event.target.value);
+          }}
+          readOnly={actions.locked}
+          value={text}
+        />
+      ) : (
+        <p className="text-body leading-7 text-cv-text" dir="auto">
+          {text}
+        </p>
+      )}
 
-      <div className="min-w-0">
-        {/* `text`, not `claim.text`: an edit still in the autosave buffer is what the user
-            last typed. */}
-        <div className={editing ? "rounded-control bg-cv-surface-muted" : undefined}>
-          {editing ? (
-            <Textarea
-              aria-label="טקסט השורה"
-              className="min-h-16 resize-y border-transparent bg-transparent px-2 py-1.5 shadow-none"
-              dir="auto"
-              onBlur={actions.onCommit}
-              readOnly={actions.locked}
-              onChange={(event) => {
-                setText(event.target.value);
-                actions.onEdit(claim, event.target.value);
+      {/* Only once typed text actually diverges from the line this edit opened with -
+          not on entering edit mode, and not before it has actually disconnected. */}
+      {revertTarget === null ? null : (
+        <Callout
+          action={
+            <Button
+              disabled={actions.locked}
+              onClick={() => {
+                setText(revertTarget);
+                actions.onEdit(claim, revertTarget);
+                actions.onCommit();
               }}
-              value={text}
-            />
-          ) : (
-            <p className="px-2 py-1.5 leading-7 text-cv-text" dir="auto">
-              {text}
-            </p>
-          )}
+              variant="secondary"
+            >
+              {editingReviewedClaim ? "שחזור הנוסח שנבדק" : "שחזור הטקסט הקודם"}
+            </Button>
+          }
+          role="alert"
+          title={editingReviewedClaim ? "העריכה מבטלת את הביקורת הקודמת" : "השורה מנותקת מהעובדה הקנונית"}
+          tone="warning"
+        >
+          <p dir="auto">
+            {editingReviewedClaim
+              ? "הבדיקה חלה על הנוסח הקודם בלבד. לאחר השמירה השורה תחזור למצב שממתין לאימות."
+              : "העריכה משנה את הניסוח בלי לשנות את מה שעומד מאחורי השורה. שחזור הטקסט הקודם מחבר אותה מחדש."}
+          </p>
+        </Callout>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <StatusBadge className="px-2 py-0.5" tone={claimTypeTones[claim.claim_type]}>
+            {claimTypeLabels[claim.claim_type]}
+          </StatusBadge>
+          {showSource ? (
+            <button
+              aria-controls={sourceId}
+              aria-expanded={sourceOpen}
+              className="inline-flex items-center gap-1 rounded-control text-support font-medium text-cv-text-muted transition-colors hover:text-cv-text"
+              onClick={() => setSourceOpen(!sourceOpen)}
+              type="button"
+            >
+              <ChevronDown
+                aria-hidden="true"
+                className={cx("size-icon-md transition-transform duration-200", sourceOpen ? "rotate-0" : "rotate-90")}
+              />
+              {sourceLabel}
+            </button>
+          ) : null}
         </div>
 
-        {/* Only once typed text actually diverges from the line this edit opened with -
-            not on entering edit mode, and not before it has actually disconnected. */}
-        {revertTarget === null ? null : (
+        {/* Quiet until the row is pointed at or focused: sixty rows of five full-strength
+            icons read as a toolbar, not a document. Always present and always focusable. */}
+        <div className="flex items-center gap-0.5 transition-opacity lg:opacity-60 lg:group-focus-within/row:opacity-100 lg:group-hover/row:opacity-100">
+          {move === undefined ? null : (
+            <>
+              <RowAction
+                disabled={actions.locked || !move.canMoveUp}
+                icon={ArrowUp}
+                label="הזזת השורה למעלה"
+                onClick={() => move.onMove(-1)}
+              />
+              <RowAction
+                disabled={actions.locked || !move.canMoveDown}
+                icon={ArrowDown}
+                label="הזזת השורה למטה"
+                onClick={() => move.onMove(1)}
+              />
+            </>
+          )}
+          <RowAction
+            className={editing ? "text-cv-accent" : undefined}
+            disabled={actions.locked && !editing}
+            icon={editing ? Check : Pencil}
+            label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
+            onClick={toggleEditing}
+          />
+          {regeneratable ? (
+            <RowAction
+              disabled={actions.regenerationDisabled}
+              icon={RefreshCw}
+              label="יצירה מחדש של השורה"
+              onClick={() => actions.onRegenerate(claim)}
+            />
+          ) : null}
+          {removal.route === "none" ? null : (
+            <RowAction
+              disabled={actions.locked}
+              icon={Trash2}
+              label="הסרת השורה"
+              onClick={() => setConfirmingRemoval(true)}
+            />
+          )}
+        </div>
+      </div>
+
+      {pending ? (
+        <>
           <Callout
             action={
-              <Button
-                disabled={actions.locked}
-                onClick={() => {
-                  setText(revertTarget);
-                  actions.onEdit(claim, revertTarget);
-                  actions.onCommit();
-                }}
-                size="compact"
-                variant="secondary"
-              >
-                {editingReviewedClaim ? "שחזור הנוסח שנבדק" : "שחזור הטקסט הקודם"}
-              </Button>
+              reviewable ? (
+                <Button
+                  disabled={actions.regenerationDisabled}
+                  onClick={() => actions.onReview(claim)}
+                  variant="secondary"
+                >
+                  בדיקת הניסוח מול העובדות
+                </Button>
+              ) : undefined
             }
-            className="mt-2"
-            role="alert"
-            title={editingReviewedClaim ? "העריכה מבטלת את הביקורת הקודמת" : "השורה מנותקת מהעובדה הקנונית"}
-            tone="warning"
+            title="הטקסט הזה חוסם אישור"
+            tone="blocker"
           >
-            <p dir="auto">
-              {editingReviewedClaim
-                ? "הבדיקה חלה על הנוסח הקודם בלבד. לאחר השמירה השורה תחזור למצב שממתין לאימות."
-                : "העריכה משנה את הניסוח בלי לשנות את מה שעומד מאחורי השורה. שחזור הטקסט הקודם מחבר אותה מחדש."}
-            </p>
+            <p>{claimTypeExplanations.pending}</p>
+            {reviewable ? (
+              <p className="mt-1">אם המשמעות זהה לעובדות שמאחוריה, הבדיקה תאשר את השורה בלי לשנות אותה.</p>
+            ) : null}
+            {/* The validator's own reason is English and technical - evidence for a bug
+                report, not the explanation - so it is folded rather than shown. */}
+            {claim.pending_reason == null ? null : (
+              <Disclosure summary="פרטי הסיבה">
+                <p dir="auto">{claim.pending_reason}</p>
+              </Disclosure>
+            )}
           </Callout>
-        )}
+          {factResolution}
+        </>
+      ) : null}
 
-        {claim.claim_type === "reviewed" && claim.review_evidence != null ? (
-          <details className="mt-2 rounded-control border border-cv-border px-3 py-2 text-support text-cv-text-muted">
-            <summary className="cursor-pointer font-medium text-cv-text">למה הניסוח אושר?</summary>
-            <p className="mt-2 leading-6">
-              הניסוח נבדק סמנטית מול העובדות המקושרות. זו בדיקת תמיכה של המודל, לא הוכחה דטרמיניסטית.
-            </p>
-            <ul className="mt-2 space-y-2">
-              {Array.from(reviewAssertions, ([key, assertion]) => (
-                <li className="rounded-control bg-cv-surface-muted px-2 py-1.5" key={key}>
-                  <p dir="auto">טענה: {assertion.claim_quote}</p>
-                  {Array.from(new Set(assertion.source_quotes), (quote) => (
-                    <p className="mt-1" dir="auto" key={quote}>
-                      מקור: {quote}
-                    </p>
-                  ))}
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
-
-        {/* A fact identical to the line it backs adds nothing next to it - only the ones
-            whose wording actually differs from the claim's canonical text are worth a
-            second line. */}
-        {distinctFacts.length === 0 ? null : (
-          /* Captioned, because unlabelled bullets under a line read as more of the line -
-             under the headline, as more titles. */
-          <div className="mt-1 px-2">
-            <p aria-hidden="true" className="text-caption font-semibold text-cv-text-muted">
-              {facts.length === 1 ? "העובדה שמאחורי השורה" : "העובדות שמאחורי השורה"}
-            </p>
-            <ul aria-label={evidenceLabel} className="mt-1 flex flex-col gap-1">
-              {distinctFacts.map((fact) => (
-                <li className="flex items-start gap-2" dir="auto" key={fact.fact_id}>
-                  <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-pill bg-cv-success" />
-                  <span className="text-support leading-6 text-cv-text-muted">
-                    {fact.text ?? "לא ניתן לקרוא את העובדה הזו מהידע."}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {claim.claim_type === "pending" ? (
-          <>
-            <Callout
-              action={
-                /* A line linked to facts can be checked as written. The headline and the
-                   contacts are not factual claims, and an unlinked line has nothing to be
-                   checked against - it is resolved below, as a fact. */
-                claim.fact_ids.length > 0 && claim.style !== "headline" && claim.style !== "contact" ? (
-                  <Button
-                    disabled={actions.regenerationDisabled}
-                    onClick={() => actions.onReview(claim)}
-                    variant="secondary"
-                  >
-                    בדיקת הניסוח מול העובדות
-                  </Button>
-                ) : undefined
-              }
-              className="mt-2"
-              title="הטקסט הזה חוסם אישור"
-              tone="blocker"
-            >
-              <p>{claimTypeExplanations.pending}</p>
-              {claim.fact_ids.length > 0 && claim.style !== "headline" && claim.style !== "contact" ? (
-                <p className="mt-1">
-                  אפשר לבדוק את הניסוח כפי שכתבת: אם המשמעות זהה לעובדות שמתחתיו, השורה תאושר בלי לשנות אותה.
-                </p>
-              ) : null}
-              {/* The validator's own reason is English and technical - evidence for a
-                  bug report, not the explanation - so it is folded rather than shown. */}
-              {claim.pending_reason == null ? null : (
-                <Disclosure summary="פרטי הסיבה">
-                  <p dir="auto">{claim.pending_reason}</p>
-                </Disclosure>
-              )}
-            </Callout>
-            {factResolution}
-          </>
-        ) : null}
-
-        {removal.route === "none" && removal.reason !== undefined ? (
-          <p className="mt-1.5 px-2 text-support leading-6 text-cv-text-muted">{removal.reason}</p>
-        ) : null}
-      </div>
+      {showSource ? (
+        <ClaimSourcePanel claim={claim} facts={facts} id={sourceId} open={sourceOpen} removalReason={removalReason} />
+      ) : null}
 
       {removal.route === "none" ? null : (
         <Dialog

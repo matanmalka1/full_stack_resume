@@ -1,11 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
 import { documentQueryKey, documentQueryOptions } from "@/api/documents";
 import { ErrorCallout } from "@/ui/ErrorCallout";
-import { DraftReviewPanel } from "../components/DraftReviewPanel";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { LiveRegion } from "@/ui/LiveRegion";
@@ -15,15 +14,16 @@ import { OperationOverlay, type PendingWork, isOperationLive, operationTypeLabel
 import { applicationLabel } from "@/features/applications";
 import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
 import { DraftApprovalBar } from "../components/DraftApprovalBar";
+import { DraftAttentionPanel } from "../components/DraftAttentionPanel";
 import { DraftApprovalDialog } from "../components/DraftApprovalDialog";
 import { DraftConflictDialog } from "../components/DraftConflictDialog";
+import { DraftContentSummary } from "../components/DraftContentSummary";
 import { DraftEditorNotices } from "../components/DraftEditorNotices";
 import { DraftEmptyState } from "../components/DraftEmptyState";
-import { DraftFactPanel } from "../components/DraftFactPanel";
-import { DraftHeaderCard } from "../components/DraftHeaderCard";
 import { DraftHistoryControls } from "../components/DraftHistoryControls";
 import { DraftOutlineEditor } from "../components/DraftOutlineEditor";
 import { DraftPreview } from "../components/DraftPreview";
+import { DraftProgress } from "../components/DraftProgress";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
 import { type DraftWorkspaceMode, DraftWorkspace, DraftWorkspaceSwitch } from "../components/DraftWorkspace";
@@ -31,6 +31,7 @@ import { useDraftDocument } from "../api/queries";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
 import { useDraftEditing } from "../hooks/useDraftEditing";
 import { useRenderDocument } from "../hooks/useRenderDocument";
+import { summarizeContent, summarizeSelection } from "../model/draftOverview";
 import { isEditable } from "../model/drafts.types";
 
 /* The workspace's own shape, held while the document behind it is read. */
@@ -287,6 +288,12 @@ export const DraftEditorPage = () => {
 
   const noContent = detail !== undefined && (!hasDocument || (document !== undefined && draft === undefined));
 
+  /* What the document is made of, read from its own outline and fact accounting: shared
+     by the progress strip, the list of what blocks approval, and the account of how the
+     content was built, so the three never count differently. */
+  const content = useMemo(() => (draft === undefined ? undefined : summarizeContent(draft)), [draft]);
+  const selection = useMemo(() => (draft === undefined ? undefined : summarizeSelection(draft)), [draft]);
+
   return (
     <div
       className="contents"
@@ -325,13 +332,16 @@ export const DraftEditorPage = () => {
 
         {detail === undefined ? null : (
           <>
-            <DraftHeaderCard
-              actions={draft === undefined ? undefined : <DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />}
-              detail={detail}
-              dirty={editing.dirty}
-              draft={draft}
-              saveState={draft === undefined ? null : editing.saveState}
-            />
+            {draft === undefined || content === undefined ? null : (
+              <DraftProgress
+                actions={<DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />}
+                content={content}
+                detail={detail}
+                dirty={editing.dirty}
+                draft={draft}
+                saveState={editing.saveState}
+              />
+            )}
 
             <OperationOverlay
               awaitingRecord={awaitingRecord}
@@ -373,10 +383,10 @@ export const DraftEditorPage = () => {
           <QueryState loading loadingState={draftLoading} />
         ) : null}
 
-        {draft === undefined ? null : (
+        {draft === undefined || content === undefined || selection === undefined ? null : (
           <>
             {detail === undefined ? null : (
-              <DraftReviewPanel
+              <DraftAttentionPanel
                 detail={detail}
                 draft={draft}
                 onNavigate={(href) => {
@@ -387,17 +397,27 @@ export const DraftEditorPage = () => {
                   // A fresh request also supports jumping to the same claim again.
                   setClaimTarget({ claimId });
                 }}
+                unsupportedClaims={content.unsupportedClaims}
               />
             )}
             <DraftWorkspace
               editor={
                 <>
-                  <DraftHistoryControls
-                    canRedo={!operationLive && editing.history.canRedo}
-                    canUndo={!operationLive && editing.history.canUndo}
-                    onRedo={editing.history.redo}
-                    onUndo={editing.history.undo}
+                  <DraftContentSummary
+                    busy={operationLive || editing.selectionPending}
+                    content={content}
+                    draft={draft}
+                    onInclude={editing.includeFact}
+                    selection={selection}
                   />
+
+                  <DraftEditorNotices
+                    aiUnavailable={editing.aiUnavailable}
+                    dirty={editing.dirty}
+                    regenerationError={editing.regenerationError}
+                    selectionError={editing.selectionError}
+                  />
+
                   <DraftOutlineEditor
                     actions={editing.claimActions}
                     draft={editing.visibleDraft ?? draft}
@@ -411,21 +431,16 @@ export const DraftEditorPage = () => {
                       profile: detail?.application.profile ?? null,
                     }}
                     facts={draft}
+                    history={
+                      <DraftHistoryControls
+                        canRedo={!operationLive && editing.history.canRedo}
+                        canUndo={!operationLive && editing.history.canUndo}
+                        onRedo={editing.history.redo}
+                        onUndo={editing.history.undo}
+                      />
+                    }
                     onMoveClaim={editing.history.moveClaim}
                     onRegenerateSection={editing.regenerateSection}
-                  />
-
-                  <DraftEditorNotices
-                    aiUnavailable={editing.aiUnavailable}
-                    dirty={editing.dirty}
-                    regenerationError={editing.regenerationError}
-                    selectionError={editing.selectionError}
-                  />
-
-                  <DraftFactPanel
-                    busy={operationLive || editing.selectionPending}
-                    facts={draft}
-                    onInclude={editing.includeFact}
                   />
                 </>
               }
