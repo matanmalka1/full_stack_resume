@@ -1,7 +1,7 @@
 import type { ApplicationPreset } from "@/api/contracts";
 import { cx } from "@/ui/cx";
 
-export type PresetSelection = ApplicationPreset | "all";
+type PresetSelection = ApplicationPreset | "all";
 
 interface ApplicationPresetTabsProps {
   counts: Record<string, number> | undefined;

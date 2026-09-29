@@ -2,7 +2,7 @@ import { Archive, Award, Bookmark, PhoneCall, Send, Users, type LucideIcon } fro
 
 import type { RecruitmentStatus } from "@/api/contracts";
 
-export type RecruitmentStageTone = "neutral" | "accent" | "warning" | "success";
+type RecruitmentStageTone = "neutral" | "accent" | "warning" | "success";
 
 interface RecruitmentStageShape {
   id: string;

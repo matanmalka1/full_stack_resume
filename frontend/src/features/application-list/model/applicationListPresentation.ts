@@ -110,7 +110,7 @@ export const isNextActionOverdue = (value: string | null | undefined, today: Dat
 export const isDueToday = (value: string | null | undefined, today: Date = new Date()): boolean =>
   dateOnlyKey(value) === localDateKey(today);
 
-export interface AttentionItem {
+interface AttentionItem {
   code: string;
   title: string;
 }

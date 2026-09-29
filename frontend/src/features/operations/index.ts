@@ -18,6 +18,6 @@ export { isOperationLive } from "./model/operationLive";
    Operation-shaped and every consumer of it already shows the overlay, so it sits with it
    rather than as root-level infrastructure. */
 export { useWatchedOperation } from "./hooks/useWatchedOperation";
-export { operationTypeLabels, statusLabels, statusTones } from "./model/operationLabels";
+export { operationTypeLabels, statusLabels } from "./model/operationLabels";
 /* A document's recorded render failure, in the same words the Operation report uses. */
 export { recordedFailureDetail } from "./model/operationLabels";

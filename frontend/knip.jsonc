@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // The Vite plugin marks every file under src/ as reachable, so an unused module there
+  // is never reported. It is off, and the entries it supplied are named here instead.
+  "vite": false,
+  "entry": [
+    "src/main.tsx",
+    "src/test/setup.ts",
+    // Run by tests/e2e/test_browser_api_journey.py through the Playwright CLI; knip
+    // cannot see a caller outside this package.
+    "playwright.integration.config.ts",
+  ],
+}

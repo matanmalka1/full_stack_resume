@@ -5,5 +5,5 @@ export { useCaptureClaimFact } from "./api/mutations";
 export { useFactDetail } from "./api/queries";
 export { FactEventHistory } from "./components/FactEventHistory";
 export { FactCoreFields, FactProvenanceField, FactSourceField, FactTagsField } from "./components/FactFormFieldset";
-export { emptyFactForm, parseFactTags, replacementFactForm, type FactFormFields } from "./model/factForm";
+export { emptyFactForm, parseFactTags, type FactFormFields } from "./model/factForm";
 export { factLabelInLanguage, factSourceLabel, factStatusLabel } from "./model/factLabels";
