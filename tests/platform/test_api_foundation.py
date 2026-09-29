@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sys
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -34,6 +36,7 @@ from cv_engine.application.errors import (
     UnknownRecord,
     ValidationBlocked,
 )
+from cv_engine.application.maintenance import ORPHAN_MIN_AGE
 from cv_engine.infrastructure.runtime_logging import (
     ConciseExceptionFilter,
     StructuredRuntimeLogger,
@@ -141,10 +144,8 @@ def test_logs_summarise_requests_keep_tracebacks_in_file_and_redact_secrets(
     assert record.exc_info is None
 
 
-def test_orphan_inventory_reports_and_reclaim_removes_only_unregistered_payloads(
-    api, services
-) -> None:
-    """Inventory is read-only; reclaim removes exactly what it reported.
+def test_orphan_inventory_reports_old_unregistered_payloads_without_deletion(api, services) -> None:
+    """Inventory excludes fresh writes; the removed reclaim route cannot delete evidence.
 
     Ingest registers the snapshot without registering an artifact version, and a
     derived working projection is not a payload, so neither is a candidate.
@@ -157,10 +158,18 @@ def test_orphan_inventory_reports_and_reclaim_removes_only_unregistered_payloads
         )
     )
     orphan = services.payloads.commit_snapshot("unregistered", "snapshot", "pending payload")
+    response = api.get(f"{API_PREFIX}/maintenance/orphans")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"candidates": []}
+
     services.paths.artifacts_root.joinpath("working", "projection").mkdir(parents=True)
-    services.paths.artifacts_root.joinpath("working", "projection", "resume.md").write_text(
-        "derived"
-    )
+    projection = services.paths.artifacts_root / "working" / "projection" / "resume.md"
+    projection.write_text("derived")
+    stamp = (datetime.now(UTC) - ORPHAN_MIN_AGE * 2).timestamp()
+    for reference in services.payloads.payload_inventory():
+        os.utime(services.paths.root / reference, (stamp, stamp))
+    os.utime(projection, (stamp, stamp))
+    fresh = services.payloads.commit_snapshot("fresh", "snapshot", "in-flight payload")
     before = services.payloads.payload_inventory()
     response = api.get(f"{API_PREFIX}/maintenance/orphans")
     assert response.status_code == 200, response.text
@@ -173,9 +182,12 @@ def test_orphan_inventory_reports_and_reclaim_removes_only_unregistered_payloads
         f"{API_PREFIX}/maintenance/orphans/reclaim",
         headers={"Origin": ALLOWED_ORIGIN},
     )
-    assert response.status_code == 200, response.text
-    assert response.json() == {"removed": [orphan.reference]}
-    assert services.maintenance.inspect_orphans().candidates == []
+    assert response.status_code == 404, response.text
+    assert services.maintenance.inspect_orphans().candidates == [orphan.reference]
+    assert services.payloads.payload_inventory() == before
+    assert services.payloads.read_snapshot(orphan.reference, orphan.sha256) == "pending payload"
+    assert services.payloads.read_snapshot(fresh.reference, fresh.sha256) == "in-flight payload"
+    assert projection.read_text() == "derived"
 
 
 # --- refusals ---------------------------------------------------------------

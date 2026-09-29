@@ -551,9 +551,6 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
         "record_operation_attempt": lambda runner: _execution_write(
             services, "record_operation_attempt", operation.id, runner_id=runner
         ),
-        "heartbeat_operation": lambda runner: _execution_write(
-            services, "heartbeat_operation", operation.id, runner_id=runner
-        ),
         "fail_operation": lambda runner: _execution_write(
             services,
             "fail_operation",

@@ -143,7 +143,9 @@ Evidence: `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
 - Transitions are forward-only; terminal rows cannot be rewritten or deleted.
 - Creation is idempotent by key; the same key with a different payload is refused.
 - Racing claimants produce one claim and one execution; a runner without the lease is
-  refused; heartbeat extends it.
+  refused. Worker startup interrupts every claimed Operation, a second worker is
+  refused while one holds the worker lock, and a worker whose lock session is
+  terminated stops and frees the slot.
 - Application and global render leases queue contending work with an observable
   waiting phase; the AI resource admits two and queues the third.
 - Startup interrupts work held by previous runners; shutdown prevents activation.
@@ -195,8 +197,9 @@ Evidence: `tests/selection/`, `tests/drafts/test_draft_validation.py`,
 - A failed render keeps the approval; its retry is new work; unactivated and superseded
   files are discarded.
 - Payload keys are immutable per attempt; local and S3 stores agree on create-if-absent,
-  hash, size, absence, and prefix handling. Reclaim removes only abandoned unreferenced
-  payloads; orphan inventory is read-only.
+  hash, size, absence, prefix handling, and listing by age. No store offers deletion;
+  orphan inspection lists only unreferenced payloads older than the minimum age and is
+  read-only.
 - Submission rechecks Ready under lock and copies content/HTML/PDF with checksums that
   survive later edits. External submission never fabricates document or files.
 

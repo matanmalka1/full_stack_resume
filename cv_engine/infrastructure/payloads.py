@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -90,28 +91,16 @@ class PayloadStore:
         self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
-    def delete_payload(self, reference: str) -> None:
-        """Remove one stored payload `reclaim_orphans` has decided is safe to remove.
-
-        A reference that does not resolve to an approved, contained layout is
-        refused (`ValueError`) rather than silently ignored - the same
-        refusal every other reference-resolving method on this store makes.
-        Within an approved layout, removal is idempotent: the key may already
-        be gone, including because an earlier `reclaim_orphans` call already
-        removed it (architecture.md §7.1).
-        """
-        assert_external_io_allowed("immutable payload removal")
-        self._objects.delete(self._key_for_reference(reference))
-
-    def payload_inventory(self) -> list[str]:
+    def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
         """List managed immutable references; working projections are excluded.
 
-        No bytes are fetched and no objects are changed. This observation can
-        include payloads whose writer has not registered them yet.
+        No bytes are fetched and no objects are changed. Without
+        `modified_before` this observation can include payloads whose writer
+        has not registered them yet.
         """
         assert_external_io_allowed("payload inventory")
         references = []
-        for key in self._objects.keys_under(""):
+        for key in self._objects.keys_under("", modified_before=modified_before):
             try:
                 self._approved_destination(key)
             except ValueError:
@@ -179,8 +168,7 @@ class PayloadStore:
         """The stored reference `destination` would receive, without writing anything.
 
         Pure and side-effect-free: it lets a caller compute the physical
-        key(s) a write is about to produce *before* writing, so a payload
-        write lease (architecture.md §7.1) can be acquired first.
+        key(s) a write is about to produce *before* writing.
         """
         return self._reference_for_key(self._key(destination))
 

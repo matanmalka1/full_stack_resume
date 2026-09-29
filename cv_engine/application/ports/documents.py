@@ -170,17 +170,10 @@ class DocumentFileStore(Protocol):
         """Contained read of a document's current PDF; a missing file is an error."""
         ...
 
-    def submission_targets(self, application_id: str, submission_id: str) -> tuple[str, str]:
-        """The HTML and PDF references a Submission's copies will receive, without writing.
-
-        The caller acquires its payload write lease against these before copying.
-        """
-        ...
-
     def copy_for_submission(
         self, application_id: str, submission_id: str, files: RenderedFiles
     ) -> SubmittedFiles:
-        """Copy under a payload write lease and hash what was copied."""
+        """Copy into the Submission's immutable layout and hash what was copied."""
         ...
 
 

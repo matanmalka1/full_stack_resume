@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from threading import Event, Thread
 from time import sleep
 from typing import Any, Protocol
 
@@ -45,6 +43,14 @@ class OperationExecutionError(RuntimeError):
         #: Set when the failure is raised after an activation that committed, so the
         #: runner does not discard what that activation kept.
         self.activated = False
+
+
+class WorkerAlreadyRunning(RuntimeError):
+    """Another worker process already holds this database's worker slot."""
+
+
+class WorkerLockLost(RuntimeError):
+    """The worker's slot was released underneath it; it must stop working."""
 
 
 class SourceChanged(OperationExecutionError):
@@ -96,8 +102,6 @@ class OperationRunner:
             [str, str, PersistedOperation | None, Mapping[str, object]], str | None
         ]
         | None = None,
-        lease_seconds: int = 30,
-        heartbeat_interval_seconds: float = 10.0,
     ):
         self.handlers = dict(handlers)
         self.transactions = transactions
@@ -108,8 +112,6 @@ class OperationRunner:
         self.technical_logger = technical_logger or (lambda _error: None)
         self.operation_failure_logger = operation_failure_logger
         self.operation_event_logger = operation_event_logger
-        self.lease_seconds = lease_seconds
-        self.heartbeat_interval_seconds = heartbeat_interval_seconds
 
     def record_event(
         self,
@@ -208,53 +210,16 @@ class OperationRunner:
                     tx, operation_id, output.output_type, output.output_id, active=False
                 )
 
-    @contextmanager
-    def _heartbeat(self, operation_id: str) -> Iterator[None]:
-        stopped, errors = Event(), []
-
-        def pump() -> None:
-            while not stopped.wait(self.heartbeat_interval_seconds):
-                try:
-                    with self.transactions.write() as tx:
-                        self.execution_store.heartbeat_operation(
-                            tx,
-                            operation_id,
-                            runner_id=self.runner_id,
-                            lease_seconds=self.lease_seconds,
-                        )
-                except Exception as error:
-                    errors.append(error)
-                    stopped.set()
-
-        thread = Thread(target=pump, name=f"operation-heartbeat-{operation_id}", daemon=True)
-        thread.start()
-        try:
-            yield
-        finally:
-            stopped.set()
-            thread.join(timeout=max(1.0, self.heartbeat_interval_seconds + 1.0))
-        if errors:
-            raise errors[0]
-
     def claim_next(self) -> PersistedOperation | None:
         with self.transactions.write() as tx:
-            return self.execution_store.claim_next_operation(
-                tx, runner_id=self.runner_id, lease_seconds=self.lease_seconds
-            )
-
-    def recover_expired(self) -> list[str]:
-        with self.transactions.write() as tx:
-            return self.execution_store.interrupt_expired_operations(tx)
+            return self.execution_store.claim_next_operation(tx, runner_id=self.runner_id)
 
     def recover_previous_runner_claims(self) -> list[str]:
-        """A fresh process's one-time startup sweep: reclaim every held lease.
+        """A fresh worker's one-time startup sweep: interrupt every claimed Operation.
 
-        Distinct from `recover_expired`, which only reclaims a lease whose TTL
-        has actually passed. At startup, before this process has claimed
-        anything of its own, nothing legitimate could hold a lease it needs
-        protected - so there is no reason to wait out a TTL that only widens
-        the window in which a fast restart fails to recover a dead
-        predecessor's rows.
+        Only one worker runs at a time (`worker_exclusivity`), so before this
+        process has claimed anything, every claim on a row belongs to a worker
+        that no longer exists.
         """
         with self.transactions.write() as tx:
             return self.execution_store.interrupt_claims_from_previous_runners(tx)
@@ -262,7 +227,7 @@ class OperationRunner:
     def run(self, operation_id: str) -> PersistedOperation:
         with self.transactions.write() as tx:
             operation = self.execution_store.claim_operation(
-                tx, operation_id, runner_id=self.runner_id, lease_seconds=self.lease_seconds
+                tx, operation_id, runner_id=self.runner_id
             )
         return self._operation(operation_id) if operation is None else self.run_claimed(operation)
 
@@ -291,11 +256,10 @@ class OperationRunner:
                 if self._cancelled(operation.id):
                     return self._complete(operation.id)
                 self._set_phase(operation.id, OperationPhase.EXECUTING)
-                with self._heartbeat(operation.id):
-                    prepared = handler.execute(
-                        operation,
-                        lambda operation_id=operation.id: self._cancelled(operation_id),
-                    )
+                prepared = handler.execute(
+                    operation,
+                    lambda operation_id=operation.id: self._cancelled(operation_id),
+                )
                 break
             except OperationExecutionError as error:
                 if error.technical_log_reference is None:

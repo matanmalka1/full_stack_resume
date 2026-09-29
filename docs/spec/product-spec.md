@@ -684,19 +684,12 @@ approval and rendering always validate against the current values rather than tr
 of the document and part of its `document_hash`.
 
 Approved, submitted, historical, and inactive Operation outputs are not automatically
-deleted by registration or approval activity. Read-only orphan inspection reports
-candidates whose destination holds no live write lease and no database reference; a
-candidate still covered by an unexpired lease is never listed in the first place.
-`reclaim_orphans` (state-and-use-cases.md §19b) removes a candidate only after fencing
-its write lease and then explicitly checking, before deleting anything, that nothing
-registered references it - fencing rules out a future registration, but the deletion
-decision itself comes from that check, not from fencing alone. A candidate with no
-lease at all, including one an old writer's late storage write produced after an
-earlier reclaim already removed its lease and files, is checked and removed the same
-way. Reclaim guarantees no registered payload is ever removed and no reclaimed write
-ever completes registration; it does not guarantee a single call removes every orphan,
-since the underlying object-store write is not itself fenced and may still land after
-its lease is gone, leaving that case for a later call to remove (architecture.md §7.1).
+deleted by registration or approval activity, or by anything else: no path in the
+system deletes an immutable payload. Read-only orphan inspection
+(state-and-use-cases.md §19b) reports payloads that no database record references and
+that were stored more than an hour ago; a younger unregistered payload may still be on
+its way to registration and is not listed. Orphans are reported, never removed
+(architecture.md §7.1).
 
 There is no archived copy of replaced content. `build_from_analysis` and ordinary
 editing overwrite `content`; only a Submission keeps what was sent (decision record §3

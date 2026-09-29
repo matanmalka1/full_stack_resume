@@ -1,8 +1,8 @@
 """§18: recording a send that already happened, and freezing what was sent.
 
 An internal Submission copies the document's content and its rendered files to
-submission-owned, immutable paths, with a SHA-256 per file. The copy happens under
-a payload write lease, before the database transaction; the transaction then
+submission-owned, immutable paths, with a SHA-256 per file. The copy happens
+before the database transaction; the transaction then
 re-checks the document under its row lock and inserts the Submission, the status
 transition and the audit record together. It is not a validation gate: it requires
 the document to be Ready at the basis computed now, and nothing else.
@@ -35,7 +35,6 @@ from ...ports.documents import (
     DocumentSubmissionStore,
     RenderedFiles,
 )
-from ...ports.payload_leases import DEFAULT_LEASE_TTL_SECONDS, PayloadWriteLeaseStore
 from ...ports.recruitment import RecruitmentStore
 from ...ports.transactions import TransactionManager, WriteTransaction
 from ..documents import (
@@ -57,7 +56,6 @@ class SubmissionService:
         sources: AnalysisSelectionSourceReader,
         submissions: DocumentSubmissionStore,
         files: DocumentFileStore,
-        leases: PayloadWriteLeaseStore,
         recruitment: RecruitmentStore,
         audit: AuditLogWriter,
         knowledge: AnalysisKnowledgeSource,
@@ -67,7 +65,6 @@ class SubmissionService:
         self._sources = sources
         self._submissions = submissions
         self._files = files
-        self._leases = leases
         self._recruitment = recruitment
         self._audit = audit
         self._knowledge = knowledge
@@ -103,14 +100,6 @@ class SubmissionService:
             )
         refuse_review_reasons(document, knowledge)
         submission_id = new_id()
-        targets = sorted(self._files.submission_targets(command.application_id, submission_id))
-        # A Submission's files are one registration group; the Submission ID keys both
-        # the group and the attempt, so a retried submit is a new Submission.
-        group_key = f"submission:{command.application_id}:{submission_id}"
-        with self._transactions.write() as tx:
-            self._leases.acquire(
-                tx, group_key, submission_id, keys=targets, ttl_seconds=DEFAULT_LEASE_TTL_SECONDS
-            )
         try:
             copied = self._files.copy_for_submission(
                 command.application_id,
@@ -118,17 +107,12 @@ class SubmissionService:
                 RenderedFiles(html=document.html_path, pdf=document.pdf_path),
             )
         except (ApplicationError, OSError, ValueError) as exc:
-            with self._transactions.write() as tx:
-                self._leases.release(tx, group_key, submission_id)
             if isinstance(exc, ApplicationError):
                 raise
             raise InfrastructureFailure(f"could not copy the submitted files: {exc}") from exc
-        if sorted([copied.html_path, copied.pdf_path]) != targets:
-            raise InfrastructureFailure("submitted files did not land where they were reserved")
         warnings = ["DOCUMENT_ON_OLDER_ANALYSIS"] if source.on_older_analysis else []
 
         def insert(tx: WriteTransaction) -> None:
-            self._leases.mark_committed(tx, group_key, submission_id, keys=targets)
             locked = self._documents.lock_document(tx, command.application_id)
             if locked is None:
                 raise StateConflict("the document no longer exists")

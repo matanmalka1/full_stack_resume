@@ -145,8 +145,6 @@ class SqlAlchemyOperationClientStore:
                     finished_at=timestamp,
                     cancellation_requested_at=timestamp,
                     lease_owner=None,
-                    lease_expires_at=None,
-                    heartbeat_at=None,
                 )
             )
         elif row["status"] == OperationStatus.RUNNING.value:

@@ -11,6 +11,7 @@ so the CSV writer lives in `infrastructure/exports.py`.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from ..util import utc_now
@@ -81,17 +82,15 @@ def build_application_export(applications: ApplicationListView) -> ApplicationEx
     )
 
 
+#: How long an unregistered payload must have been stored before inspection
+#: reports it (architecture.md §7.1). Every writer registers its payload within
+#: seconds of storing it, so a younger unregistered payload is most likely a
+#: write still in progress and would only be noise in the report. This filters a
+#: read-only report; nothing is deleted on the strength of it.
+ORPHAN_MIN_AGE = timedelta(hours=1)
+
+
 class OrphanInventory(BoundaryDTO):
-    """Unreferenced payload candidates, potentially still awaiting registration."""
+    """Unregistered payloads older than `ORPHAN_MIN_AGE`."""
 
     candidates: list[str]
-
-
-class ReclaimResult(BoundaryDTO):
-    """What one `reclaim_orphans()` call removed (architecture.md §7.1).
-
-    Not exhaustive by design: a payload an old attempt's storage write lands
-    after this call finished is invisible to it and waits for a later call.
-    """
-
-    removed: list[str]

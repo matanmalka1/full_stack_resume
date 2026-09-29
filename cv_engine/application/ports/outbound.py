@@ -8,6 +8,7 @@ against local adapters with no AI key present.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Generic, Protocol, TypeVar
 
@@ -52,18 +53,6 @@ class ArtifactStore(Protocol):
 
 
 class SnapshotPayloadStore(Protocol):
-    def snapshot_path(self, application_id: str, snapshot_id: str) -> Path:
-        """Where a JobSnapshot payload would land, without writing it.
-
-        Lets a caller compute the reference for a payload write lease
-        (architecture.md §7.1) before any bytes are written.
-        """
-        ...
-
-    def reference_for(self, destination: Path) -> str:
-        """The stored reference `destination` would receive, without writing anything."""
-        ...
-
     def commit_snapshot(
         self,
         application_id: str,
@@ -88,14 +77,10 @@ class SnapshotPayloadStore(Protocol):
 
 
 class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
-    def payload_inventory(self) -> list[str]:
-        """Read-only observation of managed immutable payload references."""
-        ...
+    def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
+        """Read-only observation of managed immutable payload references.
 
-    def delete_payload(self, reference: str) -> None:
-        """Remove one stored payload `reclaim_orphans` has decided is safe to remove.
-
-        Idempotent: a reference already absent from storage is not an error.
+        `modified_before` keeps only payloads stored before that instant.
         """
         ...
 

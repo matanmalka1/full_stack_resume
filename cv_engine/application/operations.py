@@ -313,8 +313,6 @@ class PersistedOperation(OperationView):
     sources: OperationSources
     resources: tuple[OperationResource, ...]
     lease_owner: str | None = None
-    lease_expires_at: str | None = None
-    heartbeat_at: str | None = None
     attempts_completed: int = Field(ge=0)
     next_attempt_at: str | None = None
     technical_log_reference: str | None = None

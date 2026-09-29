@@ -3,7 +3,8 @@
 Production has no foreground caller: the API creates Operations and the worker
 process executes them. Tests still need a way to drive one Operation to a
 terminal state synchronously - and one test needs a second claimant to race the
-worker, which is what proves the claim contract holds for more than one worker.
+worker, which is what proves the claim contract holds for the worker's
+concurrent threads.
 
 Deliberately not in `cv_engine/`. Shipping a second execution host that nothing
 runs would make the runtime model ambiguous to read.
@@ -34,7 +35,6 @@ class ForegroundOperationExecutor:
         self.sleeper = sleeper
 
     def execute(self, operation_id: str) -> PersistedOperation:
-        self.runner.recover_expired()
         while True:
             current = self.runner.operation(operation_id)
             if is_terminal_operation(current.status):

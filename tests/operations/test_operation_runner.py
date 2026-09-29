@@ -12,12 +12,13 @@ from operations_support import (
     _enqueue_operation,
     _execution_write,
     _Handler,
+    _held_slot,
     _operation,
     _operation_for_runner,
     _runner,
     _stored_request,
 )
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 import cv_engine.infrastructure.rendering as rendering_adapter
 from cv_engine.application.commands import (
@@ -38,6 +39,8 @@ from cv_engine.application.errors import (
 from cv_engine.application.operation_runner import (
     PreparedOperation,
     SourceChanged,
+    WorkerAlreadyRunning,
+    WorkerLockLost,
 )
 from cv_engine.application.operations import (
     CreateOperation,
@@ -60,6 +63,10 @@ from cv_engine.infrastructure.persistence.operation_execution import (
 from cv_engine.infrastructure.persistence.tables import (
     operation_resource_leases,
     operations,
+)
+from cv_engine.infrastructure.persistence.worker_lock import (
+    WORKER_LOCK_KEY,
+    worker_exclusivity,
 )
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.execution import OperationWorker
@@ -125,8 +132,7 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
     winner = claimed[0]
     assert winner.lease_owner in {"runner-a", "runner-b"}
     # The loser must release only what it took. Releasing by operation_id
-    # deleted the winner's leases, and the winner then failed at its first
-    # heartbeat mid-execution with "operation resource leases are missing".
+    # deleted the winner's resource slots while it was still running under them.
     with services.operation_runner.transactions.read() as tx:
         connection = services.operation_runner.transactions.connection_for(tx)
         held = connection.execute(
@@ -136,7 +142,6 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
             )
         ).scalars()
         assert sorted(held) == sorted(resource.kind.value for resource in winner.resources)
-    _execution_write(services, "heartbeat_operation", created.id, runner_id=str(winner.lease_owner))
 
     operation = _operation_for_runner(services, "Foreground Worker Race Co")
     barrier = Barrier(2)
@@ -166,6 +171,7 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
             runner_id="worker-racer",
         ),
         request_cancellation=services.operation_lifecycle.cancel,
+        exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0,
     )
@@ -206,6 +212,7 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
             operation_event_logger=event_logger.record_event,
         ),
         request_cancellation=services.operation_lifecycle.cancel,
+        exclusive=_held_slot,
         concurrency=1,
     )
     caplog.set_level("INFO", logger="cv_engine.worker")
@@ -319,138 +326,101 @@ def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> Non
     assert _operation(services, operations[2].id).phase.value == "waiting_for_ai_slot"
 
 
-def test_heartbeat_extends_the_lease_and_skips_inflight_cancellation(
-    services,
-) -> None:
-    """A heartbeat extends the lease, and never fails an Operation being cancelled.
-
-    Interruption waits until the extended lease expires. A heartbeat that meets a
-    cancellation holding the row lock skips it rather than waiting and raising a
-    serialization error, and the Operation then completes as cancelled.
-    """
-    ingested = services.applications.ingest(
-        IngestCommand(
-            company="Heartbeat Co", target_role="Developer", job_text="Python role", client="web"
-        )
-    )
-    created = _enqueue_operation(
-        services,
-        _stored_request(ingested.application_id),
-    )
-    claimed = _claim_operation(
-        services,
-        created.id,
-        runner_id="runner-a",
-        lease_seconds=30,
-        now="2026-08-19T08:00:00+00:00",
-    )
-    assert claimed is not None
-    assert (
-        _execution_write(services, "interrupt_expired_operations", now="2026-08-19T08:00:20+00:00")
-        == []
-    )
-
-    _execution_write(
-        services,
-        "heartbeat_operation",
-        created.id,
-        runner_id="runner-a",
-        lease_seconds=30,
-        now="2026-08-19T08:00:20+00:00",
-    )
-    assert (
-        _execution_write(services, "interrupt_expired_operations", now="2026-08-19T08:00:49+00:00")
-        == []
-    )
-    assert _execution_write(
-        services, "interrupt_expired_operations", now="2026-08-19T08:00:51+00:00"
-    ) == [created.id]
-    assert _operation(services, created.id).status is OperationStatus.INTERRUPTED
-
-    operation = _operation_for_runner(services, "Heartbeat Cancellation Co")
-    claimed = _claim_operation(services, operation.id, runner_id="owner")
-    assert claimed is not None
-    transactions = services.operation_runner.transactions
-
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        with transactions.write() as tx:
-            services.operation_lifecycle.operations.request_cancellation(tx, operation.id)
-            # The cancellation update holds the row lock until this scope commits.
-            # A heartbeat on another connection must skip it rather than wait and
-            # raise a REPEATABLE READ serialization error after that commit.
-            future = pool.submit(
-                _execution_write,
-                services,
-                "heartbeat_operation",
-                operation.id,
-                runner_id="owner",
-            )
-            future.result(timeout=2)
-
-    result = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
-    assert result.status is OperationStatus.CANCELLED
-    assert result.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
-
-
-def test_startup_interrupts_work_held_by_previous_runners(
+def test_startup_interrupts_work_held_by_previous_runners_and_one_worker_runs(
     services,
     database_engine,
 ) -> None:
-    """Startup interrupts dead runners' work, expired or not.
+    """Startup interrupts every claimed Operation, which is safe only with one worker.
 
-    A queued Operation holding an expired runner lease is interrupted. A fast
-    restart must not leave a dead predecessor's claim stuck either:
-    `interrupt_expired_operations` deliberately waits out the TTL, which is right
-    for a periodic sweep that must not disturb another live claimant, but a
-    process's one-time startup sweep has no claimant to protect, so it reclaims
-    unconditionally.
+    Any claim left on a row belongs to a worker that no longer exists, queued or
+    running. An unclaimed queued Operation is left for the new worker. The
+    advisory lock is what makes "no other worker is alive" true: a second
+    holder is refused, and the slot frees when the first lets go.
     """
-    operation = _operation_for_runner(services, "Expired Queued Co")
+    queued = _operation_for_runner(services, "Claimed Queued Co")
+    running = _operation_for_runner(services, "Claimed Running Co")
+    waiting = _operation_for_runner(services, "Unclaimed Co")
     with database_engine.begin() as connection:
         connection.execute(
-            update(operations)
-            .where(operations.c.id == operation.id)
-            .values(
-                lease_owner="dead-runner",
-                heartbeat_at="2026-08-19T07:59:00+00:00",
-                lease_expires_at="2026-08-19T07:59:30+00:00",
-            )
+            update(operations).where(operations.c.id == queued.id).values(lease_owner="dead-runner")
         )
-
-    interrupted = _execution_write(
-        services, "interrupt_expired_operations", now="2026-08-19T08:00:00+00:00"
-    )
-
-    assert interrupted == [operation.id]
-    assert _operation(services, operation.id).status is OperationStatus.INTERRUPTED
-
-    operation = _operation_for_runner(services, "Fast Restart Co")
-    with database_engine.begin() as connection:
         connection.execute(
             update(operations)
-            .where(operations.c.id == operation.id)
-            .values(
-                status="running",
-                lease_owner="dead-runner",
-                heartbeat_at="2026-08-19T08:00:00+00:00",
-                lease_expires_at="2026-08-19T08:00:30+00:00",
-            )
+            .where(operations.c.id == running.id)
+            .values(status="running", lease_owner="dead-runner")
         )
 
-    # The lease has not expired yet; a TTL-respecting sweep would skip it.
-    assert (
-        _execution_write(services, "interrupt_expired_operations", now="2026-08-19T08:00:05+00:00")
-        == []
-    )
+    interrupted = _execution_write(services, "interrupt_claims_from_previous_runners")
 
-    interrupted = _execution_write(
-        services,
-        "interrupt_claims_from_previous_runners",
-        now="2026-08-19T08:00:05+00:00",
-    )
+    assert sorted(interrupted) == sorted([queued.id, running.id])
+    assert _operation(services, queued.id).status is OperationStatus.INTERRUPTED
+    assert _operation(services, running.id).status is OperationStatus.INTERRUPTED
+    assert _operation(services, waiting.id).status is OperationStatus.QUEUED
 
-    assert interrupted == [operation.id]
-    assert _operation(services, operation.id).status is OperationStatus.INTERRUPTED
+    with worker_exclusivity(database_engine):
+        with pytest.raises(WorkerAlreadyRunning):
+            with worker_exclusivity(database_engine):
+                pass
+    with worker_exclusivity(database_engine):
+        pass
+
+
+def test_worker_stops_when_its_lock_session_ends(services, database_engine) -> None:
+    """Losing the lock session ends the worker instead of leaving it unguarded.
+
+    PostgreSQL releases a session advisory lock with its session. A worker that
+    kept claiming after that would be running beside whichever worker takes the
+    lock next, so it stops, and the slot is free for that next worker.
+    """
+    worker = OperationWorker(
+        _runner(services, {}, runner_id="lock-loser"),
+        request_cancellation=services.operation_lifecycle.cancel,
+        exclusive=lambda: worker_exclusivity(database_engine),
+        concurrency=1,
+        poll_interval_seconds=0.01,
+        slot_check_interval_seconds=0,
+    )
+    errors: list[BaseException] = []
+    stop = Event()
+
+    def serve() -> None:
+        try:
+            worker.serve(stop)
+        except BaseException as error:
+            errors.append(error)
+
+    # pg_locks spans the cluster; only this database's worker lock is the subject.
+    lock_session = text(
+        "SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND granted "
+        "AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) "
+        "AND classid = :high AND objid = :low AND objsubid = 1"
+    )
+    key = {"high": WORKER_LOCK_KEY >> 32, "low": WORKER_LOCK_KEY & 0xFFFFFFFF}
+    thread = Thread(target=serve)
+    thread.start()
+    try:
+        pid = None
+        for _attempt in range(200):
+            with database_engine.connect() as connection:
+                pid = connection.execute(lock_session, key).scalar_one_or_none()
+            if pid is not None:
+                break
+            Event().wait(0.01)
+        assert pid is not None, "the worker never took its lock"
+
+        with database_engine.connect() as connection:
+            connection.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": pid})
+            connection.commit()
+        thread.join(timeout=5)
+    finally:
+        # Never leave a worker behind: it would claim the next tests' Operations.
+        stop.set()
+        thread.join(timeout=5)
+
+    assert not thread.is_alive(), "the worker kept running without its lock"
+    assert len(errors) == 1 and isinstance(errors[0], WorkerLockLost)
+    with worker_exclusivity(database_engine):
+        pass
 
 
 def test_runner_activates_outputs_and_completes_in_one_activation_transaction(services) -> None:
@@ -556,24 +526,25 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     original_cancel = services.operation_lifecycle.operations.request_cancellation
     cancellation_attempts = []
 
-    def cancel_after_heartbeat(tx, operation_id):
+    def cancel_after_runner_write(tx, operation_id):
         cancellation_attempts.append(operation_id)
         if len(cancellation_attempts) == 1:
-            # Establish the cancellation snapshot, then commit a heartbeat on
-            # another connection. Its update must force cancellation to retry.
+            # Establish the cancellation snapshot, then commit a runner phase
+            # update on another connection. It must force cancellation to retry.
             services.operation_runner.execution_store.operation(tx, operation_id)
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pool.submit(
                     _execution_write,
                     services,
-                    "heartbeat_operation",
+                    "set_operation_phase",
                     operation_id,
+                    OperationPhase.EXECUTING,
                     runner_id="shutdown-worker",
                 ).result(timeout=2)
         return original_cancel(tx, operation_id)
 
     monkeypatch.setattr(
-        services.operation_lifecycle.operations, "request_cancellation", cancel_after_heartbeat
+        services.operation_lifecycle.operations, "request_cancellation", cancel_after_runner_write
     )
 
     def execute(_operation, cancellation_requested):
@@ -586,11 +557,11 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
         services,
         {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
         runner_id="shutdown-worker",
-        heartbeat_interval_seconds=10,
     )
     worker = OperationWorker(
         runner,
         request_cancellation=services.operation_lifecycle.cancel,
+        exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0.01,
     )

@@ -9,7 +9,7 @@ from .transactions import ReadTransaction, WriteTransaction
 
 
 class OperationExecutionStore(Protocol):
-    """Token-scoped claim, lease, attempt, output, and completion persistence."""
+    """Token-scoped claim, attempt, output, and completion persistence."""
 
     def operation(self, tx: ReadTransaction, operation_id: str) -> PersistedOperation: ...
     def claim_operation(
@@ -18,7 +18,6 @@ class OperationExecutionStore(Protocol):
         operation_id: str,
         *,
         runner_id: str,
-        lease_seconds: int = 30,
         now: str | None = None,
     ) -> PersistedOperation | None: ...
     def claim_next_operation(
@@ -26,21 +25,8 @@ class OperationExecutionStore(Protocol):
         tx: WriteTransaction,
         *,
         runner_id: str,
-        lease_seconds: int = 30,
         now: str | None = None,
     ) -> PersistedOperation | None: ...
-    def heartbeat_operation(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        *,
-        runner_id: str,
-        lease_seconds: int = 30,
-        now: str | None = None,
-    ) -> None: ...
-    def interrupt_expired_operations(
-        self, tx: WriteTransaction, *, now: str | None = None
-    ) -> list[str]: ...
     def interrupt_claims_from_previous_runners(
         self, tx: WriteTransaction, *, now: str | None = None
     ) -> list[str]: ...

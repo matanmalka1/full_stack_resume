@@ -199,8 +199,6 @@ operations = Table(
     Column("started_at", IsoTimestamp()),
     Column("finished_at", IsoTimestamp()),
     Column("lease_owner", Text),
-    Column("lease_expires_at", IsoTimestamp()),
-    Column("heartbeat_at", IsoTimestamp()),
     Column("cancellation_requested_at", IsoTimestamp()),
     Column("failure_code", Text),
     Column("safe_failure_detail", Text),
@@ -228,12 +226,6 @@ operations = Table(
         name="failure_code",
     ),
     CheckConstraint("attempts_completed >= 0", name="attempts_completed_nonnegative"),
-    CheckConstraint(
-        "(lease_owner IS NULL AND lease_expires_at IS NULL AND heartbeat_at IS NULL) OR "
-        "(lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL "
-        "AND heartbeat_at IS NOT NULL)",
-        name="lease_fields",
-    ),
     CheckConstraint("status != 'running' OR lease_owner IS NOT NULL", name="running_lease"),
     CheckConstraint(
         "status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted') OR lease_owner IS NULL",
@@ -287,8 +279,6 @@ operation_resource_leases = Table(
     Column("slot", Integer, nullable=False),
     Column("operation_id", UUID(as_uuid=False), ForeignKey("operations.id"), nullable=False),
     Column("lease_owner", Text, nullable=False),
-    Column("lease_expires_at", IsoTimestamp(), nullable=False),
-    Column("heartbeat_at", IsoTimestamp(), nullable=False),
     CheckConstraint(
         "resource_kind IN ('application_mutation', 'render_browser', 'ai')",
         name="resource_kind",
@@ -300,25 +290,6 @@ operation_resource_leases = Table(
 Index(
     "idx_operation_resource_leases_operation",
     operation_resource_leases.c.operation_id,
-)
-
-payload_write_leases = Table(
-    "payload_write_leases",
-    metadata,
-    Column("group_key", Text, primary_key=True),
-    Column("attempt_id", String, nullable=False),
-    Column("state", Text, nullable=False),
-    Column("owner", Text, nullable=False),
-    Column("keys_json", JSONB, nullable=False),
-    Column("claimed_at", IsoTimestamp(), nullable=False),
-    Column("lease_expires_at", IsoTimestamp(), nullable=False),
-    Column("reclaim_deadline_at", IsoTimestamp()),
-    Column("committed_at", IsoTimestamp()),
-    CheckConstraint("state IN ('pending', 'reclaiming', 'committed')", name="state"),
-    CheckConstraint("(state = 'committed') = (committed_at IS NOT NULL)", name="committed_at"),
-    CheckConstraint(
-        "(state = 'reclaiming') = (reclaim_deadline_at IS NOT NULL)", name="reclaim_deadline_at"
-    ),
 )
 
 operation_outputs = Table(

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol
 
 from ...domain.contracts.analysis import JobAnalysis
@@ -47,14 +46,6 @@ class AnalysisPayloadStore(Protocol):
     """Only snapshot reads and verified provider-response preservation."""
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
-
-    def provider_path(self, application_id: str, operation_id: str, artifact_id: str) -> Path:
-        """Where one provider response payload would land, without writing it."""
-        ...
-
-    def reference_for(self, destination: Path) -> str:
-        """The stored reference `destination` would receive, without writing anything."""
-        ...
 
     def commit_provider_response(
         self,
