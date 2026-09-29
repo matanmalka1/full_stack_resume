@@ -44,6 +44,29 @@
       }
     },
     {
+      "files": ["e2e/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@playwright/test",
+                "importNames": ["test"],
+                "message": "Import test from ./fixtures: the mocked UI suite answers every API request from its stubs and fails on any other."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["e2e/fixtures.ts", "e2e/integration/**"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
       "files": ["vite.config.ts", "playwright.config.ts", "playwright.integration.config.ts", "scripts/**"],
       "rules": {
         "import/no-default-export": "off",

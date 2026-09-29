@@ -1,40 +1,14 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { expect, test, type Page, type Route } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import type { ApplicationListItem, ApplicationListResponse } from "../src/api/contracts";
-import { HASH, cvDocument, detail, documentCheck, settings } from "../src/test/records";
+import { HASH, cvDocument, detail, documentCheck } from "../src/test/records";
+import { expect, json, test } from "./fixtures";
 
 /* Axe scans of the screens whose own specs are Vitest-only: the board, the Resume
-   resolver, the draft editor, the Ready screen, Settings, and Not Found. New Application, Job Detail, and the Facts integrity
-   check carry their scans in their own specs.
-
-   Every `/api/v1` request goes through one handler. A screen that starts reading an
-   endpoint these stubs do not answer fails the test by name, rather than rendering the
-   preview server's HTML fallback as a broken reply and scanning an error state. */
-
-type Answer = (route: Route) => Promise<void>;
-
-const jsonAnswer =
-  (body: unknown, status = 200, headers: Record<string, string> = {}): Answer =>
-  (route) =>
-    route.fulfill({ status, contentType: "application/json", headers, json: body });
-
-const stubApi = async (page: Page, answers: Record<string, Answer>): Promise<string[]> => {
-  const unstubbed: string[] = [];
-  const table: Record<string, Answer> = { "GET /api/v1/settings": jsonAnswer(settings()), ...answers };
-  await page.route("**/api/v1/**", async (route) => {
-    const request = route.request();
-    const key = `${request.method()} ${new URL(request.url()).pathname}`;
-    const answer = table[key];
-    if (answer === undefined) {
-      unstubbed.push(key);
-      await route.fulfill({ status: 404, contentType: "application/problem+json", json: { status: 404 } });
-      return;
-    }
-    await answer(route);
-  });
-  return unstubbed;
-};
+   resolver, the draft editor, the Ready screen, Settings, and Not Found. New Application,
+   Job Detail, and the Facts integrity check carry their scans in their own specs. Every
+   API read is stubbed through the shared fixture, which fails a test on any other. */
 
 const scan = async (page: Page, exclude: string[] = []) => {
   const builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]);
@@ -101,14 +75,11 @@ const board = (): ApplicationListResponse => {
 };
 
 test.describe("accessibility", () => {
-  let unstubbed: string[] = [];
-
-  test.afterEach(() => {
-    expect(unstubbed, "requests with no stub").toEqual([]);
-  });
-
-  test("the application board has no automatically detectable violations", async ({ page }) => {
-    unstubbed = await stubApi(page, { "GET /api/v1/applications": jsonAnswer(board()) });
+  test("the application board has no automatically detectable violations", async ({ api, page }) => {
+    /* The board asks two questions of one endpoint: the list itself and the attention
+       summary beside it. Each gets its own answer. */
+    api.stub("GET /api/v1/applications?activity=open&limit=24&sort=updated", json(board()));
+    api.stub("GET /api/v1/applications?preset=needs_attention&limit=3", json({ ...board(), items: [], matched: 0 }));
 
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1, name: "לוח מועמדויות" })).toBeVisible();
@@ -120,13 +91,11 @@ test.describe("accessibility", () => {
   /* The resolver renders a screen of its own only while it reads or when the read fails;
      a successful read redirects to a screen that carries its own scan. The failure is the
      state a reader can stay on. */
-  test("the Resume view's failure state has no automatically detectable violations", async ({ page }) => {
-    unstubbed = await stubApi(page, {
-      "GET /api/v1/applications/app-1": jsonAnswer(
-        { type: "about:blank", title: "Internal Server Error", status: 500 },
-        500,
-      ),
-    });
+  test("the Resume view's failure state has no automatically detectable violations", async ({ api, page }) => {
+    api.stub(
+      "GET /api/v1/applications/app-1",
+      json({ type: "about:blank", title: "Internal Server Error", status: 500 }, { status: 500 }),
+    );
 
     await page.goto("/applications/app-1/resume");
     await expect(page.getByText("לא ניתן לטעון את פרטי המועמדות")).toBeVisible();
@@ -135,7 +104,10 @@ test.describe("accessibility", () => {
     await scan(page);
   });
 
-  test("the draft editor and its approval dialog have no automatically detectable violations", async ({ page }) => {
+  test("the draft editor and its approval dialog have no automatically detectable violations", async ({
+    api,
+    page,
+  }) => {
     const draft = cvDocument({
       content_check: "none",
       content_report: null,
@@ -194,25 +166,24 @@ test.describe("accessibility", () => {
       ],
     });
     const documentPath = "/api/v1/applications/app-1/document";
-    unstubbed = await stubApi(page, {
-      "GET /api/v1/applications/app-1": jsonAnswer(
-        detail({
-          content_check: "none",
-          available_actions: ["edit", "check", "approve"],
-          recommended_action: "check",
-        }),
+    api.stub(
+      "GET /api/v1/applications/app-1",
+      json(
+        detail({ content_check: "none", available_actions: ["edit", "check", "approve"], recommended_action: "check" }),
       ),
-      [`GET ${documentPath}`]: jsonAnswer(draft, 200, { ETag: `"${HASH}"` }),
-      [`GET ${documentPath}/preview`]: (route) =>
-        route.fulfill({
-          contentType: "text/html",
-          body: '<!doctype html><html lang="en"><head><title>Preview</title></head><body><main><h1>Account Manager</h1><p>Owned the CRM migration.</p></main></body></html>',
-        }),
-      [`POST ${documentPath}/check`]: jsonAnswer(documentCheck()),
-      "GET /api/v1/applications/app-1/artifacts": jsonAnswer({ items: [] }),
-      "GET /api/v1/facts": jsonAnswer({ items: [] }),
-      "GET /api/v1/facts/history": jsonAnswer({ events: [] }),
-    });
+    );
+    api.stub(`GET ${documentPath}`, json(draft, { headers: { ETag: `"${HASH}"` } }));
+    /* The preview frame's source carries the document hash as its cache key. */
+    api.stub(`GET ${documentPath}/preview?v=${HASH}`, (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<!doctype html><html lang="en"><head><title>Preview</title></head><body><main><h1>Account Manager</h1><p>Owned the CRM migration.</p></main></body></html>',
+      }),
+    );
+    api.stub(`POST ${documentPath}/check`, json(documentCheck()));
+    api.stub("GET /api/v1/applications/app-1/artifacts", json({ items: [] }));
+    api.stub("GET /api/v1/facts", json({ items: [] }));
+    api.stub("GET /api/v1/facts/history", json({ events: [] }));
 
     await page.goto("/applications/app-1/draft");
     await expect(page.getByRole("button", { name: "עריכה ותצוגה" })).toHaveAttribute("aria-pressed", "true");
@@ -230,8 +201,6 @@ test.describe("accessibility", () => {
   });
 
   test("the Settings screen has no automatically detectable violations", async ({ page }) => {
-    unstubbed = await stubApi(page, {});
-
     await page.goto("/settings");
     await expect(page.getByText("מדיניות הפעלה ותצוגה")).toBeVisible();
 
@@ -239,19 +208,21 @@ test.describe("accessibility", () => {
   });
 
   test("the Not Found screen has no automatically detectable violations", async ({ page }) => {
-    unstubbed = await stubApi(page, {});
-
     await page.goto("/no-such-screen");
     await expect(page.getByRole("heading", { level: 1, name: "העמוד לא נמצא" })).toBeVisible();
 
     await scan(page);
   });
 
-  test("the Ready screen and its submission dialog have no automatically detectable violations", async ({ page }) => {
+  test("the Ready screen and its submission dialog have no automatically detectable violations", async ({
+    api,
+    page,
+  }) => {
     const approvedAt = "2026-08-25T08:00:00Z";
     const documentPath = "/api/v1/applications/app-1/document";
-    unstubbed = await stubApi(page, {
-      "GET /api/v1/applications/app-1": jsonAnswer(
+    api.stub(
+      "GET /api/v1/applications/app-1",
+      json(
         detail({
           preparation_state: "ready",
           approved_at: approvedAt,
@@ -259,15 +230,15 @@ test.describe("accessibility", () => {
           recommended_action: "submit",
         }),
       ),
-      [`GET ${documentPath}`]: jsonAnswer(cvDocument({ preparation_state: "ready", approved_at: approvedAt }), 200, {
-        ETag: `"${HASH}"`,
-      }),
-      [`GET ${documentPath}/decision-markdown`]: jsonAnswer({
-        application_id: "app-1",
-        document_id: "doc-1",
-        markdown: "# Decision",
-      }),
-    });
+    );
+    api.stub(
+      `GET ${documentPath}`,
+      json(cvDocument({ preparation_state: "ready", approved_at: approvedAt }), { headers: { ETag: `"${HASH}"` } }),
+    );
+    api.stub(
+      `GET ${documentPath}/decision-markdown`,
+      json({ application_id: "app-1", document_id: "doc-1", markdown: "# Decision" }),
+    );
 
     await page.goto("/applications/app-1/ready");
     await expect(page.getByRole("heading", { name: "מוכן למסירה" })).toBeVisible();

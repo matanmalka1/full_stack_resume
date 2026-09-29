@@ -1,18 +1,5 @@
 import { AxeBuilder } from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
-
-const settings = {
-  edit_version: 0,
-  auto_generate_when_review_not_required: false,
-  ai_enabled: false,
-  ai_enabled_override: null,
-  default_execution_mode: "deterministic",
-  provider_configured: false,
-  ui_density: "comfortable",
-  ui_text_size: "normal",
-  ui_theme: "system",
-  updated_at: null,
-};
+import { expect, json, test } from "./fixtures";
 
 const detail = {
   recruitment_status: "recruiter_screen",
@@ -50,16 +37,9 @@ const detail = {
 };
 
 test.describe("the Job Detail screen", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.route("**/api/v1/settings", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: settings });
-    });
-    await page.route("**/api/v1/applications/app-1", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: detail });
-    });
-    await page.route("**/api/v1/applications/app-1/artifacts", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: { items: [] } });
-    });
+  test.beforeEach(({ api }) => {
+    api.stub("GET /api/v1/applications/app-1", json(detail));
+    api.stub("GET /api/v1/applications/app-1/artifacts", json({ items: [] }));
   });
 
   test("has no automatically detectable accessibility violations", async ({ page }) => {

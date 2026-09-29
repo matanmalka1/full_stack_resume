@@ -1,20 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, json, test } from "./fixtures";
 
 /* Real keyboard navigation verifies Tab boundary wrapping, native modal focus
    restoration, and Escape reaching the element's cancel behavior. */
-
-const settings = {
-  edit_version: 0,
-  auto_generate_when_review_not_required: false,
-  ai_enabled: false,
-  ai_enabled_override: null,
-  default_execution_mode: "deterministic",
-  provider_configured: false,
-  ui_density: "comfortable",
-  ui_text_size: "normal",
-  ui_theme: "system",
-  updated_at: null,
-};
 
 const detail = {
   recruitment_status: "recruiter_screen",
@@ -52,23 +41,13 @@ const detail = {
 };
 
 test.describe("dialogs", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.route("**/api/v1/settings", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: settings });
-    });
-    await page.route("**/api/v1/applications/app-1", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: detail });
-    });
-    await page.route("**/api/v1/applications/app-1/artifacts", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: { items: [] } });
-    });
-    /* Matched on the path itself: a glob wide enough to catch the list's query string
-       also catches the detail request routed above it. */
-    await page.route(
-      (url) => url.pathname === "/api/v1/applications",
-      async (route) => {
-        await route.fulfill({ contentType: "application/json", json: { items: [], total: 0, limit: 8, offset: 0 } });
-      },
+  test.beforeEach(({ api }) => {
+    api.stub("GET /api/v1/applications/app-1", json(detail));
+    api.stub("GET /api/v1/applications/app-1/artifacts", json({ items: [] }));
+    /* The search palette opens on the Applications needing attention. */
+    api.stub(
+      "GET /api/v1/applications?preset=needs_attention&limit=8",
+      json({ items: [], total: 0, limit: 8, offset: 0 }),
     );
   });
 
@@ -178,6 +157,7 @@ test.describe("dialogs", () => {
      and does not make the page safe to change: the commands that conflict with the run
      stay locked while it is live. */
   test("puts a live run's panel away only from its close button, keeps conflicting actions locked, and opens the report from its chip", async ({
+    api,
     page,
   }) => {
     const running = {
@@ -192,15 +172,11 @@ test.describe("dialogs", () => {
       message: "",
       created_at: "2026-08-24T07:00:00Z",
     };
-    await page.route("**/api/v1/applications/app-1", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        json: { ...detail, active_operation: running, latest_operation: running },
-      });
-    });
-    await page.route("**/api/v1/operations/op-1", async (route) => {
-      await route.fulfill({ contentType: "application/json", json: running });
-    });
+    api.stub(
+      "GET /api/v1/applications/app-1",
+      json({ ...detail, active_operation: running, latest_operation: running }),
+    );
+    api.stub("GET /api/v1/operations/op-1", json(running));
 
     await page.goto("/applications/app-1");
     /* Live work is a panel beside the page, not a modal: Escape leaves it where it is,
