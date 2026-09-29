@@ -27,12 +27,7 @@ export const OperationPhaseSteps = ({ phase }: { phase: OperationPhase }) => {
           <Fragment key={label}>
             {index === 0 ? null : (
               <li aria-hidden="true" className="flex items-center">
-                <span
-                  className={cx(
-                    "h-px w-3",
-                    index <= current ? "bg-cv-accent" : "workflow-track-upcoming",
-                  )}
-                />
+                <span className={cx("h-px w-3", index <= current ? "bg-cv-accent" : "workflow-track-upcoming")} />
               </li>
             )}
             <li

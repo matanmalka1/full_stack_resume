@@ -173,11 +173,7 @@ export const ReadyPage = () => {
                 dialog closes. It used to be an edge-marked line under the cards and the
                 folded extras, the same weight as any other notice on the page. */}
             {submissionNoticeOpen ? (
-              <SuccessNotice
-                emphasis="milestone"
-                onDismiss={() => setSubmissionNoticeOpen(false)}
-                title="ההגשה נרשמה"
-              >
+              <SuccessNotice emphasis="milestone" onDismiss={() => setSubmissionNoticeOpen(false)} title="ההגשה נרשמה">
                 התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
               </SuccessNotice>
             ) : null}
@@ -291,7 +287,6 @@ export const ReadyPage = () => {
                 </aside>
               </div>
             )}
-
           </>
         )}
       </QueryState>

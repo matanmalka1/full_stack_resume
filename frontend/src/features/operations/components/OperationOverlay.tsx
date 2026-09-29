@@ -292,9 +292,7 @@ export const OperationOverlay = ({
             <>
               <OperationPhaseSteps phase={record.phase} />
               {/* In place of the page's own content, the card says what fills it. */}
-              {inline ? (
-                <p className="text-support leading-6 text-cv-text-muted">{inlineNote}</p>
-              ) : null}
+              {inline ? <p className="text-support leading-6 text-cv-text-muted">{inlineNote}</p> : null}
             </>
           )}
           {showingSuccess ? null : (
