@@ -30,7 +30,7 @@ export const OperationPhaseSteps = ({ phase }: { phase: OperationPhase }) => {
                 <span
                   className={cx(
                     "h-px w-3",
-                    index <= current ? "bg-cv-accent" : "border-t border-dashed border-cv-border-strong",
+                    index <= current ? "bg-cv-accent" : "workflow-track-upcoming",
                   )}
                 />
               </li>
