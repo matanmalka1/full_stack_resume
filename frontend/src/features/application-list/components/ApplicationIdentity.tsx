@@ -93,12 +93,14 @@ export const ApplicationIdentity = ({
             </Link>
           </Tooltip>
         </div>
-        {/* Clamped rather than truncated: with no tooltip on it, a long role must still be
-            readable in full within two lines. */}
+        {/* One line, so every card's header is the same height and the blocks under it
+            line up across the board; a role cut short is whole in the tooltip. */}
         <p className="flex min-w-0 items-baseline gap-1.5 text-support text-cv-text-muted">
-          <span className="line-clamp-2 min-w-0 font-medium text-cv-text" dir="auto">
-            {item.target_role}
-          </span>
+          <Tooltip align="center" className="min-w-0" label={item.target_role} wrap>
+            <span className="min-w-0 truncate font-medium text-cv-text" dir="auto">
+              {item.target_role}
+            </span>
+          </Tooltip>
           {item.track == null ? null : (
             <>
               <span aria-hidden="true">·</span>

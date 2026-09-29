@@ -1,3 +1,5 @@
+import { CircleHelp } from "lucide-react";
+
 import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
@@ -19,6 +21,10 @@ const quietDotClasses: Record<Tone, string> = {
   neutral: "bg-cv-text-muted",
 };
 
+/* One shape for every fit chip, score or mark, so the cards' headers line up. */
+const fitChipClasses =
+  "inline-flex h-7 min-w-12 items-center justify-center rounded-control bg-cv-surface-muted px-2.5 text-support font-bold";
+
 /* Fit as the board says it: the score where there is one, the level word where there
    is not. */
 const fitScoreText = (item: ApplicationListItem): string | null =>
@@ -38,9 +44,21 @@ export const ApplicationFitStatus = ({ item }: { item: ApplicationListItem }) =>
   const label = fitLevelLabel(item.fit_level);
   const score = fitScoreText(item);
 
+  /* An unchecked fit has no score and a sentence for a level; the chip draws a mark and
+     leaves the sentence to the tooltip. */
+  if (score == null && item.fit_level === "unknown") {
+    return (
+      <Tooltip align="center" label={label}>
+        <span className={cx(fitChipClasses, "text-cv-text-muted")}>
+          <CircleHelp aria-hidden="true" className="size-4" />
+        </span>
+      </Tooltip>
+    );
+  }
+
   return (
     <Tooltip align="center" label={label}>
-      <span className="inline-flex min-w-12 items-center justify-center rounded-control bg-cv-surface-muted px-2.5 py-1 text-support font-bold text-cv-text tabular-nums">
+      <span className={cx(fitChipClasses, "text-cv-text tabular-nums")}>
         {score ?? label}
       </span>
     </Tooltip>
