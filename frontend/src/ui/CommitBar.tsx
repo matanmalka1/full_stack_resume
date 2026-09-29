@@ -1,4 +1,3 @@
-import { Circle, CircleCheck } from "lucide-react";
 import { createContext, useContext, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -116,27 +115,3 @@ export const CommitBar = (props: CommitBarProps) => {
   if (target === null) return null;
   return createPortal(surface, target);
 };
-
-export interface ChecklistEntry {
-  done: boolean;
-  label: string;
-}
-
-/* The live checklist. Colour is never the only signal (A.2): a done entry changes its
-   mark from a ring to a ring with a tick, and states which it is in words for a reader
-   who hears the list rather than sees it. */
-export const CommitChecklist = ({ entries, label }: { entries: readonly ChecklistEntry[]; label: string }) => (
-  <ul aria-label={label} className="flex flex-wrap items-center gap-x-5 gap-y-2">
-    {entries.map((entry) => (
-      <li className="flex items-center gap-2 text-support font-medium" key={entry.label}>
-        {entry.done ? (
-          <CircleCheck aria-hidden="true" className="size-icon-md shrink-0 text-cv-success" />
-        ) : (
-          <Circle aria-hidden="true" className="size-icon-md shrink-0 text-cv-text-muted" />
-        )}
-        <span className={cx(entry.done ? "text-cv-text" : "text-cv-text-muted")}>{entry.label}</span>
-        <span className="sr-only">{entry.done ? "הושלם" : "טרם הושלם"}</span>
-      </li>
-    ))}
-  </ul>
-);

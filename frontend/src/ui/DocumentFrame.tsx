@@ -18,7 +18,6 @@ interface DocumentFrameProps {
   /* The document behind the frame is being replaced: the page dims until it loads. */
   busy?: boolean;
   className?: string;
-  frameClassName?: string;
   onLoad?: () => void;
   src: string;
   title: string;
@@ -42,7 +41,7 @@ const zoomStepClasses = "w-9";
    It owns its whole presentation - toolbar, canvas, and the page on it - so every
    screen that shows a CV shows the same object, and no caller wraps the toolbar in a
    surface of its own. */
-export const DocumentFrame = ({ busy = false, className, frameClassName, onLoad, src, title }: DocumentFrameProps) => {
+export const DocumentFrame = ({ busy = false, className, onLoad, src, title }: DocumentFrameProps) => {
   const viewportRef = useRef<HTMLElement>(null);
   const [fitZoom, setFitZoom] = useState(100);
   const [manualZoom, setManualZoom] = useState(100);
@@ -157,7 +156,7 @@ export const DocumentFrame = ({ busy = false, className, frameClassName, onLoad,
           style={{ height: PAGE_HEIGHT_PX * scale, width: PAGE_WIDTH_PX * scale }}
         >
           <iframe
-            className={cx("absolute left-0 top-0 border-0 bg-cv-surface", frameClassName)}
+            className="absolute left-0 top-0 border-0 bg-cv-surface"
             onLoad={onLoad}
             sandbox=""
             src={src}

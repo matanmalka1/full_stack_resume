@@ -1,23 +1,17 @@
 import type { LucideIcon } from "lucide-react";
-import { createElement, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { cx } from "./cx";
-
-type HeadingLevel = "h2" | "h3" | "h4";
 
 interface SectionHeaderProps {
   actions?: ReactNode;
   align?: "start" | "center" | "baseline";
   className?: string;
-  /* A description long enough to want a reading measure rather than the full frame. */
-  constrainDescription?: boolean;
   description?: ReactNode;
-  gap?: "standard" | "tight" | "wide" | "wide-compact";
+  gap?: "standard" | "wide" | "wide-compact";
   headingId?: string;
-  headingLevel?: HeadingLevel;
   headingSize?: "section" | "body";
   icon?: LucideIcon;
-  iconPresentation?: "badge" | "inline";
   spacing?: "compact" | "roomy";
   title: ReactNode;
 }
@@ -30,46 +24,35 @@ const alignmentClasses: Record<NonNullable<SectionHeaderProps["align"]>, string>
 
 const gapClasses: Record<NonNullable<SectionHeaderProps["gap"]>, string> = {
   standard: "gap-3",
-  tight: "gap-2",
   wide: "gap-x-6 gap-y-3",
   "wide-compact": "gap-x-6 gap-y-2",
 };
 
 /* A section masthead has one stable reading order: title and explanation first, then
-   its local status or action. Callers still choose the heading level and icon treatment
-   because those carry document hierarchy and visual emphasis, not boilerplate. */
+   its local status or action. */
 export const SectionHeader = ({
   actions,
   align = "start",
   className,
-  constrainDescription = false,
   description,
   gap = "standard",
   headingId,
-  headingLevel = "h2",
   headingSize = "section",
   icon: Icon,
-  iconPresentation = "badge",
   spacing = "compact",
   title,
 }: SectionHeaderProps) => {
-  const heading = createElement(
-    headingLevel,
-    {
-      className:
-        headingSize === "section" ? "text-heading-sm font-bold text-cv-text" : "text-body font-semibold text-cv-text",
-      id: headingId,
-    },
-    title,
-  );
   const text = (
     <div className="min-w-0">
-      {heading}
-      {description === undefined ? null : (
-        <p className={cx("mt-1 text-support text-cv-text-muted", constrainDescription ? "max-w-2xl" : undefined)}>
-          {description}
-        </p>
-      )}
+      <h2
+        className={
+          headingSize === "section" ? "text-heading-sm font-bold text-cv-text" : "text-body font-semibold text-cv-text"
+        }
+        id={headingId}
+      >
+        {title}
+      </h2>
+      {description === undefined ? null : <p className="mt-1 text-support text-cv-text-muted">{description}</p>}
     </div>
   );
 
@@ -85,16 +68,11 @@ export const SectionHeader = ({
     >
       {Icon === undefined ? (
         text
-      ) : iconPresentation === "badge" ? (
+      ) : (
         <div className="flex min-w-0 items-start gap-2.5">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
             <Icon aria-hidden="true" className="size-icon-md" />
           </span>
-          {text}
-        </div>
-      ) : (
-        <div className="flex min-w-0 items-center gap-2">
-          <Icon aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
           {text}
         </div>
       )}
