@@ -37,7 +37,7 @@ const serverFields = { job_text: "job_text", source_url: "source_url" } as const
 
    The alternative was creating a new Application for the same job, which is the one thing
    the duplicate check exists to discourage - and it would have left the recruitment
-   timeline, the analyses, and the approved revisions of the original behind.
+   timeline, the analyses, the CV document, and the Submissions of the original behind.
 
    What it creates from Job Detail is a new immutable JobSnapshot, never an edit of the existing one. The
    snapshot on record is evidence of what the posting said when it was captured, and a
@@ -171,8 +171,8 @@ export const JobPostingUpdate = ({
               save and is not started by it: the analyze action on this screen stays the
               one place a run begins. */}
           <p className="text-support leading-6 text-cv-text-muted">
-            הנוסח נשמר כתצלום חדש ובלתי משתנה. התצלום הקודם, הניתוחים שנעשו עליו והגרסאות שאושרו נשמרים כפי שהם. טיוטה
-            פעילה תסומן כלא מעודכנת, וניתוח מחדש נשאר פעולה נפרדת.
+            הנוסח נשמר כתצלום חדש ובלתי משתנה. התצלום הקודם והניתוחים שנעשו עליו נשמרים כפי שהם. מסמך קורות החיים לא
+            משתנה ויסומן כמבוסס על ניתוח קודם, וניתוח מחדש נשאר פעולה נפרדת.
           </p>
 
           <Field error={errors.job_text?.message} label="טקסט המשרה">

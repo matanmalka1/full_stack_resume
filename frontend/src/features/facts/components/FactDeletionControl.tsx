@@ -11,8 +11,9 @@ import { useDeleteFact } from "../api/mutations";
    Unlike `FactConfirmationControl`'s forward step, this needs its own confirmation stage -
    the attestation checkbox alone reads the same as "I confirm the fact", and
    deleting is not a step in the same direction. The button opens a confirmation panel
-   that states plainly what stays (history, immutable revisions) and what does not
-   (default listings, attachment targets, new selections), and only that panel's own
+   that states plainly what stays (history, Submissions), what does not (default listings,
+   attachment targets, new selections), and that a document using the fact loses its
+   approval (state-and-use-cases §6), and only that panel's own
    button sends the request. An already-deleted fact renders nothing: there is no
    undelete in this phase. */
 export const FactDeletionControl = ({ fact }: { fact: Fact }) => {
@@ -35,8 +36,9 @@ export const FactDeletionControl = ({ fact }: { fact: Fact }) => {
   return (
     <div className="flex flex-col gap-3 rounded-control border border-cv-blocker bg-cv-surface p-4">
       <Callout title="הפעולה סופית ואינה הפיכה" tone="warning">
-        העובדה תוסר מרשימת העובדות המוצגת כברירת מחדל ולא תוצע כיעד צירוף חדש. ההיסטוריה שלה, וכל מסמך מאושר שכבר הפיק
-        אותה, יישארו ללא שינוי ונגישים לצפייה.
+        העובדה תוסר מרשימת העובדות המוצגת כברירת מחדל ולא תוצע כיעד צירוף חדש. ההיסטוריה שלה וכל הגשה שכבר נרשמה
+        יישארו ללא שינוי ונגישים לצפייה. מסמך קורות חיים שמשתמש בה לא ישתנה, אבל האישור שלו יפוג, ויהיה צורך לפתור את
+        השימוש בעובדה לפני אישור מחדש.
       </Callout>
       <div className="flex flex-wrap justify-end gap-2">
         <Button onClick={() => setConfirming(false)} size="compact" variant="secondary">

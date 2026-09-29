@@ -48,8 +48,6 @@ describe("preparationResumeDestination", () => {
    either by having a destination or by being named in UNBUILT with a reason.
 
    The tables are written for the single-document vocabulary of state-and-use-cases §9.
-   That tuple is owned by the document-core lane, so in this lane's isolated tree it still
-   carries the revision vocabulary; the guard is meant to run against the merged tree.
 
    UNBUILT is deliberately empty. Add an entry only with a reason, so forgetting to
    register a new action fails here instead of stranding the record that receives it. */

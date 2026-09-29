@@ -46,7 +46,7 @@ export const QueryState = ({
 
   /* The word is announced as well as printed. A region that hands its own `loadingState`
      over already says so - the board's skeleton is a `role="status"` output, the draft and
-     revision skeletons open with a `LiveRegion` - while the plain sentence this falls back
+     Ready skeletons open with a `LiveRegion` - while the plain sentence this falls back
      to was a bare paragraph, so the four screens that take the fallback said nothing to a
      reader who cannot see it. Visible and announced are the same node here, which is what
      keeps the two from drifting apart. */

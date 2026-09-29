@@ -14,8 +14,7 @@ interface DisclosureProps {
 }
 
 /* Content that belongs to the screen but is longer than the screen's own text: the job
-   posting the analysis was run against, the decision document behind an approved
-   revision.
+   posting the analysis was run against, the decision document behind an approved CV.
 
    It replaced `TechnicalDetails`, which collapsed two unlike things behind one label.
    Identifiers and failure codes are no longer shown at all, so what is left is content -

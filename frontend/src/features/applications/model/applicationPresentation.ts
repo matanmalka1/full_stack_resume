@@ -1,7 +1,7 @@
 /* How one Application is named wherever it is named as a single line: the company, an
    em dash, the target role. It lives here because four surfaces said it in three
    different ways - an en dash in the breadcrumb trail, an em dash in the intake and close
-   dialogs, a middle dot on the revision screen - three separators for one relationship.
+   dialogs, a middle dot on the former revision screen - three separators for one relationship.
 
    The fallback is the same one the breadcrumb trail carried: a record whose canonical
    values have not loaded is named generically rather than by its id. */

@@ -10,7 +10,7 @@ import { routePaths } from "./routePaths";
    trip worked and the three record screens did not.
 
    Carried here rather than in each link because the record screens sit at varying depths -
-   board, Application, editor, revision - and threading a search parameter through every
+   board, Application, editor, Ready - and threading a search parameter through every
    hop would put the board's filters in the URL of records that have nothing to do with
    them, where a shared link would hand someone else a filtered board they never chose.
 

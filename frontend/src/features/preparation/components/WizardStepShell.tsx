@@ -42,7 +42,7 @@ interface WizardStepShellProps {
      chip: an in-flight edit can make the projection dip to an earlier state than the
      screen the reader is looking at, and the chip must not chase that back and forth. */
   stage: WorkflowStage;
-  /* Only where the record does not actually meet its stage - an approved revision that is
+  /* Only where the record does not actually meet its stage - an approved document that is
      not deliverable is not "מוכן למסירה", and saying so in the heading is a distinction
      worth keeping. Everything else takes the stage's own name. */
   title?: ReactNode;
