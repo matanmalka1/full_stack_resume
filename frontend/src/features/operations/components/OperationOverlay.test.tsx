@@ -88,6 +88,46 @@ describe("OperationReport", () => {
     vi.useRealTimers();
   });
 
+  it("shows rejected wording as inactive evidence with explicit correction destinations", () => {
+    const value = failed({
+      operation_type: "regenerate_claim",
+      failure_code: "CLAIM_REVIEW_UNCERTAIN",
+      failure_reason: {
+        code: "claim_review",
+        claims: [
+          {
+            claim_id: "claim-1",
+            section: "Experience",
+            heading: "Account Manager",
+            text: "<script>unsupported claim</script>",
+            verdict: "uncertain",
+            sources: [{ fact_id: "sales.one", rendering: "Managed accounts.", meaning: "Account management" }],
+          },
+        ],
+      },
+    });
+    render(
+      <QueryClientProvider client={client()}>
+        <MemoryRouter>
+          <OperationReport onQueued={vi.fn()} operation={value} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const clarification = screen.getByRole("region", { name: "בירור הניסוח שנדחה" });
+    expect(within(clarification).getByText("<script>unsupported claim</script>")).toBeVisible();
+    expect(clarification.querySelector("script")).toBeNull();
+    expect(within(clarification).getByText("Managed accounts.")).toBeVisible();
+    expect(within(clarification).getByRole("link", { name: "פתיחת השורה במסמך" })).toHaveAttribute(
+      "href",
+      "/applications/application-1/draft?claim=claim-1",
+    );
+    expect(within(clarification).getByRole("link", { name: "פתיחת העובדה הנוכחית" })).toHaveAttribute(
+      "href",
+      "/facts?fact=sales.one",
+    );
+    expect(within(clarification).queryByRole("button", { name: /אישור/ })).not.toBeInTheDocument();
+  });
+
   it("presents a queued operation as one status", () => {
     renderOverlay({ operation: operation({ status: "queued", phase: "queued" }) });
 

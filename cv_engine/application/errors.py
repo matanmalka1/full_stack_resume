@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
+from .operations import ClaimReviewReason
+
 _CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
 
 
@@ -220,6 +222,7 @@ class ProposalRejected(PreconditionFailed):
     def __init__(self, message: str, *, unsupported: list[str] | None = None):
         super().__init__(message)
         self.unsupported = list(unsupported or [])
+        self.review_reason: ClaimReviewReason | None = None
         # Set by the service that already preserved the response this refusal is
         # about, so the handler can register it as inactive evidence instead of
         # leaving an orphaned payload behind. Typed loosely because the value is

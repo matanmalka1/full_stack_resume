@@ -8,6 +8,7 @@ from pathlib import Path
 from threading import Event, Thread
 
 import pytest
+from fake_provider import HTTPStatus
 from helpers import analysis_proposal
 
 from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
@@ -67,6 +68,7 @@ def test_browser_analysis_through_ready_and_submission(
     # temporary artifact root. Rendering uses real Chromium, not a fake PDF.
     fake_openai.script(
         "propose_analysis",
+        HTTPStatus(400),
         analysis_proposal(
             requirements=[
                 ProposedRequirement(
@@ -88,7 +90,7 @@ def test_browser_analysis_through_ready_and_submission(
     worker.start()
     try:
         run_browser(live_api_server, "preparation.spec.ts")
-        assert [call.task for call in fake_openai.calls] == ["propose_analysis"]
+        assert [call.task for call in fake_openai.calls] == ["propose_analysis", "propose_analysis"]
     finally:
         stop.set()
         worker.join(timeout=15)

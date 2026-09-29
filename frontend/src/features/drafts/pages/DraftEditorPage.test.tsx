@@ -194,7 +194,7 @@ const reviewDetail = (codes = ["PENDING_FACT_REQUIRES_RESOLUTION"]): Application
     })),
   });
 
-const renderPage = (aiEnabled = true) => {
+const renderPage = (aiEnabled = true, search = "") => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, refetchInterval: false, gcTime: 0 },
@@ -223,7 +223,7 @@ const renderPage = (aiEnabled = true) => {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/applications/app-1/draft"]}>
+      <MemoryRouter initialEntries={[`/applications/app-1/draft${search}`]}>
         <Routes>
           <Route element={<DraftEditorPage />} path="/applications/:applicationId/draft" />
           <Route element={<h1>הכנת קורות החיים</h1>} path="/applications/:applicationId" />
@@ -249,6 +249,11 @@ afterEach(() => {
 });
 
 describe("DraftEditorPage", () => {
+  it("focuses the requested claim after a direct clarification link loads its document", async () => {
+    stubReads({});
+    renderPage(true, `?claim=${encodeURIComponent(firstClaim().claim_id)}`);
+    await waitFor(() => expect(document.activeElement?.id).toBe(`draft-claim-${firstClaim().claim_id}`));
+  });
   it("opens in the split editing workspace with a focused preview option", async () => {
     stubReads({});
 

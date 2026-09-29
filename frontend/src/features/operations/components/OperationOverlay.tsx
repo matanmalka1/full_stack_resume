@@ -1,5 +1,6 @@
 import { ChevronLeft, X } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
@@ -105,6 +106,9 @@ export const OperationOverlay = ({
   const headingId = useId();
   const panelHeadingId = useId();
   const chipRef = useRef<HTMLButtonElement>(null);
+  const [navigating, setNavigating] = useState(false);
+  const location = useLocation();
+  const [shownAtLocation, setShownAtLocation] = useState(location.key);
   const { settings } = useSettings();
   const [session, setSession] = useState<Session>({
     active: false,
@@ -113,6 +117,14 @@ export const OperationOverlay = ({
     panelHidden: false,
     succeededId: null,
   });
+  // The editor settles buffered edits before navigating and captures the click,
+  // so the Link's own onClick may never run. The location is the reliable signal
+  // that navigation was accepted. Release the native modal before claim focus.
+  if (shownAtLocation !== location.key) {
+    setShownAtLocation(location.key);
+    setNavigating(true);
+    setSession((current) => ({ ...current, dialogOpen: false }));
+  }
 
   const starting = isOperationStarting({
     awaitingRecord,
@@ -202,7 +214,10 @@ export const OperationOverlay = ({
   const showChip =
     (session.active && session.panelHidden) ||
     (!session.active && record !== undefined && isTerminalOperation(record) && record.status !== "succeeded");
-  const openDialog = () => setSession((current) => ({ ...current, dialogOpen: true }));
+  const openDialog = () => {
+    setNavigating(false);
+    setSession((current) => ({ ...current, dialogOpen: true }));
+  };
 
   return (
     <>
@@ -298,7 +313,7 @@ export const OperationOverlay = ({
         headingId={headingId}
         onClose={() => setSession((current) => ({ ...current, dialogOpen: false }))}
         open={session.dialogOpen}
-        restoreFocusTo={chipRef}
+        {...(navigating ? {} : { restoreFocusTo: chipRef })}
         title={heading}
       >
         {record === undefined ? (
@@ -312,6 +327,10 @@ export const OperationOverlay = ({
           </div>
         ) : (
           <OperationReport
+            onNavigate={() => {
+              setNavigating(true);
+              setSession((current) => ({ ...current, dialogOpen: false }));
+            }}
             continuation={continuation}
             failureAction={failureAction}
             onQueued={onQueued}

@@ -75,7 +75,12 @@ lines unchanged. If no supported improvement exists, return the original unchang
   exactly one assessment per claim. Split each claim into factual assertion quotes in
   original order; together they must cover the complete claim. For every assertion,
   identify all supporting facts and quote exact supporting text from their meaning or
-  target-language rendering. Use `supported` only when every assertion preserves exact
+  target-language rendering. The `fact_ids` and `source_quotes` arrays are positional
+  pairs: `source_quotes[i]` must be a verbatim substring of the meaning or rendering of
+  `fact_ids[i]`. Include exactly one nonempty quote per cited fact. If you reorder fact
+  IDs, move their quotes with them; never sort the two arrays independently. Before
+  returning, verify each pair against that specific fact, including assertions that
+  combine multiple facts. Use `supported` only when every assertion preserves exact
   meaning and attribution. Use `uncertain` for ambiguity and `unsupported` for additions,
   strengthening, contradiction, changed metrics or periods, raised proficiency,
   substituted tools, or invented relationships.

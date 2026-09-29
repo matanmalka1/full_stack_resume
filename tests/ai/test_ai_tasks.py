@@ -38,7 +38,7 @@ from cv_engine.application.commands import (
     UpdateSelectionCommand,
 )
 from cv_engine.application.errors import StateConflict
-from cv_engine.application.operations import OperationFailureCode
+from cv_engine.application.operations import ClaimReviewReason, OperationFailureCode
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.projection import fit_level, fit_score
 from cv_engine.domain.contracts.providers import (
@@ -763,8 +763,22 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
 
     assert completed.status.value == "failed"
     assert completed.failure_code is expected_code
+    assert isinstance(completed.failure_reason, ClaimReviewReason)
+    [rejected] = completed.failure_reason.claims
+    assert rejected.claim_id == claim.claim_id
+    assert rejected.section == _section.name
+    assert rejected.text == "Consistently exceeded every quota by 400% across all regions."
+    assert rejected.verdict == verdict
+    assert [source.fact_id for source in rejected.sources] == claim.fact_ids
+    facts = ai_services.drafts.load_knowledge().facts
+    for source in rejected.sources:
+        assert source.meaning == facts.get(source.fact_id).meaning
+        assert source.rendering == facts.rendering(source.fact_id, working.content.language)
+    # A fresh lifecycle read must round-trip the stored context, not reconstruct it.
+    assert (
+        ai_services.operation_lifecycle.get(completed.id).failure_reason == completed.failure_reason
+    )
     unchanged = stored_document(ai_services, ingested.application_id)
-    assert unchanged.document_hash == working.document_hash
     assert unchanged.document_hash == working.document_hash
 
     # §6 invariant 15: the refused output exists, and never becomes current.

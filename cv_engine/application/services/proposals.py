@@ -35,6 +35,7 @@ from ...domain.drafts import (
 )
 from ...domain.facts import FactStore
 from ..errors import ClaimReviewUncertain, ClaimReviewUnsupported, ProposalRejected
+from ..operations import ClaimReviewReason, ClaimReviewSource, RejectedClaimReview
 from ..ports import SnapshotPayload
 
 
@@ -303,16 +304,48 @@ def authorize_semantically_reviewed_claims(
                 ],
             ),
         )
-    if unsupported:
-        raise ClaimReviewUnsupported(
-            f"semantic review found unsupported claims: {', '.join(sorted(unsupported))}",
-            unsupported=sorted(unsupported),
+    if unsupported or uncertain:
+        # Capture from the exact in-memory draft and Knowledge used by this review.
+        # Reconstructing from today's document or facts on a later GET would invent
+        # historical evidence. Provider explanations are not needed for this view.
+        rejected = []
+        for section in draft.sections:
+            heading = None
+            for claim in section.claims:
+                if claim.style == "heading":
+                    heading = claim.text
+                if claim.claim_id not in unsupported and claim.claim_id not in uncertain:
+                    continue
+                rejected.append(
+                    RejectedClaimReview(
+                        claim_id=claim.claim_id,
+                        section=section.name,
+                        heading=heading,
+                        text=claim.text,
+                        verdict="unsupported" if claim.claim_id in unsupported else "uncertain",
+                        sources=[
+                            ClaimReviewSource(
+                                fact_id=fact_id,
+                                meaning=facts.get(fact_id, canonical_only=True).meaning,
+                                rendering=facts.rendering(fact_id, draft.language),
+                            )
+                            for fact_id in claim.fact_ids
+                        ],
+                    )
+                )
+        error = (
+            ClaimReviewUnsupported(
+                f"semantic review found unsupported claims: {', '.join(sorted(unsupported))}",
+                unsupported=sorted(unsupported),
+            )
+            if unsupported
+            else ClaimReviewUncertain(
+                f"semantic review was uncertain about claims: {', '.join(sorted(uncertain))}",
+                unsupported=sorted(uncertain),
+            )
         )
-    if uncertain:
-        raise ClaimReviewUncertain(
-            f"semantic review was uncertain about claims: {', '.join(sorted(uncertain))}",
-            unsupported=sorted(uncertain),
-        )
+        error.review_reason = ClaimReviewReason(claims=rejected)
+        raise error
     if refused:
         raise ProposalRejected(
             f"semantic review did not authorize claims: {', '.join(sorted(refused))}",
