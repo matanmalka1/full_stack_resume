@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import { decisionExportQueryOptions, documentPdfHref, documentQueryOptions } from "@/api/documents";
-import { boardPath } from "@/app/boardReturn";
+import { boardPath, boardReturnState } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { applicationLabel } from "@/features/applications";
@@ -126,7 +126,7 @@ export const ReadyPage = () => {
       ? {
           note: "ההגשה נרשמה. תהליך הכנת קורות החיים הושלם.",
           primary: (
-            <Link className={buttonClasses("primary")} to={boardPath()}>
+            <Link className={buttonClasses("primary")} state={boardReturnState(applicationId)} to={boardPath()}>
               סיום וחזרה ללוח
             </Link>
           ),

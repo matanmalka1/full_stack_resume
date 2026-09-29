@@ -26,6 +26,9 @@ interface ApplicationCardsViewProps {
   onRequestDelete: (item: ApplicationListItem) => void;
   onRequestDetails: (item: ApplicationListItem) => void;
   onRequestUpdate: (item: ApplicationListItem) => void;
+  /* The Application the reader just came back from: its card is ringed for a moment
+     (styles.css, `cv-returned`) so the eye finds it, and nothing about its place changes. */
+  returnedId: string | null;
 }
 
 /* The update time with both dates on the system tooltip. */
@@ -72,10 +75,12 @@ const ApplicationCard = ({
   onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
-}: Omit<ApplicationCardsViewProps, "clearingApplicationId" | "items"> & {
+  returned,
+}: Omit<ApplicationCardsViewProps, "clearingApplicationId" | "items" | "returnedId"> & {
   ambiguous: boolean;
   clearing: boolean;
   item: ApplicationListItem;
+  returned: boolean;
 }) => {
   const open = useOpenRecord(() => onRequestDetails(item));
   const hasNext = nextActionHeading(item, applicationAttention(item) !== null) !== null;
@@ -94,8 +99,10 @@ const ApplicationCard = ({
             ? "bg-cv-surface-muted"
             : "bg-cv-surface-raised shadow-surface hover:shadow-floating focus-visible:shadow-floating",
           urgency === null ? undefined : urgencyEdgeClasses[urgency],
+          returned && "cv-returned",
         ),
       )}
+      data-application-id={item.id}
       data-closed={item.is_closed ? true : undefined}
       data-urgency={urgency ?? undefined}
       onClick={open.onClick}
@@ -159,6 +166,7 @@ export const ApplicationCardsView = ({
   onRequestDelete,
   onRequestDetails,
   onRequestUpdate,
+  returnedId,
 }: ApplicationCardsViewProps) => {
   /* Two Applications for the same company and role would otherwise read as one card
      drawn twice; each says there is another. */
@@ -179,6 +187,7 @@ export const ApplicationCardsView = ({
           onRequestDelete={onRequestDelete}
           onRequestDetails={onRequestDetails}
           onRequestUpdate={onRequestUpdate}
+          returned={returnedId === item.id}
         />
       ))}
     </section>

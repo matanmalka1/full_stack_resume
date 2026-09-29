@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
+import { returnedApplicationId } from "@/app/boardReturn";
 import { routePaths } from "@/app/routePaths";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { Button, buttonClasses } from "@/ui/Button";
@@ -26,6 +27,9 @@ import { useApplicationListQuery } from "../hooks/useApplicationListQuery";
 import { PAGE_SIZE } from "../model/applicationListParams";
 import { initialViewMode, rememberViewMode, type ViewMode } from "../model/applicationViews";
 import { type RecruitmentStageId, recruitmentStages, selectedStage } from "../model/recruitmentStages";
+
+/* How long the card the reader came back from stays marked. Matches `cv-returned`. */
+const RETURN_HIGHLIGHT_MS = 2_400;
 
 const findApplication = (items: readonly ApplicationListItem[], id: string | null) =>
   id === null ? null : (items.find((item) => item.id === id) ?? null);
@@ -57,6 +61,15 @@ export const ApplicationListPage = () => {
   const [deletedLabel, setDeletedLabel] = useState<string | null>(null);
   const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
   const [detailsApplicationId, setDetailsApplicationId] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  /* Read once, from the link that left a flow screen. The history entry is then cleared
+     of it, so a reload or a step back to this board does not mark the card again. */
+  const [returnedId, setReturnedId] = useState(() => returnedApplicationId(location.state));
+  useEffect(() => {
+    if (returnedApplicationId(location.state) === null) return;
+    void navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+  }, [location, navigate]);
   const { clearNextActionMutation, closeMutation, deleteMutation, undoCloseMutation } = useApplicationListMutations({
     onApplicationClosed: (applicationId, eventId) => {
       const application = findApplication(items, applicationId);
@@ -83,6 +96,26 @@ export const ApplicationListPage = () => {
 
   const page = listQuery.data;
   const items = page?.items ?? [];
+  const loaded = page !== undefined;
+
+  /* Once the board holds the card, bring it into view if it is not, and let its mark go
+     after a moment. The board's order is untouched: the reader finds the card where it
+     is, rather than the card being moved to where the reader is. */
+  useEffect(() => {
+    if (returnedId === null || !loaded) return;
+    const card = [...window.document.querySelectorAll<HTMLElement>("[data-application-id]")].find(
+      (element) => element.dataset.applicationId === returnedId,
+    );
+    if (card !== undefined) {
+      const box = card.getBoundingClientRect();
+      if (box.top < 0 || box.bottom > window.innerHeight) {
+        const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+        card.scrollIntoView?.({ behavior: still ? "auto" : "smooth", block: "center" });
+      }
+    }
+    const timeout = window.setTimeout(() => setReturnedId(null), RETURN_HIGHLIGHT_MS);
+    return () => window.clearTimeout(timeout);
+  }, [loaded, returnedId]);
   const closingApplication = findApplication(items, closingApplicationId);
   const deletingApplication = findApplication(items, deletingApplicationId);
   const updatingApplication = findApplication(items, updatingApplicationId);
@@ -255,6 +288,7 @@ export const ApplicationListPage = () => {
               pageSize={PAGE_SIZE}
               recruitmentStatusCounts={page.recruitment_status_counts}
               recruitmentStatusFilter={query.recruitmentStatuses}
+              returnedId={returnedId}
               viewMode={viewMode}
             />
           </div>

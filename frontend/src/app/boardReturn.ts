@@ -42,3 +42,23 @@ export const boardPath = (): string => {
 
   return search === "" ? routePaths.home : `${routePaths.home}?${search}`;
 };
+
+/* Which Application the reader is coming back to the board from, carried in the history
+   entry of the link that leaves a flow screen. The board uses it once - to find that card
+   for the reader and mark it for a moment - and never as a filter or an order: the board
+   stays exactly as it was left. History state rather than the query string, so a shared
+   or reloaded board URL carries no trace of it. */
+export interface BoardReturnState {
+  returnedFrom: string;
+}
+
+export const boardReturnState = (applicationId: string | undefined): BoardReturnState | undefined =>
+  applicationId === undefined ? undefined : { returnedFrom: applicationId };
+
+export const returnedApplicationId = (state: unknown): string | null =>
+  typeof state === "object" &&
+  state !== null &&
+  "returnedFrom" in state &&
+  typeof (state as BoardReturnState).returnedFrom === "string"
+    ? (state as BoardReturnState).returnedFrom
+    : null;

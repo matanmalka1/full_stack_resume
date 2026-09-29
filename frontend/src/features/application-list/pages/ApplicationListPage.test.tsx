@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -166,7 +167,7 @@ const HistoryBack = () => {
 };
 
 interface RenderPageOptions {
-  entries?: string[];
+  entries?: ComponentProps<typeof MemoryRouter>["initialEntries"];
   initialIndex?: number;
   queryClient?: QueryClient;
   withHistoryBack?: boolean;
@@ -232,6 +233,28 @@ describe("ApplicationListPage", () => {
     expect(failure).not.toHaveTextContent("חסימה");
     fireEvent.click(within(failure).getByRole("button", { name: "ניסיון חוזר" }));
     expect(await screen.findByRole("article", { name: "Backend Engineer אצל Acme" })).toBeInTheDocument();
+  });
+
+  /* Coming back from the flow, the card worked on is marked for a moment where it already
+     is - the board's order and filtering stay exactly as they were left. */
+  it("marks the card the reader came back to for a moment, without reordering the board", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      stubList([item(), item({ id: "app-2", company: "Binat", target_role: "Sales Engineer" })]);
+
+      renderPage({ entries: [{ pathname: "/", state: { returnedFrom: "app-2" } }] });
+
+      const returned = await screen.findByRole("article", { name: "Sales Engineer אצל Binat" });
+      expect(returned).toHaveClass("cv-returned");
+      expect(screen.getByRole("article", { name: "Backend Engineer אצל Acme" })).not.toHaveClass("cv-returned");
+      const cards = screen.getAllByRole("article").map((card) => card.getAttribute("aria-label"));
+      expect(cards).toEqual(["Backend Engineer אצל Acme", "Sales Engineer אצל Binat"]);
+
+      act(() => vi.advanceTimersByTime(2_400));
+      expect(returned).not.toHaveClass("cv-returned");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reserves the list layout with card-shaped skeletons while the first request is pending", () => {
