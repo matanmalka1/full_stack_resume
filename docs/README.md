@@ -7,7 +7,7 @@ Where the authoritative answer lives. One concept, one home; everything else lin
 | What the product does, what it refuses to do, and every invariant | [`spec/product-spec.md`](spec/product-spec.md) |
 | A state value, a command's preconditions, an error code, an HTTP route | [`spec/state-and-use-cases.md`](spec/state-and-use-cases.md) |
 | A layer boundary, storage layout, runtime config, process model | [`spec/architecture.md`](spec/architecture.md) |
-| What evidence a change owes, the golden matrix, release gates | [`spec/test-and-acceptance-plan.md`](spec/test-and-acceptance-plan.md) |
+| What evidence each invariant owes, the golden matrix, the live AI smoke checklist | [`spec/test-and-acceptance-plan.md`](spec/test-and-acceptance-plan.md) |
 | Why tailoring works the way it does, and what is still only designed | [`tailoring-decisions.md`](tailoring-decisions.md) |
 | Why there is one mutable CV document per Application | [`decisions/single-document-model.md`](decisions/single-document-model.md) |
 | Open storage maintenance work | [`backlog/storage-maintenance.md`](backlog/storage-maintenance.md) |
