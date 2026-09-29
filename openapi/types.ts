@@ -1639,6 +1639,31 @@ export interface components {
             /** Policy Version */
             policy_version: string;
         };
+        /**
+         * ClaimReviewReason
+         * @description Inactive proposed wording and exact sources; never approval evidence.
+         */
+        ClaimReviewReason: {
+            /** Claims */
+            claims: components["schemas"]["RejectedClaimReview"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            code: "claim_review";
+        };
+        /**
+         * ClaimReviewSource
+         * @description The canonical source as it was read for this failed review, not a live fact.
+         */
+        ClaimReviewSource: {
+            /** Fact Id */
+            fact_id: string;
+            /** Meaning */
+            meaning: string;
+            /** Rendering */
+            rendering: string;
+        };
         /** CloseApplicationResponse */
         CloseApplicationResponse: {
             /** Application Id */
@@ -2572,7 +2597,7 @@ export interface components {
             created_at: string;
             failure_code?: components["schemas"]["OperationFailureCode"] | null;
             /** Failure Reason */
-            failure_reason?: (components["schemas"]["PdfPageLimitReason"] | components["schemas"]["MissingFactRenderingReason"] | components["schemas"]["RenderCheckReason"]) | null;
+            failure_reason?: (components["schemas"]["PdfPageLimitReason"] | components["schemas"]["MissingFactRenderingReason"] | components["schemas"]["RenderCheckReason"] | components["schemas"]["ClaimReviewReason"]) | null;
             /** Finished At */
             finished_at?: string | null;
             /** Id */
@@ -2776,6 +2801,24 @@ export interface components {
             instruction: string;
             /** Section */
             section: string;
+        };
+        /** RejectedClaimReview */
+        RejectedClaimReview: {
+            /** Claim Id */
+            claim_id: string;
+            /** Heading */
+            heading?: string | null;
+            /** Section */
+            section: string;
+            /** Sources */
+            sources: components["schemas"]["ClaimReviewSource"][];
+            /** Text */
+            text: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "uncertain" | "unsupported";
         };
         /**
          * RenderCheckReason

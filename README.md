@@ -109,8 +109,8 @@ the same application services the API exposes.
 **Create → analyze → draft → review → approve → render → Ready.** A job posting is
 captured once as an immutable snapshot and never re-fetched. Drafting stops for review
 and never renders by default; unsupported wording is retained as `pending` rather than
-discarded, and cannot be approved. Approval freezes exactly the content one
-ValidationRun passed, and rendering then runs the same content, claim, PDF, ATS, link,
+discarded, and cannot be approved. Approval stamps the current document basis after its
+content check passes, and rendering then runs the same content, claim, PDF, ATS, link,
 direction, filename, and visual gates every time. Low fit and requirement gaps are
 diagnostic information, not workflow blockers.
 
@@ -124,10 +124,10 @@ and a correction never mutates the fact it supersedes.
 
 ## Tracking and inspection
 
-An internal submission requires the exact qualified ApprovedRevision and PDF artifact IDs;
-Ready qualification is re-derived from stored evidence at submission time, so a revision
-whose PDF was replaced is refused rather than recorded. An external submission records
-what is known without creating either identity, and a field that cannot be derived stays
+An internal submission requires the exact current Ready document hash. Ready qualification
+is checked at submission time; the content and HTML/PDF are copied into immutable
+Submission storage with their checksums. An external submission records what is known
+without inventing internal document evidence, and a field that cannot be derived stays
 null. `applied` is submission-owned: it is reached by recording a submission, never by
 asking for it. Recruitment history, corrections, audit records, and submissions are
 append-only, and a correction appends an event rather than editing the one it corrects.
@@ -341,8 +341,8 @@ canonical fact sources are `common.json`, `sales.json`, `development.json`, and
 
 `ai/prompts/` holds exactly the live prompt, `ai/prompts/system.md`. A prompt change edits
 that file in place and bumps the prompt version in `ai/contracts/task_contracts.json`;
-no versioned copy is kept beside it. An ApprovedRevision records the prompt version and
-hash it was produced under, and the file behind that hash is recoverable from Git history.
+no versioned copy is kept beside it. Provider evidence records the prompt version and
+hash used by each call, and the file behind that hash is recoverable from Git history.
 
 Facts migrated out of `cv_base.md` still cite it in their `provenance`. Those strings are
 the historical record of where a fact came from and are deliberately left unchanged; the

@@ -1875,6 +1875,55 @@
         "title": "ClaimReviewEvidenceResponse",
         "type": "object"
       },
+      "ClaimReviewReason": {
+        "additionalProperties": false,
+        "description": "Inactive proposed wording and exact sources; never approval evidence.",
+        "properties": {
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/RejectedClaimReview"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "code": {
+            "const": "claim_review",
+            "default": "claim_review",
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claims"
+        ],
+        "title": "ClaimReviewReason",
+        "type": "object"
+      },
+      "ClaimReviewSource": {
+        "additionalProperties": false,
+        "description": "The canonical source as it was read for this failed review, not a live fact.",
+        "properties": {
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "string"
+          },
+          "meaning": {
+            "title": "Meaning",
+            "type": "string"
+          },
+          "rendering": {
+            "title": "Rendering",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_id",
+          "meaning",
+          "rendering"
+        ],
+        "title": "ClaimReviewSource",
+        "type": "object"
+      },
       "CloseApplicationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -4244,6 +4293,7 @@
               {
                 "discriminator": {
                   "mapping": {
+                    "claim_review": "#/components/schemas/ClaimReviewReason",
                     "content_overflow": "#/components/schemas/RenderCheckReason",
                     "direction_isolation": "#/components/schemas/RenderCheckReason",
                     "document_direction": "#/components/schemas/RenderCheckReason",
@@ -4268,6 +4318,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RenderCheckReason"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ClaimReviewReason"
                   }
                 ]
               },
@@ -4894,6 +4947,58 @@
           "section"
         ],
         "title": "RegenerateDocumentSectionRequest",
+        "type": "object"
+      },
+      "RejectedClaimReview": {
+        "additionalProperties": false,
+        "properties": {
+          "claim_id": {
+            "title": "Claim Id",
+            "type": "string"
+          },
+          "heading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heading"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimReviewSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "uncertain",
+              "unsupported"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim_id",
+          "section",
+          "text",
+          "verdict",
+          "sources"
+        ],
+        "title": "RejectedClaimReview",
         "type": "object"
       },
       "RenderCheckReason": {

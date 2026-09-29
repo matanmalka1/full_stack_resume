@@ -403,12 +403,20 @@ inactive evidence, the document is unchanged, and retry or correction is offered
 failure, cancellation, invalid output, missing assertion coverage, or stale evidence
 never makes wording eligible.
 
-**Not built:** focused clarification of an uncertain line with the user. Its intended
-shape is recorded in `tailoring-decisions.md` §4.1. Until it is specified here, there is
-no acknowledgement path of any kind: uncertainty is resolved only by other wording,
-removal, or new facts through the fact lifecycle. New candidate information supplied in
-a clarification always goes through the fact lifecycle and never silently becomes
-wording evidence.
+Failed semantic reviews expose a focused clarification panel: the rejected sentence,
+its section and preceding heading when present, and the exact canonical meanings and
+renderings read during that review. This context is recorded with the failure, not
+reconstructed from the current document or fact store. Older failures without recorded
+context retain generic guidance; missing historical content is never invented.
+
+The panel distinguishes an uncertain verdict from an unsupported one and offers the
+existing editor and fact lifecycle as resolution paths. A claim link opens the current
+document at that claim if it still exists; the displayed failure context remains
+historical. Initial drafting failures return to preparation because no draft activated.
+The user may keep the unchanged document, edit or remove a line, retry writing, or
+supply new facts through the fact lifecycle. The ordinary validation and approval
+boundaries apply to every correction. There is no acknowledgement or human-attestation
+override: clarification itself never activates proposed wording or authorizes a claim.
 
 ## 11. Validation, approval, rendering, and Ready
 
@@ -721,12 +729,15 @@ State as of this revision (details: `tailoring-decisions.md` §2–§3):
 
 - **Implemented and gated:** the full engine and Web workflow described above, from
   intake through submission and tracking, including the deterministic pipeline.
-- **Implemented, not yet accepted live:** AI tailoring (writer/reviewer v1, sectioned
-  selection and writer context). Mock tests prove contract enforcement only; live
-  acceptance on development and sales postings has not run.
-- **Not built:** the clarification flow for uncertain wording (§10.1), an interface for
-  the chained check → approve → render flow (§11), and the experience measurement of
-  delivery 3.
+- **Implemented, live acceptance incomplete:** AI tailoring (writer/reviewer v1, sectioned
+  selection and writer context). The sales sample reached Ready. The development
+  sample needed repeated drafting and a content exclusion before its PDF fit the page
+  limit. These are live observations, not proof of repeatable quality.
+- **Implemented:** focused correction guidance for rejected wording (§10.1) and the Web
+  check → explicit approval → automatic render flow (§11). Rejected wording remains
+  inactive, with correction through the editor or fact lifecycle.
+- Live acceptance and experience measurements are recorded separately in
+  `../acceptance/2026-09-29.md`; an unsuccessful run does not constitute acceptance.
 
 Executable evidence and the release matrix are defined only in
 `test-and-acceptance-plan.md`.

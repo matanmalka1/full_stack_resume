@@ -143,6 +143,7 @@ type FailureReason = NonNullable<Operation["failure_reason"]>;
    an English sentence, and matching that sentence broke silently whenever it was reworded.
    A record from before the field existed has no reason, and gets its code's guidance. */
 const reasonDetails: Record<FailureReason["code"], string | null> = {
+  claim_review: null,
   pdf_page_limit: null,
   missing_fact_rendering: null,
   pdf_text_coverage: "לא ניתן לחלץ מספיק מהטקסט בקובץ ה־PDF. יש לבדוק את מבנה התוכן לפני יצירה מחדש.",

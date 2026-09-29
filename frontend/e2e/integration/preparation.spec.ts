@@ -50,7 +50,17 @@ test("analysis, deterministic draft, approval, real PDF and submission compose t
   const documentPath = `${applicationPath}/document`;
   const analyzed = await analysisResponse;
   expect(analyzed.status()).toBe(202);
-  await operationSucceeded(request, (await analyzed.json()).id);
+  const firstAnalysisId = (await analyzed.json()).id;
+  await expect
+    .poll(async () => (await (await request.get(`/api/v1/operations/${firstAnalysisId}`)).json()).status)
+    .toBe("failed");
+  const retryResponse = postResponse(page, `/api/v1/operations/${firstAnalysisId}/retry`);
+  await page.getByRole("button", { name: "ניסיון חוזר", exact: true }).click();
+  const retried = await retryResponse;
+  expect(retried.status()).toBe(202);
+  const retriedOperation = await retried.json();
+  expect(retriedOperation.retry_of_operation_id).toBe(firstAnalysisId);
+  await operationSucceeded(request, retriedOperation.id);
   const analysisDetail = await request.get(applicationPath);
   expect(analysisDetail.status()).toBe(200);
   expect(await analysisDetail.json()).toMatchObject({
@@ -67,6 +77,60 @@ test("analysis, deterministic draft, approval, real PDF and submission compose t
   await expect(page).toHaveURL(new RegExp(`/applications/${id}/draft$`));
   // Reload proves the editor is reading persisted content, not navigation state.
   await page.reload();
+  // A real concurrent writer makes the editor's ETag stale. No route interception:
+  // the second write goes through the same HTTP boundary as another browser tab.
+  const before = await request.get(documentPath);
+  const beforeDocument = await before.json();
+  const target = beforeDocument.outline.sections
+    .flatMap(
+      (section: { claims: { claim_id: string; text: string; fact_ids: string[]; claim_type: string }[] }) =>
+        section.claims,
+    )
+    .find(
+      (claim: { claim_type: string; fact_ids: string[] }) =>
+        claim.claim_type === "canonical" && claim.fact_ids.length === 1,
+    );
+  expect(target).toBeDefined();
+  const row = page.locator(`[id="draft-claim-${target.claim_id}"]`);
+  await row.getByRole("button", { name: "עריכת השורה", exact: true }).click();
+  const concurrentText = "Managed a fictional division of 9999 people.";
+  const localText = "My conflicting unsupported claim about 8888 people.";
+  const concurrent = await request.patch(documentPath, {
+    headers: { Origin: new URL(page.url()).origin, "If-Match": before.headers().etag! },
+    data: {
+      claim_edits: [{ claim_id: target.claim_id, fact_ids: target.fact_ids, text: concurrentText }],
+      claim_removals: [],
+      claim_additions: [],
+    },
+  });
+  expect(concurrent.status()).toBe(200);
+  const conflicted = page.waitForResponse(
+    (response) => response.request().method() === "PATCH" && new URL(response.url()).pathname === documentPath,
+  );
+  await row.getByRole("textbox", { name: "טקסט השורה" }).fill(localText);
+  await row.getByRole("textbox", { name: "טקסט השורה" }).blur();
+  expect((await conflicted).status()).toBe(409);
+  const conflict = page.getByRole("dialog", { name: "הטיוטה השתנתה בזמן העריכה" });
+  await expect(conflict.getByText(localText, { exact: true })).toBeVisible();
+  await expect(conflict.getByText(concurrentText, { exact: true })).toBeVisible();
+  await conflict.getByRole("button", { name: "שמירה על הגרסה הנוכחית" }).click();
+  await expect(conflict).not.toBeVisible();
+  await expect(row.getByText("הטקסט הזה חוסם אישור", { exact: true })).toBeVisible();
+  const blockedCheck = postResponse(page, `${documentPath}/check`);
+  await page.getByRole("button", { name: "בדיקה והכנת PDF", exact: true }).click();
+  expect((await (await blockedCheck).json()).passed).toBe(false);
+  await expect(page.getByRole("dialog", { name: "אישור והכנת PDF" })).not.toBeVisible();
+  // Correct through the UI using the original canonical wording; it must unblock
+  // the same document, without an AI key or a bypass of the approval boundary.
+  const editing = row.getByRole("textbox", { name: "טקסט השורה" });
+  if (!(await editing.isVisible())) await row.getByRole("button", { name: "עריכת השורה", exact: true }).click();
+  const savedCorrection = page.waitForResponse(
+    (response) => response.request().method() === "PATCH" && new URL(response.url()).pathname === documentPath,
+  );
+  await editing.fill(target.text);
+  await editing.blur();
+  expect((await savedCorrection).status()).toBe(200);
+  await expect(row.getByText("הטקסט הזה חוסם אישור", { exact: true })).not.toBeVisible();
   const checkResponse = postResponse(page, `${documentPath}/check`);
   await page.getByRole("button", { name: "בדיקה והכנת PDF", exact: true }).click();
   const checked = await checkResponse;

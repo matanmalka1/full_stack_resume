@@ -266,6 +266,30 @@ class RenderCheckReason(OperationModel):
     code: RenderCheckCode
 
 
+class ClaimReviewSource(OperationModel):
+    """The canonical source as it was read for this failed review, not a live fact."""
+
+    fact_id: str
+    meaning: str
+    rendering: str
+
+
+class RejectedClaimReview(OperationModel):
+    claim_id: str
+    section: str
+    heading: str | None = None
+    text: str
+    verdict: Literal["uncertain", "unsupported"]
+    sources: list[ClaimReviewSource]
+
+
+class ClaimReviewReason(OperationModel):
+    """Inactive proposed wording and exact sources; never approval evidence."""
+
+    code: Literal["claim_review"] = "claim_review"
+    claims: list[RejectedClaimReview]
+
+
 #: Why a failed Operation failed, in a closed vocabulary with typed parameters.
 #: `safe_failure_detail` is the same reason as an English sentence for logs and
 #: legacy clients; this is what a client reads to explain the failure in its own
@@ -273,7 +297,7 @@ class RenderCheckReason(OperationModel):
 #: failure is recorded; absent on records from before it existed and on failures
 #: whose code already says everything.
 FailureReason = Annotated[
-    PdfPageLimitReason | MissingFactRenderingReason | RenderCheckReason,
+    PdfPageLimitReason | MissingFactRenderingReason | RenderCheckReason | ClaimReviewReason,
     Field(discriminator="code"),
 ]
 

@@ -11,6 +11,7 @@ import { Callout } from "@/ui/Callout";
 import { reportError } from "@/ui/reportError";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
+import { ClaimReviewClarification } from "./ClaimReviewClarification";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import {
@@ -62,6 +63,7 @@ export const OperationReport = ({
   continuation,
   failureAction,
   onQueued,
+  onNavigate,
   operation,
 }: {
   /* What happens next by itself, when this run succeeding is not the end of the work.
@@ -75,6 +77,7 @@ export const OperationReport = ({
   /* Handed down to the retry inside: a re-queued Operation belongs to the same watch the
      host screen is already keeping, so it is reported here rather than followed. */
   onQueued: (operationId: string) => void;
+  onNavigate?: (() => void) | undefined;
   operation: Operation;
 }) => {
   const showCancel = useCancelVisibility(operation);
@@ -175,6 +178,10 @@ export const OperationReport = ({
           )}
         </Callout>
       )}
+
+      {operation.status === "failed" && operation.failure_reason?.code === "claim_review" ? (
+        <ClaimReviewClarification onNavigate={onNavigate} operation={operation} reason={operation.failure_reason} />
+      ) : null}
 
       {operation.cancellation_requested_at != null && !operation.is_terminal ? (
         <Callout title="בקשת הביטול התקבלה" tone="info">

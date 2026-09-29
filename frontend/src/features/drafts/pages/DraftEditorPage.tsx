@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
 import { documentQueryKey, documentQueryOptions } from "@/api/documents";
@@ -68,6 +68,8 @@ const DOCUMENT_WRITING_OPERATIONS = new Set([
 export const DraftEditorPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedClaim = searchParams.get("claim");
   const queryClient = useQueryClient();
   const [resolutionError, setResolutionError] = useState<unknown>(null);
   const [resolving, setResolving] = useState(false);
@@ -255,6 +257,19 @@ export const DraftEditorPage = () => {
     target?.scrollIntoView?.({ block: "center" });
     target?.focus();
   }, [claimTarget]);
+
+  const focusDocumentId = draft?.id;
+  useEffect(() => {
+    if (requestedClaim === null || focusDocumentId === undefined) return;
+    // A same-page link can close a native modal in this commit. Focus after its
+    // close algorithm has released the inert page and restored its old focus.
+    const frame = window.requestAnimationFrame(() => {
+      const target = window.document.getElementById(`draft-claim-${requestedClaim}`);
+      target?.scrollIntoView?.({ block: "center" });
+      target?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [requestedClaim, focusDocumentId]);
 
   const approvalUnavailable =
     operationLive ||

@@ -399,6 +399,17 @@ language, a named render check); the detail is the same cause as an English sent
 Clients explain a failure from the reason and never parse the sentence. The UI polls and
 does not show fabricated progress.
 
+For `CLAIM_REVIEW_UNCERTAIN` and `CLAIM_REVIEW_UNSUPPORTED`, a newly recorded failure
+includes a `failure_reason` with `code=claim_review` and `claims`: claim ID, section,
+preceding heading (nullable), proposed text, the policy's rejected verdict, and each
+cited canonical fact's ID, meaning and rendering as read for that review. In a mixed
+failure both uncertain and unsupported lines are included; unsupported determines the
+Operation failure code. This is inactive diagnostic context, not an accepted proposal
+or an approval record. Raw provider rationale, responses, credentials and internal
+paths are excluded. Existing failure records remain unchanged and may have no context.
+Resolution uses the existing document editing and fact commands; no acknowledgement
+command is introduced.
+
 ## 12. Application commands
 
 ### `duplicate_check`

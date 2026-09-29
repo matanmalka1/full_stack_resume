@@ -425,8 +425,11 @@ macOS.
 
 Open work, not implied coverage:
 
-1. **Browser-to-API exception paths beyond intake remain untested.** The successful
-   analysis-through-submission journey has real-server browser coverage; review blockers,
-   stale-document conflicts, and worker failure/retry remain covered separately by
-   stubbed UI tests and backend journeys.
+1. **Live provider semantics require separate acceptance.** The real-server browser
+   journey covers a failed analysis and explicit worker retry, a concurrent stale-document
+   save that refuses with `409`, unsupported manual wording blocking approval, correction,
+   and continuation through PDF and submission. Semantic review failures have separate
+   provider-transport and UI tests; the scripted browser journey does not prove live AI
+   judgement. Live acceptance outcomes and experience measurements are recorded in
+   `../acceptance/2026-09-29.md`.
 2. **Real S3** is exercised only by a manual smoke run.

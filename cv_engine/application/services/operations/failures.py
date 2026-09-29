@@ -101,4 +101,6 @@ def failure_reason_for(error: ApplicationError) -> FailureReason | None:
     """
     if isinstance(error, MissingFactRendering):
         return MissingFactRenderingReason(fact_id=error.fact_id, language=error.language)
+    if isinstance(error, (ClaimReviewUncertain, ClaimReviewUnsupported)):
+        return error.review_reason
     return None
