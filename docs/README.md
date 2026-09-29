@@ -36,4 +36,4 @@ one of them and a specification is a blocker, not an interpretation.
 
 Closed milestone plans, superseded design drafts, the v1 archive, and completed review
 and checklist reports are in Git history rather than in this tree. `tailoring-decisions.md`
-section 6 names the commits for the plans that code docstrings still cite.
+section 5 names the commits for the plans that code and test comments still cite.
