@@ -313,6 +313,40 @@ def test_a_fact_edit_by_hand_moves_the_basis_without_a_write(
     assert stored_document(services, application_id) == document
 
 
+def test_a_deleted_fact_before_drafting_offers_only_resolutions_that_apply(
+    services: Services, project_root: Path
+) -> None:
+    """§7 and §9: a review reason names its resolutions; content actions need content.
+
+    `FACT_DELETED_REQUIRES_RESOLUTION` lists edit and regeneration among its
+    resolutions, but with no content yet the commands would refuse them, so the
+    projection offers only the selection change.
+    """
+    ingested, _analysis = seed_document(services, "Deleted Early Co")
+    application_id = ingested.application_id
+    document = stored_document(services, application_id)
+    assert document.content is None
+    fact_id = document.selection.selected_fact_ids[0]
+    source = next(
+        path
+        for path in sorted((project_root / "base").glob("*.json"))
+        if any(
+            item.get("fact_id") == fact_id
+            for item in json.loads(path.read_text(encoding="utf-8")).get("facts", [])
+        )
+    )
+    data = json.loads(source.read_text(encoding="utf-8"))
+    next(item for item in data["facts"] if item["fact_id"] == fact_id)["status"] = "deleted"
+    source.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    detail = _detail(services, application_id)
+    assert [reason.code for reason in detail.review_reasons] == [
+        "FACT_DELETED_REQUIRES_RESOLUTION"
+    ]
+    assert "update_selection" in detail.available_actions
+    assert not {"edit", "regenerate_section", "regenerate_claim"} & set(detail.available_actions)
+
+
 def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     services: Services, deterministic_renderer
 ) -> None:

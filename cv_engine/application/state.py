@@ -70,6 +70,10 @@ DOCUMENT_MUTATING_ACTIONS = frozenset(
     }
 )
 
+#: Commands that act on existing content. A review reason may name them as its
+#: resolution, but they are offered only while the document has content (§9).
+CONTENT_ACTIONS = frozenset({"edit", "regenerate_section", "regenerate_claim"})
+
 #: Operations that carry `expected_document_hash` and write the document (§11).
 DOCUMENT_OPERATION_TYPES = frozenset(
     {
@@ -336,7 +340,7 @@ def derive_actions(
             if not has_content:
                 candidates.update({"create_draft", "propose_selection"})
             else:
-                candidates.update({"edit", "regenerate_section", "regenerate_claim"})
+                candidates.update(CONTENT_ACTIONS)
                 if check is not ContentCheck.PASSED:
                     candidates.add("check")
                 if state is DocumentState.DRAFT and not review and check is not ContentCheck.FAILED:
@@ -349,7 +353,8 @@ def derive_actions(
                 candidates.update(
                     action
                     for action in reason.allowed_resolution_actions
-                    if action in PREPARATION_ACTIONS and (action not in {"edit"} or has_content)
+                    if action in PREPARATION_ACTIONS
+                    and (action not in CONTENT_ACTIONS or has_content)
                 )
             if document_operation_active:
                 candidates -= DOCUMENT_MUTATING_ACTIONS
