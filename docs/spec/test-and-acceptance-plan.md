@@ -45,13 +45,16 @@ Section numbers §5.1, §5.3, §5.5, and §6 are cited from code docstrings and
 - **API contract** — `openapi/openapi.json` is checked by
   `tests/platform/test_api_foundation.py`; `openapi/types.ts` by regeneration and
   `git diff --exit-code`.
-- **CI** — `.github/workflows/ci.yml` runs on every pull request and on `main`: the
-  browser-complete backend gate (`CV_REQUIRE_BROWSER=1`, `-m ""`) against a fresh
-  PostgreSQL on Linux Chromium, the API contract regeneration and
-  `git diff --exit-code -- openapi/`, and the frontend `npm run check` plus the stubbed
-  Playwright suite against the production build. `OPENAI_API_KEY` is never set. The live
-  smoke (§6) and real S3 stay manual. A green CI run is evidence for the scopes it ran; it does not
-  replace the focused gates `CLAUDE.md` assigns to a diff.
+- **CI** — `.github/workflows/ci.yml` runs on every pull request and on `main`. The
+  backend suite runs against a fresh PostgreSQL: the browser-complete gate
+  (`CV_REQUIRE_BROWSER=1`, `-m ""`) on Linux Chromium on every push to `main` and on a
+  pull request whose diff touches rendering, browser fixtures and journeys, or the
+  browser and build pins (the workflow's `BROWSER_PATHS`); the default suite otherwise.
+  The API contract is regenerated and checked with `git diff --exit-code -- openapi/`.
+  The frontend runs `npm run check` and the stubbed Playwright suite against the
+  production build. `OPENAI_API_KEY` is never set. The live smoke (§6) and real S3 stay
+  manual. A green CI run is evidence for the scopes it ran; it does not replace the
+  focused gates `CLAUDE.md` assigns to a diff.
 
 ## 3. Evidence map
 

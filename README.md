@@ -280,8 +280,9 @@ golden Development/English Sales/Hebrew Sales/Tech Sales cases, migration,
 immutability, and targeted regressions. Tests marked `browser` are deselected by the
 default `pyproject.toml` configuration.
 
-`.github/workflows/ci.yml` runs the browser-complete gate below, the API contract
-regeneration check, and the frontend `npm run check` and stubbed Playwright suite on
+`.github/workflows/ci.yml` runs the browser-complete gate below (on `main`, and on
+pull requests that touch rendering or browser tests; the default suite otherwise), the
+API contract regeneration check, and the frontend `npm run check` and stubbed Playwright suite on
 every pull request and on `main`.
 
 Browser tests start a real headless Chromium/Chrome. Some
