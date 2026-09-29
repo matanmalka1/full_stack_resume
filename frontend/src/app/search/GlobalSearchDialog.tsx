@@ -2,8 +2,8 @@ import { CircleAlert, Plus, Search, X } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { ApplicationListItem } from "@/api/contracts";
 import { ApplicationSummary } from "@/features/application-list";
+import { factLabel, factStatusLabel } from "@/features/facts/model/factLabels";
 import { preparationResumeDestination } from "@/features/preparation";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
@@ -11,7 +11,7 @@ import { cx } from "@/ui/cx";
 import { wrapDialogFocus } from "@/ui/dialogFocus";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { routePaths } from "../routePaths";
-import { type ApplicationSearch, useApplicationSearch } from "./useApplicationSearch";
+import { type ApplicationSearch, type GlobalSearchItem, useApplicationSearch } from "./useApplicationSearch";
 
 /* oxlint-disable jsx-a11y/no-noninteractive-element-interactions */
 
@@ -21,7 +21,7 @@ interface GlobalSearchDialogProps {
 }
 
 const LISTBOX_ID = "global-search-results";
-const optionId = (item: ApplicationListItem): string => `global-search-result-${item.id}`;
+const optionId = (item: GlobalSearchItem): string => `global-search-result-${item.kind}-${item.id}`;
 
 const Kbd = ({ children, className }: { children: ReactNode; className?: string }) => (
   <kbd className={cx("rounded border border-cv-border px-1.5 py-0.5 text-support font-mono", className)}>
@@ -38,6 +38,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
   const [activeIndex, setActiveIndex] = useState(0);
   const results = useApplicationSearch(open);
   const { items, isStale, search, setSearch } = results;
+  const shownApplicationCount = items.filter((item) => item.kind === "application").length;
 
   // Clamped: a new result set may be shorter than the one the index was chosen in.
   const active = Math.min(activeIndex, items.length - 1);
@@ -74,14 +75,22 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
     }
   };
 
-  const selectItem = (item: ApplicationListItem) => {
+  const selectItem = (item: GlobalSearchItem) => {
     onClose();
-    void navigate(preparationResumeDestination(item));
+    if (item.kind === "application") {
+      void navigate(preparationResumeDestination(item.item));
+    } else if (item.kind === "fact") {
+      void navigate(`${routePaths.facts}?fact=${encodeURIComponent(item.fact.fact_id)}`);
+    } else {
+      void navigate(
+        `${routePaths.facts}?fact=${encodeURIComponent(item.event.fact_id)}&event=${encodeURIComponent(item.event.id)}`,
+      );
+    }
   };
 
   // Escape is left to the dialog's native cancel behavior.
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (items.length === 0 || event.nativeEvent.isComposing) {
+    if (items.length === 0 || results.isPending || results.isError || isStale || event.nativeEvent.isComposing) {
       return;
     }
 
@@ -128,10 +137,12 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
       <div className="flex items-center gap-3 border-b border-cv-border px-4 py-3">
         <Search aria-hidden="true" className="size-icon-lg shrink-0 text-cv-accent" />
         <input
-          aria-activedescendant={activeItem === undefined ? undefined : optionId(activeItem)}
+          aria-activedescendant={
+            activeItem === undefined || results.isPending || results.isError ? undefined : optionId(activeItem)
+          }
           aria-autocomplete="list"
           aria-controls={LISTBOX_ID}
-          aria-expanded={items.length > 0}
+          aria-expanded={items.length > 0 && !results.isPending && !results.isError}
           aria-label="חיפוש מועמדות"
           autoComplete="off"
           className="flex-1 bg-transparent text-body font-medium text-cv-text placeholder:text-cv-text-muted focus:ring-0"
@@ -173,7 +184,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
           role="listbox"
         >
-          {results.isError
+          {results.isError || results.isPending
             ? null
             : items.map((item, index) => (
                 // Keyboard selection is owned by the combobox; options never take focus.
@@ -185,7 +196,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
                     index === active ? "border-cv-accent/40 bg-cv-accent-soft" : "border-transparent",
                   )}
                   id={optionId(item)}
-                  key={item.id}
+                  key={`${item.kind}:${item.id}`}
                   onClick={() => selectItem(item)}
                   onMouseDown={(event) => event.preventDefault()}
                   // Move, not enter: keyboard scrolling must not let a resting pointer steal selection.
@@ -196,7 +207,34 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
                   role="option"
                   tabIndex={-1}
                 >
-                  <ApplicationSummary item={item} />
+                  {item.kind === "application" ? (
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <ResultKind>מועמדות</ResultKind>
+                      <ApplicationSummary item={item.item} />
+                    </div>
+                  ) : item.kind === "fact" ? (
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <ResultKind>עובדה</ResultKind>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-cv-text">{factLabel(item.fact)}</span>
+                        <span className="block truncate text-support text-cv-text-muted">
+                          {factStatusLabel(item.fact.status)} · {item.fact.fact_id}
+                        </span>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <ResultKind>היסטוריה</ResultKind>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-cv-text">
+                          {item.event.reason || item.event.event_type}
+                        </span>
+                        <span className="block truncate text-support text-cv-text-muted">
+                          {item.event.created_at} · {item.event.fact_id}
+                        </span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               ))}
         </div>
@@ -215,6 +253,24 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           משרה חדשה
         </button>
 
+        {search.trim() !== "" &&
+        !results.isPending &&
+        !results.isError &&
+        !isStale &&
+        results.applicationMatched > shownApplicationCount ? (
+          <button
+            className="font-medium text-cv-accent hover:underline"
+            onClick={() => {
+              const params = new URLSearchParams({ activity: "all", search: search.trim() });
+              onClose();
+              void navigate(`${routePaths.home}?${params.toString()}`);
+            }}
+            type="button"
+          >
+            כל {results.applicationMatched} תוצאות המועמדויות
+          </button>
+        ) : null}
+
         <div className="hidden items-center gap-2 sm:flex">
           <span>ניווט במקשים:</span>
           <Kbd className="bg-cv-surface px-1 py-0">↑↓</Kbd>
@@ -225,6 +281,12 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
     </dialog>
   );
 };
+
+const ResultKind = ({ children }: { children: ReactNode }) => (
+  <span className="shrink-0 rounded-control bg-cv-surface-muted px-2 py-1 text-caption font-semibold text-cv-text-muted">
+    {children}
+  </span>
+);
 
 const announcement = ({ isError, isPending, isStale, items }: ApplicationSearch): string | null => {
   if (isError || isPending || isStale) {
@@ -251,16 +313,16 @@ const ResultsStatus = ({ results }: { results: ApplicationSearch }) => {
     );
   }
 
+  if (isPending || isStale) {
+    return <p className="py-10 text-center text-cv-text-muted">מחפש…</p>;
+  }
+
   if (items.length > 0) {
     return mode.kind === "attention" && !isStale ? (
       <p aria-hidden="true" className="px-3 py-1.5 text-support font-semibold text-cv-text-muted">
         דורש טיפול
       </p>
     ) : null;
-  }
-
-  if (isPending || isStale) {
-    return <p className="py-10 text-center text-cv-text-muted">מחפש…</p>;
   }
 
   return (
@@ -273,7 +335,7 @@ const ResultsStatus = ({ results }: { results: ApplicationSearch }) => {
         </>
       ) : (
         <>
-          <p className="font-semibold text-cv-text">אין מועמדות שתואמת ל&quot;{mode.text}&quot;</p>
+          <p className="font-semibold text-cv-text">אין תוצאות שתואמות ל&quot;{mode.text}&quot;</p>
           <p className="mt-1 text-support text-cv-text-muted">אפשר לנסות מילת חיפוש אחרת או לקלוט משרה חדשה.</p>
         </>
       )}

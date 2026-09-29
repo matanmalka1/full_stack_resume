@@ -10,6 +10,7 @@ interface DisclosureProps {
      width, like the cards beside it, instead of the indent that lines text up with the
      summary's label. */
   flush?: boolean;
+  initiallyOpen?: boolean;
   summary: string;
 }
 
@@ -32,11 +33,15 @@ interface DisclosureProps {
    attribute. Both describe the same fact, but a class recomputed in JS cannot be defeated
    by a CSS selector matching an unexpected ancestor - and `toggle` fires for every way a
    reader can open a `<details>` (click, Space, Enter), keyboard included. */
-export const Disclosure = ({ children, className, flush = false, summary }: DisclosureProps) => {
-  const [open, setOpen] = useState(false);
+export const Disclosure = ({ children, className, flush = false, initiallyOpen = false, summary }: DisclosureProps) => {
+  const [open, setOpen] = useState(initiallyOpen);
 
   return (
-    <details className={cx("text-support", className)} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <details
+      className={cx("text-support", className)}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      open={open}
+    >
       <DisclosureSummary className="font-medium text-cv-text-muted transition-colors hover:text-cv-text" open={open}>
         {summary}
       </DisclosureSummary>

@@ -57,6 +57,7 @@ export const FactsPage = () => {
   const entries = poolQuery.data?.entries ?? [];
   const mutationsBlocked = (poolQuery.data?.outOfSyncCount ?? 0) > 0;
   const requestedId = searchParams.get("fact");
+  const requestedEventId = searchParams.get("event");
   const selectedId = requestedId ?? entries[0]?.fact.fact_id ?? null;
   const detailQuery = useFactDetail(selectedId);
   const visible = filterFactEntries(entries, filters);
@@ -66,6 +67,7 @@ export const FactsPage = () => {
   const selectFact = (factId: string) => {
     const next = new URLSearchParams(searchParams);
     next.set("fact", factId);
+    next.delete("event");
     setSearchParams(next);
   };
 
@@ -204,6 +206,7 @@ export const FactsPage = () => {
                       detail={detailQuery.data}
                       mutationsBlocked={mutationsBlocked}
                       onCreated={selectFact}
+                      selectedEventId={requestedEventId}
                     />
                   )}
                 </QueryState>

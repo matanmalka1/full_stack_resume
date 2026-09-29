@@ -17,11 +17,17 @@ import { FactConfirmationControl } from "./FactConfirmationControl";
 
 interface FactManagementDetailProps {
   detail: FactDetail;
+  selectedEventId?: string | null;
   mutationsBlocked?: boolean;
   onCreated: (factId: string) => void;
 }
 
-export const FactManagementDetail = ({ detail, mutationsBlocked = false, onCreated }: FactManagementDetailProps) => {
+export const FactManagementDetail = ({
+  detail,
+  mutationsBlocked = false,
+  onCreated,
+  selectedEventId,
+}: FactManagementDetailProps) => {
   const { fact } = detail;
   const targets = useFactAttachmentTargets(fact.fact_id);
   const [correcting, setCorrecting] = useState(false);
@@ -86,13 +92,17 @@ export const FactManagementDetail = ({ detail, mutationsBlocked = false, onCreat
           />
         ) : null}
 
-        <Disclosure summary="היסטוריית העובדה">
+        <Disclosure
+          key={selectedEventId ?? "closed"}
+          initiallyOpen={selectedEventId != null}
+          summary="היסטוריית העובדה"
+        >
           {detail.events.length === 0 ? (
             <Callout title="לא נמצאה היסטוריית lifecycle" tone="blocker">
               יש להפעיל בדיקת התאמה לפני שינוי נוסף.
             </Callout>
           ) : (
-            <FactEventHistory events={detail.events} />
+            <FactEventHistory events={detail.events} selectedEventId={selectedEventId} />
           )}
         </Disclosure>
 
