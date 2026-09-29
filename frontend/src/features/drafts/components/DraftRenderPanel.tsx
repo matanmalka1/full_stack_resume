@@ -1,4 +1,4 @@
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
@@ -36,29 +36,10 @@ export const DraftRenderPanel = ({
   }, [lastRenderError]);
   const failureDetail = recordedFailureDetail(lastRenderError);
 
-  /* While the render runs, the screen still says where the work stands. It offers nothing
-     to press - the run is the live panel's to report and cancel. */
-  if (inFlight) {
-    return (
-      <section
-        aria-labelledby="render-heading"
-        className="flex items-start gap-3 rounded-surface border-2 border-cv-success/30 bg-cv-success-soft p-5"
-      >
-        <LoaderCircle
-          aria-hidden="true"
-          className="mt-1 size-icon-md shrink-0 text-cv-accent motion-safe:animate-spin"
-        />
-        <div>
-          <h2 className="text-heading-sm font-bold text-cv-text" id="render-heading">
-            הגרסה אושרה
-          </h2>
-          <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            יוצרים ממנה HTML ו־PDF. כשהקבצים יהיו מוכנים, המסך יעבור לקורות החיים המוכנים למסירה.
-          </p>
-        </div>
-      </section>
-    );
-  }
+  /* While the render runs the editor's Operation panel stands here, inline: it is the
+     one account of the run, with its phase and its report. This panel used to draw a
+     banner of its own beside it, so the same wait was shown twice. */
+  if (inFlight) return null;
 
   return (
     <>

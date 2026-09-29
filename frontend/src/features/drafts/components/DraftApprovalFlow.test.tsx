@@ -353,9 +353,9 @@ describe("DraftRenderPanel", () => {
 
     await waitFor(() => expect(onQueued).toHaveBeenCalledWith(operation().id));
     expect(fetchMock.mock.calls.filter((call) => isPost(call[1]))).toHaveLength(1);
-    /* While it renders the step says so, and offers no second way to start the same work. */
-    expect(screen.getByRole("heading", { name: "הגרסה אושרה" })).toBeInTheDocument();
-    expect(screen.getByText(/יוצרים ממנה HTML ו־PDF/)).toBeInTheDocument();
+    /* While it renders the panel steps aside for the editor's inline Operation report, and
+       offers no second way to start the same work. */
+    expect(screen.queryByRole("heading", { name: "הגרסה אושרה" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת HTML ו־PDF" })).not.toBeInTheDocument();
   });
 

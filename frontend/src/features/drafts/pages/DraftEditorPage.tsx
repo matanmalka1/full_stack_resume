@@ -346,6 +346,12 @@ export const DraftEditorPage = () => {
             <OperationOverlay
               awaitingRecord={awaitingRecord}
               continuation={continuation}
+              /* The render is this step's own last act, so it is reported in the step,
+                 where its banner used to stand - once, not as that banner plus a corner
+                 panel saying the same. Held inline through the continuation to Ready so
+                 the report does not jump to the corner for its last moment. */
+              inline={renderState.inFlight || renderFinished}
+              inlineNote="הגרסה אושרה. כשקובצי ה־HTML וה־PDF יהיו מוכנים, המסך יעבור לקורות החיים המוכנים למסירה."
               onQueued={watch}
               operation={operation}
               pending={pending}
