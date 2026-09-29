@@ -64,9 +64,10 @@ browser again without replacing the environment:
   boundaries.
 - PostgreSQL stores mutable application state and immutable history, through
   SQLAlchemy Core and numbered Alembic revisions.
-- `artifacts/working/` contains the replaceable working draft. Immutable payloads live
-  under fixed key prefixes — `snapshots/`, `revisions/`, `outputs/`, `provider/`,
-  `manifests/` — whose layout is frozen in `docs/spec/architecture.md` section 6.2 so a
+- The CV document's content lives in PostgreSQL; its rendered HTML/PDF are mutable
+  working outputs under `artifacts/documents/`. Immutable payloads live under fixed key
+  prefixes — `snapshots/`, `provider/`, `submissions/` — whose layout is frozen in
+  `docs/spec/architecture.md` section 6.2 so a
   row reads the same under local storage and under an S3-compatible bucket.
 - `base/` and `profiles/` hold the canonical source facts used directly by the
   application, so they are live input rather than archive.
@@ -154,8 +155,10 @@ export, and recruitment tracking — runs with no key at all. Draft creation kee
 separate deterministic path (`provider=deterministic` on `create_draft`), unaffected by
 this.
 
-A configured key enables five structured OpenAI proposal tasks: `propose_analysis`,
-`propose_selection_plan`, `draft_resume`, `regenerate_section`, and `regenerate_claim`.
+A configured key enables six structured OpenAI tasks: `propose_analysis`,
+`propose_selection_plan`, `draft_resume`, `regenerate_section`, `regenerate_claim`, and
+`assess_claim_support`, the separate reviewer every writing Operation runs after the
+writer.
 The Web settings page offers a closed model catalog and low/medium/high reasoning
 effort, frozen onto each queued AI Operation:
 
@@ -252,10 +255,11 @@ cd openapi && npm ci && npm run generate
 ```
 
 Read-only storage inspection is available at `GET /api/v1/maintenance/orphans`.
-Its `candidates` are managed immutable payload references absent from a database
-snapshot, including payloads that active writers may still be registering. It excludes
-mutable working projections and performs no deletion. Local and S3 stores share this
-inspection contract.
+Its `candidates` are managed immutable payload references that are neither registered
+nor held by a live write lease, so an active writer's payload is never listed. It
+excludes mutable working outputs and performs no deletion.
+`POST /api/v1/maintenance/orphans/reclaim` removes the candidates it can prove abandoned
+(`docs/spec/architecture.md` section 7.1). Local and S3 stores share both contracts.
 
 ## Tests
 

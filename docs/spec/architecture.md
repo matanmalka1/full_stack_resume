@@ -1,834 +1,598 @@
-# v2.0 Architecture
+# Architecture
 
-Status: **Approved for v2.0 implementation**
-
-Product authority: `docs/spec/product-spec.md`
+Product authority: `docs/spec/product-spec.md`. State, command, error, and HTTP
+contracts: `docs/spec/state-and-use-cases.md`. This document owns what neither of those
+does: layer boundaries, storage, transactions, the Operation runner, security, and
+runtime. Where a topic is owned elsewhere it is linked, not restated. Section numbers are
+cited from code and other specifications; keep them stable.
 
 ## 1. Architecture objective
 
-The product runs over one synchronous application layer. Two processes call that
-layer, and the distinction between them is what the rest of this document assumes:
+One synchronous application layer, called by two processes:
 
-- **FastAPI is the only user-facing adapter.** Every user action arrives through it, and
+- **FastAPI is the only user-facing adapter.** Every user action arrives through it.
   React reaches the application layer through the API and nowhere else.
 - **The worker is an internal execution host.** It calls the same application layer
-  directly, through the Operation runner, and serves no user. It is not a second client
-  for any use-case: it executes Operations the API created.
+  through the Operation runner and serves no user. It executes Operations the API
+  created; it is not a second client for any use-case.
 
-A second user-facing adapter is what this rule excludes. Existing domain and validation
-behavior is preserved and separated from orchestration, storage, and transport
-concerns.
+A second user-facing surface for a use-case the API already owns is not added: it would
+be a second contract to keep compatible with no capability the first lacks.
 
-The primary architecture rule is:
+The dependency rule is:
 
 `domain <- application <- infrastructure / api / runtime`
 
-Dependencies point inward. Product semantics live in domain/application code, not in
-routers, React components, SQL triggers, or templates.
+Dependencies point inward. `runtime` imports `api`; `api` never imports `runtime`.
+Product semantics live in domain and application code, not in routers, React
+components, SQL triggers, or templates.
 
-There is one user-facing adapter. A second surface for a use-case the API already owns
-has a second contract to keep compatible and no capability the first lacks.
+## 2. Technology baseline
 
-## 2. Required technology baseline
+This is the dependency baseline. A new dependency is added only when it enforces a
+contract, reduces rendering risk, or gives a concrete portability benefit. Exact
+versions live in `pyproject.toml` and `frontend/package.json`.
 
-Backend/runtime:
+Backend:
 
 - Python 3.11+
-- Pydantic for serialized domain documents, AI contracts, application boundary DTOs,
-  and HTTP schemas
-- FastAPI for the local HTTP API and production static-asset serving
-- Uvicorn as the supervised loopback ASGI server
-- PostgreSQL 17 for structured state and relationships
-- SQLAlchemy 2.0 Core for database access; no ORM Session or mapped entities
-- psycopg 3 as the PostgreSQL driver
+- Pydantic 2 for serialized domain documents, AI contracts, boundary DTOs, and HTTP
+  schemas
+- FastAPI for the HTTP API and production static-asset serving; Uvicorn as the ASGI
+  server
+- PostgreSQL 17, through SQLAlchemy 2.0 Core (no ORM Session or mapped entities) and
+  psycopg 3
 - Alembic for explicit numbered schema revisions
-- Jinja2 for resume HTML
-- Playwright-managed Chromium for rendering and render validation
-- `pypdf` for PDF extraction and ATS checks
-- `boto3`, in the optional `s3` extra only, for the S3/R2 payload backend. Optional
-  because the local store is the default: from an existing JobAnalysis the workflow
-  must reach Ready with nothing configured and no cloud SDK installed, so it is
-  imported inside the adapter rather than at module scope
+- Jinja2 for resume HTML; Playwright-managed Chromium for rendering and render
+  validation; `pypdf` for PDF extraction and ATS checks
+- `boto3`, in the optional `s3` extra only, imported inside the adapter so the local
+  path — which must reach Ready from an existing analysis with nothing configured —
+  never needs it
+- Tooling: pytest, pytest-cov, ruff, pyright (`basic`, which checks that adapters
+  structurally satisfy their Protocol ports)
 
 Frontend:
 
-- React and TypeScript
-- Vite
-- React Router
-- TanStack Query
-- React Hook Form
-- Tailwind CSS
-- `lucide-react` for the icon set
-- generated TypeScript types from OpenAPI
-- selective Radix primitives only when an accessible complex primitive is warranted
+- React, TypeScript, Vite, React Router, TanStack Query, React Hook Form, Tailwind CSS,
+  `lucide-react`
+- TypeScript types generated from the committed OpenAPI schema (`openapi/`)
+- Tooling: Vitest, Playwright with axe, oxlint, Prettier, knip, the design-token check
+- An accessible headless primitive library (Radix) may be added selectively when a
+  complex accessible primitive is warranted; none is installed
 
-Redux, a full component framework, Celery, Redis, WebSockets, SSE, and a DI framework are
-not part of the product.
+Redux, a full component framework, Celery, Redis, WebSockets, SSE, a DI framework, and
+`python-dotenv` are not part of the product.
 
 ## 3. Source organization
 
-The top-level package organization is:
-
 ```text
 cv_engine/
-  domain/
-  application/
-  infrastructure/
-  api/
-  worker/
-  runtime/
-frontend/
+  domain/           entities, value objects, validation, selection, lifecycle rules
+  application/      commands, queries, ports, services, action policy, Operation runner
+  infrastructure/   persistence adapters, object stores, Knowledge, provider, renderer
+  api/              routers, schemas, middleware
+  runtime/          composition root, config, paths, ASGI app, worker pool
+  worker/           `python -m cv_engine.worker`
+frontend/           React application (`frontend/src/features/README.md`)
+openapi/            generated schema and TypeScript types
+alembic/            schema revisions
 ```
 
 Subpackages are introduced only when the amount and cohesion of code justify them.
-There is no one-file-per-interface rule and no micro-packaging objective.
+There is no one-file-per-interface rule.
 
 ### 3.1 Domain
 
 The domain owns entities, value objects, lifecycle rules, validation semantics,
-transition rules, knowledge/fact safety, Ready qualification, and invariant checks. It
-does not import FastAPI, SQLAlchemy, psycopg, filesystem paths, Playwright, React concepts,
-provider HTTP code, or runtime configuration.
+transition rules, fact safety, selection, claim-review evidence checks, Ready
+qualification, and invariant checks. It does not import FastAPI, SQLAlchemy, psycopg,
+filesystem paths, Playwright, provider HTTP code, or runtime configuration.
 
-Pydantic remains appropriate for DraftDocument and other serialized domain documents.
-Small internal value objects may be dataclasses when serialization is not a boundary.
+Serialized domain documents are Pydantic models. Small internal value objects may be
+dataclasses when serialization is not a boundary.
 
 ### 3.2 Application
 
-The application layer owns explicit commands, queries, services, ports, transaction
-boundaries, permissions/action policy, state projections, optimistic commit checks,
-and conversion of validated Proposals into domain state.
+The application layer owns commands, queries, services, ports, transaction boundaries,
+action policy, state projections, optimistic commit checks, and conversion of validated
+Proposals into domain state. Services are synchronous, have no dependency on FastAPI or
+an event loop, and follow consumer and lifecycle boundaries (intake and queries,
+analysis, selection, document authoring/validation/approval/history, rendering,
+recruitment and submission, knowledge, Operations, maintenance, settings).
 
-Services are synchronous. The layer has no dependency on FastAPI or an event loop.
-
-Services follow consumer and lifecycle boundaries: application intake and queries;
-analysis and selection; draft authoring, validation, approval, and history; rendering;
-recruitment and submission; knowledge queries, fact lifecycle, and recovery; operation
-submission, lifecycle, and replacement; settings and maintenance. The composition
-container exposes these services and required outbound stores, never persistence
-repositories or transaction managers to the API.
+Services return Pydantic boundary DTOs, never database rows or filesystem paths.
 
 ### 3.3 Infrastructure
 
-Infrastructure implements independent SQLAlchemy Core persistence capabilities,
-PostgreSQL transaction scopes, local/S3-compatible object stores, file-backed Knowledge,
-the OpenAI provider, rendering, operation execution, logging, and Alembic integration.
+Infrastructure implements the ports: SQLAlchemy Core persistence, PostgreSQL
+transaction scopes, the object stores, file-backed Knowledge, the OpenAI provider,
+rendering, structured logging, and Alembic integration.
 
-Persistence capabilities follow consumer, lifecycle, and trust boundaries rather than
-tables. Intake, job snapshots, analysis/selection plans, working drafts and approvals,
-artifacts, validation, decisions, recruitment/submissions, audit (including draft
-lifecycle actions), knowledge lifecycle, idempotency,
-and settings each have an explicit Port. Operation client and execution Ports separate
-API permissions from worker authority. Consumer-specific source/context readers,
-application projections, Ready evidence, and maintenance inspection supply minimal
-read models. There is no generic workflow-state DTO or persistence container.
+Persistence ports follow consumer, lifecycle, and trust boundaries rather than tables.
+The Operation client port (what the API may do) and the execution port (what the worker
+may do) are separate, so API permissions never carry worker authority. There is no
+generic workflow-state DTO or persistence container.
 
-Concrete adapters neither inherit, hold, nor call other repositories. They hold no
-bound mutable connection and open no transaction. Database methods accept an active
-opaque transaction token explicitly; writes require a write token. Private SQL functions
-may share statements and record conversion without becoming repository wrappers.
-Services depend on application Ports, never concrete persistence implementations or
-casts between capabilities.
+Concrete adapters neither inherit, hold, nor call other adapters. They hold no bound
+connection and open no transaction: every database method takes an opaque transaction
+token explicitly, and writes require a write token. Private SQL helpers may share
+statements and record conversion without becoming repository wrappers. Services depend
+on ports, never on concrete adapters.
 
-There is no root repository, repository bundle, generic dependency dictionary, bind(),
-or repository-exposing UnitOfWork. A new Port must have a real consumer, lifecycle, or
-trust boundary; a one-method Port must represent an atomic persistence or external
-system boundary. A service with more than seven constructor dependencies requires an
-explicit architecture review, not a gateway introduced solely to shorten its constructor.
+There is no root repository, repository bundle, generic dependency dictionary, `bind()`,
+or repository-exposing unit of work. A new port needs a real consumer, lifecycle, or
+trust boundary; a one-method port must represent an atomic persistence or external
+system boundary. A service with more than seven constructor dependencies needs an
+explicit architecture review, not a gateway introduced to shorten its constructor.
 
 ### 3.4 API
 
-FastAPI routers map HTTP DTOs, headers, and application errors to use-cases and
-responses. They do not load Profiles, select facts, call providers, validate claims,
-calculate fit, or write history directly.
+Routers map HTTP DTOs, headers, and application errors to use-cases and back. They do
+not load Profiles, select facts, call providers, validate claims, calculate Fit, or
+write history.
 
-Maintenance is an API concern like any other. Reconciliation is
-`POST /api/v1/maintenance/reconciliations` behind a `MaintenanceService`, which holds
-the payload store, transaction manager, and MaintenanceInspection Port directly —
-`ApiServices` carries none of those, so this cannot be a router helper. CSV export is a function of the application layer with no
-route, because writing the file is not yet a product use-case.
+The API receives `ApiServices` (`cv_engine/api/services.py`): application services plus
+instance identity and transport limits. It carries no store, repository, renderer,
+provider, transaction manager, or worker. Anything that needs those — reconciliation
+included — is an application service.
 
-Every product use-case belongs to the API and the Web UI. A second surface for a
-use-case the API owns has a second contract to keep compatible and no capability the
-first lacks.
+CSV export is an application function with no route; writing the file is not a product
+use-case yet.
 
 ### 3.5 Runtime and composition
 
-`cv_engine/runtime/composition.py` is the manual composition root. It builds fixed application paths,
-configuration, independent persistence adapters, one transaction manager, services,
-provider, renderer, operation worker, and API dependencies. No DI framework is used.
+`cv_engine/runtime/composition.py` is the manual composition root. `build_services`
+wires configuration, one SQLAlchemy engine, one transaction manager, adapters, services,
+the Operation runner, and the worker; `build_api_services` narrows that to
+`ApiServices`. No DI framework is used. Tests substitute adapters through
+`build_services` keyword arguments. Building services also runs Knowledge mutation
+recovery (§7.2), so both processes recover before serving.
 
 The system runs as two processes over one database, and neither supervises the other:
 
-- `uvicorn cv_engine.runtime.asgi:app` serves HTTP. It starts no background work, so an app
-  lifespan never spawns a worker per test client.
-- `python -m cv_engine.worker` claims queued Operations under a lease.
+- `uvicorn cv_engine.runtime.asgi:app` serves HTTP. It starts no background work, so a
+  test client never spawns a worker.
+- `python -m cv_engine.worker` recovers startup state, then claims queued Operations
+  until SIGINT/SIGTERM.
 
-A worker that dies leaves its claims to expire, and the next worker's
-`recover_startup()` reclaims them. That lease is what makes the split safe.
-
-FastAPI remains a Web server and does not become a process manager.
+One worker process runs at a time (§10).
 
 ## 4. Application paths
 
-The runtime uses the repository root as the single application root. There is no root
-selector, marker, initialization command, or per-root identity. `AppPaths` supplies:
+The application root is the installed repository root, computed from the code location
+(`runtime/paths.py`). It is not selectable by argument, setting, or environment
+variable. A test that needs another root injects `AppPaths.from_root(...)` into
+composition.
 
 ```text
-knowledge_root
-artifacts_root
-temp_root
-logs_root
+knowledge_root   = {root}            base/, profiles/, config/, ai/, rendering/
+artifacts_root   = {root}/artifacts
+temp_root        = {root}/tmp
+logs_root        = {root}/logs
 ```
 
-All mutable and immutable local paths remain contained below that root. Tests inject a
-temporary root directly into composition; the running processes do not expose that
-injection surface. Historical archives are not runtime inputs.
+`artifacts`, `tmp`, and `logs` are created on startup and may not be symlinks. Every
+path resolves inside the root.
 
 ## 5. CandidateContext
 
-One CandidateContext is loaded from Knowledge. It references canonical name/contact
-fact IDs and defines filename/display policy, timezone, and locale. It carries its own
-version/hash for provenance.
+One CandidateContext is loaded from Knowledge. It references canonical name and contact
+fact IDs and defines filename/display policy, timezone, and locale, with its own
+version and hash for provenance.
 
-Application rows do not contain `candidate_id`. Submission metadata records the
-CandidateContext version/hash used for the content it copied. Renderers and filename
-policy take CandidateContext as an explicit dependency, eliminating candidate literals
-from code.
+Application rows carry no `candidate_id`. A Submission records the CandidateContext
+version/hash used for its content. Renderers and filename policy take CandidateContext
+as an explicit dependency, so no candidate literal lives in code.
 
-Existing semantic fact IDs are preserved. New facts use UUIDv4 technical identity;
-a human slug is optional metadata and never a foreign key.
+Existing semantic fact IDs are preserved. New facts use UUIDv4 technical identity; a
+human slug is optional metadata and never a foreign key.
 
-Knowledge dependencies are re-read or re-hashed before relevant commands. Manual edits
-to the source files remain valid inputs; a changed context produces `knowledge_changed` or
+Knowledge is re-read or re-hashed before commands that depend on it. Manual edits to the
+source files are valid inputs; a changed context produces `knowledge_changed` or
 `SOURCE_CHANGED` and is never silently loaded into an open editor form.
 
 ## 6. Persistence boundary
 
 ### 6.1 PostgreSQL
 
-PostgreSQL stores structured state and relationships:
+PostgreSQL holds structured state and relationships: Applications and their recruitment
+projection, recruitment and audit history, JobSnapshot metadata, JobAnalyses, the one
+mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
+provider-evidence artifacts, Submissions, Operations and their resource leases, payload
+write leases, fact events, the Knowledge mutation journal, and safe settings.
 
-- Applications and current recruitment projections
-- immutable status and audit history
-- JobSnapshot metadata
-- JobAnalysis structured data (immutable)
-- `cv_documents`: one mutable row per Application — `analysis_id`, `selection`,
-  `content`, `built_with`, `document_hash`, `content_report`/`checked_basis`/`passed`,
-  `approved_basis`/`approved_at`, `rendered_basis`/`html_path`/`pdf_path`/
-  `last_render_error` (state-and-use-cases.md §3)
-- narrowed provider-response Artifact metadata (Artifact/ArtifactVersion no longer carry
-  `resume_pdf`, `resume_html`, `resume_markdown`, `claim_manifest`, or
-  `working_draft_snapshot`; `artifact_versions.revision_id` is removed)
-- Submission records (restructured: content, `document_hash`, `job_snapshot_id`
-  (FK `RESTRICT`), `html_path`+`html_sha256`, `pdf_path`+`pdf_sha256`; no
-  `approved_revision_id` or `artifact_version_id`)
-- Operation, lease, idempotency, failure, retry, and output metadata
-- safe settings
-- Knowledge audit and cross-store mutation journal
-- schema metadata
+The database is addressed by `database_url` (`CV_DATABASE_URL`). Composition creates one
+`Engine` (`pool_pre_ping=True`) that owns pooling and connection health. Transaction
+scopes run at `REPEATABLE READ`.
 
-The database is addressed by the resolved `database_url` setting (`CV_DATABASE_URL` in
-environment and `.env` surfaces), not by a local database path. One process-wide SQLAlchemy
-`Engine` per URL owns pooling and connection health. Commands and multi-query projection
-reads use explicit token scopes with `REPEATABLE READ`.
+Foreign keys and CHECK/UNIQUE constraints enforce relational invariants. Every immutable
+table carries an UPDATE guard and a DELETE guard trigger. Which tables are immutable is
+derived, not listed: a table is immutable unless it is named in the mutable exception
+set (`tests/platform/test_persistence_constraints.py`), so a new table without its guards
+fails the check. Tables mutable only through one permitted transition guard their
+terminal rows. Business workflows stay in domain and application code.
 
-Foreign keys and CHECK/UNIQUE constraints enforce relational invariants. Every
-immutable table carries an UPDATE guard and a DELETE guard, and which tables those are
-is derived rather than listed: a table is immutable unless it is named in the mutable
-exception set, so adding a table without its guards fails the check instead of passing
-unnoticed. Application `current_status` validity is one CHECK constraint, which covers
-both INSERT and UPDATE. Business workflows remain in domain/application code.
-
-Alembic owns explicit numbered revisions, schema version metadata, and schema upgrades.
-The revision graph has one head, `alembic upgrade head` applies it explicitly, and normal
-runtime composition does not perform hidden migrations as a startup side effect.
+Alembic owns the schema. The revision graph has one head and is applied explicitly with
+`alembic upgrade head`. Composition reads the current revision for reporting and never
+migrates as a startup side effect. There is no built-in backup or restore; a fresh
+installation starts from an empty database.
 
 ### 6.2 Object storage
 
-Immutable/heavy payloads sit behind `ObjectStore`, which speaks keys and bytes and
-carries no `Path`. Two implementations satisfy it: `LocalObjectStore`, the default,
-which maps a key onto a file under `{artifacts_root}`; and `S3ObjectStore`, which puts
-it in an S3-compatible bucket (R2 and MinIO via `endpoint_url`). The composition root
-selects one from `CV_OBJECT_STORE`; `PayloadStore` never branches on the backend.
+Immutable payloads sit behind `ObjectStore`, which speaks keys and bytes and carries no
+`Path`. `LocalObjectStore` (default) maps a key to a file under `{artifacts_root}`;
+`S3ObjectStore` stores it in an S3-compatible bucket (R2 and MinIO through
+`CV_S3_ENDPOINT_URL`). Composition selects one from `CV_OBJECT_STORE`; `PayloadStore`
+never branches on the backend.
 
-The key layout is the same either way:
+The key layout is the same either way, and `PayloadStore` refuses any other:
 
 ```text
 {artifacts_root}/ or {bucket}/{prefix}/
   snapshots/{application_id}/{snapshot_id}.txt
-  provider/{application_id}/{operation_id}/{artifact_id}.json
+  provider/{application_id}/{operation_id}/{artifact_version_id}.json
   submissions/{application_id}/{submission_id}/resume.html
   submissions/{application_id}/{submission_id}/resume.pdf
 ```
 
-A Submission's sent content is stored inline in `submissions.content`; only its HTML and
-PDF are object-store payloads. `cv_documents.content` is likewise a mutable structured
-field stored inline in PostgreSQL, not an object-store payload: there is no per-edit-version draft file, because the document has
-no version history to address. The document's rendered `html_path`/`pdf_path` are
-mutable working outputs written to a unique per-attempt path outside this immutable
-layout (below); they are plain document fields, not registered artifacts, and are not
-addressed through this key scheme.
+**References are storage-neutral and their format is frozen.** PostgreSQL path fields
+store project-relative strings such as `artifacts/snapshots/{app}/{id}.txt`; the object
+key is the same string without the `artifacts/` prefix. A row is identical under either
+backend, so storage can change without rewriting rows.
 
-**References are storage-neutral and their format is frozen.** PostgreSQL path fields,
-including `job_snapshots.payload_path`, the Submission file paths, and
-`artifact_versions.path`, store project-relative strings such as
-`artifacts/snapshots/{app}/{id}.txt`; an object key is the same string without the
-`artifacts/` prefix. A row is identical under either backend, so storage can change
-without rewriting database rows.
+Key validation is shared by both implementations. A crafted key — traversal, absolute,
+empty segment, backslash, drive prefix — is refused identically, because a payload's
+address must not depend on the configured backend.
 
-Key validation is shared by both implementations rather than delegated to each. A
-crafted key - traversal, absolute, empty segment, backslash, drive prefix - is refused
-identically, because a payload's address must not depend on which backend is
-configured. "S3 has no `..`" is not a reason to skip the check.
+What stays out of the object store, by decision:
 
-Three things stay on the local filesystem by decision: `RenderTargets`, the mutable
-per-attempt HTML/PDF `render_document` writes and activates as `html_path`/`pdf_path`,
-because Chromium writes real files to real paths and cannot write to a bucket and
-because these are working outputs rather than immutable records; the document content
-itself, which lives in PostgreSQL rather than on disk; and Knowledge sources, which are
-version-controlled inputs rather than artifacts.
+- **Document content** lives inline in `cv_documents.content`; the document has no
+  version history to address.
+- **Render targets.** `render_document` writes HTML and PDF to a unique per-attempt
+  directory, `{artifacts_root}/documents/{application_id}/{attempt_id}/`, and activates
+  them as the document's `html_path`/`pdf_path`. Chromium writes real files to real
+  paths, and these are mutable working outputs, not immutable records.
+- **Knowledge sources** are version-controlled inputs, not artifacts.
 
-A submitted rendered output is the one payload family that reaches storage as a location
-rather than as bytes. The store decides where it is written: on the local store that is
-the artifact path itself, so the copied file *is* the stored object; on a remote store it
-is scratch under `{temp_root}/render/`, uploaded and then removed. Deleting the render
-location is correct in the second case and would destroy the payload in the first,
-which is why the store answers the question rather than the caller.
+A Submission copies the document's `content` inline and its active HTML and PDF into
+submission-owned keys, recording a SHA-256 per file. On the local store the copied file
+is the stored object; on a remote store the copy is scratch under `{temp_root}`,
+uploaded and then removed. The store decides which, because deleting the source location
+is correct in one case and destroys the payload in the other.
 
-Every payload has SHA-256 metadata in PostgreSQL. Recruiter-friendly names are
-Content-Disposition/export names, never the physical identity of an artifact. There is
-no `latest.pdf` artifact.
-
-JobSnapshot source is the exact text accepted by the backend. PostgreSQL keeps path, source
-hash, normalized dedupe hash, URL/provenance, timestamp, and prior-snapshot reference.
-
-A Submission copies the document's exact `content` (as immutable structured JSON) plus
-its active `html_path`/`pdf_path` files to submission-owned paths, recording a SHA-256
-per file. Provider-response artifacts remain the only other registered `Artifact` kind;
-`resume_pdf`, `resume_html`, `resume_markdown`, `claim_manifest`, and
-`working_draft_snapshot` are removed, because none of them is an immutable record
-distinct from the document or a Submission any more.
+Every payload has SHA-256 metadata in PostgreSQL. Friendly names are
+`Content-Disposition` names, never physical identity. There is no `latest.pdf`.
 
 ### 6.3 Knowledge files
 
 Facts, CandidateContext, Profiles, selection/emphasis policy, prompts, task contracts,
-rendering rules, and templates remain file-backed and version-controlled. Database audit
-does not become an alternative Knowledge source of truth. The product never runs Git
-commit automatically.
+requirement concepts, rendering rules, and templates are file-backed and
+version-controlled. Database audit is not an alternative Knowledge source of truth. The
+product never runs Git commit.
 
 ## 7. Transaction ownership and consistency
 
-Allowlisted application entry-point orchestrators own read/write scopes:
+Application entry points own read and write scopes:
 
 ```python
 with transactions.write() as tx:
     store.mutate(tx, prepared)
 ```
 
-Successful write-scope exit commits exactly once; exceptional exit rolls back. Tokens
-close on scope exit. The adapter rejects closed tokens, tokens from another manager or
-engine, writes under a read token, and nested scopes in one execution context. Services
-do not own connections or call driver transaction primitives.
+A write scope commits once on normal exit and rolls back on an exception. Tokens close
+on scope exit. The adapter rejects closed tokens, tokens from another manager or engine,
+writes under a read token, and nested scopes in one execution context. Services never
+own connections or call driver transaction primitives.
 
-The Operation runner owns source-verification and activation scopes. Handlers,
-activators, and commit gateways receive tokens, never transaction managers. A commit
-gateway accepts prepared immutable data for an atomic fan-in; it makes no business
-decision and calls no external service. `propose_selection`, `create_draft`,
-`regenerate_section`, `regenerate_claim`, and `render_document` use this boundary,
-locking the document row and checking `expected_document_hash` at activation. `check_document`,
-`approve_document`, `update_selection`, `update_document`, `build_from_analysis`, and
-`submit_application` are synchronous application commands and do not go through the
-Operation runner; they take the document row lock directly inside their own write scope.
+The Operation runner owns source-verification and activation scopes; handlers receive
+tokens, never transaction managers. Which commands are Operations and which are
+synchronous, and how each takes the document lock, is state-and-use-cases.md §11.
 
-AI, network, browser, filesystem writes, and object-store writes run outside database
-scopes. Outbound adapters enforce this through `assert_external_io_allowed()`. Metadata
-reads finish before payload verification or streaming. The document's rendered
-HTML/PDF files are derived projections written to a unique per-attempt path before
-activation and swapped in by `render_document`'s commit; `content` itself is a database
-field, not a derived file. Validation input is produced in memory.
+AI, network, browser, filesystem, and object-store I/O run outside database scopes.
+Outbound adapters enforce this with `assert_external_io_allowed()`. Metadata reads
+finish before payload verification or streaming.
 
-Queries use minimal consumer-specific projections and explicit joins without hydrating
-ORM entities. Application/action-policy reads capture database and Ready metadata in
-one stable snapshot, then verify payloads after the scope closes.
+Action-policy reads (state-and-use-cases.md §9) capture database and Knowledge state in
+one read scope; Ready payload verification runs after it closes, and the policy combines
+both. The API returns this policy; React does not duplicate it.
 
 State tables are authoritative current projections. Append-only events provide audit
 and provenance; the system is not event-sourced.
 
-### 7.1 Ordinary immutable payload commit
+### 7.1 Immutable payload commit and write leases
 
-The normal artifact protocol is:
+The payload protocol is:
 
-`validate bytes -> conditional store under key -> register in PostgreSQL`
+`acquire write lease -> validate bytes -> conditional store -> register + commit lease`
 
-There is no temp-then-rename staging. Validation runs on the bytes before the key is
-claimed, so a payload that fails it never occupies its destination - which is what temp
-staging bought, without the temp file. The write itself refuses to replace an existing
-payload: `O_EXCL` locally, a conditional PUT (`IfNoneMatch: "*"`) on S3 and R2. That
-also closes the window an `exists()` check followed by a rename left open.
+Validation runs on the bytes before the key is claimed, so a payload that fails it never
+occupies its key. The write refuses to replace an existing payload: `O_EXCL` locally, a
+conditional PUT (`IfNoneMatch: "*"`) on S3 and R2. The store hashes the bytes it stored
+in the same pass, and that digest is what the caller registers. Before registration a
+payload is invisible to queries; if registration fails, no row references it.
 
-The hash is computed by the store over the bytes it stored, in the same read, and is
-what the caller registers. Re-hashing the payload afterwards would describe a second
-read rather than the stored object.
+**Write leases.** Every writer claims its keys in `payload_write_leases` before storing
+bytes. A row is keyed by a *group key* — the file set one registration depends on — and
+records the claiming `attempt_id`, the exact physical keys, an expiry, and a state
+(`pending`, `committed`, `reclaiming`). `acquire` refuses a group key with a live row.
 
-Before registration, the artifact is invisible to normal queries. If registration
-fails, read-only orphan inspection can list the unreferenced payload. A full journal is
-not required: failed registration leaves no active database state referencing the
-payload, and orphan inspection preserves that evidence for reconciliation.
+| Writer | Group key | Attempt | Keys |
+| --- | --- | --- | --- |
+| JobSnapshot intake | the snapshot reference | the same reference | the snapshot file |
+| Provider evidence | the provider reference | the same reference | the response file |
+| `submit_application` | `submission:{application_id}:{submission_id}` | `submission_id` | the Submission's HTML and PDF |
 
-A write claims its destination through a `payload_write_leases` row before any bytes are
-stored. The row is keyed by a *group key* - one immutable payload, or the small file set
-one registration depends on, such as a provider-evidence Operation's raw response
-together with any sanitized companion file - and records the current *attempt* claiming
-it: an `attempt_id` minted fresh each time the group key is acquired, an owner, and a
-bounded, renewable expiry, in `pending` state. `acquire` refuses a group key that already
-holds a live row, in `pending` (unexpired) or `reclaiming` state. Decision record §4
-narrows this table's writers to JobSnapshot intake and provider-evidence payloads only;
-approval, history, and render no longer claim a lease, because approval and rendering no
-longer produce an immutable multi-file commit of their own — approval only stamps the
-document row, and a render's HTML/PDF are mutable working outputs.
+Each physical key embeds a freshly minted ID, so a retry is a new attempt with new keys
+and never overwrites a prior attempt's. A failed store releases the lease.
 
-Every physical object key a write produces is derived from its group key **and** its
-attempt_id together (for example
-`snapshots/{application_id}/{snapshot_id}.txt` or
-`provider/{application_id}/{operation_id}/{artifact_id}.json`), never from the
-group key alone. A later attempt against the same group key, including a legitimate
-retry, mints a new attempt_id and therefore new physical keys; it never reuses or
-overwrites a prior attempt's keys. Registration and the lease's flip to `committed`
-happen in one transaction, and that transaction enforces two conditions together, not
-one: it flips the group key's lease row from `pending` to `committed` only if the row's
-attempt_id still matches the attempt registering, **and** it accepts, for every physical
-key it is about to write into the domain row, only a key that is derived from that same
-attempt_id - checked against the derivation pattern, not merely assumed from where the
-key came from. Key uniqueness across attempts does not by itself enforce this; the
-transaction checks it directly, because otherwise a group key that became leaseless and
-was then re-acquired by a newer attempt would create a window where nothing in the
-contract stops that newer attempt's registration from naming an older, unrelated key -
-one reclaim may already be about to remove - instead of the key it actually just wrote.
-With both conditions gated on the one transaction, an attempt whose lease was reclaimed
-can neither flip the row nor register any key, under its own attempt_id or any other:
-nothing is ever registered under an attempt already declared abandoned, and nothing is
-ever registered under a key that does not belong to the attempt winning that
-transaction.
+Registration and the lease's flip to `committed` happen in one transaction.
+`mark_committed` updates the row only if it is still `pending`, still held by the
+registering `attempt_id`, **and** records exactly the keys being registered. An attempt
+whose lease was fenced therefore cannot register anything, and a registration cannot
+name a key its attempt did not claim.
 
-`submit_application` (state-and-use-cases.md §18) copies the document's content and
-its active HTML and PDF to submission-owned paths under a payload write lease, one group
-key per Submission, exactly as above; it registers those keys in the transaction that
-inserts the Submission.
+**Orphan inspection and reclaim** (`MaintenanceService`; routes in
+state-and-use-cases.md). `inspect_orphans` lists stored keys that are neither registered
+nor held by a live lease and deletes nothing. `reclaim_orphans` handles three cases:
 
-Maintenance inventories registered snapshot and artifact references in one
-read scope, closes it, then enumerates managed immutable object keys through the same
-backend-neutral Port on local and S3 stores. `inspect_orphans` lists an object key whose
-group key is absent from the database snapshot **and** holds no live lease row (`pending`
-or `reclaiming`) - the lease check is what removes an active writer's key from the list,
-so a listed candidate is never one still covered by an unexpired lease.
+1. **Expired `pending` lease.** Reclaim fences it — a conditional update from `pending`
+   to `reclaiming` on the same `attempt_id`, stamped with a reclaim deadline. This is
+   the same update a registration needs, so the two serialize and only one wins. After
+   fencing, reclaim checks the database for a reference to any of the attempt's keys
+   *before* deleting; a reference is an integrity failure and reclaim raises. Otherwise
+   it deletes the keys, then the lease row.
+2. **`reclaiming` past its deadline.** A previous reclaim stopped between fencing and
+   row removal. The call resumes it: re-check, delete (idempotent), remove the row.
+   Without this the group key would be blocked from any new `acquire` forever.
+3. **Leaseless key.** A stored key with no lease row and no registration can never be
+   registered, because registration requires a live lease. After the same reference
+   check it is deleted. This catches a `put` that landed after case 1 removed its
+   attempt.
 
-`reclaim_orphans` removes two kinds of candidate, and also resumes any reclaim of its
-own that a prior call started but did not finish:
+Guarantees: a registration never points at a payload reclaim removed, and a fenced
+attempt never registers afterward. A single call is not exhaustive — a `put` in flight
+when its lease was fenced can land after the call, and a later call removes it under
+case 3. Reclaim is repeatable, not a fixed point; making it exhaustive would need the
+object store to refuse writes once a lease is gone, which is not implemented.
 
-1. One whose group key still holds a `pending` lease, now expired. Reclaim fences it
-   first - a conditional update from `pending` to `reclaiming`, matched on the same
-   attempt_id, which is the same conditional update a genuine registration would need
-   and therefore serializes against one: whichever transaction's update lands first wins
-   the row, and the other affects zero rows and fails. That same update also stamps the
-   row with a bounded reclaim deadline. Only after fencing succeeds does reclaim query
-   the database, once more, for a reference to any of that attempt's physical keys - a
-   check made *before* any deletion, because a check made only afterward cannot prevent
-   removing a payload that turns out to be referenced, only report it too late. Fencing
-   already makes that query's answer "no" by construction; the query is still made
-   explicitly rather than assumed, and deletion is gated on its answer. Finding a
-   reference at this point is an integrity failure - fencing should have made it
-   impossible - and reclaim stops and raises rather than deleting. Finding none, reclaim
-   deletes every physical key the attempt produced, then removes the lease row. A second
-   reference check after deletion may run as additional verification; it is not what
-   makes deletion safe, since by then it is too late to prevent anything.
-
-   A row can be found already in `reclaiming` past its own deadline: the process that
-   fenced it stopped before finishing, between fencing and lease-row removal. Fencing is
-   not re-done or reversed - it already happened - so a call that finds such a row
-   resumes it: repeats the reference check, repeats deletion of the attempt's physical
-   keys (safe to repeat, since deleting an already-absent key is a no-op), then removes
-   the lease row. Without this, a crash in that window would leave the group key blocked
-   from any new `acquire` forever, and `reclaim_orphans` would never converge for it.
-2. One whose group key holds **no** lease row at all. This needs no fencing: the absence
-   of a lease row already makes registration for that key impossible, since registration
-   is gated on a live lease row exactly as case 1 describes, and there is none to satisfy
-   that gate. Reclaim makes the same pre-deletion reference check and, finding none,
-   deletes the key directly. This is how a key an old attempt's `put` writes *after* case
-   1 already deleted that attempt's files and lease row - on an earlier `reclaim_orphans`
-   call - gets found and removed: such a key can never become registered, so it is always
-   safe to remove, whenever a later call happens to observe it.
-
-This guarantees exactly two things: a registration can never point at a payload
-`reclaim_orphans` has removed, and a reclaimed attempt can never complete registration
-afterward. It does not guarantee one `reclaim_orphans` call removes every orphan - case 2
-exists precisely because a `put` already in flight when case 1 fenced its lease can still
-land afterward, producing exactly the key case 2 is defined to catch, but only on a call
-that runs after that `put` lands. `reclaim_orphans` is specified as a repeatable
-operation, not a fixed point: operators call it on a schedule, and each call removes
-whatever qualifies as of that call. A guarantee that a single call is exhaustive, or that
-no transient orphan can ever appear, would require the object store itself to refuse a
-write once its lease is gone - a fenced or conditional write keyed to lease validity -
-which is not implemented.
+Reconciliation verifies every registered artifact's payload hash and the fact lifecycle,
+reporting both halves without short-circuiting.
 
 ### 7.2 Knowledge mutation journal
 
-Knowledge changes cross a file source of truth and PostgreSQL audit/relationships, so they
-use a narrow durable journal:
+A Knowledge change crosses a file source of truth and PostgreSQL, so it uses a durable
+journal (`knowledge_mutation_journal`: `PREPARED`, `COMMITTED`, `QUARANTINED`):
 
-1. Validate the complete command and proposed Knowledge file.
+1. Validate the complete command and the proposed Knowledge file.
 2. Stage the new file.
-3. Persist a `PREPARED` journal entry with old/new hashes and paths, staged path, DB
-   mutation identity, and recovery strategy.
+3. Persist a `PREPARED` entry with old/new hashes and paths, the staged path, the
+   database mutation and its identity, and the recovery strategy.
 4. Atomically replace the Knowledge file.
-5. In one write scope, apply fact events, any resulting document selection update
-   (`confirm_and_use_fact`'s `update_selection` step, guarded by
-   `expected_document_hash` exactly as a direct `update_selection` call is), and the
-   journal transition to `COMMITTED`; all commit or roll back together. The journal
-   writes nothing else to the document: a fact edited, replaced, demoted, or deleted
-   changes `facts_hash` and is picked up on the document's next read, not by a journal
-   write to the document row (state-and-use-cases.md §6).
-6. Clean up staged/backup files outside the database scope. A cleanup failure may leave
-   temporary files but does not undo the committed source or metadata.
+5. In one write scope, apply the fact events, any resulting document selection update
+   (state-and-use-cases.md §17), and the transition to `COMMITTED`. They commit or roll
+   back together.
+6. Clean up staged and backup files outside the scope. A cleanup failure leaves
+   temporary files but does not undo the commit.
 
-Startup recovery must decide from durable hashes and identities whether to finish or
-restore. It never guesses. An unrecoverable state is explicitly quarantined.
-
-Normal queries only expose `COMMITTED` state. Quarantine blocks additional fact mutations
-and approval dependent on unreconciled Knowledge. It does not block history reads,
-historical exports, or recruitment tracking.
+Recovery runs during composition and decides from durable hashes and identities whether
+to finish or restore each `PREPARED` entry. It never guesses; an unrecoverable entry is
+`QUARANTINED`. What quarantine blocks is state-and-use-cases.md §17.
 
 ## 8. Domain lineage and provenance
 
-Commands always receive explicit source IDs. `latest` belongs to query/UI convenience,
-not command semantics:
+Commands receive explicit source IDs. `latest` belongs to query and UI convenience, not
+command semantics.
 
-```python
-analyze_job(application_id, job_snapshot_id, provider)
-create_draft(application_id, expected_document_hash, provider)
-approve_document(application_id, expected_document_hash)
-render_document(application_id, expected_document_hash)
-submit_application(application_id, expected_document_hash, submitted_at, metadata)
-```
+`CVDocument` records its source — `analysis_id` and `selection` — and has no draft or
+revision lineage (`docs/decisions/single-document-model.md`). A Submission freezes the
+provenance: Application, JobSnapshot, JobAnalysis, `content`/`document_hash`,
+CandidateContext, `facts_hash`, and policy versions.
 
-`CVDocument` records its own source: `analysis_id` (the JobAnalysis it is pinned to) and
-`selection`. There is no `parent_revision_id` and no draft/revision lineage, because
-editing an approved or Ready document changes it in place rather than branching a new
-entity. A Submission freezes the provenance that used to live on ApprovedRevision:
-Application, JobSnapshot, JobAnalysis (via the document's `analysis_id` at submission
-time), the document's `content`/`document_hash`, CandidateContext, the facts and
-Knowledge context the content actually depended on (`facts_hash`), and policy versions.
-
-The global Knowledge-store version is coarse audit/detection. `facts_hash` is the exact
-dependency hash: computed on read from the document's `selection` fact IDs united with
-the fact IDs its claims cite, so an unrelated fact change does not affect a document that
-does not depend on it. `built_with` (profile version, selection-policy version) is
-frozen on the document at creation/re-pin and drives the `PROFILE_CHANGED`/
-`POLICY_CHANGED` warnings by comparison; approval and rendering validate against current
-values regardless of `built_with`.
-
-Ready is computed, never stored as a second entity. `preparation_state = ready` when
-`rendered_basis == approved_basis == basis` (state-and-use-cases.md §3, §4): the basis
-already covers content, selection, analysis pin, and every fact the document depends on,
-so a change to any of them drops `ready` on the next read without a separate demotion
-step. There is no `newer_draft_in_progress` and no historical-versus-active Ready
-distinction, because there is exactly one document: `DOCUMENT_ON_OLDER_ANALYSIS`
-(state-and-use-cases.md §8) is the only warning a newer JobSnapshot/JobAnalysis produces,
-and it never changes `preparation_state` by itself.
+The Knowledge-store version is coarse audit and detection; `facts_hash` is the exact
+dependency hash. Ready is computed from the document's basis, never stored
+(state-and-use-cases.md §3, §4, §6).
 
 ## 9. Application services and action policy
 
-Application services return Pydantic boundary DTOs. They enforce domain preconditions,
-load all explicit sources, call ports, record audit, and commit one outcome. They do not
-return database rows or paths.
-
-The action-policy projector computes PreparationState, content_check,
-warnings, review reasons, active Operation, available actions, the actions a blocker
-withholds with its reason codes, and a nullable recommended action from inputs captured in one consistent
-read transaction — including the Knowledge needed to compute the document's `basis`
-(state-and-use-cases.md §9). There is no stale-reasons projection: outdated stamps are
-read directly off the basis comparison, not derived from a separate reason catalogue.
-Ready payload verification (that `html_path`/`pdf_path` still exist and are intact) runs
-after that scope closes, and the final policy is computed from the captured metadata and
-verified evidence.
-
-The API consumes this policy. React does not duplicate it.
+The action-policy projector (`application/state.py`) implements state-and-use-cases.md
+§9. Its architectural constraint is §7: inputs from one read scope, payload verification
+after it closes.
 
 ## 10. Operation runner
 
-Operation is an application/infrastructure concern, not the central domain aggregate.
-The worker process is the one host: it runs lightweight loops that poll and claim
-PostgreSQL rows atomically and execute jobs outside requests, under leases, heartbeat,
-resource locks, cancellation, idempotency, and optimistic activation checks.
+Operation is an application and infrastructure concern, not the central domain
+aggregate. Types, statuses, phases, failure codes, and idempotency are
+state-and-use-cases.md §11 and §19. This section covers execution.
 
-The claim contract does not assume a single claimer. Two workers may run: whichever
-claims a row first owns it, and the other observes that Operation through its terminal
-outcome rather than duplicating it. That is what makes the worker safe to run in more
-than one copy. It requires neither Celery nor Redis.
+**Resources.** Required resources are derived from the request
+(`required_operation_resources`), so a caller cannot weaken concurrency policy:
 
-Default limits are:
+- one mutating Operation per Application (every type)
+- one global render/browser slot (`render_document`)
+- two global AI slots (every AI task, and `analyze_job`/`create_draft` unless the
+  provider is `deterministic`)
 
-- one mutating Operation per Application
-- one global render/browser Operation
-- two concurrent AI Operations
+Locks are resource-specific: a render for one Application does not block analysis for
+another. Contention is queueing, not failure; a waiting Operation stays `queued` with an
+observable waiting phase until a claim succeeds or the user cancels.
 
-Locks are resource-specific. Render for one Application does not block analysis for
-another.
+**Claiming.** The worker (`runtime/execution.py`) runs a thread pool (concurrency 2,
+poll 0.25 s). A claim selects a queued row with `FOR UPDATE SKIP LOCKED`, inserts
+resource slot rows, and takes a 30 s lease renewed by a 10 s heartbeat. A lost race — a
+skipped row or a `40001` serialization failure — is a lost claim, not an error.
 
-Contention for the global render/browser slot is queueing, not an immediate failure. A
-render waiting for the slot stays queued with an observable `waiting_for_render_slot`
-phase until an eligible runner claims it or the user cancels. It never starts a
-duplicate render merely because another runner owns the current global lease.
+**Startup and shutdown.** Worker startup changes every `queued`/`running` row that still
+holds a lease to `interrupted`, regardless of expiry, and releases its slots; it never
+resumes an external call. This assumes no other worker is live, which is why one worker
+process runs at a time. Shutdown stops claiming and requests cancellation for whatever
+it still holds.
 
-Operation records contain type, full secret-free structured payload and hash,
-idempotency key, provider/model/reasoning effort, source IDs, expected versions/hashes, lifecycle
-timestamps, lease owner/expiry, heartbeat, cancellation request, phase/message,
-failure code, safe message, technical detail/log reference, retry reference, and output
-references.
+**Records.** An Operation stores its type, secret-free payload and hash (a payload with
+a secret-named key is refused), idempotency key, provider/model/reasoning effort, frozen
+sources (`OperationSources`), required resources, lifecycle timestamps, lease and
+heartbeat, cancellation request, phase and message, failure detail and log reference,
+retry reference, and outputs.
 
-Startup changes queued/running rows with expired leases to `interrupted`; it does not
-resume an external call. Graceful shutdown stops claiming, requests cancellation or
-waits briefly, stops heartbeat, and leaves durable state for recovery.
+**Execution.** Handlers implement `verify_sources`, `execute`, `activate`,
+`after_activation`, and `discard`. Commit checks run before execution and before
+activation. `SOURCE_CHANGED` keeps any immutable output as inactive evidence and fails
+the Operation without changing the document. Provider calls and payload preservation
+happen outside scopes; prepared evidence is registered as inactive in short scopes
+before activation, and neither cancellation nor activation rollback erases it.
+Re-registering the same provider output does not duplicate evidence. Activation locks
+the Application, reloads Operation and lease state, rechecks sources and cancellation,
+then atomically activates use-case state, outputs, and completion. Post-commit
+projections and file logging run after the scope closes.
 
-Commit checks run before execution and before activation. `SOURCE_CHANGED` preserves
-any immutable output as inactive evidence and fails the Operation without changing the
-document.
-
-Provider execution and immutable payload preservation/verification happen outside
-scopes. Prepared evidence is registered durably as inactive before activation in short
-database scopes; cancellation or activation rollback must not erase it. Re-registering
-the same provider output must not duplicate evidence. Activation first locks the
-Application, reloads Operation/lease state, rechecks persisted sources and cancellation,
-then atomically activates use-case state, eligible outputs, and Operation completion.
-Handlers own no scope. Post-commit working projections and filesystem logging happen
-after closure.
-
-Queued cancellation is immediate. Running cancellation is best effort and cancels
-activation. Retry creates another immutable Operation. One automatic retry with a small
-exponential delay is allowed only for classified transient timeout/network/429/5xx or
-temporary browser-startup failures.
+**Cancel and retry.** Queued cancellation is immediate. Running cancellation is best
+effort and cancels activation. A user retry creates another Operation. One automatic
+retry, after a short delay, is allowed only for the transient codes.
 
 ## 11. AI adapter
 
-The provider-neutral protocol implements the available tasks defined in product-spec
-§12. `assess_claim_support` remains design work and must not be represented as an
-available provider capability until its evidence lifecycle and activation rules are
-implemented.
-The OpenAI adapter uses the Responses API and strict Structured Outputs. It
-returns task-specific Proposal DTOs and provider provenance; it cannot save domain
-state.
+Task semantics — analysis, coverage and shortfall, writer and reviewer, evidence
+acceptance — are product-spec §12 and state-and-use-cases.md §13–§14. This section is
+the adapter.
 
-The `analyze_job` command calls one of those tasks, `propose_analysis`: a stateless
-structured response proposing the requirements, their importance, evidence-linked
-coverage, shortfall severity and reason, and the classification together. Its raw output
-is preserved.
+`AIProvider` (`application/ports/outbound.py`) is provider-neutral. The OpenAI adapter
+(`infrastructure/providers.py`) uses the Responses API with strict Structured Outputs
+and returns task-specific Proposal DTOs plus provider provenance. It cannot save domain
+state. Tasks: `propose_analysis`, `propose_selection_plan`, `draft_resume`,
+`regenerate_section`, `regenerate_claim`, and `assess_claim_support` (the reviewer step
+of every writing Operation, a separate call from the writer). With no provider
+configured no adapter is built, and nothing is sent.
 
-What the engine validates before deterministic Fit/gap calculation is what it can
-establish itself: that the posting carries each quoted requirement, which it locates in
-the snapshot rather than being told where it is; that every cited fact exists and is
-canonical; that a positive reading keeps evidence after that check; and that a canonical
-boundary fact still caps a match. A check that fails narrows that requirement and
-records an `AnalysisIssue` on the analysis. It does not discard the reading: a response
-that cannot be parsed is the one failure that fails the Operation.
+Each task receives minimal allowed context. Provider output passes schema validation and
+deterministic checks before it becomes domain state; the claim-review evidence check
+(`domain/claim_review.py`) runs at activation and again at validation for approval, so
+the evidence that let a line in is the evidence that keeps it in. Pre-approval
+validation is synchronous and deterministic over stored evidence and starts no AI work.
 
-Coverage and shortfall materiality remain separate fields. The provider may propose that
-a partial shortfall is `minor`, `material`, or `unknown`, but deterministic normalization
-forces matched/unsupported/unknown coverage to none/material/unknown severity
-respectively. A canonical boundary that caps a match produces a material shortfall. Only
-a material partial shortfall can make a mandatory requirement a hard gap.
+**Analysis contract.** Requirement identity is the snapshot plus the requirement's
+normalized text under a stated identity-algorithm version. The prompt version is
+provenance, not identity input, so rewording a prompt does not turn unchanged
+requirements into new entities. The reader accepts analysis contract `3.0` only and does
+not invent fields for older documents. A provider-supplied held value is not numeric
+evidence merely because it agrees arithmetically with the proposed coverage; it must
+trace to canonical structured evidence or stay unresolved. Malformed thresholds are
+invalid output.
 
-Requirement identity is the snapshot and the requirement's own normalized text under a
-stated identity-algorithm version. The prompt version is recorded as provenance and is
-deliberately not an identity input, so rewording a prompt does not turn unchanged
-requirements into new entities. Corrections create another immutable JobAnalysis under
-the same Application.
-The current reader accepts analysis contract `3.0` only. It does not invent fields for
-older JSONB documents or reconstruct historical results with a newer extractor.
-
-Malformed thresholds are invalid provider output. A provider-supplied held value is not
-accepted as numeric evidence merely because it agrees arithmetically with the proposed
-coverage; it must be traceable to canonical structured evidence or remain unresolved.
-Optional provider tags or relations alone cannot establish boundary applicability or
-positive coverage. The closed concept vocabulary is not a semantic authority in this
-path. Unresolved completeness or applicability remains `unknown` and is reported rather
-than turned into an approval blocker.
-
-Each task receives minimal allowed context. Provider text and fact IDs pass schema and
-semantic support validation. A valid ID paired with strengthened wording fails. Claims
-are not silently dropped.
-
-The domain owns reviewed-evidence eligibility and staleness; the application freezes
-inputs, orchestrates writer/reviewer calls through the Operation runner, preserves
-evidence and commits only against matching preconditions. Review is a separate call
-from generation. Neither provider nor router can declare a claim approved.
-
-Evidence binds exact wording, language, claim attribution/structural context, consumed
-fact content, allowed scope, and policy versions. Dependencies are derived from actual
-inputs. Structured review records and focused human decisions require immutable
-history and explicit references from validation/approval; raw provider payloads use
-the existing object-store boundary. The detailed schema and command DTOs remain to be
-designed before coding, rather than inferred from this conceptual record description.
-Any new immutable records receive the existing derived trigger protections.
-
-Pre-approval validation remains synchronous and deterministic over stored evidence;
-it starts no AI work. A separate asynchronous review supplies evidence in advance.
-Historical records retain their original semantics and missing metadata; this contract
-does not synthesize past reviews, rewrite approved artifacts, or alter their paths.
-
-Calls are stateless. The settings query exposes a closed backend-owned model catalog;
-the selected default model and reasoning effort are frozen when the Operation is
-submitted. Exact model/provider/reasoning effort, semantic task-contract version,
-prompt version/hash, input/output schema versions, usage, latency, response ID, dated
-pricing snapshot, derived USD cost, and output hashes are stored.
-
-Sanitized raw response is an immutable payload in the object store, registered like
-any other. Sanitization removes secrets and excludes hidden chain-of-thought. Provider failure is explicit; deterministic
-continuation requires another user-selected command.
+**Provenance.** Calls are stateless. The model and reasoning effort are frozen when an
+Operation is submitted. Model, provider, reasoning effort, task-contract version, prompt
+version/hash, input/output schema hashes, usage, latency, response ID, dated pricing,
+derived USD cost, and output hashes are stored. The sanitized raw response is an
+immutable payload (§6.2); sanitization removes secrets and excludes hidden reasoning.
 
 ## 12. HTTP API
 
-The API prefix is `/api/v1`. Product v2 and API v1 are intentionally separate version
-spaces.
+The prefix is `/api/v1`; product v2 and API v1 are separate version spaces. Endpoints,
+status codes, and concurrency headers are state-and-use-cases.md §21–§22, and the
+generated `openapi/openapi.json` is authoritative for the route table. OpenAPI is served
+at `/api/v1/openapi.json`; interactive docs pages are disabled.
 
-Resources include Applications, JobSnapshots, analyses, the Application's one CVDocument,
-provider-response artifacts, Operations, submissions, and contextual facts. True
-use-cases use action endpoints such as check, approve, render, cancel, and retry rather
-than artificial CRUD.
+API schemas are separate from domain and persistence types. The schema is generated
+(`python openapi/generate_openapi.py`) and checked for drift; `openapi/types.ts` is
+generated from it. The handwritten `frontend/src/api/client.ts` owns HTTP mechanics.
 
-Asynchronous commands return `202 Accepted` plus an Operation Location. Synchronous
-creation returns `201 Created`. `propose_selection` is `202` with a Location, since it
-is always an AI Operation; `update_selection` is synchronous. A review reason and a
-failed content check are successful domain outcomes.
+Errors are RFC-style Problem Details with a stable code and safe context. Technical
+detail stays in the structured logs.
 
-API schemas are separate from domain and persistence types. OpenAPI is generated and
-validated; TypeScript types are generated and checked for drift. The small handwritten
-`frontend/src/api/client.ts` module owns HTTP mechanics.
-
-The document resource emits `document_hash` as its ETag. The autosave `update_document`
-takes it as `If-Match`; every other document-mutating command carries it in the request
-body as `expected_document_hash`, because an action on a resource is not a conditional
-replacement of it (state-and-use-cases.md §21). A mismatch is `409`; a missing/blocked
-domain precondition is `412`. Analyze, generate, approve, and render accept idempotency
-keys scoped by operation type + key. Reuse with another payload hash is
-`409 IDEMPOTENCY_KEY_REUSED`.
-
-Problems follow RFC-style Problem Details with stable code and safe context. Internal
-technical details remain in structured rotating logs.
-
-Artifact endpoints accept IDs only. They resolve a registered reference, verify the
-stored content hash, and stream it with a friendly filename. Containment is the
-backend's: `LocalObjectStore` keeps every key below `artifacts_root` and refuses
-traversal and symlink escape; `S3ObjectStore` has neither paths nor symlinks and
-validates the key. Nothing above the store handles a filesystem path. Body size is
-bounded; oversize is `413`.
+Artifact endpoints take IDs only. They resolve a registered reference, verify the stored
+hash, and stream it with a friendly filename. Containment belongs to the store:
+`LocalObjectStore` keeps keys below `artifacts_root` and refuses traversal and symlink
+escape; `S3ObjectStore` validates the key. Nothing above the store handles a filesystem
+path. Request bodies are bounded (`CV_API_MAX_BODY_BYTES`, default 2 MiB); oversize is
+`413`.
 
 ## 13. Frontend architecture
 
-Production React assets are built ahead of time and served by FastAPI under the same
-origin. Node is not a user runtime dependency. Development Vite proxies `/api` to
-FastAPI and only its configured origin is allowed.
+The production build is served by FastAPI at the same origin when `frontend/dist`
+exists; without it the API runs alone. Node is not a user runtime dependency. In
+development, Vite proxies `/api` to the API, and only that one origin is allowed.
+Module boundaries: `frontend/src/features/README.md`; tokens, theming, and RTL:
+`frontend/docs/design-system.md`.
 
 TanStack Query owns server state and polling. React Hook Form owns local forms.
-Component/local state owns transient editor dialogs and save-conflict UI. No Redux or
-client-side workflow state machine is introduced.
+Component state owns transient editor dialogs and save-conflict UI. There is no Redux
+and no client-side workflow state machine.
 
-The UI is Hebrew and its shell is RTL. CV language is independent. URLs, hashes,
-technical identifiers, and code-like values use explicit LTR direction. HTML preview
-is rendered by the backend and shown in an isolated iframe.
+The UI is Hebrew and its shell is RTL. CV language is independent. The HTML preview is
+rendered by the backend and shown in an isolated iframe.
 
-Operation progress is polled every one to two seconds while active and shows status,
-phase, safe message, failure guidance, and the actions returned by the backend. No
-synthetic percentages are displayed, and there is no separate Operation route.
+Operation progress polls while an Operation is active and stops at a terminal status or
+a permanent error. It shows the backend's status, phase, safe message, and actions —
+no synthetic percentages and no separate Operation route.
 
-Autosave uses debounce and blur. A 409 opens an explicit local/current comparison and
-never silently merges.
+Autosave uses debounce and blur. A `409` opens an explicit local/current comparison and
+never merges silently.
 
 ## 14. Local security
 
-The production service binds to `127.0.0.1`, serves UI/API same-origin, disables
-wildcard CORS, and validates Origin for mutation. Development allows only the exact Vite
-origin. The application has no authentication and no CSRF token.
+The service binds to `127.0.0.1`, serves UI and API same-origin, and validates `Origin`
+on mutation. CORS uses an explicit origin list with no wildcard and no credentials;
+development adds only the one Vite origin (`CV_API_DEV_ORIGIN`). There is no
+authentication and no CSRF token.
 
-The OpenAI key remains environment/backend secret configuration. React sees only a
-configured boolean. Logs and Operation payloads are redacted and never contain keys,
+The OpenAI key is environment-only backend configuration. React sees only whether it is
+configured. Logs and Operation payloads are redacted and never contain keys,
 authorization headers, or secrets.
 
-Job/user text is untrusted. Prompt contracts isolate it from policy. Artifact access
-resolves registered references only -- never a caller-supplied location -- and the
-local backend additionally prevents traversal and symlink escape. No endpoint accepts
-arbitrary local paths or arbitrary file uploads.
+Job and user text is untrusted; prompt contracts isolate it from policy. Artifact access
+resolves registered references only, never a caller-supplied location. No endpoint
+accepts arbitrary local paths or arbitrary file uploads.
 
 ## 15. Runtime behavior
 
-The API defaults to `127.0.0.1:8765`. The port is uvicorn's to bind, but the app must
-also be told it, through `CV_API_PORT`: the origin policy allows the origin the app
+The API defaults to `127.0.0.1:8765`. Uvicorn binds the port, but the app must also be
+told it through `CV_API_HOST`/`CV_API_PORT`: the origin policy allows the origin the app
 believes it answers on, so a port given only to uvicorn refuses every state-changing
-request from the app's own UI.
+request from its own UI.
 
-Production supports current Chrome/Chromium, and the browser tests run there. Resume
-PDF rendering always uses the Chromium managed by Playwright. Local Chrome is
+Resume PDFs always render with the Playwright-managed Chromium. Local Chrome is
 diagnostic only.
 
-Structured rotating logs under `logs_root` include timestamp, level, Operation ID,
-Application ID, phase, error code, and log reference. There is no logs screen: a log
-reference identifies the entry, and the files are read directly on the host.
+Structured rotating logs under `logs_root`: `server.jsonl` (API) and `operations.jsonl`
+(worker), with timestamp, level, Operation ID, Application ID, phase, error code, and
+log reference. Exception details and tracebacks are file-only. There is no logs screen.
 
-The two process consoles provide concise lifecycle visibility. The API logs startup,
-shutdown, and one terminal line per HTTP request with method, path, status, and duration.
-The worker logs claims, retries, terminal outcomes, startup recovery, and shutdown. The
-complete structured streams are rotating `server.jsonl` and `operations.jsonl` files
-under `logs_root`; exception details and tracebacks are file-only. Empty queue polling,
-heartbeat traffic, HTTP query strings, headers, and bodies are not logged.
+The consoles are concise. The API logs startup, shutdown, and one line per request with
+method, path, status, and duration (uvicorn's access log is disabled). The worker logs
+start, claims, terminal outcomes, startup recovery, and stop. Empty polling, heartbeats,
+query strings, headers, and bodies are not logged.
 
 ### 15.1 Runtime configuration and secrets
 
-`cv_engine/runtime/config.py` is the single resolution contract. Precedence is:
+`cv_engine/runtime/config.py` is the single resolution contract; `.env.example` is the
+committed inventory of supported variables. Precedence:
 
-`process environment > project .env file > project config > default`
+`process environment > project .env > project cv.config.json > default`
 
-Only the repository-root `.env` is considered. Real environment variables override
-stale developer files. The supported `.env` syntax is the
-small documented `KEY=value` subset, implemented without an additional dependency.
+Only the repository-root `.env` is read, in a small `KEY=value` subset parsed without a
+dependency; a malformed line is skipped.
 
-Each setting declares whether it is secret or environment-only.
-`database_url` is secret. `OPENAI_API_KEY` is both secret and environment-only, so an
-`unset OPENAI_API_KEY` reliably disables the OpenAI adapter even when a `.env` exists.
-AWS credentials remain ambient boto3 configuration rather than values copied through
-the application contract.
+Each setting declares whether it is secret or environment-only. `database_url` is
+secret. `OPENAI_API_KEY` is secret and environment-only, so `unset OPENAI_API_KEY`
+reliably disables the OpenAI adapter even when a `.env` exists. AWS credentials stay
+ambient boto3 configuration.
 
-Masking occurs only at display/reporting boundaries. Any API, log, or error surface that
-reports a configuration value must show `***` for a configured secret while preserving
-the non-secret source label, and unset secrets
-remain visibly unset. Connectors always receive the original value, never the masked
-representation. `.env` and `.env.*` are ignored by Git, while `.env.example` is the
-committed safe inventory of supported variables.
+Masking happens only at display boundaries: a configured secret shows as `***` with its
+source label, and an unset secret shows as unset. Connectors always receive the real
+value. `.env` and `.env.*` are Git-ignored.
 
 ## 16. Database lifecycle and upgrade
 
-The application has no built-in backup or restore command. PostgreSQL lifecycle and any
-environment-level backup policy remain outside the application. A fresh installation
-starts from an empty database.
-
-Schema upgrade is explicit through `alembic upgrade head`. Runtime surfaces report the
-current schema revision and database integrity result; a new binary/runtime never
-performs a hidden live data migration.
+Schema upgrade is explicit: `alembic upgrade head`. `/health` reports the current schema
+revision; reconciliation reports payload and fact-lifecycle integrity. A new build never
+performs a hidden data migration. Backup policy lives outside the application.
 
 ## 17. Version surfaces
 
-Provenance and compatibility track at least:
+Provenance and compatibility track, each where it applies:
 
-- product version
-- database schema version
-- domain document version
-- API version
-- Knowledge schema/version
-- CandidateContext version/hash
-- selection policy version
-- rendering policy version
-- task-contract semantic version
-- prompt version/hash
-- input/output schema versions
-- validator versions
+- product version, database schema revision, API version
+- domain document and analysis contract versions
+- Knowledge versions (reported by `/health`)
+- selection, rendering, validator, and review policy versions
+- task-contract version, prompt version/hash, input/output schema hashes
 
-Versions may be per artifact/task rather than one global constant. Product version does
-not substitute for these surfaces.
+The product version does not substitute for any of them.
