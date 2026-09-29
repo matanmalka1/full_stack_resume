@@ -10,7 +10,7 @@ Where the authoritative answer lives. One concept, one home; everything else lin
 | What evidence each invariant owes, the golden matrix, the live AI smoke checklist | [`spec/test-and-acceptance-plan.md`](spec/test-and-acceptance-plan.md) |
 | Why tailoring works the way it does, and what is still only designed | [`tailoring-decisions.md`](tailoring-decisions.md) |
 | Why there is one mutable CV document per Application | [`decisions/single-document-model.md`](decisions/single-document-model.md) |
-| Open frontend UX work | [`backlog/frontend-ux.md`](backlog/frontend-ux.md) |
+| Open frontend UX work | [`frontend-ux.md`](frontend-ux.md) |
 | How to split implementation across parallel agents | [`execution-protocol.md`](execution-protocol.md) |
 | How to run, build, and test the system | [`../README.md`](../README.md) |
 | How agents work in this repository, and which gate a diff owes | [`../CLAUDE.md`](../CLAUDE.md) |
