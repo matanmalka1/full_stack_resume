@@ -23,7 +23,8 @@ import {
 } from "./decisionMarkdown";
 
 /* Rows of a list and spans of a line are positional: the document is immutable, so their
-   order is the only identity they have. */
+   order is the only identity they have. The selected facts are the exception - their
+   wording is read live from the fact store, so each row is keyed by its fact id. */
 /* oxlint-disable react/no-array-index-key */
 
 const Inline = ({ text }: { text: string }) => (
@@ -153,7 +154,7 @@ const overridesText = (raw: string): string => {
 
 interface FactGroup {
   label: string;
-  texts: string[];
+  facts: { id: string; text: string }[];
 }
 
 /* Selected facts are recorded by id. A reader needs what each one says, so each id is
@@ -165,7 +166,7 @@ const groupFacts = (
   facts: Map<string, Fact>,
   language: string,
 ): { groups: FactGroup[]; missing: string[] } => {
-  const groups = new Map<string, string[]>();
+  const groups = new Map<string, FactGroup["facts"]>();
   const missing: string[] = [];
   for (const id of ids) {
     const fact = facts.get(id);
@@ -174,9 +175,9 @@ const groupFacts = (
       continue;
     }
     const label = factSourceLabel(fact.source);
-    groups.set(label, [...(groups.get(label) ?? []), factLabelInLanguage(fact, language)]);
+    groups.set(label, [...(groups.get(label) ?? []), { id, text: factLabelInLanguage(fact, language) }]);
   }
-  return { groups: [...groups].map(([label, texts]) => ({ label, texts })), missing };
+  return { groups: [...groups].map(([label, members]) => ({ label, facts: members })), missing };
 };
 
 const SelectedFacts = ({ ids, language }: { ids: string[]; language: string | null }) => {
@@ -204,12 +205,12 @@ const SelectedFacts = ({ ids, language }: { ids: string[]; language: string | nu
       {groups.map((group) => (
         <div className="flex flex-col gap-1.5" key={group.label}>
           <h5 className="text-caption font-semibold text-cv-text-muted">
-            {group.label} · {group.texts.length}
+            {group.label} · {group.facts.length}
           </h5>
           <ul className="flex list-disc flex-col gap-1 ps-5 leading-6 marker:text-cv-text-muted">
-            {group.texts.map((text, index) => (
-              <li dir="auto" key={index} lang={language ?? undefined}>
-                {text}
+            {group.facts.map((fact) => (
+              <li dir="auto" key={fact.id} lang={language ?? undefined}>
+                {fact.text}
               </li>
             ))}
           </ul>

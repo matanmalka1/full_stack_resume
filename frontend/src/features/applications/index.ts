@@ -4,8 +4,6 @@
    It composes preparation, recruitment and its own artifact inventory; it owns none of
    their logic. What it does own is the Application's identity, so the label and the
    posting's source line are exported for the screens that name the same record from
-   outside. */
-export { ApplicationPage } from "./pages/ApplicationPage";
-export { ApplicationResumePage } from "./pages/ApplicationResumePage";
+   outside. Its screens are not exported: the route table loads each one on its own. */
 export { applicationLabel, sourceHostname } from "./model/applicationPresentation";
 export { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "./model/applicationInput";
