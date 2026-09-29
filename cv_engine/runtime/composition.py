@@ -55,6 +55,7 @@ from ..infrastructure.persistence import (
     SqlAlchemyTransactionManager,
     create_database_engine,
     current_database_revision,
+    worker_exclusivity,
 )
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisSelectionSourceReader
@@ -384,7 +385,11 @@ def build_services(
         operation_failure_logger=failure_logger.record_operation_failure,
         operation_event_logger=failure_logger.record_event,
     )
-    worker = OperationWorker(runner, request_cancellation=operation_lifecycle.cancel)
+    worker = OperationWorker(
+        runner,
+        request_cancellation=operation_lifecycle.cancel,
+        exclusive=lambda: worker_exclusivity(engine),
+    )
     knowledge_service = FactLifecycleService(
         transactions=transactions,
         store=knowledge_lifecycle_store,

@@ -155,7 +155,7 @@ The system runs as two processes over one database, and neither supervises the o
 - `python -m cv_engine.worker` recovers startup state, then claims queued Operations
   until SIGINT/SIGTERM.
 
-One worker process runs at a time (§10).
+One worker process runs at a time, enforced by an advisory lock (§10).
 
 ## 4. Application paths
 
@@ -395,19 +395,23 @@ observable waiting phase until a claim succeeds or the user cancels.
 
 **Claiming.** The worker (`runtime/execution.py`) runs a thread pool (concurrency 2,
 poll 0.25 s). A claim selects a queued row with `FOR UPDATE SKIP LOCKED`, inserts
-resource slot rows, and takes a 30 s lease renewed by a 10 s heartbeat. A lost race — a
-skipped row or a `40001` serialization failure — is a lost claim, not an error.
+resource slot rows, and records the worker as `lease_owner`. A lost race between the
+worker's threads — a skipped row or a `40001` serialization failure — is a lost claim,
+not an error. Claims do not expire and there is no heartbeat: only a new worker's
+startup releases them.
 
-**Startup and shutdown.** Worker startup changes every `queued`/`running` row that still
-holds a lease to `interrupted`, regardless of expiry, and releases its slots; it never
-resumes an external call. This assumes no other worker is live, which is why one worker
-process runs at a time. Shutdown stops claiming and requests cancellation for whatever
-it still holds.
+**One worker.** The worker holds a PostgreSQL session advisory lock for its whole life
+(`worker_exclusivity`); a second worker is refused at start and exits. With that
+guarantee, startup changes every `queued`/`running` row that has a `lease_owner` to
+`interrupted` and releases its slots: every such claim belongs to a worker that no
+longer exists. An external call is never resumed. The lock lives on a dedicated
+connection, so a crash releases it with the session. Shutdown stops claiming and
+requests cancellation for whatever it still holds.
 
 **Records.** An Operation stores its type, secret-free payload and hash (a payload with
 a secret-named key is refused), idempotency key, provider/model/reasoning effort, frozen
-sources (`OperationSources`), required resources, lifecycle timestamps, lease and
-heartbeat, cancellation request, phase and message, failure detail and log reference,
+sources (`OperationSources`), required resources, lifecycle timestamps, lease owner,
+cancellation request, phase and message, failure detail and log reference,
 retry reference, and outputs.
 
 **Execution.** Handlers implement `verify_sources`, `execute`, `activate`,
@@ -534,8 +538,8 @@ log reference. Exception details and tracebacks are file-only. There is no logs 
 
 The consoles are concise. The API logs startup, shutdown, and one line per request with
 method, path, status, and duration (uvicorn's access log is disabled). The worker logs
-start, claims, terminal outcomes, startup recovery, and stop. Empty polling, heartbeats,
-query strings, headers, and bodies are not logged.
+start, claims, terminal outcomes, startup recovery, and stop. Empty polling, query
+strings, headers, and bodies are not logged.
 
 ### 15.1 Runtime configuration and secrets
 

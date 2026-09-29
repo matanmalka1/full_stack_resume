@@ -7,6 +7,7 @@ import signal
 from threading import Event
 from types import FrameType
 
+from ..application.operation_runner import WorkerAlreadyRunning
 from ..runtime.composition import build_services
 from ..runtime.paths import AppPaths, resolve_root
 
@@ -66,6 +67,9 @@ def run_worker(stop: Event | None = None) -> None:
     try:
         try:
             services.operation_worker.serve(stop)
+        except WorkerAlreadyRunning:
+            logger.error("worker refused to start: another worker is already running")
+            raise SystemExit(1) from None
         except Exception as error:
             try:
                 reference = services.operation_runner.technical_logger(error)

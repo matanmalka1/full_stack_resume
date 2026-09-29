@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-
 from sqlalchemy import delete, insert, null, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.sql.elements import ColumnElement
 
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.operations import (
@@ -25,12 +22,6 @@ from .operation_sql import _operation_record, _outputs, _release
 from .tables import operation_outputs, operation_resource_leases, operations
 
 _RESOURCE_CAPACITY = {"application_mutation": 1, "render_browser": 1, "ai": 2}
-
-
-def _expiry(now: str, lease_seconds: int) -> str:
-    if lease_seconds < 1:
-        raise ValueError("lease_seconds must be positive")
-    return (datetime.fromisoformat(now) + timedelta(seconds=lease_seconds)).isoformat()
 
 
 def _waiting_phase(resource_kind: str) -> tuple[str, str]:
@@ -65,11 +56,9 @@ class SqlAlchemyOperationExecutionStore:
         operation_id: str,
         *,
         runner_id: str,
-        lease_seconds: int = 30,
         now: str | None = None,
     ) -> PersistedOperation | None:
         timestamp = now or utc_now()
-        expires_at = _expiry(timestamp, lease_seconds)
         connection = self._transactions.connection_for(tx, access="write")
         try:
             with connection.begin_nested():
@@ -121,8 +110,6 @@ class SqlAlchemyOperationExecutionStore:
                                 slot=slot,
                                 operation_id=operation_id,
                                 lease_owner=runner_id,
-                                lease_expires_at=expires_at,
-                                heartbeat_at=timestamp,
                             )
                         )
                 except IntegrityError:
@@ -150,8 +137,6 @@ class SqlAlchemyOperationExecutionStore:
                 message="",
                 started_at=timestamp,
                 lease_owner=runner_id,
-                lease_expires_at=expires_at,
-                heartbeat_at=timestamp,
             )
         ).rowcount
         if changed != 1:
@@ -169,7 +154,6 @@ class SqlAlchemyOperationExecutionStore:
         tx: WriteTransaction,
         *,
         runner_id: str,
-        lease_seconds: int = 30,
         now: str | None = None,
     ) -> PersistedOperation | None:
         timestamp = now or utc_now()
@@ -188,88 +172,32 @@ class SqlAlchemyOperationExecutionStore:
             .all()
         )
         for operation_id in candidates:
-            claimed = self.claim_operation(
-                tx, operation_id, runner_id=runner_id, lease_seconds=lease_seconds, now=timestamp
-            )
+            claimed = self.claim_operation(tx, operation_id, runner_id=runner_id, now=timestamp)
             if claimed is not None:
                 return claimed
         return None
 
-    def heartbeat_operation(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        *,
-        runner_id: str,
-        lease_seconds: int = 30,
-        now: str | None = None,
-    ) -> None:
-        timestamp = now or utc_now()
-        expires_at = _expiry(timestamp, lease_seconds)
-        connection = self._transactions.connection_for(tx, access="write")
-        locked = connection.execute(
-            select(operations.c.id)
-            .where(operations.c.id == operation_id)
-            .with_for_update(skip_locked=True)
-        ).scalar_one_or_none()
-        if locked is None:
-            owned = connection.execute(
-                select(operations.c.id).where(
-                    operations.c.id == operation_id,
-                    operations.c.status == "running",
-                    operations.c.lease_owner == runner_id,
-                )
-            ).scalar_one_or_none()
-            if owned is not None:
-                # Cancellation can hold this row. Waiting at REPEATABLE READ
-                # would turn that normal overlap into a serialization failure.
-                # Keep the existing lease and let the next heartbeat refresh it.
-                return
-            raise StateConflict("operation lease is not owned by this runner")
-        changed = connection.execute(
-            update(operations)
-            .where(
-                operations.c.id == operation_id,
-                operations.c.status == "running",
-                operations.c.lease_owner == runner_id,
-            )
-            .values(heartbeat_at=timestamp, lease_expires_at=expires_at)
-        ).rowcount
-        if changed != 1:
-            raise StateConflict("operation lease is not owned by this runner")
-        leases = connection.execute(
-            update(operation_resource_leases)
-            .where(
-                operation_resource_leases.c.operation_id == operation_id,
-                operation_resource_leases.c.lease_owner == runner_id,
-            )
-            .values(heartbeat_at=timestamp, lease_expires_at=expires_at)
-        ).rowcount
-        if leases < 1:
-            raise StateConflict("operation resource leases are missing")
-
-    def _interrupt_claimed(
-        self, tx: WriteTransaction, *, now: str | None, only_if_expired: bool
+    def interrupt_claims_from_previous_runners(
+        self, tx: WriteTransaction, *, now: str | None = None
     ) -> list[str]:
+        """Interrupt every claimed Operation, for a fresh worker's one-time sweep.
+
+        Called once, before this worker has claimed anything of its own. Only
+        one worker runs at a time (`worker_exclusivity`), so any claim still on
+        a row belongs to a worker that no longer exists. An external call it
+        made is never resumed.
+        """
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
-        conditions: list[ColumnElement[bool]] = [
-            operations.c.status.in_(("queued", "running")),
-            operations.c.lease_expires_at.is_not(None),
-        ]
-        if only_if_expired:
-            conditions.append(operations.c.lease_expires_at <= timestamp)
         identifiers = list(
             connection.execute(
                 select(operations.c.id)
-                .where(*conditions)
+                .where(
+                    operations.c.status.in_(("queued", "running")),
+                    operations.c.lease_owner.is_not(None),
+                )
                 .order_by(operations.c.created_at, operations.c.id)
             ).scalars()
-        )
-        message = (
-            "Interrupted after runner lease expired."
-            if only_if_expired
-            else "Interrupted by a fresh worker startup."
         )
         for identifier in identifiers:
             _release(connection, identifier)
@@ -282,34 +210,12 @@ class SqlAlchemyOperationExecutionStore:
                 .values(
                     status="interrupted",
                     phase="completed",
-                    message=message,
+                    message="Interrupted by a fresh worker startup.",
                     finished_at=timestamp,
                     lease_owner=None,
-                    lease_expires_at=None,
-                    heartbeat_at=None,
                 )
             )
         return identifiers
-
-    def interrupt_expired_operations(
-        self, tx: WriteTransaction, *, now: str | None = None
-    ) -> list[str]:
-        return self._interrupt_claimed(tx, now=now, only_if_expired=True)
-
-    def interrupt_claims_from_previous_runners(
-        self, tx: WriteTransaction, *, now: str | None = None
-    ) -> list[str]:
-        """Reclaim every held lease unconditionally, for a fresh process's one-time sweep.
-
-        Called once, before this process has claimed anything of its own, so any
-        lease still on a row belongs to a runner instance that no longer exists -
-        there is nothing of this process's own that a wall-clock TTL could be
-        protecting it from. Waiting for the lease to actually expire only widens
-        the window in which a restarted worker fails to reclaim a row a dead
-        predecessor held, leaving that Application's mutation lock stuck until
-        some later restart happens to land after the original lease's TTL.
-        """
-        return self._interrupt_claimed(tx, now=now, only_if_expired=False)
 
     def operation(self, tx: ReadTransaction, operation_id: str) -> PersistedOperation:
         connection = self._transactions.connection_for(tx)
@@ -512,8 +418,6 @@ class SqlAlchemyOperationExecutionStore:
                 failure_code=failure_code,
                 safe_failure_detail=message or None,
                 lease_owner=None,
-                lease_expires_at=None,
-                heartbeat_at=None,
                 next_attempt_at=None,
                 attempts_completed=operations.c.attempts_completed + 1,
             )
@@ -561,8 +465,6 @@ class SqlAlchemyOperationExecutionStore:
                 technical_log_reference=technical_log_reference,
                 attempts_completed=operations.c.attempts_completed + 1,
                 lease_owner=None,
-                lease_expires_at=None,
-                heartbeat_at=None,
                 next_attempt_at=None,
             )
         ).rowcount

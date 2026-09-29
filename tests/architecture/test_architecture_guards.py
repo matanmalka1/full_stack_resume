@@ -345,9 +345,10 @@ def test_dependencies_point_inward() -> None:
 
     for path in _layer_modules("worker"):
         offenders.extend(
-            f"{path.relative_to(ENGINE)}:{line} imports infrastructure.db"
+            f"{path.relative_to(ENGINE)}:{line} imports infrastructure.persistence"
             for target, line in _resolved_import_modules(path)
-            if target == "infrastructure.db" or target.startswith("infrastructure.db.")
+            if target == "infrastructure.persistence"
+            or target.startswith("infrastructure.persistence.")
         )
 
     for path in sorted(ENGINE.rglob("*.py")):
@@ -484,13 +485,11 @@ def test_persistence_refuses_through_the_application_taxonomy() -> None:
     at the boundary would collapse those three into one, so the classification
     is made where the meaning is known and this check keeps it there.
 
-    The exemptions are contract violations by the caller rather than domain
-    refusals: a non-positive lease is a bug in calling code, and `ValueError`
-    is the right answer to that bug.
+    An exemption is only for a contract violation by the caller rather than a
+    domain refusal, where `ValueError` is the right answer to a bug in calling
+    code. There are none today.
     """
-    exempt = {
-        "operation_execution.py:lease_seconds must be positive",
-    }
+    exempt: set[str] = set()
     offenders: list[str] = []
     seen: set[str] = set()
     for path in sorted((ENGINE / "infrastructure/persistence").rglob("*.py")):

@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import AbstractContextManager
 from threading import Event, Lock
 from time import monotonic
 
@@ -28,6 +29,7 @@ class OperationWorker:
         runner: OperationRunner,
         *,
         request_cancellation: Callable[[str], object],
+        exclusive: Callable[[], AbstractContextManager[object]],
         concurrency: int = 2,
         poll_interval_seconds: float = 0.25,
     ):
@@ -35,6 +37,7 @@ class OperationWorker:
             raise ValueError("worker concurrency must be positive")
         self.runner = runner
         self.request_cancellation = request_cancellation
+        self._exclusive = exclusive
         self.concurrency = concurrency
         self.poll_interval_seconds = poll_interval_seconds
         self._active_ids: set[str] = set()
@@ -121,6 +124,16 @@ class OperationWorker:
         self.runner.record_event(f"operation.{operation.status.value}", level, operation, fields)
 
     def serve(self, stop: Event) -> None:
+        """Hold the worker slot, recover, and claim until `stop` is set.
+
+        Startup recovery interrupts every claimed Operation, so it runs only
+        inside `exclusive`: a second worker is refused before it can touch the
+        first one's work.
+        """
+        with self._exclusive():
+            self._serve(stop)
+
+    def _serve(self, stop: Event) -> None:
         recovered = self.recover_startup()
         if recovered:
             logger.warning(

@@ -83,8 +83,9 @@ the Operation worker - over one database:
 ```
 
 The API serves HTTP and starts no background work; the worker claims queued
-Operations under a lease, so neither process supervises the other and a worker that
-dies leaves its work recoverable by the next one.
+Operations, so neither process supervises the other. Only one worker runs per database:
+a second one refuses to start. Work a dead worker left claimed is interrupted when the
+next worker starts.
 
 Both terminals show concise lifecycle summaries. Complete rotating JSONL logs are
 written under `logs/`: `server.jsonl` for API requests and failures, and

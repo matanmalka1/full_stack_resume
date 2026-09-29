@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager
 from contextvars import Token
 from functools import cache
 from typing import Any, Literal, cast
 
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 
+from ...application.operation_runner import WorkerAlreadyRunning
 from ...application.ports.transactions import ReadTransaction, TransactionConflict, WriteTransaction
 from ...application.transactions import (
     begin_transaction_scope,
@@ -21,6 +23,35 @@ from ...application.transactions import (
 @cache
 def create_database_engine(database_url: str) -> Engine:
     return create_engine(database_url, pool_pre_ping=True)
+
+
+#: The session advisory lock the running worker holds for its whole life.
+WORKER_LOCK_KEY = 0x63765F776F726B  # "cv_work"
+
+
+@contextmanager
+def worker_exclusivity(engine: Engine) -> Iterator[None]:
+    """Hold the database's single worker slot while the block runs.
+
+    Worker startup interrupts every claimed Operation, which is only safe when
+    no other worker is alive. A PostgreSQL session advisory lock makes that a
+    mechanism rather than a convention: a second worker is refused at start
+    instead of interrupting the first one's live work. The lock lives on a
+    dedicated connection that is discarded afterwards, never returned to the
+    pool, so a crash or an early exit releases it with the session.
+    """
+    connection = engine.connect()
+    try:
+        acquired = connection.execute(
+            text("SELECT pg_try_advisory_lock(:key)"), {"key": WORKER_LOCK_KEY}
+        ).scalar_one()
+        connection.commit()
+        if not acquired:
+            raise WorkerAlreadyRunning("another Operation worker is already running")
+        yield
+    finally:
+        connection.invalidate()
+        connection.close()
 
 
 def current_database_revision(engine: Engine) -> str | None:

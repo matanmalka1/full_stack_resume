@@ -48,8 +48,6 @@ def _operation_record(row: Any, outputs: list[Any]) -> PersistedOperation:
         started_at=record["started_at"],
         finished_at=record["finished_at"],
         lease_owner=record["lease_owner"],
-        lease_expires_at=record["lease_expires_at"],
-        heartbeat_at=record["heartbeat_at"],
         cancellation_requested_at=record["cancellation_requested_at"],
         failure_code=record["failure_code"],
         safe_failure_detail=record["safe_failure_detail"],

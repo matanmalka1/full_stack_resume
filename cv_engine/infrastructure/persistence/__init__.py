@@ -2,6 +2,7 @@ from .connection import (
     SqlAlchemyTransactionManager,
     create_database_engine,
     current_database_revision,
+    worker_exclusivity,
 )
 from .operation_client import SqlAlchemyOperationClientStore
 from .operation_execution import SqlAlchemyOperationExecutionStore
@@ -14,4 +15,5 @@ __all__ = [
     "SqlAlchemySettingsStore",
     "create_database_engine",
     "current_database_revision",
+    "worker_exclusivity",
 ]
