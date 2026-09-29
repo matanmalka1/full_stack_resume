@@ -37,6 +37,15 @@ conflict silently.
 
 The user runs every gate. You never run tests — you hand over the commands.
 
+**Cloud exception.** In a cloud agent container (Claude Code on the web, where
+`CLAUDE_CODE_REMOTE=true`, or Codex cloud) the user has no terminal, so you run the
+focused tests yourself and report the exact commands with their real output. Run
+`./scripts/cloud-db.sh` first — cloud containers do not keep PostgreSQL running. Every
+other rule in this section still holds: focused tests only, broaden only for a stated
+reason, and never relabel a failure. Boundary gates the user wants as fresh evidence are
+still handed over for them to run locally. Cloud work always lands on its own branch
+and reaches `main` only through a pull request.
+
 Every change needs the focused tests for what it touched. A **boundary** is a delivery
 point — the work handed back to the user as done, whether that's a task, a PR, or an
 explicit checkpoint the user names. It is not any internal step inside that work.

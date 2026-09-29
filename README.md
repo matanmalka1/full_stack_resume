@@ -9,10 +9,15 @@ The binding specifications are under [`docs/spec/`](docs/spec/).
 
 ## Setup
 
-Install `uv`, then bootstrap a dedicated environment for this worktree:
+Install `uv`, Python 3.11 or newer, and npm, then create a dedicated environment for
+this checkout:
 
 ```bash
-./scripts/bootstrap-worktree.sh
+uv venv --python python3 .venv
+uv pip install --python .venv/bin/python -e '.[test]'
+./.venv/bin/python -m playwright install chromium
+npm ci --prefix frontend
+[ -e .env ] || cp .env.example .env
 ```
 
 Each worktree keeps its own editable environment, so imports cannot fall through to a
@@ -20,9 +25,9 @@ different checkout. `uv` installs third-party packages from its global cache usi
 copy-on-write clones on macOS, avoiding another physical copy of Playwright's 115 MB
 Node driver and the other shared dependencies.
 
-The bootstrap also installs the locked frontend dependencies and creates `.env` from
-`.env.example` when no local configuration exists. It never replaces an existing
-`.env`.
+Run these setup commands once in a new checkout without an existing `.venv`. They
+install the locked frontend dependencies and create `.env` from `.env.example`
+only when no local configuration exists.
 
 PostgreSQL lifecycle and schema upgrades stay explicit. For the first run, start the
 local database and apply the current migrations before starting the application:
@@ -38,9 +43,9 @@ parallel should use separate databases through `CV_DATABASE_URL`; they do not ne
 separate PostgreSQL servers.
 
 PDF generation uses Playwright-managed Chromium. Playwright's normal macOS browser
-cache is shared at `~/Library/Caches/ms-playwright`; the bootstrap refuses
-`PLAYWRIGHT_BROWSERS_PATH=0`, which would instead duplicate browser binaries inside
-each worktree. To install the browser again without replacing the environment:
+cache is shared at `~/Library/Caches/ms-playwright`; leave `PLAYWRIGHT_BROWSERS_PATH`
+unset to avoid duplicating browser binaries inside each worktree. To install the
+browser again without replacing the environment:
 
 ```bash
 ./.venv/bin/python -m playwright install chromium

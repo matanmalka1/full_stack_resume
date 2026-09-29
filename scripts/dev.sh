@@ -18,7 +18,7 @@ case "$#:${1-}" in
 esac
 
 if [ ! -x "$python" ]; then
-    echo "development environment is missing; run ./scripts/bootstrap-worktree.sh first" >&2
+    echo "development environment is missing; follow the Setup instructions in README.md first" >&2
     exit 1
 fi
 
