@@ -802,12 +802,13 @@ def test_persistence_adapters_are_independent_and_token_explicit() -> None:
         for node in ast.walk(ast.parse(source)):
             if not isinstance(node, ast.ClassDef):
                 continue
-            # Transaction infrastructure owns connections/scopes; every other
-            # class discovered here must obey the independent adapter contract.
+            # Transaction infrastructure and the worker lock own connections;
+            # every other class here must obey the independent adapter contract.
             if node.name in {
                 "SqlAlchemyTransactionManager",
                 "SqlAlchemyTransaction",
                 "_SqlAlchemyTransactionScope",
+                "_AdvisoryWorkerLock",
             }:
                 continue
             assert not node.bases, f"{node.name} inherits another concrete adapter"

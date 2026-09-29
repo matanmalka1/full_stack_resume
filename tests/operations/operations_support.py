@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 from cv_engine.application.commands import (
     IngestCommand,
 )
@@ -13,6 +15,17 @@ from cv_engine.application.operations import (
     OperationType,
 )
 from cv_engine.util import new_id
+
+
+class _HeldSlot:
+    """A worker slot that is never lost, for workers that are not the subject."""
+
+    def held(self) -> bool:
+        return True
+
+
+def _held_slot():
+    return nullcontext(_HeldSlot())
 
 
 def _runner(services, handlers, **options) -> OperationRunner:

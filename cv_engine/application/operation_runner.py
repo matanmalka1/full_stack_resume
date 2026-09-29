@@ -49,6 +49,10 @@ class WorkerAlreadyRunning(RuntimeError):
     """Another worker process already holds this database's worker slot."""
 
 
+class WorkerLockLost(RuntimeError):
+    """The worker's slot was released underneath it; it must stop working."""
+
+
 class SourceChanged(OperationExecutionError):
     def __init__(self, safe_detail: str = "Operation sources changed."):
         super().__init__(OperationFailureCode.SOURCE_CHANGED, safe_detail)

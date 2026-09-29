@@ -143,8 +143,9 @@ Evidence: `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
 - Transitions are forward-only; terminal rows cannot be rewritten or deleted.
 - Creation is idempotent by key; the same key with a different payload is refused.
 - Racing claimants produce one claim and one execution; a runner without the lease is
-  refused. Worker startup interrupts every claimed Operation, and a second worker is
-  refused while one holds the worker lock.
+  refused. Worker startup interrupts every claimed Operation, a second worker is
+  refused while one holds the worker lock, and a worker whose lock session is
+  terminated stops and frees the slot.
 - Application and global render leases queue contending work with an observable
   waiting phase; the AI resource admits two and queues the third.
 - Startup interrupts work held by previous runners; shutdown prevents activation.

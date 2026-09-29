@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
 from threading import Barrier, Event, Lock, Thread
 
 import pytest
@@ -13,12 +12,13 @@ from operations_support import (
     _enqueue_operation,
     _execution_write,
     _Handler,
+    _held_slot,
     _operation,
     _operation_for_runner,
     _runner,
     _stored_request,
 )
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 import cv_engine.infrastructure.rendering as rendering_adapter
 from cv_engine.application.commands import (
@@ -40,6 +40,7 @@ from cv_engine.application.operation_runner import (
     PreparedOperation,
     SourceChanged,
     WorkerAlreadyRunning,
+    WorkerLockLost,
 )
 from cv_engine.application.operations import (
     CreateOperation,
@@ -55,16 +56,17 @@ from cv_engine.domain.contracts.providers import SelectionProposal
 from cv_engine.domain.document import PreparationState
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
-from cv_engine.infrastructure.persistence.connection import (
-    SqlAlchemyTransactionManager,
-    worker_exclusivity,
-)
+from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.operation_execution import (
     SqlAlchemyOperationExecutionStore,
 )
 from cv_engine.infrastructure.persistence.tables import (
     operation_resource_leases,
     operations,
+)
+from cv_engine.infrastructure.persistence.worker_lock import (
+    WORKER_LOCK_KEY,
+    worker_exclusivity,
 )
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.execution import OperationWorker
@@ -169,7 +171,7 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
             runner_id="worker-racer",
         ),
         request_cancellation=services.operation_lifecycle.cancel,
-        exclusive=nullcontext,
+        exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0,
     )
@@ -210,7 +212,7 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
             operation_event_logger=event_logger.record_event,
         ),
         request_cancellation=services.operation_lifecycle.cancel,
-        exclusive=nullcontext,
+        exclusive=_held_slot,
         concurrency=1,
     )
     caplog.set_level("INFO", logger="cv_engine.worker")
@@ -363,6 +365,64 @@ def test_startup_interrupts_work_held_by_previous_runners_and_one_worker_runs(
         pass
 
 
+def test_worker_stops_when_its_lock_session_ends(services, database_engine) -> None:
+    """Losing the lock session ends the worker instead of leaving it unguarded.
+
+    PostgreSQL releases a session advisory lock with its session. A worker that
+    kept claiming after that would be running beside whichever worker takes the
+    lock next, so it stops, and the slot is free for that next worker.
+    """
+    worker = OperationWorker(
+        _runner(services, {}, runner_id="lock-loser"),
+        request_cancellation=services.operation_lifecycle.cancel,
+        exclusive=lambda: worker_exclusivity(database_engine),
+        concurrency=1,
+        poll_interval_seconds=0.01,
+        slot_check_interval_seconds=0,
+    )
+    errors: list[BaseException] = []
+    stop = Event()
+
+    def serve() -> None:
+        try:
+            worker.serve(stop)
+        except BaseException as error:
+            errors.append(error)
+
+    # pg_locks spans the cluster; only this database's worker lock is the subject.
+    lock_session = text(
+        "SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND granted "
+        "AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) "
+        "AND classid = :high AND objid = :low AND objsubid = 1"
+    )
+    key = {"high": WORKER_LOCK_KEY >> 32, "low": WORKER_LOCK_KEY & 0xFFFFFFFF}
+    thread = Thread(target=serve)
+    thread.start()
+    try:
+        pid = None
+        for _attempt in range(200):
+            with database_engine.connect() as connection:
+                pid = connection.execute(lock_session, key).scalar_one_or_none()
+            if pid is not None:
+                break
+            Event().wait(0.01)
+        assert pid is not None, "the worker never took its lock"
+
+        with database_engine.connect() as connection:
+            connection.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": pid})
+            connection.commit()
+        thread.join(timeout=5)
+    finally:
+        # Never leave a worker behind: it would claim the next tests' Operations.
+        stop.set()
+        thread.join(timeout=5)
+
+    assert not thread.is_alive(), "the worker kept running without its lock"
+    assert len(errors) == 1 and isinstance(errors[0], WorkerLockLost)
+    with worker_exclusivity(database_engine):
+        pass
+
+
 def test_runner_activates_outputs_and_completes_in_one_activation_transaction(services) -> None:
     operation = _operation_for_runner(services)
     output_id = new_id()
@@ -501,7 +561,7 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     worker = OperationWorker(
         runner,
         request_cancellation=services.operation_lifecycle.cancel,
-        exclusive=nullcontext,
+        exclusive=_held_slot,
         concurrency=1,
         poll_interval_seconds=0.01,
     )

@@ -55,7 +55,6 @@ from ..infrastructure.persistence import (
     SqlAlchemyTransactionManager,
     create_database_engine,
     current_database_revision,
-    worker_exclusivity,
 )
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisSelectionSourceReader
@@ -85,6 +84,7 @@ from ..infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
 from ..infrastructure.persistence.settings_store import SqlAlchemySettingsStore
+from ..infrastructure.persistence.worker_lock import worker_exclusivity
 from ..infrastructure.providers import OpenAIProvider
 from ..infrastructure.rendering import PlaywrightRenderer
 from ..util import new_id

@@ -402,8 +402,15 @@ startup releases them.
 guarantee, startup changes every `queued`/`running` row that has a `lease_owner` to
 `interrupted` and releases its slots: every such claim belongs to a worker that no
 longer exists. An external call is never resumed. The lock lives on a dedicated
-connection, so a crash releases it with the session. Shutdown stops claiming and
-requests cancellation for whatever it still holds.
+connection, so a crash releases it with the session.
+
+The session can also end under a live worker (terminated, or a server restart). The
+worker checks the lock session every 5 s; once it is gone it stops claiming, requests
+cancellation for what it holds, and exits with `WorkerLockLost`. Until it notices, a
+worker started in that window can interrupt its Operations but not corrupt them: every
+runner write, activation included, requires `lease_owner` to still be that runner, so
+interrupted work cannot activate. Shutdown stops claiming and requests cancellation for
+whatever it still holds.
 
 **Records.** An Operation stores its type, secret-free payload and hash (a payload with
 a secret-named key is refused), idempotency key, provider/model/reasoning effort, frozen
