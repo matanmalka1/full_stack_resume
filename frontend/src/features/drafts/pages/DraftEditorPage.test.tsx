@@ -1039,7 +1039,11 @@ describe("DraftEditorPage regeneration", () => {
     const fetchMock = stubReads({ regenerate: () => accepted() });
 
     renderPage();
-    fireEvent.click((await screen.findAllByRole("button", { name: "יצירה מחדש של השורה" }))[0]!);
+    const regenerate = await screen.findByRole("button", { name: "יצירה מחדש של השורה" });
+    const identity = screen.getByRole("heading", { name: "כותרת ופרטי קשר" }).closest("section")!;
+    expect(within(identity).queryByRole("button", { name: "יצירה מחדש של השורה" })).not.toBeInTheDocument();
+    expect(within(identity).getAllByRole("button", { name: "עריכת השורה" })).toHaveLength(2);
+    fireEvent.click(regenerate);
 
     /* The overlay, not the route: the editor's own heading is still on screen under it. */
     expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
@@ -1050,11 +1054,11 @@ describe("DraftEditorPage regeneration", () => {
     expect(String(call?.[0])).toBe(`${DOC_PATH}/regenerate-claim`);
     expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({
       expected_document_hash: HASH,
-      claim_id: "c-headline",
+      claim_id: "c-1",
       keep_text: false,
     });
     expect(((call?.[1] as RequestInit | undefined)?.headers as Headers | undefined)?.get("Idempotency-Key")).toBe(
-      `${HASH}:c-headline`,
+      `${HASH}:c-1`,
     );
 
     /* Hiding the run does not make the draft safe to change: every edit would be addressed

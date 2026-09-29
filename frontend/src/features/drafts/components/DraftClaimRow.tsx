@@ -180,7 +180,9 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
   /* A line linked to facts can be checked as written. The headline and the contacts are
      not factual claims, and an unlinked line has nothing to be checked against - it is
      resolved below, as a fact. */
-  const reviewable = claim.fact_ids.length > 0 && claim.style !== "headline" && claim.style !== "contact";
+  // Regeneration addresses section claims only; identity lines are edited manually.
+  const regeneratable = claim.style !== "headline" && claim.style !== "contact";
+  const reviewable = claim.fact_ids.length > 0 && regeneratable;
 
   const toggleEditing = () => {
     if (editing) {
@@ -300,12 +302,14 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
             label={editing ? "סיום עריכת השורה" : "עריכת השורה"}
             onClick={toggleEditing}
           />
-          <RowAction
-            disabled={actions.regenerationDisabled}
-            icon={RefreshCw}
-            label="יצירה מחדש של השורה"
-            onClick={() => actions.onRegenerate(claim)}
-          />
+          {regeneratable ? (
+            <RowAction
+              disabled={actions.regenerationDisabled}
+              icon={RefreshCw}
+              label="יצירה מחדש של השורה"
+              onClick={() => actions.onRegenerate(claim)}
+            />
+          ) : null}
           {removal.route === "none" ? null : (
             <RowAction
               disabled={actions.locked}
