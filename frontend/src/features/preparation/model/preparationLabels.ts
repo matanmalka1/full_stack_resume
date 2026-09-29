@@ -121,7 +121,6 @@ const blockedReasonLabels: Record<string, string> = {
   VALIDATION_FAILED: "הבדיקה נכשלה. צריך לתקן ולבדוק מחדש.",
   PENDING_FACT_REQUIRES_RESOLUTION: "יש טענה בלי עובדה מאושרת מאחוריה.",
   FACT_DELETED_REQUIRES_RESOLUTION: "הטיוטה נשענת על עובדה שנמחקה.",
-  KNOWLEDGE_RECONCILIATION_REQUIRED: "צריך להשלים התאמת עובדות.",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "צריך לאשר שזו מועמדות כפולה.",
 };
 
@@ -140,7 +139,6 @@ export const blockedReasonLabel = (reason: string): string | null => blockedReas
 const reasonTitles: Record<string, string> = {
   PENDING_FACT_REQUIRES_RESOLUTION: "טענה בלי עובדה מאושרת",
   FACT_DELETED_REQUIRES_RESOLUTION: "הטיוטה נשענת על עובדה שנמחקה",
-  KNOWLEDGE_RECONCILIATION_REQUIRED: "נדרשת התאמת עובדות",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "מועמדות כפולה",
 };
 

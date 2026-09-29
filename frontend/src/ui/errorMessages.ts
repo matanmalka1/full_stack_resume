@@ -45,14 +45,11 @@ const problemMessages: Record<string, ProblemMessage> = {
   LINEAGE_BROKEN: { reason: "מקורות המסמך אינם תואמים זה לזה.", action: "יש לחזור למועמדות ולהמשיך מהמצב העדכני." },
   VALIDATION_BLOCKED: { reason: "הבדיקה מצאה בעיות שחוסמות את הפעולה.", action: "יש לתקן אותן ולנסות שוב." },
   VALIDATION_FAILED: { reason: "הבדיקה מצאה בעיות שחוסמות את הפעולה.", action: "יש לתקן אותן ולנסות שוב." },
-  VALIDATION_STALE: { reason: "המסמך השתנה מאז הבדיקה האחרונה.", action: "יש להריץ את הבדיקה שוב." },
-  VALIDATION_REQUIRED: { reason: "הגרסה הנוכחית עדיין לא נבדקה.", action: "יש להריץ בדיקה ולנסות שוב." },
   DOCUMENT_NOT_APPROVED: { reason: "המסמך עדיין לא אושר.", action: "יש לאשר את הגרסה הנוכחית לפני יצירת הקבצים." },
   DOCUMENT_NOT_READY: {
     reason: "המסמך השתנה מאז שהקבצים נוצרו.",
     action: "יש לאשר את המסמך וליצור את הקבצים מחדש.",
   },
-  UNLINKED_CLAIM: { reason: "יש במסמך טענה שאינה מקושרת לעובדה.", action: "יש לקשר אותה לעובדה מאושרת או להסיר אותה." },
   REGENERATION_REQUIRED: {
     reason: "המסמך כולל ניסוח ידני שבנייה מחדש הייתה מוחקת, ולכן הבחירה לא השתנתה.",
     action: "אפשר לשנות אותה ביצירה מחדש של הפרק או של השורה.",

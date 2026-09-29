@@ -184,9 +184,7 @@ const stubReads = (
   return fetchMock;
 };
 
-const reviewDetail = (
-  codes = ["PENDING_FACT_REQUIRES_RESOLUTION", "KNOWLEDGE_RECONCILIATION_REQUIRED"],
-): ApplicationDetail =>
+const reviewDetail = (codes = ["PENDING_FACT_REQUIRES_RESOLUTION"]): ApplicationDetail =>
   detail({
     review_reasons: codes.map((code) => ({
       code,
@@ -571,7 +569,6 @@ describe("DraftEditorPage", () => {
     });
     renderPage();
     expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeVisible();
-    expect(screen.getByText(/נדרשת השלמת התאמה של מאגר הידע/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "מעבר לפתרון השורה" }));
     await waitFor(() => expect(document.activeElement?.id).toBe("draft-claim-c-1"));
     expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeVisible();
@@ -687,10 +684,10 @@ describe("DraftEditorPage", () => {
               review_reasons: blocked
                 ? [
                     {
-                      code: "KNOWLEDGE_RECONCILIATION_REQUIRED",
-                      message: "Knowledge must be reconciled first.",
-                      entity_references: {},
-                      allowed_resolution_actions: [],
+                      code: "FACT_DELETED_REQUIRES_RESOLUTION",
+                      message: "The document depends on a fact that has been deleted.",
+                      entity_references: { fact_id: "f-gone" },
+                      allowed_resolution_actions: ["update_selection"],
                     },
                   ]
                 : [],
@@ -726,7 +723,7 @@ describe("DraftEditorPage", () => {
       if (outcome === "blocked") {
         /* The projection no longer offers the check, so none is sent: the blocker is the
            answer, reported where the editor reports blockers. */
-        expect(await screen.findByText(/נדרשת השלמת התאמה של מאגר הידע/)).toBeInTheDocument();
+        expect(await screen.findByText("יש לשנות את בחירת העובדות של המסמך במסך ההכנה.")).toBeInTheDocument();
         expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/check`)).toBe(false);
         expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
       } else {
