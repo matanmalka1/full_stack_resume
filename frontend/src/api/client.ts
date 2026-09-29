@@ -25,7 +25,6 @@ export type ApiPath = `/api/v1/${string}`;
 export interface ApiResponse<T> {
   data: T;
   status: number;
-  contentDisposition: string | null;
   etag: string | null;
   location: string | null;
 }
@@ -153,7 +152,6 @@ export const apiRequest = async <T>(path: ApiPath, options: ApiRequestOptions = 
   return {
     data: payload as T,
     status: response.status,
-    contentDisposition: response.headers.get("Content-Disposition"),
     etag: response.headers.get("ETag"),
     location: response.headers.get("Location"),
   };

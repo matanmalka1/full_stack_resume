@@ -19,7 +19,6 @@ const classification: Classification = {
       requirement: "Experience selling AWS-based solutions",
       severity: "hard",
       reason: "Canonical facts do not verify this requirement.",
-      substituteFactIds: [],
     },
   ],
   decided: [],

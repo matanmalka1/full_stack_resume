@@ -9,7 +9,6 @@ const AUTOSAVE_DEBOUNCE_MS = 500;
 
 interface StoredIntakeDraft {
   fields: ApplicationIntakeFields;
-  savedAt: string;
   version: typeof INTAKE_DRAFT_VERSION;
 }
 
@@ -55,11 +54,7 @@ const persist = (fields: ApplicationIntakeFields): boolean => {
       return true;
     }
 
-    const draft: StoredIntakeDraft = {
-      fields,
-      savedAt: new Date().toISOString(),
-      version: INTAKE_DRAFT_VERSION,
-    };
+    const draft: StoredIntakeDraft = { fields, version: INTAKE_DRAFT_VERSION };
     window.localStorage.setItem(INTAKE_DRAFT_STORAGE_KEY, JSON.stringify(draft));
     return true;
   } catch {

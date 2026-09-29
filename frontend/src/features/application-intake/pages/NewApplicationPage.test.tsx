@@ -74,10 +74,7 @@ const ANALYSES_PATH = "/api/v1/applications/app-new/analyses";
 const INTAKE_DRAFT_STORAGE_KEY = "cv-engine:application-intake-draft";
 
 const storeIntakeDraft = (fields: { company: string; target_role: string; source_url: string; job_text: string }) => {
-  window.localStorage.setItem(
-    INTAKE_DRAFT_STORAGE_KEY,
-    JSON.stringify({ fields, savedAt: "2026-09-14T07:00:00.000Z", version: 1 }),
-  );
+  window.localStorage.setItem(INTAKE_DRAFT_STORAGE_KEY, JSON.stringify({ fields, version: 1 }));
 };
 
 const queuedAnalysisResponse = (): Response =>

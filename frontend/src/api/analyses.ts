@@ -89,7 +89,6 @@ export interface AnalysisGap {
   requirement: string;
   severity: "hard" | "warning";
   reason: string;
-  substituteFactIds: string[];
 }
 
 /* Where the reading was narrowed: a citation dropped, a coverage lowered, a quote the
@@ -97,7 +96,6 @@ export interface AnalysisGap {
    less than the posting seems to ask for - and never a blocker. */
 export interface AnalysisIssue {
   code: string;
-  requirementIndex: number | null;
 }
 
 export interface Classification {
@@ -180,16 +178,7 @@ const requirementsFrom = (value: unknown): { items: Requirement[]; unreadableCou
 
 const issuesFrom = (value: unknown): AnalysisIssue[] =>
   Array.isArray(value)
-    ? value.flatMap((issue) =>
-        isRecord(issue) && typeof issue.code === "string"
-          ? [
-              {
-                code: issue.code,
-                requirementIndex: typeof issue.requirement_index === "number" ? issue.requirement_index : null,
-              },
-            ]
-          : [],
-      )
+    ? value.flatMap((issue) => (isRecord(issue) && typeof issue.code === "string" ? [{ code: issue.code }] : []))
     : [];
 
 /* A narrow read of the analysis document, which is carried as an opaque object on the wire
@@ -236,7 +225,6 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
       requirement: gap.requirement,
       severity: gap.severity,
       reason: gap.reason,
-      substituteFactIds: gap.substitute_fact_ids ?? [],
     })),
     decided: Object.keys(override),
     summary: typeof analysis.summary === "string" ? analysis.summary : null,
