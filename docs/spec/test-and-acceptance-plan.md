@@ -37,12 +37,24 @@ Section numbers §5.1, §5.3, §5.5, and §6 are cited from code docstrings and
   unset.
 - **Frontend** — Vitest with React Testing Library, colocated under `frontend/src/`;
   `npm run check` also runs typecheck, design-token lint, and strict oxlint. Playwright
-  tests in `frontend/e2e/` run against the production build with the API stubbed by
-  `page.route`: they prove UI behavior, focus, and accessibility, not backend
-  integration.
+  tests in `frontend/e2e/` normally run against the production build with the API
+  stubbed by `page.route`: they prove UI behavior, focus, and accessibility.
+  `frontend/e2e/integration/` instead runs against the production build served by
+  real FastAPI and isolated PostgreSQL, without API interception. The browser-marked
+  `tests/e2e/test_browser_api_journey.py` owns its build, database, and server lifecycle.
 - **API contract** — `openapi/openapi.json` is checked by
   `tests/platform/test_api_foundation.py`; `openapi/types.ts` by regeneration and
   `git diff --exit-code`.
+- **CI** — `.github/workflows/ci.yml` runs on every pull request and on `main`. The
+  backend suite runs against a fresh PostgreSQL: the browser-complete gate
+  (`CV_REQUIRE_BROWSER=1`, `-m ""`) on Linux Chromium on every push to `main` and on a
+  pull request whose diff touches rendering, browser fixtures and journeys, or the
+  browser and build pins (the workflow's `BROWSER_PATHS`); the default suite otherwise.
+  The API contract is regenerated and checked with `git diff --exit-code -- openapi/`.
+  The frontend runs `npm run check` and the stubbed Playwright suite against the
+  production build. `OPENAI_API_KEY` is never set. The live smoke (§6) and real S3 stay
+  manual. A green CI run is evidence for the scopes it ran; it does not replace the
+  focused gates `CLAUDE.md` assigns to a diff.
 
 ## 3. Evidence map
 
@@ -204,6 +216,17 @@ failure; Ready download; recruitment; application list; facts; settings; routing
 error boundary. `frontend/e2e/` holds dialog focus and backdrop behavior, search
 palette, live-run locking, route focus, sidebar, theme, and axe scans of New
 Application, Job Detail, and the Facts integrity check.
+`frontend/e2e/accessibility.spec.ts` holds the axe scans of the application board, the
+Resume view's failure state (a successful read redirects to a screen scanned on its
+own), the Draft Editor with its approval dialog (its sandboxed preview frame, the
+server-rendered CV, is excluded), the Ready screen with its submission
+dialog, Settings, and Not Found; an API read it does not stub fails
+the test by name.
+
+`frontend/e2e/integration/intake.spec.ts` covers browser-to-API intake, persisted
+detail after reload, list navigation, duplicate detection and explicit acknowledgement,
+and preservation of the original snapshot. It runs without a provider; no analysis
+or asynchronous Operation is requested, so this journey needs no worker.
 
 ## 4. Golden matrix and semantic parity
 
@@ -381,9 +404,9 @@ macOS.
 
 Open work, not implied coverage:
 
-1. **No CI.** Every gate runs manually.
-2. **Axe coverage** is missing for the application list, Resume view, Draft Editor, and
-   Ready screen. A new screen arrives with its scan.
-3. **Frontend browser tests stub the API.** UI-to-API integration is proven only by the
-   generated types and the backend API journey.
-4. **Real S3** is exercised only by a manual smoke run.
+1. **A new screen arrives with its axe scan.** Every current screen has one.
+2. **Browser-to-API coverage beyond intake is missing.** Intake, reload, list navigation,
+   and duplicate acknowledgement have a real-server browser journey. Analysis through
+   Ready and submission remain covered separately by stubbed UI tests and backend
+   journeys, not by a browser driving the real API and worker together.
+3. **Real S3** is exercised only by a manual smoke run.

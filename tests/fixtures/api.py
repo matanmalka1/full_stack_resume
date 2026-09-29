@@ -67,7 +67,14 @@ class LiveApiServer:
 
 
 @pytest.fixture
-def live_api_server(project_root: Path, database_url: str) -> Iterator[LiveApiServer]:
+def frontend_dist() -> Path | None:
+    return None
+
+
+@pytest.fixture
+def live_api_server(
+    project_root: Path, database_url: str, frontend_dist: Path | None
+) -> Iterator[LiveApiServer]:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
@@ -92,6 +99,7 @@ def live_api_server(project_root: Path, database_url: str) -> Iterator[LiveApiSe
             "CV_DATABASE_URL": database_url,
             "PYTHONPATH": str(TESTS_DIR),
             "CV_API_PORT": str(port),
+            "CV_TEST_FRONTEND_DIST": str(frontend_dist) if frontend_dist else "",
         },
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

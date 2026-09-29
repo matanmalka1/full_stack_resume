@@ -1,0 +1,150 @@
+# The gates of docs/spec/test-and-acceptance-plan.md §2, run on every pull request and
+# on main. The backend job runs the browser-complete gate (CV_REQUIRE_BROWSER=1 -m ""):
+# rendering, PDF, ATS acceptance, and the real-server browser journey. On main it always
+# runs; on a pull request only when the diff touches what those tests exercise
+# (BROWSER_PATHS below), otherwise the default suite runs. The live provider smoke and
+# real S3 stay manual release gates.
+#
+# OPENAI_API_KEY is never set here. No test reaches a real provider, and the offline
+# journeys assert the key is unset.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: cv
+          POSTGRES_USER: cv
+          POSTGRES_PASSWORD: cv
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cv -d cv"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      # The suite derives its own database, cv_test, from this runtime URL and refuses to
+      # run against the runtime database itself (README § Tests).
+      CV_DATABASE_URL: postgresql+psycopg://cv:cv@127.0.0.1:5432/cv
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Decide whether the diff needs the browser gate
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Rendering and its validation, the fixtures and journeys browser tests use, the
+          # real-server integration suite, and what pins the browser or the build.
+          BROWSER_PATHS: >-
+            ^(cv_engine/infrastructure/|cv_engine/application/services/operations/|rendering/|config/|tests/fixtures/|tests/e2e/|tests/asgi_factory\.py|tests/conftest\.py|frontend/e2e/integration/|frontend/playwright\.integration\.config\.ts|pyproject\.toml|uv\.lock|\.github/workflows/)
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA" HEAD | grep -Eq "$BROWSER_PATHS"; then
+            echo "browser=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "browser=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the engine with test extras
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e '.[test]'
+      # The renderer drives Chromium through Python Playwright; the real-server browser
+      # journey launches the frontend's own Playwright against a fresh React build.
+      - uses: actions/setup-node@v4
+        if: steps.scope.outputs.browser == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install both Playwright Chromiums
+        if: steps.scope.outputs.browser == 'true'
+        run: |
+          ./.venv/bin/python -m playwright install --with-deps chromium
+          npm ci --prefix frontend
+          cd frontend && npx playwright install chromium
+      - name: Create and migrate the test database
+        env:
+          PGPASSWORD: cv
+        run: |
+          createdb -h 127.0.0.1 -U cv cv_test
+          CV_DATABASE_URL=postgresql+psycopg://cv:cv@127.0.0.1:5432/cv_test ./.venv/bin/alembic upgrade head
+      - name: pytest, default suite
+        if: steps.scope.outputs.browser != 'true'
+        run: ./.venv/bin/python -m pytest -q
+      - name: pytest, browser tests included
+        if: steps.scope.outputs.browser == 'true'
+        env:
+          # Fails the run if browser tests are still deselected.
+          CV_REQUIRE_BROWSER: "1"
+        run: ./.venv/bin/python -m pytest -q -m ""
+
+  api-contract:
+    name: API contract (generated OpenAPI and types)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: openapi/package-lock.json
+      - name: Install the engine
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e '.[test]'
+      - name: Regenerate openapi.json and types.ts
+        run: |
+          ./.venv/bin/python openapi/generate_openapi.py
+          cd openapi && npm ci && npm run generate
+      - name: Generated contract matches the committed one
+        run: git diff --exit-code -- openapi/
+
+  frontend:
+    name: Frontend (check, Playwright)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Typecheck, design-token lint, strict oxlint, Vitest
+        run: npm run check
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Playwright against the production build
+        run: npm run e2e
+      - name: Keep Playwright results of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: frontend/test-results
+          retention-days: 7

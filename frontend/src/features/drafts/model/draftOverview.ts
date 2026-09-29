@@ -70,7 +70,10 @@ export const summarizeSelection = (draft: EditableDocument): SelectionSummary =>
     included: ranked.filter((fact) => fact.outcome !== "omitted").length,
     pinned: ranked.filter((fact) => fact.outcome === "pinned").length,
     omitted,
-    omittedByReason: Array.from(reasons, ([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count),
+    omittedByReason: Array.from(reasons, ([reason, count]) => ({ reason, count }))
+      // ES2022 has no toSorted; this array is newly created and belongs only to this call.
+      // oxlint-disable-next-line unicorn/no-array-sort
+      .sort((a, b) => b.count - a.count),
   };
 };
 

@@ -44,7 +44,7 @@
       }
     },
     {
-      "files": ["vite.config.ts", "playwright.config.ts", "scripts/**"],
+      "files": ["vite.config.ts", "playwright.config.ts", "playwright.integration.config.ts", "scripts/**"],
       "rules": {
         "import/no-default-export": "off",
         "no-console": "off"

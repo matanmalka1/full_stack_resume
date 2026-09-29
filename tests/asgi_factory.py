@@ -32,9 +32,10 @@ def build_test_app() -> FastAPI:
     # No `config=`: composition resolves it against `paths.root`, so the test
     # project's own `.env` and config apply rather than the installation's.
     services = build_services(paths)
+    frontend_dist = os.environ.get("CV_TEST_FRONTEND_DIST")
     return create_app(
         build_api_services(services),
         port=int(os.environ.get("CV_API_PORT", "8765")),
-        # A test project has no frontend build, and the API is what is served.
-        frontend_dist=None,
+        # Browser integration tests opt into serving a fresh production build.
+        frontend_dist=Path(frontend_dist) if frontend_dist else None,
     )

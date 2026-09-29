@@ -280,6 +280,11 @@ golden Development/English Sales/Hebrew Sales/Tech Sales cases, migration,
 immutability, and targeted regressions. Tests marked `browser` are deselected by the
 default `pyproject.toml` configuration.
 
+`.github/workflows/ci.yml` runs the browser-complete gate below (on `main`, and on
+pull requests that touch rendering or browser tests; the default suite otherwise), the
+API contract regeneration check, and the frontend `npm run check` and stubbed Playwright suite on
+every pull request and on `main`.
+
 Browser tests start a real headless Chromium/Chrome. Some
 sandboxed agent sessions (for example Codex under Seatbelt) block the browser's Mach
 port registration, so the browser cannot start there at all; Chrome's `--no-sandbox`
@@ -298,6 +303,23 @@ The empty marker expression overrides the default `not browser` selection, so th
 runs the entire suite, including rendering, PDF, and ATS acceptance checks.
 `CV_REQUIRE_BROWSER=1` makes the run fail immediately if browser tests are still
 deselected.
+
+The focused real-server frontend journey uses the same isolated PostgreSQL test
+database described above. With frontend dependencies installed (`npm ci --prefix
+frontend`) and its Chromium installed (`cd frontend && npx playwright install chromium`),
+run from the project root:
+
+```bash
+./.venv/bin/python -m pytest -q -m browser tests/e2e/test_browser_api_journey.py
+```
+
+Pytest builds React into a temporary directory, starts FastAPI serving that build on
+one origin, and launches the separate Playwright integration configuration. The test
+drives intake, reload, list navigation, and duplicate acknowledgement through the real
+API with no interception or AI provider. It needs no worker because it creates no
+Operations. Do not run other database suites concurrently against the same test database.
+The ordinary `npm --prefix frontend run e2e` suite keeps its stubbed API and excludes
+these integration tests.
 
 ## Historical artifacts
 
