@@ -35,6 +35,7 @@ const application = (number: number): ApplicationListItem =>
     company: `Acme ${number}`,
     target_role: "Engineer",
     current_status: "saved",
+    notes: "",
     recruitment_status: "saved",
     preparation_state: "needs_analysis",
     content_check: "none",
