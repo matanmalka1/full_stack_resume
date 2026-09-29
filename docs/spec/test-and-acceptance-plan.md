@@ -218,7 +218,8 @@ palette, live-run locking, route focus, sidebar, theme, and axe scans of New
 Application, Job Detail, and the Facts integrity check.
 `frontend/e2e/accessibility.spec.ts` holds the axe scans of the application board, the
 Resume view's failure state (a successful read redirects to a screen scanned on its
-own), the Draft Editor with its approval dialog, the Ready screen with its submission
+own), the Draft Editor with its approval dialog (its sandboxed preview frame, the
+server-rendered CV, is excluded), the Ready screen with its submission
 dialog, Settings, and Not Found; an API read it does not stub fails
 the test by name.
 

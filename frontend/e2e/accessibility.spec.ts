@@ -36,10 +36,18 @@ const stubApi = async (page: Page, answers: Record<string, Answer>): Promise<str
   return unstubbed;
 };
 
-const scan = async (page: Page) => {
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+const scan = async (page: Page, exclude: string[] = []) => {
+  const builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]);
+  for (const selector of exclude) builder.exclude(selector);
+  const results = await builder.analyze();
   expect(results.violations).toEqual([]);
 };
+
+/* The draft preview is the server-rendered CV in a `sandbox=""` frame. Axe cannot run
+   scripts there and waits on the frame until the test times out; the document inside is
+   the backend's render output, checked by its render validation, not this app's UI. The
+   frame's title is asserted by the test itself. */
+const DRAFT_PREVIEW = 'iframe[title="תצוגה מקדימה של הטיוטה"]';
 
 const listItem = (overrides: Partial<ApplicationListItem>): ApplicationListItem => ({
   id: "app-1",
@@ -213,14 +221,14 @@ test.describe("accessibility", () => {
     await expect(page.getByTitle("תצוגה מקדימה של הטיוטה")).toBeVisible();
     await expect(page.getByText("Owned the CRM migration.").first()).toBeVisible();
 
-    await scan(page);
+    await scan(page, [DRAFT_PREVIEW]);
 
     await page.getByRole("button", { name: "בדיקה והכנת PDF" }).click();
     const approval = page.getByRole("dialog", { name: "אישור והכנת PDF" });
     await expect(approval).toBeVisible();
     await expect(approval).toHaveCSS("opacity", "1");
 
-    await scan(page);
+    await scan(page, [DRAFT_PREVIEW]);
   });
 
   test("the Settings screen has no automatically detectable violations", async ({ page }) => {
