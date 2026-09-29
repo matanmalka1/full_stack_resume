@@ -16,7 +16,7 @@ explicit confirmation the specification requires for a status change, which
 must fail rather than be interpreted when it is absent.
 
 Fact identity is deliberately absent from every request. Identity is generated
-(product-spec.md 561: "The UI does not expose fact-ID creation"), and the
+(product-spec.md §17: "the UI never creates IDs"), and the
 application layer refuses a caller-supplied one; not accepting the field is
 how this layer states the same rule.
 """

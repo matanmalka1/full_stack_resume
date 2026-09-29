@@ -1,7 +1,7 @@
 """The contextual fact lifecycle: inspect, capture, confirm, attach.
 
 The Web flow this serves is contextual rather than a general Knowledge
-Manager (product-spec.md 561-567): facts are reached from the claim that needs
+Manager (product-spec.md §17): facts are reached from the claim that needs
 them, created as `pending`, made canonical only on explicit confirmation, and
 attached to a Profile section before a plan can select them.
 

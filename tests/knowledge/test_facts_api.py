@@ -78,7 +78,7 @@ def test_fact_attachment_targets_are_read_only_and_report_existing_membership(ap
 
 def test_fact_http_refusals_preserve_the_pending_fact(api_worker) -> None:
     """Transport and lifecycle refusals share one unchanged source fact."""
-    # product-spec.md 561: the UI does not expose fact-ID creation.
+    # product-spec.md §17: the UI never creates fact IDs.
     chosen_identity = _post(
         api_worker,
         "/facts",

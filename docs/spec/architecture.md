@@ -358,12 +358,14 @@ Commands receive explicit source IDs. `latest` belongs to query and UI convenien
 command semantics.
 
 `CVDocument` records its source — `analysis_id` and `selection` — and has no draft or
-revision lineage (`docs/decisions/single-document-model.md`). A Submission freezes the
-provenance: Application, JobSnapshot, JobAnalysis, `content`/`document_hash`,
-CandidateContext, `facts_hash`, and policy versions.
+revision lineage (`docs/decisions/single-document-model.md`). A Submission freezes
+what was sent: `content` (which carries its Application, JobSnapshot, and JobAnalysis
+binding and the coarse fact-store version), `document_hash`, the JobSnapshot ID, and the
+copied files with their SHA-256. It does not record `facts_hash`, the CandidateContext
+version, or policy versions (product-spec.md §16).
 
-The Knowledge-store version is coarse audit and detection; `facts_hash` is the exact
-dependency hash. Ready is computed from the document's basis, never stored
+The fact-store version is coarse audit; `facts_hash` is the document's exact dependency
+hash, computed on read and never stored. Ready is computed from the document's basis, never stored
 (state-and-use-cases.md §3, §4, §6).
 
 ## 9. Application services and action policy
