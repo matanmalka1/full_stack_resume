@@ -1,12 +1,12 @@
 {
-  "version": "9.0.0",
+  "version": "10.0.0",
   "prompt": {
-    "version": "system-v11",
-    "file": "ai/prompts/system-v11.md"
+    "version": "system-v12",
+    "file": "ai/prompts/system-v12.md"
   },
   "tasks": {
     "propose_analysis": {
-      "version": "4.0.0",
+      "version": "5.0.0",
       "input": "AnalysisContext",
       "input_schema_version": "1.0.0",
       "output": "AnalysisProposal",

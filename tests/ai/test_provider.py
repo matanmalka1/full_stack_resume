@@ -294,8 +294,8 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     assert len(answered.provenance.raw_output_hash) == 64
 
     # The rules the tasks rely on are in that one prompt. Analysis splits a
-    # sentence only into self-contained quotes and judges qualitative wording
-    # semantically; selection respects each section's pin capacity and allowed
+    # sentence only into self-contained quotes and judges qualitative and
+    # frequency wording semantically; selection respects each section's pin capacity and allowed
     # facts.
     prompt = task_contracts.prompt_text
     for rule in (
@@ -306,6 +306,8 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
         "Do not require a fact to",
         "Absence of that wording or quantification is not by itself",
         "identifiable substantive condition",
+        "frequency or habit wording",
+        "explicit duration or quantity threshold",
         "max_additional_pins",
         "Count each proposed pin not already",
         "The engine still validates the complete overlay",
