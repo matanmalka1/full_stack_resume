@@ -1,4 +1,4 @@
-import type { ContentCheck, PreparationState } from "@/api/contracts";
+import type { PreparationState } from "@/api/contracts";
 import { BadgeCheck, CircleCheck, Clock, FilePen, FilePlus2, type LucideIcon } from "lucide-react";
 
 import type { Tone } from "@/ui/tone";
@@ -21,22 +21,6 @@ export const preparationStateTones: Record<PreparationState, Tone> = {
   draft_in_progress: "neutral",
   approved: "success",
   ready: "success",
-};
-
-/* §5: whether the stored content report still describes the document. An outdated report
-   is still shown - as outdated - and authorizes nothing. */
-export const contentCheckLabels: Record<ContentCheck, string> = {
-  none: "טרם נבדק",
-  outdated: "הבדיקה אינה מעודכנת",
-  failed: "הבדיקה נכשלה",
-  passed: "הבדיקה עברה",
-};
-
-export const contentCheckTones: Record<ContentCheck, Tone> = {
-  none: "neutral",
-  outdated: "warning",
-  failed: "blocker",
-  passed: "success",
 };
 
 /* Hebrew names for the actions the projection reports. Deliberately a partial map over

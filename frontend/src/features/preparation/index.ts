@@ -42,9 +42,7 @@ export {
 export {
   confidenceText,
   emphasisLabels,
-  fitLevelIcon,
   fitLevelLabel,
-  fitLevelTone,
   languageLabels,
   profileLabels,
   trackLabel,
@@ -52,8 +50,6 @@ export {
 export {
   actionDescription,
   actionLabel,
-  contentCheckLabels,
-  contentCheckTones,
   preparationStateIcons,
   preparationStateLabels,
   preparationStateTones,

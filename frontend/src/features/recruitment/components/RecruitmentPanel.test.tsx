@@ -1,11 +1,27 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { applicationDetailQueryKey } from "@/api/applications";
 import type { ApplicationDetail, RecruitmentTimelineItem } from "@/api/contracts";
 import { formatDate } from "@/utils/formatDateTime";
-import { RecruitmentManagerButton } from "./RecruitmentManagerButton";
+import type { RecruitmentManagerTarget } from "../model/recruitment.types";
+import { RecruitmentUpdateDialog } from "./RecruitmentUpdateDialog";
+
+/* A harness standing in for the screens that open the dialog: one control that opens it
+   for one Application, closed again by the dialog itself. */
+const RecruitmentManagerButton = ({ application }: { application: RecruitmentManagerTarget }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} type="button">
+        עדכון סטטוס ומשימות
+      </button>
+      <RecruitmentUpdateDialog application={open ? application : null} onClose={() => setOpen(false)} />
+    </>
+  );
+};
 
 const statusEvent = (overrides: Partial<RecruitmentTimelineItem> = {}): RecruitmentTimelineItem => ({
   id: "status-1",
@@ -99,7 +115,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("RecruitmentManagerButton", () => {
+describe("RecruitmentUpdateDialog", () => {
   it("names the first event an opening rather than a transition from a status never held", async () => {
     const value = detail({
       recruitment_timeline: [statusEvent({ from_status: null, to_status: "saved", reason: "application created" })],

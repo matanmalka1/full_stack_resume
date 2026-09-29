@@ -1,6 +1,3 @@
-import { HelpCircle, SignalHigh, SignalLow, SignalMedium } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-
 import type { RequirementCoverage } from "@/api/analyses";
 import { type FitLevel, isFitLevel } from "@/api/classificationValues";
 import type { Emphasis, Language, ProfileName, Track } from "@/api/contracts";
@@ -71,25 +68,11 @@ export const fitTones: Record<FitLevel, Tone> = {
   unknown: "warning",
 };
 
-/* Fit is a scale, so its mark is a scale too. The tone's own icons say "warning" and
-   "information", which is what a severity carries - a reader comparing rows is ranking
-   them, and a rising signal reads as the rank the word already states. */
-export const fitIcons: Record<FitLevel, LucideIcon> = {
-  high: SignalHigh,
-  medium: SignalMedium,
-  low: SignalLow,
-  unknown: HelpCircle,
-};
-
 /* The Application projections carry `fit_level` and `track` as open strings rather than
    as the analysis unions, so the board and the Application screen read them through
    these. The maps above stay the one place each value is named; a value this build does
    not recognise is shown as itself rather than guessed at. */
 export const fitLevelLabel = (fit: string): string => (isFitLevel(fit) ? fitLabels[fit] : fit);
-
-export const fitLevelTone = (fit: string): Tone => (isFitLevel(fit) ? fitTones[fit] : "neutral");
-
-export const fitLevelIcon = (fit: string): LucideIcon | undefined => (isFitLevel(fit) ? fitIcons[fit] : undefined);
 
 export const trackLabel = (track: string): string => (track in trackLabels ? trackLabels[track as Track] : track);
 

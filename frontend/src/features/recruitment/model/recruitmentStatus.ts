@@ -18,7 +18,7 @@ import type { Tone } from "@/ui/tone";
 
 /* Worded after the demo_re board where it names the same status; the statuses it has
    no counterpart for keep their own words. The values are the API's and do not change. */
-export const recruitmentStatusLabels: Record<RecruitmentStatus, string> = {
+const recruitmentStatusLabels: Record<RecruitmentStatus, string> = {
   saved: "טרם הוגש",
   applied: "הוגשה מועמדות",
   recruiter_screen: "סינון טלפוני / HR",

@@ -117,9 +117,8 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
             recommended === "render" || recommended === "approve" || recommended === "check" || recommended === "edit",
         };
 
-  const ready = readyNow
-    ? { emphasized: detail.preparation_state === "ready", href: routePaths.ready(applicationId) }
-    : null;
+  // Offered only while Ready, and then it is always the step the workflow waits on.
+  const ready = readyNow ? { emphasized: true, href: routePaths.ready(applicationId) } : null;
 
   const handledHere = new Set(
     [
