@@ -114,25 +114,23 @@ First match wins, over one consistent read (§9):
 
 1. No CVDocument -> `needs_analysis`.
 2. `content IS NULL` -> `ready_to_draft`.
-3. `document_state = ready` -> `ready`.
-4. `document_state = approved` -> `approved`.
+3. `approved_basis == basis AND rendered_basis == basis` -> `ready`.
+4. `approved_basis == basis` -> `approved`.
 5. Otherwise -> `draft_in_progress`.
+
+PreparationState is the one document state the API and UI read. "Approved" and "Ready"
+in this document mean `preparation_state` `approved` and `ready`. The domain keeps its
+own restatement of the approval stamps (`DocumentState`) for the commands that check
+them; it is not exposed.
 
 A review reason (§7) is an overlay: it blocks the actions it names and leaves the
 PreparationState as projected. A newer JobSnapshot or JobAnalysis does not change the
 PreparationState of an existing document; it is reported by the
 `DOCUMENT_ON_OLDER_ANALYSIS` warning.
 
-## 5. DocumentState and content check
+## 5. Content check
 
-```text
-none        no CVDocument
-draft       approved_basis IS NULL OR approved_basis != basis
-approved    approved_basis == basis AND rendered_basis != basis
-ready       approved_basis == basis AND rendered_basis == basis
-```
-
-`content_check`:
+`content_check` describes the stored content report:
 
 ```text
 none        no document, content IS NULL, or checked_basis IS NULL
@@ -166,7 +164,7 @@ Review reasons are blockers that need an explicit user decision. They are comput
 the dependent fact set (§3), plus any fact IDs a command is about to select:
 
 ```text
-PENDING_FACT_REQUIRES_RESOLUTION     a dependent fact is pending or confirmed
+PENDING_FACT_REQUIRES_RESOLUTION     a dependent fact is pending
 FACT_DELETED_REQUIRES_RESOLUTION     a dependent fact has status deleted
 ```
 
@@ -229,7 +227,6 @@ Application detail and every list row return:
   "recruitment_status": "saved",
   "terminal_outcome": null,
   "preparation_state": "draft_in_progress",
-  "document_state": "draft",
   "content_check": "failed",
   "review_reasons": [],
   "warnings": [],
@@ -254,55 +251,49 @@ derived from that capture. Action identifiers are stable command names, not UI l
 Detail additionally returns `allowed_recruitment_transitions` (§10), the latest
 snapshot and analysis, and the recruitment timeline.
 
-- `approved_at` is reported only while `document_state` is `approved` or `ready`.
+- `approved_at` is reported only while `preparation_state` is `approved` or `ready`.
 - `last_render_error` is reported only while its recorded hash equals `document_hash`
   (§16).
 - `active_operation` is the queued/running Operation, if any; it is the polling and
   concurrency signal. `latest_operation` is the newest Operation whether live or
   terminal, so a failure stays presentable after work ends.
 
-Actions, in projection order, and when each is available. A deleted Application offers
-none of them.
+Each action is first allowed or not by the stage. An action the stage does not allow
+appears in neither `available_actions` nor `blocked_actions`: the stage already says
+why. A deleted Application allows none.
 
-| Action | Available when |
+| Action | The stage allows it when |
 | --- | --- |
-| `analyze` | no JobAnalysis exists for the active JobSnapshot and no `analyze_job` is active |
-| `edit_matching_configuration` | a JobAnalysis exists and no `analyze_job` or `propose_selection` is queued/running |
+| `analyze` | no JobAnalysis exists for the active JobSnapshot |
+| `edit_matching_configuration` | a JobAnalysis exists |
 | `build_from_analysis` | a document exists and the newest analysis has a higher version than the document's |
 | `update_selection` | a document exists |
-| `propose_selection` | a document exists and `content IS NULL` |
-| `confirm_and_use_fact` | offered only as a resolution action of `PENDING_FACT_REQUIRES_RESOLUTION` |
-| `create_draft` | a document exists and `content IS NULL` |
+| `propose_selection`, `create_draft` | a document exists and `content IS NULL` |
+| `confirm_and_use_fact` | a review reason names it as a resolution action |
 | `edit`, `regenerate_section`, `regenerate_claim` | `content IS NOT NULL` |
 | `check` | `content IS NOT NULL` and `content_check != passed` |
-| `approve` | `content IS NOT NULL`, `document_state = draft`, `content_check != failed`, no review reason |
-| `render` | `document_state = approved` and no review reason |
-| `submit` | `document_state = ready` and no review reason |
-| `download_pdf` | `document_state = ready` |
+| `approve` | `preparation_state = draft_in_progress` |
+| `render` | `preparation_state = approved` |
+| `submit`, `download_pdf` | `preparation_state = ready` |
 
-A review reason's resolution actions are added to the available set; `edit`,
-`regenerate_section` and `regenerate_claim` only while content exists. While a document-mutating Operation (`propose_selection`,
-`create_draft`, `regenerate_section`, `regenerate_claim`, `render_document`) is
-queued or running, `build_from_analysis`, `update_selection`, `propose_selection`,
-`confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`,
-`regenerate_claim`, `check`, `approve` and `render` are withdrawn.
+A review reason's resolution actions are allowed too; `edit`, `regenerate_section` and
+`regenerate_claim` only while content exists.
+
+An allowed action is available unless a blocker withholds it. Then it is in
+`blocked_actions` with every blocker's code:
+
+| Code | Withholds |
+| --- | --- |
+| `ANALYSIS_IN_PROGRESS` | `analyze`, while an `analyze_job` is queued or running |
+| `MATCHING_CONTEXT_OPERATION_IN_PROGRESS` | `edit_matching_configuration`, while an `analyze_job` or `propose_selection` is queued or running |
+| `DOCUMENT_OPERATION_IN_PROGRESS` | `build_from_analysis`, `update_selection`, `propose_selection`, `confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`, `regenerate_claim`, `check`, `approve`, `render`, while a `propose_selection`, `create_draft`, `regenerate_section`, `regenerate_claim` or `render_document` is queued or running |
+| any review reason code (§7) | `approve`, `render`, `submit` |
+| `VALIDATION_FAILED` | `approve`, while `content_check = failed` |
+
+`download_pdf` has no blocker: a Ready document stays downloadable.
 
 `edit_matching_configuration` is committed through `apply_analysis_decisions` (§13); it
 is an action name, not a separate endpoint.
-
-Every action not available appears in `blocked_actions` with at least one reason code:
-
-```text
-APPLICATION_DELETED               ANALYSIS_EXISTS / ANALYSIS_IN_PROGRESS
-ANALYSIS_REQUIRED                 MATCHING_CONTEXT_OPERATION_IN_PROGRESS
-DOCUMENT_REQUIRED                 DOCUMENT_OPERATION_IN_PROGRESS
-NO_NEWER_ANALYSIS                 NO_REVIEW_DECISION_REQUIRED
-CONTENT_EXISTS                    CONTENT_REQUIRED
-CONTENT_CHECK_PASSED              VALIDATION_FAILED
-DOCUMENT_NOT_DRAFT                DOCUMENT_NOT_APPROVED
-DOCUMENT_ALREADY_RENDERED         DOCUMENT_NOT_READY
-ACTION_NOT_AVAILABLE              <any review reason code>
-```
 
 `recommended_action`, first match wins, then nulled unless available: `analyze` when no
 document exists; `create_draft` when content is NULL; `check` when `content_check` is
@@ -652,7 +643,7 @@ user actions with `actor_type = user`, subject to every rule above.
 
 ### `render_document(application_id, expected_document_hash)`
 
-Operation. Admission (at queue time) requires the hash, `document_state = approved`
+Operation. Admission (at queue time) requires the hash, `preparation_state = approved`
 (else `DOCUMENT_NOT_APPROVED`, 412), and no review reason. Execution revalidates the
 content against current Knowledge (failure: `ValidationBlocked`), writes HTML and
 renders the PDF with Playwright Chromium to a unique per-attempt path, and checks
@@ -674,7 +665,7 @@ and a new render.
 ### `export_recruiter_pdf(application_id)`
 
 Synchronous read. Computes the basis at request time and refuses with
-`DOCUMENT_NOT_READY` (412) unless `document_state = ready`. Verifies path containment
+`DOCUMENT_NOT_READY` (412) unless `preparation_state = ready`. Verifies path containment
 and existence, then streams the file with a friendly Content-Disposition filename and
 the document hash as ETag.
 
@@ -689,7 +680,8 @@ Every fact mutation runs through the Knowledge mutation journal
 (architecture.md §7.2). While any mutation is quarantined, every fact mutation is
 refused (`KNOWLEDGE_REJECTED`, 412) and approval is refused (§15).
 
-Fact statuses: `pending`, `confirmed`, `canonical`, `deleted`.
+Fact statuses: `pending`, `canonical`, `deleted`. The lifecycle is
+`pending -> canonical` on one explicit confirmation; any live fact may be deleted.
 
 ### Reads
 
@@ -711,24 +703,24 @@ source file, meaning, renderings (`en` required, `he` optional), tags, provenanc
 `resume_style`, optional effective dates, optional `replaces`, reason. With `replaces`
 naming a canonical fact it is a pending correction; the original is not changed.
 
-### `confirm_fact(fact_id)` / `promote_fact(fact_id)`
+### `confirm_fact(fact_id)`
 
-`confirm` moves exactly `pending -> confirmed`; `promote` moves exactly
-`confirmed -> canonical`. Each needs an explicit `confirm: true` attestation in the
-request; `false` is refused, not ignored. Any other source status is refused. Promoting
-a replacement makes the original superseded for warning purposes (§8); it rewrites
-neither the original nor any Submission.
+Moves exactly `pending -> canonical`. It needs an explicit `confirm: true` attestation
+in the request; `false` is refused, not ignored. Any other source status is refused.
+It sets `confirmed_at` when the fact has none and advances the source file's version.
+Confirming a replacement makes the original superseded for warning purposes (§8); it
+rewrites neither the original nor any Submission.
 
 ### `delete_fact(fact_id)`
 
-Explicitly confirmed, one-way move from `pending`, `confirmed`, or `canonical` to
+Explicitly confirmed, one-way move from `pending` or `canonical` to
 `deleted`; an already deleted fact is refused. The record and its history stay
 reachable. Deletion is always allowed, even for a fact attached to a Profile or used by
 a document, and writes nothing to any document: a dependent document's basis changes
 and it reports `FACT_DELETED_REQUIRES_RESOLUTION` (§7). Submissions are unaffected.
 Deletion does not create a replacement, and a replacement does not delete the original.
 
-A deleted fact is refused by `confirm_fact`, `promote_fact`, `attach_fact`, and
+A deleted fact is refused by `confirm_fact`, `attach_fact`, and
 `confirm_and_use_fact`.
 
 ### `attach_fact(fact_id, profile, section, pin=false)`
@@ -741,7 +733,7 @@ Non-canonical facts are refused. It changes no Profile structure and no document
 One journaled command:
 
 ```text
-pending -> confirmed -> canonical
+pending -> canonical
 -> attach to the named Profile section
 -> select the fact in the Application's document
 ```
@@ -771,7 +763,7 @@ them.
 
 ### `submit_application(application_id, expected_document_hash, submitted_at, metadata)`
 
-Records a send that already happened. Requires the hash, `document_state = ready` with
+Records a send that already happened. Requires the hash, `preparation_state = ready` with
 both files present (`DOCUMENT_NOT_READY`, 412), and no review reason. Copies the
 rendered HTML and PDF to submission-owned paths under a payload write lease, computing
 a SHA-256 per file. Then, in one transaction under the document row lock, re-checks that
@@ -912,8 +904,8 @@ idempotent and safe to run concurrently and on a schedule.
 
 - **Application list** (`GET /applications`): filters `activity` (`open` | `closed` |
   `all`), `stage` (PreparationStates), `recruitment_status`, `preset`
-  (`needs_attention` = any review reason or warning; `ready_to_send` = `document_state
-  = ready`; `active_interviews` = `recruiter_screen` through `offer`), `search`; `sort`
+  (`needs_attention` = any review reason or warning; `ready_to_send` =
+  `preparation_state = ready`; `active_interviews` = `recruiter_screen` through `offer`), `search`; `sort`
   (`updated` | `created` | `company` | `stage`); `limit` (1–200) and `offset`. Each row
   carries the §9 projection and `is_closed`. The response carries `matched` and
   preparation-state, preset, and recruitment-status counts from the same projected
@@ -929,7 +921,7 @@ idempotent and safe to run concurrently and on a schedule.
   changes the active snapshot.
 - **CVDocument**: ID, analysis ID, selection with candidate accounting, content and its
   outline, language, dependent facts, `built_with`, `document_hash` (ETag), content
-  report and `content_check`, `document_state`, `approved_at` (as in §9),
+  report and `content_check`, `preparation_state`, `approved_at` (as in §9),
   `last_render_error`, timestamps.
 - **Document previews** (§14).
 - **Operation** (§11).

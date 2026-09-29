@@ -149,7 +149,7 @@ The product includes:
 - A Ready state derived, on every read, from the document's own approval and render
   stamps against its current basis (document content plus the facts it depends on).
 - A dedicated candidate-facts surface for listing and inspecting candidate facts,
-  creating pending facts, explicit confirmation and promotion, canonical correction
+  creating pending facts, explicit confirmation to canonical, canonical correction
   through a replacement fact, and attachment to existing Profile sections. Contextual
   claim capture and use remain available in preparation flows. This surface is not a
   general Knowledge Manager and does not edit Profile definitions or arbitrary Knowledge.
@@ -586,16 +586,16 @@ model behavior and is not a guarantee of universal injection resistance.
 
 Preparation and recruitment are separate views.
 
-Preparation state describes progress toward a usable CV. DocumentState restates the
-document's own approval/render stamps (`draft`/`approved`/`ready`) against its current
-basis. Recruitment status describes the application after it is saved or submitted.
+Preparation state describes progress toward a usable CV, including whether the document
+is approved or Ready against its current basis; it is the one document state a client
+reads. Recruitment status describes the application after it is saved or submitted.
 Their exact values and transitions belong to `state-and-use-cases.md`. Recruitment never
 changes preparation history, and `closed` is archival rather than a hiring outcome.
 
-Every Application projection includes current preparation and document states, the
+Every Application projection includes the current preparation state, the
 content check state, active context IDs, the document's own ID/hash/analysis pin,
-review reasons and warnings, active Operation, available actions, blocked actions with
-reason codes, and a nullable recommended action. These values are computed from one
+review reasons and warnings, active Operation, available actions, the actions a blocker
+withholds with its reason codes, and a nullable recommended action. These values are computed from one
 consistent database snapshot. Payload integrity is verified after the database read
 scope closes; the final policy is derived from the captured metadata and that
 verification without holding a transaction across storage I/O.
@@ -612,7 +612,7 @@ Application Detail contains header/status/next action, current preparation, one 
 timeline, a focused document/provenance section and a submissions section, and
 navigation back to the editor.
 
-`submit_application` requires the document's `document_state = ready` (`rendered_basis
+`submit_application` requires the document's `preparation_state = ready` (`rendered_basis
 == approved_basis == basis`) and no review reason, copies its exact content and rendered
 HTML/PDF to submission-owned paths with a SHA-256 per file, creates an immutable
 Submission, transitions to `applied` if necessary, and appends status/audit history in
@@ -724,12 +724,12 @@ not identity.
 
 The Web supports these lifecycle operations both on the dedicated candidate-facts
 surface and, where the operation depends on a claim or active analysis, in its contextual
-preparation flow: viewing facts, creating a pending fact, explicit confirmation/promotion,
+preparation flow: viewing facts, creating a pending fact, explicit confirmation,
 attachment to an existing Profile section, and selection in the Application's document.
 The dedicated surface may list valid attachment targets; listing them does not grant
 Profile editing. The shortcut `Confirm and add to source of truth` still records
-pending -> confirmed -> canonical transitions separately. `Confirm and use` is one
-logical command that promotes, attaches, and updates the named Application's document
+pending -> canonical transition. `Confirm and use` is one
+logical command that confirms, attaches, and updates the named Application's document
 selection (`update_selection`), or reports a complete failure.
 
 Creating a fact from a claim copies the exact user text without AI rewriting. Meaning,
@@ -737,7 +737,7 @@ tags, provenance, dates, and other metadata require explicit input.
 
 Canonical corrections create a new fact with a `replaces` relationship rather than
 mutating old content. `POST /api/v1/facts` accepts `replaces`; the new fact enters at
-`pending` like any other, so a correction is confirmed and promoted explicitly.
+`pending` like any other, so a correction is confirmed explicitly.
 
 This candidate-facts surface does not add deletion, archival, withdrawal, retirement,
 or a `known-incorrect` transition. Those operations have distinct consequences for
@@ -746,7 +746,7 @@ separate approved lifecycle contract. Canonical facts are never edited in place.
 
 Cross-store Knowledge mutations use a narrow durable journal with old/new hashes,
 paths, staged path, DB mutation identity, and deterministic recovery. An unreconciled
-mutation quarantines additional promotion and approvals that depend on Knowledge, but
+mutation quarantines additional fact mutations and approvals that depend on Knowledge, but
 does not block read-only history, export, or recruitment tracking.
 
 Superseded facts add historical warnings. A fact known to be incorrect receives a
