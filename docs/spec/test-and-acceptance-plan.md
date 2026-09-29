@@ -196,9 +196,9 @@ Evidence: `tests/selection/`, `tests/drafts/test_draft_validation.py`,
 - A failed render keeps the approval; its retry is new work; unactivated and superseded
   files are discarded.
 - Payload keys are immutable per attempt; local and S3 stores agree on create-if-absent,
-  hash, size, absence, prefix handling, and listing by age. Reclaim removes only
-  unreferenced payloads older than the minimum age and refuses one that became
-  referenced; orphan inventory is read-only.
+  hash, size, absence, prefix handling, and listing by age. No store offers deletion;
+  orphan inspection lists only unreferenced payloads older than the minimum age and is
+  read-only.
 - Submission rechecks Ready under lock and copies content/HTML/PDF with checksums that
   survive later edits. External submission never fabricates document or files.
 

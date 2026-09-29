@@ -928,29 +928,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/maintenance/orphans/reclaim": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Remove unreferenced payloads stored over an hour ago
-         * @description Remove the inspection candidates (architecture.md §7.1).
-         *
-         *     Never removes a payload a database record references: the reference check
-         *     runs again immediately before deleting. Idempotent.
-         */
-        post: operations["reclaim_orphans_api_v1_maintenance_orphans_reclaim_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/maintenance/reconciliations": {
         parameters: {
             query?: never;
@@ -2708,14 +2685,6 @@ export interface components {
             };
             /** Message */
             message: string;
-        };
-        /**
-         * ReclaimResultResponse
-         * @description What one reclaim call removed (architecture.md §7.1).
-         */
-        ReclaimResultResponse: {
-            /** Removed */
-            removed: string[];
         };
         /**
          * ReconciliationResponse
@@ -4662,35 +4631,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrphanInventoryResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    reclaim_orphans_api_v1_maintenance_orphans_reclaim_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReclaimResultResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

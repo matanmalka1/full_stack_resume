@@ -91,18 +91,6 @@ class PayloadStore:
         self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
-    def delete_payload(self, reference: str) -> None:
-        """Remove one stored payload `reclaim_orphans` has decided is safe to remove.
-
-        A reference that does not resolve to an approved, contained layout is
-        refused (`ValueError`) rather than silently ignored - the same
-        refusal every other reference-resolving method on this store makes.
-        Within an approved layout, removal is idempotent: the key may already
-        be gone.
-        """
-        assert_external_io_allowed("immutable payload removal")
-        self._objects.delete(self._key_for_reference(reference))
-
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
         """List managed immutable references; working projections are excluded.
 

@@ -84,13 +84,6 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         """
         ...
 
-    def delete_payload(self, reference: str) -> None:
-        """Remove one stored payload `reclaim_orphans` has decided is safe to remove.
-
-        Idempotent: a reference already absent from storage is not an error.
-        """
-        ...
-
     def commit_provider_response(
         self,
         application_id: str,

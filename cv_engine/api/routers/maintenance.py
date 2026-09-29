@@ -15,7 +15,6 @@ from fastapi import APIRouter
 from ..dependencies import Services
 from ..schemas.maintenance import (
     OrphanInventoryResponse,
-    ReclaimResultResponse,
     ReconciliationResponse,
 )
 
@@ -43,17 +42,3 @@ def inspect_orphans(services: Services) -> OrphanInventoryResponse:
     This endpoint neither repairs nor deletes payloads.
     """
     return OrphanInventoryResponse.of(services.maintenance.inspect_orphans())
-
-
-@router.post(
-    "/orphans/reclaim",
-    response_model=ReclaimResultResponse,
-    summary="Remove unreferenced payloads stored over an hour ago",
-)
-def reclaim_orphans(services: Services) -> ReclaimResultResponse:
-    """Remove the inspection candidates (architecture.md §7.1).
-
-    Never removes a payload a database record references: the reference check
-    runs again immediately before deleting. Idempotent.
-    """
-    return ReclaimResultResponse.of(services.maintenance.reclaim_orphans())

@@ -880,13 +880,8 @@ layouts are excluded.
 Storage enumeration happens outside the database read. The result is a read-only,
 non-atomic observation; it changes no reconciliation verdict and deletes nothing.
 
-### `reclaim_orphans()`
-
-`POST /api/v1/maintenance/orphans/reclaim` deletes the `inspect_orphans` candidates and
-returns them as `removed`. Immediately before deleting it reads the registered
-references again; a candidate that became referenced is an integrity failure, and
-reclaim stops without deleting anything. It never removes a referenced payload, is
-idempotent, and is safe to run on a schedule.
+There is no reclaim command. Nothing deletes an immutable payload, so an orphan stays in
+storage and is only reported (architecture.md §7.1).
 
 ## 20. Queries
 

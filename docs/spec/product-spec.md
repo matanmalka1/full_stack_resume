@@ -684,12 +684,12 @@ approval and rendering always validate against the current values rather than tr
 of the document and part of its `document_hash`.
 
 Approved, submitted, historical, and inactive Operation outputs are not automatically
-deleted by registration or approval activity. Read-only orphan inspection reports
-payloads that no database record references and that were stored more than an hour ago;
-a younger unregistered payload may still be on its way to registration and is never
-listed. `reclaim_orphans` (state-and-use-cases.md §19b) removes those candidates after
-checking again, immediately before deleting, that nothing registered references them. It
-never removes a registered payload (architecture.md §7.1).
+deleted by registration or approval activity, or by anything else: no path in the
+system deletes an immutable payload. Read-only orphan inspection
+(state-and-use-cases.md §19b) reports payloads that no database record references and
+that were stored more than an hour ago; a younger unregistered payload may still be on
+its way to registration and is not listed. Orphans are reported, never removed
+(architecture.md §7.1).
 
 There is no archived copy of replaced content. `build_from_analysis` and ordinary
 editing overwrite `content`; only a Submission keeps what was sent (decision record §3

@@ -82,11 +82,11 @@ def build_application_export(applications: ApplicationListView) -> ApplicationEx
     )
 
 
-#: How long an unregistered payload must have been stored before it counts as
-#: an orphan (architecture.md §7.1). Every writer registers its payload within
-#: seconds of storing it - intake, provider evidence, and submission each store
-#: and register in one command - so a payload still unregistered an hour later
-#: was abandoned, and a younger one may still be on its way to registration.
+#: How long an unregistered payload must have been stored before inspection
+#: reports it (architecture.md §7.1). Every writer registers its payload within
+#: seconds of storing it, so a younger unregistered payload is most likely a
+#: write still in progress and would only be noise in the report. This filters a
+#: read-only report; nothing is deleted on the strength of it.
 ORPHAN_MIN_AGE = timedelta(hours=1)
 
 
@@ -94,9 +94,3 @@ class OrphanInventory(BoundaryDTO):
     """Unregistered payloads older than `ORPHAN_MIN_AGE`."""
 
     candidates: list[str]
-
-
-class ReclaimResult(BoundaryDTO):
-    """What one `reclaim_orphans()` call removed (architecture.md §7.1)."""
-
-    removed: list[str]

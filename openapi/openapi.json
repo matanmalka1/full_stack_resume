@@ -4625,24 +4625,6 @@
         "title": "ReasonResponse",
         "type": "object"
       },
-      "ReclaimResultResponse": {
-        "additionalProperties": false,
-        "description": "What one reclaim call removed (architecture.md §7.1).",
-        "properties": {
-          "removed": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Removed",
-            "type": "array"
-          }
-        },
-        "required": [
-          "removed"
-        ],
-        "title": "ReclaimResultResponse",
-        "type": "object"
-      },
       "ReconciliationResponse": {
         "additionalProperties": false,
         "description": "Whether stored evidence and the fact lifecycle agree.\n\n`problems` describes stored artifacts; the lifecycle keeps its own list, so\na reader can tell which half is broken instead of seeing one merged list.",
@@ -7974,38 +7956,6 @@
           }
         },
         "summary": "Inspect unreferenced immutable payload candidates",
-        "tags": [
-          "maintenance"
-        ]
-      }
-    },
-    "/api/v1/maintenance/orphans/reclaim": {
-      "post": {
-        "description": "Remove the inspection candidates (architecture.md §7.1).\n\nNever removes a payload a database record references: the reference check\nruns again immediately before deleting. Idempotent.",
-        "operationId": "reclaim_orphans_api_v1_maintenance_orphans_reclaim_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReclaimResultResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Remove unreferenced payloads stored over an hour ago",
         "tags": [
           "maintenance"
         ]

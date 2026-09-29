@@ -57,9 +57,6 @@ class _FakeS3:
             raise _ClientError("404")
         return {}
 
-    def delete_object(self, Bucket: str, Key: str) -> dict[str, Any]:
-        self.objects.pop(Key, None)
-        return {}
 
     def list_objects_v2(
         self, Bucket: str, Prefix: str, ContinuationToken: str | None = None
@@ -144,15 +141,6 @@ def test_s3_applies_its_prefix_to_the_bucket_key_only(s3: S3ObjectStore) -> None
 
     assert stored.key == "snapshots/app/snap.txt"
     assert list(s3._client.objects) == ["cv/snapshots/app/snap.txt"]  # type: ignore[attr-defined]
-
-
-def test_delete_is_idempotent_on_both_object_stores(local, s3) -> None:
-    key = "snapshots/app/snap.txt"
-    for store in _stores(local, s3):
-        store.put(key, b"immutable")
-        store.delete(key)
-        store.delete(key)
-        assert not store.exists(key)
 
 
 def test_inventory_is_backend_neutral_paginated_and_read_only(local, s3, monkeypatch) -> None:

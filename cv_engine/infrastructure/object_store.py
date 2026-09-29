@@ -52,7 +52,11 @@ class StoredObject:
 
 
 class ObjectStore(Protocol):
-    """Keys and bytes. No `Path`, no directories, no temp staging.
+    """Keys and bytes. No `Path`, no directories, no temp staging, no delete.
+
+    There is no delete on purpose: every object is an immutable payload, and a
+    store that cannot remove one cannot race a registration that references it
+    (architecture.md §7.1).
 
     The unit is a whole payload, because every immutable payload in this system
     is one document that the system produced itself - a CV, a
@@ -105,15 +109,6 @@ class ObjectStore(Protocol):
         """Metadata for a stored object without transferring its bytes.
 
         Raises `ObjectNotFound` when the key holds nothing.
-        """
-        ...
-
-    def delete(self, key: str) -> None:
-        """Remove the object under `key`, or do nothing if it is not there.
-
-        Idempotent on purpose: an orphan removed by one `reclaim_orphans` call
-        (architecture.md §7.1) must stay a safe no-op, not an error, for any
-        caller that observed it before it was removed.
         """
         ...
 
@@ -249,15 +244,6 @@ class LocalObjectStore:
             if cutoff is not None and path.stat().st_mtime >= cutoff:
                 continue
             yield path.relative_to(self._root).as_posix()
-
-    def delete(self, key: str) -> None:
-        path = self._path(key)
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            return
-        except OSError as exc:
-            raise InfrastructureFailure(f"object could not be removed: {key}") from exc
 
 
 def _aware(moment: datetime) -> datetime:
@@ -409,10 +395,3 @@ class S3ObjectStore:
             if not next_token or next_token == continuation:
                 raise InfrastructureFailure("object inventory pagination did not advance")
             continuation = next_token
-
-    def delete(self, key: str) -> None:
-        object_key = self._object_key(key)
-        try:
-            self._client.delete_object(Bucket=self._bucket, Key=object_key)  # type: ignore[attr-defined]
-        except Exception as exc:
-            raise InfrastructureFailure(f"object could not be removed: {key}") from exc

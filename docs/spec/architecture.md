@@ -299,7 +299,7 @@ both. The API returns this policy; React does not duplicate it.
 State tables are authoritative current projections. Append-only events provide audit
 and provenance; the system is not event-sourced.
 
-### 7.1 Immutable payload commit and orphan reclaim
+### 7.1 Immutable payload commit and orphan inspection
 
 The payload protocol is:
 
@@ -315,22 +315,19 @@ keys and never overwrites an earlier attempt's.
 Before registration a payload is invisible to queries. If registration fails, no row
 references it and it is an orphan.
 
-**Orphan inspection and reclaim** (`MaintenanceService`; routes in
-state-and-use-cases.md §19b). A candidate is a stored payload that no database row
-references and that was stored longer than `ORPHAN_MIN_AGE` (one hour) ago. Every writer
-— JobSnapshot intake, provider evidence, `submit_application` — stores and registers
-within one command, seconds apart, so a younger unregistered payload may still be on its
-way to registration and is left alone. The age comes from the store itself: file mtime
-locally, `LastModified` on S3.
+**No deletion.** Nothing in the system deletes an immutable payload: `ObjectStore` and
+`PayloadStore` have no delete operation. That is what guarantees a registration can never
+reference a removed payload — there is no remover to race. The cost is that an orphan,
+a payload whose registration failed, stays in storage. Orphans arise only from failed
+registrations; their volume is assumed small for a single-user tool, not measured.
 
-`inspect_orphans` lists the candidates and deletes nothing. `reclaim_orphans` deletes
-them, after reading the registered references once more immediately before deleting; a
-candidate that became referenced is an integrity failure and reclaim stops without
-deleting anything. Deleting an absent key is a no-op, so reclaim is idempotent.
-
-The one limit: a registration that happened more than an hour after its `put` could find
-its payload reclaimed. No writer holds a payload unregistered that long; if one ever did,
-reconciliation reports the missing payload rather than hiding it.
+**Orphan inspection** (`MaintenanceService.inspect_orphans`; route in
+state-and-use-cases.md §19b) lists stored payloads that no database row references and
+that were stored longer than `ORPHAN_MIN_AGE` (one hour) ago, and deletes nothing. Every
+writer — JobSnapshot intake, provider evidence, `submit_application` — stores and
+registers within one command, so a younger unregistered payload is most likely a write
+still in progress and is left out of the report. The age comes from the store itself:
+file mtime locally, `LastModified` on S3.
 
 Reconciliation verifies every registered artifact's payload hash and the fact lifecycle,
 reporting both halves without short-circuiting.
