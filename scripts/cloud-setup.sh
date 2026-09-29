@@ -32,7 +32,15 @@ if [ ! -x .venv/bin/python ]; then
     uv venv --python 3.12 .venv
 fi
 uv pip install --python .venv/bin/python -q -e '.[test]'
-./.venv/bin/python -m playwright install --with-deps chromium
+# Cloud images often ship Playwright browsers (PLAYWRIGHT_BROWSERS_PATH); install
+# only when a location this Playwright version expects is missing.
+if ./.venv/bin/python -m playwright install --dry-run chromium \
+    | sed -n 's/^ *Install location: *//p' \
+    | while read -r dir; do [ -d "$dir" ] || exit 1; done; then
+    :
+else
+    ./.venv/bin/python -m playwright install --with-deps chromium
+fi
 
 if [ ! -d frontend/node_modules ]; then
     npm ci --prefix frontend
