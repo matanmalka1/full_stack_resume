@@ -11,7 +11,7 @@ belongs to, so the wire carries `source` - the name alone, derived through
 Two constraints are named here rather than left to the application layer,
 because refusing them at the transport boundary is a `422` with a field name
 instead of a `412` after a command has been built. The fact *source* is a
-closed set of four files, and a promotion requires `confirm: true` - the
+closed set of four files, and a confirmation requires `confirm: true` - the
 explicit confirmation the specification requires for a status change, which
 must fail rather than be interpreted when it is absent.
 
@@ -166,7 +166,7 @@ class FactAttachmentResponse(FactMutationResponse):
 
 
 class ConfirmAndUseFactResponse(HttpSchema):
-    """The one logical command's whole outcome: promoted, attached, selected.
+    """The one logical command's whole outcome: confirmed, attached, selected.
 
     The document whose selection the fact joined, and its token afterwards.
     """
@@ -221,7 +221,7 @@ class CaptureClaimFactRequest(HttpSchema):
 
 
 class FactTransitionRequest(HttpSchema):
-    """A promotion along `pending -> confirmed -> canonical`.
+    """The one lifecycle step, `pending -> canonical`.
 
     `confirm` is the explicit confirmation the specification requires for a
     status change. It defaults to `false` so that omitting it refuses the
@@ -241,7 +241,7 @@ class AttachFactRequest(HttpSchema):
 
 
 class ConfirmAndUseFactRequest(HttpSchema):
-    """Promote, attach, and select one fact as a single recoverable command."""
+    """Confirm, attach, and select one fact as a single recoverable command."""
 
     application_id: str
     job_analysis_id: str

@@ -15,7 +15,7 @@ interface FactPoolFiltersProps {
 }
 
 // Deleted facts are absent from the pool response, so they cannot be filtered here.
-const statuses: FactStatus[] = ["pending", "confirmed", "canonical"];
+const statuses: FactStatus[] = ["pending", "canonical"];
 
 export const FactPoolFilters = ({ filters, onChange, sources, tags }: FactPoolFiltersProps) => (
   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

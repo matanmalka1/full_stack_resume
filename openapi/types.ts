@@ -815,7 +815,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Promote a pending fact to confirmed
+         * Confirm a pending fact as canonical
          * @description `confirm: false` is refused, not interpreted: see `FactTransitionRequest`.
          */
         post: operations["confirm_fact_api_v1_facts__fact_id__confirm_post"];
@@ -835,8 +835,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Promote, attach, and select one fact as one command
-         * @description One logical command: it promotes, attaches, and adds the fact to the
+         * Confirm, attach, and select one fact as one command
+         * @description One logical command: it confirms, attaches, and adds the fact to the
          *     document's selection, or it reports a complete failure. There is no partial outcome to
          *     report, so there is no partial success status.
          */
@@ -883,23 +883,6 @@ export interface paths {
         get: operations["read_one_fact_history_api_v1_facts__fact_id__history_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/facts/{fact_id}/promote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Promote a confirmed fact to canonical */
-        post: operations["promote_fact_api_v1_facts__fact_id__promote_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1702,7 +1685,7 @@ export interface components {
         };
         /**
          * ConfirmAndUseFactRequest
-         * @description Promote, attach, and select one fact as a single recoverable command.
+         * @description Confirm, attach, and select one fact as a single recoverable command.
          */
         ConfirmAndUseFactRequest: {
             /** Application Id */
@@ -1723,7 +1706,7 @@ export interface components {
         };
         /**
          * ConfirmAndUseFactResponse
-         * @description The one logical command's whole outcome: promoted, attached, selected.
+         * @description The one logical command's whole outcome: confirmed, attached, selected.
          *
          *     The document whose selection the fact joined, and its token afterwards.
          */
@@ -2366,10 +2349,10 @@ export interface components {
          * FactStatus
          * @enum {string}
          */
-        FactStatus: "pending" | "confirmed" | "canonical" | "deleted";
+        FactStatus: "pending" | "canonical" | "deleted";
         /**
          * FactTransitionRequest
-         * @description A promotion along `pending -> confirmed -> canonical`.
+         * @description The one lifecycle step, `pending -> canonical`.
          *
          *     `confirm` is the explicit confirmation the specification requires for a
          *     status change. It defaults to `false` so that omitting it refuses the
@@ -4632,41 +4615,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactHistoryResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    promote_fact_api_v1_facts__fact_id__promote_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                fact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FactTransitionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FactMutationResponse"];
                 };
             };
             /** @description The request did not match the API contract. */

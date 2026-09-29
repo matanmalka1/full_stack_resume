@@ -407,7 +407,7 @@ describe("DraftEditorPage", () => {
       application_id: "app-1",
       claim_id: "c-1",
       created_at: "2026-08-24T07:05:00Z",
-      event_type: "confirmed",
+      event_type: "fact_confirmed",
       fact_hash: "fact-hash",
       fact_id: "f-captured",
       facts_version: "facts-2",
@@ -416,7 +416,7 @@ describe("DraftEditorPage", () => {
       lifecycle_version: "lifecycle-2",
       reason: "explicit confirmation",
       source: "sales.json",
-      to_status: "confirmed",
+      to_status: "canonical",
     };
     const fetchMock = vi.fn((input: unknown) => {
       const url = String(input);
@@ -438,7 +438,7 @@ describe("DraftEditorPage", () => {
               replaces: null,
               resume_style: "bullet",
               source: "sales.json",
-              status: "confirmed",
+              status: "canonical",
               tags: ["growth"],
             },
           }),
@@ -456,13 +456,13 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("מצב: אושרה", {}, { timeout: 5_000 })).toBeInTheDocument();
+    expect(await screen.findByText("מצב: מקור אמת", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת העובדה במאגר העובדות" })).toHaveAttribute(
       "href",
       "/facts?fact=f-captured",
     );
-    expect(screen.getByText("ממתינה לאישור ← אושרה · explicit confirmation")).toBeInTheDocument();
-    expect(screen.queryByText(/\bpending\b|\bconfirmed\b/)).not.toBeInTheDocument();
+    expect(screen.getByText("ממתינה לאישור ← מקור אמת · explicit confirmation")).toBeInTheDocument();
+    expect(screen.queryByText(/\bpending\b|\bcanonical\b/)).not.toBeInTheDocument();
   }, 10_000);
 
   it("says how the content was built without duplicating fact lifecycle management", async () => {

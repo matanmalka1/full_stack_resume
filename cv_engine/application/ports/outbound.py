@@ -130,11 +130,10 @@ class KnowledgeStore(Protocol):
         canonical: bool = False,
     ) -> tuple[StagedKnowledgeFile, Any]: ...
 
-    def stage_promote_fact(
+    def stage_confirm_fact(
         self,
         mutation_id: str,
         fact_id: str,
-        target: Any,
         *,
         explicitly_confirmed: bool,
     ) -> tuple[StagedKnowledgeFile, Any, Any]: ...
@@ -161,7 +160,7 @@ class KnowledgeStore(Protocol):
         fact_id: str,
         profile: str,
         section: str,
-    ) -> tuple[list[StagedKnowledgeFile], Any, Any, Any, Profile, str, Knowledge]: ...
+    ) -> tuple[list[StagedKnowledgeFile], Any, Any, Profile, str, Knowledge]: ...
 
     def activate_staged(self, staged: StagedKnowledgeFile) -> None: ...
 

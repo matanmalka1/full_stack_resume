@@ -133,7 +133,7 @@ def document_review_reasons(
     pending = sorted(
         fact_id
         for fact_id in dependent
-        if fact_id in facts and facts[fact_id].status in {FactStatus.PENDING, FactStatus.CONFIRMED}
+        if fact_id in facts and facts[fact_id].status is FactStatus.PENDING
     )
     if pending:
         reasons.append(

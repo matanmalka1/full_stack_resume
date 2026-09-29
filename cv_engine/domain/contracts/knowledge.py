@@ -14,7 +14,6 @@ from .taxonomy import Emphasis, ProfileName, Track
 
 class FactStatus(StrEnum):
     PENDING = "pending"
-    CONFIRMED = "confirmed"
     CANONICAL = "canonical"
     DELETED = "deleted"
 

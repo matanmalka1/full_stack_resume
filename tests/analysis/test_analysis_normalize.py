@@ -139,9 +139,7 @@ def test_a_noncanonical_fact_is_dropped_and_positive_coverage_becomes_unknown(
     fact_store, profile_store, requirement_concepts
 ) -> None:
     facts = dict(fact_store.facts)
-    facts[CANONICAL_FACT] = facts[CANONICAL_FACT].model_copy(
-        update={"status": FactStatus.CONFIRMED}
-    )
+    facts[CANONICAL_FACT] = facts[CANONICAL_FACT].model_copy(update={"status": FactStatus.PENDING})
     noncanonical = FactStore(facts, dict(fact_store.source_versions))
 
     analysis = _normalize(

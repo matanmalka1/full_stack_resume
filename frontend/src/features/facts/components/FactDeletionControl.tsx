@@ -8,8 +8,8 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useDeleteFact } from "../api/mutations";
 
 /* Deletion is one-way: nothing brings the fact back to `list_facts` or a Profile pool.
-   Unlike `FactPromotionControl`'s forward step, this needs its own confirmation stage -
-   the attestation checkbox alone reads the same as "I confirm the promotion", and
+   Unlike `FactConfirmationControl`'s forward step, this needs its own confirmation stage -
+   the attestation checkbox alone reads the same as "I confirm the fact", and
    deleting is not a step in the same direction. The button opens a confirmation panel
    that states plainly what stays (history, immutable revisions) and what does not
    (default listings, attachment targets, new selections), and only that panel's own

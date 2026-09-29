@@ -48,7 +48,6 @@ def test_fact_attachment_targets_are_read_only_and_report_existing_membership(ap
     created = _create_pending(api_worker)
     fact_id = created["fact"]["fact_id"]
     _post(api_worker, f"/facts/{fact_id}/confirm", {"confirm": True})
-    _post(api_worker, f"/facts/{fact_id}/promote", {"confirm": True})
     attached = _post(
         api_worker,
         f"/facts/{fact_id}/attachments",

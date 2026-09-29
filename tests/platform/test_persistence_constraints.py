@@ -461,7 +461,7 @@ def test_knowledge_mutation_journal_has_one_guarded_terminal_transition(
     mutation_id = new_id()
     request = PrepareKnowledgeMutation(
         mutation_id=mutation_id,
-        mutation_type="promote_fact",
+        mutation_type="fact_confirmed",
         source_reference="base/sales.json",
         staged_reference=f"temp/knowledge/{mutation_id}.json",
         old_sha256="a" * 64,
