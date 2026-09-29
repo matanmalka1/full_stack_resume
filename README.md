@@ -314,10 +314,14 @@ run from the project root:
 ```
 
 Pytest builds React into a temporary directory, starts FastAPI serving that build on
-one origin, and launches the separate Playwright integration configuration. The test
-drives intake, reload, list navigation, and duplicate acknowledgement through the real
-API with no interception or AI provider. It needs no worker because it creates no
-Operations. Do not run other database suites concurrently against the same test database.
+one origin, and launches the separate Playwright integration configuration. The intake
+test drives creation, reload, list navigation, and duplicate acknowledgement with no
+provider or worker. The preparation test runs the real worker outside the API process
+and drives analysis, deterministic drafting, checking, approval, real PDF rendering and
+download, and submission through the UI. Only the analysis provider transport is scripted;
+neither test intercepts API requests, and `OPENAI_API_KEY` remains unset. The preparation
+test also needs the Python renderer's Chromium (`./.venv/bin/python -m playwright install chromium`).
+Do not run other database suites concurrently against the same test database.
 The ordinary `npm --prefix frontend run e2e` suite keeps its stubbed API and excludes
 these integration tests.
 

@@ -1,12 +1,16 @@
-"""React -> real HTTP -> PostgreSQL, with no provider or API interception."""
+"""React -> real HTTP -> PostgreSQL and the worker, without API interception."""
 
 from __future__ import annotations
 
 import os
 import subprocess
 from pathlib import Path
+from threading import Event, Thread
 
 import pytest
+from helpers import analysis_proposal
+
+from cv_engine.domain.contracts.analysis_proposal import ProposedRequirement
 
 FRONTEND = Path(__file__).resolve().parents[2] / "frontend"
 pytestmark = pytest.mark.browser
@@ -28,9 +32,7 @@ def frontend_dist(tmp_path: Path) -> Path:
     return build_dir
 
 
-def test_browser_intake_persists_and_requires_duplicate_acknowledgement(live_api_server) -> None:
-    # The shared fixtures supply an empty, migrated test database and a temporary
-    # knowledge root. The API serves React on its own origin, as in production.
+def run_browser(live_api_server, spec: str) -> None:
     assert os.environ.get("OPENAI_API_KEY") is None
     result = subprocess.run(
         [
@@ -39,6 +41,7 @@ def test_browser_intake_persists_and_requires_duplicate_acknowledgement(live_api
             "test",
             "--config",
             "playwright.integration.config.ts",
+            spec,
         ],
         cwd=FRONTEND,
         env={**os.environ, "CV_TEST_BASE_URL": live_api_server.base_url},
@@ -48,3 +51,45 @@ def test_browser_intake_persists_and_requires_duplicate_acknowledgement(live_api
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_browser_intake_persists_and_requires_duplicate_acknowledgement(live_api_server) -> None:
+    # Each test owns an empty, migrated database and a temporary knowledge root.
+    run_browser(live_api_server, "intake.spec.ts")
+
+
+@pytest.mark.parametrize("live_api_factory", ["asgi_factory:build_test_ai_app"], indirect=True)
+def test_browser_analysis_through_ready_and_submission(
+    live_api_server, ai_services, fake_openai
+) -> None:
+    # Only the provider transport is scripted. The API is a separate uvicorn
+    # process; the real worker runs here, sharing its PostgreSQL database and
+    # temporary artifact root. Rendering uses real Chromium, not a fake PDF.
+    fake_openai.script(
+        "propose_analysis",
+        analysis_proposal(
+            requirements=[
+                ProposedRequirement(
+                    text=quote,
+                    importance="mandatory",
+                    coverage="matched",
+                    fact_ids=[fact_id],
+                    rationale="stated in the posting",
+                )
+                for quote, fact_id in (
+                    ("Experience owning the full sales cycle.", "sales.summary.new_business"),
+                    ("Fluent English.", "common.language.english"),
+                )
+            ]
+        ),
+    )
+    stop = Event()
+    worker = Thread(target=ai_services.operation_worker.serve, args=(stop,), daemon=True)
+    worker.start()
+    try:
+        run_browser(live_api_server, "preparation.spec.ts")
+        assert [call.task for call in fake_openai.calls] == ["propose_analysis"]
+    finally:
+        stop.set()
+        worker.join(timeout=15)
+        assert not worker.is_alive(), "the browser journey worker did not stop"

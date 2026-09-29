@@ -72,8 +72,13 @@ def frontend_dist() -> Path | None:
 
 
 @pytest.fixture
+def live_api_factory(request) -> str:
+    return getattr(request, "param", "asgi_factory:build_test_app")
+
+
+@pytest.fixture
 def live_api_server(
-    project_root: Path, database_url: str, frontend_dist: Path | None
+    project_root: Path, database_url: str, frontend_dist: Path | None, live_api_factory: str
 ) -> Iterator[LiveApiServer]:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -84,7 +89,7 @@ def live_api_server(
             "-m",
             "uvicorn",
             "--factory",
-            "asgi_factory:build_test_app",
+            live_api_factory,
             "--host",
             "127.0.0.1",
             "--port",

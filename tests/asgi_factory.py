@@ -15,23 +15,38 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from fake_provider import FakeOpenAI
 from fastapi import FastAPI
 
 from cv_engine.api.app import create_app
+from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.runtime.composition import build_api_services, build_services
 from cv_engine.runtime.paths import AppPaths
 
-__all__ = ["build_test_app"]
+__all__ = ["build_test_ai_app", "build_test_app"]
 
 
 def build_test_app() -> FastAPI:
+    return _build_test_app(with_test_provider=False)
+
+
+def build_test_ai_app() -> FastAPI:
+    """Expose provider availability; only the independent test worker calls it."""
+    return _build_test_app(with_test_provider=True)
+
+
+def _build_test_app(*, with_test_provider: bool) -> FastAPI:
     root = os.environ.get("CV_TEST_ASGI_ROOT")
     if not root:
         raise RuntimeError("CV_TEST_ASGI_ROOT must name the test project root")
     paths = AppPaths.from_root(Path(root))
     # No `config=`: composition resolves it against `paths.root`, so the test
     # project's own `.env` and config apply rather than the installation's.
-    services = build_services(paths)
+    provider = None
+    if with_test_provider:
+        contracts = FileKnowledge(paths.knowledge_root, project_root=paths.root).task_contracts()
+        provider = FakeOpenAI().provider(contracts)
+    services = build_services(paths, provider=provider)
     frontend_dist = os.environ.get("CV_TEST_FRONTEND_DIST")
     return create_app(
         build_api_services(services),

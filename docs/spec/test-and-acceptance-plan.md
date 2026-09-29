@@ -229,11 +229,22 @@ Resume view's failure state (a successful read redirects to a screen scanned on 
 own), the Draft Editor with its approval dialog (its sandboxed preview frame, the
 server-rendered CV, is excluded), the Ready screen with its submission
 dialog, Settings, and Not Found.
+Every new screen must include an axe accessibility scan.
 
 `frontend/e2e/integration/intake.spec.ts` covers browser-to-API intake, persisted
 detail after reload, list navigation, duplicate detection and explicit acknowledgement,
 and preservation of the original snapshot. It runs without a provider; no analysis
 or asynchronous Operation is requested, so this journey needs no worker.
+
+`frontend/e2e/integration/preparation.spec.ts` covers the successful analysis →
+deterministic draft → check → approve → render → Ready → submission journey through
+the browser and real API, including reloads, a real PDF download, and persisted
+submission history. Pytest runs the real Operation worker outside the API process
+against the same isolated PostgreSQL database and temporary artifact root. Only the
+analysis provider transport is scripted; `OPENAI_API_KEY` stays unset, and the test
+asserts no provider calls occur downstream of analysis. Chromium renders the PDF.
+This is offline integration evidence, not a live-provider smoke test. Both browser
+journeys are launched by `tests/e2e/test_browser_api_journey.py`.
 
 ## 4. Golden matrix and semantic parity
 
@@ -411,9 +422,8 @@ macOS.
 
 Open work, not implied coverage:
 
-1. **A new screen arrives with its axe scan.** Every current screen has one.
-2. **Browser-to-API coverage beyond intake is missing.** Intake, reload, list navigation,
-   and duplicate acknowledgement have a real-server browser journey. Analysis through
-   Ready and submission remain covered separately by stubbed UI tests and backend
-   journeys, not by a browser driving the real API and worker together.
-3. **Real S3** is exercised only by a manual smoke run.
+1. **Browser-to-API exception paths beyond intake remain untested.** The successful
+   analysis-through-submission journey has real-server browser coverage; review blockers,
+   stale-document conflicts, and worker failure/retry remain covered separately by
+   stubbed UI tests and backend journeys.
+2. **Real S3** is exercised only by a manual smoke run.
