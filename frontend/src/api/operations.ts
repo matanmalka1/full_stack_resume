@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { ApiProblem, type ApiPath, type ApiResponse, apiRequest } from "./client";
+import { type ApiPath, type ApiResponse, apiRequest, isPermanentFailure } from "./client";
 import type { Operation } from "./contracts";
 
 /* Which statuses end an Operation is a lifecycle rule the backend owns and now reports,
@@ -14,21 +14,6 @@ export const OPERATION_POLL_INTERVAL_MS = 1500;
 export const operationQueryKey = (operationId: string) => ["operation", operationId] as const;
 
 const operationPath = (operationId: string): ApiPath => `/api/v1/operations/${encodeURIComponent(operationId)}`;
-
-/* 408 and 429 are 4xx that say "later", not "never": they stay retryable. Everything
-   else in the 4xx range is the request itself being wrong, and repeating it cannot
-   change the answer. A 5xx, a timeout, and a dropped connection are all transient as
-   far as this screen can tell, so they keep polling. */
-const RETRYABLE_CLIENT_STATUSES = new Set([408, 429]);
-
-const isPermanentFailure = (error: unknown): boolean => {
-  if (!(error instanceof ApiProblem)) {
-    return false;
-  }
-
-  const { status } = error.problem;
-  return status >= 400 && status < 500 && !RETRYABLE_CLIENT_STATUSES.has(status);
-};
 
 export const operationQueryOptions = (operationId: string) =>
   queryOptions({

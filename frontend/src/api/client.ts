@@ -76,6 +76,21 @@ const clientProblem = (code: string, title: string, detail: string): ProblemDeta
   detail,
 });
 
+/* 408 and 429 are 4xx that say "later", not "never": they stay retryable. Everything
+   else in the 4xx range is the request itself being wrong, and repeating it cannot
+   change the answer. A 5xx, a timeout, and a dropped connection are all transient as
+   far as a screen can tell. */
+const RETRYABLE_CLIENT_STATUSES = new Set([408, 429]);
+
+export const isPermanentFailure = (error: unknown): boolean => {
+  if (!(error instanceof ApiProblem)) {
+    return false;
+  }
+
+  const { status } = error.problem;
+  return status >= 400 && status < 500 && !RETRYABLE_CLIENT_STATUSES.has(status);
+};
+
 const isAbortError = (error: unknown): boolean => error instanceof DOMException && error.name === "AbortError";
 
 const invalidServerResponse = (): ApiProblem =>

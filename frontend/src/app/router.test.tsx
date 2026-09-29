@@ -1,35 +1,42 @@
 import { isValidElement } from "react";
+import type { RouteObject } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import { NewApplicationPage } from "@/features/application-intake";
-import { ApplicationListPage } from "@/features/application-list";
-import { ApplicationPage, ApplicationResumePage } from "@/features/applications";
-import { DraftEditorPage } from "@/features/drafts";
-import { ReadyPage } from "@/features/ready";
+import { NewApplicationPage } from "@/features/application-intake/pages/NewApplicationPage";
+import { ApplicationListPage } from "@/features/application-list/pages/ApplicationListPage";
+import { ApplicationPage } from "@/features/applications/pages/ApplicationPage";
+import { ApplicationResumePage } from "@/features/applications/pages/ApplicationResumePage";
+import { DraftEditorPage } from "@/features/drafts/pages/DraftEditorPage";
+import { ReadyPage } from "@/features/ready/pages/ReadyPage";
 import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";
-import { router } from "./router";
+import { routes } from "./router";
 
 /* Every screen sits under a pathless route whose only job is to own the error boundary,
    so the table is read one level in. Reading `routes[0].children` directly would find
    that single wrapper and report every screen as absent. */
-const screens = router.routes[0]?.children?.[0]?.children ?? [];
+const screens = routes[0]?.children?.[0]?.children ?? [];
 const route = (path: string) => screens.find((entry) => entry.path === path);
-const elementType = (path: string) => {
-  const element = route(path)?.element;
-  return isValidElement(element) ? element.type : null;
+
+/* Screens are loaded on first visit, so a route names its screen through `lazy` rather
+   than `element`. The table is read as declared rather than through the live router,
+   which rewrites a route's `lazy` in place once it starts loading that screen. */
+const screenOf = async (entry: RouteObject | undefined) => {
+  const lazy = entry?.lazy;
+  return typeof lazy === "function" ? ((await lazy()).Component ?? null) : null;
 };
+const elementType = (path: string) => screenOf(route(path));
 
 describe("the route table", () => {
-  it("puts the board at the root and intake on its own path", () => {
+  it("puts the board at the root and intake on its own path", async () => {
     const index = screens.find((entry) => entry.index === true);
 
-    expect(isValidElement(index?.element) ? index?.element.type : null).toBe(ApplicationListPage);
-    expect(elementType("applications/new")).toBe(NewApplicationPage);
+    expect(await screenOf(index)).toBe(ApplicationListPage);
+    expect(await elementType("applications/new")).toBe(NewApplicationPage);
   });
 
   it("keeps root and in-layout failures in containers that own different landmarks", () => {
-    const rootBoundary = router.routes[0]?.errorElement;
-    const routeBoundary = router.routes[0]?.children?.[0]?.errorElement;
+    const rootBoundary = routes[0]?.errorElement;
+    const routeBoundary = routes[0]?.children?.[0]?.errorElement;
 
     expect(isValidElement(rootBoundary) ? rootBoundary.type : null).toBe(RootRouteErrorBoundary);
     expect(isValidElement(routeBoundary) ? routeBoundary.type : null).toBe(RouteErrorBoundary);
@@ -38,9 +45,9 @@ describe("the route table", () => {
   /* One address, one screen. `/preparation` was a second name for this same screen, and
      the two components that locate the reader by comparing against `pathname` disagreed
      depending on which one had been used to arrive. */
-  it("answers only the canonical Application addresses", () => {
-    expect(elementType("applications/:applicationId")).toBe(ApplicationPage);
-    expect(elementType("applications/:applicationId/resume")).toBe(ApplicationResumePage);
+  it("answers only the canonical Application addresses", async () => {
+    expect(await elementType("applications/:applicationId")).toBe(ApplicationPage);
+    expect(await elementType("applications/:applicationId/resume")).toBe(ApplicationResumePage);
     expect(route("applications/:applicationId/preparation")).toBeUndefined();
     expect(route("applications/:applicationId/tracking")).toBeUndefined();
     expect(route("approved-revisions/:revisionId/ready")).toBeUndefined();
@@ -48,9 +55,9 @@ describe("the route table", () => {
 
   /* One document per Application: the editor and the ready step are both addressed by the
      Application, and no screen is addressed by a revision any more - there are none. */
-  it("addresses the draft and ready steps by the Application", () => {
-    expect(elementType("applications/:applicationId/draft")).toBe(DraftEditorPage);
-    expect(elementType("applications/:applicationId/ready")).toBe(ReadyPage);
+  it("addresses the draft and ready steps by the Application", async () => {
+    expect(await elementType("applications/:applicationId/draft")).toBe(DraftEditorPage);
+    expect(await elementType("applications/:applicationId/ready")).toBe(ReadyPage);
     expect(route("revisions/:revisionId")).toBeUndefined();
     expect(route("revisions/:revisionId/compare")).toBeUndefined();
   });

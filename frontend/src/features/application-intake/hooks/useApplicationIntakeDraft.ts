@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { confirmUnload } from "@/utils/confirmUnload";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
 
 const INTAKE_DRAFT_STORAGE_KEY = "cv-engine:application-intake-draft";
@@ -123,7 +124,7 @@ export const useApplicationIntakeDraft = (initialFields: ApplicationIntakeFields
     };
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!clearedAfterCreation.current && hasContent(latestFields.current) && !persist(latestFields.current)) {
-        event.preventDefault();
+        confirmUnload(event);
       }
     };
     window.addEventListener("pagehide", flush);

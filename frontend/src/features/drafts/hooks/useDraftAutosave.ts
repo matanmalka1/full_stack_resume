@@ -5,6 +5,7 @@ import { type DocumentPatch, updateDocument } from "@/api/documents";
 import type { ClaimAddition, ClaimPatch, DocumentMutation } from "@/api/contracts";
 import { problemSentence } from "@/ui/errorMessages";
 import { reportError } from "@/ui/reportError";
+import { confirmUnload } from "@/utils/confirmUnload";
 
 const AUTOSAVE_DEBOUNCE_MS = 700;
 
@@ -164,7 +165,7 @@ export const useDraftAutosave = ({ applicationId, etag, onConflict, onSaved }: U
       ) {
         return;
       }
-      event.preventDefault();
+      confirmUnload(event);
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);

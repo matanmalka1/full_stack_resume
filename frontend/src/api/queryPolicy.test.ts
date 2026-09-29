@@ -10,7 +10,8 @@ import {
 import { factsQueryKey, factsQueryPrefix } from "./facts";
 import { cancelOperation, operationQueryOptions, retryOperation } from "./operations";
 import { decisionExportQueryOptions, documentQueryOptions } from "./documents";
-import { queryClient } from "../app/queryClient";
+import { apiRequest } from "./client";
+import { MAX_QUERY_RETRIES, queryClient } from "../app/queryClient";
 
 const jsonResponse = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
   new Response(JSON.stringify(body), {
@@ -115,9 +116,40 @@ describe("query cache policy", () => {
   it("retries reads once and never retries writes", () => {
     const defaults = queryClient.getDefaultOptions();
 
-    expect(defaults.queries?.retry).toBe(1);
+    expect(MAX_QUERY_RETRIES).toBe(1);
+    expect(typeof defaults.queries?.retry).toBe("function");
     expect(defaults.queries?.retryDelay).toBeUndefined();
     expect(defaults.mutations?.retry).toBe(false);
+  });
+
+  /* A second attempt is spent only where it could answer differently. */
+  it.each([
+    [400, 1],
+    [404, 1],
+    [409, 1],
+    [422, 1],
+    [408, 1 + MAX_QUERY_RETRIES],
+    [429, 1 + MAX_QUERY_RETRIES],
+    [500, 1 + MAX_QUERY_RETRIES],
+    [503, 1 + MAX_QUERY_RETRIES],
+  ])("a read failing with %i is requested %i time(s)", async (status, attempts) => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        jsonResponse({ type: "about:blank#x", title: "Refused", status, code: "X", detail: "Refused" }, status),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new QueryClient({
+      defaultOptions: { queries: { ...queryClient.getDefaultOptions().queries, retryDelay: 0 } },
+    });
+
+    await expect(
+      client.fetchQuery({
+        queryKey: ["read", status],
+        queryFn: async () => (await apiRequest("/api/v1/applications/x")).data,
+      }),
+    ).rejects.toThrow("Refused");
+    expect(fetchMock).toHaveBeenCalledTimes(attempts);
   });
 });
 
