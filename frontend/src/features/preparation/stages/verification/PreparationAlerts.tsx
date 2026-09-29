@@ -77,11 +77,10 @@ export const PreparationAlerts = ({
   const currentPath = screenPath(screen, detail.application.id);
   const reviewReasons = showReviewReasons ? detail.review_reasons : [];
   const statedReasonCodes = new Set(detail.review_reasons.map((reason) => reason.code));
-  /* `blocked_actions` contains the normal future workflow as well as exceptional
-     blockers. Only translated exceptions are useful here, and a reason already stated
-     by its own callout is not repeated once for every action it blocks. The translation
-     table is therefore the deliberate exception list: a new backend reason stays quiet
-     until the UI has an intentional sentence for it. */
+  /* `blocked_actions` holds only actions the stage allows and a blocker withholds. A
+     reason already stated by its own callout is not repeated once for every action it
+     blocks, and a reason with no sentence in the translation table stays quiet until the
+     UI has an intentional one. */
   const exceptionalBlockedActions = detail.blocked_actions.flatMap((blocked) => {
     const reasons = blocked.reasons.flatMap((reason) => {
       if (statedReasonCodes.has(reason)) {

@@ -12,7 +12,7 @@ from __future__ import annotations
 from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.drafts import DraftDocument
 from ....domain.contracts.providers import ProposedClaim
-from ....domain.document import content_check, document_state
+from ....domain.document import content_check, preparation_state
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....domain.knowledge import Knowledge
 from ....util import utc_now
@@ -363,7 +363,7 @@ class DraftAuthoringService:
             application_id=command.application_id,
             document_id=updated.id,
             document_hash=updated.document_hash,
-            document_state=document_state(updated, new_basis),
+            preparation_state=preparation_state(updated, new_basis),
             content_check=content_check(updated, new_basis),
             pending_claim_ids=sorted(
                 claim.claim_id

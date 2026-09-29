@@ -58,7 +58,7 @@ export const actionDestination = (action: string, applicationId: string): string
    finished document. Availability and recommendation remain projection-owned. */
 type ResumeProjection = Pick<
   ApplicationListItem,
-  "id" | "document_state" | "preparation_state" | "recommended_action" | "active_operation"
+  "id" | "preparation_state" | "recommended_action" | "active_operation"
 >;
 
 const operationActions: Record<OperationType, string> = {
@@ -85,7 +85,7 @@ const resumeDestination = (application: ResumeProjection): string => {
     return recommended;
   }
 
-  if (application.document_state === "ready") {
+  if (application.preparation_state === "ready") {
     return routePaths.ready(application.id);
   }
 
@@ -106,7 +106,6 @@ export const preparationResumeDestinationFromDetail = (applicationId: string, de
   resumeDestination({
     id: applicationId,
     active_operation: detail.active_operation,
-    document_state: detail.document_state,
     preparation_state: detail.preparation_state,
     recommended_action: detail.recommended_action,
   });

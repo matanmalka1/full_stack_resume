@@ -16,7 +16,7 @@ from pydantic import Field
 
 from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
 from ...domain.contracts.taxonomy import Emphasis
-from ...domain.document import ContentCheck, DocumentState
+from ...domain.document import ContentCheck, PreparationState
 from .drafts import (
     ContentPatchRequest,
     DraftFactResponse,
@@ -127,7 +127,7 @@ class DocumentResponse(HttpSchema):
     content: dict[str, Any] | None = None
     outline: DraftOutlineResponse | None = None
     facts: list[DraftFactResponse] = []
-    document_state: DocumentState
+    preparation_state: PreparationState
     content_check: ContentCheck
     #: The stored report, returned even when outdated so it can be shown as such.
     content_report: ValidationReportResponse | None = None
@@ -143,7 +143,7 @@ class DocumentMutationResponse(HttpSchema):
     application_id: str
     document_id: str
     document_hash: str
-    document_state: DocumentState
+    preparation_state: PreparationState
     content_check: ContentCheck
     pending_claim_ids: list[str] = []
 

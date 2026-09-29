@@ -62,7 +62,6 @@ export type DuplicateMatchReason = DuplicateMatch["matched_on"][number];
    than `string`, so a label map keyed by them stays exhaustive; the action fields are
    `string` at the boundary and are treated as open here on purpose. */
 export type PreparationState = ApiSchemas["PreparationState"];
-export type DocumentState = ApiSchemas["DocumentState"];
 export type ContentCheck = ApiSchemas["ContentCheck"];
 export type Reason = ApiSchemas["ReasonResponse"];
 

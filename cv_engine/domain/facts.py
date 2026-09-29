@@ -123,19 +123,16 @@ class FactStore:
             raise FactStoreError(f"fact {fact_id} has no {language!r} rendering")
         return value
 
-    def promote(self, fact_id: str, target: FactStatus, *, explicitly_confirmed: bool) -> Fact:
+    def confirm(self, fact_id: str, *, explicitly_confirmed: bool) -> Fact:
+        """The one lifecycle step: `pending -> canonical`, on explicit attestation."""
         fact = self.get(fact_id)
-        allowed = {
-            FactStatus.PENDING: FactStatus.CONFIRMED,
-            FactStatus.CONFIRMED: FactStatus.CANONICAL,
-        }
-        if allowed.get(fact.status) is not target:
-            raise FactStoreError(f"invalid fact transition: {fact.status} -> {target}")
+        if fact.status is not FactStatus.PENDING:
+            raise FactStoreError(f"only a pending fact can be confirmed: {fact_id} ({fact.status})")
         if not explicitly_confirmed:
-            raise FactStoreError("fact promotion requires explicit confirmation")
-        promoted = fact.model_copy(update={"status": target})
-        self.facts[fact_id] = promoted
-        return promoted
+            raise FactStoreError("fact confirmation requires explicit confirmation")
+        confirmed = fact.model_copy(update={"status": FactStatus.CANONICAL})
+        self.facts[fact_id] = confirmed
+        return confirmed
 
     def delete(self, fact_id: str) -> Fact:
         """One-way transition to `deleted` from any live status.
@@ -224,30 +221,26 @@ def with_new_fact(source: FactSource, record: Fact, *, canonical: bool) -> FactS
     return FactSource(source_version=version, facts=[*source.facts, record])
 
 
-def with_promoted_fact(
-    source: FactSource, fact_id: str, status: FactStatus, confirmed_at: str
-) -> FactSource:
-    """The source file's next content with one fact's status advanced."""
+def with_confirmed_fact(source: FactSource, fact_id: str, confirmed_at: str) -> FactSource:
+    """The source file's next content with one fact made canonical.
+
+    Canonical content changed, so the declared source version advances.
+    """
     facts = [
-        fact.model_copy(update={"status": status, "confirmed_at": confirmed_at})
+        fact.model_copy(update={"status": FactStatus.CANONICAL, "confirmed_at": confirmed_at})
         if fact.fact_id == fact_id
         else fact
         for fact in source.facts
     ]
-    if all(fact.status is not status or fact.fact_id != fact_id for fact in facts):
+    if all(fact.status is not FactStatus.CANONICAL or fact.fact_id != fact_id for fact in facts):
         raise FactStoreError(f"fact {fact_id} is not present in this source")
-    version = (
-        _next_source_version(source.source_version)
-        if status is FactStatus.CANONICAL
-        else source.source_version
-    )
-    return FactSource(source_version=version, facts=facts)
+    return FactSource(source_version=_next_source_version(source.source_version), facts=facts)
 
 
 def with_deleted_fact(source: FactSource, fact_id: str) -> FactSource:
     """The source file's next content with one fact marked `deleted`.
 
-    Unlike `with_promoted_fact`, deletion never sets `confirmed_at`: it is not
+    Unlike `with_confirmed_fact`, deletion never sets `confirmed_at`: it is not
     a confirmation and must not manufacture one for a fact that never had it.
     """
     facts = [

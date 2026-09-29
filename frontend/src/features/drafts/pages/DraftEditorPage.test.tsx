@@ -124,7 +124,7 @@ const updateResponse = (version: number): Response =>
       application_id: "app-1",
       document_id: "doc-1",
       document_hash: hashAt(version),
-      document_state: "draft",
+      preparation_state: "draft_in_progress",
       content_check: "none",
       pending_claim_ids: [],
     },
@@ -137,7 +137,7 @@ const checkResponse = (documentHash: string, passed: boolean, issues: unknown[] 
     application_id: "app-1",
     document_id: "doc-1",
     document_hash: documentHash,
-    document_state: "draft",
+    preparation_state: "draft_in_progress",
     content_check: passed ? "passed" : "failed",
     pending_claim_ids: [],
     passed,
@@ -184,9 +184,7 @@ const stubReads = (
   return fetchMock;
 };
 
-const reviewDetail = (
-  codes = ["PENDING_FACT_REQUIRES_RESOLUTION", "KNOWLEDGE_RECONCILIATION_REQUIRED"],
-): ApplicationDetail =>
+const reviewDetail = (codes = ["PENDING_FACT_REQUIRES_RESOLUTION"]): ApplicationDetail =>
   detail({
     review_reasons: codes.map((code) => ({
       code,
@@ -409,7 +407,7 @@ describe("DraftEditorPage", () => {
       application_id: "app-1",
       claim_id: "c-1",
       created_at: "2026-08-24T07:05:00Z",
-      event_type: "confirmed",
+      event_type: "fact_confirmed",
       fact_hash: "fact-hash",
       fact_id: "f-captured",
       facts_version: "facts-2",
@@ -418,7 +416,7 @@ describe("DraftEditorPage", () => {
       lifecycle_version: "lifecycle-2",
       reason: "explicit confirmation",
       source: "sales.json",
-      to_status: "confirmed",
+      to_status: "canonical",
     };
     const fetchMock = vi.fn((input: unknown) => {
       const url = String(input);
@@ -440,7 +438,7 @@ describe("DraftEditorPage", () => {
               replaces: null,
               resume_style: "bullet",
               source: "sales.json",
-              status: "confirmed",
+              status: "canonical",
               tags: ["growth"],
             },
           }),
@@ -458,13 +456,13 @@ describe("DraftEditorPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("מצב: אושרה", {}, { timeout: 5_000 })).toBeInTheDocument();
+    expect(await screen.findByText("מצב: מקור אמת", {}, { timeout: 5_000 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "פתיחת העובדה במאגר העובדות" })).toHaveAttribute(
       "href",
       "/facts?fact=f-captured",
     );
-    expect(screen.getByText("ממתינה לאישור ← אושרה · explicit confirmation")).toBeInTheDocument();
-    expect(screen.queryByText(/\bpending\b|\bconfirmed\b/)).not.toBeInTheDocument();
+    expect(screen.getByText("ממתינה לאישור ← מקור אמת · explicit confirmation")).toBeInTheDocument();
+    expect(screen.queryByText(/\bpending\b|\bcanonical\b/)).not.toBeInTheDocument();
   }, 10_000);
 
   it("says how the content was built without duplicating fact lifecycle management", async () => {
@@ -571,7 +569,6 @@ describe("DraftEditorPage", () => {
     });
     renderPage();
     expect(await screen.findByText("טענה בלי עובדה מאושרת")).toBeVisible();
-    expect(screen.getByText(/נדרשת השלמת התאמה של מאגר הידע/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "מעבר לפתרון השורה" }));
     await waitFor(() => expect(document.activeElement?.id).toBe("draft-claim-c-1"));
     expect(screen.getByText("הפיכת הטקסט לעובדה מאושרת")).toBeVisible();
@@ -687,10 +684,10 @@ describe("DraftEditorPage", () => {
               review_reasons: blocked
                 ? [
                     {
-                      code: "KNOWLEDGE_RECONCILIATION_REQUIRED",
-                      message: "Knowledge must be reconciled first.",
-                      entity_references: {},
-                      allowed_resolution_actions: [],
+                      code: "FACT_DELETED_REQUIRES_RESOLUTION",
+                      message: "The document depends on a fact that has been deleted.",
+                      entity_references: { fact_id: "f-gone" },
+                      allowed_resolution_actions: ["update_selection"],
                     },
                   ]
                 : [],
@@ -726,7 +723,7 @@ describe("DraftEditorPage", () => {
       if (outcome === "blocked") {
         /* The projection no longer offers the check, so none is sent: the blocker is the
            answer, reported where the editor reports blockers. */
-        expect(await screen.findByText(/נדרשת השלמת התאמה של מאגר הידע/)).toBeInTheDocument();
+        expect(await screen.findByText("יש לשנות את בחירת העובדות של המסמך במסך ההכנה.")).toBeInTheDocument();
         expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/check`)).toBe(false);
         expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
       } else {
@@ -788,7 +785,6 @@ describe("DraftEditorPage", () => {
             document_id: null,
             document_hash: null,
             document_analysis_id: null,
-            document_state: "none",
             preparation_state: "needs_analysis",
           }),
         ),
@@ -818,9 +814,8 @@ describe("DraftEditorPage", () => {
      stays open beside the render step, and editing simply returns the document to draft. */
   it("keeps the approved document editable beside its render step", async () => {
     const fetchMock = stubReads({
-      detail: () =>
-        jsonResponse(detail({ document_state: "approved", preparation_state: "approved", content_check: "passed" })),
-      document: () => jsonResponse(draft({}, { document_state: "approved", content_check: "passed" })),
+      detail: () => jsonResponse(detail({ preparation_state: "approved", content_check: "passed" })),
+      document: () => jsonResponse(draft({}, { preparation_state: "approved", content_check: "passed" })),
     });
 
     renderPage();
@@ -839,7 +834,6 @@ describe("DraftEditorPage", () => {
       detail: () =>
         jsonResponse(
           detail({
-            document_state: "approved",
             preparation_state: "approved",
             content_check: "passed",
             last_render_error: {
@@ -851,7 +845,7 @@ describe("DraftEditorPage", () => {
             },
           }),
         ),
-      document: () => jsonResponse(draft({}, { document_state: "approved", content_check: "passed" })),
+      document: () => jsonResponse(draft({}, { preparation_state: "approved", content_check: "passed" })),
     });
 
     renderPage();

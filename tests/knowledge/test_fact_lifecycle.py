@@ -314,7 +314,7 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
     services, application_id = setup
     request = PrepareKnowledgeMutation(
         mutation_id=str(uuid.uuid4()),
-        mutation_type="promote_fact",
+        mutation_type="fact_confirmed",
         source_reference="base/sales.json",
         staged_reference="tmp/knowledge/quarantined-mutation/new",
         old_sha256="a" * 64,
@@ -367,11 +367,10 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_document_command(
     events = services.knowledge_queries.fact_history(created.fact.fact_id).events
     assert [(event.from_status, event.to_status) for event in events] == [
         (None, "pending"),
-        ("pending", "confirmed"),
-        ("confirmed", "canonical"),
+        ("pending", "canonical"),
         ("canonical", "canonical"),
     ]
-    assert len(result.event_ids) == 3
+    assert len(result.event_ids) == 2
     transactions, store = _knowledge_persistence(services)
     with transactions.read() as tx:
         assert store.prepared_mutations(tx) == []
@@ -490,32 +489,21 @@ def test_pending_fact_does_not_invalidate_drafts_built_from_canonical_facts(
     assert after.version == before.version
     assert after.lifecycle_version != before.lifecycle_version
 
-    services.knowledge_lifecycle.promote_fact(
-        "situational.postgres", "confirmed", explicitly_confirmed=True
-    )
-    assert _reload(services).version == before.version
-
-    services.knowledge_lifecycle.promote_fact(
-        "situational.postgres", "canonical", explicitly_confirmed=True
-    )
+    services.knowledge_lifecycle.confirm_fact("situational.postgres", explicitly_confirmed=True)
     assert _reload(services).version != before.version
 
 
 def test_lifecycle_refuses_unconfirmed_illegal_duplicate_and_repeated_deletion(
     services: Services,
 ) -> None:
-    """Promotion needs explicit confirmation and a legal transition; a fact ID is
+    """Confirmation needs explicit attestation and a pending fact; a fact ID is
     unique across every source; and deletion is confirmed, one-way, excluded from
     the default listing and targets, and keeps the lifecycle trail."""
     services.knowledge_lifecycle.add_fact("situational_skills.json", dict(NEW_FACT))
 
     with pytest.raises(KnowledgeRejected, match="explicit confirmation"):
-        services.knowledge_lifecycle.promote_fact(
-            "situational.postgres", "confirmed", explicitly_confirmed=False
-        )
-    with pytest.raises(KnowledgeRejected, match="invalid fact transition"):
-        services.knowledge_lifecycle.promote_fact(
-            "situational.postgres", "canonical", explicitly_confirmed=True
+        services.knowledge_lifecycle.confirm_fact(
+            "situational.postgres", explicitly_confirmed=False
         )
     assert _reload(services).get("situational.postgres").status is FactStatus.PENDING
 
@@ -547,11 +535,11 @@ def test_lifecycle_refuses_unconfirmed_illegal_duplicate_and_repeated_deletion(
     assert fact_id in {item.fact.fact_id for item in deleted_listing.items}
     assert services.knowledge_queries.show_fact(fact_id).fact.status is FactStatus.DELETED
 
-    # Excluded from attachment targets, and refused by confirm/promote/attach.
+    # Excluded from attachment targets, and refused by confirm/attach.
     with pytest.raises(UnknownRecord, match="deleted"):
         services.knowledge_queries.fact_attachment_targets(fact_id)
-    with pytest.raises(KnowledgeRejected, match="invalid fact transition"):
-        services.knowledge_lifecycle.promote_fact(fact_id, "confirmed", explicitly_confirmed=True)
+    with pytest.raises(KnowledgeRejected, match="only a pending fact can be confirmed"):
+        services.knowledge_lifecycle.confirm_fact(fact_id, explicitly_confirmed=True)
     with pytest.raises(KnowledgeRejected, match="only canonical facts"):
         services.knowledge_lifecycle.attach_fact(fact_id, "account-manager", "Work Experience")
 
@@ -596,10 +584,10 @@ def test_lifecycle_survives_process_boundaries_over_http(
 
     confirmed = live_api_server.post(f"/facts/{fact_id}/confirm", {"confirm": True})
     assert confirmed.status == 200, confirmed.body
-    assert confirmed.json["fact"]["status"] == "confirmed"
-    promoted = live_api_server.post(f"/facts/{fact_id}/promote", {"confirm": True})
-    assert promoted.status == 200, promoted.body
-    assert promoted.json["fact"]["status"] == "canonical"
+    assert confirmed.json["fact"]["status"] == "canonical"
+    # Confirmation is the one step: a canonical fact has nothing left to confirm.
+    again = live_api_server.post(f"/facts/{fact_id}/confirm", {"confirm": True})
+    assert again.status == 412, again.body
 
     detail = live_api_server.get(f"/facts/{fact_id}")
     assert detail.status == 200, detail.body
@@ -615,8 +603,7 @@ def test_lifecycle_survives_process_boundaries_over_http(
     transitions = [(event["from_status"], event["to_status"]) for event in history.json["events"]]
     assert transitions == [
         (None, "pending"),
-        ("pending", "confirmed"),
-        ("confirmed", "canonical"),
+        ("pending", "canonical"),
     ]
 
     # The file on disk is the record, not the server's memory.
@@ -641,9 +628,9 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     """The full product path a new fact has to travel.
 
     An unsupported manual edit becomes a `pending` claim that blocks approval;
-    the claim's own wording is captured as a `pending` fact, confirmed, promoted
-    to canonical, offered to the Profile section, and only then may a claim link
-    to it and validate. The draft is rebuilt after promotion because a new
+    the claim's own wording is captured as a `pending` fact, confirmed as
+    canonical, offered to the Profile section, and only then may a claim link
+    to it and validate. The draft is rebuilt after confirmation because a new
     canonical fact changes the canonical surface the draft was built from.
     """
     # Capture over HTTP names its provenance explicitly; it is never defaulted.
@@ -681,11 +668,8 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     assert captured.fact.renderings["en"] == text
     assert captured.fact.resume_style == claim.style
 
-    services.knowledge_lifecycle.promote_fact(
-        "sales.leadership.pipeline_review", "confirmed", explicitly_confirmed=True
-    )
-    services.knowledge_lifecycle.promote_fact(
-        "sales.leadership.pipeline_review", "canonical", explicitly_confirmed=True
+    services.knowledge_lifecycle.confirm_fact(
+        "sales.leadership.pipeline_review", explicitly_confirmed=True
     )
 
     edit_document_claim(
@@ -725,8 +709,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
     events = services.knowledge_queries.fact_history("sales.leadership.pipeline_review").events
     assert [event.event_type for event in events] == [
         "fact_created",
-        "fact_promoted",
-        "fact_promoted",
+        "fact_confirmed",
         "fact_attached_to_profile",
     ]
     assert events[0].application_id == app_id

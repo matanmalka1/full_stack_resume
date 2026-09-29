@@ -494,7 +494,7 @@ use a narrow durable journal:
 Startup recovery must decide from durable hashes and identities whether to finish or
 restore. It never guesses. An unrecoverable state is explicitly quarantined.
 
-Normal queries only expose `COMMITTED` state. Quarantine blocks additional promotions
+Normal queries only expose `COMMITTED` state. Quarantine blocks additional fact mutations
 and approval dependent on unreconciled Knowledge. It does not block history reads,
 historical exports, or recruitment tracking.
 
@@ -527,14 +527,14 @@ frozen on the document at creation/re-pin and drives the `PROFILE_CHANGED`/
 `POLICY_CHANGED` warnings by comparison; approval and rendering validate against current
 values regardless of `built_with`.
 
-Ready is computed, never stored as a second entity. `document_state = ready` when
-`rendered_basis == approved_basis == basis` (state-and-use-cases.md §3, §5): the basis
+Ready is computed, never stored as a second entity. `preparation_state = ready` when
+`rendered_basis == approved_basis == basis` (state-and-use-cases.md §3, §4): the basis
 already covers content, selection, analysis pin, and every fact the document depends on,
 so a change to any of them drops `ready` on the next read without a separate demotion
 step. There is no `newer_draft_in_progress` and no historical-versus-active Ready
 distinction, because there is exactly one document: `DOCUMENT_ON_OLDER_ANALYSIS`
 (state-and-use-cases.md §8) is the only warning a newer JobSnapshot/JobAnalysis produces,
-and it never changes `document_state` by itself.
+and it never changes `preparation_state` by itself.
 
 ## 9. Application services and action policy
 
@@ -542,9 +542,9 @@ Application services return Pydantic boundary DTOs. They enforce domain precondi
 load all explicit sources, call ports, record audit, and commit one outcome. They do not
 return database rows or paths.
 
-The action-policy projector computes PreparationState, DocumentState, content_check,
-warnings, review reasons, active Operation, available actions, blocked actions and
-reason codes, and a nullable recommended action from inputs captured in one consistent
+The action-policy projector computes PreparationState, content_check,
+warnings, review reasons, active Operation, available actions, the actions a blocker
+withholds with its reason codes, and a nullable recommended action from inputs captured in one consistent
 read transaction — including the Knowledge needed to compute the document's `basis`
 (state-and-use-cases.md §9). There is no stale-reasons projection: outdated stamps are
 read directly off the basis comparison, not derived from a separate reason catalogue.

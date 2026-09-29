@@ -19,7 +19,6 @@ const detail = {
   allowed_recruitment_transitions: ["interview", "rejected", "withdrawn", "closed"],
   recruitment_timeline: [],
   preparation_state: "needs_analysis",
-  document_state: "none",
   content_check: "none",
   review_reasons: [],
   warnings: [],

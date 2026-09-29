@@ -8,7 +8,7 @@ clears every stamp in the same write.
 
 from __future__ import annotations
 
-from ....domain.document import content_check, document_state
+from ....domain.document import content_check, preparation_state
 from ....util import utc_now
 from ...commands import BuildFromAnalysisCommand, DocumentMutationResult, UpdateSelectionCommand
 from ...errors import LineageBroken, PreconditionFailed
@@ -92,7 +92,7 @@ class SelectionChangeService:
             application_id=command.application_id,
             document_id=updated.id,
             document_hash=updated.document_hash,
-            document_state=document_state(updated, new_basis),
+            preparation_state=preparation_state(updated, new_basis),
             content_check=content_check(updated, new_basis),
         )
 
@@ -132,6 +132,6 @@ class SelectionChangeService:
             application_id=command.application_id,
             document_id=updated.id,
             document_hash=updated.document_hash,
-            document_state=document_state(updated, new_basis),
+            preparation_state=preparation_state(updated, new_basis),
             content_check=content_check(updated, new_basis),
         )

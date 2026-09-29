@@ -50,7 +50,7 @@ from cv_engine.application.operations import (
     OperationType,
 )
 from cv_engine.domain.contracts.providers import SelectionProposal
-from cv_engine.domain.document import DocumentState, PreparationState
+from cv_engine.domain.document import PreparationState
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
@@ -712,7 +712,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
     assert failed.status is OperationStatus.FAILED
     assert failed.failure_code is OperationFailureCode.RENDER_FAILED
     detail = services.queries.application_detail(application_id)
-    assert detail.document_state is DocumentState.APPROVED
+    assert detail.preparation_state is PreparationState.APPROVED
     assert detail.last_render_error is not None
     assert detail.last_render_error["failure_code"] == "RENDER_FAILED"
     assert detail.recommended_action == "render"

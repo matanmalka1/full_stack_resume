@@ -1,43 +1,48 @@
-# v2.0 State and Use-Case Contracts
+# State and Use-Case Contracts
 
-Status: **Approved for v2.0 implementation.** Sections §2–§9, §11, §12, §14–§16, §18–§20
-were rewritten for the single-document model
+Status: **Binding.** Describes the single-document model as implemented
 ([`../decisions/single-document-model.md`](../decisions/single-document-model.md)).
 
-Product authority: `docs/spec/product-spec.md`
+Product authority: [`product-spec.md`](product-spec.md). Section numbers are cited from
+code docstrings; keep them stable.
 
 ## 1. Purpose
 
-This document defines the detailed lifecycle, state projections, commands, queries,
-outcomes, and action policy exposed through the API. It is normative for behavior but
-must not override the product specification.
+This document defines state values, their projections, the commands and queries the
+application layer exposes, their preconditions and outcomes, and the action policy the
+API returns. It is normative for behavior and does not override the product
+specification.
 
-Commands always name the sources they act on. An immutable source is named by ID; the
-mutable CVDocument is named by its Application and guarded by the `expected_document_hash`
-the client last read. Query/UI conveniences may resolve a latest entity for presentation;
-commands may not silently do so.
+Commands name the sources they act on. An immutable source is named by ID. The mutable
+CVDocument is named by its Application and guarded by the `expected_document_hash` the
+client last read. A query may resolve "latest" for presentation; a command never does.
+
+Every write records `actor_type` (`user` | `system`) and `client` (`web` | `worker`).
+There is no authenticated username.
 
 ## 2. Entity lifecycle summary
 
 Mutable:
 
-- Application recruitment projection and safe mutable metadata
-- one CVDocument per Application
-- one active next action per Application
+- the Application: recruitment status, terminal outcome, notes, next action, and the
+  `deleted_at` disposition
+- exactly one CVDocument per Application, once the first analysis activates
+- the active JobSnapshot pointer
+- the Settings row
 
 Immutable or append-only:
 
-- JobSnapshot
+- JobSnapshot and its payload
 - JobAnalysis (one row per analysis; its ID is its identity)
-- Submission, including the content and the files it copied
-- provider-response Artifact and artifact payload
-- recruitment/status/audit events
-- completed Operation lifecycle record
+- Submission, including the content it sent and the files it copied
+- provider-response Artifacts and their payloads
+- recruitment, status, audit, and fact lifecycle events
+- a terminal Operation record
 
-What is frozen is what left the system: the posting as captured, the analyses made of it,
-the provider responses, and the CV actually sent. Everything else is a working state that
-the next command may overwrite. There is no approval history, no draft history, and no
-record of a Ready state that was never submitted.
+What is frozen is what left the system or what was observed: the posting as captured,
+the analyses made of it, provider responses, and the CV actually sent. Everything else
+is working state the next command may overwrite. There is no approval history, no draft
+history, and no record of a Ready state that was never submitted.
 
 ## 3. The CVDocument and its basis
 
@@ -45,58 +50,57 @@ record of a Ready state that was never submitted.
 JobSnapshot (immutable)  ->  JobAnalysis (immutable)
                                    |
                                    v
-CVDocument (mutable, exactly one per Application once the first analysis activates)
+CVDocument (mutable, one per Application)
   analysis_id                       the analysis it is pinned to
   selection                         candidates, selected, pinned, excluded, tag coverage,
-                                    emphasis, emphasis_override, proposal provenance
+                                    emphasis, emphasis_override, proposed_by,
+                                    proposal_rationale
   content                           the DraftDocument; NULL until generated
   built_with                        profile_version, selection_policy_version
   document_hash                     stored: hash(analysis_id, selection, content)
-  content_report, checked_basis, passed
+  content_report, passed, checked_basis
   approved_basis, approved_at
   rendered_basis, html_path, pdf_path, last_render_error
 ```
 
 `document_hash` is the SHA-256 of the canonical JSON of `analysis_id`, `selection` and
-`content`. It is rewritten by every command that changes one of them and by nothing else.
-It is also the document's concurrency token: every command that changes the document
-carries `expected_document_hash`, and a mismatch is a conflict that writes nothing. Two
-states with the same hash are the same document, so a change computed against one is
-valid against the other.
+`content`. Every command that changes one of them rewrites it; nothing else does. It is
+the document's concurrency token: a command that changes the document carries
+`expected_document_hash`, and a mismatch is `DOCUMENT_CHANGED` (409) with nothing
+written.
 
-`facts_hash` is the SHA-256 of the canonical JSON of the current state of every fact the
-document depends on: the fact IDs in `selection` united with the fact IDs cited by the
-claims in `content`. Each entry carries the fact ID, its lifecycle status, and its
-canonical content; a fact that no longer resolves is entered as missing. `facts_hash` is
-computed on read from the loaded Knowledge and never stored.
+The **dependent fact set** is the fact IDs in `selection.selected_fact_ids` and
+`selection.pinned_fact_ids`, united with every fact ID cited by the headline, contact,
+and section claims in `content`. `facts_hash` is the SHA-256 of the canonical JSON of
+each dependent fact's full current record (status included, storage location excluded),
+sorted by ID; a fact that no longer resolves is entered as missing. It is computed on
+read and never stored.
 
 ```text
-basis = hash(document_hash, facts_hash)
+basis = sha256(document_hash + ":" + facts_hash)
 ```
 
-The basis is computed on read. Only three stamps of it are stored:
+The basis is computed on read. Three stamps of it are stored:
 
-- `checked_basis`: the basis the stored `content_report` was produced for;
+- `checked_basis`: the basis `content_report` was produced for;
 - `approved_basis`: the basis that was approved;
 - `rendered_basis`: the basis whose files `html_path`/`pdf_path` hold.
 
-A NULL stamp never equals the basis. Any change to the document, or to a fact it depends
-on, changes the basis, however the fact changed — through the Knowledge mutation journal
-or by hand in `base/`. No command invalidates a stamp by writing: an outdated stamp simply
-no longer equals the basis on the next read.
+A NULL stamp never equals the basis. Any change to the document, or to a dependent fact,
+changes the basis however the fact changed — through the Knowledge mutation journal or
+by hand in `base/`. No command invalidates a stamp by writing; an outdated stamp simply
+no longer matches on the next read.
 
-The document is pinned to its analysis:
+Pinning:
 
-- The first activated analysis of an Application, when no document exists, creates the
-  document with that analysis's deterministic selection and no content. Creation relies
-  on the one-document-per-Application unique constraint.
-- A later analysis never changes the document. It raises `DOCUMENT_ON_OLDER_ANALYSIS`
+- The first activated analysis of an Application creates the document with that
+  analysis's deterministic selection and no content, relying on the
+  one-document-per-Application unique constraint.
+- A later analysis never touches the document; it raises `DOCUMENT_ON_OLDER_ANALYSIS`
   (§8).
-- `build_from_analysis` (§14) is the explicit action that re-pins the document.
+- `build_from_analysis` (§14) is the only command that changes `analysis_id`.
 
 ## 4. PreparationState
-
-Values:
 
 ```text
 needs_analysis
@@ -106,103 +110,90 @@ approved
 ready
 ```
 
-Projection rules, first match wins, over inputs captured in one consistent database
-snapshot (§9):
+First match wins, over one consistent read (§9):
 
-1. No CVDocument exists -> `needs_analysis`.
+1. No CVDocument -> `needs_analysis`.
 2. `content IS NULL` -> `ready_to_draft`.
-3. `rendered_basis == approved_basis == basis` -> `ready`.
+3. `approved_basis == basis AND rendered_basis == basis` -> `ready`.
 4. `approved_basis == basis` -> `approved`.
 5. Otherwise -> `draft_in_progress`.
 
-A review reason (§7) is an overlay on these states, not a state: it blocks the actions it
-names and leaves the PreparationState as projected. Ready and approved are therefore never
-hidden by unrelated work, and they are lost only by a change the basis covers.
+PreparationState is the one document state the API and UI read. "Approved" and "Ready"
+in this document mean `preparation_state` `approved` and `ready`. The domain keeps its
+own restatement of the approval stamps (`DocumentState`) for the commands that check
+them; it is not exposed.
 
-A newer JobSnapshot or JobAnalysis does not change the PreparationState of an existing
-document. It is reported by the `DOCUMENT_ON_OLDER_ANALYSIS` warning, and `analyze` and
-`build_from_analysis` are offered according to §9.
+A review reason (§7) is an overlay: it blocks the actions it names and leaves the
+PreparationState as projected. A newer JobSnapshot or JobAnalysis does not change the
+PreparationState of an existing document; it is reported by the
+`DOCUMENT_ON_OLDER_ANALYSIS` warning.
 
-## 5. DocumentState and content check
-
-`document_state` restates the approval stamps on their own:
-
-```text
-none        no CVDocument
-draft       approved_basis IS NULL OR approved_basis != basis
-approved    approved_basis == basis AND (rendered_basis IS NULL OR rendered_basis != basis)
-ready       rendered_basis == approved_basis == basis
-```
+## 5. Content check
 
 `content_check` describes the stored content report:
 
 ```text
-none        no report has been produced, or content IS NULL
+none        no document, content IS NULL, or checked_basis IS NULL
 outdated    checked_basis != basis
 failed      checked_basis == basis AND passed = false
 passed      checked_basis == basis AND passed = true
 ```
 
 An outdated report is still returned so the client can show it as outdated; it never
-authorizes anything. An ETag conflict is a save-attempt outcome held by the client until
-resolution, not a persisted state.
+authorizes anything. An ETag conflict is a save-attempt outcome the client holds until
+resolved, not persisted state.
 
 ## 6. Why nothing goes stale
 
-The revision model froze a context and reported `stale` reasons when a source moved. The
-document model has no frozen context to go stale:
+There is no frozen context and no `stale_reasons` projection:
 
-- A document edit, a selection change, or a re-pin changes `document_hash`, so every
-  stamp is outdated at once.
-- A fact edit, replacement, demotion, or deletion that the document depends on changes
-  `facts_hash`, so every stamp is outdated at once. An unrelated fact change does not.
-- A newer analysis or snapshot is a warning (`DOCUMENT_ON_OLDER_ANALYSIS`); the document
-  stays as it was until `build_from_analysis`.
-- A profile or selection-policy change is a warning (`PROFILE_CHANGED`,
-  `POLICY_CHANGED`) derived from `built_with` against the current versions. Approval and
-  rendering validate against the current values, so the warning never lets an outdated
-  build through.
-
-There is no `stale_reasons` projection and no `primary_stale_reason`.
+- A content edit, selection change, or re-pin changes `document_hash`, so every stamp is
+  outdated at once.
+- A change to a dependent fact (edit, status transition, replacement, deletion, removal
+  from `base/`) changes `facts_hash`, so every stamp is outdated at once. A change to an
+  unrelated fact does not.
+- A newer analysis or snapshot is the `DOCUMENT_ON_OLDER_ANALYSIS` warning; the document
+  stays as it is until `build_from_analysis`.
+- A Profile or selection-policy version change is the `PROFILE_CHANGED` or
+  `POLICY_CHANGED` warning, derived from `built_with`. Approval and rendering validate
+  against the current Knowledge, so the warning never lets an outdated build through.
 
 ## 7. Review reasons
 
-Review reasons are blockers that require an explicit user decision. Codes:
+Review reasons are blockers that need an explicit user decision. They are computed over
+the dependent fact set (§3), plus any fact IDs a command is about to select:
 
 ```text
-PENDING_FACT_REQUIRES_RESOLUTION
-FACT_DELETED_REQUIRES_RESOLUTION
-KNOWLEDGE_RECONCILIATION_REQUIRED
+PENDING_FACT_REQUIRES_RESOLUTION     a dependent fact is pending
+FACT_DELETED_REQUIRES_RESOLUTION     a dependent fact has status deleted
 ```
 
-Analysis issues, low Fit and hard gaps are diagnostics, not review reasons. They remain
-visible to the user but do not require acknowledgement and do not block drafting,
-approval, rendering or Ready. Missing evidence is not evidence of missing experience;
-an uncertain requirement therefore remains `unknown` rather than becoming unsupported.
+A pending or deleted fact outside that set does not affect the Application. Each reason
+carries a safe message, entity references (`document_id` and the first offending
+`fact_id`), and its resolution actions:
 
-A review reason advertises an action only when that action can actually close it. The
-projection derives those actions from the underlying fact or integrity condition; it
-does not maintain a second catalogue of analysis acknowledgements.
+| Reason | Resolution actions |
+| --- | --- |
+| `PENDING_FACT_REQUIRES_RESOLUTION` | `confirm_and_use_fact`, `update_selection`, `edit` |
+| `FACT_DELETED_REQUIRES_RESOLUTION` | `update_selection`, `edit`, `regenerate_section`, `regenerate_claim` |
 
-`PENDING_FACT_REQUIRES_RESOLUTION` and `FACT_DELETED_REQUIRES_RESOLUTION` are computed
-over the same fact set as `facts_hash` — the document's selection united with the facts
-its claims cite — plus a requested selection. A pending or deleted fact outside that set
-does not affect the Application. `FACT_DELETED_REQUIRES_RESOLUTION` refers to
-`FactStatus.DELETED` (§17).
+A review reason blocks `approve`, `render` and `submit`, which refuse with a 412 whose
+`code` is the first reason. It does not block editing, selection changes, generation, or
+regeneration: those are how it is resolved.
 
-A review reason blocks `approve` and `render`, and therefore Ready and `submit`. It does
-not block editing, selection changes, generation, or regeneration: those are how it is
-resolved.
+Analysis issues, low Fit, and hard gaps are diagnostics, not review reasons. They stay
+visible and block nothing. Missing evidence is not evidence of missing experience: an
+uncertain requirement stays `unknown`.
 
-Each reason includes a safe message, relevant entity references, and allowed resolution
-action identifiers.
+`KNOWLEDGE_RECONCILIATION_REQUIRED` is not projected as a review reason. It is the
+refusal `approve_document` returns while any Knowledge mutation is quarantined (§15).
 
 ## 8. Warnings, blockers, and failures
 
-- A warning is important but does not disable approval.
-- A blocker disables one or more commands.
-- A review reason is a blocker requiring explicit human judgment.
-- An error is a technical or Operation failure rather than domain state.
+- A warning is shown but disables nothing.
+- A blocker disables one or more actions (`blocked_actions`, §9).
+- A review reason is a blocker that needs human judgment (§7).
+- An error is a refusal or an Operation failure, not domain state.
 
 Warning codes:
 
@@ -211,32 +202,31 @@ DOCUMENT_ON_OLDER_ANALYSIS
 PROFILE_CHANGED
 POLICY_CHANGED
 FACT_SUPERSEDED
-FACT_KNOWN_INCORRECT
 NEXT_ACTION_OVERDUE
 ```
 
-`DOCUMENT_ON_OLDER_ANALYSIS` applies when the document's `analysis_id` is not the newest
-JobAnalysis of the Application, or when the document's analysis was made of a JobSnapshot
-other than the active one. It replaces the revision model's snapshot, analysis and
-selection-plan replacement reasons.
+- `DOCUMENT_ON_OLDER_ANALYSIS`: the document's `analysis_id` is not the newest
+  JobAnalysis of the Application, or its analysis was made of a JobSnapshot other than
+  the active one.
+- `PROFILE_CHANGED` / `POLICY_CHANGED`: `built_with` differs from the current Profile
+  or selection-policy version.
+- `FACT_SUPERSEDED`: a canonical fact `replaces` a dependent fact. It never rewrites a
+  Submission.
+- `NEXT_ACTION_OVERDUE`: `next_action_date` is before today and the recruitment status
+  is not `accepted`, `rejected`, `withdrawn`, or `closed`.
 
-`FACT_SUPERSEDED` and `FACT_KNOWN_INCORRECT` are computed over the `facts_hash` fact set.
-`FACT_KNOWN_INCORRECT` is materially stronger than supersession. Neither rewrites a
-Submission, which is immutable and keeps the content it sent.
-
-A deleted fact the document still depends on is the `FACT_DELETED_REQUIRES_RESOLUTION`
-blocker (§7), never a warning.
+A deleted dependent fact is the `FACT_DELETED_REQUIRES_RESOLUTION` blocker, never a
+warning. There is no known-incorrect fact status and no warning for one.
 
 ## 9. Action policy projection
 
-Application Detail and relevant list projections return:
+Application detail and every list row return:
 
 ```json
 {
   "recruitment_status": "saved",
   "terminal_outcome": null,
   "preparation_state": "draft_in_progress",
-  "document_state": "draft",
   "content_check": "failed",
   "review_reasons": [],
   "warnings": [],
@@ -249,816 +239,754 @@ Application Detail and relevant list projections return:
   "document_analysis_id": "...",
   "approved_at": null,
   "last_render_error": null,
-  "available_actions": ["check", "regenerate_claim"],
-  "blocked_actions": [
-    {"action": "approve", "reasons": ["VALIDATION_FAILED"]}
-  ],
+  "available_actions": ["update_selection", "edit", "regenerate_section", "regenerate_claim", "check"],
+  "blocked_actions": [{"action": "approve", "reasons": ["VALIDATION_FAILED"]}],
   "recommended_action": "check"
 }
 ```
 
-All database inputs, including the Knowledge the basis is computed from, are captured in
-one read. The projection is derived from that capture. `recommended_action` is
-deterministic and nullable. Action identifiers are stable application commands, not UI
-labels.
+All inputs — the Application, snapshots, analyses, document, Operations, and the
+Knowledge the basis is computed from — are captured in one read, and the projection is
+derived from that capture. Action identifiers are stable command names, not UI labels.
+Detail additionally returns `allowed_recruitment_transitions` (§10), the latest
+snapshot and analysis, and the recruitment timeline.
 
-`approved_at` is the time of the approval in force: it is reported only while
-`document_state` is `approved` or `ready`, and is null otherwise, including after an edit
-or a fact change has left a stored approval outdated. `last_render_error` is likewise
-reported only while the document still carries the hash the render failed against.
+- `approved_at` is reported only while `preparation_state` is `approved` or `ready`.
+- `last_render_error` is reported only while its recorded hash equals `document_hash`
+  (§16).
+- `active_operation` is the queued/running Operation, if any; it is the polling and
+  concurrency signal. `latest_operation` is the newest Operation whether live or
+  terminal, so a failure stays presentable after work ends.
 
-Action availability:
+Each action is first allowed or not by the stage. An action the stage does not allow
+appears in neither `available_actions` nor `blocked_actions`: the stage already says
+why. A deleted Application allows none.
 
-| Action | Available when |
+| Action | The stage allows it when |
 | --- | --- |
-| `analyze` | the active JobSnapshot has no JobAnalysis, and no `analyze_job` is queued/running |
-| `edit_matching_configuration` | a JobAnalysis exists and no queued/running Operation can replace it or change the document selection |
-| `build_from_analysis` | a document exists and a newer JobAnalysis than `document_analysis_id` exists |
-| `update_selection`, `propose_selection` | a document exists |
-| `create_draft` | a document exists and `content IS NULL` |
+| `analyze` | no JobAnalysis exists for the active JobSnapshot |
+| `edit_matching_configuration` | a JobAnalysis exists |
+| `build_from_analysis` | a document exists and the newest analysis has a higher version than the document's |
+| `update_selection` | a document exists |
+| `propose_selection`, `create_draft` | a document exists and `content IS NULL` |
+| `confirm_and_use_fact` | a review reason names it as a resolution action |
 | `edit`, `regenerate_section`, `regenerate_claim` | `content IS NOT NULL` |
 | `check` | `content IS NOT NULL` and `content_check != passed` |
-| `approve` | `content IS NOT NULL`, `document_state = draft`, and no review reason |
-| `render` | `document_state = approved` and no review reason |
-| `submit` | `document_state = ready` and no review reason |
-| `download_pdf` | `document_state = ready` |
+| `approve` | `preparation_state = draft_in_progress` |
+| `render` | `preparation_state = approved` |
+| `submit`, `download_pdf` | `preparation_state = ready` |
 
-A queued or running Operation that mutates the document disables every other command
-that mutates it. `edit_matching_configuration` means voluntarily editing the matching
-context; it is committed through the `apply_analysis_decisions` backend endpoint, which
-is an implementation name, not a separate advertised action.
+A review reason's resolution actions are allowed too; `edit`, `regenerate_section` and
+`regenerate_claim` only while content exists.
 
-Recommendation order, first match wins: `analyze` when no document exists; `create_draft`
-when content is NULL; `check` when the report is not current; `approve`; `render`;
-`submit`; otherwise null.
+An allowed action is available unless a blocker withholds it. Then it is in
+`blocked_actions` with every blocker's code:
 
-`active_operation` is limited to queued/running work and is the polling and concurrency
-signal. `latest_operation` is the newest lifecycle record whether live or terminal, so a
-failed outcome remains presentable after active work ends. A live Operation may therefore
-appear in both fields; clients prefer `active_operation` while work is in flight.
+| Code | Withholds |
+| --- | --- |
+| `ANALYSIS_IN_PROGRESS` | `analyze`, while an `analyze_job` is queued or running |
+| `MATCHING_CONTEXT_OPERATION_IN_PROGRESS` | `edit_matching_configuration`, while an `analyze_job` or `propose_selection` is queued or running |
+| `DOCUMENT_OPERATION_IN_PROGRESS` | `build_from_analysis`, `update_selection`, `propose_selection`, `confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`, `regenerate_claim`, `check`, `approve`, `render`, while a `propose_selection`, `create_draft`, `regenerate_section`, `regenerate_claim` or `render_document` is queued or running |
+| any review reason code (§7) | `approve`, `render`, `submit` |
+| `VALIDATION_FAILED` | `approve`, while `content_check = failed` |
 
-`last_render_error` is the structured failure of the newest failed render whose expected
-document hash still equals `document_hash` (§16). It is cleared by a successful render and
-is not shown once the document has changed.
+`download_pdf` has no blocker: a Ready document stays downloadable.
+
+`edit_matching_configuration` is committed through `apply_analysis_decisions` (§13); it
+is an action name, not a separate endpoint.
+
+`recommended_action`, first match wins, then nulled unless available: `analyze` when no
+document exists; `create_draft` when content is NULL; `check` when `content_check` is
+`none` or `outdated`; otherwise the first available of `approve`, `render`, `submit`.
 
 ## 10. RecruitmentStatus
 
-Values:
-
 ```text
-saved
-applied
-recruiter_screen
-interview
-assignment
-final_stage
-offer
-accepted
-rejected
-withdrawn
-closed
+saved  applied  recruiter_screen  interview  assignment  final_stage  offer
+accepted  rejected  withdrawn  closed
 ```
 
-Normal transitions:
+Allowed transitions:
 
 ```text
-saved
-  -> applied | withdrawn | closed
-
-applied
-  -> recruiter_screen | interview | rejected | withdrawn | closed
-
-recruiter_screen
-  -> interview | assignment | rejected | withdrawn | closed
-
-interview
-  -> assignment | final_stage | offer | rejected | withdrawn | closed
-
-assignment
-  -> interview | final_stage | offer | rejected | withdrawn | closed
-
-final_stage
-  -> offer | rejected | withdrawn | closed
-
-offer
-  -> accepted | rejected | withdrawn | closed
-
-accepted | rejected | withdrawn
-  -> closed
+saved             -> applied | withdrawn | closed
+applied           -> recruiter_screen | interview | rejected | withdrawn | closed
+recruiter_screen  -> interview | assignment | rejected | withdrawn | closed
+interview         -> assignment | final_stage | offer | rejected | withdrawn | closed
+assignment        -> interview | final_stage | offer | rejected | withdrawn | closed
+final_stage       -> offer | rejected | withdrawn | closed
+offer             -> accepted | rejected | withdrawn | closed
+accepted | rejected | withdrawn -> closed
+closed            -> (none)
 ```
 
-Backward transitions are not normal. `correct_recruitment_status` adds a correction
-event referencing the erroneous event and requiring a reason. Current status and
-terminal outcome are updated transactionally while the original event remains.
+`saved -> applied` is owned by submission (§18): the status command refuses `applied`,
+and `allowed_recruitment_transitions` never lists it.
 
-`closed` is archival. The last accepted/rejected/withdrawn outcome remains in
-`terminal_outcome` and history.
+`terminal_outcome` is set to `accepted`/`rejected`/`withdrawn` on entering that status,
+kept on entering `closed`, and cleared on entering any other status. `closed` is
+archival.
 
-Audit actors use `actor_type=user|system` and `client=web|worker`. There is no
-authenticated username; the UI may label the local user as `You`.
+A backward move is not a transition. `correct_recruitment_status` appends a correction
+event that references the erroneous one; current status and terminal outcome change in
+the same transaction and the original event stays.
 
-Preparation commands never alter RecruitmentStatus. Drafting after `applied` leaves the
-Application applied.
+Preparation commands never change RecruitmentStatus. Drafting after `applied` leaves
+the Application applied.
 
 ## 11. Operation lifecycle
 
-Status:
+Status: `queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`.
+
+Phase: `queued`, `waiting_for_application`, `waiting_for_render_slot`,
+`waiting_for_ai_slot`, `pre_execution_check`, `executing`, `retry_wait`,
+`pre_activation_check`, `activating`, `completed`.
+
+Types:
+
+| Type | Bound to | Provider |
+| --- | --- | --- |
+| `analyze_job` | its JobSnapshot (ID and hash) and a Knowledge context hash | required |
+| `propose_selection` | `expected_document_hash` | required |
+| `create_draft` | `expected_document_hash` | `deterministic` (model `rules-v1`) or `openai` |
+| `regenerate_section` | `expected_document_hash` | required |
+| `regenerate_claim` | `expected_document_hash` | required |
+| `render_document` | `expected_document_hash` | none (Playwright) |
+
+Manual edits, `update_selection`, `apply_analysis_decisions`, `build_from_analysis`,
+`check`, `approve`, and `submit` are synchronous and never Operations. No provider call
+happens inside an HTTP request.
+
+A document-mutating Operation locks the document row at activation; a hash mismatch
+discards the result and fails the Operation with `SOURCE_CHANGED`. Draft-producing
+Operations do not re-check other input freshness at activation: their output is
+unapproved, and `approve`/`render` validate against the current Knowledge.
+
+AI Operations freeze the model and reasoning effort from the command, or from the
+Settings defaults, into the immutable payload when queued. The worker never re-reads
+Settings to decide what to run. Retry copies them from the original.
+
+Failure codes:
 
 ```text
-queued
-running
-succeeded
-failed
-cancelled
-interrupted
-```
-
-Operation types:
-
-```text
-analyze_job
-propose_selection
-create_draft
-regenerate_section
-regenerate_claim
-render_document
-```
-
-Manual edits, deterministic selection changes, `build_from_analysis`, `check`, `approve`
-and `submit` are synchronous and are never Operations.
-
-An Operation that mutates an existing document (`propose_selection`, `create_draft`,
-`regenerate_section`, `regenerate_claim`, `render_document`) carries
-`expected_document_hash`. At activation it locks the document row; a mismatch discards
-the result and fails the Operation with `SOURCE_CHANGED`. `analyze_job` is bound to its
-input JobSnapshot, not to a document. Operations keep the input identities they need to
-execute, retry and pin, but draft-producing Operations do not recheck input freshness at
-activation: their output is unapproved, and `approve`/`render` validate against the
-current authoritative context (facts and their eligibility, profile, policy, evidence).
-
-Failure reason is separate. Stable failure codes:
-
-```text
-SOURCE_CHANGED
-PROVIDER_TIMEOUT
-PROVIDER_RATE_LIMITED
-PROVIDER_UNAVAILABLE
-PROVIDER_REFUSED
-INVALID_OUTPUT
-CLAIM_REVIEW_UNCERTAIN
-CLAIM_REVIEW_UNSUPPORTED
-SCHEMA_VIOLATION
-RENDER_FAILED
-BROWSER_START_FAILED
-MISSING_FACT_RENDERING
-VALIDATION_EXECUTION_FAILED
+SOURCE_CHANGED               PROVIDER_TIMEOUT*          PROVIDER_RATE_LIMITED*
+PROVIDER_UNAVAILABLE*        PROVIDER_REFUSED           PROVIDER_NOT_CONFIGURED
+INVALID_OUTPUT               SCHEMA_VIOLATION           CLAIM_REVIEW_UNCERTAIN
+CLAIM_REVIEW_UNSUPPORTED     RENDER_FAILED              BROWSER_START_FAILED*
+MISSING_FACT_RENDERING       VALIDATION_EXECUTION_FAILED
 CANCELLED_BEFORE_ACTIVATION
-PROVIDER_NOT_CONFIGURED
 ```
 
-`PROVIDER_NOT_CONFIGURED` means an AI task was requested and no provider is configured,
-so nothing was sent; `PROVIDER_REFUSED` means a provider answered and refused. Both are
-terminal.
+`*` marks transient codes the runner may retry once automatically.
 
-`CLAIM_REVIEW_UNCERTAIN` means the semantic reviewer could not establish that a
-proposed paraphrase is supported. `CLAIM_REVIEW_UNSUPPORTED` means it found that the
-proposal exceeds or contradicts the cited canonical facts. Both are terminal and leave
-the document unchanged; malformed or incomplete reviewer output remains
-`INVALID_OUTPUT`.
+- `PROVIDER_NOT_CONFIGURED`: an AI task was requested with no provider configured;
+  nothing was sent. `PROVIDER_REFUSED`: a provider answered and declined.
+- `CLAIM_REVIEW_UNCERTAIN`: the semantic reviewer could not establish support for a
+  proposed wording. `CLAIM_REVIEW_UNSUPPORTED`: it found the wording exceeds or
+  contradicts the cited facts. Both leave the document unchanged. Malformed reviewer
+  output is `INVALID_OUTPUT`.
 
-An Operation may be failed/cancelled while owning an inactive immutable output (provider
-evidence). Output existence and output activation are separate.
+A failed or cancelled Operation may own inactive immutable output (provider evidence).
+Output existence and activation are separate. An output reference is one of
+`job_analysis`, `cv_document`, or `provider_response`.
 
-An output reference names one of three things, a closed set: `job_analysis` (the
-JobAnalysis an analysis activated), `cv_document` (the document an analysis created or an
-Operation changed at activation), and `provider_response` (registered provider
-evidence).
-
-Operation query fields include status, phase, message, timestamps, failure code, safe
-failure detail, structured failure reason, retry reference, cancellation state, output
-references, and the backend-derived Operation actions currently accepted. The UI polls every one to two
-seconds. It does not display fabricated percentages or re-derive lifecycle permissions
-from status strings.
-
-The structured failure reason is the failure's cause in a closed vocabulary with typed
-parameters - a PDF page count against its limit, a fact missing a rendering in a language,
-a named render check - written when the failure is recorded. The safe failure detail is
-the same cause as an English sentence; a client explains the failure from the reason and
-never parses the sentence. The reason is null when the code alone says everything.
+The Operation read returns status, phase, message, timestamps, failure code, safe
+failure detail, structured `failure_reason`, retry reference, cancellation state,
+output references, provider/model/reasoning/usage metadata, and `available_actions`
+(`cancel`, `retry`). The structured reason is the cause in a closed vocabulary with
+typed parameters (a page count against its limit, a fact missing a rendering in a
+language, a named render check); the detail is the same cause as an English sentence.
+Clients explain a failure from the reason and never parse the sentence. The UI polls and
+does not show fabricated progress.
 
 ## 12. Application commands
 
+### `duplicate_check`
+
+Synchronous read. Takes the intake fields and returns duplicate matches with the reasons
+they matched. Writes nothing.
+
 ### `create_application`
 
-Input:
+Input: company, target role, exact job text, optional source URL,
+`acknowledged_duplicates`.
 
-- company
-- target role
-- exact job text
-- optional source URL
-- explicit create-anyway acknowledgement when duplicate matches were shown
+- Validates required fields, size, control characters, and an `http(s)` source URL. A
+  refusal is `APPLICATION_INTAKE_INVALID` (412) naming the rejected field in `context`;
+  the rejected value is never echoed.
+- Reruns duplicate detection; unacknowledged matches are
+  `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` (412) with the matches.
+- Writes the JobSnapshot payload under a payload write lease, then creates the
+  Application in `saved` with its first snapshot in one transaction.
+- Returns the IDs and duplicate warnings.
 
-Behavior:
-
-- validate size/control-character constraints
-- report a deterministic intake validation refusal with the rejected field name in safe
-  Problem Details context; never reflect the rejected value
-- compute source and normalized hashes
-- rerun duplicate detection
-- create Application in `saved`
-- write/register immutable initial JobSnapshot
-- return warnings and duplicate matches
-
-It is synchronous, deterministic, fast, and never calls AI.
+Synchronous, deterministic, never calls AI. Deleted Applications are excluded from
+duplicate detection.
 
 ### `create_job_snapshot`
 
-Input: Application ID, exact new text, optional URL/provenance. Creates a new immutable
-snapshot and makes it the active snapshot. It does not mutate or delete older snapshots
-or analyses, and it does not change the document.
+Input: Application ID, exact new text, optional URL and source metadata. Creates a new
+immutable snapshot with the next version and makes it active. Text identical to an
+existing snapshot of the Application is refused (409). Older snapshots, analyses, and
+the document are not changed.
+
+### `update_application_notes`
+
+Synchronous. Replaces the Application's free-text notes, guarded by `expected_notes`
+(the notes the client last read); a mismatch is 409 and writes nothing. Appends an
+audit record.
 
 ### `close_application`
 
-Transitions a saved/non-terminal Application through the allowed policy to `closed`.
-There is no hard-delete command in the Web UI.
+Transitions to `closed` through `transition_recruitment_status`, so it is refused where
+that transition is not allowed. There is no hard delete.
 
-### `delete_application(application_id)`
+### `delete_application`
 
-Soft-deletes an Application: sets a terminal `deleted_at` disposition and appends an
-audit event. It is orthogonal to `RecruitmentStatus` — available from any status
-including `closed` — and does not itself transition `current_status`. A deleted
-Application is excluded from default list/dashboard/search projections and from
-duplicate detection, but its record, its document, and every immutable JobSnapshot,
-JobAnalysis, Artifact, Submission, and Operation it produced remain unchanged and
-individually reachable by ID. There is no hard delete and no `undelete` command in this
-phase; a mistaken deletion is corrected the same way a mistaken status is, by explicit
-reason, not by reversing the flag. Calling it on an Application already deleted is
-refused with `StateConflict` (409) — the same idempotency posture as `delete_fact`
-refusing an already-`deleted` fact — rather than silently succeeding again or appending a
-second `delete_application` audit event.
+Soft delete: sets `deleted_at` and appends an audit event, from any status, without
+changing `current_status`. A deleted Application is excluded from the default list,
+Dashboard counts, and duplicate detection. Its document and every immutable record it
+produced stay unchanged and reachable by ID. There is no undelete. Deleting an already
+deleted Application is 409.
 
-Every command in §13–§16 and `submit_application` (§18) resolves its Application through
-one shared precondition rather than each service repeating its own check: 404 if the
-Application does not exist, 409 (`StateConflict`) if it is deleted, otherwise the record.
-A read that must still resolve a deleted Application's history on purpose — the
-detail-by-ID projection, submission detail, `export_decision_markdown` — is exempt by
-design, exactly as §17's `show_fact` stays exempt for a deleted fact.
+Every command in §13–§18, and `close_application`, resolves its Application through
+one shared precondition: 404 if it does not exist, 409 if it is deleted.
+`create_job_snapshot` and `update_application_notes` check existence only. Reads of
+history are exempt by design: the detail projection, document read, JobSnapshot
+history, `export_recruiter_pdf`, `export_decision_markdown`, and previews.
 
 ## 13. Analysis commands
 
-### `analyze_job(application_id, job_snapshot_id, provider, ...)`
+### `analyze_job(application_id, job_snapshot_id, model?, reasoning_effort?)`
 
-Asynchronous and idempotent. Creating a new analysis requires the configured AI provider.
-`analyze_job` runs the one provider task named in product-spec §12,
-`propose_analysis`, and supplies its structured Proposal: the posting's requirements with
-their importance, evidence-linked coverage, shortfall severity and reason, and the
-Track/Profile/Emphasis/language classification. The raw response is preserved.
-Deterministic policy locates each quoted
-requirement in the snapshot, validates canonical-fact eligibility, refuses a positive
-coverage left without evidence, applies canonical boundary facts, checks profile
-legality, and derives requirement identity, gaps, Fit, and review reasons. A check that
-fails narrows the requirement it names and is recorded as an analysis issue; the rest of
-the reading stands. A fact ID or provider-declared
-relation is not by itself proof of semantic support or boundary applicability. Unresolved
-material completeness, support, or boundary applicability remains explicit and reviewable.
-Legacy concept/rule gaps are not unioned into or allowed to veto this result.
+Asynchronous Operation (`202`). Needs the configured provider; there is no rules-based
+fallback. It runs the `propose_analysis` task (product-spec §12) and receives a
+Proposal: requirements with importance, evidence-linked coverage, shortfall severity and
+reason, and the Track/Profile/Emphasis/language classification. The raw response is
+preserved as provider evidence.
 
-Every successful activation creates one immutable JobAnalysis. When the Application has
-no document, the same transaction creates the CVDocument pinned to that analysis, with
-the analysis's deterministic selection, `built_with` set to the current profile and
-selection-policy versions, and no content. When a document exists, activation does not
-touch it. The result returns the analysis ID, the document ID, and the projected state.
+Deterministic policy then locates each quoted requirement in the snapshot, checks
+canonical-fact eligibility, refuses positive coverage without evidence, applies
+canonical boundary facts, checks Profile legality, and derives requirement identity,
+gaps, Fit, and review routing. A failed check narrows the requirement it names and is
+recorded as an analysis issue; the rest of the reading stands. A check may narrow a
+proposal, never widen it.
 
-Preconditions:
+Activation writes one immutable JobAnalysis under the Application lock. When the
+Application has no document, the same transaction creates it (§3) with `built_with` set
+to the current versions. An existing document is not touched.
 
-- snapshot belongs to Application
-- a configured provider is available
+Preconditions: the snapshot belongs to the Application; the Application is not deleted.
 
-For AI mode, the application resolves the current allowlisted model and reasoning
-preference before writing the Operation. Those values are part of the immutable payload
-and runner record; the worker never re-reads Settings to decide what to execute.
+Fit: `fit_score` is the weighted fraction of requirement coverage (mandatory weighted
+double; `partial` earns half; `unknown` earns zero and is not excluded). `fit`
+(`high`/`medium`/`low`) is read off fixed thresholds and then capped: two or more hard
+gaps force `low`, exactly one caps at `medium`. `fit_score` is null only when nothing
+could be scored. A mandatory `unsupported` requirement is a hard gap; a mandatory
+`partial` one is hard only when its shortfall severity is `material`. Fit is diagnostic
+and blocks nothing.
 
-### `apply_analysis_decisions`
+### `apply_analysis_decisions(analysis_id, ...)`
 
-Synchronous. It accepts one local form submission naming the analysis it addresses
-(`expected_analysis_id`) and, when a document exists, `expected_document_hash`. Under the
-Application write lock both must still match; a mismatch returns a conflict and writes
-nothing. The same transaction refuses the decision while a queued or running Operation
-can replace the analysis or change the document selection. Operation admission and this
-check serialize on the same Application lock.
+Synchronous (`201`). Input: `expected_analysis_id` (must equal the path's analysis),
+`expected_document_hash` (required when a document exists), and any of
+`track_override`, `profile_override`, `language_override`, `emphasis_override`,
+`pinned_fact_ids`, `excluded_fact_ids`.
 
-- A change to requirement meaning or to the Track/Profile/language classification
-  creates one new immutable JobAnalysis. It never mutates the original. The document is
-  not changed; the new analysis raises `DOCUMENT_ON_OLDER_ANALYSIS` until the user runs
-  `build_from_analysis`. When no document exists, the new analysis creates it as in
-  `analyze_job`.
-- An Emphasis decision or a fact-selection decision on the document's own analysis
-  updates the document selection in place, exactly as `update_selection` does, including
-  its effect on content.
-- An Emphasis decision accompanying a classification change is carried into the new
-  analysis's deterministic selection.
+Overrides accumulate: the submission is merged over the overrides the source analysis
+already carries, and omitting a field does not retract it.
 
-A *fact* overlay may not accompany a classification change: pinned and excluded facts are
-decided against candidate accounting the new analysis has not produced yet, so they stay
-a second command.
+- **Classification change** (Track, Profile, or language differs from what the analysis
+  already carries): creates one new immutable JobAnalysis without calling a provider,
+  after checking Track/Profile/Emphasis consistency. Any Emphasis decision is carried
+  into it. The document is not changed: it reports `DOCUMENT_ON_OLDER_ANALYSIS` until
+  `build_from_analysis`. With no document, the new analysis creates it.
+- **Fact overlay with a classification change**: refused (412). Pins and exclusions are
+  decided against candidates the new analysis has not produced; send them as a second
+  command.
+- **Emphasis or fact overlay only**: applied to the document selection in place, exactly
+  as `update_selection` (§14), including its effect on content. It needs the document to
+  be built on this analysis. Under the Application lock it refuses while an
+  `analyze_job` or `propose_selection` is queued or running, and refuses (409) when the
+  newest analysis is no longer `expected_analysis_id`.
+- **No change**: refused (412).
 
-After a successful commit the API response includes the newly computed application-state
-projection, including `available_actions` and `recommended_action`. The Web client chooses
-the next step from that projection and does not predict it from the submitted fields.
-
-Fit remains `unknown` when nothing can be scored. An individual requirement whose
-coverage is `unknown` receives zero credit without becoming an approval blocker.
-
-`fit_score` is the canonical numeric Fit measure `fit` is read off:
-a weighted fraction of requirement coverage (mandatory requirements weighted double),
-where `unknown` counts at zero credit rather than being excluded - an incompletely
-assessed posting must not outscore a fully assessed one. `fit` (`high`/`medium`/`low`)
-is derived from `fit_score` against fixed thresholds, then capped by hard gap count
-regardless of the score: two or more hard gaps force `low` outright; exactly one caps
-the level at `medium`. This remains diagnostic. `fit_score` is `null` only when nothing
-at all could be scored.
-
-A mandatory `unsupported` requirement is a hard gap. A mandatory `partial` requirement
-is hard only when its uncovered condition has `material` shortfall severity; `minor` and
-`unknown` partial shortfalls are warnings. Coverage values and their numeric Fit credit
-do not change: every `partial` still earns one half of its requirement weight.
+The response carries the resulting analysis ID, whether one was created, and the
+document ID and hash. The client reads the fresh projection to choose the next step.
 
 ## 14. Document commands
 
 ### Wording evidence contract
 
-The following rules govern generation, regeneration, editing, checking, and approval.
-Canonical/extractive/presentation proof or complete eligible reviewed evidence under
-product-spec §10.1 may establish claim support. Positive reviewed evidence needs no
-individual user confirmation. Uncertainty cannot be downgraded to a warning; known
-contradiction or unsupported content cannot be overridden by general approval.
+Governs generation, regeneration, editing, checking, and approval. A claim is supported
+by canonical, extractive, or presentation proof, or by complete eligible reviewed
+evidence (product-spec §10.1). Positive reviewed evidence needs no per-claim user
+confirmation. Uncertainty cannot be downgraded to a warning; a known contradiction or
+unsupported content cannot be overridden by approval.
 
-Review execution uses persisted Operations and `expected_document_hash`. A provider
-result with uncertainty is a domain review outcome, not a transport failure, and does
-not authorize activation as supported content. Unsupported AI wording remains refused;
-unsupported manual text remains savable as pending/unlinked. Evidence cannot be
-activated after cancellation or against a changed document.
+AI wording is proposed, then reviewed by the semantic reviewer against the exact
+proposed claims, section context, linked fact IDs, allowed canonical sources, and an
+ordered assertion-to-source mapping. Only a fully supported result activates.
+Uncertain or unsupported results fail the Operation (§11) with inactive provider
+evidence and leave the document unchanged. Unsupported manual text is saved as a
+pending, unlinked claim; it is never rejected or discarded, and it cannot pass the check.
 
-A missing review or unresolved clarification blocks approval through both action policy
-and application services. Claim-level evidence may remain reusable after an unrelated
-edit only when its actual dependencies still match. The v1 writer/reviewer flow adds no
-public command or PreparationState value. Its provider DTOs carry the exact proposed
-claims, section context, linked fact IDs, allowed canonical sources, and one ordered
-assertion/source-quote mapping per reviewed claim. Only a fully supported result
-activates. Uncertain/unsupported results fail the existing Operation with immutable
-inactive provider evidence and leave the document unchanged.
+### `read_document(application_id)`
 
-### `update_selection(application_id, expected_document_hash, change)`
+Returns the document (§20) with `document_hash` as the ETag. 404 when the Application
+has no document yet.
 
-Synchronous and deterministic. Selects, pins, excludes, or unselects facts, or sets the
-Emphasis override, on the document's selection. It validates Profile/Track/Emphasis and
-allowed-fact constraints against the document's analysis and the current Knowledge.
+### `update_selection(application_id, expected_document_hash, pinned_fact_ids, excluded_fact_ids, emphasis_override?)`
 
-When `content IS NULL`, only the selection changes. When content exists, the command
-updates selection and content atomically when the change is deterministic and
-unambiguous; a change that requires wording judgment returns an outcome directing the
-client to a regeneration command and writes nothing. The selection records its effective
-`emphasis` separately from the nullable `emphasis_override`.
+Synchronous and deterministic. Rebuilds the selection from the document's analysis and
+current Knowledge with the given overlay, checking Profile/Track/Emphasis and fact
+eligibility. The effective `emphasis` is recorded separately from the nullable
+`emphasis_override`.
 
-### `propose_selection(application_id, expected_document_hash, provider)`
+- `content IS NULL`: only the selection changes.
+- Content composed by the engine: content is recomposed from the new selection in the
+  same write.
+- Content carrying manual or AI wording a rebuild would discard: refused with
+  `REGENERATION_REQUIRED` (412); nothing is written.
 
-Asynchronous, idempotent AI Operation. The provider output is only a Proposal;
-activation repeats the deterministic validations of `update_selection` and the
-`expected_document_hash` check before replacing the selection. It is available only while
-`content IS NULL`. A selection activated from a Proposal records `proposed_by = "ai"` and
-the provider's written rationale inside the selection. They are provenance only:
-activation never reads them. Engine and user selections leave both null. No provider call
-occurs inside a synchronous HTTP request.
+### `propose_selection(application_id, expected_document_hash, model?, reasoning_effort?)`
+
+AI Operation, only while `content IS NULL`. The proposal is an overlay (pins,
+exclusions, rationale). Activation re-checks the hash and empty content under the row
+lock and reruns selection policy against the Knowledge loaded for activation. The
+activated selection records `proposed_by = "ai"` and `proposal_rationale` as provenance;
+activation never reads them. Engine and user selections leave both null.
 
 ### `build_from_analysis(application_id, analysis_id, expected_document_hash)`
 
-Synchronous and deterministic. Re-pins the document to an explicitly named JobAnalysis of
-the same Application: it replaces `analysis_id`, sets the selection to that analysis's
-deterministic selection, refreshes `built_with`, and sets `content` to NULL. The same
-write clears the content report and all three stamps, and clears `html_path`,
-`pdf_path` and `last_render_error`; the previous rendered files are deleted best-effort
-after commit. It is the only command that changes `analysis_id`.
+Synchronous and deterministic. Re-pins the document to a named JobAnalysis of the same
+Application (412 if it is another Application's, or the one already pinned). The
+command accepts any analysis of the Application; the projection offers it only when a
+newer one exists. It sets `analysis_id`, the analysis's deterministic selection, fresh
+`built_with`, and `content = NULL`, and in the same write clears the report, all three
+stamps, `html_path`, `pdf_path`, and `last_render_error`. The released rendered files
+are deleted best-effort after commit.
 
-### `create_draft(application_id, expected_document_hash, provider)`
+### `create_draft(application_id, expected_document_hash, provider, model?, reasoning_effort?)`
 
-Asynchronous and idempotent. The deterministic path constructs the canonical
-DraftDocument from the document's analysis and selection. AI mode uses the `draft_resume`
-Proposal and semantic validation. Activation writes `content` only while
-`document_hash == expected_document_hash`.
+Operation, only while `content IS NULL`. `provider = deterministic` composes the
+canonical DraftDocument from the analysis and selection with no AI. `provider = openai`
+uses the `draft_resume` Proposal and semantic review. Activation writes `content` only
+while `document_hash == expected_document_hash`. A selected fact without a rendering in
+the document language fails with `MISSING_FACT_RENDERING`.
 
-AI selection proposals, draft generation, and targeted regeneration freeze the same
-model/reasoning pair at submission. Retry copies that pair from the original Operation.
+### `update_document(application_id, If-Match, patch)`
 
-### `update_document(application_id, expected_document_hash, patch)`
+Synchronous autosave. The patch has `claim_edits` (text, fact IDs, template),
+`claim_removals`, `claim_additions` (section + text), and `claim_orders` (the complete
+claim order per reordered section). Returns the new `document_hash`. A mismatch is 409.
 
-Synchronous autosave command. The input is a structured content patch. It returns the
-new `document_hash`. A mismatch returns Conflict and changes nothing.
+- Free text that cannot be authorized is saved as a pending claim carrying the reason.
+- Only an unauthorized section claim may be removed; removing a claim the selection
+  authorizes is 412 pointing at the selection change. Headline and contacts are
+  structural.
 
-Free-text is saved as pending/unlinked when it cannot be authorized. It is not silently
-rejected or discarded.
+Editing an approved or Ready document is allowed; the basis changes and the document is
+`draft` on the next read.
 
 ### `regenerate_section` / `regenerate_claim`
 
-Asynchronous, idempotent AI Operations. They receive the Application, the
-`expected_document_hash`, the target section/claim, and minimal facts/policies. Output is
-a Proposal; activation uses the same `expected_document_hash` rule as `create_draft`.
+AI Operations against `expected_document_hash`, a named section or claim, and an
+optional instruction. An unknown section or claim is 404. `regenerate_claim` with
+`keep_text` reviews the claim's own wording instead of rewriting it; it requires a
+pending claim linked to at least one fact. Activation follows the `create_draft` hash
+rule.
 
-Editing an approved or ready document is allowed. It changes the basis, so the document
-returns to `draft` on the next read; no command reopens it.
+### Previews
+
+`preview` (HTML) and `preview.pdf` render the current content through the render
+composition, marked as an unapproved draft. They need no approval, store nothing, and
+write no document field, Artifact, or Operation. 412 while `content IS NULL`.
 
 ## 15. Check and approval commands
 
 ### `check_document(application_id, expected_document_hash)`
 
-Synchronous deterministic content validation. It does not call a provider. It runs the
-validation contract against the current content, the document's analysis and selection,
-and the current Knowledge, profile, policy and evidence, and stores the result in one
-write: `content_report`, `passed`, and `checked_basis` set to the basis the check ran
-against. It always stores the report when validation executed, including `passed=false`.
-Validator execution failure is an application/infrastructure error and stores nothing.
+Synchronous and deterministic; no provider. Runs the validation contract against the
+current content, the document's analysis and selection, and current Knowledge, and
+stores `content_report`, `passed`, and `checked_basis` in one write — including when
+`passed = false`. Content bound to another Application, analysis, or snapshot fails as
+`document-binding-mismatch`. A validator execution failure stores nothing and is an
+infrastructure error.
 
-The report records its issues, groups and evidence, and the validator versions. For
-reviewed wording, evidence includes exact review/proof references. Validation checks
-hard-rule results, full assertion coverage, permitted evidence kind, no unresolved
-contradiction/uncertainty, and that every claim's facts are eligible. It does not infer
-success from a missing review.
+The report records issues, groups, evidence (including reviewed-wording proof
+references), and validator versions. It checks hard rules, full assertion coverage,
+permitted evidence kinds, absence of unresolved contradiction or uncertainty, and fact
+eligibility. A missing review is never read as success.
 
 ### `approve_document(application_id, expected_document_hash)`
 
-Synchronous. It runs `check_document`'s validation and approves in one action, under the
-document row lock:
+Synchronous. Validates and approves in one action:
 
-- It always stores the report and `checked_basis`.
-- It sets `approved_basis` to the checked basis and `approved_at` only when the report
-  passed and no review reason or blocker exists.
-- When `approved_basis` already equals the basis it returns the existing approval: it
-  does not rewrite `approved_at` and appends no audit record.
+1. Refuses a deleted Application, a hash mismatch, and `content IS NULL`.
+2. If `approved_basis` and `checked_basis` already equal the basis, returns the
+   existing approval: `approved_at` is not rewritten and no audit record is added.
+3. Refuses with `KNOWLEDGE_RECONCILIATION_REQUIRED` (412) while any Knowledge mutation
+   is quarantined.
+4. Refuses with the first review reason's code (412).
+5. Runs validation, then under the document row lock stores the report and
+   `checked_basis`, and — only when the report passed — `approved_basis` and
+   `approved_at`, with an audit record.
 
-A failed check is returned as data (`200` with the report), not as an exception. A review
-reason or other blocker is refused with a precondition failure naming it.
+A failed check is returned as data (`200` with the report and `passed = false`), not as
+an exception.
 
-A no-pause flow (product-spec.md §11) is an explicit user approval action here too: it
-may orchestrate check -> approve -> render with `actor_type=user` and the originating
-client, but it is subject to every validation, warning confirmation, and blocker rule
-above.
-
-Warnings may require one general confirmation. No warning that actually requires a
-specific resolution may reach this command as a warning.
+A no-pause flow (product-spec §11) orchestrates check -> approve -> render as explicit
+user actions with `actor_type = user`, subject to every rule above.
 
 ## 16. Rendering commands
 
 ### `render_document(application_id, expected_document_hash)`
 
-Asynchronous and idempotent. Admission requires `document_state = approved` and no
-review reason. The Operation validates the content, writes HTML and renders PDF with
-Playwright Chromium to a unique per-attempt path, and checks geometry, page count,
-PDF/ATS text, links, direction, and filename metadata. All rendering happens outside
-database scopes.
+Operation. Admission (at queue time) requires the hash, `preparation_state = approved`
+(else `DOCUMENT_NOT_APPROVED`, 412), and no review reason. Execution revalidates the
+content against current Knowledge (failure: `ValidationBlocked`), writes HTML and
+renders the PDF with Playwright Chromium to a unique per-attempt path, and checks
+geometry, page count, PDF/ATS text, links, direction, and filename metadata. Rendering
+runs outside database scopes.
 
-Activation locks the document row and requires `approved_basis == basis` and
-`document_hash == expected_document_hash`. Only then does it swap `html_path` and
-`pdf_path` to the new files, stamp `rendered_basis`, and clear `last_render_error`.
-Render activation is the only writer of `rendered_basis`.
+Activation locks the document row and requires `document_hash == expected_document_hash`
+and `approved_basis == basis`. Only then does it swap `html_path`/`pdf_path`, stamp
+`rendered_basis`, and clear `last_render_error`. Render activation is the only writer of
+`rendered_basis`.
 
-A failure records `last_render_error` (structured failure reason) only while
-`document_hash` still equals the expected hash; otherwise only the Operation keeps the
-failure. A failure never touches the active files or `rendered_basis`. Superseded files
-(after success) and failed-attempt files are deleted best-effort. Readiness does not
-depend on a render version, and no render output is registered as an Artifact.
-
-After a render failure the document stays approved. Correction is an ordinary edit,
-which returns the document to draft; retry creates a new Operation.
+A failure records `last_render_error` (the structured reason plus the hash it failed
+against) only while `document_hash` still equals the expected hash; otherwise only the
+Operation keeps it. A failure never touches the active files or `rendered_basis`.
+Superseded and failed-attempt files are deleted best-effort. Rendered files are working
+outputs, not Artifacts. After a failure the document stays approved; the fix is an edit
+and a new render.
 
 ### `export_recruiter_pdf(application_id)`
 
-Synchronous read. It computes the basis at request time and refuses unless
-`document_state = ready`. It verifies path containment and that the file exists before
-returning it with a friendly Content-Disposition filename.
+Synchronous read. Computes the basis at request time and refuses with
+`DOCUMENT_NOT_READY` (412) unless `preparation_state = ready`. Verifies path containment
+and existence, then streams the file with a friendly Content-Disposition filename and
+the document hash as ETag.
 
 ### `export_decision_markdown(application_id)`
 
-Produces a human-readable provenance export of the current document: its analysis,
-selection, the facts it depends on, and the stored content report. It writes nothing.
-Diagnostic JSON remains available through the API but is not the primary human export.
+A human-readable provenance export of the current document: its analysis, selection,
+dependent facts, and stored content report. Writes nothing.
 
 ## 17. Knowledge commands
 
-### `list_facts(status=None)` / `show_fact(fact_id)` / `fact_history(fact_id=None)`
+Every fact mutation runs through the Knowledge mutation journal
+(architecture.md §7.2). While any mutation is quarantined, every fact mutation is
+refused (`KNOWLEDGE_REJECTED`, 412) and approval is refused (§15).
 
-Synchronous reads over the candidate Fact pool and its immutable lifecycle events.
-`list_facts` may filter by lifecycle status; with no filter it excludes `deleted` facts,
-which remain reachable by an explicit `status=deleted` filter or by `show_fact`.
-`show_fact` returns one fact with its events. The dedicated candidate-facts surface uses
-these reads without requiring an Application, JobAnalysis, or document context.
+Fact statuses: `pending`, `canonical`, `deleted`. The lifecycle is
+`pending -> canonical` on one explicit confirmation; any live fact may be deleted.
 
-### `list_fact_attachment_targets`
+### Reads
 
-Returns the existing Profiles and their sections as read-only attachment targets. Stable
-Profile and section identifiers plus display labels are returned; stored paths, Profile
-editing capabilities, policies, and other Knowledge documents are not exposed. This is a
-query convenience over existing Profile definitions, not candidate or Profile CRUD.
+- `list_facts(status?)`: without a filter excludes `deleted`; `status=deleted` lists
+  them. Each item carries the fact and its last recorded lifecycle status.
+- `show_fact(fact_id)`: one fact with its events, including a deleted fact.
+- `fact_history(fact_id?)`: lifecycle events, for one fact or all.
+- `list_fact_attachment_targets(fact_id?)`: existing Profiles and their sections as
+  read-only targets (stable identifiers and labels; with `fact_id`, whether it is already
+  attached or pinned there). A deleted `fact_id` is 404. No stored paths, policies, or
+  Profile editing.
+
+None of these need an Application or document context.
 
 ### `create_pending_fact`
 
-Creates a UUID-identified pending fact through the Knowledge mutation journal. Input
-contains language-neutral meaning, exact English rendering, optional Hebrew rendering,
-tags, provenance, dates/replacement, proposed Profile section, and source
-Application/claim. Fact identity is not user-editable.
-
-When `replaces` names a canonical fact, the command creates a pending correction. The
-original fact is not mutated; confirmation and promotion remain separate explicit
-transitions.
+Creates a pending fact with a generated ID (a client-supplied ID is refused). Input:
+source file, meaning, renderings (`en` required, `he` optional), tags, provenance,
+`resume_style`, optional effective dates, optional `replaces`, reason. With `replaces`
+naming a canonical fact it is a pending correction; the original is not changed.
 
 ### `confirm_fact(fact_id)`
 
-Moves exactly one fact from `pending` to `confirmed` after explicit user attestation.
-It refuses every other source status and never resolves a latest fact implicitly.
-
-### `promote_fact(fact_id)`
-
-Moves exactly one fact from `confirmed` to `canonical` after a second explicit user
-attestation. Promoting a replacement makes the original fact superseded for warning
-purposes; it does not rewrite or remove the original record or any Submission.
+Moves exactly `pending -> canonical`. It needs an explicit `confirm: true` attestation
+in the request; `false` is refused, not ignored. Any other source status is refused.
+It sets `confirmed_at` when the fact has none and advances the source file's version.
+Confirming a replacement makes the original superseded for warning purposes (§8); it
+rewrites neither the original nor any Submission.
 
 ### `delete_fact(fact_id)`
 
-Moves a fact from `pending`, `confirmed`, or `canonical` to the terminal `deleted`
-status. Refuses a fact already `deleted`. It is a soft delete through the same
-Knowledge mutation journal as every other transition: the fact record and its full
-lifecycle history are preserved and remain reachable via `show_fact`/`fact_history`,
-but a deleted fact is excluded from `list_facts` by default, from
-`list_fact_attachment_targets` results, and is refused by `confirm_fact`,
-`promote_fact`, `attach_fact`, and `confirm_and_use_fact`.
+Explicitly confirmed, one-way move from `pending` or `canonical` to
+`deleted`; an already deleted fact is refused. The record and its history stay
+reachable. Deletion is always allowed, even for a fact attached to a Profile or used by
+a document, and writes nothing to any document: a dependent document's basis changes
+and it reports `FACT_DELETED_REQUIRES_RESOLUTION` (§7). Submissions are unaffected.
+Deletion does not create a replacement, and a replacement does not delete the original.
 
-Deletion is always permitted, including for a fact currently attached to a Profile
-section or used by a document — it does not require detaching first, and it writes
-nothing to any document. A document that depends on the deleted fact sees its basis
-change and reports `FACT_DELETED_REQUIRES_RESOLUTION` (§7) until the dependency is
-resolved (re-selection, edit, or replacement fact). A Submission that already carries
-the fact is immutable and unaffected. Deletion never rewrites, removes, or reassigns the
-fact's canonical content, and it is a separate disposition from `replaces`-based
-canonical correction: deleting a fact does not create a replacement, and creating a
-replacement does not delete the original.
+A deleted fact is refused by `confirm_fact`, `attach_fact`, and
+`confirm_and_use_fact`.
 
-### `attach_fact(fact_id, profile, section, pin=False)`
+### `attach_fact(fact_id, profile, section, pin=false)`
 
-Offers one canonical fact to an explicitly named existing Profile section. It may pin the
-fact within that section. It does not edit Profile structure or change any document
-selection. Non-canonical facts are refused.
+Offers one canonical fact to one existing Profile section's pool, optionally pinned.
+Non-canonical facts are refused. It changes no Profile structure and no document.
 
-### `confirm_and_use_fact`
+### `confirm_and_use_fact(fact_id, application_id, job_analysis_id, profile, section, expected_document_hash)`
 
-One logical cross-store command:
+One journaled command:
 
 ```text
-pending -> confirmed -> canonical
--> attach to explicit Profile section
--> select the fact in the named Application's document (update_selection)
+pending -> canonical
+-> attach to the named Profile section
+-> select the fact in the Application's document
 ```
 
-Every transition receives a separate audit event. Complete validation occurs before
-mutation, the journal provides deterministic recovery, and normal queries never expose
-partial completion. A failure reports the whole command as unsuccessful. The journal's
-selection step is a document selection update guarded by `expected_document_hash`.
+Preconditions, checked before any write: the document exists and matches the hash
+(`DOCUMENT_CHANGED`, 409); it is built on `job_analysis_id`; the analysis belongs to the
+Application and its Profile is `profile`. The selection step removes the fact from the
+exclusions and rebuilds the selection; the fact must end up selected. Engine-composed
+content is recomposed; content with wording a rebuild would discard refuses the whole
+command. Every transition gets its own event; the document write commits with the fact
+events. Partial completion is never visible.
 
-### `create_fact_from_claim`
+### `create_fact_from_claim(application_id, claim_id, ...)`
 
-Copies exact claim text into the appropriate rendering without AI rewrite. Meaning,
-tags, provenance, and other required metadata are supplied explicitly. It creates a
-pending fact and does not authorize the claim until the lifecycle/attachment/selection
-is complete.
+Turns a claim of the current document into a pending fact, copying the claim's exact
+text as a rendering without rewrite. Meaning, tags, and provenance are supplied
+explicitly; a Hebrew document also needs the English rendering. The headline cannot
+become a fact. The claim is not authorized until the fact completes its lifecycle and
+is selected.
 
-Canonical correction creates a replacement fact carrying `replaces`; it never mutates
-the old fact content.
-
-`delete_fact` (above) is the only removal command in this lifecycle. Archive,
-withdrawal, retirement, and distinct `known-incorrect` transitions remain undefined:
-adding them requires a separate contract for their effects on Profile pools, selection,
-warnings, validation, reconciliation, and Submissions. Their absence must not be
-presented by a client as an available action.
+Canonical correction always creates a replacement fact carrying `replaces`; it never
+mutates the old fact. `delete_fact` is the only removal. Archive, withdrawal,
+retirement, and known-incorrect transitions do not exist; a client must not present
+them.
 
 ## 18. Tracking commands
 
 ### `submit_application(application_id, expected_document_hash, submitted_at, metadata)`
 
-Records a send that already happened; it carries the submission time. It is not a
-validation gate. Under the document row lock it requires
-`rendered_basis == approved_basis == basis` and `document_hash == expected_document_hash`
-and no review reason. It copies the content into the Submission and the rendered HTML and
-PDF to submission-owned paths under a payload write lease, computing a SHA-256 per file, and
-then, in one PostgreSQL transaction, inserts the immutable Submission, transitions to
-`applied` if required, and appends status/audit events.
+Records a send that already happened. Requires the hash, `preparation_state = ready` with
+both files present (`DOCUMENT_NOT_READY`, 412), and no review reason. Copies the
+rendered HTML and PDF to submission-owned paths under a payload write lease, computing
+a SHA-256 per file. Then, in one transaction under the document row lock, re-checks that
+the hash, stamps, and file paths are unchanged, inserts the immutable Submission,
+transitions `saved -> applied` when the Application is `saved`, and appends status and
+audit events.
 
-An internal Submission records:
+An internal Submission records its content, `document_hash`, the `job_snapshot_id` of
+the document's analysis (FK `RESTRICT`), `html_path`/`html_sha256`,
+`pdf_path`/`pdf_sha256`, `submitted_at`, and metadata.
 
-- the content it sent and its `document_hash`;
-- the `job_snapshot_id` of the document's analysis (FK `RESTRICT`);
-- `html_path` + `html_sha256` and `pdf_path` + `pdf_sha256`.
+When the document is on an older analysis or snapshot, the result carries the
+`DOCUMENT_ON_OLDER_ANALYSIS` warning; it is not a precondition. Multiple submissions
+are allowed; later ones add no transition. Submitting does not change the document.
 
-When the active snapshot or analysis is newer than the document's, the outcome includes
-the `DOCUMENT_ON_OLDER_ANALYSIS` warning; it is not a precondition.
+### `record_external_submission(application_id, submitted_at, metadata)`
 
-Multiple submissions are allowed. Later submissions do not add a redundant `applied`
-transition or reset recruitment state. Submitting does not change the document.
+Records an immutable external submission with no content or files and the same
+`saved -> applied` rule.
 
-### `record_external_submission`
+### `transition_recruitment_status(application_id, target_status, reason?, occurred_at?)`
 
-Records an immutable external submission that carries no document content or files. It
-transitions to `applied` if required and records explicit provenance.
+Applies one allowed transition (§10). `applied` is refused (submission-owned); an
+unknown or disallowed target is 409. Targeting the current status is a no-op that
+returns the current state and writes nothing.
 
-### `transition_recruitment_status`
+### `correct_recruitment_status(application_id, target_status, corrects_event_id, reason)`
 
-Applies only an allowed forward transition. Actor, client, timestamp, from/to, and
-source are mandatory; reason is optional for a normal transition.
+Requires a non-blank reason and a status event of this Application (not a next-action
+event); an unknown event is 404, a foreign or wrong-kind event 409. Appends a
+correction event and updates status and terminal outcome in one transaction. The
+corrected event is not changed.
 
-### `correct_recruitment_status`
+### `set_next_action(application_id, next_action?, next_action_date?)`
 
-Requires target status, `corrects_event_id`, and reason. It appends a correction event
-and updates current status/terminal outcome in one transaction. It does not delete or
-alter the corrected event.
-
-### `set_next_action`
-
-Sets or clears the one active action/date and appends an event. Overdue is computed by
-queries; no notification job is created.
+Sets or clears the one active next action and date, appending an event. Overdue is
+computed on read (§8); no notification job exists.
 
 ## 19. Operation commands
 
-### `cancel_operation`
+### `get_operation(operation_id)`
 
-Queued work becomes cancelled immediately. Running work records
-`cancellation_requested_at`. Any later output is registered inactive and cannot be
-activated.
+The Operation read (§11).
 
-### `retry_operation`
+### `cancel_operation(operation_id)`
 
-Creates a new Operation with `retry_of_operation_id` and a new idempotency key. The old
-Operation remains immutable. Reusing the old key returns the old result. A retry of a
-document-mutating Operation carries the current `document_hash` as its
-`expected_document_hash`.
+A queued Operation becomes `cancelled` immediately and releases its resource leases. A
+running one records `cancellation_requested_at`; any later output is registered
+inactive and never activated.
 
-`MISSING_FACT_RENDERING` and `SOURCE_CHANGED` are not retryable. A missing rendering
-requires a changed Fact or selection, while a source change requires a new command
-against the current document. In both cases the Operation exposes no `retry` action.
+### `retry_operation(operation_id, Idempotency-Key?)`
+
+Creates a new Operation with `retry_of_operation_id`, the original payload, and the
+original model and reasoning effort. Only a terminal Operation can be retried (409
+otherwise). A document-mutating retry carries the document's current `document_hash`
+as its `expected_document_hash`; if the document no longer exists it is 409. The
+original stays unchanged.
+
+`MISSING_FACT_RENDERING` and `SOURCE_CHANGED` failures expose no `retry` action: the
+first needs a changed fact or selection, the second a new command against the current
+document.
+
+### Idempotency
+
+Every asynchronous command accepts an optional `Idempotency-Key`; the boundary
+generates one when absent. Keys are scoped per Operation type. Reusing a key with the
+same payload returns the existing Operation; with a different payload it is
+`IDEMPOTENCY_KEY_REUSED` (409).
 
 ## 19a. Settings commands
 
-### `update_settings(expected_edit_version, settings)`
+### `read_settings()`
 
-Applies the safe UI settings named in `docs/spec/product-spec.md` section 15. The write
-is optimistic: `expected_edit_version` must match the stored one, and a mismatch is a
-conflict that changes nothing. Each successful write increments `edit_version`, which the
-transport carries as an ETag. The theme preference shares this version with density,
-text size, automation, and AI defaults. On conflict the client preserves its baseline
-and local edits, reads the current version, and lets the user explicitly discard or
-select local changes to apply over it. Unselected fields retain current server values;
-a subsequent save uses that read's ETag. There is no automatic overwrite retry.
+Returns the safe settings, `edit_version` (as ETag), whether a provider is configured,
+and the allowlisted model catalog.
 
-The default model and reasoning effort are settings only through their closed
-backend-supplied allowlists. Arbitrary model IDs, per-task overrides, timezone, and
-secrets are never writable through this command.
+### `update_settings(If-Match, settings)`
+
+Writable fields: `ui_theme`, `ui_density`, `ui_text_size`, `default_execution_mode`
+(`deterministic` | `ai`), `default_ai_model` and `default_reasoning_effort` (closed
+backend allowlists), `auto_generate_when_review_not_required`, and
+`ai_enabled_override`. The write is optimistic on `edit_version`; a mismatch is 409 and
+changes nothing, and each successful write increments it. On conflict the client keeps
+its local edits, reads the current version, and lets the user choose what to reapply;
+there is no automatic overwrite. Arbitrary model IDs, per-task overrides, timezone, and
+secrets are never writable.
 
 ## 19b. Maintenance commands
 
 ### `reconcile()`
 
-Checks database references and stored hashes against the payload store — JobSnapshot
-payloads, provider-response artifact versions, and every Submission file against its
-SHA-256 — and the fact lifecycle against its audit trail. Both halves always run: a
-failing artifact check must not hide a broken lifecycle.
+`POST /api/v1/maintenance/reconciliations`. Checks database references and stored
+hashes against the payload store — JobSnapshot payloads, provider-response artifact
+versions, and every Submission file against its SHA-256 — and the fact lifecycle
+against its trail: events for facts that no longer exist, live statuses the trail never
+recorded or contradicts, and prepared or quarantined journal mutations. Both halves
+always run.
 
-It reports and never repairs. The records it checks are immutable, so a repair would
-destroy the evidence of the mismatch. `passed` is the conjunction of both halves; a
-failed reconciliation is a successful answer to the question asked, not a command
-failure. The document's rendered files are mutable working outputs and are not checked.
+It reports and never repairs: the records it checks are immutable, and a repair would
+destroy the evidence. `passed` is the conjunction of both halves. A failed
+reconciliation is a successful answer (`200`). The document's rendered files are
+mutable and not checked.
 
 ### `inspect_orphans()`
 
-`GET /api/v1/maintenance/orphans` returns `candidates`, a sorted list of managed
-immutable payload references observed in storage whose group key (architecture.md §7.1)
-is absent from the database snapshot **and** holds no live lease row (`pending` or
-`reclaiming`). A key still covered by an unexpired lease is never listed - the lease
-check is what excludes it. References include JobSnapshots, Submission files, and every
-provider-response artifact version, including inactive evidence. The document's rendered
-files and files outside managed immutable layouts are excluded.
+`GET /api/v1/maintenance/orphans` returns `candidates`: a sorted list of managed
+immutable payload references found in storage whose group key (architecture.md §7.1)
+is absent from the database **and** holds no live lease row (`pending` or
+`reclaiming`). References cover JobSnapshots, Submission files, and every
+provider-response artifact version, including inactive evidence. Rendered document
+files and files outside managed layouts are excluded.
 
-The database read scope closes before storage enumeration. This is a read-only,
-non-atomic observation: between this call's several reads, a candidate's lease could be
-newly acquired, committed, or reclaimed by other activity. Listing neither changes
-reconciliation's `passed` verdict nor deletes anything.
+The database read closes before storage enumeration. The result is a read-only,
+non-atomic observation; it changes no reconciliation verdict and deletes nothing.
 
 ### `reclaim_orphans()`
 
 `POST /api/v1/maintenance/orphans/reclaim` removes two kinds of candidate
-`inspect_orphans` would list (architecture.md §7.1 defines both in full):
+(architecture.md §7.1 defines both):
 
-- One whose group key still holds a `pending` lease, now expired. Reclaim fences it
-  first (`pending -> reclaiming`, conditioned on the same attempt_id - the same
-  condition a genuine registration needs, so the two serialize against each other), and
-  the same update stamps a bounded reclaim deadline on the row. Only after fencing
-  succeeds does reclaim check, once more and *before deleting anything*, that the
-  database holds no reference to any physical key that attempt produced - a check made
-  before deletion because one made only afterward cannot prevent removing a payload
-  that turns out to be referenced. A "yes" at this point is an integrity failure, not a
-  candidate to skip quietly, and reclaim stops rather than deletes. A "no" allows
-  deletion of every physical key the attempt produced, after which the lease row is
-  removed last. A second check after deletion may run as additional verification; it is
-  not what makes the deletion safe. A group key already found in `reclaiming` past its
-  own deadline - a prior call fenced it but stopped before finishing - is resumed, not
-  re-fenced: the same reference check, deletion, and lease-row removal repeat, safely,
-  since deleting an already-absent key is a no-op (architecture.md §7.1).
-- One whose group key holds no lease row at all. No fencing is needed, because a
-  missing lease row already makes registration for that key impossible. Reclaim makes
-  the same pre-deletion reference check and, finding none, deletes it directly. This is
-  the path that removes a key an old attempt's `put` wrote *after* the first case
-  already deleted that same attempt's files and lease row on an earlier call - such a
-  key can never be registered, so removing it whenever it is next observed is always
-  safe.
+- **Expired `pending` lease.** Reclaim fences it first (`pending -> reclaiming`,
+  conditioned on the same `attempt_id` a registration needs, so the two serialize) and
+  stamps a reclaim deadline. After fencing, and before deleting anything, it checks that
+  no database row references any key the attempt produced. A reference found here is an
+  integrity failure and reclaim stops. Otherwise it deletes the attempt's keys and then
+  the lease row. A group key already `reclaiming` past its deadline is resumed, not
+  re-fenced; deleting an absent key is a no-op.
+- **No lease row.** Registration for the key is already impossible, so no fence is
+  needed. Reclaim makes the same pre-deletion reference check and deletes. This removes a
+  key an old attempt wrote after an earlier call already reclaimed that attempt.
 
-It guarantees exactly two things: it never removes a payload a database record
-references, and it never lets a reclaimed attempt's registration succeed afterward. It
-does not guarantee one call removes every orphan, for the reason the second case exists:
-an object-store write behind an already-fenced lease is not itself prevented, so it can
-still land after that call finished, and only a later call observes it.
-`reclaim_orphans` is idempotent and safe to call repeatedly, including concurrently with
-itself; operators run it on a schedule rather than once.
+It guarantees that it never removes a referenced payload and never lets a reclaimed
+attempt register afterward. It does not guarantee one call removes every orphan: a
+write behind a fenced lease can still land later and is removed by a later call. It is
+idempotent and safe to run concurrently and on a schedule.
 
 ## 20. Queries
 
-Query contracts:
+- **Application list** (`GET /applications`): filters `activity` (`open` | `closed` |
+  `all`), `stage` (PreparationStates), `recruitment_status`, `preset`
+  (`needs_attention` = any review reason or warning; `ready_to_send` =
+  `preparation_state = ready`; `active_interviews` = `recruiter_screen` through `offer`), `search`; `sort`
+  (`updated` | `created` | `company` | `stage`); `limit` (1–200) and `offset`. Each row
+  carries the §9 projection and `is_closed`. The response carries `matched` and
+  preparation-state, preset, and recruitment-status counts from the same projected
+  read; each facet ignores its own selected value and respects the other filters.
+  Deleted Applications are excluded.
+- **Application detail**: the §9 projection plus the Application, latest snapshot and
+  analysis, `allowed_recruitment_transitions`, and the unified recruitment timeline.
+  Reachable for a deleted Application.
+- **Duplicate check** (§12).
+- **JobSnapshot history**: the active snapshot ID and every snapshot in version order
+  with ID, version, capture time, source URL, and exact verified text. Unreadable or
+  unverified text is NULL. It never fetches the live posting, repairs a payload, or
+  changes the active snapshot.
+- **CVDocument**: ID, analysis ID, selection with candidate accounting, content and its
+  outline, language, dependent facts, `built_with`, `document_hash` (ETag), content
+  report and `content_check`, `preparation_state`, `approved_at` (as in §9),
+  `last_render_error`, timestamps.
+- **Document previews** (§14).
+- **Operation** (§11).
+- **Facts**: list, detail, history, attachment targets (§17).
+- **Provider-response artifacts**: per-Application artifact versions, one version's
+  metadata, and its payload download, addressed by artifact version ID only and
+  verified for containment and hash on read.
+- **Settings** (§19a) and **health**: runtime and provider configuration status without
+  secrets.
 
-- Application list with search/filter/sort and Dashboard projection. Each row carries
-  application-owned `is_closed`; the response carries preparation-state, preset, and
-  recruitment-status counts computed from the same projected read. Each Dashboard facet
-  ignores its own selected value while respecting the other list filters. The list and
-  Dashboard exclude deleted Applications (`delete_application`, §12) by default; a
-  deleted Application remains reachable at its detail endpoint by ID.
-- Application detail with consistent state/action policy and unified timeline
-- duplicate candidates for a proposed Application
-- JobSnapshot and analysis history
-- the CVDocument: analysis ID, selection with candidate accounting, content,
-  `built_with`, `document_hash` (carried as the ETag), the content report with its
-  `content_check`, `document_state`, `approved_at` (reported as in the §9 projection), and
-  `last_render_error`
-- the document preview: `preview` (HTML) and `preview.pdf`, rendered on request from the
-  current content through the same composition as `render_document`, marked as draft,
-  stored nowhere, and writing no document field, Artifact or Operation. They need no
-  approval.
-- Operation status
-- contextual fact detail/history
-- submissions (with their content and file metadata) and recruitment history
-- next-action/overdue projection
-- runtime/provider configuration status without secrets
-- the allowlisted model catalog, current AI defaults, and immutable execution
-  model/reasoning/usage/cost metadata
+There is no revision history and no revision comparison. The history of what was sent
+is the list of Submissions.
 
-JobSnapshot history returns the active snapshot ID and all saved snapshots in version
-order, with explicit IDs, version numbers, capture times, source URLs, and exact verified
-text. Unreadable or unverified text is NULL; history never fetches the live posting,
-repairs a payload, or changes the active context. Storage paths are not exposed.
+Queries return DTOs, never database rows or local paths.
 
-There is no revision history and no revision comparison. The history of what was sent is
-the list of Submissions.
+## 21. HTTP mapping
 
-Queries may use direct efficient joins and read models. They return DTOs, not database
-rows or local paths.
+Every command and query maps to `/api/v1` without a second business contract. The
+generated OpenAPI document (`openapi/openapi.json`) is the authoritative endpoint
+inventory; the sections above stay authoritative for sources, preconditions,
+idempotency, and synchronous versus asynchronous behavior.
 
-## 21. HTTP mapping baseline
-
-The API maps each documented command and query to `/api/v1` without adding a second
-business contract. Synchronous creation returns `201`; asynchronous commands return
-`202` plus an Operation `Location`. The generated OpenAPI document is the authoritative
-endpoint inventory. Command sections above remain authoritative for source IDs,
-preconditions, idempotency, and synchronous versus asynchronous behavior.
-
-The document is read and written at the Application's document resource. Its
-`document_hash` travels as the ETag. The autosave `update_document` takes it as
-`If-Match`; every other command carries it in the body as `expected_document_hash`,
-because an action on a resource is not a conditional replacement of it.
+- Synchronous creation returns `201`; an accepted Operation returns `202` with a
+  `Location` naming the Operation to poll.
+- The document is read and written at `/applications/{id}/document`. Its
+  `document_hash` travels as a strong ETag. Only `PATCH` (autosave) takes it as
+  `If-Match`; a weak or malformed value is 412. Every document action carries it in the
+  body as `expected_document_hash`, because an action on a resource is not a conditional
+  replacement of it.
+- Settings use the ETag `"settings-<edit_version>"` with `If-Match` on `PATCH`.
+- CORS exposes `ETag`, `Location`, and `Content-Disposition`, and allows `If-Match` and
+  `Idempotency-Key`.
 
 ## 22. HTTP outcomes
 
-- `200`: query/update or successful outcome such as a failed content check
-- `201`: synchronous entity creation
-- `202`: accepted Operation with `Location`
-- `409`: optimistic concurrency (`expected_document_hash` mismatch) or idempotency-key
-  payload mismatch
-- `412`: missing domain precondition or blocker
-- `413`: body limit exceeded
-- `422`: invalid request schema
-- `500/503`: infrastructure execution failure as appropriate
+The status comes from the refusal's class, never its message:
 
-Problem Details carries stable `code`, safe `detail`, and safe `context`. Examples:
+| Status | Meaning |
+| --- | --- |
+| `200` | query, synchronous update, or a successful outcome such as a failed check or reconciliation |
+| `201` | synchronous creation |
+| `202` | accepted Operation with `Location` |
+| `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, or unknown route |
+| `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed status transition; duplicate snapshot; idempotency-key payload mismatch |
+| `412` | a named state cannot satisfy the command: missing precondition, blocker, review reason, intake refusal, lineage or Knowledge refusal |
+| `413` | body limit exceeded |
+| `422` | request does not match the schema (`REQUEST_VALIDATION_FAILED`) |
+| `500` | infrastructure failure |
+| `503` | a required collaborator is not configured |
+
+Problem Details (`application/problem+json`) carries `type`, `title`, `status`, a stable
+`code`, a safe `detail`, and an optional safe `context`. It never contains a stack
+trace, local path, provider response, or secret.
+
+A refusal's `code` defaults to its class name in upper snake case (`STATE_CONFLICT`,
+`PRECONDITION_FAILED`, `KNOWLEDGE_REJECTED`, `LINEAGE_BROKEN`, `VALIDATION_BLOCKED`,
+`APPLICATION_INTAKE_INVALID`, ...). These codes are contracted by name:
 
 ```text
-DOCUMENT_CHANGED
-DOCUMENT_NOT_APPROVED
-DOCUMENT_NOT_READY
-VALIDATION_FAILED
-UNLINKED_CLAIM
-IDEMPOTENCY_KEY_REUSED
-SOURCE_CHANGED
-KNOWLEDGE_RECONCILIATION_REQUIRED
+DOCUMENT_CHANGED                    DOCUMENT_NOT_APPROVED
+DOCUMENT_NOT_READY                  REGENERATION_REQUIRED
+MISSING_FACT_RENDERING              DUPLICATE_ACKNOWLEDGEMENT_REQUIRED
+IDEMPOTENCY_KEY_REUSED              KNOWLEDGE_RECONCILIATION_REQUIRED
+PENDING_FACT_REQUIRES_RESOLUTION    FACT_DELETED_REQUIRES_RESOLUTION
 ```
 
-Review reasons and domain validation issues are data, not exceptions.
+Review reasons, warnings, and validation issues are data in the projection, not
+exceptions. They become a refusal only when a command they block is attempted.

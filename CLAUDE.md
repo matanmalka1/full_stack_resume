@@ -100,8 +100,8 @@ Report what passed, what failed, and what remains. Never claim completion with
   the restriction is on the fact, not on prose.
 - One fact has one canonical location. Profiles may reference it; they may not create
   conflicting copies.
-- New facts follow `pending -> confirmed -> canonical` unless the user confirms in the
-  same message.
+- New facts follow `pending -> canonical`, on an explicit confirmation, unless the user
+  confirms in the same message.
 - Unsupported factual claims block approval and `ready_qualified`. No chained or
   no-pause flow may bypass that; a blocker refuses whatever is driving it.
 - AI proposes classification, selection, wording, and — per `docs/spec/product-spec.md`

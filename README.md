@@ -114,8 +114,8 @@ diagnostic information, not workflow blockers.
 
 ## Fact lifecycle
 
-New information follows `pending -> confirmed -> canonical` (`docs/spec/product-spec.md`
-§17); every promotion writes to the canonical source file under `base/` and appends an
+New information follows `pending -> canonical` on one explicit confirmation
+(`docs/spec/product-spec.md` §17); every confirmation writes to the canonical source file under `base/` and appends an
 immutable event to `fact_events`. Correcting a canonical fact means creating a
 replacement that `replaces` it via `POST /api/v1/facts` — identity is always generated,
 and a correction never mutates the fact it supersedes.

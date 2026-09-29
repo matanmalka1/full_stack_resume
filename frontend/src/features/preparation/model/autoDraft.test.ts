@@ -24,7 +24,6 @@ const queued = (overrides: Partial<Operation> = {}): Operation => ({
 const analyzed = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   baseDetail({
     preparation_state: "ready_to_draft",
-    document_state: "draft",
     content_check: "none",
     available_actions: ["update_selection", "create_draft"],
     recommended_action: "create_draft",

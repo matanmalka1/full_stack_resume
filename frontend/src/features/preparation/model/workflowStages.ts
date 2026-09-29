@@ -81,6 +81,6 @@ export const workflowDestinations = (
   return {
     analysis: routePaths.application(applicationId),
     ...(hasContent ? { draft: routePaths.draft(applicationId) } : {}),
-    ...(detail?.document_state === "ready" ? { ready: routePaths.ready(applicationId) } : {}),
+    ...(detail?.preparation_state === "ready" ? { ready: routePaths.ready(applicationId) } : {}),
   };
 };

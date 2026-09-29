@@ -23,7 +23,7 @@ const item = (factId: string, status: FactStatus, recorded: string | null): Fact
 
 describe("the fact pool as the interface reads it", () => {
   it("marks a fact whose status disagrees with its lifecycle log", () => {
-    const pool = toFactPool({ items: [item("fact.a", "canonical", "confirmed")] });
+    const pool = toFactPool({ items: [item("fact.a", "canonical", "pending")] });
 
     expect(pool.entries[0]?.outOfSync).toBe(true);
     expect(pool.outOfSyncCount).toBe(1);
@@ -54,7 +54,7 @@ describe("the fact pool as the interface reads it", () => {
     const pool = toFactPool({
       items: [
         item("fact.a", "canonical", "canonical"),
-        item("fact.b", "confirmed", "pending"),
+        item("fact.b", "canonical", "pending"),
         item("fact.c", "pending", null),
       ],
     });

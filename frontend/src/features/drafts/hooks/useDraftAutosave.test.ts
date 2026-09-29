@@ -16,7 +16,7 @@ const updateResponse = (editVersion: number, pending: string[] = []): Response =
       application_id: "app-1",
       document_id: "doc-1",
       document_hash: `hash-${editVersion}`,
-      document_state: "draft",
+      preparation_state: "draft_in_progress",
       content_check: "outdated",
       pending_claim_ids: pending,
     }),

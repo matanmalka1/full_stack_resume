@@ -93,7 +93,7 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
   const checkHref = destinationFor("check");
   const approvalHref = destinationFor("approve");
   const renderHref = destinationFor("render");
-  const readyNow = detail.document_state === "ready";
+  const readyNow = detail.preparation_state === "ready";
   /* Furthest along wins the label: if rendering is offered the document is approved and
      the files are what the workflow is waiting on; before that, approval. A Ready document
      stays editable, so the editor is still offered beside it - as the way back, not as

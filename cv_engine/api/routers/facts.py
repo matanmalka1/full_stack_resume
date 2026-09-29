@@ -1,8 +1,8 @@
-"""The contextual fact lifecycle: inspect, capture, confirm, promote, attach.
+"""The contextual fact lifecycle: inspect, capture, confirm, attach.
 
 The Web flow this serves is contextual rather than a general Knowledge
 Manager (product-spec.md 561-567): facts are reached from the claim that needs
-them, created as `pending`, promoted only on explicit confirmation, and
+them, created as `pending`, made canonical only on explicit confirmation, and
 attached to a Profile section before a plan can select them.
 
 Creating a fact with a caller-chosen ID deliberately has no route: identity is
@@ -179,7 +179,7 @@ def create_fact_from_claim(
 @router.post(
     "/{fact_id}/confirm",
     response_model=FactMutationResponse,
-    summary="Promote a pending fact to confirmed",
+    summary="Confirm a pending fact as canonical",
 )
 def confirm_fact(
     fact_id: str,
@@ -187,33 +187,8 @@ def confirm_fact(
     services: Services,
 ) -> FactMutationResponse:
     """`confirm: false` is refused, not interpreted: see `FactTransitionRequest`."""
-    result = services.knowledge.transition_fact(
+    result = services.knowledge.confirm_fact(
         fact_id,
-        "confirm",
-        explicitly_confirmed=request.confirm,
-        reason=request.reason,
-    )
-    return FactMutationResponse(
-        fact=FactResponse.of(result.fact),
-        event_id=result.event_id,
-        facts_version=result.facts_version,
-        lifecycle_version=result.lifecycle_version,
-    )
-
-
-@router.post(
-    "/{fact_id}/promote",
-    response_model=FactMutationResponse,
-    summary="Promote a confirmed fact to canonical",
-)
-def promote_fact(
-    fact_id: str,
-    request: FactTransitionRequest,
-    services: Services,
-) -> FactMutationResponse:
-    result = services.knowledge.transition_fact(
-        fact_id,
-        "promote",
         explicitly_confirmed=request.confirm,
         reason=request.reason,
     )
@@ -289,14 +264,14 @@ def attach_fact(
     "/{fact_id}/confirm-and-use",
     response_model=ConfirmAndUseFactResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Promote, attach, and select one fact as one command",
+    summary="Confirm, attach, and select one fact as one command",
 )
 def confirm_and_use_fact(
     fact_id: str,
     request: ConfirmAndUseFactRequest,
     services: Services,
 ) -> ConfirmAndUseFactResponse:
-    """One logical command: it promotes, attaches, and adds the fact to the
+    """One logical command: it confirms, attaches, and adds the fact to the
     document's selection, or it reports a complete failure. There is no partial outcome to
     report, so there is no partial success status.
     """

@@ -28,9 +28,9 @@ describe("preparationResumeDestination", () => {
   });
 
   it("opens the Ready document for a completed flow", () => {
-    expect(
-      preparationResumeDestination(item({ id: "app / 1", preparation_state: "ready", document_state: "ready" })),
-    ).toBe("/applications/app%20%2F%201/ready");
+    expect(preparationResumeDestination(item({ id: "app / 1", preparation_state: "ready" }))).toBe(
+      "/applications/app%20%2F%201/ready",
+    );
   });
 
   it("falls back to analysis while the document has no content", () => {

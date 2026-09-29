@@ -89,11 +89,11 @@ interface DraftStep {
 /* Where the reader stands inside the draft step.
 
    A restatement of the projection, not a second workflow: approval and readiness are
-   `document_state`, the check is `content_check`, and the only thing read from the
+   `preparation_state`, the check is `content_check`, and the only thing read from the
    document itself is whether any line still has nothing behind it - which the validator
    refuses anyway. Nothing here gates a command; the commands' own availability does. */
 export const draftSteps = (detail: ApplicationDetail, content: ContentSummary): DraftStep[] => {
-  const approved = detail.document_state === "approved" || detail.document_state === "ready";
+  const approved = detail.preparation_state === "approved" || detail.preparation_state === "ready";
   const blocked = content.unsupportedClaims.length > 0 || detail.review_reasons.length > 0;
   const checked = detail.content_check === "passed";
 

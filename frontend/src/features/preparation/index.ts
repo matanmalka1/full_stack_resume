@@ -54,8 +54,6 @@ export {
   actionLabel,
   contentCheckLabels,
   contentCheckTones,
-  documentStateLabels,
-  documentStateTones,
   preparationStateIcons,
   preparationStateLabels,
   preparationStateTones,

@@ -86,7 +86,7 @@ describe("draftSteps", () => {
     draftSteps(projection(overrides), summarizeContent(documentWith(claims))).map((step) => step.status);
 
   it("starts at the check when every line is backed and nothing was checked", () => {
-    expect(steps({ content_check: "none", document_state: "draft", review_reasons: [] })).toEqual([
+    expect(steps({ content_check: "none", preparation_state: "draft_in_progress", review_reasons: [] })).toEqual([
       "done",
       "current",
       "upcoming",
@@ -95,12 +95,14 @@ describe("draftSteps", () => {
 
   it("holds at the content while a line has nothing behind it, even after a passing check", () => {
     expect(
-      steps({ content_check: "passed", document_state: "draft", review_reasons: [] }, [line("e", "pending")]),
+      steps({ content_check: "passed", preparation_state: "draft_in_progress", review_reasons: [] }, [
+        line("e", "pending"),
+      ]),
     ).toEqual(["blocked", "upcoming", "upcoming"]);
   });
 
   it("moves to approval once the check passed on backed content", () => {
-    expect(steps({ content_check: "passed", document_state: "draft", review_reasons: [] })).toEqual([
+    expect(steps({ content_check: "passed", preparation_state: "draft_in_progress", review_reasons: [] })).toEqual([
       "done",
       "done",
       "current",
@@ -108,7 +110,7 @@ describe("draftSteps", () => {
   });
 
   it("reports every step done once the projection says the document is approved", () => {
-    expect(steps({ content_check: "passed", document_state: "approved", review_reasons: [] })).toEqual([
+    expect(steps({ content_check: "passed", preparation_state: "approved", review_reasons: [] })).toEqual([
       "done",
       "done",
       "done",

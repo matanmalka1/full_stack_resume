@@ -27,7 +27,6 @@ afterEach(() => {
 
 const isPost = (init?: RequestInit) => init?.method === "POST";
 const approvedDetail = detail({
-  document_state: "approved",
   preparation_state: "approved",
   available_actions: ["edit", "render"],
   recommended_action: "render",
@@ -234,7 +233,7 @@ describe("DraftApprovalDialog", () => {
       const url = String(input);
       if (isPost(init))
         return Promise.resolve(
-          json(documentCheck({ document_state: "approved", approved_at: "2026-08-24T00:00:00Z" })),
+          json(documentCheck({ preparation_state: "approved", approved_at: "2026-08-24T00:00:00Z" })),
         );
       return Promise.resolve(json(url.endsWith("/document") ? warned : detail()));
     });
@@ -366,7 +365,7 @@ describe("DraftRenderPanel", () => {
     renderRoute(
       "/applications/app-1/draft",
       "/applications/:applicationId/draft",
-      <RenderStep detail={detail({ document_state: "ready", preparation_state: "ready" })} onQueued={vi.fn()} />,
+      <RenderStep detail={detail({ preparation_state: "ready" })} onQueued={vi.fn()} />,
     );
 
     expect(await screen.findByRole("link", { name: "מעבר לקורות החיים המוכנים" })).toHaveAttribute(

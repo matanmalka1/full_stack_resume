@@ -67,7 +67,7 @@ def test_exact_undo_restores_approval_and_reapproval_refreshes_only_the_check(ap
     from helpers import approve_active_draft, stored_document, validate_active_draft
 
     from cv_engine.application.commands import UpdateDocumentCommand
-    from cv_engine.domain.document import ContentCheck, DocumentState
+    from cv_engine.domain.document import ContentCheck, PreparationState
 
     setup = approved_application("Undo Approval")
     services, app_id = setup
@@ -82,7 +82,7 @@ def test_exact_undo_restores_approval_and_reapproval_refreshes_only_the_check(ap
             claim_orders={section.name: list(reversed(order))},
         )
     )
-    assert changed.document_state is DocumentState.DRAFT
+    assert changed.preparation_state is PreparationState.DRAFT_IN_PROGRESS
     validate_active_draft(services, app_id)
     restored = services.drafts.update_document(
         UpdateDocumentCommand(
@@ -92,7 +92,7 @@ def test_exact_undo_restores_approval_and_reapproval_refreshes_only_the_check(ap
         )
     )
     assert restored.document_hash == original.document_hash
-    assert restored.document_state is DocumentState.APPROVED
+    assert restored.preparation_state is PreparationState.APPROVED
     assert restored.content_check is ContentCheck.OUTDATED
     approved = approve_active_draft(services, app_id)
     assert approved.passed and approved.approved_at == original.approved_at

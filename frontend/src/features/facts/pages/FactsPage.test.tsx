@@ -53,7 +53,7 @@ describe("FactsPage", () => {
       vi.fn((input: string | URL | Request) => {
         const url = String(input);
         if (url === "/api/v1/facts")
-          return Promise.resolve(json({ items: [{ fact: item, recorded_status: "confirmed" }] }));
+          return Promise.resolve(json({ items: [{ fact: item, recorded_status: "pending" }] }));
         if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: item, events: [event(item)] }));
         if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
         return Promise.resolve(json({}, 404));
@@ -114,7 +114,7 @@ describe("FactsPage", () => {
     expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
   });
 
-  it("uses explicit promotion, replacement, and attachment commands", async () => {
+  it("uses explicit replacement and attachment commands", async () => {
     let current = fact();
     const requests: Array<{ body: unknown; method: string; url: string }> = [];
     vi.stubGlobal(
@@ -183,11 +183,8 @@ describe("FactsPage", () => {
     });
   });
 
-  it.each([
-    ["pending", "אישור העובדה", "confirm"],
-    ["confirmed", "קידום למקור אמת", "promote"],
-  ] as const)("requires attestation before moving a %s fact", async (status, label, command) => {
-    const item = fact({ status });
+  it("requires attestation before confirming a pending fact as canonical", async () => {
+    const item = fact({ status: "pending" });
     const requests: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -195,12 +192,13 @@ describe("FactsPage", () => {
         const url = String(input);
         if (init?.method === "POST") {
           requests.push(url);
-          const next = fact({ status: command === "confirm" ? "confirmed" : "canonical" });
+          const next = fact({ status: "canonical" });
           return Promise.resolve(
             json({ fact: next, event_id: "event-next", facts_version: "facts-2", lifecycle_version: "lifecycle-2" }),
           );
         }
-        if (url === "/api/v1/facts") return Promise.resolve(json({ items: [{ fact: item, recorded_status: status }] }));
+        if (url === "/api/v1/facts")
+          return Promise.resolve(json({ items: [{ fact: item, recorded_status: "pending" }] }));
         if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: item, events: [event(item)] }));
         if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
         return Promise.resolve(json({}, 404));
@@ -208,11 +206,11 @@ describe("FactsPage", () => {
     );
 
     renderRoute("/facts?fact=fact.backend", "/facts", <FactsPage />);
-    const button = await screen.findByRole("button", { name: label });
+    const button = await screen.findByRole("button", { name: "אישור העובדה כמקור אמת" });
     expect(button).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: /בדקתי את תוכן העובדה/ }));
     fireEvent.click(button);
-    await waitFor(() => expect(requests).toContain(`/api/v1/facts/fact.backend/${command}`));
+    await waitFor(() => expect(requests).toContain("/api/v1/facts/fact.backend/confirm"));
   });
 });
 

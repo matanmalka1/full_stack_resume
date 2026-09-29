@@ -150,8 +150,8 @@ Evidence: `tests/operations/`.
 
 ### 3.6 Knowledge lifecycle and journal
 
-- New facts are `pending`, cannot reach a CV, and follow `pending → confirmed →
-  canonical`; illegal and repeated transitions are refused; events are immutable; a
+- New facts are `pending`, cannot reach a CV, and follow `pending → canonical` on one
+  explicit confirmation; illegal and repeated transitions are refused; events are immutable; a
   pending fact does not invalidate drafts built from canonical facts.
 - `create_fact_from_claim` preserves the exact claim text; `confirm_and_use_fact` is one
   journaled command.

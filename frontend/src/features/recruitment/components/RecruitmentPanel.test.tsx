@@ -25,7 +25,6 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
   allowed_recruitment_transitions: ["withdrawn", "closed"],
   recruitment_timeline: [statusEvent()],
   preparation_state: "ready",
-  document_state: "none",
   content_check: "none",
   review_reasons: [],
   warnings: [],

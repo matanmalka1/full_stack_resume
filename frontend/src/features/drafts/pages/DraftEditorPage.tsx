@@ -61,7 +61,7 @@ const DOCUMENT_WRITING_OPERATIONS = new Set([
    render - on the one screen that holds the document all five act on.
 
    There is one mutable document per Application. Approval and Ready are states of it the
-   projection reports (`document_state`), not records this screen moves between, so the
+   projection reports (`preparation_state`), not records this screen moves between, so the
    editor stays open in every one of them: editing an approved or Ready document is
    allowed, and returns it to draft on the next read. That is also the way back from the
    ready step. */
@@ -95,14 +95,14 @@ export const DraftEditorPage = () => {
      finished before they came back to edit must not bounce them out of the editor. */
   const [renderQueuedHere, setRenderQueuedHere] = useState<string | null>(null);
 
-  const documentState = detail?.document_state ?? "none";
-  const renderStage = documentState === "approved" || documentState === "ready";
+  const preparationState = detail?.preparation_state ?? "needs_analysis";
+  const renderStage = preparationState === "approved" || preparationState === "ready";
 
   const renderFinished =
     operation?.operation_type === "render_document" &&
     operation.status === "succeeded" &&
     operation.id === renderQueuedHere &&
-    documentState === "ready";
+    preparationState === "ready";
 
   useEffect(() => {
     if (

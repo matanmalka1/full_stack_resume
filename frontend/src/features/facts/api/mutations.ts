@@ -15,10 +15,8 @@ import {
   factDetailQueryKey,
   factHistoryQueryKey,
   factsQueryPrefix,
-  transitionFact,
+  confirmFact,
 } from "@/api/facts";
-
-export type FactTransitionCommand = "confirm" | "promote";
 
 /* Every write below moves the permanent knowledge store, so all of them invalidate the
    same three reads: the pool, the lifecycle log, and - where the write named one fact -
@@ -59,18 +57,14 @@ export const useCaptureClaimFact = (): UseMutationResult<FactMutation, Error, Ca
   });
 };
 
-export const useTransitionFact = (
+export const useConfirmFact = (
   factId: string,
   onSettled?: () => void,
-): UseMutationResult<FactMutation, Error, FactTransitionCommand> => {
+): UseMutationResult<FactMutation, Error, void> => {
   const refresh = useFactCacheRefresh();
 
   return useMutation({
-    mutationFn: (command: FactTransitionCommand) =>
-      transitionFact(factId, command, {
-        confirm: true,
-        reason: command === "confirm" ? "explicit Web confirmation" : "explicit Web promotion",
-      }),
+    mutationFn: () => confirmFact(factId, { confirm: true, reason: "explicit Web confirmation" }),
     onSuccess: () => {
       refresh(factId);
       onSettled?.();
@@ -79,7 +73,7 @@ export const useTransitionFact = (
 };
 
 /* One-way: nothing settles it back. Kept as its own hook rather than folded into
-   `useTransitionFact` because deletion is terminal and needs its own confirmation
+   `useConfirmFact` because deletion is terminal and needs its own confirmation
    step in the UI, not another value on the same toggle. */
 export const useDeleteFact = (factId: string, onSettled?: () => void): UseMutationResult<FactMutation, Error, void> => {
   const refresh = useFactCacheRefresh();

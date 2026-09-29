@@ -19,7 +19,6 @@ const item = (overrides: Partial<ApplicationListItem> = {}): ApplicationListItem
     updated_at: "2026-08-24T07:00:00Z",
     recruitment_status: "saved",
     preparation_state: "needs_analysis",
-    document_state: "none",
     content_check: "none",
     review_reasons: [],
     warnings: [],
@@ -87,7 +86,7 @@ const listBody = (items: ApplicationListItem[], counts: Counts = {}): Applicatio
     active_interviews: items.filter((entry) =>
       ["recruiter_screen", "interview", "assignment", "final_stage", "offer"].includes(entry.recruitment_status),
     ).length,
-    ready_to_send: items.filter((entry) => entry.document_state === "ready").length,
+    ready_to_send: items.filter((entry) => entry.preparation_state === "ready").length,
     needs_attention: items.filter((entry) => entry.review_reasons.length > 0 || entry.warnings.length > 0).length,
   };
 
@@ -108,7 +107,6 @@ const detailBody = (): ApplicationDetail => ({
   allowed_recruitment_transitions: ["withdrawn", "closed"],
   recruitment_timeline: [],
   preparation_state: "needs_analysis",
-  document_state: "none",
   content_check: "none",
   review_reasons: [],
   warnings: [],
@@ -274,7 +272,7 @@ describe("ApplicationListPage", () => {
   });
 
   it("links a projected Ready document from the action hub", async () => {
-    stubList([item({ document_state: "ready", preparation_state: "ready" })]);
+    stubList([item({ preparation_state: "ready" })]);
 
     renderPage();
 
@@ -394,7 +392,6 @@ describe("ApplicationListPage", () => {
   it("opens the Ready document when the workflow is complete", async () => {
     const hash = "c".repeat(64);
     const ready = item({
-      document_state: "ready",
       document_hash: hash,
       preparation_state: "ready",
       recommended_action: null,

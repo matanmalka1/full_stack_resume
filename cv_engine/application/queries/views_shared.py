@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import Field
 
 from ...domain.contracts.recruitment import ApplicationStatus
-from ...domain.document import ContentCheck, DocumentState, PreparationState
+from ...domain.document import ContentCheck, PreparationState
 from ..commands import BoundaryDTO
 from ..operations import OperationView
 from .views_prep import JobAnalysisView, JobSnapshotView
@@ -74,7 +74,6 @@ class ApplicationStateView(BoundaryDTO):
     recruitment_status: str
     terminal_outcome: str | None = None
     preparation_state: PreparationState
-    document_state: DocumentState
     content_check: ContentCheck
     review_reasons: list[ReasonView] = []
     warnings: list[WarningView] = []

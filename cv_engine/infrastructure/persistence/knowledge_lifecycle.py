@@ -229,7 +229,7 @@ class SqlAlchemyKnowledgeLifecycleRepository:
             .execute(
                 select(fact_events.c.fact_id, fact_events.c.to_status)
                 .where(
-                    fact_events.c.event_type.in_(("fact_created", "fact_promoted", "fact_deleted"))
+                    fact_events.c.event_type.in_(("fact_created", "fact_confirmed", "fact_deleted"))
                 )
                 .order_by(fact_events.c.created_at, fact_events.c.seq)
             )

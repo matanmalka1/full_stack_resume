@@ -147,32 +147,33 @@ class FactLifecycleService(KnowledgeMutationEngine):
             claim_id=claim_id,
         )
 
-    def promote_fact(
+    def confirm_fact(
         self,
         fact_id: str,
-        target: str,
         *,
         explicitly_confirmed: bool,
         reason: str = "",
     ) -> FactMutationResult:
+        """§17: `pending -> canonical` on one explicit attestation."""
         self._ensure_mutations_allowed()
+        if not explicitly_confirmed:
+            raise KnowledgeRejected("fact confirmation requires explicit confirmation")
         mutation_id = new_id()
         try:
-            staged, before, after = self._knowledge.stage_promote_fact(
+            staged, before, after = self._knowledge.stage_confirm_fact(
                 mutation_id,
                 fact_id,
-                target,
-                explicitly_confirmed=explicitly_confirmed,
+                explicitly_confirmed=True,
             )
         except OSError as exc:
-            raise InfrastructureFailure(f"could not promote fact: {exc}") from exc
+            raise InfrastructureFailure(f"could not confirm fact: {exc}") from exc
         except (FactStoreError, ValueError) as exc:
             raise KnowledgeRejected(str(exc)) from exc
         action = self._fact_event_action(
             after,
-            event_type="fact_promoted",
+            event_type="fact_confirmed",
             from_status=before.status.value,
-            reason=reason or f"explicit promotion to {after.status.value}",
+            reason=reason or "explicit confirmation",
             facts_version=staged.proposed_versions["facts"],
             lifecycle_version=staged.proposed_versions["facts_lifecycle"],
         )
@@ -211,28 +212,6 @@ class FactLifecycleService(KnowledgeMutationEngine):
             lifecycle_version=staged.proposed_versions["facts_lifecycle"],
         )
         return self._run_fact_mutation(staged, after, action)
-
-    def transition_fact(
-        self,
-        fact_id: str,
-        command: str,
-        *,
-        explicitly_confirmed: bool,
-        reason: str = "",
-    ) -> FactMutationResult:
-        targets = {"confirm": FactStatus.CONFIRMED, "promote": FactStatus.CANONICAL}
-        try:
-            target = targets[command]
-        except KeyError as exc:
-            raise KnowledgeRejected(f"unknown fact transition command: {command}") from exc
-        if not explicitly_confirmed:
-            raise KnowledgeRejected(f"promotion to {target.value} requires explicit confirmation")
-        return self.promote_fact(
-            fact_id,
-            target.value,
-            explicitly_confirmed=True,
-            reason=reason,
-        )
 
     def capture_claim_fact(
         self,
@@ -393,7 +372,7 @@ class FactLifecycleService(KnowledgeMutationEngine):
         expected_document_hash: str,
         reason: str = "",
     ) -> ConfirmAndUseFactResult:
-        """Promote, attach, and select one pending fact as one recoverable command (§17).
+        """Confirm, attach, and select one pending fact as one recoverable command (§17).
 
         The selection step is a document selection update guarded by
         `expected_document_hash`, applied by the journal in the same commit as the
@@ -433,7 +412,6 @@ class FactLifecycleService(KnowledgeMutationEngine):
             (
                 staged_files,
                 before,
-                confirmed,
                 canonical,
                 _updated_profile,
                 _profile_source,
@@ -481,19 +459,10 @@ class FactLifecycleService(KnowledgeMutationEngine):
         lifecycle_version = proposed.facts.lifecycle_version
         actions = [
             self._fact_event_action(
-                confirmed,
-                event_type="fact_promoted",
-                from_status=before.status.value,
-                reason=reason or "explicit promotion to confirmed",
-                facts_version=facts_version,
-                lifecycle_version=lifecycle_version,
-                application_id=application_id,
-            ),
-            self._fact_event_action(
                 canonical,
-                event_type="fact_promoted",
-                from_status=confirmed.status.value,
-                reason=reason or "explicit promotion to canonical",
+                event_type="fact_confirmed",
+                from_status=before.status.value,
+                reason=reason or "explicit confirmation",
                 facts_version=facts_version,
                 lifecycle_version=lifecycle_version,
                 application_id=application_id,

@@ -79,7 +79,6 @@ describe("recommended action destinations", () => {
     const plan = workflowActionPlan(
       detail({
         preparation_state: "approved",
-        document_state: "approved",
         available_actions: ["analyze", "edit", "render"],
         recommended_action: "render",
       }),
@@ -99,7 +98,6 @@ describe("recommended action destinations", () => {
     const plan = workflowActionPlan(
       detail({
         preparation_state: "ready",
-        document_state: "ready",
         available_actions: ["edit", "submit", "download_pdf"],
         recommended_action: "submit",
       }),

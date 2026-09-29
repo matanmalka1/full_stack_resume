@@ -22,7 +22,6 @@ from ..domain.contracts.knowledge import (
     CandidateContext,
     Fact,
     FactSource,
-    FactStatus,
     Profile,
 )
 from ..domain.facts import (
@@ -33,9 +32,9 @@ from ..domain.facts import (
     parse_fact_source,
     render_fact_source,
     source_name_of,
+    with_confirmed_fact,
     with_deleted_fact,
     with_new_fact,
-    with_promoted_fact,
 )
 from ..domain.knowledge import Knowledge
 from ..domain.presentations import PresentationError, PresentationStore
@@ -386,24 +385,22 @@ class FileKnowledge:
         staged = self._stage(mutation_id, path, proposed)
         return staged, record.model_copy(update={"source_file": f"base/{source_name}"})
 
-    def stage_promote_fact(
+    def stage_confirm_fact(
         self,
         mutation_id: str,
         fact_id: str,
-        target: FactStatus | str,
         *,
         explicitly_confirmed: bool,
     ) -> tuple[StagedKnowledgeFile, Fact, Fact]:
-        status = FactStatus(target)
         store = self.facts()
         before = store.get(fact_id)
-        promoted = store.promote(fact_id, status, explicitly_confirmed=explicitly_confirmed)
+        confirmed = store.confirm(fact_id, explicitly_confirmed=explicitly_confirmed)
         path = resolve_within(self.base_dir, self.base_dir / source_name_of(before))
         source = parse_fact_source(path.read_text("utf-8"), origin=str(path))
         confirmed_at = before.confirmed_at or utc_now()[:10]
-        proposed = render_fact_source(with_promoted_fact(source, fact_id, status, confirmed_at))
+        proposed = render_fact_source(with_confirmed_fact(source, fact_id, confirmed_at))
         staged = self._stage(mutation_id, path, proposed)
-        return staged, before, promoted.model_copy(update={"confirmed_at": confirmed_at})
+        return staged, before, confirmed.model_copy(update={"confirmed_at": confirmed_at})
 
     def stage_delete_fact(
         self,
@@ -446,23 +443,17 @@ class FileKnowledge:
         fact_id: str,
         profile: str,
         section: str,
-    ) -> tuple[list[StagedKnowledgeFile], Fact, Fact, Fact, Profile, str, Knowledge]:
+    ) -> tuple[list[StagedKnowledgeFile], Fact, Fact, Profile, str, Knowledge]:
         store = self.facts()
         before = store.get(fact_id)
-        confirmed = store.promote(
-            fact_id, FactStatus.CONFIRMED, explicitly_confirmed=True
-        ).model_copy(update={"confirmed_at": before.confirmed_at or utc_now()[:10]})
-        canonical = store.promote(
-            fact_id, FactStatus.CANONICAL, explicitly_confirmed=True
-        ).model_copy(update={"confirmed_at": confirmed.confirmed_at})
+        confirmed_at = before.confirmed_at or utc_now()[:10]
+        canonical = store.confirm(fact_id, explicitly_confirmed=True).model_copy(
+            update={"confirmed_at": confirmed_at}
+        )
 
         fact_path = resolve_within(self.base_dir, self.base_dir / source_name_of(before))
         fact_source = parse_fact_source(fact_path.read_text("utf-8"), origin=str(fact_path))
-        fact_text = render_fact_source(
-            with_promoted_fact(
-                fact_source, fact_id, FactStatus.CANONICAL, canonical.confirmed_at or utc_now()[:10]
-            ),
-        )
+        fact_text = render_fact_source(with_confirmed_fact(fact_source, fact_id, confirmed_at))
 
         profile_source = load_profile_store(self.knowledge_root, store).source(profile)
         profile_path = resolve_within(self.knowledge_root, profile_source)
@@ -483,7 +474,6 @@ class FileKnowledge:
         return (
             [primary, attachment],
             before,
-            confirmed,
             canonical,
             updated,
             relative_within(self.project_root, profile_path).as_posix(),

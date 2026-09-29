@@ -18,7 +18,7 @@ from pydantic import Field, model_validator
 
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.validation import ValidationReport
-from ...domain.document import ContentCheck, DocumentState
+from ...domain.document import ContentCheck, PreparationState
 from ._base import BoundaryDTO, DuplicateMatchReason, WriteClient
 
 SOURCE_URL_MAX_CHARACTERS = 2048
@@ -328,7 +328,7 @@ class DocumentMutationResult(BoundaryDTO):
     application_id: str
     document_id: str
     document_hash: str
-    document_state: DocumentState
+    preparation_state: PreparationState
     content_check: ContentCheck
     #: Claims this change saved as pending, so a client need not diff to find them.
     pending_claim_ids: list[str] = []

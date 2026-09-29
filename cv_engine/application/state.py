@@ -21,13 +21,11 @@ from ..domain.contracts.document import CVDocument
 from ..domain.contracts.knowledge import FactStatus
 from ..domain.document import (
     ContentCheck,
-    DocumentState,
     PreparationState,
     basis,
     content_check,
     current_approved_at,
     dependent_fact_ids,
-    document_state,
     preparation_state,
 )
 from ..domain.knowledge import Knowledge
@@ -69,6 +67,10 @@ DOCUMENT_MUTATING_ACTIONS = frozenset(
         "render",
     }
 )
+
+#: Commands that act on existing content. A review reason may name them as its
+#: resolution, but they are offered only while the document has content (§9).
+CONTENT_ACTIONS = frozenset({"edit", "regenerate_section", "regenerate_claim"})
 
 #: Operations that carry `expected_document_hash` and write the document (§11).
 DOCUMENT_OPERATION_TYPES = frozenset(
@@ -129,7 +131,7 @@ def document_review_reasons(
     pending = sorted(
         fact_id
         for fact_id in dependent
-        if fact_id in facts and facts[fact_id].status in {FactStatus.PENDING, FactStatus.CONFIRMED}
+        if fact_id in facts and facts[fact_id].status is FactStatus.PENDING
     )
     if pending:
         reasons.append(
@@ -242,71 +244,21 @@ def derive_warnings(context: ProjectionContext) -> list[WarningView]:
     return warnings
 
 
-def _blocked_reasons(
-    action: str,
-    context: ProjectionContext,
-    *,
-    state: DocumentState,
-    check: ContentCheck,
-    review_codes: list[str],
-    document_operation_active: bool,
-    analyze_active: bool,
-    has_newer_analysis: bool,
-) -> list[str]:
-    document = context.document
-    if context.application.get("deleted_at") is not None:
-        return ["APPLICATION_DELETED"]
-    if action == "analyze":
-        return ["ANALYSIS_IN_PROGRESS"] if analyze_active else ["ANALYSIS_EXISTS"]
-    if action == "edit_matching_configuration":
-        if not context.analyses:
-            return ["ANALYSIS_REQUIRED"]
-        return ["MATCHING_CONTEXT_OPERATION_IN_PROGRESS"]
-    if document is None:
-        return ["DOCUMENT_REQUIRED"]
-    if action in DOCUMENT_MUTATING_ACTIONS and document_operation_active:
-        return ["DOCUMENT_OPERATION_IN_PROGRESS"]
-    if action == "build_from_analysis":
-        return [] if has_newer_analysis else ["NO_NEWER_ANALYSIS"]
-    if action == "confirm_and_use_fact":
-        return ["NO_REVIEW_DECISION_REQUIRED"]
-    if action in {"create_draft", "propose_selection"}:
-        return ["CONTENT_EXISTS"]
-    if action in {"edit", "regenerate_section", "regenerate_claim", "check"}:
-        if document.content is None:
-            return ["CONTENT_REQUIRED"]
-        return ["CONTENT_CHECK_PASSED"]
-    if action == "approve":
-        if document.content is None:
-            return ["CONTENT_REQUIRED"]
-        if review_codes:
-            return review_codes
-        if check is ContentCheck.FAILED:
-            return ["VALIDATION_FAILED"]
-        return ["DOCUMENT_NOT_DRAFT"]
-    if action == "render":
-        if state is not DocumentState.APPROVED:
-            return (
-                ["DOCUMENT_NOT_APPROVED"]
-                if state is DocumentState.DRAFT
-                else ["DOCUMENT_ALREADY_RENDERED"]
-            )
-        return review_codes or ["ACTION_NOT_AVAILABLE"]
-    if action in {"submit", "download_pdf"}:
-        if state is not DocumentState.READY:
-            return ["DOCUMENT_NOT_READY"]
-        return review_codes or ["ACTION_NOT_AVAILABLE"]
-    return ["ACTION_NOT_AVAILABLE"]
-
-
 def derive_actions(
     context: ProjectionContext,
     review: list[ReasonView],
-    state: DocumentState,
+    preparation: PreparationState,
     check: ContentCheck,
 ) -> tuple[list[str], list[BlockedActionView], str | None]:
+    """§9: the actions the stage allows, split into available and blocked.
+
+    An action the stage does not allow yet appears in neither list: the stage already
+    says why. `blocked_actions` holds only an action the stage allows and a blocker
+    withholds, with that blocker's code - live work, a review reason, or a failed check.
+    """
     document = context.document
-    deleted = context.application.get("deleted_at") is not None
+    if context.application.get("deleted_at") is not None:
+        return [], [], None
     active = context.active_operation
     analyze_active = active is not None and active.operation_type is OperationType.ANALYZE_JOB
     document_operation_active = (
@@ -315,68 +267,62 @@ def derive_actions(
     active_snapshot_analysed = any(
         row["job_snapshot_id"] == context.active_job_snapshot_id for row in context.analyses
     )
-    latest = context.analyses[-1] if context.analyses else None
-    has_newer_analysis = False
-    if document is not None and latest is not None and latest["id"] != document.analysis_id:
-        versions = {row["id"]: row.get("version_number", 0) for row in context.analyses}
-        has_newer_analysis = versions.get(latest["id"], 0) > versions.get(document.analysis_id, 0)
-    review_codes = [reason.code for reason in review]
 
-    available: set[str] = set()
-    if not deleted:
-        if not active_snapshot_analysed and not analyze_active:
-            available.add("analyze")
-        if context.analyses and not context.matching_context_operation_active:
-            available.add("edit_matching_configuration")
-        if document is not None:
-            has_content = document.content is not None
-            candidates = {"update_selection"}
-            if has_newer_analysis:
-                candidates.add("build_from_analysis")
-            if not has_content:
-                candidates.update({"create_draft", "propose_selection"})
-            else:
-                candidates.update({"edit", "regenerate_section", "regenerate_claim"})
-                if check is not ContentCheck.PASSED:
-                    candidates.add("check")
-                if state is DocumentState.DRAFT and not review and check is not ContentCheck.FAILED:
-                    candidates.add("approve")
-            if state is DocumentState.APPROVED and not review:
-                candidates.add("render")
-            if state is DocumentState.READY and not review:
-                candidates.add("submit")
-            for reason in review:
-                candidates.update(
-                    action
-                    for action in reason.allowed_resolution_actions
-                    if action in PREPARATION_ACTIONS and (action not in {"edit"} or has_content)
-                )
-            if document_operation_active:
-                candidates -= DOCUMENT_MUTATING_ACTIONS
-            available |= candidates
-        if state is DocumentState.READY:
-            available.add("download_pdf")
+    allowed: set[str] = set()
+    if not active_snapshot_analysed:
+        allowed.add("analyze")
+    if context.analyses:
+        allowed.add("edit_matching_configuration")
+    if document is not None:
+        has_content = document.content is not None
+        allowed.add("update_selection")
+        latest = context.analyses[-1] if context.analyses else None
+        if latest is not None and latest["id"] != document.analysis_id:
+            versions = {row["id"]: row.get("version_number", 0) for row in context.analyses}
+            if versions.get(latest["id"], 0) > versions.get(document.analysis_id, 0):
+                allowed.add("build_from_analysis")
+        if not has_content:
+            allowed |= {"create_draft", "propose_selection"}
+        else:
+            allowed |= CONTENT_ACTIONS
+            if check is not ContentCheck.PASSED:
+                allowed.add("check")
+            if preparation is PreparationState.DRAFT_IN_PROGRESS:
+                allowed.add("approve")
+        if preparation is PreparationState.APPROVED:
+            allowed.add("render")
+        if preparation is PreparationState.READY:
+            allowed |= {"submit", "download_pdf"}
+        for reason in review:
+            allowed.update(
+                action
+                for action in reason.allowed_resolution_actions
+                if action in PREPARATION_ACTIONS and (action not in CONTENT_ACTIONS or has_content)
+            )
 
+    blockers: dict[str, list[str]] = {}
+
+    def block(actions: Iterable[str], code: str) -> None:
+        for action in actions:
+            if action in allowed:
+                blockers.setdefault(action, []).append(code)
+
+    if analyze_active:
+        block(["analyze"], "ANALYSIS_IN_PROGRESS")
+    if context.matching_context_operation_active:
+        block(["edit_matching_configuration"], "MATCHING_CONTEXT_OPERATION_IN_PROGRESS")
+    if document_operation_active:
+        block(DOCUMENT_MUTATING_ACTIONS, "DOCUMENT_OPERATION_IN_PROGRESS")
+    for reason in review:
+        block(["approve", "render", "submit"], reason.code)
+    if check is ContentCheck.FAILED:
+        block(["approve"], "VALIDATION_FAILED")
+
+    available = [action for action in PREPARATION_ACTIONS if action in allowed - blockers.keys()]
     blocked = [
-        BlockedActionView(
-            action=action,
-            reasons=list(
-                dict.fromkeys(
-                    _blocked_reasons(
-                        action,
-                        context,
-                        state=state,
-                        check=check,
-                        review_codes=review_codes,
-                        document_operation_active=document_operation_active,
-                        analyze_active=analyze_active,
-                        has_newer_analysis=has_newer_analysis,
-                    )
-                )
-            ),
-        )
+        BlockedActionView(action=action, reasons=blockers[action])
         for action in PREPARATION_ACTIONS
-        if action not in available
+        if action in blockers
     ]
 
     # §9 recommendation order, first match wins.
@@ -393,23 +339,21 @@ def derive_actions(
         )
     if recommended not in available:
         recommended = None
-    return [action for action in PREPARATION_ACTIONS if action in available], blocked, recommended
+    return available, blocked, recommended
 
 
 def project_application_state(context: ProjectionContext) -> ApplicationStateView:
     document = context.document
     current_basis = basis(document, context.knowledge.facts.facts) if document is not None else None
-    state = document_state(document, current_basis)
     check = content_check(document, current_basis)
-    preparation: PreparationState = preparation_state(document, current_basis)
+    preparation = preparation_state(document, current_basis)
     review = document_review_reasons(document, context.knowledge) if document is not None else []
-    available, blocked, recommended = derive_actions(context, review, state, check)
+    available, blocked, recommended = derive_actions(context, review, preparation, check)
     latest = context.analyses[-1] if context.analyses else None
     return ApplicationStateView(
         recruitment_status=context.application["current_status"],
         terminal_outcome=context.application.get("terminal_outcome"),
         preparation_state=preparation,
-        document_state=state,
         content_check=check,
         review_reasons=review,
         warnings=derive_warnings(context),
@@ -420,7 +364,7 @@ def project_application_state(context: ProjectionContext) -> ApplicationStateVie
         document_id=document.id if document is not None else None,
         document_hash=document.document_hash if document is not None else None,
         document_analysis_id=document.analysis_id if document is not None else None,
-        approved_at=current_approved_at(document, state),
+        approved_at=current_approved_at(document, preparation),
         last_render_error=current_render_error(document),
         available_actions=available,
         blocked_actions=blocked,

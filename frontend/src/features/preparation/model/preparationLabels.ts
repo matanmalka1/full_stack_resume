@@ -1,4 +1,4 @@
-import type { ContentCheck, DocumentState, PreparationState } from "@/api/contracts";
+import type { ContentCheck, PreparationState } from "@/api/contracts";
 import { BadgeCheck, CircleCheck, Clock, FilePen, FilePlus2, type LucideIcon } from "lucide-react";
 
 import type { Tone } from "@/ui/tone";
@@ -19,23 +19,6 @@ export const preparationStateTones: Record<PreparationState, Tone> = {
   needs_analysis: "neutral",
   ready_to_draft: "neutral",
   draft_in_progress: "neutral",
-  approved: "success",
-  ready: "success",
-};
-
-/* §5: the document's approval stamps, restated on their own. Derived by the server from
-   the basis on every read - never here - so "approved" disappears the moment an edit or a
-   fact the document depends on changes, without any command having reopened it. */
-export const documentStateLabels: Record<DocumentState, string> = {
-  none: "אין מסמך",
-  draft: "טיוטה",
-  approved: "אושר",
-  ready: "מוכן למסירה",
-};
-
-export const documentStateTones: Record<DocumentState, Tone> = {
-  none: "neutral",
-  draft: "neutral",
   approved: "success",
   ready: "success",
 };
@@ -107,21 +90,15 @@ export const actionDescription = (action: string): string | null => actionDescri
 
 /* Why a control is disabled, as the one short sentence its tooltip carries.
 
-   This replaced a disclosure that listed every blocked action with its reasons. Most of
-   those rows said only that the workflow had not reached the action yet - true of every
-   action downstream of the current stage, and already what the stage badge says - so the
-   codes that mean "not there yet" are deliberately absent here: an action the workflow
-   has not reached is not offered at all rather than offered and explained.
-
-   What is left is the blocker that does not follow from the stage: content that failed
-   its check, a review reason that shuts approval. A code with no sentence here disables
+   The server reports only blockers that do not follow from the stage: content that
+   failed its check, a review reason that shuts approval, or live work. An action the
+   workflow has not reached is not in `blocked_actions` at all. A code with no sentence here disables
    the control without a tooltip rather than showing the reader a `SCREAMING_SNAKE`
    identifier. */
 const blockedReasonLabels: Record<string, string> = {
   VALIDATION_FAILED: "הבדיקה נכשלה. צריך לתקן ולבדוק מחדש.",
   PENDING_FACT_REQUIRES_RESOLUTION: "יש טענה בלי עובדה מאושרת מאחוריה.",
   FACT_DELETED_REQUIRES_RESOLUTION: "הטיוטה נשענת על עובדה שנמחקה.",
-  KNOWLEDGE_RECONCILIATION_REQUIRED: "צריך להשלים התאמת עובדות.",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "צריך לאשר שזו מועמדות כפולה.",
 };
 
@@ -140,7 +117,6 @@ export const blockedReasonLabel = (reason: string): string | null => blockedReas
 const reasonTitles: Record<string, string> = {
   PENDING_FACT_REQUIRES_RESOLUTION: "טענה בלי עובדה מאושרת",
   FACT_DELETED_REQUIRES_RESOLUTION: "הטיוטה נשענת על עובדה שנמחקה",
-  KNOWLEDGE_RECONCILIATION_REQUIRED: "נדרשת התאמת עובדות",
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: "מועמדות כפולה",
 };
 

@@ -59,7 +59,6 @@ const listItem = (overrides: Partial<ApplicationListItem>): ApplicationListItem 
   updated_at: "2026-08-24T07:00:00Z",
   recruitment_status: "saved",
   preparation_state: "needs_analysis",
-  document_state: "none",
   content_check: "none",
   review_reasons: [],
   warnings: [],
@@ -81,7 +80,6 @@ const board = (): ApplicationListResponse => {
       current_status: "interview",
       recruitment_status: "interview",
       preparation_state: "ready",
-      document_state: "ready",
       content_check: "passed",
       active_job_snapshot_id: "snap-2",
       available_actions: ["download"],
@@ -256,13 +254,12 @@ test.describe("accessibility", () => {
       "GET /api/v1/applications/app-1": jsonAnswer(
         detail({
           preparation_state: "ready",
-          document_state: "ready",
           approved_at: approvedAt,
           available_actions: ["edit", "submit", "download_pdf"],
           recommended_action: "submit",
         }),
       ),
-      [`GET ${documentPath}`]: jsonAnswer(cvDocument({ document_state: "ready", approved_at: approvedAt }), 200, {
+      [`GET ${documentPath}`]: jsonAnswer(cvDocument({ preparation_state: "ready", approved_at: approvedAt }), 200, {
         ETag: `"${HASH}"`,
       }),
       [`GET ${documentPath}/decision-markdown`]: jsonAnswer({

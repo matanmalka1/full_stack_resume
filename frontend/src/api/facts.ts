@@ -65,20 +65,18 @@ export const createPendingFact = async (body: CreateFactRequest): Promise<FactMu
 export const captureClaimFact = async (body: CaptureClaimFactRequest): Promise<FactMutation> =>
   (await apiRequest<FactMutation>(`${factsPath}/from-claim` as ApiPath, { method: "POST", body })).data;
 
-export const transitionFact = async (
-  factId: string,
-  command: "confirm" | "promote",
-  body: FactTransitionRequest,
-): Promise<FactMutation> =>
+/* The one lifecycle step: pending -> canonical. `confirm: false` is refused rather than
+   interpreted. */
+export const confirmFact = async (factId: string, body: FactTransitionRequest): Promise<FactMutation> =>
   (
-    await apiRequest<FactMutation>(`${factPath(factId)}/${command}` as ApiPath, {
+    await apiRequest<FactMutation>(`${factPath(factId)}/confirm` as ApiPath, {
       method: "POST",
       body,
     })
   ).data;
 
-/* One-way: pending/confirmed/canonical -> deleted. `confirm: false` is refused rather
-   than interpreted, the same as `transitionFact`. */
+/* One-way: pending/canonical -> deleted. `confirm: false` is refused rather
+   than interpreted, the same as `confirmFact`. */
 export const deleteFact = async (factId: string, body: FactTransitionRequest): Promise<FactMutation> =>
   (
     await apiRequest<FactMutation>(`${factPath(factId)}/delete` as ApiPath, {

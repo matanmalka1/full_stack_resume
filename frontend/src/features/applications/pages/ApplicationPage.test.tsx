@@ -12,7 +12,6 @@ const detail = (): ApplicationDetail =>
     allowed_recruitment_transitions: ["interview", "rejected", "withdrawn", "closed"],
     recruitment_timeline: [],
     preparation_state: "needs_analysis",
-    document_state: "none",
     content_check: "none",
     review_reasons: [],
     warnings: [],
@@ -144,7 +143,6 @@ describe("ApplicationPage", () => {
           : jsonResponse({
               ...detail(),
               preparation_state: "ready",
-              document_state: "ready",
               document_id: "doc-1",
             }),
       ),

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 
 from ....domain.analysis.projection import fit_level
-from ....domain.document import content_check, dependent_fact_ids, document_state
+from ....domain.document import content_check, dependent_fact_ids, preparation_state
 from ....util import sha256_text
 from ...commands import DecisionMarkdownExport
 from ...errors import UnknownRecord
@@ -64,7 +64,7 @@ class DraftHistoryService:
             f"- Application ID: `{application_id}`",
             f"- Document ID: `{document.id}`",
             f"- Document SHA-256: `{document.document_hash}`",
-            f"- Document state: {document_state(document, current).value}",
+            f"- Preparation state: {preparation_state(document, current).value}",
             f"- Approved at: {document.approved_at if document.approved_basis == current else ''}",
             "",
             "## Classification",

@@ -14,7 +14,6 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     allowed_recruitment_transitions: ["withdrawn", "closed"],
     recruitment_timeline: [],
     preparation_state: "ready_to_draft",
-    document_state: "none",
     content_check: "none",
     review_reasons: [],
     warnings: [],
@@ -168,16 +167,8 @@ describe("voluntary matching configuration", () => {
   });
 
   it.each([
-    [
-      "draft_in_progress" as const,
-      { document_state: "draft" as const, content_check: "outdated" as const },
-      /וייתכן שגם את תוכן הטיוטה/,
-    ],
-    [
-      "ready" as const,
-      { document_state: "ready" as const, content_check: "passed" as const },
-      /אישור קיים לא יחול עוד על המסמך שהשתנה/,
-    ],
+    ["draft_in_progress" as const, { content_check: "outdated" as const }, /וייתכן שגם את תוכן הטיוטה/],
+    ["ready" as const, { content_check: "passed" as const }, /אישור קיים לא יחול עוד על המסמך שהשתנה/],
   ])("explains the consequence from server state %s", async (preparation_state, extra, message) => {
     vi.stubGlobal(
       "fetch",

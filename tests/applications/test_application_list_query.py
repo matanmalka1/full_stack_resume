@@ -17,7 +17,6 @@ from cv_engine.application.queries import (
     ApplicationListQuery,
     ApplicationSort,
     ContentCheck,
-    DocumentState,
     PreparationState,
     narrow_application_list,
 )
@@ -49,7 +48,6 @@ def item(
         terminal_outcome=terminal_outcome,
         is_closed=is_closed,
         preparation_state=preparation_state,
-        document_state=DocumentState.NONE,
         content_check=ContentCheck.NONE,
         active_job_snapshot_id="snap-1",
         created_at=created_at,

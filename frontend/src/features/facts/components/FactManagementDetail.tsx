@@ -13,7 +13,7 @@ import { FactCreationDialog } from "./FactCreationDialog";
 import { FactDeletionControl } from "./FactDeletionControl";
 import { FactEventHistory } from "./FactEventHistory";
 import { FactOverview } from "./FactOverview";
-import { FactPromotionControl } from "./FactPromotionControl";
+import { FactConfirmationControl } from "./FactConfirmationControl";
 
 interface FactManagementDetailProps {
   detail: FactDetail;
@@ -31,7 +31,7 @@ export const FactManagementDetail = ({ detail, mutationsBlocked = false, onCreat
     <div className="flex flex-col gap-5" key={fact.fact_id}>
       <FactOverview fact={fact} />
 
-      {mutationsBlocked ? null : <FactPromotionControl fact={fact} />}
+      {mutationsBlocked ? null : <FactConfirmationControl fact={fact} />}
 
       {fact.status === "canonical" && !mutationsBlocked ? (
         <QueryState

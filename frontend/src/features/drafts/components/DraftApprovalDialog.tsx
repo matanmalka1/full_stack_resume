@@ -56,7 +56,7 @@ export const DraftApprovalDialog = ({
     },
     onSuccess: async (result) => {
       await invalidateDocumentViews(queryClient, applicationId);
-      if (result.passed && result.document_state !== "draft") onApproved(result);
+      if (result.passed && result.preparation_state !== "draft_in_progress") onApproved(result);
       else onCheckFailed();
     },
     onError: (error) => {

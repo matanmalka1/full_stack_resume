@@ -13,7 +13,6 @@ afterEach(() => {
 const readyDetail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =>
   detail({
     preparation_state: "ready",
-    document_state: "ready",
     approved_at: "2026-08-25T08:00:00Z",
     available_actions: ["edit", "submit", "download_pdf"],
     recommended_action: "submit",
@@ -43,7 +42,7 @@ const stubReads = (projection: ApplicationDetail) => {
     }
     if (url.endsWith("/document")) {
       return Promise.resolve(
-        json(cvDocument({ document_state: projection.document_state, approved_at: projection.approved_at })),
+        json(cvDocument({ preparation_state: projection.preparation_state, approved_at: projection.approved_at })),
       );
     }
     return Promise.resolve(json(projection));
@@ -125,9 +124,7 @@ describe("ReadyPage", () => {
   });
 
   it("sends a document that changed since rendering back to the editor, offering nothing to send", async () => {
-    stubReads(
-      readyDetail({ document_state: "draft", preparation_state: "draft_in_progress", available_actions: ["edit"] }),
-    );
+    stubReads(readyDetail({ preparation_state: "draft_in_progress", available_actions: ["edit"] }));
     renderReady();
 
     expect(await screen.findByRole("heading", { name: "קורות החיים אינם מוכנים כרגע" })).toBeInTheDocument();
