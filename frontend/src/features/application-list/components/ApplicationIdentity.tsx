@@ -94,13 +94,12 @@ export const ApplicationIdentity = ({
           </Tooltip>
         </div>
         {/* One line, so every card's header is the same height and the blocks under it
-            line up across the board; a role cut short is whole in the tooltip. */}
+            line up across the board. A role cut short is whole in the native title rather
+            than a Tooltip, which would put the role in the document a second time. */}
         <p className="flex min-w-0 items-baseline gap-1.5 text-support text-cv-text-muted">
-          <Tooltip align="center" className="min-w-0" label={item.target_role} wrap>
-            <span className="min-w-0 truncate font-medium text-cv-text" dir="auto">
-              {item.target_role}
-            </span>
-          </Tooltip>
+          <span className="min-w-0 truncate font-medium text-cv-text" dir="auto" title={item.target_role}>
+            {item.target_role}
+          </span>
           {item.track == null ? null : (
             <>
               <span aria-hidden="true">·</span>
