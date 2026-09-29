@@ -16,11 +16,11 @@ is that refusal, and it names the claims that caused it.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+from ...domain.claim_review import REVIEW_POLICY_VERSION, SHAPE_PROBLEMS, review_problems
 from ...domain.contracts.drafts import ClaimReviewAssertion, ClaimReviewEvidence, DraftDocument
 from ...domain.contracts.knowledge import FactStatus
 from ...domain.contracts.providers import (
@@ -29,7 +29,6 @@ from ...domain.contracts.providers import (
     ProviderTaskResult,
 )
 from ...domain.drafts import (
-    EDITABLE_STYLES,
     apply_claim_edit,
     authorize_reviewed_claim,
     draft_claims,
@@ -268,59 +267,22 @@ def authorize_semantically_reviewed_claims(
         if assessment.verdict == "unsupported":
             unsupported.append(claim_id)
             continue
-        if claim.style not in EDITABLE_STYLES or not assessment.assertions:
-            refused.append(claim_id)
-            continue
-        joined_claim_quotes = "".join(item.claim_quote for item in assessment.assertions)
-
-        def normalize(value: str) -> str:
-            return "".join(char.casefold() for char in value if char.isalnum())
-
-        if normalize(joined_claim_quotes) != normalize(claim.text):
-            refused.append(claim_id)
-            continue
-        cited: set[str] = set()
-        valid = True
-        for assertion in assessment.assertions:
-            if not assertion.claim_quote or assertion.claim_quote not in claim.text:
-                valid = False
-                break
-            cited.update(assertion.fact_ids)
-            if len(assertion.source_quotes) != len(assertion.fact_ids):
-                valid = False
-                break
-            try:
-                for fact_id, quote in zip(assertion.fact_ids, assertion.source_quotes, strict=True):
-                    if fact_id not in claim.fact_ids:
-                        valid = False
-                        break
-                    fact = facts.get(fact_id, canonical_only=True)
-                    sources = [fact.meaning, facts.rendering(fact_id, draft.language)]
-                    if quote not in sources[0] and quote not in sources[1]:
-                        valid = False
-                        break
-            except ValueError:
-                valid = False
-                break
-        source_text = " ".join(
-            " ".join(
-                (
-                    facts.get(fact_id, canonical_only=True).meaning,
-                    facts.rendering(fact_id, draft.language),
-                )
+        problems = {
+            problem.code
+            for problem in review_problems(
+                claim_id=claim_id,
+                text=claim.text,
+                style=claim.style,
+                fact_ids=claim.fact_ids,
+                assertions=assessment.assertions,
+                facts=facts,
+                language=draft.language,
             )
-            for fact_id in claim.fact_ids
-        )
-
-        def protected(value: str) -> set[str]:
-            return set(re.findall(r"\d+(?:[.,]\d+)?%?", value))
-
-        if cited != set(claim.fact_ids):
-            valid = False
-        if protected(claim.text) - protected(source_text):
+        }
+        if "unsupported-review-number" in problems and not problems & SHAPE_PROBLEMS:
             unsupported.append(claim_id)
             continue
-        if not valid:
+        if problems:
             refused.append(claim_id)
             continue
         updated = authorize_reviewed_claim(
@@ -328,7 +290,7 @@ def authorize_semantically_reviewed_claims(
             claim_id,
             facts,
             ClaimReviewEvidence(
-                policy_version="semantic-claim-support-v1",
+                policy_version=REVIEW_POLICY_VERSION,
                 provider_artifact_version_id=evidence.artifact_version_id,
                 input_hash=evidence.provenance.input_hash,
                 assertions=[
