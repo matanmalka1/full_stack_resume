@@ -515,7 +515,7 @@ describe("NewApplicationPage", () => {
     });
     answer(jsonResponse({ matches: [match()] }));
 
-    expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
+    expect(await screen.findByText("הפרטים השתנו בזמן הבדיקה")).toBeInTheDocument();
     expect(screen.queryByText("נמצאה מועמדות דומה")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "יצירת מועמדות נוספת" })).not.toBeInTheDocument();
   });
@@ -539,7 +539,7 @@ describe("NewApplicationPage", () => {
     fireEvent.change(jobTextArea(), { target: { value: "The posting now on screen" } });
     answer(jsonResponse({ matches: [] }));
 
-    expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
+    expect(await screen.findByText("הפרטים השתנו בזמן הבדיקה")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(jobTextArea()).toHaveValue("The posting now on screen");
   });
@@ -561,12 +561,12 @@ describe("NewApplicationPage", () => {
     fireEvent.change(jobTextArea(), { target: { value: "Second text" } });
     answer(jsonResponse({ matches: [match()] }));
 
-    expect(await screen.findByText("הקלט השתנה מאז הבדיקה")).toBeInTheDocument();
+    expect(await screen.findByText("הפרטים השתנו בזמן הבדיקה")).toBeInTheDocument();
 
     fireEvent.change(jobTextArea(), { target: { value: "Third text" } });
 
     await waitFor(() => {
-      expect(screen.queryByText("הקלט השתנה מאז הבדיקה")).not.toBeInTheDocument();
+      expect(screen.queryByText("הפרטים השתנו בזמן הבדיקה")).not.toBeInTheDocument();
     });
   });
 
@@ -592,11 +592,12 @@ describe("NewApplicationPage", () => {
     expect(screen.getByRole("button", { name: "יצירת מועמדות" })).toBeInTheDocument();
   });
 
-  it("shows a refused creation as a blocker with the server's safe detail", async () => {
+  it("shows a refused creation as a blocker in this screen's words, not the server's", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     stubFetch({
       [DUPLICATE_CHECK_PATH]: [jsonResponse({ matches: [] })],
       /* A code this client's table does not translate, so the fallback path is what is
-         under test: the server's own `detail` sentence, verbatim. */
+         under test. */
       [CREATE_PATH]: [problemResponse(412, "UNRECOGNIZED_REFUSAL", "job text is required")],
     });
     renderPage();
@@ -604,14 +605,17 @@ describe("NewApplicationPage", () => {
     fillIntake();
     submitForm();
 
-    expect(await screen.findByText("job text is required")).toBeInTheDocument();
+    expect(await screen.findByText("המועמדות לא נוצרה")).toBeInTheDocument();
     expect(screen.getByText("חסימה")).toBeInTheDocument();
-    /* The failure code is no longer shown. `detail` is the server's own sentence about
-       the refusal and it is the body of the callout; the code beside it named the same
-       refusal in a vocabulary the reader cannot act on. What this test guards is that a
-       refusal is reported as a blocker carrying the server's safe detail - never the
-       exception text, and never a message this screen invented. */
-    expect(screen.queryByText(/UNRECOGNIZED_REFUSAL/)).toBeNull();
+    expect(screen.getByText("הפרטים שהוזנו נשארו בטופס. אפשר לנסות שוב.")).toBeInTheDocument();
+    /* The server's detail and code are English diagnostics: they go to the console, and
+       neither reaches the page. */
+    expect(screen.queryByText(/job text is required|UNRECOGNIZED_REFUSAL/)).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      "ui_error",
+      expect.objectContaining({ code: "UNRECOGNIZED_REFUSAL", detail: "job text is required" }),
+    );
+    warn.mockRestore();
   });
 
   it("maps server validation locations to fields and preserves every entered value", async () => {
@@ -635,7 +639,7 @@ describe("NewApplicationPage", () => {
     });
     submitForm();
 
-    expect(await screen.findByText("יש לתקן את השדות המסומנים")).toBeInTheDocument();
+    expect(await screen.findByText(/יש לתקן את השדות המסומנים/)).toBeInTheDocument();
     expect(screen.getByLabelText("שם החברה")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("כתובת המשרה")).toHaveAttribute("aria-invalid", "true");
     expect(jobTextArea()).toHaveAttribute("aria-invalid", "true");
@@ -671,7 +675,7 @@ describe("NewApplicationPage", () => {
 
     submitForm();
 
-    expect(await screen.findByText("יש לתקן את השדות המסומנים")).toBeInTheDocument();
+    expect(await screen.findByText(/יש לתקן את השדות המסומנים/)).toBeInTheDocument();
     expect(screen.getByLabelText("כתובת המשרה")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("ftp://example.com/job");
     expect(jobTextArea()).toHaveValue("Job description text");

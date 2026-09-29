@@ -61,13 +61,6 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
         </h3>
         <p className="text-support text-cv-text-muted">בחרו היכן העובדה תוכל להשתתף בבניית קורות החיים.</p>
       </div>
-      {attachment.error === null ? null : (
-        <ErrorCallout
-          error={attachment.error}
-          fallbackDetail="מקור הידע לא השתנה ואפשר לנסות שוב."
-          fallbackTitle="לא ניתן לצרף את העובדה"
-        />
-      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="פרופיל יעד">
           {(control) => (
@@ -134,11 +127,15 @@ export const FactAttachmentControl = ({ fact, targets }: FactAttachmentControlPr
           צירוף העובדה לסעיף
         </Button>
       </div>
-      {attachment.isSuccess ? (
-        // role="status" is a Callout prop; Callout renders a semantic <output>.
-        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout role="status" title="העובדה צורפה" tone="success" />
-      ) : null}
+      {/* No success notice: the line beside the button already turns into "already
+          attached" once the targets refetch, which is the confirmation. */}
+      {attachment.error === null ? null : (
+        <ErrorCallout
+          error={attachment.error}
+          fallbackDetail="העובדה לא השתנתה. אפשר לנסות שוב."
+          title="העובדה לא צורפה"
+        />
+      )}
     </section>
   );
 };

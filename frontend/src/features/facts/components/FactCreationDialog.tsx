@@ -4,6 +4,7 @@ import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
+import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { useCreatePendingFact } from "../api/mutations";
 import { useFactPool } from "../api/queries";
 import { emptyFactForm, type FactFormFields, parseFactTags } from "../model/factForm";
@@ -15,6 +16,15 @@ import {
   FactStyleField,
   FactTagsField,
 } from "./FactFormFieldset";
+
+/* The API's names for the fields this form shows errors under. */
+const serverFields = {
+  meaning: "meaning",
+  renderings: "english",
+  en: "english",
+  tags: "tags",
+  provenance: "provenance",
+} as const satisfies Record<string, keyof FactFormFields>;
 
 interface FactCreationDialogProps {
   formId: string;
@@ -64,6 +74,7 @@ export const FactCreationDialog = ({
     getValues,
     register,
     reset,
+    setError,
     setValue,
     watch,
   } = form;
@@ -86,6 +97,8 @@ export const FactCreationDialog = ({
     onCreated(factId);
     onClose();
   });
+
+  const inlineFields = useServerFieldErrors(create.error, setError, serverFields);
 
   /* Reopening starts from the seed values again rather than from whatever was abandoned
      last time, and a failure from the previous attempt does not greet the next one. */
@@ -138,15 +151,6 @@ export const FactCreationDialog = ({
         id={formId}
         onSubmit={form.handleSubmit(submit)}
       >
-        {create.error === null ? null : (
-          <ErrorCallout
-            className="sm:col-span-2"
-            error={create.error}
-            fallbackDetail="מקור הידע לא השתנה ואפשר לנסות שוב."
-            fallbackTitle="לא ניתן ליצור את העובדה"
-          />
-        )}
-
         <FactSourceField register={register} />
         <FactStyleField register={register} />
         <FactCoreFields className="sm:col-span-2" errors={errors} register={register} />
@@ -166,6 +170,15 @@ export const FactCreationDialog = ({
           register={register}
         />
         <FactProvenanceField errors={errors} register={register} />
+        {create.error === null ? null : (
+          <ErrorCallout
+            className="sm:col-span-2"
+            error={create.error}
+            fallbackDetail="הפרטים שהוזנו נשארו בטופס. אפשר לנסות שוב."
+            inlineFields={inlineFields}
+            title="העובדה לא נוצרה"
+          />
+        )}
       </form>
     </Dialog>
   );

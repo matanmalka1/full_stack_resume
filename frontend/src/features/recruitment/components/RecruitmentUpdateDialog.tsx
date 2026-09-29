@@ -101,6 +101,7 @@ const LoadedRecruitmentDialog = ({
             detail={detail}
             fields={update.fields}
             form={update.form}
+            inlineFields={update.inlineFields}
             onSubmit={update.form.handleSubmit((values) => update.save.mutate(values))}
             saveError={update.save.error}
             serverChanged={update.serverChanged}
@@ -140,8 +141,8 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
       <DialogFrame application={application} onClose={onClose}>
         <ErrorCallout
           error={detailQuery.error}
-          fallbackDetail="לא ניתן לפתוח את העדכון. אפשר לנסות שוב לאחר רענון המסך."
-          fallbackTitle="טעינת פרטי המועמדות נכשלה"
+          fallbackDetail="אפשר לרענן את העמוד ולנסות שוב."
+          title="לא ניתן לטעון את פרטי המועמדות"
         />
       </DialogFrame>
     );

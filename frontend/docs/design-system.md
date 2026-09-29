@@ -118,6 +118,42 @@ sentence and adjacent resolution action on a transparent background. Soft filled
 banners remain available only for a screen-level verdict. `StatusBadge` remains the
 compact marker for dense lists, tables and small state summaries.
 
+## Messages
+
+Errors and confirmations have one wording pattern and one presentation, owned by
+`ui/errorMessages.ts`, `ui/ErrorCallout.tsx` and `ui/SuccessNotice.tsx`.
+
+**Wording.** A message says what happened and what the reader can do now, in short
+Hebrew sentences:
+
+- The title is the screen's and names what did not happen: `לא ניתן לטעון את …` for a
+  read, `<the thing> לא <past verb>` for a command (`ההגדרות לא נשמרו`,
+  `העובדה לא נמחקה`).
+- The body is the catalogue's reason and action for a known Problem code, or the
+  screen's fallback detail: what stayed as it was, then `אפשר לנסות שוב.` or the
+  specific next step. `יש ל…` is for a required step; `אפשר ל…` for an optional one.
+- The server's `title` and `detail`, Problem codes, HTTP statuses and exception text are
+  never rendered. `reportError` writes them to the console (4xx as a warning, anything
+  else as an error). Every code the API can return has a catalogue entry.
+
+**Placement.**
+
+- A field the server refused is marked under that field (`useServerFieldErrors`), with
+  `aria-invalid` and focus on the first one. The form's summary callout leaves those
+  fields out and lists only refusals it could not place.
+- A command's error sits directly under the control row that sent it, or at the end of
+  its form, just above the submit action.
+- A failed read replaces or tops the region it was loading (`QueryState`).
+
+**Presentation and timing.** Errors are a blocker `Callout` with `role="alert"`; they
+stay until the command is retried or the region is reloaded. A success message is a
+`SuccessNotice`: announced politely, never focused, and closed by its own button, the next
+command, or a screen that has moved past it. Neither times out.
+
+**When to confirm.** A success notice appears only when it tells the reader something the
+screen does not already show - a consequence, a record kept elsewhere, or a result with no
+other place on the page. A command whose effect is visible where it happened says nothing.
+
 ## Elevation and stacking
 
 The z-index variables are ordinary root-level CSS tokens, not Tailwind theme namespaces.

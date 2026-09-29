@@ -33,6 +33,7 @@ import {
   type FactFormFields,
 } from "@/features/facts";
 import { useAppForm } from "@/hooks/useAppForm";
+import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
@@ -50,6 +51,14 @@ interface ClaimFactResolutionProps {
   profile: string | null;
   section: string;
 }
+
+/* The API's names for the capture fields this form shows errors under. */
+const captureServerFields = {
+  meaning: "meaning",
+  english: "english",
+  tags: "tags",
+  provenance: "provenance",
+} as const satisfies Record<string, keyof FactFormFields>;
 
 /* Turning an unsupported line of the draft into a fact the CV is allowed to carry. The
    claim's own text is copied into the fact verbatim - this flow never rewords it - and
@@ -146,6 +155,7 @@ export const ClaimFactResolution = ({
   });
 
   const error = historyQuery.error ?? detailQuery.error ?? capture.error ?? useFact.error;
+  const inlineFields = useServerFieldErrors(capture.error, captureForm.setError, captureServerFields);
   const confirmed = confirmationForm.watch("confirmed");
   const captureFields = { errors: captureForm.formState.errors, register: captureForm.register };
 
@@ -168,16 +178,17 @@ export const ClaimFactResolution = ({
         <ErrorCallout
           className="mt-4"
           error={error}
-          fallbackDetail="יש לוודא שעריכות הטיוטה נשמרו ושההקשר מעודכן, ולפתור שגיאת שמירה או קונפליקט לפני ניסיון נוסף."
-          fallbackTitle="לא ניתן לעדכן את העובדה"
+          fallbackDetail="יש לוודא שהעריכות בטיוטה נשמרו ולנסות שוב."
+          inlineFields={inlineFields}
+          title="העובדה לא עודכנה"
         />
       )}
       {refresh.error == null ? null : (
         <div className="mt-4 flex flex-col gap-3">
           <ErrorCallout
             error={refresh.error}
-            fallbackTitle="העובדה אושרה, אך עדכון מצב הטיוטה לא הושלם"
-            fallbackDetail="אישור העובדה נשמר. יש לפתור שגיאת שמירה או קונפליקט, ולנסות שוב את הרענון והאימות בלבד."
+            title="העובדה אושרה, אך הטיוטה לא עודכנה"
+            fallbackDetail="אישור העובדה נשמר. אפשר לנסות שוב לעדכן את הטיוטה."
           />
           <Button onClick={() => refresh.mutate()} pending={refresh.isPending} variant="secondary">
             ניסיון נוסף לעדכון מצב הטיוטה
@@ -209,8 +220,7 @@ export const ClaimFactResolution = ({
         // <output> for it.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
         <Callout className="mt-4" role="status" title="העובדה אושרה ונבחרה" tone="success">
-          נוצרה תוכנית בחירה חדשה. אישור העובדה אינו אימות של השורה או הטיוטה. מצב ההקשר והאימות מוצגים במסך זה;
-          כשהטיוטה אינה עדכנית, יש להשתמש בפעולת התיקון המותרת בהתראת ההקשר.
+          אישור העובדה אינו בודק את השורה או את הטיוטה. אם הטיוטה סומנה כלא עדכנית, יש לעדכן אותה מההתראה שבמסך.
         </Callout>
       ) : (
         <div className="mt-4 flex flex-col gap-4">

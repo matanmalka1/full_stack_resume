@@ -1,71 +1,54 @@
+import { useEffect } from "react";
 import { Link, isRouteErrorResponse, useRouteError } from "react-router-dom";
 
-import { ApiProblem } from "@/api/client";
 import { buttonClasses } from "@/ui/Button";
 import { Card } from "@/ui/Card";
-import { LtrText } from "@/ui/LtrText";
+import { problemSentence } from "@/ui/errorMessages";
 import { PageShell } from "@/ui/PageShell";
+import { reportError } from "@/ui/reportError";
 import { boardPath } from "../boardReturn";
 
 interface SafeRouteError {
   title: string;
   detail: string;
-  status?: number;
 }
 
+/* The reader's copy only. The status, the server's prose, and any exception text are
+   diagnostics: `reportError` keeps them in the console. */
 const toSafeRouteError = (error: unknown): SafeRouteError => {
-  if (error instanceof ApiProblem) {
-    return {
-      title: error.problem.title,
-      detail: error.problem.detail,
-      status: error.problem.status,
-    };
-  }
-
   if (isRouteErrorResponse(error)) {
     return {
       title: "לא ניתן לפתוח את העמוד",
-      detail: "העמוד המבוקש אינו זמין כרגע.",
-      status: error.status,
+      detail: "העמוד המבוקש אינו זמין כרגע. אפשר לחזור ללוח המועמדויות.",
     };
   }
 
   return {
-    title: "אירעה שגיאה",
-    detail: "לא ניתן להשלים את הפעולה. אפשר לנסות שוב.",
+    title: "לא ניתן להציג את העמוד",
+    detail: problemSentence(error, "אירעה שגיאה בלתי צפויה. אפשר לרענן את העמוד או לחזור ללוח המועמדויות."),
   };
 };
 
-const RouteErrorContent = ({ status }: { status: number | undefined }) => (
+const RouteErrorContent = () => (
   <Card aria-labelledby="route-heading" role="alert">
-    {status === undefined ? null : (
-      <p className="text-support text-cv-text-muted">
-        <LtrText>HTTP {status}</LtrText>
-      </p>
-    )}
-
     {/* A route failure leaves no useful action on its screen, so the shared presentation
         always carries one deterministic way back to the board. */}
-    <div className={status === undefined ? undefined : "mt-4"}>
-      <Link className={buttonClasses("primary")} to={boardPath()}>
-        חזרה ללוח המועמדויות
-      </Link>
-    </div>
+    <Link className={buttonClasses("primary")} to={boardPath()}>
+      חזרה ללוח המועמדויות
+    </Link>
   </Card>
 );
 
 const RouteErrorPage = () => {
-  const error = toSafeRouteError(useRouteError());
+  const routeError = useRouteError();
+  useEffect(() => {
+    reportError("route_error", isRouteErrorResponse(routeError) ? { status: routeError.status } : routeError);
+  }, [routeError]);
+  const error = toSafeRouteError(routeError);
 
   return (
-    <PageShell
-      description={error.detail}
-      eyebrow="הבקשה נכשלה"
-      eyebrowTone="blocker"
-      measure="form"
-      title={error.title}
-    >
-      <RouteErrorContent status={error.status} />
+    <PageShell description={error.detail} eyebrow="תקלה" eyebrowTone="blocker" measure="form" title={error.title}>
+      <RouteErrorContent />
     </PageShell>
   );
 };

@@ -56,7 +56,7 @@ export const SettingsPage = () => {
         />
         <QueryState
           error={query.error}
-          fallbackTitle="ההגדרות לא נטענו"
+          errorTitle="לא ניתן לטעון את ההגדרות"
           loading={query.data === undefined}
           loadingState={settingsLoading}
         >

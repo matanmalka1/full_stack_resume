@@ -42,8 +42,8 @@ export const DraftEditorNotices = ({
     {regenerationError === null || regenerationError === undefined ? null : (
       <ErrorCallout
         error={regenerationError}
-        fallbackDetail="לא ניתן היה להפעיל יצירה מחדש. הטיוטה נשמרה כפי שהיא."
-        fallbackTitle="היצירה מחדש לא הופעלה"
+        fallbackDetail="הטיוטה לא השתנתה. אפשר לנסות שוב."
+        title="היצירה מחדש לא הופעלה"
       />
     )}
 
@@ -56,8 +56,8 @@ export const DraftEditorNotices = ({
     {selectionError === null || selectionError === undefined ? null : (
       <ErrorCallout
         error={selectionError}
-        fallbackDetail="לא ניתן היה לשנות את בחירת העובדות. הטיוטה נשמרה כפי שהיא."
-        fallbackTitle="שינוי הבחירה לא בוצע"
+        fallbackDetail="הטיוטה לא השתנתה. אפשר לנסות שוב."
+        title="בחירת העובדות לא שונתה"
       />
     )}
   </>

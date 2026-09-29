@@ -1,4 +1,4 @@
-import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
 import type { DocumentCheckState } from "../hooks/useDocumentCheck";
 import { ValidationReportView } from "./ValidationReportView";
@@ -39,11 +39,7 @@ export const DraftValidationPanel = ({ check }: DraftValidationPanelProps) => {
       ) : null}
 
       {error === null || error === undefined ? null : (
-        <ErrorCallout
-          error={error}
-          fallbackDetail={briefServerFailureDetail}
-          fallbackTitle="לא ניתן להשלים את בדיקת הקובץ"
-        />
+        <ErrorCallout error={error} fallbackDetail="אפשר לנסות שוב." title="בדיקת הקובץ לא הושלמה" />
       )}
 
       {report === null ? (

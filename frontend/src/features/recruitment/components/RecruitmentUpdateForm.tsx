@@ -16,6 +16,7 @@ interface RecruitmentUpdateFormProps {
   detail: ApplicationDetail;
   fields: RecruitmentUpdateFields;
   form: UseFormReturn<RecruitmentUpdateFields>;
+  inlineFields: ReadonlySet<string>;
   onSubmit: FormEventHandler<HTMLFormElement>;
   saveError: unknown;
   serverChanged: boolean;
@@ -30,6 +31,7 @@ export const RecruitmentUpdateForm = ({
   detail,
   fields,
   form,
+  inlineFields,
   onSubmit,
   saveError,
   serverChanged,
@@ -37,6 +39,7 @@ export const RecruitmentUpdateForm = ({
   visible,
 }: RecruitmentUpdateFormProps) => {
   const selectedStatus = fields.targetStatus;
+  const { errors } = form.formState;
 
   return (
     <form
@@ -44,19 +47,12 @@ export const RecruitmentUpdateForm = ({
       id="recruitment-update-form"
       onSubmit={onSubmit}
     >
-      {saveError == null ? null : (
-        <ErrorCallout
-          error={saveError}
-          fallbackDetail="ייתכן שחלק מהשינויים נשמרו. הערכים נטענו מחדש מהשרת; יש לבדוק אותם לפני ניסיון נוסף."
-          fallbackTitle="לא ניתן להשלים את העדכון"
-        />
-      )}
       {serverChanged ? (
         // role="status" is a Callout prop, not a DOM role; Callout already renders an
         // <output> for it.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout role="status" title="פרטי המועמדות השתנו בשרת" tone="warning">
-          הערכים שהקלדת נשמרו בטופס ולא הוחלפו. כדאי לבדוק אותם לפני השמירה.
+        <Callout role="status" title="פרטי המועמדות השתנו בינתיים" tone="warning">
+          הערכים שהקלדת נשארו בטופס. כדאי לבדוק אותם לפני השמירה.
         </Callout>
       ) : null}
 
@@ -73,7 +69,7 @@ export const RecruitmentUpdateForm = ({
           </div>
         </div>
         <div className="flex flex-col gap-4">
-          <Field label="עדכון שלב">
+          <Field error={errors.targetStatus?.message} label="עדכון שלב">
             {(control) => (
               <Select
                 {...control}
@@ -97,7 +93,9 @@ export const RecruitmentUpdateForm = ({
             <p className="text-support text-cv-text-muted">אין מעבר קדימה זמין מהמצב הנוכחי.</p>
           ) : null}
           {fields.targetStatus === "" ? null : (
-            <Field label="סיבת השינוי">{(control) => <Input {...control} {...form.register("reason")} />}</Field>
+            <Field error={errors.reason?.message} label="סיבת השינוי">
+              {(control) => <Input {...control} {...form.register("reason")} />}
+            </Field>
           )}
         </div>
       </section>
@@ -113,10 +111,10 @@ export const RecruitmentUpdateForm = ({
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
-          <Field label="הפעולה הבאה">
+          <Field error={errors.nextAction?.message} label="הפעולה הבאה">
             {(control) => <Input {...control} {...form.register("nextAction")} dir="auto" />}
           </Field>
-          <Field label="תאריך יעד">
+          <Field error={errors.nextActionDate?.message} label="תאריך יעד">
             {(control) => (
               <Input {...control} {...form.register("nextActionDate")} className="ltr-island" type="date" />
             )}
@@ -134,10 +132,18 @@ export const RecruitmentUpdateForm = ({
             <p className="text-support text-cv-text-muted">מידע שימושי לשיחה או למעקב הבא.</p>
           </div>
         </div>
-        <Field label="תוכן ההערה">
+        <Field error={errors.notes?.message} label="תוכן ההערה">
           {(control) => <Textarea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
         </Field>
       </section>
+      {saveError == null ? null : (
+        <ErrorCallout
+          error={saveError}
+          inlineFields={inlineFields}
+          fallbackDetail="ייתכן שחלק מהשינויים נשמרו. הערכים נטענו מחדש; יש לבדוק אותם לפני ניסיון נוסף."
+          title="העדכון לא הושלם"
+        />
+      )}
     </form>
   );
 };

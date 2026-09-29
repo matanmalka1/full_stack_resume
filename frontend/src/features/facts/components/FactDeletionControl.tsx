@@ -34,13 +34,6 @@ export const FactDeletionControl = ({ fact }: { fact: Fact }) => {
 
   return (
     <div className="flex flex-col gap-3 rounded-control border border-cv-blocker bg-cv-surface p-4">
-      {deletion.error === null ? null : (
-        <ErrorCallout
-          error={deletion.error}
-          fallbackDetail="מקור הידע לא השתנה ואפשר לנסות שוב."
-          fallbackTitle="לא ניתן למחוק את העובדה"
-        />
-      )}
       <Callout title="הפעולה סופית ואינה הפיכה" tone="warning">
         העובדה תוסר מרשימת העובדות המוצגת כברירת מחדל ולא תוצע כיעד צירוף חדש. ההיסטוריה שלה, וכל מסמך מאושר שכבר הפיק
         אותה, יישארו ללא שינוי ונגישים לצפייה.
@@ -53,6 +46,13 @@ export const FactDeletionControl = ({ fact }: { fact: Fact }) => {
           אישור מחיקת העובדה
         </Button>
       </div>
+      {deletion.error === null ? null : (
+        <ErrorCallout
+          error={deletion.error}
+          fallbackDetail="העובדה לא השתנתה. אפשר לנסות שוב."
+          title="העובדה לא נמחקה"
+        />
+      )}
     </div>
   );
 };

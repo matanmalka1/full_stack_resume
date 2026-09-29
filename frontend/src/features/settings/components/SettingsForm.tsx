@@ -5,7 +5,7 @@ import { ApiProblem } from "@/api/client";
 import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
 import { type SettingsRead, readSettings, settingsQueryKey, updateSettings } from "@/api/settings";
 import { useDisplaySettingsPreview } from "@/app/layout/DisplaySettingsPreview";
-import { briefServerFailureDetail, ErrorCallout } from "@/ui/ErrorCallout";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
@@ -14,6 +14,7 @@ import { Field } from "@/ui/Field";
 import { FormSection } from "@/ui/FormSection";
 import { LtrText } from "@/ui/LtrText";
 import { Select } from "@/ui/Select";
+import { SuccessNotice } from "@/ui/SuccessNotice";
 import { Switch } from "@/ui/Switch";
 import { SettingsConflict } from "./SettingsConflict";
 import { editableSettings } from "../settings.model";
@@ -261,12 +262,9 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
           }
         />
       </form>
-      {save.isSuccess ? (
-        // role="status" is a Callout prop, not a DOM role; Callout already renders an
-        // <output> for it.
-        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout role="status" title="ההגדרות נשמרו" tone="success" />
-      ) : null}
+      {/* Settings have no other on-screen trace of a save - the button only goes quiet -
+          so this one command confirms. The next edit makes it old news. */}
+      {save.isSuccess && !isDirty ? <SuccessNotice onDismiss={() => save.reset()} title="ההגדרות נשמרו" /> : null}
       {conflict !== null && (
         <Callout title="ההגדרות השתנו מאז שפתחת את הטופס" tone="warning">
           <p>העריכות שלך נשמרו בטופס. יש לטעון את הגרסה העדכנית ולהשוות לפני שמירה נוספת.</p>
@@ -280,14 +278,18 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
           >
             טעינת הגרסה העדכנית להשוואה
           </Button>
-          {refresh.error !== null && <ErrorCallout error={refresh.error} fallbackTitle="הגרסה העדכנית לא נטענה" />}
+          {refresh.error !== null && <ErrorCallout error={refresh.error} title="לא ניתן לטעון את הגרסה העדכנית" />}
           {latest !== null && (
             <SettingsConflict base={conflict.base} local={conflict.local} latest={latest} onResolve={resolve} />
           )}
         </Callout>
       )}
       {save.error === null || conflict !== null ? null : (
-        <ErrorCallout error={save.error} fallbackDetail={briefServerFailureDetail} fallbackTitle="ההגדרות לא נשמרו" />
+        <ErrorCallout
+          error={save.error}
+          fallbackDetail="השינויים נשארו בטופס. אפשר לנסות שוב."
+          title="ההגדרות לא נשמרו"
+        />
       )}
     </>
   );

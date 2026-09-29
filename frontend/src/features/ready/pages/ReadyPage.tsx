@@ -20,6 +20,7 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
+import { SuccessNotice } from "@/ui/SuccessNotice";
 import { SummaryList } from "@/ui/SummaryList";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { DecisionDocument } from "../components/DecisionDocument";
@@ -65,6 +66,7 @@ export const ReadyPage = () => {
   const applicationId = useRequiredParam("applicationId");
   const [submissionOpen, setSubmissionOpen] = useState(false);
   const [submissionRecorded, setSubmissionRecorded] = useState(false);
+  const [submissionNoticeOpen, setSubmissionNoticeOpen] = useState(false);
   const [downloadStarted, setDownloadStarted] = useState(false);
 
   const applicationQuery = useQuery(watchedApplicationDetailQueryOptions(applicationId));
@@ -158,7 +160,7 @@ export const ReadyPage = () => {
     >
       <QueryState
         error={applicationQuery.error}
-        fallbackTitle="לא ניתן לטעון את קורות החיים המוכנים"
+        errorTitle="לא ניתן לטעון את קורות החיים המוכנים"
         loading={detail === undefined}
         loadingState={readyLoading}
       >
@@ -266,8 +268,8 @@ export const ReadyPage = () => {
                       ) : (
                         <ErrorCallout
                           error={decisionQuery.error}
-                          fallbackDetail="קורות החיים עצמם נשארו זמינים; רק מסמך הסבר ההחלטה לא נטען."
-                          fallbackTitle="לא ניתן לטעון את הסבר ההחלטה"
+                          fallbackDetail="קורות החיים עצמם זמינים. אפשר לרענן את העמוד ולנסות שוב."
+                          title="לא ניתן לטעון את הסבר ההחלטה"
                         />
                       )}
                     </Card>
@@ -276,13 +278,10 @@ export const ReadyPage = () => {
               </div>
             )}
 
-            {submissionRecorded ? (
-              // role="status" is a Callout prop, not a DOM role; Callout already renders an
-              // <output> for it.
-              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-              <Callout role="status" title="ההגשה נרשמה" tone="success">
-                התוכן וקובצי ה־HTML וה־PDF המדויקים נשמרו בהיסטוריית המועמדות.
-              </Callout>
+            {submissionNoticeOpen ? (
+              <SuccessNotice onDismiss={() => setSubmissionNoticeOpen(false)} title="ההגשה נרשמה">
+                התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
+              </SuccessNotice>
             ) : null}
           </>
         )}
@@ -316,7 +315,10 @@ export const ReadyPage = () => {
           applicationId={applicationId}
           documentHash={documentHash}
           onClose={() => setSubmissionOpen(false)}
-          onRecorded={() => setSubmissionRecorded(true)}
+          onRecorded={() => {
+            setSubmissionRecorded(true);
+            setSubmissionNoticeOpen(true);
+          }}
           open={submissionOpen}
           previousSubmittedAt={submittedAt}
         />

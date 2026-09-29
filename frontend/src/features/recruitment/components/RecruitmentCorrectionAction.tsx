@@ -100,16 +100,16 @@ export const RecruitmentCorrectionAction = ({ detail, onChanged }: RecruitmentCo
               <ErrorCallout
                 className="lg:col-span-2"
                 error={correction.error}
-                fallbackDetail="אירוע התיקון לא נוסף. הרשומות הקיימות לא השתנו."
-                fallbackTitle="לא ניתן לתקן את האירוע"
+                fallbackDetail="הרשומות הקיימות לא השתנו. אפשר לנסות שוב."
+                title="האירוע לא תוקן"
               />
             )}
             {eventChangedOnServer ? (
               // role="status" is a Callout prop, not a DOM role; Callout already renders
               // an <output> for it.
               // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-              <Callout className="lg:col-span-2" role="status" title="ציר הזמן השתנה בשרת" tone="warning">
-                האירוע שבחרת נשמר בטופס ולא הוחלף. כדאי לבדוק אותו לפני השמירה.
+              <Callout className="lg:col-span-2" role="status" title="ציר הזמן השתנה בינתיים" tone="warning">
+                האירוע שבחרת נשאר בטופס. כדאי לבדוק אותו לפני השמירה.
               </Callout>
             ) : null}
             <Field label="האירוע השגוי">

@@ -8,6 +8,7 @@ import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
+import { reportError } from "@/ui/reportError";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { OperationActions } from "./OperationActions";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
@@ -23,6 +24,7 @@ import {
   statusLabels,
   statusTones,
   terminalSummaries,
+  unknownFailureGuidance,
 } from "../model/operationLabels";
 import { operationProgressLabel } from "../model/operationProgress";
 
@@ -96,6 +98,14 @@ export const OperationReport = ({
         ? null
         : failurePresentations[operation.failure_code];
   const actionableDetail = failureReasonDetail(operation.failure_reason);
+  /* A failure this client has no wording for: the server's detail is English and meant
+     for diagnosis, so it goes to the console and the reader gets the safe general line. */
+  const unreportedDetail = failure === null ? (operation.safe_failure_detail ?? null) : null;
+  useEffect(() => {
+    if (unreportedDetail !== null) {
+      reportError("operation_failure", { failure_code: operation.failure_code, detail: unreportedDetail });
+    }
+  }, [operation.failure_code, unreportedDetail]);
   const hasFailure = failure !== null || operation.safe_failure_detail != null;
   const produced = activeOutputLabels(operation);
   /* A finished run says what it came to in one line - unless it failed, where the reason
@@ -152,9 +162,7 @@ export const OperationReport = ({
           title={failure?.title ?? statusLabels[operation.status]}
           tone={failureTones[operation.status] ?? "warning"}
         >
-          {failure === null && operation.safe_failure_detail != null ? (
-            <p dir="auto">{operation.safe_failure_detail}</p>
-          ) : null}
+          {failure === null && operation.safe_failure_detail != null ? <p>{unknownFailureGuidance}</p> : null}
           {actionableDetail === null ? null : (
             <p className="font-medium" dir="auto">
               {actionableDetail}

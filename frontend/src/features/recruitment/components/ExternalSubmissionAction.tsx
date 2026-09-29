@@ -5,6 +5,7 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { recordExternalSubmission } from "@/api/tracking";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
+import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
@@ -22,6 +23,8 @@ interface ExternalSubmissionActionProps {
   detail: ApplicationDetail;
   onChanged: () => void;
 }
+
+const serverFields = { submitted_at: "submittedAt" } as const;
 
 export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissionActionProps) => {
   const [open, setOpen] = useState(false);
@@ -45,6 +48,7 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
       onChanged();
     },
   });
+  const inlineFields = useServerFieldErrors(submission.error, form.setError, serverFields);
 
   return (
     <>
@@ -73,13 +77,6 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
           id="external-submission-form"
           onSubmit={form.handleSubmit((fields) => submission.mutate(fields))}
         >
-          {submission.error === null ? null : (
-            <ErrorCallout
-              error={submission.error}
-              fallbackDetail="ההגשה לא נרשמה. הרשומות הקיימות לא השתנו."
-              fallbackTitle="לא ניתן לרשום את ההגשה"
-            />
-          )}
           <Callout title="הרישום קבוע" tone="warning">
             ההגשה תתווסף להיסטוריה בלי להמציא גרסת קורות חיים או קובץ שלא נוצרו במערכת.
           </Callout>
@@ -99,6 +96,14 @@ export const ExternalSubmissionAction = ({ detail, onChanged }: ExternalSubmissi
           <Field label="הערה" optional>
             {(control) => <Textarea {...control} {...form.register("note")} />}
           </Field>
+          {submission.error === null ? null : (
+            <ErrorCallout
+              error={submission.error}
+              fallbackDetail="היסטוריית ההגשות לא השתנתה. אפשר לנסות שוב."
+              inlineFields={inlineFields}
+              title="ההגשה לא נרשמה"
+            />
+          )}
         </form>
       </Dialog>
     </>

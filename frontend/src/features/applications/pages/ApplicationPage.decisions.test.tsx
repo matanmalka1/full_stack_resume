@@ -208,7 +208,9 @@ describe("voluntary matching configuration", () => {
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות ההתאמה" }));
 
-    expect(await screen.findByText("הפעולה מתנגשת במצב העדכני. יש לרענן ולנסות שוב.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("הנתונים השתנו מאז שהעמוד נטען. אפשר לרענן את העמוד ולנסות שוב."),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("דגש")).toHaveValue("new-business");
   });
 

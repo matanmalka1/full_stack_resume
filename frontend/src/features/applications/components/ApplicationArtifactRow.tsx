@@ -105,21 +105,23 @@ export const ApplicationArtifactRow = ({ artifact }: { artifact: ArtifactVersion
           {detailQuery.error === null ? null : (
             <ErrorCallout
               error={detailQuery.error}
-              fallbackDetail="הרשומה עצמה לא השתנתה; רק בדיקת השלמות לא הושלמה."
-              fallbackTitle="לא ניתן לבדוק את שלמות הקובץ"
+              fallbackDetail="הקובץ והרשומה לא השתנו. אפשר לנסות שוב."
+              title="בדיקת שלמות הקובץ לא הושלמה"
             />
           )}
 
           <SummaryList items={summaryItems} />
 
           {detail === undefined ? (
-            <p className="text-support text-cv-text-muted">בודק את שלמות הקובץ…</p>
+            detailQuery.error === null ? (
+              <p className="text-support text-cv-text-muted">בודק את שלמות הקובץ…</p>
+            ) : null
           ) : detail.downloadable ? (
             <Callout title="הקובץ שלם: התוכן תואם את החתימה שנשמרה" tone="success" />
           ) : (
             <Callout title="הקובץ הרשום אינו זמין להורדה" tone="blocker">
               {detail.unavailable_reason == null
-                ? "בדיקת השלמות נכשלה ולא נמסרה סיבה."
+                ? "הקובץ לא עבר את בדיקת השלמות."
                 : unavailableReasonLabel(detail.unavailable_reason)}
             </Callout>
           )}

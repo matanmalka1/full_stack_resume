@@ -58,8 +58,8 @@ export const RequirementList = ({
       {evidence.error == null ? null : (
         <ErrorCallout
           error={evidence.error}
-          fallbackDetail="הדרישות עדיין מוצגות, אך לא ניתן להציג כרגע את נוסח העובדות התומכות."
-          fallbackTitle="לא ניתן לטעון את הראיות התומכות"
+          fallbackDetail="הדרישות עצמן מוצגות כרגיל. אפשר לרענן את העמוד ולנסות שוב."
+          title="לא ניתן לטעון את העובדות התומכות"
         />
       )}
       {evidence.loading ? (

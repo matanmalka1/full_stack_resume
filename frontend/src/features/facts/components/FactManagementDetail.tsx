@@ -36,7 +36,7 @@ export const FactManagementDetail = ({ detail, mutationsBlocked = false, onCreat
       {fact.status === "canonical" && !mutationsBlocked ? (
         <QueryState
           error={targets.error}
-          fallbackTitle="יעדי הצירוף לא נטענו"
+          errorTitle="לא ניתן לטעון את יעדי הצירוף"
           loading={targets.isPending}
           loadingLabel="טוען פרופילים וסעיפים…"
         >

@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiProblem } from "@/api/client";
 import { type DocumentPatch, updateDocument } from "@/api/documents";
 import type { ClaimAddition, ClaimPatch, DocumentMutation } from "@/api/contracts";
+import { problemSentence } from "@/ui/errorMessages";
+import { reportError } from "@/ui/reportError";
 
 const AUTOSAVE_DEBOUNCE_MS = 700;
 
@@ -235,14 +237,13 @@ export const useDraftAutosave = ({ applicationId, etag, onConflict, onSaved }: U
             /* The conflict remains an explicit choice even if its refresh failed. Reapply
              performs another fresh read, so it can recover without losing local text. */
           }
-          publish("conflict", error.problem.detail);
+          reportError("draft_autosave_conflict", error);
+          publish("conflict", null);
           return;
         }
 
-        publish(
-          "failed",
-          error instanceof ApiProblem ? error.problem.detail : "השמירה נכשלה. הטקסט נשמר בדפדפן ואפשר לנסות שוב.",
-        );
+        reportError("draft_autosave_failed", error);
+        publish("failed", problemSentence(error, "הטקסט נשמר בדפדפן. אפשר לנסות שוב."));
         return;
       } finally {
         inFlight.current = false;
