@@ -4,8 +4,18 @@ import { invalidateApplicationViews, updateApplicationNotes } from "@/api/applic
 import type { ApplicationDetail } from "@/api/contracts";
 import { setNextAction, transitionRecruitmentStatus } from "@/api/tracking";
 import { useAppForm } from "@/hooks/useAppForm";
+import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import type { RecruitmentUpdateFields } from "../model/recruitment.types";
 import { useServerSyncedField } from "./useServerSyncedField";
+
+/* The API's names for the fields this form shows errors under. */
+const serverFields = {
+  target_status: "targetStatus",
+  reason: "reason",
+  next_action: "nextAction",
+  next_action_date: "nextActionDate",
+  notes: "notes",
+} as const satisfies Record<string, keyof RecruitmentUpdateFields>;
 
 const initialFields = (detail: ApplicationDetail): RecruitmentUpdateFields => ({
   nextAction: detail.application.next_action ?? "",
@@ -82,6 +92,8 @@ export const useRecruitmentUpdate = (detail: ApplicationDetail, onSaved: () => v
     },
   });
 
+  const inlineFields = useServerFieldErrors(save.error, form.setError, serverFields);
+
   const selectedStatus = fields.targetStatus;
   const statusOptions =
     selectedStatus !== "" && !detail.allowed_recruitment_transitions.includes(selectedStatus)
@@ -96,6 +108,7 @@ export const useRecruitmentUpdate = (detail: ApplicationDetail, onSaved: () => v
     fields,
     form,
     hasChanges,
+    inlineFields,
     save,
     serverChanged: statusChangedOnServer || actionChangedOnServer || dateChangedOnServer || notesChangedOnServer,
     statusOptions,

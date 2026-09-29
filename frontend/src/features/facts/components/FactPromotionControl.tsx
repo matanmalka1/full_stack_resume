@@ -23,13 +23,6 @@ export const FactPromotionControl = ({ fact }: { fact: Fact }) => {
 
   return (
     <div className="flex flex-col gap-3 rounded-control border border-cv-border bg-cv-surface p-4">
-      {transition.error === null ? null : (
-        <ErrorCallout
-          error={transition.error}
-          fallbackDetail="מקור הידע לא השתנה ואפשר לנסות שוב."
-          fallbackTitle="לא ניתן לעדכן את העובדה"
-        />
-      )}
       <Checkbox checked={attested} onChange={(event) => setAttested(event.currentTarget.checked)}>
         בדקתי את תוכן העובדה והמקור ואני מאשר את שינוי המעמד
       </Checkbox>
@@ -40,6 +33,13 @@ export const FactPromotionControl = ({ fact }: { fact: Fact }) => {
       >
         {promoting ? "קידום למקור אמת" : "אישור העובדה"}
       </Button>
+      {transition.error === null ? null : (
+        <ErrorCallout
+          error={transition.error}
+          fallbackDetail="העובדה לא השתנתה. אפשר לנסות שוב."
+          title="מעמד העובדה לא עודכן"
+        />
+      )}
     </div>
   );
 };

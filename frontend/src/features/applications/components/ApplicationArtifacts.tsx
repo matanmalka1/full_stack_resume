@@ -52,8 +52,8 @@ export const ApplicationArtifacts = ({ applicationId }: { applicationId: string 
           </EmptyState>
         }
         error={query.error}
-        fallbackDetail="שום רשומה לא השתנתה. אפשר לרענן ולנסות שוב."
-        fallbackTitle="לא ניתן לטעון את תוצרי המנוע"
+        errorDetail="אפשר לרענן את העמוד ולנסות שוב."
+        errorTitle="לא ניתן לטעון את תוצרי המנוע"
         loading={query.isPending}
         loadingLabel="טוען את תוצרי המנוע…"
       >

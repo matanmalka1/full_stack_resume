@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation, operationQueryOptions } from "@/api/operations";
+import { reportError } from "@/ui/reportError";
 
 /* What the document selected before the proposal was queued, so the result can be shown
    as the difference it made. `fromDocumentHash` is the document the proposal was
@@ -49,6 +51,18 @@ export const useSelectionProposal = (applicationId: string) => {
           : operation.status === "succeeded"
             ? { kind: "done" }
             : { kind: "failed", operation };
+
+  /* The run's own message is diagnostic English; the notice says what it means instead. */
+  const failedOperation = status.kind === "failed" ? status.operation : null;
+  useEffect(() => {
+    if (failedOperation !== null) {
+      reportError("selection_proposal_failed", {
+        operation_id: failedOperation.id,
+        failure_code: failedOperation.failure_code,
+        message: failedOperation.message,
+      });
+    }
+  }, [failedOperation]);
 
   return {
     baseline,

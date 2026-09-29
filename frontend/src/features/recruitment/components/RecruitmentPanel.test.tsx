@@ -314,10 +314,11 @@ describe("RecruitmentManagerButton", () => {
     fireEvent.change(await screen.findByLabelText("הפעולה הבאה"), { target: { value: "Try again tomorrow" } });
     fireEvent.click(screen.getByRole("button", { name: "שמירת שינויים" }));
 
-    /* The server's own `title` is never shown, known code or not - only `detail` falls
-       back to the server's literal sentence for a code this client's table lacks. */
-    expect(await screen.findByText("הבקשה נכשלה")).toBeInTheDocument();
-    expect(screen.getByText("הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.")).toBeInTheDocument();
+    /* Neither the server's `title` nor its `detail` is shown, known code or not: a code
+       this client's table lacks gets the form's own contextual detail. */
+    expect(await screen.findByText("העדכון לא הושלם")).toBeInTheDocument();
+    expect(screen.getByText(/ייתכן שחלק מהשינויים נשמרו/)).toBeInTheDocument();
+    expect(screen.queryByText("הפעולה השתנתה בשרת. יש לרענן ולנסות שוב.")).not.toBeInTheDocument();
   });
 
   it("syncs untouched next-action fields from a refreshed projection", async () => {
@@ -339,7 +340,7 @@ describe("RecruitmentManagerButton", () => {
 
     await waitFor(() => expect(screen.getByLabelText("הפעולה הבאה")).toHaveValue("Schedule interview"));
     expect(screen.getByLabelText(/תאריך יעד/)).toHaveValue("2026-09-12");
-    expect(screen.queryByText("פרטי המועמדות השתנו בשרת")).not.toBeInTheDocument();
+    expect(screen.queryByText("פרטי המועמדות השתנו בינתיים")).not.toBeInTheDocument();
   });
 
   it("keeps each dirty next-action field and warns when the server changes underneath it", async () => {
@@ -365,7 +366,7 @@ describe("RecruitmentManagerButton", () => {
     expect(screen.getByLabelText("הפעולה הבאה")).toHaveValue("My unsaved follow-up");
     expect(screen.getByLabelText("עדכון שלב")).toHaveValue("closed");
     await waitFor(() => expect(screen.getByLabelText(/תאריך יעד/)).toHaveValue("2026-09-12"));
-    expect(await screen.findByText("פרטי המועמדות השתנו בשרת")).toBeInTheDocument();
+    expect(await screen.findByText("פרטי המועמדות השתנו בינתיים")).toBeInTheDocument();
   });
 
   it("preserves a dirty correction choice across projection refreshes", async () => {
@@ -390,7 +391,7 @@ describe("RecruitmentManagerButton", () => {
     );
 
     expect(screen.getByLabelText("האירוע השגוי")).toHaveValue("status-older");
-    expect(screen.getByText("ציר הזמן השתנה בשרת")).toBeInTheDocument();
+    expect(screen.getByText("ציר הזמן השתנה בינתיים")).toBeInTheDocument();
   });
 
   /* Notes are recruitment's, not the Application screen's. This covered a standalone

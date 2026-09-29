@@ -58,7 +58,7 @@ export const DuplicateChoices = ({ matches }: DuplicateChoicesProps) => {
       <p>נדרש אישור מפורש כדי ליצור מועמדות נוספת. אפשר גם לפתוח אחת מהמועמדויות הקיימות.</p>
 
       {ranked.length === 0 ? (
-        <p className="mt-3">השרת ביקש אישור מפורש אך לא החזיר פירוט של המועמדויות הדומות.</p>
+        <p className="mt-3">פרטי המועמדויות הדומות אינם זמינים כרגע.</p>
       ) : (
         <ul className="mt-3 divide-y divide-cv-warning/20 border-y border-cv-warning/20">
           {ranked.map((match) => {

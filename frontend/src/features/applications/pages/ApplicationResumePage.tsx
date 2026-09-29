@@ -26,7 +26,7 @@ export const ApplicationResumePage = () => {
     <PageShell measure="wizard" title="ממשיך מהמקום שבו עצרת">
       <QueryState
         error={query.error}
-        fallbackTitle="לא ניתן לפתוח את המועמדות"
+        errorTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={query.isPending || (query.data !== undefined && query.isFetching)}
         loadingLabel="בודק מהו השלב הפעיל…"
       />

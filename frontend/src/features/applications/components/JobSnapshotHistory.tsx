@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { jobSnapshotHistoryOptions } from "@/api/applications";
 import type { JobSnapshotHistory as History } from "@/api/contracts";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Disclosure, DisclosureSummary } from "@/ui/Disclosure";
 import { Select } from "@/ui/Select";
@@ -142,12 +143,16 @@ export const JobSnapshotHistory = ({
           <p className="mt-2 text-support text-cv-text-muted">הצגת ההיסטוריה אינה משנה את נוסח המשרה הפעיל.</p>
           {history.isPending && <output className="block">טוען נוסחים שמורים…</output>}
           {history.isError && (
-            <div role="alert">
-              <p>לא ניתן לטעון את היסטוריית המשרה.</p>
-              <Button variant="secondary" onClick={() => void history.refetch()}>
-                ניסיון חוזר
-              </Button>
-            </div>
+            <ErrorCallout
+              action={
+                <Button variant="secondary" onClick={() => void history.refetch()}>
+                  ניסיון חוזר
+                </Button>
+              }
+              className="mt-2"
+              error={history.error}
+              title="לא ניתן לטעון את היסטוריית נוסחי המשרה"
+            />
           )}
           {history.data && <HistorySelection key={activeSnapshotId} history={history.data} />}
         </>

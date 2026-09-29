@@ -162,19 +162,13 @@ export const AiSelectionProposal = ({
       <Callout
         action={
           <Button onClick={onDismiss} variant="ghost">
-            סגירה
+            סגירת ההודעה
           </Button>
         }
         title={status.kind === "failed" ? "ההצעה לא התקבלה" : "לא ניתן לקרוא את תוצאת ההצעה"}
         tone="warning"
       >
-        הבחירה הקודמת נשארה בתוקף ולא השתנתה.
-        {status.kind === "failed" && status.operation.message !== "" ? (
-          <>
-            {" "}
-            <bdi>{status.operation.message}</bdi>
-          </>
-        ) : null}
+        הבחירה הקודמת נשארה בתוקף. אפשר לבקש הצעה חדשה.
       </Callout>
     ) : null}
 

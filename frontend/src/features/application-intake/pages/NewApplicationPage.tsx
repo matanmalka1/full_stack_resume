@@ -68,6 +68,8 @@ export const NewApplicationPage = () => {
     if (firstInvalidField !== undefined) form.setFocus(firstInvalidField);
   }, [form, submission.fieldErrors]);
 
+  const inlineFields = new Set(Object.keys(submission.fieldErrors ?? {}));
+
   const submit = form.handleSubmit((submittedFields) => submission.submit(intakeFromFields(submittedFields)));
   const createAnyway = form.handleSubmit((submittedFields) =>
     submission.submit(intakeFromFields(submittedFields), true),
@@ -103,7 +105,7 @@ export const NewApplicationPage = () => {
           onInputChanged={onInputChanged}
           onSubmit={submit}
           register={form.register}
-          serverValidationFailed={submission.fieldErrors !== null}
+          inlineFields={inlineFields}
         />
       </div>
       {/* No `back`: this is the first step, so there is no previous one to return to, and

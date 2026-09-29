@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { acknowledgementApplies, duplicateCheck, duplicateMatchesFromProblem } from "@/api/applications";
-import { ApiProblem } from "@/api/client";
 import type { ApplicationIntake, DuplicateMatch } from "@/api/contracts";
+import { problemFieldErrors } from "@/ui/errorMessages";
 import { createIntakeApplication, type CreatedIntakeApplication } from "../api/mutations";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
 
@@ -26,43 +26,16 @@ interface UseApplicationIntakeSubmissionOptions {
 
 type IntakeFieldErrors = Partial<Record<keyof ApplicationIntakeFields, string>>;
 
-const fieldMessages: Record<keyof ApplicationIntakeFields, string> = {
-  company: "שם החברה אינו עומד בדרישות השרת. יש לבדוק את הערך.",
-  target_role: "תפקיד היעד אינו עומד בדרישות השרת. יש לבדוק את הערך.",
-  source_url: "כתובת המשרה אינה עומדת בדרישות השרת. יש לבדוק את הכתובת.",
-  job_text: "טקסט המשרה אינו עומד בדרישות השרת. יש לבדוק את התוכן והאורך.",
-};
+const intakeFields: readonly (keyof ApplicationIntakeFields)[] = ["company", "target_role", "source_url", "job_text"];
 
-const isIntakeField = (value: unknown): value is keyof ApplicationIntakeFields =>
-  typeof value === "string" && Object.hasOwn(fieldMessages, value);
+const isIntakeField = (value: string): value is keyof ApplicationIntakeFields =>
+  (intakeFields as readonly string[]).includes(value);
 
+/* The server's field refusals that belong to this form, with the shared short messages. */
 const validationFieldErrors = (error: Error | null): IntakeFieldErrors | null => {
-  if (!(error instanceof ApiProblem)) return null;
-
-  if (error.problem.code === "APPLICATION_INTAKE_INVALID") {
-    const field = error.problem.context?.field;
-    return isIntakeField(field) ? { [field]: fieldMessages[field] } : null;
-  }
-  if (error.problem.code !== "REQUEST_VALIDATION_FAILED") return null;
-
-  const issues = error.problem.context?.issues;
-  if (!Array.isArray(issues)) return null;
-
   const errors: IntakeFieldErrors = {};
-  for (const issue of issues) {
-    if (typeof issue !== "object" || issue === null) continue;
-    const location = (issue as Record<string, unknown>).location;
-    if (!Array.isArray(location)) continue;
-
-    let field: keyof ApplicationIntakeFields | undefined;
-    for (let index = location.length - 1; index >= 0; index -= 1) {
-      const part: unknown = location[index];
-      if (isIntakeField(part)) {
-        field = part;
-        break;
-      }
-    }
-    if (field !== undefined) errors[field] = fieldMessages[field];
+  for (const [field, message] of problemFieldErrors(error)) {
+    if (isIntakeField(field)) errors[field] = message;
   }
   return Object.keys(errors).length === 0 ? null : errors;
 };
@@ -112,10 +85,7 @@ export const useApplicationIntakeSubmission = ({
 
   return {
     duplicateMatches: answerIsCurrent ? duplicateMatches : null,
-    error:
-      answerIsCurrent && duplicateMatchesFromProblem(mutation.error) === null && fieldErrors === null
-        ? mutation.error
-        : null,
+    error: answerIsCurrent && duplicateMatchesFromProblem(mutation.error) === null ? mutation.error : null,
     fieldErrors,
     isStale: responseIsSettled && !answerIsCurrent,
     isSubmitting: mutation.isPending,

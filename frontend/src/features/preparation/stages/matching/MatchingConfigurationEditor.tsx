@@ -199,8 +199,8 @@ export const MatchingConfigurationEditor = ({
           {save.error === null ? null : (
             <ErrorCallout
               error={save.error}
-              fallbackDetail="ההגדרות לא נשמרו. ייתכן שהניתוח או בחירת העובדות התחלפו; הערכים שבחרת נשארו בטופס כדי שאפשר יהיה להשוות ולנסות שוב לאחר רענון."
-              fallbackTitle="הגדרות ההתאמה לא נשמרו"
+              fallbackDetail="הבחירות שלך נשארו בטופס. אפשר לרענן את העמוד ולנסות שוב."
+              title="הגדרות ההתאמה לא נשמרו"
             />
           )}
 

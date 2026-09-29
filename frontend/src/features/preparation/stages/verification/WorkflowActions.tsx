@@ -190,10 +190,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
      that outcome anyway, leaving a labelled landmark of zero height that a screen reader
      announced and then had nothing to read out of. It now wraps the notes themselves and
      exists only when there are notes. */
-  const hasNotes =
-    error !== null ||
-    plan.unbuiltRecommendation !== null ||
-    plan.buildFromAnalysis !== null;
+  const hasNotes = error !== null || plan.unbuiltRecommendation !== null || plan.buildFromAnalysis !== null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -202,8 +199,8 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
           {error === null ? null : (
             <ErrorCallout
               error={error}
-              fallbackDetail="לא ניתן להפעיל את הפעולה. מצב המועמדות לא השתנה ואפשר לנסות שוב."
-              fallbackTitle="הפעולה לא בוצעה"
+              fallbackDetail="מצב המועמדות לא השתנה. אפשר לנסות שוב."
+              title="הפעולה לא הופעלה"
             />
           )}
 

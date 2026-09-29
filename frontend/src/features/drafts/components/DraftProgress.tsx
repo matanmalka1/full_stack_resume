@@ -1,4 +1,5 @@
 import { ArrowLeft, OctagonAlert } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { ApplicationDetail } from "@/api/contracts";
 import { formatDateTime } from "@/utils/formatDateTime";
@@ -8,6 +9,7 @@ import type { EditableDocument } from "../model/drafts.types";
 import { DraftSaveState } from "./DraftSaveState";
 
 interface DraftProgressProps {
+  actions?: ReactNode;
   content: ContentSummary;
   detail: ApplicationDetail;
   dirty: boolean;
@@ -29,7 +31,7 @@ const guidance: Record<DraftStepId, string> = {
    parts. What the reader needs here is the next thing to do, read from the projection
    (`document_state`, `content_check`, `review_reasons`) and the outline's claim types.
    Nothing here decides whether a command is available. */
-export const DraftProgress = ({ content, detail, dirty, draft, saveState }: DraftProgressProps) => {
+export const DraftProgress = ({ actions, content, detail, dirty, draft, saveState }: DraftProgressProps) => {
   const focus = draftSteps(detail, content).find((step) => step.status === "blocked" || step.status === "current");
   const blocked = focus?.status === "blocked";
 
@@ -53,6 +55,7 @@ export const DraftProgress = ({ content, detail, dirty, draft, saveState }: Draf
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-cv-text-muted">
         <DraftSaveState dirty={dirty} state={saveState} />
         <span>עודכנה {formatDateTime(draft.updated_at, "short")}</span>
+        {actions}
       </div>
     </div>
   );

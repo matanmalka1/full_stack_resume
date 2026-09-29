@@ -12,8 +12,8 @@ interface QueryStateProps {
   empty?: boolean;
   emptyState?: ReactNode;
   error?: unknown;
-  fallbackDetail?: string;
-  fallbackTitle?: string;
+  errorDetail?: string;
+  errorTitle?: string;
   loading?: boolean;
   loadingLabel?: ReactNode;
   loadingState?: ReactNode;
@@ -22,15 +22,15 @@ interface QueryStateProps {
 /* Query-backed regions always resolve in the same order and place: a failure replaces
    an initial loading message, while a failed refresh can still leave its existing content
    visible. Empty and loaded results share the same body rhythm. The owning screen supplies
-   its existing contextual Hebrew copy. */
+   the title - "לא ניתן לטעון את …" - and, optionally, what stayed available. */
 export const QueryState = ({
   children,
   className,
   empty = false,
   emptyState,
   error,
-  fallbackDetail,
-  fallbackTitle,
+  errorDetail,
+  errorTitle,
   loading = false,
   loadingLabel,
   loadingState,
@@ -40,8 +40,8 @@ export const QueryState = ({
   }
 
   const errorState =
-    error !== null && error !== undefined && fallbackTitle !== undefined ? (
-      <ErrorCallout className={className} error={error} fallbackDetail={fallbackDetail} fallbackTitle={fallbackTitle} />
+    error !== null && error !== undefined && errorTitle !== undefined ? (
+      <ErrorCallout className={className} error={error} fallbackDetail={errorDetail} title={errorTitle} />
     ) : null;
 
   /* The word is announced as well as printed. A region that hands its own `loadingState`

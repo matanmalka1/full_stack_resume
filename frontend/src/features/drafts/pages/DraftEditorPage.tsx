@@ -26,7 +26,7 @@ import { DraftPreview } from "../components/DraftPreview";
 import { DraftProgress } from "../components/DraftProgress";
 import { DraftRenderPanel } from "../components/DraftRenderPanel";
 import { DraftValidationPanel } from "../components/DraftValidationPanel";
-import { type DraftWorkspaceMode, DraftWorkspace } from "../components/DraftWorkspace";
+import { type DraftWorkspaceMode, DraftWorkspace, DraftWorkspaceSwitch } from "../components/DraftWorkspace";
 import { useDraftDocument } from "../api/queries";
 import { useDocumentCheck } from "../hooks/useDocumentCheck";
 import { useDraftEditing } from "../hooks/useDraftEditing";
@@ -322,18 +322,19 @@ export const DraftEditorPage = () => {
       >
         <QueryState
           error={applicationError}
-          fallbackTitle="לא ניתן לטעון את מצב המועמדות"
+          errorTitle="לא ניתן לטעון את מצב המועמדות"
           loading={detail === undefined}
           loadingLabel="טוען את מצב המועמדות…"
         />
         {draftError === null || draftError === undefined ? null : (
-          <QueryState error={draftError} fallbackTitle="לא ניתן לטעון את הטיוטה" />
+          <QueryState error={draftError} errorTitle="לא ניתן לטעון את הטיוטה" />
         )}
 
         {detail === undefined ? null : (
           <>
             {draft === undefined || content === undefined ? null : (
               <DraftProgress
+                actions={<DraftWorkspaceSwitch mode={mode} onModeChange={changeMode} />}
                 content={content}
                 detail={detail}
                 dirty={editing.dirty}
@@ -358,8 +359,8 @@ export const DraftEditorPage = () => {
             {resolutionError === null ? null : (
               <ErrorCallout
                 error={resolutionError}
-                fallbackTitle="לא ניתן להמשיך לפני שמירת העריכות"
-                fallbackDetail="יש לפתור את שגיאת השמירה או הקונפליקט, ולבדוק את ההקשר המעודכן לפני ניסיון נוסף. הטקסט המקומי נשמר בעורך."
+                title="לא ניתן להמשיך לפני שמירת העריכות"
+                fallbackDetail="העריכות נשארו בעורך. יש לפתור את בעיית השמירה ולנסות שוב."
               />
             )}
 
@@ -444,7 +445,6 @@ export const DraftEditorPage = () => {
                 </>
               }
               mode={mode}
-              onModeChange={changeMode}
               preview={
                 <>
                   <DraftPreview draft={draft} />

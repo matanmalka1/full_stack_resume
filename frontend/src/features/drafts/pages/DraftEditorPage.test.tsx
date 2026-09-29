@@ -842,7 +842,13 @@ describe("DraftEditorPage", () => {
             document_state: "approved",
             preparation_state: "approved",
             content_check: "passed",
-            last_render_error: { code: "RENDER_FAILED", detail: "Rendered PDF has 2 pages; maximum 1." },
+            last_render_error: {
+              code: "pdf_page_limit",
+              pages: 2,
+              maximum: 1,
+              failure_code: "RENDER_FAILED",
+              detail: "Rendered PDF has 2 pages; maximum 1.",
+            },
           }),
         ),
       document: () => jsonResponse(draft({}, { document_state: "approved", content_check: "passed" })),
@@ -851,7 +857,8 @@ describe("DraftEditorPage", () => {
     renderPage();
 
     expect(await screen.findByText("יצירת הקובץ האחרונה נכשלה")).toBeInTheDocument();
-    expect(screen.getByText("Rendered PDF has 2 pages; maximum 1.")).toBeInTheDocument();
+    expect(screen.getByText(/קובץ ה־PDF כולל 2 עמודים, אך הפרופיל מאפשר לכל היותר 1/)).toBeInTheDocument();
+    expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "יצירת HTML ו־PDF" })).toBeInTheDocument();
     for (const button of await screen.findAllByRole("button", { name: "עריכת השורה" })) expect(button).toBeEnabled();
   });
@@ -910,7 +917,7 @@ describe("DraftEditorPage selection changes", () => {
       target: { value: "Keep before selection." },
     });
     fireEvent.click(screen.getByRole("button", { name: "הכללת העובדה" }));
-    await screen.findByText("שינוי הבחירה לא בוצע");
+    await screen.findByText("בחירת העובדות לא שונתה");
     expect(screen.getByDisplayValue("Keep before selection.")).toBeInTheDocument();
     expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
   });
@@ -982,19 +989,18 @@ describe("DraftEditorPage selection changes", () => {
     expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
   });
 
-  it("presents the manual-wording refusal as the backend states it", async () => {
+  it("presents the manual-wording refusal in Hebrew, keeping the backend's detail out of the page", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     stubReads({
       document: () => jsonResponse(omittedDraft()),
       selection: () =>
         jsonResponse(
           {
-            type: "about:blank#unrecognized-refusal",
-            title: "Unrecognized Refusal",
-            /* A code this client's table does not translate, so the backend's own detail
-               is what reaches the screen verbatim - which is the point under test. */
+            type: "about:blank#regeneration_required",
+            title: "Precondition Failed",
             status: 412,
-            code: "UNRECOGNIZED_REFUSAL",
-            detail: "this draft carries manual wording that a deterministic rebuild would discard",
+            code: "REGENERATION_REQUIRED",
+            detail: "the document carries wording a deterministic rebuild would discard",
           },
           412,
         ),
@@ -1003,9 +1009,9 @@ describe("DraftEditorPage selection changes", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
 
-    expect(
-      await screen.findByText("this draft carries manual wording that a deterministic rebuild would discard"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("בחירת העובדות לא שונתה")).toBeInTheDocument();
+    expect(screen.getByText(/המסמך כולל ניסוח ידני שבנייה מחדש הייתה מוחקת/)).toBeInTheDocument();
+    expect(screen.queryByText(/deterministic rebuild/)).not.toBeInTheDocument();
   });
 });
 

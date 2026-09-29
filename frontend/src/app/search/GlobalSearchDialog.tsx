@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import type { ApplicationListItem } from "@/api/contracts";
 import { ApplicationSummary } from "@/features/application-list";
 import { preparationResumeDestination } from "@/features/preparation";
+import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 import { wrapDialogFocus } from "@/ui/dialogFocus";
@@ -233,18 +234,20 @@ const announcement = ({ isError, isPending, isStale, items }: ApplicationSearch)
 };
 
 const ResultsStatus = ({ results }: { results: ApplicationSearch }) => {
-  const { isError, isPending, isStale, items, mode, retry } = results;
+  const { error, isError, isPending, isStale, items, mode, retry } = results;
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center gap-3 py-10 text-center">
-        <p className="font-semibold text-cv-blocker" role="alert">
-          החיפוש נכשל.
-        </p>
-        <Button onClick={retry} variant="secondary">
-          ניסיון חוזר
-        </Button>
-      </div>
+      <ErrorCallout
+        action={
+          <Button onClick={retry} variant="secondary">
+            ניסיון חוזר
+          </Button>
+        }
+        className="my-6"
+        error={error}
+        title="החיפוש לא הושלם"
+      />
     );
   }
 

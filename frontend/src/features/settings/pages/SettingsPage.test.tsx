@@ -198,7 +198,10 @@ it("keeps a non-conflict 412 as a validation failure and retains unsaved edits",
   fireEvent.click(await screen.findByRole("switch", { name: "ערכת נושא לפי המערכת" }));
   fireEvent.click(screen.getByRole("switch", { name: "ערכת נושא כהה" }));
   fireEvent.click(screen.getByRole("button", { name: "שמירת הגדרות" }));
-  await screen.findByText("לא ניתן לבצע את הפעולה כעת");
+  await screen.findByText("ההגדרות לא נשמרו");
+  expect(
+    screen.getByText("הפעולה אינה זמינה בשלב הנוכחי. יש להשלים את השלבים הקודמים ולנסות שוב."),
+  ).toBeInTheDocument();
   expect(screen.queryByText("ההגדרות השתנו מאז שפתחת את הטופס")).not.toBeInTheDocument();
   expect(screen.getByRole("switch", { name: "ערכת נושא כהה" })).toBeChecked();
 });

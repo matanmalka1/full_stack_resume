@@ -5,7 +5,7 @@ import { classificationFromAnalysis } from "@/api/analyses";
 import { documentQueryOptions } from "@/api/documents";
 import { QueryState } from "@/ui/QueryState";
 import { actionLabel } from "../model/preparationLabels";
-import { Callout } from "@/ui/Callout";
+import { SuccessNotice } from "@/ui/SuccessNotice";
 import { WideRow } from "@/ui/WideRow";
 import type { AnalysisDecisions, ApplicationDetail } from "@/api/contracts";
 import { workflowActionPlan } from "../model/workflowActionPlan";
@@ -65,12 +65,11 @@ export const PreparationView = ({
           />
 
           {matchingSaveInContext && matchingSaved !== null && (
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-            <Callout role="status" title="הגדרות ההתאמה נשמרו" tone="success">
+            <SuccessNotice onDismiss={() => setMatchingSaved(null)} title="הגדרות ההתאמה נשמרו">
               {matchingSaved.state.recommended_action == null
-                ? "מצב המועמדות עודכן לפי ההקשר החדש."
-                : `הצעד הבא לפי השרת: ${actionLabel(matchingSaved.state.recommended_action)}.`}
-            </Callout>
+                ? "מצב המועמדות עודכן בהתאם."
+                : `הצעד הבא: ${actionLabel(matchingSaved.state.recommended_action)}.`}
+            </SuccessNotice>
           )}
 
           {classification === null ? null : (
@@ -95,8 +94,8 @@ export const PreparationView = ({
           {selectionAction === null ? null : (
             <QueryState
               error={documentQuery.error}
-              fallbackDetail="לא ניתן לקרוא את בחירת העובדות של המסמך. המסמך לא השתנה."
-              fallbackTitle="בחירת העובדות לא נטענה"
+              errorDetail="המסמך לא השתנה. אפשר לרענן את העמוד ולנסות שוב."
+              errorTitle="לא ניתן לטעון את בחירת העובדות"
               loading={documentQuery.data === undefined}
               loadingLabel="טוען את בחירת העובדות…"
             >

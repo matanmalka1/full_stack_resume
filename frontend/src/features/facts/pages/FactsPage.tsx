@@ -172,7 +172,7 @@ export const FactsPage = () => {
                   </EmptyState>
                 }
                 error={poolQuery.error}
-                fallbackTitle="מאגר העובדות לא נטען"
+                errorTitle="לא ניתן לטעון את מאגר העובדות"
                 loading={poolQuery.isPending}
                 loadingState={factPoolLoading}
               >
@@ -192,7 +192,7 @@ export const FactsPage = () => {
               <div dir="rtl">
                 <QueryState
                   error={detailQuery.error}
-                  fallbackTitle="פרטי העובדה לא נטענו"
+                  errorTitle="לא ניתן לטעון את פרטי העובדה"
                   /* Also while the pool is in flight: nothing can be selected yet, so without
                      this the detail half rendered an empty card beside the pool's skeleton and
                      the two halves of one screen waited in two different ways. */
