@@ -114,6 +114,28 @@ describe("FactsPage", () => {
     expect(screen.queryByRole("link", { name: /בניית שירותי Backend/ })).not.toBeInTheDocument();
   });
 
+  it("opens and marks the exact fact history event from a deep link", async () => {
+    const item = fact();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        const url = String(input);
+        if (url === "/api/v1/facts") {
+          return Promise.resolve(json({ items: [{ fact: item, recorded_status: item.status }] }));
+        }
+        if (url.includes("/attachment-targets")) return Promise.resolve(json(targets()));
+        if (url.endsWith("/fact.backend")) return Promise.resolve(json({ fact: item, events: [event(item)] }));
+        return Promise.resolve(json({}, 404));
+      }),
+    );
+
+    renderRoute("/facts?fact=fact.backend&event=event-fact.backend", "/facts", <FactsPage />);
+
+    const selected = await screen.findByText(/candidate confirmation/);
+    expect(selected).toHaveAttribute("aria-current", "location");
+    expect(screen.getByText("היסטוריית העובדה").closest("details")).toHaveAttribute("open");
+  });
+
   it("uses explicit replacement and attachment commands", async () => {
     let current = fact();
     const requests: Array<{ body: unknown; method: string; url: string }> = [];
