@@ -257,6 +257,22 @@ describe("ApplicationListPage", () => {
     }
   });
 
+  /* On a phone the three filter menus fold behind one control, so the board's cards are
+     not pushed below the first screen. Folding hides the controls; it never changes the
+     filtering, which the control's count reports. */
+  it("folds the filter menus behind one control that says how many are active", async () => {
+    stubList([item()]);
+
+    renderPage({ entries: ["/?activity=all&stage=approved"] });
+
+    const toggle = await screen.findByRole("button", { name: "סינון · 2 פעילים" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const menus = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+    expect(within(menus).getByLabelText("שלב הכנת קו״ח")).toHaveValue("approved");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("reserves the list layout with card-shaped skeletons while the first request is pending", () => {
     vi.stubGlobal(
       "fetch",
