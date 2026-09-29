@@ -195,6 +195,7 @@ export const ApplicationPage = () => {
         errorTitle="לא ניתן לטעון את פרטי המועמדות"
         loading={detail === undefined}
         loadingState={preparationLoading}
+        onRetry={() => void query.refetch()}
       >
         {detail === undefined ? null : detail.application.deleted_at ? (
           /* A deleted Application stays reachable by ID (product-spec.md invariant #20) so

@@ -204,6 +204,7 @@ export const ApplicationListPage = () => {
         error={listQuery.error}
         errorTitle="לא ניתן לטעון את המועמדויות"
         loading={listQuery.isPending}
+        onRetry={() => void listQuery.refetch()}
         /* No `loadingLabel`: `loadingState` always wins over it, so a label here would be
            a string that never renders. The skeleton announces the wait itself. */
         loadingState={<ApplicationCardsSkeleton />}

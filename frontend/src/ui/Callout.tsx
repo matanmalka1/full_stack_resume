@@ -41,6 +41,10 @@ interface CalloutProps {
   /* Omitted, a Callout stays the compact inline notice it has always been. "banner" is
      for the single screen-level verdict everything below it answers to. */
   emphasis?: "banner";
+  /* The severity word, where the tone's own word says the wrong thing. A region that
+     failed to load is not a blocker the reader must resolve - it is an error they can
+     retry - though it is drawn at the blocker's weight. */
+  label?: string;
   /* "alert" only when the callout appears in response to a user action. */
   role?: "alert" | "status";
   title: ReactNode;
@@ -49,8 +53,18 @@ interface CalloutProps {
 
 /* A.2: a warning states its label and never looks like a blocker; a blocker states its
    reason in plain language and offers the allowed resolution action when one exists. */
-export const Callout = ({ action, children, className, emphasis, role, title, tone }: CalloutProps) => {
-  const { icon: Icon, label } = tonePresentation[tone];
+export const Callout = ({
+  action,
+  children,
+  className,
+  emphasis,
+  label: labelOverride,
+  role,
+  title,
+  tone,
+}: CalloutProps) => {
+  const { icon: Icon, label: toneLabel } = tonePresentation[tone];
+  const label = labelOverride ?? toneLabel;
   const banner = emphasis === "banner";
   /* `<output>` carries an implicit "status" role, so a status callout becomes one
      instead of stamping `role="status"` on a generic div; "alert" has no native tag

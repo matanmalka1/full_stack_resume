@@ -14,6 +14,8 @@ interface ErrorCalloutProps {
   fallbackDetail?: string;
   /* Server field names the form already shows under their own controls. */
   inlineFields?: ReadonlySet<string>;
+  /* The severity word in place of the blocker tone's own - see `Callout`. */
+  label?: string;
   /* What did not happen, in the screen's own words: "ההגדרות לא נשמרו". */
   title: string;
 }
@@ -37,6 +39,7 @@ export const ErrorCallout = ({
   error,
   fallbackDetail = defaultFallbackDetail,
   inlineFields,
+  label,
   title,
 }: ErrorCalloutProps) => {
   useEffect(() => {
@@ -50,7 +53,7 @@ export const ErrorCallout = ({
     message === null ? fallbackDetail : listed.length === 0 ? `${message.reason} ${message.action}` : message.reason;
 
   return (
-    <Callout action={action} className={className} role="alert" title={title} tone="blocker">
+    <Callout action={action} className={className} label={label} role="alert" title={title} tone="blocker">
       <p>{body}</p>
       {listed.length === 0 ? null : (
         <>

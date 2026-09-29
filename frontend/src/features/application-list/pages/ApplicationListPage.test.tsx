@@ -215,6 +215,25 @@ describe("ApplicationListPage", () => {
     expect(window.sessionStorage.getItem("cv:board-query")).toBe("activity=all&stage=approved");
   });
 
+  /* A board that failed to load is an error the reader can retry, not a blocker to
+     resolve, and trying again is one press rather than a reload of the whole page. */
+  it("offers to read the board again when it failed to load", async () => {
+    let failing = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => (failing ? jsonResponse({ detail: "boom" }, 500) : jsonResponse(listBody([item()])))),
+    );
+
+    renderPage();
+
+    const failure = await screen.findByRole("alert", {}, { timeout: 4_000 });
+    failing = false;
+    expect(failure).toHaveTextContent("שגיאה");
+    expect(failure).not.toHaveTextContent("חסימה");
+    fireEvent.click(within(failure).getByRole("button", { name: "ניסיון חוזר" }));
+    expect(await screen.findByRole("article", { name: "Backend Engineer אצל Acme" })).toBeInTheDocument();
+  });
+
   it("reserves the list layout with card-shaped skeletons while the first request is pending", () => {
     vi.stubGlobal(
       "fetch",

@@ -163,6 +163,7 @@ export const ReadyPage = () => {
         errorTitle="לא ניתן לטעון את קורות החיים המוכנים"
         loading={detail === undefined}
         loadingState={readyLoading}
+        onRetry={() => void applicationQuery.refetch()}
       >
         {detail === undefined ? null : (
           <>
