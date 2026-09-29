@@ -4,10 +4,10 @@ const PORT = 4173;
 
 /* The spec requires E2E against a built application, so the server under test is the
    production build served by `vite preview`, never the dev server.
-   The flows that need real FastAPI, a real worker, and a real DraftFlow arrive with the
-   screens that drive them; this configuration is the foundation they plug into. */
+   Real API coverage has a separate configuration owned by the pytest harness. */
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "**/integration/**",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
