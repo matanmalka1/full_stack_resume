@@ -207,6 +207,10 @@ describe("OperationReport", () => {
     expect(alert).toHaveTextContent("הפרופיל מאפשר לכל היותר 1");
     expect(screen.getByRole("button", { name: "חזרה לעריכת הטיוטה" })).toBeInTheDocument();
     expect(screen.queryByText("Rendered PDF has 2 pages; maximum 1.")).not.toBeInTheDocument();
+    /* The outcome is said once, by the alert, in the status's own word. */
+    expect(within(alert).getByText("נכשלה")).toBeInTheDocument();
+    expect(screen.getAllByText("נכשלה")).toHaveLength(1);
+    expect(alert).not.toHaveTextContent("חסימה");
   });
 
   /* The backend files "no provider configured" under PROVIDER_REFUSED. With Settings
