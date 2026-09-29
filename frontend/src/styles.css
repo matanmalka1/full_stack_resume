@@ -597,3 +597,68 @@ dialog::backdrop {
     transform: scale(1.4);
   }
 }
+
+/* The one moment the whole flow ends on: a submission recorded. The mark grows in and its
+   tick draws, together about 300ms - long enough to register as "done", short enough to
+   never stand between the reader and what comes next. Under `prefers-reduced-motion` the
+   mark is simply there: the blanket rule above only shortens durations and would leave
+   the tick's delay in place, so these two opt out entirely. */
+@keyframes cv-success-mark {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes cv-success-check {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.cv-success-mark {
+  animation: cv-success-mark 200ms ease-out both;
+}
+
+.cv-success-mark path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 0;
+  animation: cv-success-check 220ms ease-out 80ms both;
+}
+
+/* A card the reader has just come back to from the flow that changed it: a ring that
+   holds a moment and fades, so the eye finds the card without it staying louder than its
+   neighbours. The class itself is removed when the highlight is over; under reduced
+   motion the ring is simply shown until then and goes without a fade. */
+@keyframes cv-returned {
+  0%,
+  60% {
+    box-shadow: 0 0 0 3px var(--color-cv-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+.cv-returned {
+  animation: cv-returned 2400ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-success-mark,
+  .cv-success-mark path,
+  .cv-returned {
+    animation: none !important;
+  }
+
+  .cv-returned {
+    box-shadow: 0 0 0 3px var(--color-cv-accent);
+  }
+}

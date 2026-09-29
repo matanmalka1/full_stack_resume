@@ -168,6 +168,19 @@ export const ReadyPage = () => {
           <>
             <PreparationAlerts detail={detail} screen="ready" />
 
+            {/* The end of the flow, at the top of the step where the eye lands after the
+                dialog closes. It used to be an edge-marked line under the cards and the
+                folded extras, the same weight as any other notice on the page. */}
+            {submissionNoticeOpen ? (
+              <SuccessNotice
+                emphasis="milestone"
+                onDismiss={() => setSubmissionNoticeOpen(false)}
+                title="ההגשה נרשמה"
+              >
+                התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
+              </SuccessNotice>
+            ) : null}
+
             {ready ? null : (
               /* Reached from a link or the rail after the document changed. Nothing here is
                  lost: the editor holds the document as it is now, and approving and
@@ -278,11 +291,6 @@ export const ReadyPage = () => {
               </div>
             )}
 
-            {submissionNoticeOpen ? (
-              <SuccessNotice onDismiss={() => setSubmissionNoticeOpen(false)} title="ההגשה נרשמה">
-                התוכן וקובצי ה־HTML וה־PDF שנשלחו נשמרו בהיסטוריית המועמדות.
-              </SuccessNotice>
-            ) : null}
           </>
         )}
       </QueryState>
@@ -293,14 +301,10 @@ export const ReadyPage = () => {
         <CommitBar
           back={backLink}
           label={NEXT_STEP_LABEL}
-          primary={
-            nextStep === null ? undefined : (
-              <>
-                {downloadButton === null ? null : <div className="flex flex-wrap gap-3">{downloadButton}</div>}
-                {nextStep.primary}
-              </>
-            )
-          }
+          /* The step's one command. The download sat here too, beside the same button in
+             the file card just above it - two equal buttons for one action - and on a
+             phone the pair left the way back to the editor too little room to be read. */
+          primary={nextStep === null ? undefined : nextStep.primary}
         >
           {nextStep === null ? undefined : (
             <p className="text-support leading-6 text-cv-text-muted" dir="auto">
