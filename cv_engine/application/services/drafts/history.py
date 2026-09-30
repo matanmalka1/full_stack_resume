@@ -1,9 +1,8 @@
 """§16 `export_decision_markdown`: human-readable provenance of the current document.
 
 There is no revision history (§20): the history of what was sent is the list of
-Submissions. This export describes the document as it stands - its analysis, its
-selection, the facts it depends on, and its stored content report - and writes
-nothing.
+Submissions. This export describes the document as it stands - its analysis, the
+facts its content uses, and its stored content report - and writes nothing.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from ....util import sha256_text
 from ...commands import DecisionMarkdownExport
 from ...errors import UnknownRecord
 from ...ports import TransactionManager
-from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.documents import DocumentStore
 from ...ports.drafts import DraftHistoryApplicationReader
 from ..documents import current_basis, load_knowledge, read_document_source
@@ -28,7 +27,7 @@ class DraftHistoryService:
         *,
         transactions: TransactionManager,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         applications: DraftHistoryApplicationReader,
         knowledge: AnalysisKnowledgeSource,
     ):
@@ -50,7 +49,7 @@ class DraftHistoryService:
         document = source.document
         analysis = source.analysis
         current = current_basis(document, knowledge)
-        used = [] if document.content is None else document.content.selected_fact_ids
+        used = sorted(dependent_fact_ids(document.content))
 
         def value(item: object) -> str:
             if isinstance(item, (dict, list)):

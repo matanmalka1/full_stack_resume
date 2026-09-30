@@ -13,12 +13,12 @@ from ...commands import (
 from ...errors import InfrastructureFailure, LineageBroken, ProviderNotConfigured, StateConflict
 from ...ports import AIProvider, TransactionManager
 from ...ports.analysis_plans import (
+    AnalysisContextSource,
+    AnalysisContextSourceReader,
     AnalysisKnowledgeSource,
     AnalysisPayloadStore,
-    AnalysisSelectionSourceReader,
     AnalysisSnapshotSource,
     AnalysisStore,
-    SelectionSource,
 )
 from ...ports.documents import DocumentStore
 from ...ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
@@ -29,9 +29,6 @@ from .activation import AnalysisActivation
 from .correction import AnalysisCorrection
 from .preparation import AnalysisPreparation, PreparedAnalysis
 
-#: Kept under its historical name for the modules that load Knowledge through it.
-load_analysis_knowledge = load_knowledge
-
 
 class AnalysisService:
     """Own preparation scopes and synchronous analysis transaction boundaries."""
@@ -41,7 +38,7 @@ class AnalysisService:
         *,
         transactions: TransactionManager,
         analyses: AnalysisStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         documents: DocumentStore,
         evidence: ProviderEvidenceStore,
         knowledge: AnalysisKnowledgeSource,
@@ -72,9 +69,11 @@ class AnalysisService:
             )
         return source
 
-    def selection_source(self, application_id: str, job_analysis_id: str) -> SelectionSource:
+    def analysis_context_source(
+        self, application_id: str, job_analysis_id: str
+    ) -> AnalysisContextSource:
         with self.transactions.read() as tx:
-            source = self.sources.selection_source(tx, job_analysis_id)
+            source = self.sources.analysis_context_source(tx, job_analysis_id)
         if source.application_id != application_id:
             raise LineageBroken(
                 f"job analysis {job_analysis_id} does not belong to application {application_id}"
@@ -94,7 +93,7 @@ class AnalysisService:
 
     @staticmethod
     def assert_provider_io_allowed() -> None:
-        assert_external_io_allowed("analysis/selection provider execution")
+        assert_external_io_allowed("analysis provider execution")
 
     @property
     def provider(self) -> AIProvider:

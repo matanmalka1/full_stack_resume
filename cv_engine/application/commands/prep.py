@@ -76,7 +76,7 @@ class AnalyzeCommand(BoundaryDTO):
     expected_analysis_id: str | None = None
     expected_document_hash: str | None = None
     #: Internal flag carried to persistence so an explicit decision is refused
-    #: while an Operation that can replace the analysis or the selection is active.
+    #: while an Operation that can replace the analysis context is active.
     refuse_matching_context_operation: bool = False
     provider: Literal["openai"] = "openai"
     model: str | None = None
@@ -270,16 +270,13 @@ class AnalysisResult(BoundaryDTO):
 
 
 class AnalysisDecisionsResult(BoundaryDTO):
-    """What the review form produced, and which of the two branches produced it.
+    """The new analysis produced by a review-form classification decision.
 
-    `job_analysis_id` is the analysis in force *after* the command: the new one
-    when meaning changed, the original one when only the selection did. The
-    document is re-pinned by neither branch; `document_hash` is its token now.
+    The document is not re-pinned; `document_hash` is its current token.
     """
 
     application_id: str
     job_analysis_id: str
-    created_analysis: bool
     analysis: JobAnalysis
     document_id: str | None = None
     document_hash: str | None = None

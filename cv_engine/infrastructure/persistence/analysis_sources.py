@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from ...application.errors import UnknownRecord
-from ...application.ports.analysis_plans import AnalysisSnapshotSource, SelectionSource
+from ...application.ports.analysis_plans import AnalysisContextSource, AnalysisSnapshotSource
 from ...application.ports.transactions import ReadTransaction
 from .analysis_sql import _analysis_record
 from .connection import SqlAlchemyTransactionManager
@@ -17,7 +17,7 @@ from .tables import (
 )
 
 
-class SqlAlchemyAnalysisSelectionSourceReader:
+class SqlAlchemyAnalysisContextSourceReader:
     def __init__(self, transactions: SqlAlchemyTransactionManager):
         self._transactions = transactions
 
@@ -69,7 +69,9 @@ class SqlAlchemyAnalysisSelectionSourceReader:
             deleted_at=row["deleted_at"],
         )
 
-    def selection_source(self, tx: ReadTransaction, job_analysis_id: str) -> SelectionSource:
+    def analysis_context_source(
+        self, tx: ReadTransaction, job_analysis_id: str
+    ) -> AnalysisContextSource:
         connection = self._transactions.connection_for(tx)
         row = (
             connection.execute(
@@ -100,7 +102,7 @@ class SqlAlchemyAnalysisSelectionSourceReader:
             .order_by(job_analyses.c.version_number.desc())
             .limit(1)
         ).scalar_one_or_none()
-        return SelectionSource(
+        return AnalysisContextSource(
             application_id=row["application_id"],
             job_analysis_id=job_analysis_id,
             job_snapshot_id=row["job_snapshot_id"],

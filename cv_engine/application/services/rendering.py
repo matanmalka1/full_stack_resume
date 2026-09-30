@@ -33,7 +33,7 @@ from ..errors import (
     ValidationBlocked,
 )
 from ..ports import Renderer, SnapshotPayloadStore
-from ..ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ..ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ..ports.artifact_catalog import ArtifactCatalog
 from ..ports.documents import DocumentFileStore, DocumentStore, RenderedFiles
 from ..ports.transactions import TransactionManager, WriteTransaction
@@ -75,7 +75,7 @@ class RenderingService:
         *,
         transactions: TransactionManager,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         files: DocumentFileStore,
         catalog: ArtifactCatalog,
         knowledge: AnalysisKnowledgeSource,

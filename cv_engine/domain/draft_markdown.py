@@ -26,7 +26,7 @@ def serialize_markdown(draft: DraftDocument) -> str:
         "schema_version": draft.schema_version,
         "application_id": draft.application_id,
         "job_snapshot_id": draft.job_snapshot_id,
-        **({"job_analysis_id": draft.job_analysis_id} if draft.job_analysis_id else {}),
+        "job_analysis_id": draft.job_analysis_id,
         "language": draft.language,
         "track": draft.track.value,
         "profile": draft.profile.value,

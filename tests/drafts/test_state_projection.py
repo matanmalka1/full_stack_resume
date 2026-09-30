@@ -448,7 +448,7 @@ def test_an_emphasis_decision_creates_an_analysis_and_keeps_manual_wording(
         )
     )
 
-    assert result.created_analysis and result.analysis.emphasis is other
+    assert result.analysis.emphasis is other
     assert stored_document(services, app_id) == before
     detail = services.queries.application_detail(app_id)
     assert "DOCUMENT_ON_OLDER_ANALYSIS" in {w.code for w in detail.warnings}

@@ -50,7 +50,7 @@ from ...ports import (
     SnapshotPayloadStore,
     TransactionManager,
 )
-from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.drafts import DraftEvidencePreserver
 from ...transactions import assert_external_io_allowed
@@ -118,7 +118,7 @@ class DraftAuthoringService:
         *,
         transactions: TransactionManager,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         knowledge: AnalysisKnowledgeSource,
         provider: AIProvider | None,
         evidence: DraftEvidencePreserver,
@@ -318,7 +318,7 @@ class DraftAuthoringService:
             operation_id,
             updated,
             knowledge,
-            list(updated.selected_fact_ids),
+            sorted({fact_id for claim in draft_claims(updated) for fact_id in claim.fact_ids}),
             evidence,
             claim_ids=_changed_claim_ids(chosen, updated),
             model=model,

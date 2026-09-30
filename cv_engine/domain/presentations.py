@@ -90,27 +90,6 @@ class PresentationStore:
             raise PresentationError(f"invalid presentation rules {origin}: {exc}") from exc
         return cls(rules, facts)
 
-    def line_groups(
-        self,
-        profile: Profile,
-        emphasis: Emphasis,
-    ) -> dict[str, list[tuple[str, ...]]]:
-        """Per section, the fact groups that would be emitted as one line.
-
-        Selection states role-block floors and ceilings in lines, so it needs
-        this before it chooses: two facts a rule combines cost one line, not two.
-        """
-        groups: dict[str, list[tuple[str, ...]]] = {}
-        for rule in self.rules:
-            if rule.profile is not profile.profile:
-                continue
-            if rule.emphases and emphasis not in rule.emphases:
-                continue
-            if len(rule.fact_ids) < 2:
-                continue
-            groups.setdefault(rule.section, []).append(tuple(rule.fact_ids))
-        return groups
-
     def render_rule(
         self,
         rule_id: str,
@@ -144,7 +123,7 @@ class PresentationStore:
         profile: Profile,
         section: str,
         emphasis: Emphasis,
-        selected_fact_ids: list[str],
+        fact_ids: list[str],
         language: str,
         facts: FactStore,
     ) -> list[PresentedClaim]:
@@ -155,7 +134,7 @@ class PresentationStore:
             if rule.profile is profile.profile
             and rule.section == section
             and (not rule.emphases or emphasis in rule.emphases)
-            and set(rule.fact_ids) <= set(selected_fact_ids)
+            and set(rule.fact_ids) <= set(fact_ids)
         ]
         for rule in matching:
             outside = sorted(set(rule.fact_ids) - set(allowed.fact_ids))
@@ -173,13 +152,13 @@ class PresentationStore:
         matching = [
             rule
             for rule in matching
-            if (positions := [selected_fact_ids.index(fact_id) for fact_id in rule.fact_ids])
+            if (positions := [fact_ids.index(fact_id) for fact_id in rule.fact_ids])
             == list(range(positions[0], positions[0] + len(positions)))
         ]
 
         consumed: set[str] = set()
         result: list[PresentedClaim] = []
-        for fact_id in selected_fact_ids:
+        for fact_id in fact_ids:
             if fact_id in consumed:
                 continue
             candidates = [rule for rule in matching if rule.fact_ids[0] == fact_id]

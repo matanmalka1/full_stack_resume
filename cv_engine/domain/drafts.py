@@ -181,7 +181,6 @@ def build_draft(
         "headline",
     )
 
-    selected = set(contact_ids)
     sections: list[ResumeSection] = []
     for spec in profile.sections:
         claims = []
@@ -191,7 +190,7 @@ def build_draft(
                 profile=profile,
                 section=spec.name_en,
                 emphasis=effective_emphasis,
-                selected_fact_ids=selected_ids,
+                fact_ids=selected_ids,
                 language=language,
                 facts=facts,
             )
@@ -233,7 +232,6 @@ def build_draft(
                         template_version=item.rule_version,
                     )
                 )
-            selected.update(fact_ids)
         if claims or not spec.optional:
             sections.append(
                 ResumeSection(
@@ -254,7 +252,6 @@ def build_draft(
         headline=headline,
         contacts=contacts,
         sections=sections,
-        selected_fact_ids=sorted(selected),
         fact_store_version=facts.version,
     )
     return draft.model_copy(update={"content_hash": draft_content_hash(draft)})
@@ -366,10 +363,7 @@ def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) 
 
 
 def _reseal(draft: DraftDocument) -> DraftDocument:
-    """Restate the facts the claims link, and the content hash, after an edit."""
-    draft.selected_fact_ids = sorted(
-        {fact_id for claim in draft_claims(draft) for fact_id in claim.fact_ids}
-    )
+    """Restate the content hash after an edit."""
     return draft.model_copy(update={"content_hash": draft_content_hash(draft)})
 
 
@@ -567,7 +561,7 @@ def apply_claim_edit(
 def remove_claim(draft: DraftDocument, claim_id: str) -> DraftDocument:
     """Remove one section claim, and reseal.
 
-    The document holds no separate fact selection, so a fact-backed line may go like
+    The document holds no separate fact manifest, so a fact-backed line may go like
     any other: the facts it linked simply stop being used. Structure may not. The
     headline and contacts are required by the model and the candidate context, and a
     heading or date is what keeps a role's bullets attributed to it.

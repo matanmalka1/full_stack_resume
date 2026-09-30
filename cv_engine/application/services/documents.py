@@ -35,7 +35,7 @@ from ..errors import (
     StateConflict,
     UnknownRecord,
 )
-from ..ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ..ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ..ports.documents import DocumentStore
 from ..ports.transactions import ReadTransaction, WriteTransaction
 from ..state import document_review_reasons
@@ -75,26 +75,26 @@ class DocumentSource:
 def _source(
     tx: ReadTransaction,
     document: CVDocument | None,
-    sources: AnalysisSelectionSourceReader,
+    sources: AnalysisContextSourceReader,
     application_id: str,
 ) -> DocumentSource:
     if document is None:
         raise UnknownRecord(f"application {application_id} has no CV document yet; analyze first")
-    selection = sources.selection_source(tx, document.analysis_id)
+    context = sources.analysis_context_source(tx, document.analysis_id)
     return DocumentSource(
         document=document,
-        analysis=selection.analysis,
-        job_snapshot_id=selection.job_snapshot_id,
-        latest_analysis_id=selection.active_analysis_id,
-        active_snapshot_id=selection.active_snapshot_id,
-        deleted_at=selection.deleted_at,
+        analysis=context.analysis,
+        job_snapshot_id=context.job_snapshot_id,
+        latest_analysis_id=context.active_analysis_id,
+        active_snapshot_id=context.active_snapshot_id,
+        deleted_at=context.deleted_at,
     )
 
 
 def read_document_source(
     tx: ReadTransaction,
     documents: DocumentStore,
-    sources: AnalysisSelectionSourceReader,
+    sources: AnalysisContextSourceReader,
     application_id: str,
 ) -> DocumentSource:
     return _source(tx, documents.document(tx, application_id), sources, application_id)
@@ -103,7 +103,7 @@ def read_document_source(
 def lock_document_source(
     tx: WriteTransaction,
     documents: DocumentStore,
-    sources: AnalysisSelectionSourceReader,
+    sources: AnalysisContextSourceReader,
     application_id: str,
 ) -> DocumentSource:
     """The same read, with the document row locked until the transaction ends."""

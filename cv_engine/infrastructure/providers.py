@@ -4,9 +4,9 @@ Two layers, deliberately separate.
 
 `StructuredOutputClient` is *transport*. It knows the Responses API, the strict
 JSON-Schema envelope, HTTP status classification, and how to sanitize a raw
-response. It knows nothing about job analyses, selection plans, or drafts. It
+response. It knows nothing about job analyses or drafts. It
 was called `AIProvider` until Stage G, which is the name the application layer
-needs for its own contract - a protocol describing six product tasks, not one
+needs for its own contract - a protocol describing five product tasks, not one
 describing an HTTP call.
 
 `OpenAIProvider` is the *contract*. It implements `application.ports.AIProvider`,

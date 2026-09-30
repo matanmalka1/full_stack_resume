@@ -7,7 +7,7 @@ from ....util import utc_now
 from ...commands import CheckDocumentCommand, DocumentCheckResult
 from ...errors import PreconditionFailed
 from ...ports import TransactionManager
-from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.documents import DocumentStore
 from ..documents import (
     current_basis,
@@ -27,7 +27,7 @@ class DraftValidationService:
         *,
         transactions: TransactionManager,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         knowledge: AnalysisKnowledgeSource,
     ):
         self.transactions = transactions

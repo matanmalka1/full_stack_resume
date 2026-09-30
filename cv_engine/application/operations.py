@@ -289,11 +289,9 @@ class ClaimReviewReason(OperationModel):
 
 
 #: Why a failed Operation failed, in a closed vocabulary with typed parameters.
-#: `safe_failure_detail` is the same reason as an English sentence for logs and
-#: legacy clients; this is what a client reads to explain the failure in its own
-#: words, so no client has to parse that sentence back apart. Written when the
-#: failure is recorded; absent on records from before it existed and on failures
-#: whose code already says everything.
+#: `safe_failure_detail` is the safe English diagnostic for logs and generic
+#: failures; this structured value lets a client explain supported failures in
+#: its own words without parsing that sentence. Both are written with the failure.
 FailureReason = Annotated[
     PdfPageLimitReason | MissingFactRenderingReason | RenderCheckReason | ClaimReviewReason,
     Field(discriminator="code"),

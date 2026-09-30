@@ -204,7 +204,6 @@ def test_a_decision_creates_an_analysis_and_leaves_the_document(
 
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["created_analysis"] is True
     assert body["job_analysis_id"] != analysis_id
     assert body["document_id"] == original_document["id"]
     with transaction_manager.read() as tx:

@@ -166,10 +166,7 @@ class FactAttachmentResponse(FactMutationResponse):
 
 
 class ConfirmAndUseFactResponse(HttpSchema):
-    """The one logical command's whole outcome: confirmed, attached, selected.
-
-    The document whose selection the fact joined, and its token afterwards.
-    """
+    """The one command's outcome and the unchanged document token beside it."""
 
     fact: FactResponse
     event_ids: list[str]

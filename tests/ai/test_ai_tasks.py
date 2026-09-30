@@ -329,7 +329,8 @@ def test_draft_resume_commits_wording_its_facts_support(
     assert any(
         fact_id not in section["allowed_fact_ids"]
         for section in draft_call.payload["sections"]
-        for fact_id in working.content.selected_fact_ids
+        for claim in draft_claims(working.content)
+        for fact_id in claim.fact_ids
     )
     actual = stored_document(ai_services, ingested.application_id)
     assert actual.content is not None
@@ -425,7 +426,11 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
         ]
         for section in frame.sections
     ]
-    assert len(drafted.content.selected_fact_ids) < len(frame.selected_fact_ids)
+
+    def used(draft):
+        return {fact_id for claim in draft_claims(draft) for fact_id in claim.fact_ids}
+
+    assert used(drafted.content) < used(frame)
 
 
 def test_draft_resume_accepts_separately_reviewed_paraphrase(

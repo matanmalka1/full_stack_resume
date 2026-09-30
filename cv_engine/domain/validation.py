@@ -11,7 +11,12 @@ from .contracts.drafts import ClaimLine, DraftDocument
 from .contracts.knowledge import Profile
 from .contracts.validation import ValidationIssue, ValidationReport
 from .draft_markdown import serialize_markdown
-from .drafts import draft_content_hash, render_composite_claim, validate_derived_wording
+from .drafts import (
+    draft_claims,
+    draft_content_hash,
+    render_composite_claim,
+    validate_derived_wording,
+)
 from .facts import FactStore, FactStoreError
 from .frame import dangling_heading, misplaced_role_claims
 from .presentations import PresentationStore
@@ -345,21 +350,12 @@ def _sections_match_profile(context: _ValidationContext) -> None:
             )
 
 
-def _selected_fact_set_matches(context: _ValidationContext) -> None:
-    linked_fact_ids = sorted({fact_id for claim in context.claims for fact_id in claim.fact_ids})
-    if context.draft.selected_fact_ids != linked_fact_ids:
-        context.add_issue(
-            "content",
-            "selected-fact-set-mismatch",
-            "selected_fact_ids does not exactly match the claims in the untrusted manifest",
-        )
-
-
 def _historical_titles_are_headings(context: _ValidationContext) -> None:
     draft = context.draft
     historical_title_ids = {
         fact_id
-        for fact_id in draft.selected_fact_ids
+        for claim in draft_claims(draft)
+        for fact_id in claim.fact_ids
         if fact_id in context.facts.facts and "historical-title" in context.facts.get(fact_id).tags
     }
     heading_ids = {
@@ -399,7 +395,6 @@ VALIDATION_RULES: tuple[DraftRule, ...] = (
     _claims_avoid_prohibited_wording,
     _profile_matches,
     _sections_match_profile,
-    _selected_fact_set_matches,
     _historical_titles_are_headings,
     _headline_is_safe,
 )
@@ -435,6 +430,6 @@ def validate_draft(
         issues=context.issues,
         evidence={
             "claim_count": len(context.claims),
-            "selected_fact_count": len(draft.selected_fact_ids),
+            "fact_count": len({fact_id for claim in context.claims for fact_id in claim.fact_ids}),
         },
     )

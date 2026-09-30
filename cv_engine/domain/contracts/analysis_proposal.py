@@ -80,9 +80,7 @@ class AnalysisProposal(StrictModel):
     language: ProposalLanguage
     requirements: list[ProposedRequirement]
     summary: str
-    #: Kept because selection already reads them: they break ties between facts
-    #: the semantic score rates equally (`domain/selection.py`). Dropping them
-    #: would move selected content for reasons unrelated to this contract.
+    #: Concise terms from the posting, supplied as writing context to `draft_resume`.
     keywords: list[str] = []
 
 

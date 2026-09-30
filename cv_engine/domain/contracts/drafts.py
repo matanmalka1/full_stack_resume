@@ -80,17 +80,15 @@ class DraftDocument(StrictModel):
     The schema and fact-store versions are also immutable provenance. The
     content hash remains assignable because controlled edit paths reseal it.
 
-    `job_analysis_id` is absent only on `schema_version` "1.0" manifests, which
-    were written before the binding existed. Those are still readable — approved
-    versions are immutable and must stay loadable — but their analysis is
-    recovered from their own immutable decision record, never from whichever
-    analysis happens to be latest.
+    There is no compatibility shape: the database starts empty, so accepting a
+    manifest without its analysis binding would preserve no real record and would
+    weaken the provenance contract for every caller.
     """
 
-    schema_version: str = Field(default="1.1", frozen=True)
+    schema_version: Literal["1.2"] = Field(default="1.2", frozen=True)
     application_id: str = Field(frozen=True)
     job_snapshot_id: str = Field(frozen=True)
-    job_analysis_id: str | None = Field(default=None, frozen=True)
+    job_analysis_id: str = Field(min_length=1, frozen=True)
     language: Literal["en", "he"]
     track: Track
     profile: ProfileName
@@ -99,16 +97,8 @@ class DraftDocument(StrictModel):
     headline: ClaimLine
     contacts: list[ClaimLine]
     sections: list[ResumeSection]
-    #: Every fact the claims link, sorted: the facts this document uses.
-    selected_fact_ids: list[str]
     fact_store_version: str = Field(frozen=True)
     content_hash: str = ""
-
-    @model_validator(mode="after")
-    def validate_analysis_binding(self) -> DraftDocument:
-        if self.schema_version != "1.0" and not self.job_analysis_id:
-            raise ValueError("a draft must name the exact job analysis it was built from")
-        return self
 
     @model_validator(mode="after")
     def validate_headline_placement(self) -> DraftDocument:

@@ -67,10 +67,8 @@ class ContentPatchRequest(HttpSchema):
     claim_removals: list[str] = Field(
         default=[],
         description=(
-            "Claims to delete outright. Only an unauthorized section claim may "
-            "be removed this way; a claim the fact selection authorizes is a "
-            "412 naming the selection change, and the headline and contacts "
-            "are structural."
+            "Section claims to delete outright. Headlines, contacts, role headings, "
+            "and dates are structural and cannot be removed."
         ),
     )
     claim_additions: list[ClaimAdditionRequest] = []

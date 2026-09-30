@@ -8,6 +8,7 @@ from helpers import approve_active_draft, seed_document, seed_draft, stored_docu
 
 from cv_engine.application.commands import RenderCommand
 from cv_engine.domain.draft_markdown import serialize_markdown
+from cv_engine.domain.drafts import draft_claims
 from cv_engine.infrastructure.rendering import render_html
 from cv_engine.util import sha256_text
 
@@ -40,7 +41,7 @@ def _golden_choice(profile, case: dict) -> dict[str, list[str]]:
     Fixture input, not a computed selection: the golden cases pin what a document
     with these facts renders to, while `draft_resume` owns the choice itself.
     """
-    kept = set(case["snapshot"]["selected_fact_ids"])
+    kept = set(case["snapshot"]["fact_ids"])
     return {
         spec.name_en: [fact_id for fact_id in spec.fact_ids if fact_id in kept]
         for spec in profile.sections
@@ -89,6 +90,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
     for fixture, case in _golden_cases():
         setup = _build_case(services, case)
         facts, analysis, draft = setup.facts, setup.analysis, setup.draft
+        used = sorted({fact_id for claim in draft_claims(draft) for fact_id in claim.fact_ids})
         candidate = setup.candidate
         assert analysis.track.value == case["track"], fixture.stem
         assert analysis.profile.value == case["profile"], fixture.stem
@@ -97,9 +99,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
         markdown = serialize_markdown(draft)
         assert "30% YoY" not in markdown, fixture.stem
         assert "3-4 sales representatives" not in markdown.casefold(), fixture.stem
-        assert all(
-            facts.get(fact_id).status.value == "canonical" for fact_id in draft.selected_fact_ids
-        ), fixture.stem
+        assert all(facts.get(fact_id).status.value == "canonical" for fact_id in used), fixture.stem
         if case["language"] == "he":
             assert "תקציר מקצועי" in markdown
             assert "עברית: שפת אם" in markdown
@@ -117,7 +117,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
         snapshot = {
             "markdown_body_sha256": sha256_text(markdown_body),
             "html_sha256": sha256_text(html_text),
-            "selected_fact_ids": draft.selected_fact_ids,
+            "fact_ids": used,
             "sections": [section.name for section in draft.sections],
         }
         assert snapshot == case["snapshot"], fixture.stem

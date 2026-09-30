@@ -56,7 +56,7 @@ from ..infrastructure.persistence import (
     current_database_revision,
 )
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
-from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisSelectionSourceReader
+from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisContextSourceReader
 from ..infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
@@ -229,7 +229,7 @@ def build_services(
             api_key=str(api_key),
         )
     analysis_plans = SqlAlchemyAnalysisPlanRepository(transactions)
-    analysis_sources = SqlAlchemyAnalysisSelectionSourceReader(transactions)
+    analysis_sources = SqlAlchemyAnalysisContextSourceReader(transactions)
     application_projections = SqlAlchemyApplicationProjectionReader(transactions)
     evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
     operation_client = SqlAlchemyOperationClientStore(transactions)

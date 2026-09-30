@@ -212,8 +212,8 @@ def delete_fact(
 ) -> FactMutationResponse:
     """One-way; `confirm: false` is refused rather than interpreted.
 
-    Always permitted, even for a fact attached to a Profile section or
-    referenced by a document selection, claim, or gap resolution: this command
+        Always permitted, even for a fact attached to a Profile section or
+        referenced by a claim or gap resolution: this command
     does not pre-check those, the review reason and warning it produces do
     (state-and-use-cases.md §17).
     """

@@ -1,4 +1,4 @@
-"""Analysis/selection lifecycle and consumer-specific source contracts."""
+"""Analysis lifecycle and consumer-specific source contracts."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class AnalysisSnapshotSource:
 
 
 @dataclass(frozen=True)
-class SelectionSource:
+class AnalysisContextSource:
     application_id: str
     job_analysis_id: str
     job_snapshot_id: str
@@ -55,21 +55,20 @@ class AnalysisKnowledgeSource(Protocol):
     def load(self) -> Knowledge: ...
 
 
-class AnalysisSelectionSourceReader(Protocol):
+class AnalysisContextSourceReader(Protocol):
     def knowledge_is_prepared(self, tx: ReadTransaction) -> bool: ...
 
     def analysis_source(
         self, tx: ReadTransaction, job_snapshot_id: str
     ) -> AnalysisSnapshotSource: ...
 
-    def selection_source(self, tx: ReadTransaction, job_analysis_id: str) -> SelectionSource: ...
+    def analysis_context_source(
+        self, tx: ReadTransaction, job_analysis_id: str
+    ) -> AnalysisContextSource: ...
 
 
 class AnalysisStore(Protocol):
-    """Analysis writes and the Application's current matching configuration.
-
-    Selection lives on the CV document; this store owns no selection state.
-    """
+    """Analysis writes and the Application's current matching configuration."""
 
     def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
 

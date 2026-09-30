@@ -209,7 +209,7 @@ def create_analysis(
 
     NeedsReview is not an error here or anywhere else. An analysis that needs a
     decision is a *successful* Operation whose JobAnalysis - and, for the first
-    analysis, the document's initial selection - were committed; what needs deciding is reported by the
+    analysis and the empty document pinned to it were committed; what needs deciding is reported by the
     Application's review reasons, and is resolved through
     `POST /analyses/{id}/apply-decisions`.
 

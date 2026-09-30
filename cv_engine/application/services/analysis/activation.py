@@ -10,7 +10,7 @@ from __future__ import annotations
 from ....util import utc_now
 from ...commands import AnalysisResult, AnalyzeCommand
 from ...errors import LineageBroken, PreconditionFailed
-from ...ports.analysis_plans import AnalysisSelectionSourceReader, AnalysisStore
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisStore
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.transactions import WriteTransaction
 from ..documents import refuse_deleted, require_hash
@@ -21,7 +21,7 @@ class AnalysisActivation:
     def __init__(
         self,
         analyses: AnalysisStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         documents: DocumentStore,
     ):
         self.analyses = analyses

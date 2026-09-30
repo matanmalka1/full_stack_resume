@@ -49,12 +49,13 @@ from ...operations import (
     RenderCheckCode,
     RenderCheckReason,
 )
-from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.documents import DocumentStore, RenderedFiles
 from ...ports.transactions import ReadTransaction, WriteTransaction
 from ..analysis.activation import AnalysisActivation
 from ..analysis.preparation import PreparedAnalysis
-from ..analysis.service import AnalysisService, load_analysis_knowledge
+from ..analysis.service import AnalysisService
+from ..documents import load_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
 from ..proposals import ProviderEvidence
@@ -250,7 +251,7 @@ class RegisteredEvidenceTaskHandler(AITaskHandler):
     knowledge: AnalysisKnowledgeSource
 
     def load_knowledge(self):
-        return load_analysis_knowledge(self.knowledge)
+        return load_knowledge(self.knowledge)
 
     def _preserve_rejected(
         self, operation: PersistedOperation, error: ApplicationError
@@ -278,7 +279,7 @@ class RegisteredEvidenceTaskHandler(AITaskHandler):
 
 class AnalysisTaskHandler(RegisteredEvidenceTaskHandler):
     service: AnalysisService
-    sources: AnalysisSelectionSourceReader
+    sources: AnalysisContextSourceReader
 
 
 class AnalysisOperationHandler(AnalysisTaskHandler):
@@ -289,7 +290,7 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
     def __init__(
         self,
         service: AnalysisService,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         activation: AnalysisActivation,
         knowledge: AnalysisKnowledgeSource,
     ):
@@ -499,7 +500,7 @@ class RenderOperationHandler:
         self,
         service: RenderingService,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         knowledge: AnalysisKnowledgeSource,
     ):
         self.service = service
@@ -578,7 +579,7 @@ class RenderOperationHandler:
     def activate(self, tx: WriteTransaction, operation, prepared):
         if not isinstance(prepared.value, ExecutedRender):
             raise TypeError("render handler received an invalid executed value")
-        knowledge = load_analysis_knowledge(self.knowledge)
+        knowledge = load_knowledge(self.knowledge)
         try:
             result, superseded = self.service.activate(tx, prepared.value, knowledge)
         except StateConflict as exc:

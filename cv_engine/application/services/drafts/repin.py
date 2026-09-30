@@ -10,7 +10,7 @@ from ....util import utc_now
 from ...commands import BuildFromAnalysisCommand, DocumentMutationResult
 from ...errors import LineageBroken, PreconditionFailed
 from ...ports import TransactionManager
-from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.documents import DocumentBody, DocumentFileStore, DocumentStore
 from ..documents import (
     built_with,
@@ -30,7 +30,7 @@ class RepinService:
         *,
         transactions: TransactionManager,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         files: DocumentFileStore,
         knowledge: AnalysisKnowledgeSource,
     ):
@@ -48,7 +48,7 @@ class RepinService:
         """
         with self.transactions.read() as tx:
             source = read_document_source(tx, self.documents, self.sources, command.application_id)
-            target = self.sources.selection_source(tx, command.analysis_id)
+            target = self.sources.analysis_context_source(tx, command.analysis_id)
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
         if target.application_id != command.application_id:

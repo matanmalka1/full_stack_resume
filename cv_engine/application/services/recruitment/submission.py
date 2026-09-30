@@ -27,7 +27,7 @@ from ...errors import (
     StateConflict,
     UnknownRecord,
 )
-from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.application_intake import AuditLogWriter
 from ...ports.documents import (
     DocumentFileStore,
@@ -53,7 +53,7 @@ class SubmissionService:
         *,
         transactions: TransactionManager,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         submissions: DocumentSubmissionStore,
         files: DocumentFileStore,
         recruitment: RecruitmentStore,

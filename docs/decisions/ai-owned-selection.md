@@ -52,7 +52,8 @@ engine narrows what comes back; it never widens it.
   section claim may be removed.
 - The selection step inside `create_draft`.
 - Validation codes `section-budget-exceeded`, `pinned-fact-dropped`,
-  `required-tag-uncovered`, `emphasis-coverage-low`, and `selected-fact-set-mismatch`.
+  `required-tag-uncovered`, `emphasis-coverage-low`, and `selected-fact-set-mismatch`
+  (with `DraftDocument.selected_fact_ids`; the facts a draft uses come from its claims).
 - The `POLICY_CHANGED` warning. Emphasis policy is guidance, so a change to it
   invalidates nothing.
 

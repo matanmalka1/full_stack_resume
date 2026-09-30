@@ -69,7 +69,6 @@ def _content(*claim_fact_ids: str) -> DraftDocument:
         headline=_claim("headline", style="headline", claim_type="headline"),
         contacts=[],
         sections=[ResumeSection(name="Experience", claims=[_claim("c1", *claim_fact_ids)])],
-        selected_fact_ids=[],
         fact_store_version="v1",
     )
 

@@ -64,7 +64,7 @@ class AnalysisCorrection:
                 "the analysis addressed by the request does not match the analysis "
                 "observed by the form"
             )
-        record = service.selection_source(command.application_id, command.job_analysis_id)
+        record = service.analysis_context_source(command.application_id, command.job_analysis_id)
         service.refuse_deleted(record.application_id, record.deleted_at)
         analysis: JobAnalysis = record.analysis
         document = service.current_document(command.application_id)
@@ -97,7 +97,6 @@ class AnalysisCorrection:
         return AnalysisDecisionsResult(
             application_id=command.application_id,
             job_analysis_id=result.analysis_id,
-            created_analysis=True,
             analysis=result.analysis,
             document_id=current.id if current is not None else None,
             document_hash=current.document_hash if current is not None else None,

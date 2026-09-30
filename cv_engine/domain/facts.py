@@ -138,8 +138,8 @@ class FactStore:
         """One-way transition to `deleted` from any live status.
 
         Deletion is always permitted, regardless of Profile attachment or
-        active SelectionPlan/claim/gap-resolution dependency (state-and-use-
-        cases.md §17): nothing here pre-checks those, the downstream review
+        active claim/gap-resolution dependency (state-and-use-cases.md §17):
+        nothing here pre-checks those, the downstream review
         reason and warning do. Only an already-deleted fact is refused.
         """
         fact = self.get(fact_id)

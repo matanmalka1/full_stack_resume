@@ -40,9 +40,8 @@ class ClassificationOverrides(HttpSchema):
     Shared because both requests that accept them accept exactly the same four,
     and a second declaration is a second place to forget one.
 
-    Every field is optional and withholding one is not a retraction. Track,
-    Profile and language are analysis-level decisions; Emphasis changes only the
-    document's selection when it is the only change.
+    Every field is optional and withholding one is not a retraction. Any changed
+    value creates a new immutable JobAnalysis; the document is not re-pinned.
     """
 
     track_override: Track | None = None
@@ -81,7 +80,7 @@ class ApplyAnalysisDecisionsRequest(ClassificationOverrides):
 
 
 class AnalysisDecisionsResponse(HttpSchema):
-    """Which analysis is in force after the decision, and whether it is a new one.
+    """The new analysis created by the decision.
 
     `job_analysis_id` names the analysis the client should work from now, the new
     one every decision creates. The decision never re-pins the document;
@@ -90,7 +89,6 @@ class AnalysisDecisionsResponse(HttpSchema):
 
     application_id: str
     job_analysis_id: str
-    created_analysis: bool
     analysis: dict[str, Any]
     document_id: str | None = None
     document_hash: str | None = None
