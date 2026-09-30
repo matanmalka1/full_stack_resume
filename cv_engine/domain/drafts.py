@@ -364,24 +364,26 @@ def reorder_draft(
     return reordered.model_copy(update={"content_hash": draft_content_hash(reordered)})
 
 
-def manually_edited(draft: DraftDocument) -> bool:
+def carries_authored_wording(draft: DraftDocument) -> bool:
     """Whether this document carries wording a deterministic rebuild would lose.
 
-    Three markers, and each one is only ever set by a human edit path.
+    Four markers, none of which the engine's own composition ever sets.
     `superseded_by_manual_edit` says a claim was relinked to a fact the engine
     did not choose. A `pending` claim is free text nothing could authorize, kept
     rather than discarded. The extractive derivation is the one derivation
-    `apply_claim_edit` writes; presentation rules carry their own rule IDs, so
-    a draft the engine built alone matches none of the three.
+    `apply_claim_edit` writes; presentation rules carry their own rule IDs. A
+    `reviewed` claim is wording that passed semantic review - written by the AI
+    (`create_draft`, `regenerate_section`, `regenerate_claim`) or kept by the user
+    under review. A draft the engine built alone matches none of the four.
 
     Rebuilding such a document from a new SelectionPlan would silently replace
-    the user's wording with the engine's, which is why §14 sends that case to a
+    that wording with the engine's, which is why §14 sends that case to a
     regeneration command instead of the deterministic path.
     """
     if draft.selection is not None and draft.selection.superseded_by_manual_edit:
         return True
     return any(
-        claim.claim_type == "pending"
+        claim.claim_type in {"pending", "reviewed"}
         or (claim.derivation_id, claim.derivation_version) == EXTRACTIVE_DERIVATION
         for claim in draft_claims(draft)
     )
@@ -628,7 +630,7 @@ def remove_claim(draft: DraftDocument, claim_id: str, facts: FactStore) -> Draft
     product-spec §10 lists removal as one of the three resolutions for free text
     nothing could authorize, and it is the only one of the three that no other
     command can reach: a `pending` claim has no fact to exclude, and its very
-    presence makes `manually_edited` true, which is what refuses the
+    presence makes `carries_authored_wording` true, which is what refuses the
     deterministic selection path.
 
     So the removal is narrow on purpose. It refuses anything a fact selection

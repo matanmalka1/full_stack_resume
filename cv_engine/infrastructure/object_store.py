@@ -279,7 +279,8 @@ class S3ObjectStore:
             self._client = client
             return
         try:
-            import boto3
+            # The optional s3 extra may be absent when using local storage.
+            import boto3  # pyright: ignore[reportMissingImports]
         except ImportError as exc:  # pragma: no cover - depends on the install extra
             raise InfrastructureFailure(
                 "object storage is configured for S3 but boto3 is not installed; "

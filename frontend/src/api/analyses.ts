@@ -77,6 +77,9 @@ export interface Requirement {
   coverage: RequirementCoverage;
   shortfallSeverity: ShortfallSeverity | null;
   shortfallReason: string | null;
+  /* The provider's account of why it chose this coverage; absent on analyses made before it
+     was kept, and whenever the engine narrowed the coverage it explained. */
+  rationale: string | null;
   supportingFactIds: string[];
   boundaryFactIds: string[];
 }
@@ -168,6 +171,7 @@ const requirementsFrom = (value: unknown): { items: Requirement[]; unreadableCou
         coverage: requirement.coverage,
         shortfallSeverity: isShortfallSeverity(requirement.shortfall_severity) ? requirement.shortfall_severity : null,
         shortfallReason: typeof requirement.shortfall_reason === "string" ? requirement.shortfall_reason : null,
+        rationale: typeof requirement.rationale === "string" ? requirement.rationale : null,
         supportingFactIds: stringsFrom(requirement.supporting_fact_ids),
         boundaryFactIds: stringsFrom(requirement.boundary_fact_ids),
       },

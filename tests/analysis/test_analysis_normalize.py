@@ -148,6 +148,7 @@ def test_a_noncanonical_fact_is_dropped_and_positive_coverage_becomes_unknown(
                 text="- Experience working with Web-based systems - required.",
                 coverage="matched",
                 fact_ids=[CANONICAL_FACT],
+                rationale="Full-stack web delivery is verified.",
             )
         ),
         noncanonical,
@@ -158,6 +159,8 @@ def test_a_noncanonical_fact_is_dropped_and_positive_coverage_becomes_unknown(
     requirement = analysis.requirements[0]
     assert requirement.supporting_fact_ids == []
     assert requirement.coverage == "unknown"
+    # The rationale explained a match that no longer stands.
+    assert requirement.rationale is None
     assert {issue.code for issue in analysis.issues} == {
         "fact_not_canonical",
         "coverage_without_evidence",
@@ -346,7 +349,8 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
     Merging takes the lower coverage, because two readings that disagree are
     not evidence for the more flattering one; the higher importance, because
     that disagreement is about what the employer demanded; and the union of the
-    evidence, because both citations were offered for the same sentence.
+    evidence, because both citations were offered for the same sentence. The
+    rationale is the one written for the coverage kept.
 
     The duplicate issue's `requirement_index` addresses the provider's list,
     not the merged one: the preserved response is the only list a reader can
@@ -360,6 +364,7 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
                 importance="mandatory",
                 coverage="matched",
                 fact_ids=[CANONICAL_FACT],
+                rationale="Customer presentations are verified.",
             ),
             ProposedRequirement(text="- Sales experience in the software industry."),
             ProposedRequirement(
@@ -369,7 +374,9 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
                 shortfall_severity="material",
                 shortfall_reason="A material part of the demand is not verified.",
                 fact_ids=["sales.cycle.account_management"],
+                rationale="Account work is verified; presenting is only adjacent.",
             ),
+            keywords=["presenting", "sales", "presenting"],
         ),
         fact_store,
         profile_store,
@@ -381,6 +388,9 @@ def test_two_readings_of_one_sentence_merge_to_the_lower_claim(
     assert requirement.coverage == "partial"
     assert requirement.shortfall_severity == "material"
     assert requirement.importance == "mandatory"
+    assert requirement.rationale == "Account work is verified; presenting is only adjacent."
+    # Keywords are the provider's ranking: repeats collapse, the order stays.
+    assert analysis.keywords == ["presenting", "sales"]
     assert set(requirement.supporting_fact_ids) == {
         CANONICAL_FACT,
         "sales.cycle.account_management",
@@ -406,6 +416,7 @@ def test_a_canonical_boundary_still_caps_a_match(
                 importance="mandatory",
                 coverage="matched",
                 fact_ids=["sales.cycle.account_management"],
+                rationale="Account management is software-adjacent sales.",
             )
         ),
         fact_store,
@@ -417,6 +428,7 @@ def test_a_canonical_boundary_still_caps_a_match(
     assert requirement.boundary_fact_ids
     assert requirement.coverage == "partial"
     assert requirement.shortfall_severity == "material"
+    assert requirement.rationale is None
 
 
 @pytest.mark.parametrize(

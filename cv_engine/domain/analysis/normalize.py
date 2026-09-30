@@ -156,6 +156,9 @@ def _merge(first: ProposedRequirement, second: ProposedRequirement) -> ProposedR
         ),
         first.shortfall_reason or second.shortfall_reason,
     )
+    # The rationale explains a coverage, so it comes from a reading that
+    # claimed the coverage kept - never from the more flattering one.
+    rationale = next((item.rationale for item in surviving_readings if item.rationale), None)
     return first.model_copy(
         update={
             # Upward, unlike coverage. Coverage is a claim about the
@@ -167,6 +170,7 @@ def _merge(first: ProposedRequirement, second: ProposedRequirement) -> ProposedR
             "coverage": coverage,
             "shortfall_severity": shortfall_severity,
             "shortfall_reason": shortfall_reason,
+            "rationale": rationale,
             "fact_ids": list(dict.fromkeys([*first.fact_ids, *second.fact_ids])),
         }
     )
@@ -320,6 +324,7 @@ def normalize_requirement(
         coverage=coverage,
         shortfall_severity=shortfall_severity,
         shortfall_reason=shortfall_reason,
+        rationale=proposed.rationale if coverage == proposed.coverage else None,
         supporting_fact_ids=supporting,
         boundary_fact_ids=boundaries,
         source=source,
@@ -383,7 +388,8 @@ def normalize_analysis_proposal(
         emphasis=emphasis,
         language=language,
         summary=proposal.summary,
-        keywords=sorted(set(proposal.keywords)),
+        # The provider's order is its ranking; duplicates go, the order stays.
+        keywords=list(dict.fromkeys(proposal.keywords)),
         requirements=requirements,
         issues=issues,
         source_coverage=(verified / len(requirements)) if requirements else None,

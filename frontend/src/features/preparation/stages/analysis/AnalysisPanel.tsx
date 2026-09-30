@@ -5,7 +5,6 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { surfaceClasses } from "@/ui/surface";
 import { AnalysisHeader } from "./AnalysisHeader";
 import { AnalysisNotes } from "./AnalysisNotes";
-import { AnalysisOverview } from "./AnalysisOverview";
 import { RequirementList } from "./RequirementList";
 import { RoleSummary } from "./RoleSummary";
 
@@ -25,9 +24,7 @@ export const AnalysisPanel = ({
     <AnalysisHeader record={detail.latest_analysis ?? null}>{headerContent}</AnalysisHeader>
 
     <div className="flex flex-col divide-y divide-cv-border [&>*]:py-5 [&>*:last-child]:pb-0">
-      <RoleSummary keywords={classification.keywords} summary={classification.summary} />
-
-      <AnalysisOverview classification={classification} />
+      <RoleSummary summary={classification.summary} />
 
       {classification.requirements.length === 0 ? null : (
         <RequirementList detail={detail} gaps={classification.gaps} requirements={classification.requirements} />
@@ -35,6 +32,7 @@ export const AnalysisPanel = ({
 
       <AnalysisNotes
         issues={classification.issues}
+        sourceCoverage={classification.sourceCoverage}
         unreadableRequirementCount={classification.unreadableRequirementCount}
       />
 

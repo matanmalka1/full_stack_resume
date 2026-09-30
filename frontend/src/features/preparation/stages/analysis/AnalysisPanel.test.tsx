@@ -32,6 +32,7 @@ const classification: Classification = {
       coverage: "unsupported",
       shortfallSeverity: null,
       shortfallReason: null,
+      rationale: null,
       supportingFactIds: [],
       boundaryFactIds: [],
     },
@@ -42,6 +43,7 @@ const classification: Classification = {
       coverage: "matched",
       shortfallSeverity: null,
       shortfallReason: null,
+      rationale: null,
       supportingFactIds: [],
       boundaryFactIds: [],
     },
@@ -61,17 +63,20 @@ const renderPanel = (value: Classification) => {
 };
 
 describe("AnalysisPanel", () => {
-  it("leads with the role summary and splits coverage by mandatory and preferred asks", () => {
+  it("leads with the role summary and states coverage once per importance group", () => {
     renderPanel(classification);
 
     expect(screen.getByRole("heading", { name: "מה המשרה מחפשת" })).toBeInTheDocument();
     expect(screen.getByText("A cloud sales role.")).toBeInTheDocument();
-    const overview = screen.getByRole("region", { name: "סיכום הכיסוי" });
-    expect(within(overview).getByText("0/1")).toBeInTheDocument();
-    expect(within(overview).getByText("פער קשיח אחד")).toBeInTheDocument();
-    expect(within(overview).getByText("1/1")).toBeInTheDocument();
-    /* The classification and the verdict belong to the matching form and the step
-       banner; the panel does not restate either. */
+    /* Keywords and a separate coverage summary repeated what the requirements say. */
+    expect(screen.queryByText("AWS")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "סיכום הכיסוי" })).not.toBeInTheDocument();
+    expect(screen.getByText("0/1 מכוסות")).toBeInTheDocument();
+    /* Full source anchoring is nothing to report. */
+    expect(screen.queryByText(/הערות על אמינות הניתוח/)).not.toBeInTheDocument();
+    /* The classification, the verdict and the hard-gap count belong to the matching form
+       and the step banner; the panel does not restate them. */
+    expect(screen.queryByText("פער קשיח אחד")).not.toBeInTheDocument();
     expect(screen.queryByText("סיווג שהוצע")).not.toBeInTheDocument();
     expect(screen.queryByText("התאמה נמוכה")).not.toBeInTheDocument();
   });
@@ -92,7 +97,7 @@ describe("AnalysisPanel", () => {
     expect(screen.getByText("Fluent English")).toBeInTheDocument();
   });
 
-  it("shows a minor mandatory shortfall with its own severity and reason", () => {
+  it("explains an uncovered requirement by its shortfall, keeping the AI's rationale behind the disclosure", () => {
     renderPanel({
       ...classification,
       fit: "high",
@@ -103,12 +108,31 @@ describe("AnalysisPanel", () => {
           coverage: "partial",
           shortfallSeverity: "minor",
           shortfallReason: "The verified duration is slightly below the requested threshold.",
+          rationale: "AWS work is verified, but not for the requested duration.",
         },
       ],
     });
 
-    expect(screen.getByText("ללא פער קשיח")).toBeInTheDocument();
     expect(screen.getByText(/פער קטן:/)).toBeInTheDocument();
     expect(screen.getByText(/verified duration is slightly below/)).toBeInTheDocument();
+    expect(screen.getByText("AWS work is verified, but not for the requested duration.")).not.toBeVisible();
+    expect(screen.getByText("הסבר ה-AI")).toBeInTheDocument();
+  });
+
+  it("shows the AI's rationale on a covered requirement", () => {
+    renderPanel({
+      ...classification,
+      requirements: [{ ...classification.requirements[1], rationale: "The CV states fluent English." }],
+    });
+
+    expect(screen.getByText(/הסבר ה-AI:/)).toBeInTheDocument();
+    expect(screen.getByText("The CV states fluent English.")).toBeInTheDocument();
+  });
+
+  it("reports partial source anchoring as a reliability note", () => {
+    renderPanel({ ...classification, sourceCoverage: 0.5 });
+
+    expect(screen.getByText("הערות על אמינות הניתוח (1)")).toBeInTheDocument();
+    expect(screen.getByText("רק 50% מהדרישות אותרו בנוסח המודעה.")).toBeInTheDocument();
   });
 });

@@ -24,7 +24,6 @@ import {
 import { PreparationView, WizardStepShell, useAutomaticDraft } from "@/features/preparation";
 import { applicationLabel } from "../model/applicationPresentation";
 import { analysisViewState } from "../model/analysisViewState";
-import { ApplicationArtifacts } from "../components/ApplicationArtifacts";
 import { JobSnapshotPanel } from "../components/JobSnapshotPanel";
 
 /* The news that an Application was just created, handed over in route state by the intake
@@ -132,11 +131,6 @@ export const ApplicationPage = () => {
     settled,
   });
 
-  /* The engine's provider evidence exists only once an analysis ran, so its reference
-     section is drawn only then - never as an empty disclosure the reader opens onto
-     nothing. The CV's own file is the ready step's, not this section's. */
-  const hasArtifacts = detail !== undefined && detail.latest_analysis != null;
-
   return (
     /* The analysis step of the wizard. Its name and its spine are the shell's; what is left
        here is the one thing this step is identified by - who the CV is for. The heading
@@ -237,9 +231,8 @@ export const ApplicationPage = () => {
               <PreparationView detail={detail} onQueued={watch} operationLive={operationLive} />
             ) : null}
 
-            {/* The posting the CV is tailored to, and the files the work produced: reference
-                the reader checks or downloads, folded away so the step above stays the
-                screen's subject.
+            {/* The posting the CV is tailored to: reference the reader checks or repairs,
+                folded away so the step above stays the screen's subject.
 
                 Behind a rule and a quiet heading, because a drawer sitting in the same
                 column at the same weight as the step reads as another panel of it - which
@@ -270,14 +263,6 @@ export const ApplicationPage = () => {
                       </div>
                     </Disclosure>
                   )}
-
-                  {hasArtifacts ? (
-                    <Disclosure summary="תוצרי המנוע">
-                      <div className="pt-2">
-                        <ApplicationArtifacts applicationId={applicationId} />
-                      </div>
-                    </Disclosure>
-                  ) : null}
                 </div>
               </WideRow>
             ) : null}

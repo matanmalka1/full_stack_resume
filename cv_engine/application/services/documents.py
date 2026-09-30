@@ -24,7 +24,7 @@ from ...domain.contracts.taxonomy import Emphasis
 from ...domain.contracts.validation import ValidationIssue, ValidationReport
 from ...domain.document import basis
 from ...domain.draft_markdown import serialize_markdown
-from ...domain.drafts import build_draft, manually_edited
+from ...domain.drafts import build_draft, carries_authored_wording
 from ...domain.knowledge import Knowledge
 from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.validation import validate_draft
@@ -220,6 +220,20 @@ def compose_content(
         raise PreconditionFailed(f"document content could not be built: {exc}") from exc
 
 
+def refuse_authored_wording(content: DraftDocument | None) -> None:
+    """A selection change may rebuild only content the engine composed (§14).
+
+    Content carrying manual or AI wording is refused with a pointer to regeneration,
+    before anything is written - or, for `propose_selection`, before a paid call.
+    """
+    if content is not None and carries_authored_wording(content):
+        raise PreconditionFailed(
+            "the document carries wording a deterministic rebuild would discard; use "
+            "regenerate_section or regenerate_claim to change its selection",
+            code=REGENERATION_REQUIRED,
+        )
+
+
 def selection_change_body(
     source: DocumentSource,
     knowledge: Knowledge,
@@ -227,6 +241,7 @@ def selection_change_body(
     pinned_fact_ids: Iterable[str],
     excluded_fact_ids: Iterable[str],
     emphasis_override: str | None,
+    ai_rationale: str | None = None,
 ) -> DocumentBody:
     """§14 `update_selection`, as the body it would write.
 
@@ -234,6 +249,8 @@ def selection_change_body(
     atomically when it is deterministic: content the engine composed is recomposed
     from the new selection. Content carrying wording a rebuild would discard is a
     change that needs wording judgment, refused with a pointer to regeneration.
+    An activated `propose_selection` writes through the same rule, with its
+    rationale recorded as provenance.
     """
     document = source.document
     selection = build_document_selection(
@@ -243,15 +260,11 @@ def selection_change_body(
         pinned_fact_ids=pinned_fact_ids,
         excluded_fact_ids=excluded_fact_ids,
         emphasis_override=emphasis_override,
+        ai_rationale=ai_rationale,
     )
     content = document.content
+    refuse_authored_wording(content)
     if content is not None:
-        if manually_edited(content):
-            raise PreconditionFailed(
-                "the document carries wording a deterministic rebuild would discard; use "
-                "regenerate_section or regenerate_claim to change its selection",
-                code=REGENERATION_REQUIRED,
-            )
         content = compose_content(
             document.application_id,
             document.analysis_id,

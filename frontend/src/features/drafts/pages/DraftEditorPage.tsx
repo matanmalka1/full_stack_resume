@@ -418,10 +418,9 @@ export const DraftEditorPage = () => {
               editor={
                 <>
                   <DraftContentSummary
-                    busy={operationLive || editing.selectionPending}
+                    applicationId={applicationId}
                     content={content}
                     draft={draft}
-                    onInclude={editing.includeFact}
                     selection={selection}
                   />
 

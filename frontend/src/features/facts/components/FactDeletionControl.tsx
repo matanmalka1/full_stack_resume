@@ -36,9 +36,9 @@ export const FactDeletionControl = ({ fact }: { fact: Fact }) => {
   return (
     <div className="flex flex-col gap-3 rounded-control border border-cv-blocker bg-cv-surface p-4">
       <Callout title="הפעולה סופית ואינה הפיכה" tone="warning">
-        העובדה תוסר מרשימת העובדות המוצגת כברירת מחדל ולא תוצע כיעד צירוף חדש. ההיסטוריה שלה וכל הגשה שכבר נרשמה
-        יישארו ללא שינוי ונגישים לצפייה. מסמך קורות חיים שמשתמש בה לא ישתנה, אבל האישור שלו יפוג, ויהיה צורך לפתור את
-        השימוש בעובדה לפני אישור מחדש.
+        העובדה תוסר מרשימת העובדות המוצגת כברירת מחדל ולא תוצע כיעד צירוף חדש. ההיסטוריה שלה וכל הגשה שכבר נרשמה יישארו
+        ללא שינוי ונגישים לצפייה. מסמך קורות חיים שמשתמש בה לא ישתנה, אבל האישור שלו יפוג, ויהיה צורך לפתור את השימוש
+        בעובדה לפני אישור מחדש.
       </Callout>
       <div className="flex flex-wrap justify-end gap-2">
         <Button onClick={() => setConfirming(false)} size="compact" variant="secondary">

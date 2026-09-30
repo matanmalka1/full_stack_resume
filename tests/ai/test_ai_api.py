@@ -121,16 +121,41 @@ def test_the_selection_proposal_is_queued_and_the_selection_change_is_not(
     assert _document(ai_api_worker, application_id)["selection"]["proposed_by"] is None
 
 
-def test_a_selection_proposal_is_refused_once_content_exists(ai_api_worker) -> None:
-    """Proposals apply only while the document has no content (§14)."""
+def test_a_selection_proposal_recomposes_an_engine_draft(
+    ai_api_worker, fake_openai: FakeOpenAI
+) -> None:
+    """§14: a proposal follows `update_selection`'s content rule.
+
+    Content the engine composed is offered a proposal, and activation recomposes it
+    from the new selection in the same write. Authored wording refuses it; that half
+    is asserted where an AI draft is written (`test_ai_tasks.py`).
+    """
     application_id = _drafted(ai_api_worker, "Late Proposal Co")
-    token = _document(ai_api_worker, application_id)["document_hash"]
-    refused = _post(
+    detail = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}")
+    assert detail.status_code == 200, detail.text
+    assert "propose_selection" in detail.json()["available_actions"]
+    document = _document(ai_api_worker, application_id)
+    pinned = document["selection"]["selected_fact_ids"][:1]
+    fake_openai.script(
+        "propose_selection_plan",
+        SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r"),
+    )
+
+    queued = _post(
         ai_api_worker,
         f"/applications/{application_id}/document/selection-proposals",
-        {"expected_document_hash": token},
+        {"expected_document_hash": document["document_hash"]},
     )
-    assert refused.status_code == 412, refused.text
+    assert queued.status_code == 202, queued.text
+    finished = ai_api_worker.wait_for_operation(queued.json()["id"])
+    assert finished["status"] == "succeeded", finished
+
+    stored = stored_document(ai_api_worker.services, application_id)
+    assert stored.selection.proposed_by == "ai"
+    assert stored.selection.pinned_fact_ids == pinned
+    assert stored.content is not None
+    assert stored.content.selection is not None
+    assert stored.content.selection.pinned_fact_ids == pinned
 
 
 def test_regenerate_claim_is_accepted_at_the_specified_path_only_on_a_current_hash(

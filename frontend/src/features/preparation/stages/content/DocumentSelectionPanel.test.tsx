@@ -84,6 +84,7 @@ const panel = (client: QueryClient, value: ApplicationDetail, doc: CVDocument, o
           coverage: "matched",
           shortfallSeverity: null,
           shortfallReason: null,
+          rationale: null,
           supportingFactIds: ["fact.omitted"],
           boundaryFactIds: [],
         },
@@ -164,6 +165,23 @@ describe("DocumentSelectionPanel", () => {
 
     expect(screen.queryByRole("button", { name: "הצעת בחירה באמצעות AI" })).toBeNull();
     expect(screen.getByText("הצעת AI אינה זמינה למסמך במצבו הנוכחי.")).toBeInTheDocument();
+    expect(screen.queryByText(/קריאת AI בתשלום/)).toBeNull();
+  });
+
+  it("offers a proposal over an engine draft and says the draft is rebuilt", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    renderPanel(detail(), document({}, { content: cvDocument().content }), true);
+
+    expect(screen.getByRole("button", { name: "הצעת בחירה באמצעות AI" })).toBeInTheDocument();
+    expect(screen.getByText(/הטיוטה תיבנה מחדש מהבחירה החדשה/)).toBeInTheDocument();
+  });
+
+  it("names authored wording when the stage withholds a proposal over a draft", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const drafted = document({}, { content: cvDocument().content });
+    renderPanel(detail({ available_actions: ["update_selection"] }), drafted, true);
+
+    expect(screen.getByText(/הטיוטה כוללת ניסוח ידני או של AI/)).toBeInTheDocument();
   });
 
   it("shows an AI selection's own rationale and labels only the marks it still holds", () => {
@@ -225,7 +243,9 @@ describe("DocumentSelectionPanel", () => {
     const added = screen.getByRole("heading", { name: "נוספו לקורות החיים (1)" }).parentElement;
     if (added === null) throw new Error("the added list was not rendered");
     expect(within(added).getByText("עובדה שהושמטה")).toBeInTheDocument();
-    expect(within(added).getByText("Priority ERP")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "הוסרו מקורות החיים (1)" })).toBeInTheDocument();
+    expect(within(added).getByText(/ראיה לדרישת חובה/)).toBeInTheDocument();
+    const removed = screen.getByRole("heading", { name: "הוסרו מקורות החיים (1)" }).parentElement;
+    if (removed === null) throw new Error("the removed list was not rendered");
+    expect(within(removed).getByText("עובדה שנבחרה")).toBeInTheDocument();
   });
 });

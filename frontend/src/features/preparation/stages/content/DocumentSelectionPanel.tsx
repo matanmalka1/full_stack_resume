@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/api/analyses";
 import type { ApplicationDetail, CVDocument } from "@/api/contracts";
@@ -15,7 +15,8 @@ import { surfaceClasses } from "@/ui/surface";
 import { type FactFilter, factTotals } from "../../model/factGroups";
 import { requirementsByFact } from "../../model/requirementGroups";
 import { includedFactIds, selectionChanges } from "../../model/selectionManifest";
-import { AiSelectionProposal } from "./AiSelectionProposal";
+import { AiSelectionProposal, aiProposalSteps } from "./AiSelectionProposal";
+import { factSelectionAnchor } from "./factSelectionAnchor";
 import type { FactChoice } from "./FactRow";
 import { FactSelectionList } from "./FactSelectionList";
 import { useSelectionProposal } from "./useSelectionProposal";
@@ -67,6 +68,13 @@ export const DocumentSelectionPanel = ({
   const proposal = useSelectionProposal(applicationId);
   const [edits, setEdits] = useState<FactOverrides | null>(null);
   const [filter, setFilter] = useState<FactFilter>("all");
+  const panelRef = useRef<HTMLElement>(null);
+
+  /* The editor sends the reader here to change the selection. The panel mounts only after
+     the document loads, after the browser's own jump to the anchor has already missed it. */
+  useEffect(() => {
+    if (window.location.hash === `#${factSelectionAnchor}`) panelRef.current?.scrollIntoView?.({ block: "start" });
+  }, []);
 
   const { selection } = document;
   const candidates = selection.candidates;
@@ -154,27 +162,24 @@ export const DocumentSelectionPanel = ({
   // Recorded only on selections activated from an AI proposal; null means "not recorded", never "not AI".
   const aiProposed = selection.proposed_by === "ai";
   const hasContent = document.content != null;
+  /* Not offered and not blocked: with a draft present, the stage itself withholds it. */
+  const proposalWithheldByWording =
+    hasContent && !proposalOffered && !detail.blocked_actions.some(({ action }) => action === "propose_selection");
 
   return (
     <section
       aria-labelledby="selection-plan-heading"
+      id={factSelectionAnchor}
+      ref={panelRef}
       className={surfaceClasses("flex flex-col gap-5 bg-cv-surface p-5")}
     >
       <div className="flex flex-col gap-3 border-b border-cv-border pb-4">
-        {/* The count sits beside the heading it belongs to: at the full width of the row,
-            an opposite-edge counter read as detached from the panel it summarizes. */}
+        {/* The count is the action bar's, below: it says the same number and whether a
+            change is still unsaved. */}
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="text-heading-sm font-bold text-cv-text" id="selection-plan-heading">
-              בחירת העובדות לקורות החיים
-            </h2>
-            <p className="rounded-pill bg-cv-surface-muted px-2.5 py-0.5 text-caption text-cv-text-muted">
-              <span className="font-bold text-cv-text">
-                {totals.included}/{totals.total}
-              </span>{" "}
-              עובדות בקורות החיים
-            </p>
-          </div>
+          <h2 className="text-heading-sm font-bold text-cv-text" id="selection-plan-heading">
+            בחירת העובדות לקורות החיים
+          </h2>
           <p className="mt-1 max-w-2xl text-support text-cv-text-muted">
             המנוע דירג את כל העובדות המאושרות מול המשרה ובחר מה ייכנס לכל סעיף. אפשר להשאיר לו את ההחלטה, לכלול או
             להחריג עובדה במפורש, או לבקש הצעה מ־AI.
@@ -190,13 +195,21 @@ export const DocumentSelectionPanel = ({
             עובדה שנכללה או הוחרגה במפורש - ידנית או בהצעת AI - גוברת על הדירוג. שינוי כאן חל על המסמך עצמו, ולכן גם על
             הטיוטה בעורך.
           </p>
+          <p className="mt-3 font-semibold text-cv-text">הצעת בחירה באמצעות AI</p>
+          <ol className="mt-1 flex list-decimal flex-col gap-1 ps-4">
+            {aiProposalSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
         </Disclosure>
       </div>
 
       <AiSelectionProposal
         aiAvailable={aiAvailable}
+        authoredWording={proposalWithheldByWording}
         busy={busy}
         changes={proposalChanges}
+        hasContent={hasContent}
         offered={proposalOffered}
         onDismiss={proposal.dismiss}
         onPropose={() => ai.mutate()}

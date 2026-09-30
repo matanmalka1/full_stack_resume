@@ -362,7 +362,7 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
 
 
 class SelectionPlanOperationHandler(AnalysisTaskHandler):
-    """`propose_selection`: the AI form of §14 `update_selection`, while content is NULL."""
+    """`propose_selection`: the AI form of §14 `update_selection`, under its content rule."""
 
     task = "propose_selection_plan"
 

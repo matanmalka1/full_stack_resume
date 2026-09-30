@@ -7,13 +7,12 @@ import { documentQueryOptions } from "@/api/documents";
 import { factsQueryOptions } from "@/api/facts";
 import { candidateIncluded } from "../../model/factGroups";
 
-export type EvidenceInclusion = "included" | "omitted" | "unknown";
+type EvidenceInclusion = "included" | "omitted" | "unknown";
 
 export interface RequirementEvidence {
   error: unknown;
   inclusion: (factId: string) => EvidenceInclusion;
   label: (factId: string) => string;
-  loading: boolean;
 }
 
 export const useRequirementEvidence = (
@@ -60,8 +59,11 @@ export const useRequirementEvidence = (
       const entry = planIndex.get(factId);
       return entry === undefined ? "unknown" : entry.included ? "included" : "omitted";
     },
+    /* The evidence sits behind each row's disclosure, so loading is stated there, per fact,
+       rather than as a banner over the whole list - and never as a missing fact. */
     label: (factId) =>
-      meanings.get(factId) ?? planIndex.get(factId)?.text ?? `העובדה ${factId} אינה קיימת במאגר הנוכחי.`,
-    loading: factsQuery.isLoading,
+      meanings.get(factId) ??
+      planIndex.get(factId)?.text ??
+      (factsQuery.isLoading ? "טוען…" : `העובדה ${factId} אינה קיימת במאגר הנוכחי.`),
   };
 };

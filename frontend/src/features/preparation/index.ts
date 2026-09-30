@@ -56,6 +56,6 @@ export {
   reasonTitle,
   warningTitle,
 } from "./model/preparationLabels";
-/* What the document's selection decided about a fact. The draft editor names the same decisions
-   beside the facts it offers to include, so the words are defined once. */
-export { omissionReasonLabels } from "./model/selectionLabels";
+/* The selection is edited on one screen. The draft editor links here rather than offering
+   a second editor of its own. */
+export { factSelectionAnchor } from "./stages/content/factSelectionAnchor";

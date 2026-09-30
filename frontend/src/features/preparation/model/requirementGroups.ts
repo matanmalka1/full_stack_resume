@@ -13,6 +13,7 @@ export const needsAttention = (requirement: Requirement): boolean => requirement
 
 interface RequirementGroup {
   importance: RequirementImportance;
+  /* Matched and total count the whole group, whatever the filter shows. */
   matched: number;
   requirements: Requirement[];
   total: number;
@@ -43,15 +44,6 @@ export const requirementGroups = (
       },
     ];
   });
-
-export const coverageCounts = (requirements: readonly Requirement[]): Record<RequirementCoverage, number> =>
-  requirements.reduce(
-    (result, requirement) => {
-      result[requirement.coverage] += 1;
-      return result;
-    },
-    { matched: 0, partial: 0, unsupported: 0, unknown: 0 } satisfies Record<RequirementCoverage, number>,
-  );
 
 export const requirementsByFact = (requirements: readonly Requirement[]): Map<string, Requirement[]> => {
   const index = new Map<string, Requirement[]>();

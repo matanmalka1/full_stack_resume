@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApplicationDetail, ArtifactVersion } from "@/api/contracts";
+import type { ApplicationDetail } from "@/api/contracts";
 import { ApplicationPage } from "./ApplicationPage";
 
 const detail = (): ApplicationDetail =>
@@ -42,24 +42,6 @@ const detail = (): ApplicationDetail =>
     },
   }) as ApplicationDetail;
 
-const artifact = (overrides: Partial<ArtifactVersion>): ArtifactVersion => ({
-  artifact_id: "artifact-1",
-  artifact_type: "provider_response",
-  content_hash: "hash",
-  created_at: "2026-09-06T08:00:00Z",
-  emphasis: null,
-  facts_version: null,
-  id: "artifact-version-1",
-  job_snapshot_id: "snap-1",
-  lifecycle_status: "rendered",
-  logical_name: "provider-response.json",
-  metadata: {},
-  profile: null,
-  track: null,
-  version_number: 1,
-  ...overrides,
-});
-
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), {
     status: 200,
@@ -74,14 +56,7 @@ const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: Requ
     },
   });
 
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(
-      fetchImplementation ??
-        ((input: RequestInfo | URL) =>
-          Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail()))),
-    ),
-  );
+  vi.stubGlobal("fetch", vi.fn(fetchImplementation ?? (() => Promise.resolve(jsonResponse(detail())))));
 
   return render(
     <QueryClientProvider client={client}>
@@ -181,52 +156,13 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
   });
 
-  it("keeps the engine's provider evidence collapsed until requested", async () => {
-    const artifacts = [
-      artifact({
-        id: "newest",
-        artifact_id: "newest",
-        created_at: "2026-09-06T08:00:00Z",
-        metadata: { task: "propose_analysis", provider: "openai", model: "gpt-5.6-terra" },
-      }),
-      artifact({ id: "second", artifact_id: "second", created_at: "2026-09-05T08:00:00Z" }),
-      artifact({ id: "third", artifact_id: "third", created_at: "2026-09-04T08:00:00Z" }),
-      artifact({ id: "oldest", artifact_id: "oldest", created_at: "2026-09-03T08:00:00Z" }),
-    ];
-    renderPage((input) =>
-      Promise.resolve(
-        String(input).endsWith("/artifacts")
-          ? jsonResponse({ items: artifacts })
-          : jsonResponse({
-              ...detail(),
-              latest_analysis: {
-                id: "analysis-1",
-                application_id: "app-1",
-                job_snapshot_id: "snap-1",
-                version_number: 1,
-                analysis: {},
-                fit_level: "high",
-                gaps: [],
-                provider: "openai",
-                model: "gpt-5.6-terra",
-                created_at: "2026-08-24T07:00:00Z",
-              },
-            }),
-      ),
-    );
+  it("does not show provider artifacts in the preparation screen", async () => {
+    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(jsonResponse(detail())));
+    renderPage(fetchMock);
 
-    const artifactsSummary = (await screen.findAllByText("תוצרי המנוע"))[0];
-    expect(artifactsSummary.closest("details")).not.toHaveAttribute("open");
-    fireEvent.click(artifactsSummary);
-    /* A row is named by the task that produced it, with its model; a record without a
-       known task keeps the artifact type's name. */
-    const artifactsList = await screen.findByRole("region", { name: "תוצרי המנוע" });
-    expect(within(artifactsList).getByText("ניתוח המשרה")).toBeInTheDocument();
-    expect(within(artifactsList).getByText("gpt-5.6-terra")).toBeInTheDocument();
-    expect(within(artifactsList).getAllByText("תשובת ספק ה־AI")).toHaveLength(2);
-
-    fireEvent.click(screen.getByRole("button", { name: "הצגת רשומות קודמות (1)" }));
-    expect(within(artifactsList).getAllByText("תשובת ספק ה־AI")).toHaveLength(3);
+    expect(await screen.findByRole("heading", { name: "ניתוח והתאמה" })).toBeInTheDocument();
+    expect(screen.queryByText("תוצרי המנוע")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/artifacts"))).toBe(false);
   });
 
   it("copies the complete stored job text from inside its disclosure", async () => {

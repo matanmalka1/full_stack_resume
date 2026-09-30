@@ -10,15 +10,15 @@ from __future__ import annotations
 from ....domain.knowledge import Knowledge
 from ....util import utc_now
 from ...commands import AnalysisResult, AnalyzeCommand, ProposeSelectionCommand
-from ...errors import LineageBroken, PreconditionFailed, StateConflict
+from ...errors import LineageBroken, PreconditionFailed
 from ...ports.analysis_plans import AnalysisSelectionSourceReader, AnalysisStore
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.transactions import WriteTransaction
 from ..documents import (
-    build_document_selection,
     lock_document_source,
     refuse_deleted,
     require_hash,
+    selection_change_body,
 )
 from .preparation import PreparedAnalysis
 from .selection_policy import PreparedSelectionProposal
@@ -100,31 +100,28 @@ class AnalysisActivation:
     ) -> str:
         """Replace the selection with an AI proposal, after repeating every check (§14).
 
-        The expected hash and the empty content are re-checked under the row lock, and
-        the overlay is run through selection policy again against the Knowledge loaded
-        for activation. The provider's proposal is never trusted on its own.
+        The expected hash is re-checked under the row lock, and the overlay is run
+        through selection policy again against the Knowledge loaded for activation.
+        The provider's proposal is never trusted on its own. The write follows
+        `update_selection`'s content rule: engine-composed content is recomposed from
+        the new selection, and authored wording refuses the activation.
         """
         source = lock_document_source(tx, self.documents, self.sources, command.application_id)
         refuse_deleted(command.application_id, source.deleted_at)
-        document = source.document
-        require_hash(document, command.expected_document_hash)
-        if document.content is not None:
-            raise StateConflict(
-                "a selection proposal applies only while the document has no content"
-            )
-        selection = build_document_selection(
-            source.analysis,
+        require_hash(source.document, command.expected_document_hash)
+        body = selection_change_body(
+            source,
             knowledge,
-            current=document.selection,
             pinned_fact_ids=prepared.proposal.pinned_fact_ids,
             excluded_fact_ids=prepared.proposal.excluded_fact_ids,
+            emphasis_override=None,
             ai_rationale=prepared.proposal.rationale,
         )
         updated = self.documents.update_body(
             tx,
             command.application_id,
             command.expected_document_hash,
-            DocumentBody(analysis_id=document.analysis_id, selection=selection, content=None),
+            body,
             updated_at=utc_now(),
         )
         return updated.id

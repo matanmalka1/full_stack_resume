@@ -47,8 +47,7 @@ export interface SelectionSummary {
   included: number;
   /* Of those, the ones fixed by an explicit decision rather than the ranking. */
   pinned: number;
-  /* Facts the selection weighed and left out, with nothing in the draft resting on them -
-     the ones an include could still bring in. */
+  /* Facts the selection weighed and left out, with nothing in the draft resting on them. */
   omitted: EditableDocument["facts"];
 }
 

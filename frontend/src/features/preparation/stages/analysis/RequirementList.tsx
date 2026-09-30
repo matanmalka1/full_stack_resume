@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 
 import type { AnalysisGap, Requirement, RequirementImportance } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
-import { Callout } from "@/ui/Callout";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { ViewSwitch } from "@/ui/ViewSwitch";
@@ -35,12 +34,9 @@ export const RequirementList = ({
   return (
     <section aria-labelledby="requirements-heading" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-body font-semibold text-cv-text" id="requirements-heading">
-            דרישות המשרה
-          </h3>
-          <p className="text-support text-cv-text-muted">מה המשרה דורשת, ואילו עובדות מאושרות עונות על כל דרישה.</p>
-        </div>
+        <h3 className="text-body font-semibold text-cv-text" id="requirements-heading">
+          דרישות המשרה
+        </h3>
         <div className="max-w-full overflow-x-auto">
           <ViewSwitch
             label="סינון הדרישות"
@@ -62,10 +58,6 @@ export const RequirementList = ({
           title="לא ניתן לטעון את העובדות התומכות"
         />
       )}
-      {evidence.loading ? (
-        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout role="status" title="טוען את הראיות התומכות…" tone="progress" />
-      ) : null}
 
       {visible === 0 ? (
         <EmptyState>
@@ -77,14 +69,13 @@ export const RequirementList = ({
         groups.map((group) =>
           group.requirements.length === 0 ? null : (
             <section aria-labelledby={`requirements-${group.importance}`} key={group.importance}>
-              <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-cv-border pb-2">
-                <h4 className="text-support font-bold text-cv-text" id={`requirements-${group.importance}`}>
-                  {importanceTitles[group.importance]}
-                </h4>
+              {/* Coverage per importance is stated here, once; the filter counts the states. */}
+              <h4 className="flex items-baseline justify-between gap-3 border-b border-cv-border pb-2 text-support font-bold text-cv-text">
+                <span id={`requirements-${group.importance}`}>{importanceTitles[group.importance]}</span>
                 <span className="text-caption font-semibold text-cv-text-muted">
-                  {group.matched} מתוך {group.total} מכוסות במלואן
+                  {group.matched}/{group.total} מכוסות
                 </span>
-              </div>
+              </h4>
               <ul aria-labelledby={`requirements-${group.importance}`} className="divide-y divide-cv-border">
                 {group.requirements.map((requirement) => (
                   <RequirementRow

@@ -14,7 +14,7 @@ from ....domain.selection import STRUCTURAL_STYLES
 from ...commands import ProposeSelectionCommand
 from ...errors import PreconditionFailed, ProposalRejected
 from ...ports import SelectionPlanContext, SelectionSectionContext
-from ..documents import build_document_selection, refuse_deleted
+from ..documents import build_document_selection, refuse_authored_wording, refuse_deleted
 from ..proposals import evidence_attached, fact_context, refuse_facts_outside_the_pool
 from .selection_policy import AnalysisSelection, PreparedSelectionProposal
 
@@ -88,15 +88,14 @@ class AnalysisSelectionService:
         ever reached from the Operation runner's execute phase. Nothing durable is
         written here beyond the preserved response: the overlay is validated by the
         same selection policy `update_selection` uses, and written only at activation
-        after the `expected_document_hash` check.
+        after the `expected_document_hash` check. Content the engine composed is
+        rebuilt from the activated selection; authored wording is refused here, before
+        the provider is called.
         """
         source = service.document_source(command.application_id)
         refuse_deleted(command.application_id, source.deleted_at)
         document = source.document
-        if document.content is not None:
-            raise PreconditionFailed(
-                "a selection proposal applies only while the document has no content"
-            )
+        refuse_authored_wording(document.content)
         analysis: JobAnalysis = source.analysis
         effective_analysis = analysis.model_copy(update={"emphasis": document.selection.emphasis})
         knowledge = service.load_knowledge()
