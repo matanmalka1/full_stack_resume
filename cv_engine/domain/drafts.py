@@ -365,7 +365,7 @@ def reorder_draft(
 
 
 def carries_authored_wording(draft: DraftDocument) -> bool:
-    """Whether this document carries wording a deterministic rebuild would lose.
+    """Whether this document carries wording a selection change would lose.
 
     Four markers, none of which the engine's own composition ever sets.
     `superseded_by_manual_edit` says a claim was relinked to a fact the engine
@@ -374,11 +374,10 @@ def carries_authored_wording(draft: DraftDocument) -> bool:
     `apply_claim_edit` writes; presentation rules carry their own rule IDs. A
     `reviewed` claim is wording that passed semantic review - written by the AI
     (`create_draft`, `regenerate_section`, `regenerate_claim`) or kept by the user
-    under review. A draft the engine built alone matches none of the four.
+    under review. Content left in its canonical wording matches none of the four.
 
-    Rebuilding such a document from a new SelectionPlan would silently replace
-    that wording with the engine's, which is why §14 sends that case to a
-    regeneration command instead of the deterministic path.
+    A selection change drops the content to be drafted again, which would silently
+    lose that wording; §14 sends that case to a regeneration command instead.
     """
     if draft.selection is not None and draft.selection.superseded_by_manual_edit:
         return True

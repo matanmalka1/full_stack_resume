@@ -152,11 +152,7 @@ class OperationSubmissionService:
     ) -> OperationView:
         """§14 `create_draft`: queue generation against the document the client read."""
         self._load_active_application(command.application_id)
-        command = (
-            self._freeze_ai_execution(command)
-            if command.provider == "openai"
-            else command.model_copy(update={"model": "rules-v1", "reasoning_effort": None})
-        )
+        command = self._freeze_ai_execution(command)
         source = draft_service.document_source(command.application_id)
         sources = self._document_sources(source, command.expected_document_hash)
         if source.document.content is not None:
@@ -170,9 +166,7 @@ class OperationSubmissionService:
             payload=command.model_dump(mode="json"),
             idempotency_key=idempotency_key,
             sources=sources,
-            # The mode the client chose, recorded on the Operation. It also decides
-            # whether the AI resource slot is required.
-            provider=command.provider,
+            provider="openai",
             model=command.model,
             reasoning_effort=self._validated_reasoning_effort(command.reasoning_effort),
         )

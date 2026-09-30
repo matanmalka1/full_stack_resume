@@ -16,9 +16,9 @@ from ...errors import PreconditionFailed, StateConflict
 from ..documents import (
     build_document_selection,
     built_with,
+    changed_selection,
     lock_document_source,
     require_hash,
-    selection_change_body,
 )
 from .preparation import PreparedAnalysis
 from .selection_policy import AnalysisSelection
@@ -161,7 +161,7 @@ class AnalysisCorrection:
         knowledge = service.load_knowledge()
         source = service.document_source(command.application_id)
         require_hash(source.document, command.expected_document_hash)
-        body = selection_change_body(
+        selection = changed_selection(
             source,
             knowledge,
             pinned_fact_ids=command.pinned_fact_ids,
@@ -179,16 +179,18 @@ class AnalysisCorrection:
                     "the active JobAnalysis moved since this decision was made "
                     "(expected_analysis_id)"
                 )
-            updated = service.documents.update_body(
+            # Rendered files it releases are left to orphan maintenance, as a
+            # best-effort discard after `build_from_analysis` would be.
+            updated, _released = service.documents.replace_selection(
                 tx,
                 command.application_id,
                 command.expected_document_hash,
-                body,
+                selection,
                 updated_at=utc_now(),
             )
             if emphasis_decision_changed:
                 service.analyses.set_matching_emphasis(
-                    tx, command.application_id, body.selection.emphasis.value
+                    tx, command.application_id, selection.emphasis.value
                 )
         return AnalysisDecisionsResult(
             application_id=command.application_id,

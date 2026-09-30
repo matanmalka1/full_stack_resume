@@ -255,8 +255,7 @@ class S3ObjectStore:
     """`ObjectStore` over an S3-compatible bucket. R2 via `endpoint_url`.
 
     boto3 is imported inside `__init__` rather than at module scope, because
-    the local path must keep working with no cloud SDK installed - the
-    deterministic workflow has to reach Ready with nothing configured, and a
+    the local path must keep working with no cloud SDK installed, and a
     module-level import would make that depend on an optional dependency.
 
     Every botocore exception is translated. One escaping raw would reach the

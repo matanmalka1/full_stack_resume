@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ...application.ai_configuration import AIModel, ReasoningEffort
-from ...application.settings import ExecutionMode, UiDensity, UiTextSize, UiTheme
+from ...application.settings import UiDensity, UiTextSize, UiTheme
 from .health import HttpSchema
 
 
@@ -19,9 +19,6 @@ class AIModelOptionResponse(HttpSchema):
 class SettingsResponse(HttpSchema):
     edit_version: int
     auto_generate_when_review_not_required: bool
-    ai_enabled: bool
-    ai_enabled_override: bool | None = None
-    default_execution_mode: ExecutionMode
     default_ai_model: AIModel
     default_reasoning_effort: ReasoningEffort
     available_ai_models: list[AIModelOptionResponse]
@@ -34,8 +31,6 @@ class SettingsResponse(HttpSchema):
 
 class UpdateSettingsRequest(HttpSchema):
     auto_generate_when_review_not_required: bool
-    ai_enabled_override: bool | None = None
-    default_execution_mode: ExecutionMode
     default_ai_model: AIModel
     default_reasoning_effort: ReasoningEffort
     ui_density: UiDensity

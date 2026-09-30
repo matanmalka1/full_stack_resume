@@ -15,10 +15,10 @@ from ...ports.analysis_plans import AnalysisSelectionSourceReader, AnalysisStore
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.transactions import WriteTransaction
 from ..documents import (
+    changed_selection,
     lock_document_source,
     refuse_deleted,
     require_hash,
-    selection_change_body,
 )
 from .preparation import PreparedAnalysis
 from .selection_policy import PreparedSelectionProposal
@@ -103,13 +103,14 @@ class AnalysisActivation:
         The expected hash is re-checked under the row lock, and the overlay is run
         through selection policy again against the Knowledge loaded for activation.
         The provider's proposal is never trusted on its own. The write follows
-        `update_selection`'s content rule: engine-composed content is recomposed from
-        the new selection, and authored wording refuses the activation.
+        `update_selection`'s content rule: content nobody has worded is dropped, to be
+        drafted again, and authored wording refuses the activation. Rendered files it
+        releases are left to orphan maintenance.
         """
         source = lock_document_source(tx, self.documents, self.sources, command.application_id)
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
-        body = selection_change_body(
+        selection = changed_selection(
             source,
             knowledge,
             pinned_fact_ids=prepared.proposal.pinned_fact_ids,
@@ -117,11 +118,11 @@ class AnalysisActivation:
             emphasis_override=None,
             ai_rationale=prepared.proposal.rationale,
         )
-        updated = self.documents.update_body(
+        updated, _released = self.documents.replace_selection(
             tx,
             command.application_id,
             command.expected_document_hash,
-            body,
+            selection,
             updated_at=utc_now(),
         )
         return updated.id
