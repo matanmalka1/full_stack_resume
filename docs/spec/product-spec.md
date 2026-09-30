@@ -421,8 +421,9 @@ failure, cancellation, invalid output, missing assertion coverage, or stale evid
 never makes wording eligible.
 
 Failed semantic reviews expose a focused clarification panel: the rejected sentence,
-its section and preceding heading when present, and the exact canonical meanings and
-renderings read during that review. This context is recorded with the failure, not
+its section and preceding heading when present, the exact canonical meanings and
+renderings read during that review, and the reviewer's explanation when one was
+recorded, labeled as the reviewer's reading rather than proof. This context is recorded with the failure, not
 reconstructed from the current document or fact store. Older failures without recorded
 context retain generic guidance; missing historical content is never invented.
 

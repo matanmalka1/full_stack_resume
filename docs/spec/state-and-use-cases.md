@@ -401,12 +401,16 @@ does not show fabricated progress.
 
 For `CLAIM_REVIEW_UNCERTAIN` and `CLAIM_REVIEW_UNSUPPORTED`, a newly recorded failure
 includes a `failure_reason` with `code=claim_review` and `claims`: claim ID, section,
-preceding heading (nullable), proposed text, the policy's rejected verdict, and each
-cited canonical fact's ID, meaning and rendering as read for that review. In a mixed
-failure both uncertain and unsupported lines are included; unsupported determines the
-Operation failure code. This is inactive diagnostic context, not an accepted proposal
-or an approval record. Raw provider rationale, responses, credentials and internal
-paths are excluded. Existing failure records remain unchanged and may have no context.
+preceding heading (nullable), proposed text, the policy's rejected verdict, each
+cited canonical fact's ID, meaning and rendering as read for that review, and the
+reviewer's explanation for that line (`rationale`, nullable). In a mixed failure both
+uncertain and unsupported lines are included; unsupported determines the Operation
+failure code. This is inactive diagnostic context, not an accepted proposal or an
+approval record. The explanation is the reviewer's opinion, shown as plain text to help
+the user find what to fix; it is never evidence and authorizes nothing. Other provider
+output, responses, credentials and internal paths are excluded. Existing failure records
+remain unchanged and may have no context; one recorded before the explanation was kept
+has none, and none is reconstructed.
 Resolution uses the existing document editing and fact commands; no acknowledgement
 command is introduced.
 
