@@ -76,31 +76,18 @@ class AnalyzeCommand(BoundaryDTO):
     expected_analysis_id: str | None = None
     expected_document_hash: str | None = None
     #: Internal flag carried to persistence so an explicit decision is refused
-    #: while an Operation that can replace the analysis or the selection is active.
+    #: while an Operation that can replace the analysis context is active.
     refuse_matching_context_operation: bool = False
     provider: Literal["openai"] = "openai"
     model: str | None = None
     reasoning_effort: str | None = None
 
 
-class SelectionOverlay(BoundaryDTO):
-    """One user's explicit fact decisions, laid over the deterministic engine.
-
-    Two lists, not three. `selected` is what the selection reports, not what a
-    client asks for: in a budgeted deterministic selection the only way to say
-    "include this" is to hold it, which is what a pin is.
-    """
-
-    pinned_fact_ids: list[str] = []
-    excluded_fact_ids: list[str] = []
-
-
-class ApplyAnalysisDecisionsCommand(SelectionOverlay):
+class ApplyAnalysisDecisionsCommand(BoundaryDTO):
     """One local review-form submission (§13).
 
-    Carries both kinds of decision because one form does. Track/Profile/language
-    change analysis meaning and create a new JobAnalysis; Emphasis and fact
-    selection change only the document's selection, in place.
+    Every decision it carries - Track, Profile, language, Emphasis - is
+    classification, and a change to any of them creates a new JobAnalysis.
     """
 
     application_id: str
@@ -115,28 +102,6 @@ class ApplyAnalysisDecisionsCommand(SelectionOverlay):
     profile_override: str | None = None
     emphasis_override: str | None = None
     language_override: str | None = None
-
-
-class UpdateSelectionCommand(SelectionOverlay):
-    """§14 `update_selection`: a deterministic change to the document's selection.
-
-    `emphasis_override` null means "leave the effective Emphasis as it is", not
-    "clear the override".
-    """
-
-    application_id: str
-    expected_document_hash: str = DocumentHash
-    emphasis_override: str | None = None
-
-
-class ProposeSelectionCommand(BoundaryDTO):
-    """§14 `propose_selection`: the provider proposes the overlay; activation decides."""
-
-    application_id: str
-    expected_document_hash: str = DocumentHash
-    provider: Literal["openai"] = "openai"
-    model: str | None = None
-    reasoning_effort: str | None = None
 
 
 class BuildFromAnalysisCommand(BoundaryDTO):
@@ -305,16 +270,13 @@ class AnalysisResult(BoundaryDTO):
 
 
 class AnalysisDecisionsResult(BoundaryDTO):
-    """What the review form produced, and which of the two branches produced it.
+    """The new analysis produced by a review-form classification decision.
 
-    `job_analysis_id` is the analysis in force *after* the command: the new one
-    when meaning changed, the original one when only the selection did. The
-    document is re-pinned by neither branch; `document_hash` is its token now.
+    The document is not re-pinned; `document_hash` is its current token.
     """
 
     application_id: str
     job_analysis_id: str
-    created_analysis: bool
     analysis: JobAnalysis
     document_id: str | None = None
     document_hash: str | None = None

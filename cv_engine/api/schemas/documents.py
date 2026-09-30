@@ -14,8 +14,6 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
-from ...domain.contracts.taxonomy import Emphasis
 from ...domain.document import ContentCheck, PreparationState
 from .drafts import (
     ContentPatchRequest,
@@ -39,23 +37,6 @@ class UpdateDocumentRequest(ContentPatchRequest):
 
     The token is `If-Match`, not a body field.
     """
-
-
-class UpdateSelectionRequest(DocumentActionRequest):
-    """A deterministic selection change (§14 `update_selection`).
-
-    Two lists, not three: explicit inclusion is a pin, and what ends up selected is a
-    response field. `emphasis_override` null means "leave the effective Emphasis as it
-    is", not "clear the override".
-    """
-
-    pinned_fact_ids: list[str] = []
-    excluded_fact_ids: list[str] = []
-    emphasis_override: Emphasis | None = None
-
-
-class ProposeSelectionRequest(DocumentActionRequest):
-    provider: Literal["openai"] = "openai"
 
 
 class BuildFromAnalysisRequest(DocumentActionRequest):
@@ -87,30 +68,6 @@ class RegenerateDocumentClaimRequest(DocumentActionRequest):
 
 class BuiltWithResponse(HttpSchema):
     profile_version: str
-    selection_policy_version: str
-
-
-class DocumentCandidateResponse(HttpSchema):
-    fact_id: str
-    text: str | None = None
-    section: str
-    outcome: SelectionOutcome
-    reason: OmissionReason | None = None
-    user_selectable: bool
-
-
-class DocumentSelectionResponse(HttpSchema):
-    """The selection with its candidate accounting (§20)."""
-
-    emphasis: Emphasis
-    emphasis_override: Emphasis | None = None
-    selected_fact_ids: list[str]
-    pinned_fact_ids: list[str]
-    excluded_fact_ids: list[str]
-    #: Null for engine and user selections.
-    proposed_by: ProposalSource | None = None
-    proposal_rationale: str | None = None
-    candidates: list[DocumentCandidateResponse]
 
 
 class DocumentResponse(HttpSchema):
@@ -122,7 +79,6 @@ class DocumentResponse(HttpSchema):
     document_hash: str
     built_with: BuiltWithResponse
     language: str
-    selection: DocumentSelectionResponse
     #: The DraftDocument as the versioned domain document; null until generated.
     content: dict[str, Any] | None = None
     outline: DraftOutlineResponse | None = None

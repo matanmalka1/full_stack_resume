@@ -104,6 +104,7 @@ describe("OperationReport", () => {
             text: "<script>unsupported claim</script>",
             verdict: "uncertain",
             sources: [{ fact_id: "sales.one", rendering: "Managed accounts.", meaning: "Account management" }],
+            rationale: "The fact does not mention quotas.",
           },
         ],
       },
@@ -116,7 +117,11 @@ describe("OperationReport", () => {
       </QueryClientProvider>,
     );
     const clarification = screen.getByRole("region", { name: "בירור הניסוח שנדחה" });
+    expect(within(clarification).getByText("Experience · Account Manager")).toBeVisible();
+    /* The panel owns the next steps; the callout above keeps only its title. */
+    expect(screen.queryByText(/הניסוח לא הופעל ודבר לא השתנה/)).not.toBeInTheDocument();
     expect(within(clarification).getByText("<script>unsupported claim</script>")).toBeVisible();
+    expect(within(clarification).getByText("The fact does not mention quotas.")).toBeVisible();
     expect(clarification.querySelector("script")).toBeNull();
     expect(within(clarification).getByText("Managed accounts.")).toBeVisible();
     expect(within(clarification).getByRole("link", { name: "פתיחת השורה במסמך" })).toHaveAttribute(
@@ -128,6 +133,37 @@ describe("OperationReport", () => {
       "/facts?fact=sales.one",
     );
     expect(within(clarification).queryByRole("button", { name: /אישור/ })).not.toBeInTheDocument();
+  });
+
+  it("says why a line the reviewer approved was still refused", () => {
+    const value = failed({
+      operation_type: "create_draft",
+      failure_code: "INVALID_OUTPUT",
+      failure_reason: {
+        code: "claim_review",
+        claims: [
+          {
+            claim_id: "claim-1",
+            section: "Professional Summary",
+            text: "Full-Stack Developer with backend experience.",
+            verdict: "unattested",
+            problems: ["review-fact-coverage-mismatch"],
+            sources: [{ fact_id: "summary.backend", rendering: "Backend experience.", meaning: "Backend experience." }],
+            rationale: "The title and summary are supported.",
+          },
+        ],
+      },
+    });
+    render(
+      <QueryClientProvider client={client()}>
+        <MemoryRouter>
+          <OperationReport onQueued={vi.fn()} operation={value} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const clarification = screen.getByRole("region", { name: "בירור הניסוח שנדחה" });
+    expect(within(clarification).getByText("Full-Stack Developer with backend experience.")).toBeVisible();
+    expect(within(clarification).getByText(/נשענת על עובדה שאינה מקושרת אליה/)).toBeVisible();
   });
 
   it("presents a queued operation as one status", () => {

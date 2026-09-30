@@ -18,10 +18,6 @@ from ...domain.contracts.drafts import (
     ClaimStyle,
     ClaimType,
 )
-from ...domain.contracts.selection import (
-    OmissionReason,
-    SelectionOutcome,
-)
 from .health import HttpSchema
 
 
@@ -71,10 +67,8 @@ class ContentPatchRequest(HttpSchema):
     claim_removals: list[str] = Field(
         default=[],
         description=(
-            "Claims to delete outright. Only an unauthorized section claim may "
-            "be removed this way; a claim the fact selection authorizes is a "
-            "412 naming the selection change, and the headline and contacts "
-            "are structural."
+            "Section claims to delete outright. Headlines, contacts, role headings, "
+            "and dates are structural and cannot be removed."
         ),
     )
     claim_additions: list[ClaimAdditionRequest] = []
@@ -154,23 +148,18 @@ class DraftOutlineResponse(HttpSchema):
 
 
 class DraftFactResponse(HttpSchema):
-    """One fact the content uses, or one the document's selection considered.
+    """One fact the content's claims link.
 
     `text` is nullable: a fact the store can no longer resolve is already
-    reported as a stale reason by the state projection, and a read that raised
-    over it would turn an explainable staleness into a `500`.
-
-    `outcome` is null for a fact the selection never ranked - a contact, or a fact
-    a manual relink attached. That null is what says no include/exclude decision
-    applies to it, so no second flag is needed to say the same thing.
+    reported as a review reason by the state projection, and a read that raised
+    over it would turn an explainable staleness into a `500`. `section` is the
+    content section whose claims first link it, null for the headline and contacts.
     """
 
     fact_id: str
     text: str | None = None
     linked_claim_ids: list[str] = []
     section: str | None = None
-    outcome: SelectionOutcome | None = None
-    reason: OmissionReason | None = None
 
 
 class ValidationIssueResponse(HttpSchema):

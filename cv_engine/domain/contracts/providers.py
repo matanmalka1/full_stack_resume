@@ -22,22 +22,13 @@ class ProposedClaim(StrictModel):
     fact_ids: list[str] = []
 
 
-class SelectionProposal(StrictModel):
-    """`propose_selection_plan`: an overlay on the deterministic selection.
-
-    Deliberately expressed as the same two lists a user's review form submits,
-    because activation replays the identical deterministic `build_selection`.
-    A provider that could return a finished plan could express a selection the
-    engine would never make; a provider that returns an overlay cannot.
-    """
-
-    pinned_fact_ids: list[str] = []
-    excluded_fact_ids: list[str] = []
-    rationale: str
-
-
 class DraftProposal(StrictModel):
-    """`draft_resume`: proposed wording for a draft the engine composed."""
+    """`draft_resume`: the frame claims the writer keeps, with their wording.
+
+    The engine composed every fact each section offers. A claim left out is a fact
+    the writer did not choose; headings, dates and contacts stay whether or not they
+    come back.
+    """
 
     claims: list[ProposedClaim]
     rationale: str

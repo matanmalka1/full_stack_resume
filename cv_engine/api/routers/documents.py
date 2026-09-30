@@ -24,12 +24,10 @@ from ...application.commands import (
     ClaimAddition,
     ClaimPatch,
     DraftCommand,
-    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
     UpdateDocumentCommand,
-    UpdateSelectionCommand,
 )
 from ...util import new_id
 from ..dependencies import Services
@@ -44,11 +42,9 @@ from ..schemas.documents import (
     DocumentCheckResponse,
     DocumentMutationResponse,
     DocumentResponse,
-    ProposeSelectionRequest,
     RegenerateDocumentClaimRequest,
     RegenerateDocumentSectionRequest,
     UpdateDocumentRequest,
-    UpdateSelectionRequest,
 )
 from ..schemas.operations import OperationResponse
 
@@ -170,47 +166,6 @@ def preview_document_pdf(application_id: str, services: Services) -> Response:
 
 
 @router.post(
-    "/selection",
-    response_model=DocumentMutationResponse,
-    summary="Change the document's fact selection deterministically",
-)
-def update_selection(
-    application_id: str, request: UpdateSelectionRequest, services: Services, response: Response
-) -> DocumentMutationResponse:
-    """`200`; `412` when the change needs wording judgment and a regeneration instead.
-
-    Dumped as JSON: `emphasis_override` is a `StrEnum` on the schema and a plain string
-    on the command and in the stored selection.
-    """
-    result = services.selection.update_selection(
-        UpdateSelectionCommand(application_id=application_id, **request.model_dump(mode="json"))
-    )
-    return _mutation(response, result)
-
-
-@router.post(
-    "/selection-proposals",
-    response_model=OperationResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Ask the provider to propose a selection",
-)
-def propose_selection(
-    application_id: str,
-    request: ProposeSelectionRequest,
-    services: Services,
-    response: Response,
-    idempotency_key: IdempotencyKey = None,
-) -> OperationResponse:
-    """`202` and a `Location`. No provider call happens inside this request."""
-    queued = services.operation_submissions.submit_selection_proposal(
-        ProposeSelectionCommand(application_id=application_id, **request.model_dump(mode="json")),
-        idempotency_key=idempotency_key or new_id(),
-        analysis_service=services.analysis,
-    )
-    return accepted_operation(response, queued)
-
-
-@router.post(
     "/build-from-analysis",
     response_model=DocumentMutationResponse,
     summary="Re-pin the document to a newer analysis",
@@ -221,8 +176,8 @@ def build_from_analysis(
     services: Services,
     response: Response,
 ) -> DocumentMutationResponse:
-    """`200` with a document that has a fresh selection and no content."""
-    result = services.selection.build_from_analysis(
+    """`200` with a document pinned to the named analysis and no content."""
+    result = services.repin.build_from_analysis(
         BuildFromAnalysisCommand(
             application_id=application_id,
             **request.model_dump(mode="python"),

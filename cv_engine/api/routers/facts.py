@@ -212,8 +212,8 @@ def delete_fact(
 ) -> FactMutationResponse:
     """One-way; `confirm: false` is refused rather than interpreted.
 
-    Always permitted, even for a fact attached to a Profile section or
-    referenced by a document selection, claim, or gap resolution: this command
+        Always permitted, even for a fact attached to a Profile section or
+        referenced by a claim or gap resolution: this command
     does not pre-check those, the review reason and warning it produces do
     (state-and-use-cases.md §17).
     """
@@ -264,16 +264,16 @@ def attach_fact(
     "/{fact_id}/confirm-and-use",
     response_model=ConfirmAndUseFactResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Confirm, attach, and select one fact as one command",
+    summary="Confirm one fact and attach it to a Profile section as one command",
 )
 def confirm_and_use_fact(
     fact_id: str,
     request: ConfirmAndUseFactRequest,
     services: Services,
 ) -> ConfirmAndUseFactResponse:
-    """One logical command: it confirms, attaches, and adds the fact to the
-    document's selection, or it reports a complete failure. There is no partial outcome to
-    report, so there is no partial success status.
+    """One logical command: it confirms the fact and attaches it to the Profile
+    section, or it reports a complete failure. There is no partial outcome to report, so
+    there is no partial success status. The document is not written.
     """
     result = services.knowledge.confirm_and_use_fact(
         fact_id,
@@ -281,7 +281,6 @@ def confirm_and_use_fact(
         job_analysis_id=request.job_analysis_id,
         profile=request.profile,
         section=request.section,
-        expected_document_hash=request.expected_document_hash,
         reason=request.reason,
     )
     return ConfirmAndUseFactResponse(

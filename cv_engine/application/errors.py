@@ -249,9 +249,6 @@ DUPLICATE_ACKNOWLEDGEMENT_REQUIRED = "DUPLICATE_ACKNOWLEDGEMENT_REQUIRED"
 DOCUMENT_CHANGED = "DOCUMENT_CHANGED"
 DOCUMENT_NOT_APPROVED = "DOCUMENT_NOT_APPROVED"
 DOCUMENT_NOT_READY = "DOCUMENT_NOT_READY"
-#: A selection change that needs wording judgment: the client is directed to a
-#: regeneration command and nothing is written (§14 `update_selection`).
-REGENERATION_REQUIRED = "REGENERATION_REQUIRED"
 
 
 WorkflowError = ApplicationError

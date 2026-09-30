@@ -113,8 +113,13 @@ describe("voluntary matching configuration", () => {
   it("shows current values and sends the analysis the form read", async () => {
     let applied = false;
     const before = detail();
-    const after = detail({ document_hash: "b".repeat(64) });
-    after.application = { ...before.application, emphasis: "new-business" };
+    const after = detail({ document_hash: "b".repeat(64), latest_analysis_id: "analysis-2" });
+    after.latest_analysis = {
+      ...before.latest_analysis!,
+      id: "analysis-2",
+      version_number: 2,
+      analysis: { ...before.latest_analysis!.analysis, emphasis: "new-business" },
+    };
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === APPLY_PATH) {
         applied = true;
@@ -122,8 +127,7 @@ describe("voluntary matching configuration", () => {
           jsonResponse(
             {
               application_id: "app-1",
-              job_analysis_id: "analysis-1",
-              created_analysis: false,
+              job_analysis_id: "analysis-2",
               analysis: after.latest_analysis!.analysis,
               document_id: "doc-1",
               document_hash: "b".repeat(64),
@@ -166,10 +170,13 @@ describe("voluntary matching configuration", () => {
     });
   });
 
+  /* An Emphasis change is classification like any other: it creates a new analysis and
+     leaves the document - drafted or Ready - on the one it was built from. */
   it.each([
-    ["draft_in_progress" as const, { content_check: "outdated" as const }, /וייתכן שגם את תוכן הטיוטה/],
-    ["ready" as const, { content_check: "passed" as const }, /אישור קיים לא יחול עוד על המסמך שהשתנה/],
-  ])("explains the consequence from server state %s", async (preparation_state, extra, message) => {
+    ["draft_in_progress" as const, { content_check: "outdated" as const }],
+    ["ready" as const, { content_check: "passed" as const }],
+  ])("explains the consequence from server state %s", async (preparation_state, extra) => {
+    const message = /המסמך יישאר בנוי על הניתוח הנוכחי/;
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(jsonResponse(detail({ preparation_state, ...extra })))),
@@ -180,7 +187,7 @@ describe("voluntary matching configuration", () => {
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
     expect(screen.getByText(message)).toBeInTheDocument();
-    expect(screen.getByText("השמירה תבחר את העובדות מחדש")).toBeInTheDocument();
+    expect(screen.getByText("השמירה תיצור ניתוח חדש")).toBeInTheDocument();
   });
 
   it("keeps local choices visible when the server reports a context conflict", async () => {

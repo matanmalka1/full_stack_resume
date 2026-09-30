@@ -125,7 +125,7 @@ export const DraftClaimList = ({
                         onMove: (offset) => onMove(index, offset),
                       }
                 }
-                removal={removability(claim, draft, facts)}
+                removal={removability(claim, draft)}
               />
             );
           })}

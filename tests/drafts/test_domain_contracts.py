@@ -31,6 +31,16 @@ def test_a_draft_cannot_rewrite_the_provenance_it_is_judged_against(draft_factor
     # catches a digest that no longer describes the document — not this model.
     draft.content_hash = "0" * 64
 
+    without_analysis = draft.model_dump(mode="json")
+    without_analysis.pop("job_analysis_id")
+    with pytest.raises(ValidationError, match="job_analysis_id"):
+        type(draft).model_validate(without_analysis)
+
+    old_schema = draft.model_dump(mode="json")
+    old_schema["schema_version"] = "1.1"
+    with pytest.raises(ValidationError, match="schema_version"):
+        type(draft).model_validate(old_schema)
+
 
 def test_a_validation_reports_pass_is_derived_from_its_findings() -> None:
     """`passed` gates approval and Ready on its own, so it may not contradict
@@ -52,7 +62,7 @@ def test_a_validation_reports_pass_is_derived_from_its_findings() -> None:
         issues=[
             ValidationIssue(
                 group="profile",
-                code="emphasis-coverage-low",
+                code="future-soft-finding",
                 message="x",
                 hard=False,
             )

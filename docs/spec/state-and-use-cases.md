@@ -58,26 +58,25 @@ JobSnapshot (immutable)  ->  JobAnalysis (immutable)
                                    v
 CVDocument (mutable, one per Application)
   analysis_id                       the analysis it is pinned to
-  selection                         candidates, selected, pinned, excluded, tag coverage,
-                                    emphasis, emphasis_override, proposed_by,
-                                    proposal_rationale
   content                           the DraftDocument; NULL until generated
-  built_with                        profile_version, selection_policy_version
-  document_hash                     stored: hash(analysis_id, selection, content)
+  built_with                        profile_version
+  document_hash                     stored: hash(analysis_id, content)
   content_report, passed, checked_basis
   approved_basis, approved_at
   rendered_basis, html_path, pdf_path, last_render_error
 ```
 
-`document_hash` is the SHA-256 of the canonical JSON of `analysis_id`, `selection` and
-`content`. Every command that changes one of them rewrites it; nothing else does. It is
+`document_hash` is the SHA-256 of the canonical JSON of `analysis_id` and `content`. Every command that changes one of them rewrites it; nothing else does. It is
 the document's concurrency token: a command that changes the document carries
 `expected_document_hash`, and a mismatch is `DOCUMENT_CHANGED` (409) with nothing
 written.
 
-The **dependent fact set** is the fact IDs in `selection.selected_fact_ids` and
-`selection.pinned_fact_ids`, united with every fact ID cited by the headline, contact,
-and section claims in `content`. `facts_hash` is the SHA-256 of the canonical JSON of
+The **dependent fact set** is every fact ID cited by the headline, contact, and section
+claims in `content`; it is empty while `content IS NULL`. The document holds no separate
+selection: the facts it uses are the facts its content links
+(`docs/decisions/ai-owned-selection.md`).
+
+`facts_hash` is the SHA-256 of the canonical JSON of
 each dependent fact's full current record (status included, storage location excluded),
 sorted by ID; a fact that no longer resolves is entered as missing. It is computed on
 read and never stored.
@@ -99,8 +98,8 @@ no longer matches on the next read.
 
 Pinning:
 
-- The first activated analysis of an Application creates the document with that
-  analysis's deterministic selection and no content, relying on the
+- The first activated analysis of an Application creates the document pinned to it with
+  no content, relying on the
   one-document-per-Application unique constraint.
 - A later analysis never touches the document; it raises `DOCUMENT_ON_OLDER_ANALYSIS`
   (§8).
@@ -153,21 +152,21 @@ resolved, not persisted state.
 
 There is no frozen context and no `stale_reasons` projection:
 
-- A content edit, selection change, or re-pin changes `document_hash`, so every stamp is
+- A content edit or re-pin changes `document_hash`, so every stamp is
   outdated at once.
 - A change to a dependent fact (edit, status transition, replacement, deletion, removal
   from `base/`) changes `facts_hash`, so every stamp is outdated at once. A change to an
   unrelated fact does not.
 - A newer analysis or snapshot is the `DOCUMENT_ON_OLDER_ANALYSIS` warning; the document
   stays as it is until `build_from_analysis`.
-- A Profile or selection-policy version change is the `PROFILE_CHANGED` or
-  `POLICY_CHANGED` warning, derived from `built_with`. Approval and rendering validate
+- A Profile version change is the `PROFILE_CHANGED` warning, derived from
+  `built_with`. Approval and rendering validate
   against the current Knowledge, so the warning never lets an outdated build through.
 
 ## 7. Review reasons
 
 Review reasons are blockers that need an explicit user decision. They are computed over
-the dependent fact set (§3), plus any fact IDs a command is about to select:
+the dependent fact set (§3):
 
 ```text
 PENDING_FACT_REQUIRES_RESOLUTION     a dependent fact is pending
@@ -180,12 +179,11 @@ carries a safe message, entity references (`document_id` and the first offending
 
 | Reason | Resolution actions |
 | --- | --- |
-| `PENDING_FACT_REQUIRES_RESOLUTION` | `confirm_and_use_fact`, `update_selection`, `edit` |
-| `FACT_DELETED_REQUIRES_RESOLUTION` | `update_selection`, `edit`, `regenerate_section`, `regenerate_claim` |
+| `PENDING_FACT_REQUIRES_RESOLUTION` | `confirm_and_use_fact`, `edit` |
+| `FACT_DELETED_REQUIRES_RESOLUTION` | `edit`, `regenerate_section`, `regenerate_claim` |
 
 A review reason blocks `approve`, `render` and `submit`, which refuse with a 412 whose
-`code` is the first reason. It does not block editing, selection changes, generation, or
-regeneration: those are how it is resolved.
+`code` is the first reason. It does not block editing, generation, or regeneration: those are how it is resolved.
 
 Analysis issues, low Fit, and hard gaps are diagnostics, not review reasons. They stay
 visible and block nothing. Missing evidence is not evidence of missing experience: an
@@ -206,7 +204,6 @@ Warning codes:
 ```text
 DOCUMENT_ON_OLDER_ANALYSIS
 PROFILE_CHANGED
-POLICY_CHANGED
 FACT_SUPERSEDED
 NEXT_ACTION_OVERDUE
 ```
@@ -214,8 +211,7 @@ NEXT_ACTION_OVERDUE
 - `DOCUMENT_ON_OLDER_ANALYSIS`: the document's `analysis_id` is not the newest
   JobAnalysis of the Application, or its analysis was made of a JobSnapshot other than
   the active one.
-- `PROFILE_CHANGED` / `POLICY_CHANGED`: `built_with` differs from the current Profile
-  or selection-policy version.
+- `PROFILE_CHANGED`: `built_with` differs from the current Profile version.
 - `FACT_SUPERSEDED`: a canonical fact `replaces` a dependent fact. It never rewrites a
   Submission.
 - `NEXT_ACTION_OVERDUE`: `next_action_date` is before today and the recruitment status
@@ -245,7 +241,7 @@ Application detail and every list row return:
   "document_analysis_id": "...",
   "approved_at": null,
   "last_render_error": null,
-  "available_actions": ["update_selection", "edit", "regenerate_section", "regenerate_claim", "check"],
+  "available_actions": ["edit", "regenerate_section", "regenerate_claim", "check"],
   "blocked_actions": [{"action": "approve", "reasons": ["VALIDATION_FAILED"]}],
   "recommended_action": "check"
 }
@@ -273,9 +269,7 @@ why. A deleted Application allows none.
 | `analyze` | no JobAnalysis exists for the active JobSnapshot |
 | `edit_matching_configuration` | a JobAnalysis exists |
 | `build_from_analysis` | a document exists and the newest analysis has a higher version than the document's |
-| `update_selection` | a document exists |
 | `create_draft` | a document exists and `content IS NULL` |
-| `propose_selection` | a document exists and its content is NULL or composed by the engine alone (no manual or AI wording) |
 | `confirm_and_use_fact` | a review reason names it as a resolution action |
 | `edit`, `regenerate_section`, `regenerate_claim` | `content IS NOT NULL` |
 | `check` | `content IS NOT NULL` and `content_check != passed` |
@@ -292,8 +286,8 @@ An allowed action is available unless a blocker withholds it. Then it is in
 | Code | Withholds |
 | --- | --- |
 | `ANALYSIS_IN_PROGRESS` | `analyze`, while an `analyze_job` is queued or running |
-| `MATCHING_CONTEXT_OPERATION_IN_PROGRESS` | `edit_matching_configuration`, while an `analyze_job` or `propose_selection` is queued or running |
-| `DOCUMENT_OPERATION_IN_PROGRESS` | `build_from_analysis`, `update_selection`, `propose_selection`, `confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`, `regenerate_claim`, `check`, `approve`, `render`, while a `propose_selection`, `create_draft`, `regenerate_section`, `regenerate_claim` or `render_document` is queued or running |
+| `MATCHING_CONTEXT_OPERATION_IN_PROGRESS` | `edit_matching_configuration`, while an `analyze_job` is queued or running |
+| `DOCUMENT_OPERATION_IN_PROGRESS` | `build_from_analysis`, `confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`, `regenerate_claim`, `check`, `approve`, `render`, while a `create_draft`, `regenerate_section`, `regenerate_claim` or `render_document` is queued or running |
 | any review reason code (§7) | `approve`, `render`, `submit` |
 | `VALIDATION_FAILED` | `approve`, while `content_check = failed` |
 
@@ -354,13 +348,12 @@ Types:
 | Type | Bound to | Provider |
 | --- | --- | --- |
 | `analyze_job` | its JobSnapshot (ID and hash) and a Knowledge context hash | required |
-| `propose_selection` | `expected_document_hash` | required |
 | `create_draft` | `expected_document_hash` | required |
 | `regenerate_section` | `expected_document_hash` | required |
 | `regenerate_claim` | `expected_document_hash` | required |
 | `render_document` | `expected_document_hash` | none (Playwright) |
 
-Manual edits, `update_selection`, `apply_analysis_decisions`, `build_from_analysis`,
+Manual edits, `apply_analysis_decisions`, `build_from_analysis`,
 `check`, `approve`, and `submit` are synchronous and never Operations. No provider call
 happens inside an HTTP request.
 
@@ -408,12 +401,19 @@ does not show fabricated progress.
 
 For `CLAIM_REVIEW_UNCERTAIN` and `CLAIM_REVIEW_UNSUPPORTED`, a newly recorded failure
 includes a `failure_reason` with `code=claim_review` and `claims`: claim ID, section,
-preceding heading (nullable), proposed text, the policy's rejected verdict, and each
-cited canonical fact's ID, meaning and rendering as read for that review. In a mixed
-failure both uncertain and unsupported lines are included; unsupported determines the
-Operation failure code. This is inactive diagnostic context, not an accepted proposal
-or an approval record. Raw provider rationale, responses, credentials and internal
-paths are excluded. Existing failure records remain unchanged and may have no context.
+preceding heading (nullable), proposed text, the policy's rejected verdict, each
+cited canonical fact's ID, meaning and rendering as read for that review, and the
+reviewer's explanation for that line (`rationale`, nullable). The same reason is
+recorded on an `INVALID_OUTPUT` failure where the reviewer answered `supported` but its
+evidence failed the deterministic review check: such a line has verdict `unattested` and
+`problems`, the closed codes of the checks it failed (empty for every other verdict). In
+a mixed failure every refused line is included; unsupported, then uncertain, determines
+the Operation failure code. This is inactive diagnostic context, not an accepted proposal or an
+approval record. The explanation is the reviewer's opinion, shown as plain text to help
+the user find what to fix; it is never evidence and authorizes nothing. Other provider
+output, responses, credentials and internal paths are excluded. Existing failure records
+remain unchanged and may have no context; one recorded before the explanation was kept
+has none, and none is reconstructed.
 Resolution uses the existing document editing and fact commands; no acknowledgement
 command is introduced.
 
@@ -511,25 +511,18 @@ and blocks nothing.
 
 Synchronous (`201`). Input: `expected_analysis_id` (must equal the path's analysis),
 `expected_document_hash` (required when a document exists), and any of
-`track_override`, `profile_override`, `language_override`, `emphasis_override`,
-`pinned_fact_ids`, `excluded_fact_ids`.
+`track_override`, `profile_override`, `language_override`, `emphasis_override`.
 
 Overrides accumulate: the submission is merged over the overrides the source analysis
 already carries, and omitting a field does not retract it.
 
-- **Classification change** (Track, Profile, or language differs from what the analysis
-  already carries): creates one new immutable JobAnalysis without calling a provider,
-  after checking Track/Profile/Emphasis consistency. Any Emphasis decision is carried
-  into it. The document is not changed: it reports `DOCUMENT_ON_OLDER_ANALYSIS` until
-  `build_from_analysis`. With no document, the new analysis creates it.
-- **Fact overlay with a classification change**: refused (412). Pins and exclusions are
-  decided against candidates the new analysis has not produced; send them as a second
-  command.
-- **Emphasis or fact overlay only**: applied to the document selection in place, exactly
-  as `update_selection` (§14), including its effect on content. It needs the document to
-  be built on this analysis. Under the Application lock it refuses while an
-  `analyze_job` or `propose_selection` is queued or running, and refuses (409) when the
-  newest analysis is no longer `expected_analysis_id`.
+- **Classification change** (Track, Profile, language, or Emphasis differs from what the
+  analysis already carries): creates one new immutable JobAnalysis without calling a
+  provider, after checking Track/Profile/Emphasis consistency. The document is not
+  changed: it reports `DOCUMENT_ON_OLDER_ANALYSIS` until `build_from_analysis`. With no
+  document, the new analysis creates it. Under the Application lock it refuses while an
+  `analyze_job` is queued or running, and refuses (409) when the newest analysis is no
+  longer `expected_analysis_id`.
 - **No change**: refused (412).
 
 The response carries the resulting analysis ID, whether one was created, and the
@@ -557,53 +550,26 @@ pending, unlinked claim; it is never rejected or discarded, and it cannot pass t
 Returns the document (§20) with `document_hash` as the ETag. 404 when the Application
 has no document yet.
 
-### `update_selection(application_id, expected_document_hash, pinned_fact_ids, excluded_fact_ids, emphasis_override?)`
-
-Synchronous and deterministic. Rebuilds the selection from the document's analysis and
-current Knowledge with the given overlay, checking Profile/Track/Emphasis and fact
-eligibility. The effective `emphasis` is recorded separately from the nullable
-`emphasis_override`.
-
-- `content IS NULL`: only the selection changes.
-- Content in its canonical wording: dropped in the same write, with every check,
-  approval and render stamp; the rendered files are released and deleted best-effort
-  after commit. The document returns to `ready_to_draft` for a new `create_draft`.
-- Content carrying manual or AI wording the drop would discard: refused with
-  `REGENERATION_REQUIRED` (412); nothing is written.
-
-### `propose_selection(application_id, expected_document_hash, model?, reasoning_effort?)`
-
-AI Operation under `update_selection`'s content rule. The proposal is an overlay (pins,
-exclusions, rationale). Content carrying manual or AI wording is refused with
-`REGENERATION_REQUIRED` (412) when the Operation is requested, before any provider
-call. Activation re-checks the hash under the row lock, reruns selection policy against
-the Knowledge loaded for activation, and writes as `update_selection` does: with
-`content IS NULL` only the selection changes; content in its canonical wording is
-dropped in the same write. The
-activated selection records `proposed_by = "ai"` and `proposal_rationale` as provenance;
-activation never reads them. Engine and user selections leave both null.
-
 ### `build_from_analysis(application_id, analysis_id, expected_document_hash)`
 
 Synchronous and deterministic. Re-pins the document to a named JobAnalysis of the same
 Application (412 if it is another Application's, or the one already pinned). The
 command accepts any analysis of the Application; the projection offers it only when a
-newer one exists. It sets `analysis_id`, the analysis's deterministic selection, fresh
-`built_with`, and `content = NULL`, and in the same write clears the report, all three
+newer one exists. It sets `analysis_id`, fresh `built_with`, and `content = NULL`, and in the same write clears the report, all three
 stamps, `html_path`, `pdf_path`, and `last_render_error`. The released rendered files
 are deleted best-effort after commit.
 
 ### `create_draft(application_id, expected_document_hash, provider, model?, reasoning_effort?)`
 
 Operation, only while `content IS NULL`. `provider` is always `openai`; there is no
-rules-based form. An untouched selection (no pins, exclusions, Emphasis override, or
-`proposed_by`) is first replaced by a `propose_selection_plan` overlay validated by
-selection policy and recorded as `proposed_by = ai`; a selection the user chose is kept.
-The engine composes the frame from the analysis and that selection, and `draft_resume`
-proposes its wording, activated through semantic review. Selection and content are
-written in one activation. Activation writes `content` only
-while `document_hash == expected_document_hash`. A selected fact without a rendering in
-the document language fails with `MISSING_FACT_RENDERING`.
+rules-based form. The engine composes the frame from the analysis and the Profile:
+per section, the pool of canonical facts, the structural facts that are always present,
+and the section's guidance (product-spec §10). `draft_resume` chooses the facts per
+section and proposes their wording. The engine refuses a chosen fact outside the
+section's pool or not canonical, lays the chosen facts out in pool order, and activates
+the wording through semantic review. Activation writes `content` only while
+`document_hash == expected_document_hash`. A chosen or structural fact without a
+rendering in the document language fails with `MISSING_FACT_RENDERING`.
 
 ### `update_document(application_id, If-Match, patch)`
 
@@ -612,9 +578,8 @@ Synchronous autosave. The patch has `claim_edits` (text, fact IDs, template),
 claim order per reordered section). Returns the new `document_hash`. A mismatch is 409.
 
 - Free text that cannot be authorized is saved as a pending claim carrying the reason.
-- Only an unauthorized section claim may be removed; removing a claim the selection
-  authorizes is 412 pointing at the selection change. Headline and contacts are
-  structural.
+- Any section claim may be removed; the fact it linked leaves the dependent fact set.
+  Headline and contacts are structural.
 
 Editing an approved or Ready document is allowed; the basis changes and the document is
 `draft` on the next read.
@@ -622,7 +587,8 @@ Editing an approved or Ready document is allowed; the basis changes and the docu
 ### `regenerate_section` / `regenerate_claim`
 
 AI Operations against `expected_document_hash`, a named section or claim, and an
-optional instruction. An unknown section or claim is 404. `regenerate_claim` with
+optional instruction. An unknown section or claim is 404. Both reword the facts the
+section or claim already links; neither chooses facts again. `regenerate_claim` with
 `keep_text` reviews the claim's own wording instead of rewriting it; it requires a
 pending claim linked to at least one fact. Activation follows the `create_draft` hash
 rule.
@@ -638,7 +604,7 @@ write no document field, Artifact, or Operation. 412 while `content IS NULL`.
 ### `check_document(application_id, expected_document_hash)`
 
 Synchronous and deterministic; no provider. Runs the validation contract against the
-current content, the document's analysis and selection, and current Knowledge, and
+current content, the document's analysis, and current Knowledge, and
 stores `content_report`, `passed`, and `checked_basis` in one write — including when
 `passed = false`. Content bound to another Application, analysis, or snapshot fails as
 `document-binding-mismatch`. A validator execution failure stores nothing and is an
@@ -701,7 +667,7 @@ the document hash as ETag.
 
 ### `export_decision_markdown(application_id)`
 
-A human-readable provenance export of the current document: its analysis, selection,
+A human-readable provenance export of the current document: its analysis,
 dependent facts, and stored content report. Writes nothing.
 
 ## 17. Knowledge commands
@@ -762,23 +728,20 @@ A deleted fact is refused by `confirm_fact`, `attach_fact`, and
 Offers one canonical fact to one existing Profile section's pool, optionally pinned.
 Non-canonical facts are refused. It changes no Profile structure and no document.
 
-### `confirm_and_use_fact(fact_id, application_id, job_analysis_id, profile, section, expected_document_hash)`
+### `confirm_and_use_fact(fact_id, application_id, job_analysis_id, profile, section)`
 
 One journaled command:
 
 ```text
 pending -> canonical
 -> attach to the named Profile section
--> select the fact in the Application's document
 ```
 
-Preconditions, checked before any write: the document exists and matches the hash
-(`DOCUMENT_CHANGED`, 409); it is built on `job_analysis_id`; the analysis belongs to the
-Application and its Profile is `profile`. The selection step removes the fact from the
-exclusions and rebuilds the selection; the fact must end up selected. Content in its
-canonical wording is dropped, to be drafted again; content with wording the drop would
-discard refuses the whole command. Every transition gets its own event; the document write commits with the fact
-events. Partial completion is never visible.
+Preconditions, checked before any write: the document exists and is built on
+`job_analysis_id`; the analysis belongs to the Application and its Profile is `profile`.
+It writes no document: a claim already linking the fact stops raising
+`PENDING_FACT_REQUIRES_RESOLUTION`, and the next `create_draft` can choose the fact.
+Every transition gets its own event. Partial completion is never visible.
 
 ### `create_fact_from_claim(application_id, claim_id, ...)`
 
@@ -786,7 +749,7 @@ Turns a claim of the current document into a pending fact, copying the claim's e
 text as a rendering without rewrite. Meaning, tags, and provenance are supplied
 explicitly; a Hebrew document also needs the English rendering. The headline cannot
 become a fact. The claim is not authorized until the fact completes its lifecycle and
-is selected.
+is in its section's pool.
 
 Canonical correction always creates a replacement fact carrying `replaces`; it never
 mutates the old fact. `delete_fact` is the only removal. Archive, withdrawal,
@@ -857,7 +820,7 @@ as its `expected_document_hash`; if the document no longer exists it is 409. The
 original stays unchanged.
 
 `MISSING_FACT_RENDERING` and `SOURCE_CHANGED` failures expose no `retry` action: the
-first needs a changed fact or selection, the second a new command against the current
+first needs a changed fact, the second a new command against the current
 document.
 
 ### Idempotency
@@ -943,7 +906,7 @@ storage and is only reported (architecture.md §7.1).
   with ID, version, capture time, source URL, and exact verified text. Unreadable or
   unverified text is NULL. It never fetches the live posting, repairs a payload, or
   changes the active snapshot.
-- **CVDocument**: ID, analysis ID, selection with candidate accounting, content and its
+- **CVDocument**: ID, analysis ID, content and its
   outline, language, dependent facts, `built_with`, `document_hash` (ETag), content
   report and `content_check`, `preparation_state`, `approved_at` (as in §9),
   `last_render_error`, timestamps.
@@ -1015,10 +978,10 @@ A refusal's `code` defaults to its class name in upper snake case (`STATE_CONFLI
 
 ```text
 DOCUMENT_CHANGED                    DOCUMENT_NOT_APPROVED
-DOCUMENT_NOT_READY                  REGENERATION_REQUIRED
-MISSING_FACT_RENDERING              DUPLICATE_ACKNOWLEDGEMENT_REQUIRED
-IDEMPOTENCY_KEY_REUSED              KNOWLEDGE_RECONCILIATION_REQUIRED
-PENDING_FACT_REQUIRES_RESOLUTION    FACT_DELETED_REQUIRES_RESOLUTION
+DOCUMENT_NOT_READY                  MISSING_FACT_RENDERING
+DUPLICATE_ACKNOWLEDGEMENT_REQUIRED  IDEMPOTENCY_KEY_REUSED
+KNOWLEDGE_RECONCILIATION_REQUIRED   PENDING_FACT_REQUIRES_RESOLUTION
+FACT_DELETED_REQUIRES_RESOLUTION
 ```
 
 Review reasons, warnings, and validation issues are data in the projection, not

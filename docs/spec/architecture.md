@@ -73,7 +73,7 @@ Redux, a full component framework, Celery, Redis, WebSockets, SSE, a DI framewor
 
 ```text
 cv_engine/
-  domain/           entities, value objects, validation, selection, lifecycle rules
+  domain/           entities, value objects, validation, draft frame, lifecycle rules
   application/      commands, queries, ports, services, action policy, Operation runner
   infrastructure/   persistence adapters, object stores, Knowledge, provider, renderer
   api/              routers, schemas, middleware
@@ -90,7 +90,7 @@ There is no one-file-per-interface rule.
 ### 3.1 Domain
 
 The domain owns entities, value objects, lifecycle rules, validation semantics,
-transition rules, fact safety, selection, claim-review evidence checks, Ready
+transition rules, fact safety, the draft frame, claim-review evidence checks, Ready
 qualification, and invariant checks. It does not import FastAPI, SQLAlchemy, psycopg,
 filesystem paths, Playwright, provider HTTP code, or runtime configuration.
 
@@ -103,7 +103,7 @@ The application layer owns commands, queries, services, ports, transaction bound
 action policy, state projections, optimistic commit checks, and conversion of validated
 Proposals into domain state. Services are synchronous, have no dependency on FastAPI or
 an event loop, and follow consumer and lifecycle boundaries (intake and queries,
-analysis, selection, document authoring/validation/approval/history, rendering,
+analysis, document authoring/validation/approval/history, rendering,
 recruitment and submission, knowledge, Operations, maintenance, settings).
 
 Services return Pydantic boundary DTOs, never database rows or filesystem paths.
@@ -284,7 +284,7 @@ Every payload has SHA-256 metadata in PostgreSQL. Friendly names are
 *Designed, not built (§18):* facts, CandidateContext, and each user's Profile binding
 move to PostgreSQL; only policy stays file-backed.
 
-Facts, CandidateContext, Profiles, selection/emphasis policy, prompts, task contracts,
+Facts, CandidateContext, Profiles, emphasis policy, prompts, task contracts,
 requirement concepts, rendering rules, and templates are file-backed and
 version-controlled. Database audit is not an alternative Knowledge source of truth. The
 product never runs Git commit.
@@ -361,8 +361,7 @@ journal (`knowledge_mutation_journal`: `PREPARED`, `COMMITTED`, `QUARANTINED`):
 3. Persist a `PREPARED` entry with old/new hashes and paths, the staged path, the
    database mutation and its identity, and the recovery strategy.
 4. Atomically replace the Knowledge file.
-5. In one write scope, apply the fact events, any resulting document selection update
-   (state-and-use-cases.md §17), and the transition to `COMMITTED`. They commit or roll
+5. In one write scope, apply the fact events and the transition to `COMMITTED`. They commit or roll
    back together.
 6. Clean up staged and backup files outside the scope. A cleanup failure leaves
    temporary files but does not undo the commit.
@@ -380,7 +379,7 @@ journal rows stay as read-only history.
 Commands receive explicit source IDs. `latest` belongs to query and UI convenience, not
 command semantics.
 
-`CVDocument` records its source — `analysis_id` and `selection` — and has no draft or
+`CVDocument` records its source — `analysis_id` — and has no draft or
 revision lineage (`docs/decisions/single-document-model.md`). A Submission freezes
 what was sent: `content` (which carries its Application, JobSnapshot, and JobAnalysis
 binding and the coarse fact-store version), `document_hash`, the JobSnapshot ID, and the
@@ -470,7 +469,7 @@ the adapter.
 `AIProvider` (`application/ports/outbound.py`) is provider-neutral. The OpenAI adapter
 (`infrastructure/providers.py`) uses the Responses API with strict Structured Outputs
 and returns task-specific Proposal DTOs plus provider provenance. It cannot save domain
-state. Tasks: `propose_analysis`, `propose_selection_plan`, `draft_resume`,
+state. Tasks: `propose_analysis`, `draft_resume` (which also chooses the facts),
 `regenerate_section`, `regenerate_claim`, and `assess_claim_support` (the reviewer step
 of every writing Operation, a separate call from the writer). With no provider
 configured no adapter is built, and nothing is sent.
@@ -618,7 +617,7 @@ Provenance and compatibility track, each where it applies:
 - product version, database schema revision, API version
 - domain document and analysis contract versions
 - Knowledge versions (reported by `/health`)
-- selection, rendering, validator, and review policy versions
+- rendering, validator, and review policy versions
 - task-contract version, prompt version/hash, input/output schema hashes
 
 The product version does not substitute for any of them.
@@ -695,7 +694,7 @@ templates, `config/`, `ai/`, `rendering/`) stays in files.
 `facts_hash` is still computed on read from the facts a document depends on.
 
 **How an Application references facts.** By `fact_id` only, inside the document's
-selection and content and inside Submission content — never by the internal `id`. A
+content and inside Submission content — never by the internal `id`. A
 `fact_id` is always resolved as `(application.user_id, fact_id)`, so the same string in
 two users' data names two different facts and can never cross.
 

@@ -21,8 +21,7 @@ def apply_analysis_decisions(
     request: ApplyAnalysisDecisionsRequest,
     services: Services,
 ) -> AnalysisDecisionsResponse:
-    """`201`: a meaning change creates an immutable JobAnalysis; a selection-only
-    change updates the document's selection in place (§13).
+    """`201`: every changed classification value creates an immutable JobAnalysis (§13).
 
     `application_id` is in the body rather than inferred from the analysis. The
     client states which Application it believes it is deciding for, and a

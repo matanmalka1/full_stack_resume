@@ -11,7 +11,7 @@ from ....util import new_id, utc_now
 from ...commands import ApproveDocumentCommand, DocumentCheckResult
 from ...errors import KNOWLEDGE_RECONCILIATION_REQUIRED, PreconditionFailed
 from ...ports import TransactionManager
-from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ...ports.application_intake import AuditLogWriter
 from ...ports.documents import DocumentStore
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
@@ -34,7 +34,7 @@ class DraftApprovalService:
         *,
         transactions: TransactionManager,
         documents: DocumentStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         knowledge: AnalysisKnowledgeSource,
         journal: KnowledgeLifecycleStore,
         audit: AuditLogWriter,

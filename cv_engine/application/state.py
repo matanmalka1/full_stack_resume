@@ -28,7 +28,6 @@ from ..domain.document import (
     dependent_fact_ids,
     preparation_state,
 )
-from ..domain.drafts import carries_authored_wording
 from ..domain.knowledge import Knowledge
 from .operations import OperationType, OperationView
 from .queries import ApplicationStateView, BlockedActionView, ReasonView, WarningView
@@ -37,8 +36,6 @@ PREPARATION_ACTIONS = (
     "analyze",
     "edit_matching_configuration",
     "build_from_analysis",
-    "update_selection",
-    "propose_selection",
     "confirm_and_use_fact",
     "create_draft",
     "edit",
@@ -56,8 +53,6 @@ PREPARATION_ACTIONS = (
 DOCUMENT_MUTATING_ACTIONS = frozenset(
     {
         "build_from_analysis",
-        "update_selection",
-        "propose_selection",
         "confirm_and_use_fact",
         "create_draft",
         "edit",
@@ -76,7 +71,6 @@ CONTENT_ACTIONS = frozenset({"edit", "regenerate_section", "regenerate_claim"})
 #: Operations that carry `expected_document_hash` and write the document (§11).
 DOCUMENT_OPERATION_TYPES = frozenset(
     {
-        OperationType.PROPOSE_SELECTION,
         OperationType.CREATE_DRAFT,
         OperationType.REGENERATE_SECTION,
         OperationType.REGENERATE_CLAIM,
@@ -115,19 +109,15 @@ def _reason(
     )
 
 
-def document_review_reasons(
-    document: CVDocument, knowledge: Knowledge, requested_fact_ids: Iterable[str] = ()
-) -> list[ReasonView]:
-    """§7 review reasons over the `facts_hash` fact set, plus a requested selection.
+def document_review_reasons(document: CVDocument, knowledge: Knowledge) -> list[ReasonView]:
+    """§7 review reasons over the `facts_hash` fact set.
 
-    The set is the document's selection united with the facts its claims cite, so a
-    fact can never block a document without also being able to change its basis. A
-    pending or deleted fact outside it does not affect the Application.
+    The set is the facts the document's claims cite, so a fact can never block a
+    document without also being able to change its basis. A pending or deleted fact
+    outside it does not affect the Application.
     """
     facts = knowledge.facts.facts
-    dependent = set(dependent_fact_ids(document.selection, document.content)) | set(
-        requested_fact_ids
-    )
+    dependent = dependent_fact_ids(document.content)
     reasons: list[ReasonView] = []
     pending = sorted(
         fact_id
@@ -140,7 +130,7 @@ def document_review_reasons(
                 "PENDING_FACT_REQUIRES_RESOLUTION",
                 "The document depends on a fact that is not canonical yet.",
                 {"document_id": document.id, "fact_id": pending[0]},
-                ["confirm_and_use_fact", "update_selection", "edit"],
+                ["confirm_and_use_fact", "edit"],
             )
         )
     deleted = sorted(
@@ -154,7 +144,7 @@ def document_review_reasons(
                 "FACT_DELETED_REQUIRES_RESOLUTION",
                 "The document depends on a fact that has been deleted.",
                 {"document_id": document.id, "fact_id": deleted[0]},
-                ["update_selection", "edit", "regenerate_section", "regenerate_claim"],
+                ["edit", "regenerate_section", "regenerate_claim"],
             )
         )
     return reasons
@@ -208,15 +198,7 @@ def derive_warnings(context: ProjectionContext) -> list[WarningView]:
                     entity_references={"document_id": document.id},
                 )
             )
-        if document.built_with.selection_policy_version != knowledge.policies.version:
-            warnings.append(
-                WarningView(
-                    code="POLICY_CHANGED",
-                    message="The document was built with an older selection policy.",
-                    entity_references={"document_id": document.id},
-                )
-            )
-        dependent = dependent_fact_ids(document.selection, document.content)
+        dependent = dependent_fact_ids(document.content)
         superseded = sorted(
             fact.fact_id
             for fact in knowledge.facts.facts.values()
@@ -276,19 +258,14 @@ def derive_actions(
         allowed.add("edit_matching_configuration")
     if document is not None:
         has_content = document.content is not None
-        allowed.add("update_selection")
         latest = context.analyses[-1] if context.analyses else None
         if latest is not None and latest["id"] != document.analysis_id:
             versions = {row["id"]: row.get("version_number", 0) for row in context.analyses}
             if versions.get(latest["id"], 0) > versions.get(document.analysis_id, 0):
                 allowed.add("build_from_analysis")
         if not has_content:
-            allowed |= {"create_draft", "propose_selection"}
+            allowed.add("create_draft")
         else:
-            # A proposal rebuilds engine-composed content, as `update_selection` does;
-            # authored wording would be discarded, so it is not offered then (§14).
-            if not carries_authored_wording(document.content):
-                allowed.add("propose_selection")
             allowed |= CONTENT_ACTIONS
             if check is not ContentCheck.PASSED:
                 allowed.add("check")

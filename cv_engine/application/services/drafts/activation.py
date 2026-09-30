@@ -35,11 +35,7 @@ class DraftActivation:
             tx,
             prepared.application_id,
             prepared.expected_document_hash,
-            DocumentBody(
-                analysis_id=document.analysis_id,
-                selection=prepared.selection or document.selection,
-                content=prepared.content,
-            ),
+            DocumentBody(analysis_id=document.analysis_id, content=prepared.content),
             updated_at=utc_now(),
         )
         return DraftResult(
@@ -61,11 +57,7 @@ class DraftActivation:
             tx,
             prepared.application_id,
             prepared.expected_document_hash,
-            DocumentBody(
-                analysis_id=document.analysis_id,
-                selection=document.selection,
-                content=prepared.content,
-            ),
+            DocumentBody(analysis_id=document.analysis_id, content=prepared.content),
             updated_at=utc_now(),
         )
         return RegenerationResult(

@@ -128,7 +128,6 @@ describe("ApplicationResumePage", () => {
 
   it.each([
     ["analyze_job", "ניתוח"],
-    ["propose_selection", "ניתוח"],
     ["create_draft", "ניתוח"],
     ["regenerate_section", "טיוטה"],
     ["regenerate_claim", "טיוטה"],

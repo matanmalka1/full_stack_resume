@@ -53,7 +53,6 @@ const DOCUMENT_WRITING_OPERATIONS = new Set([
   "create_draft",
   "regenerate_section",
   "regenerate_claim",
-  "propose_selection",
   "render_document",
 ]);
 
@@ -403,9 +402,6 @@ export const DraftEditorPage = () => {
               <DraftAttentionPanel
                 detail={detail}
                 draft={draft}
-                onNavigate={(href) => {
-                  if (!resolving) void navigateSaved(href);
-                }}
                 onShowClaim={(claimId) => {
                   setMode("read");
                   // A fresh request also supports jumping to the same claim again.
@@ -417,18 +413,12 @@ export const DraftEditorPage = () => {
             <DraftWorkspace
               editor={
                 <>
-                  <DraftContentSummary
-                    applicationId={applicationId}
-                    content={content}
-                    draft={draft}
-                    selection={selection}
-                  />
+                  <DraftContentSummary content={content} draft={draft} selection={selection} />
 
                   <DraftEditorNotices
                     aiUnavailable={editing.aiUnavailable}
                     dirty={editing.dirty}
                     regenerationError={editing.regenerationError}
-                    selectionError={editing.selectionError}
                   />
 
                   <DraftOutlineEditor

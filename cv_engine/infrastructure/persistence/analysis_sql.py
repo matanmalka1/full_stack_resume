@@ -118,9 +118,9 @@ def _save_analysis(
 ) -> str:
     """Write one immutable JobAnalysis; its ID is its identity (decision 2).
 
-    The CV document is not written here. Creating it with the analysis's
-    deterministic selection is the application's decision, taken in the same
-    transaction under the same Application lock.
+    The CV document is not written here. Creating the first empty document is
+    the application's decision, taken in the same transaction under the same
+    Application lock.
     """
     analysis_id = new_id()
     now = utc_now()

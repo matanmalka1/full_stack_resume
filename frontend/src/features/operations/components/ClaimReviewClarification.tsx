@@ -3,9 +3,44 @@ import { Link } from "react-router-dom";
 import type { Operation } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
+import { StatusBadge } from "@/ui/StatusBadge";
 
 type ReviewReason = Extract<NonNullable<Operation["failure_reason"]>, { code: "claim_review" }>;
+type RejectedClaim = ReviewReason["claims"][number];
+type ReviewProblem = NonNullable<RejectedClaim["problems"]>[number];
 
+const verdictLabels: Record<RejectedClaim["verdict"], string> = {
+  uncertain: "לא הוכרע",
+  unsupported: "לא נתמך",
+  unattested: "הראיות לא אומתו",
+};
+
+/* The checks a `supported` answer's evidence failed. The reviewer said yes, so its own
+   explanation reads as approval; only these say why the line was still refused. Keyed by
+   the generated union, so a new check fails the build until it is worded here. */
+const problemLabels: Record<ReviewProblem, string> = {
+  "invalid-review-evidence": "הבודק לא פירט על מה נשען אישור השורה.",
+  "incomplete-review-coverage": "הבודק לא בדק את כל השורה - חלק מהניסוח לא נבדק מול העובדות.",
+  "invalid-review-claim-quote": "הבודק ציטט מהשורה ניסוח שאינו מופיע בה.",
+  "invalid-review-source-quote": "הבודק ציטט מהעובדות טקסט שאינו מופיע בהן.",
+  "stale-review-source": "השורה מקושרת לעובדה שאינה מאושרת עוד.",
+  "review-fact-coverage-mismatch":
+    "השורה נשענת על עובדה שאינה מקושרת אליה, או מקושרת לעובדה שלא שימשה בה. לרוב זה ניסוח (כמו תואר תפקיד) שנלקח מעובדה אחרת.",
+  "unsupported-review-number": "השורה כוללת מספר שאינו מופיע בעובדות שלה.",
+};
+
+/* Where the line sat. The heading is the section's own title more often than not, and
+   printing the same words twice as title and subtitle only looked like a second fact. */
+const claimContext = ({ heading, section }: RejectedClaim) =>
+  heading == null || heading === section ? section : `${section} · ${heading}`;
+
+const FieldLabel = ({ children }: { children: string }) => (
+  <p className="text-support font-medium text-cv-text-muted">{children}</p>
+);
+
+/* The failure callout above already names the verdict and that nothing was applied. This
+   panel adds only what the callout cannot: which line, what it said, the facts it was
+   checked against as they were read then, and where to fix it. */
 export const ClaimReviewClarification = ({
   operation,
   reason,
@@ -14,69 +49,123 @@ export const ClaimReviewClarification = ({
   operation: Operation;
   reason: ReviewReason;
   onNavigate?: (() => void) | undefined;
-}) => (
-  <section aria-label="בירור הניסוח שנדחה" className="flex flex-col gap-4">
-    <p className="text-support text-cv-text-muted">
-      ההצעה לא הופעלה. אלה הניסוח והמקורות בזמן הבדיקה; המסמך והעובדות עשויים להשתנות מאז. אישור קורות החיים אינו מאשר
-      את ההצעה הזו.
-    </p>
-    {reason.claims.map((claim) => (
-      <div className="flex flex-col gap-3 border-t border-cv-border pt-3" key={claim.claim_id}>
-        <p className="font-semibold" dir="auto">
-          {claim.heading ?? claim.section}
-        </p>
-        <p className="text-support text-cv-text-muted" dir="auto">
-          {claim.section}
-        </p>
-        <blockquote className="border-s-2 border-cv-border ps-3" dir="auto">
-          {claim.text}
-        </blockquote>
-        <p>
-          {claim.verdict === "uncertain"
-            ? "הבדיקה לא הצליחה לקבוע שהמקורות תומכים בניסוח."
-            : "הניסוח לא עבר את בדיקת התמיכה בעובדות."}
-        </p>
-        <ul aria-label="המקורות שנבדקו" className="flex flex-col gap-3">
-          {claim.sources.map((source) => (
-            <li className="bg-cv-surface-muted p-3" key={source.fact_id}>
-              <p dir="auto">{source.rendering}</p>
-              {source.meaning === source.rendering ? null : (
-                <p className="mt-1 text-support text-cv-text-muted" dir="auto">
-                  {source.meaning}
-                </p>
-              )}
-              <Link
-                onClick={onNavigate}
-                className="text-support text-cv-accent underline"
-                to={`${routePaths.facts}?${new URLSearchParams({ fact: source.fact_id })}`}
-              >
-                פתיחת העובדה הנוכחית
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <p className="font-medium">האם אפשר להסתפק בנוסח נתמך, או שחסר מידע עובדתי במקורות?</p>
-        <p className="text-support text-cv-text-muted">
-          אפשר להשאיר את המסמך כפי שהוא. לתיקון, פתחו את המסמך וערכו או הסירו את השורה; ניסוח חדש ייבדק שוב. מידע חדש יש
-          להוסיף ולאשר במאגר העובדות לפני שימוש בו.
-        </p>
-        <div className="flex flex-wrap gap-3">
+}) => {
+  const initialDraft = operation.operation_type === "create_draft";
+  /* A verdict per line only says something when the lines disagree; otherwise it is the
+     callout's title again. */
+  const mixedVerdicts = new Set(reason.claims.map((claim) => claim.verdict)).size > 1;
+
+  return (
+    <section aria-label="בירור הניסוח שנדחה" className="flex flex-col gap-4">
+      <p className="text-support text-cv-text-muted">
+        {initialDraft ? "לא נוצרה טיוטה." : "המסמך לא השתנה."} להלן הניסוח שנדחה והעובדות שמולן נבדק, כפי שהיו בזמן
+        הבדיקה; ייתכן שהשתנו מאז.
+      </p>
+
+      {reason.claims.map((claim) => (
+        <article className="flex flex-col gap-3 rounded-surface border border-cv-border p-4" key={claim.claim_id}>
+          <header className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-semibold" dir="auto">
+              {claimContext(claim)}
+            </p>
+            {mixedVerdicts ? (
+              <StatusBadge tone={claim.verdict === "uncertain" ? "warning" : "blocker"}>
+                {verdictLabels[claim.verdict]}
+              </StatusBadge>
+            ) : null}
+          </header>
+
+          <div className="flex flex-col gap-1">
+            <FieldLabel>הניסוח שנדחה</FieldLabel>
+            <blockquote className="border-s-2 border-cv-border ps-3" dir="auto">
+              {claim.text}
+            </blockquote>
+          </div>
+
+          {claim.problems == null || claim.problems.length === 0 ? null : (
+            <div className="flex flex-col gap-1">
+              <FieldLabel>למה השורה נדחתה</FieldLabel>
+              <ul className="list-disc ps-5">
+                {claim.problems.map((problem) => (
+                  <li key={problem}>{problemLabels[problem]}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* The reviewer's words, in its own language. Without them a sentence almost
+              identical to its fact is refused and nothing says why; with them, the
+              reader still has to be told this is a reading, not a proof. */}
+          {claim.rationale == null ? null : (
+            <div className="flex flex-col gap-1">
+              <FieldLabel>הסבר הבודק</FieldLabel>
+              <p dir="auto">{claim.rationale}</p>
+              <p className="text-support text-cv-text-muted">זו הקריאה של הבודק האוטומטי, לא הוכחה.</p>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <FieldLabel>{claim.sources.length > 1 ? "העובדות שנבדקו" : "העובדה שנבדקה"}</FieldLabel>
+            <ul aria-label="המקורות שנבדקו" className="flex flex-col gap-2">
+              {claim.sources.map((source) => (
+                <li className="flex flex-col gap-2 rounded-surface bg-cv-surface-muted p-3" key={source.fact_id}>
+                  {/* The meaning is what the review holds the wording to; the rendering is
+                      how the CV prints the fact. Where they differ - a qualifier one
+                      carries and the other drops - is usually the reason, so both show,
+                      each named. */}
+                  <div>
+                    <p className="text-support text-cv-text-muted">משמעות</p>
+                    <p dir="auto">{source.meaning}</p>
+                  </div>
+                  {source.meaning === source.rendering ? null : (
+                    <div>
+                      <p className="text-support text-cv-text-muted">נוסח בקורות החיים</p>
+                      <p dir="auto">{source.rendering}</p>
+                    </div>
+                  )}
+                  <Link
+                    onClick={onNavigate}
+                    className="self-start text-support text-cv-accent underline"
+                    to={`${routePaths.facts}?${new URLSearchParams({ fact: source.fact_id })}`}
+                  >
+                    פתיחת העובדה הנוכחית
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {initialDraft ? null : (
+            <Link
+              onClick={onNavigate}
+              className={buttonClasses("secondary", "self-start")}
+              to={`${routePaths.draft(operation.application_id)}?${new URLSearchParams({ claim: claim.claim_id })}`}
+            >
+              פתיחת השורה במסמך
+            </Link>
+          )}
+        </article>
+      ))}
+
+      <p className="text-support text-cv-text-muted">
+        {initialDraft
+          ? "אפשר להריץ שוב את יצירת הטיוטה. אם חסר מידע במקורות, יש להוסיף אותו במאגר העובדות ולאשר אותו לפני שימוש בו."
+          : "אפשר להשאיר את המסמך כפי שהוא, או לערוך או להסיר את השורה - ניסוח חדש ייבדק שוב. אם חסר מידע במקורות, יש להוסיף אותו במאגר העובדות ולאשר אותו לפני שימוש בו."}
+      </p>
+      <div className="flex flex-wrap gap-3">
+        {initialDraft ? (
           <Link
             onClick={onNavigate}
             className={buttonClasses("secondary")}
-            to={
-              operation.operation_type === "create_draft"
-                ? routePaths.application(operation.application_id)
-                : `${routePaths.draft(operation.application_id)}?${new URLSearchParams({ claim: claim.claim_id })}`
-            }
+            to={routePaths.application(operation.application_id)}
           >
-            {operation.operation_type === "create_draft" ? "חזרה להכנת טיוטה" : "פתיחת השורה במסמך"}
+            חזרה להכנת טיוטה
           </Link>
-          <Link className={buttonClasses("secondary")} onClick={onNavigate} to={routePaths.facts}>
-            הוספת מידע עובדתי
-          </Link>
-        </div>
+        ) : null}
+        <Link className={buttonClasses("secondary")} onClick={onNavigate} to={routePaths.facts}>
+          הוספת מידע עובדתי
+        </Link>
       </div>
-    ))}
-  </section>
-);
+    </section>
+  );
+};

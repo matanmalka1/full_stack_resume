@@ -36,7 +36,7 @@ export const claimTypeExplanations: Record<ClaimType, string> = {
   derived: "השורה נגזרה מהעובדה לפי כלל ניסוח קבוע. המשמעות לא השתנתה.",
   reviewed: "השורה נוסחה מחדש לתפקיד, והניסוח נבדק בנפרד מול העובדות במאגר כדי לוודא שהמשמעות זהה.",
   pending: "אין עובדה שמאשרת את הטקסט הזה. הוא נשמר כפי שנכתב, ואינו מאפשר אישור של הגרסה.",
-  headline: "שורת הכותרת של קורות החיים. היא נבנית מהפרופיל ולא מבחירת העובדות.",
+  headline: "שורת הכותרת של קורות החיים. היא נבנית מהפרופיל ולא מהעובדות שנבחרו לטיוטה.",
 };
 
 /* Where a line came from, in the words the content summary counts it under. Keyed by

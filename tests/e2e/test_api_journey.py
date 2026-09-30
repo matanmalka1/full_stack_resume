@@ -162,8 +162,8 @@ def test_the_full_api_journey_reaches_ready_offline(
         ),
     )
     sources = _outputs(analyzed)
-    # The first analysis creates the document with a deterministic selection and no
-    # content, so the no-review path can draft without a separate selection command.
+    # The first analysis creates the document with no content, so the no-review path
+    # can draft straight away; the draft chooses the facts.
     detail = _get(ai_api_worker, f"/applications/{application_id}").json()
     assert detail["preparation_state"] == "ready_to_draft"
     assert detail["document_id"] == sources["cv_document"]

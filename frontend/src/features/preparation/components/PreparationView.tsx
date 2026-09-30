@@ -1,16 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { classificationFromAnalysis } from "@/api/analyses";
-import { documentQueryOptions } from "@/api/documents";
-import { QueryState } from "@/ui/QueryState";
 import { actionLabel } from "../model/preparationLabels";
 import { SuccessNotice } from "@/ui/SuccessNotice";
 import { WideRow } from "@/ui/WideRow";
 import type { AnalysisDecisions, ApplicationDetail } from "@/api/contracts";
 import { workflowActionPlan } from "../model/workflowActionPlan";
 import { AnalysisStage } from "../stages/analysis/AnalysisStage";
-import { DocumentSelectionPanel } from "../stages/content/DocumentSelectionPanel";
 import { VerificationStage } from "../stages/verification/VerificationStage";
 import { MatchingConfigurationEditor } from "../stages/matching/MatchingConfigurationEditor";
 import { AnalysisStatusBanner } from "./AnalysisStatusBanner";
@@ -37,13 +33,6 @@ export const PreparationView = ({
 
   const plan = workflowActionPlan(detail);
   const hasRecommendation = detail.recommended_action != null;
-  const selectionAction = plan.selection;
-  /* The fact selection is the document's own, so it is read from the document - which
-     exists from the first analysis on. */
-  const documentQuery = useQuery({
-    ...documentQueryOptions(detail.application.id),
-    enabled: selectionAction !== null,
-  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,8 +41,8 @@ export const PreparationView = ({
       <AnalysisStatusBanner classification={classification} supersededAnalysis={supersededAnalysis} />
 
       <WideRow>
-        {/* One column: what needs deciding first, then the analysis and the fact selection
-            at the full width of the row. The step's action is not here - its commit bar
+        {/* One column: what needs deciding first, then the analysis at the full width
+            of the row. The step's action is not here - its commit bar
             portals to the shell's action slot. */}
         <div className="flex min-w-0 flex-col gap-6">
           <VerificationStage
@@ -89,27 +78,6 @@ export const PreparationView = ({
               operationLive={operationLive}
               plan={plan}
             />
-          )}
-
-          {selectionAction === null ? null : (
-            <QueryState
-              error={documentQuery.error}
-              errorDetail="המסמך לא השתנה. אפשר לרענן את העמוד ולנסות שוב."
-              errorTitle="לא ניתן לטעון את בחירת העובדות"
-              loading={documentQuery.data === undefined}
-              loadingLabel="טוען את בחירת העובדות…"
-            >
-              {documentQuery.data === undefined ? null : (
-                <DocumentSelectionPanel
-                  detail={detail}
-                  document={documentQuery.data.document}
-                  emphasized={selectionAction.emphasized}
-                  onQueued={onQueued}
-                  operationLive={operationLive}
-                  requirements={classification?.requirements ?? []}
-                />
-              )}
-            </QueryState>
           )}
         </div>
       </WideRow>

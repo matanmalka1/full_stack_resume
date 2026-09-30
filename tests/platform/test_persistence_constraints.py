@@ -690,9 +690,7 @@ def test_document_write_blocks_on_its_row_lock(services, database_url):
     holder = create_engine(database_url, poolclass=NullPool)
     transactions = SqlAlchemyTransactionManager(impatient)
     store = SqlAlchemyDocumentStore(transactions)
-    body = DocumentBody(
-        analysis_id=document.analysis_id, selection=document.selection, content=None
-    )
+    body = DocumentBody(analysis_id=document.analysis_id, content=None)
     try:
         with holder.begin() as held:
             held.execute(

@@ -24,7 +24,6 @@ import {
   type MatchingKey,
   type MatchingValues,
   changedKeys,
-  createsAnalysis,
   matchingConsequence,
   matchingKeys,
   matchingOrigin,
@@ -148,7 +147,7 @@ export const MatchingConfigurationEditor = ({
         <div className="flex flex-col gap-4">
           {lockedByOperation ? (
             <Callout title="ההגדרות נעולות בזמן שינוי ההקשר" tone="warning">
-              יש להמתין לסיום ניתוח המשרה או שינוי בחירת העובדות, ואז לפתוח את ההגדרות המעודכנות.
+              יש להמתין לסיום ניתוח המשרה, ואז לפתוח את ההגדרות המעודכנות.
             </Callout>
           ) : null}
 
@@ -160,7 +159,7 @@ export const MatchingConfigurationEditor = ({
             {matchingKeys.map((key) => {
               const field = fields[key];
               const isChanged = changes.includes(key);
-              const origin = matchingOrigin(key, classification, detail);
+              const origin = matchingOrigin(key, classification);
               return (
                 <Field
                   hint={
@@ -195,11 +194,8 @@ export const MatchingConfigurationEditor = ({
           </div>
 
           {changed ? (
-            <Callout
-              title={createsAnalysis(changes) ? "השמירה תריץ ניתוח מחדש" : "השמירה תבחר את העובדות מחדש"}
-              tone={hasContent ? "warning" : "info"}
-            >
-              {matchingConsequence(detail, createsAnalysis(changes))}
+            <Callout title="השמירה תיצור ניתוח חדש" tone={hasContent ? "warning" : "info"}>
+              {matchingConsequence(detail)}
             </Callout>
           ) : null}
 

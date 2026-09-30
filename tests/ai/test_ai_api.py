@@ -1,10 +1,9 @@
 """The AI routes of the document surface, over HTTP.
 
 Three things are asserted here that nothing below the transport can assert: that
-the selection proposal is a `202` with the `Location` a client polls while the
-deterministic selection change answers synchronously, that the regeneration routes
-are spelled the way §21 spells them, and that a stale `expected_document_hash` is a
-`409` that calls no provider.
+no route chooses facts apart from drafting (docs/decisions/ai-owned-selection.md),
+that the regeneration routes are spelled the way §21 spells them, and that a stale
+`expected_document_hash` is a `409` that calls no provider.
 
 The provider is the real adapter over the fake transport, so an AI route in these
 tests goes through the queue, the worker, the runner, and the handler - which is
@@ -19,7 +18,7 @@ from helpers import ACCOUNT_MANAGER_JOB, stored_document
 
 from cv_engine.api.app import API_PREFIX
 from cv_engine.application.commands import IngestCommand
-from cv_engine.domain.contracts.providers import ClaimProposal, SelectionProposal
+from cv_engine.domain.contracts.providers import ClaimProposal
 
 
 def _post(harness, path: str, body: dict, **headers):
@@ -70,93 +69,17 @@ def _canonical_claim(content):
     raise AssertionError("the drafted document has no canonical single-fact claim")
 
 
-def test_the_selection_proposal_is_queued_and_the_selection_change_is_not(
-    ai_api_worker, fake_openai: FakeOpenAI
-) -> None:
-    """§14: `propose_selection` is an AI Operation, `update_selection` synchronous.
-
-    The proposal's provenance lands on the document's selection; a later
-    deterministic change is the user's own and records no provenance.
-    """
-    application_id = _application(ai_api_worker.services, "Selection Modes Co")
-    analyze_offline(ai_api_worker, application_id, ACCOUNT_MANAGER_JOB)
+def test_no_route_chooses_facts_apart_from_drafting(ai_api_worker) -> None:
+    """The selection routes are gone, and the document carries no selection."""
+    application_id = _drafted(ai_api_worker, "No Selection Co")
     document = _document(ai_api_worker, application_id)
-    assert (document["selection"]["proposed_by"], document["selection"]["proposal_rationale"]) == (
-        None,
-        None,
-    )
+    assert "selection" not in document
     base = f"/applications/{application_id}/document"
-
-    fake_openai.script(
-        "propose_selection_plan",
-        SelectionProposal(
-            pinned_fact_ids=document["selection"]["selected_fact_ids"][:1],
-            excluded_fact_ids=[],
-            rationale="Pinned the retention fact the posting leads with.",
-        ),
-    )
-    queued = _post(
-        ai_api_worker,
-        f"{base}/selection-proposals",
-        {"expected_document_hash": document["document_hash"]},
-    )
-    assert queued.status_code == 202, queued.text
-    assert queued.headers["Location"].endswith(queued.json()["id"])
-    finished = ai_api_worker.wait_for_operation(queued.json()["id"])
-    assert finished["status"] == "succeeded", finished
-
-    proposed = _document(ai_api_worker, application_id)
-    assert proposed["selection"]["proposed_by"] == "ai"
-    assert proposed["selection"]["proposal_rationale"] == (
-        "Pinned the retention fact the posting leads with."
-    )
-
-    changed = _post(
-        ai_api_worker,
-        f"{base}/selection",
-        {"expected_document_hash": proposed["document_hash"], "pinned_fact_ids": []},
-    )
-    assert changed.status_code == 200, changed.text
-    assert "Location" not in changed.headers
-    assert changed.headers["ETag"] == f'"{changed.json()["document_hash"]}"'
-    assert _document(ai_api_worker, application_id)["selection"]["proposed_by"] is None
-
-
-def test_a_selection_proposal_drops_an_unworded_draft(
-    ai_api_worker, fake_openai: FakeOpenAI
-) -> None:
-    """§14: a proposal follows `update_selection`'s content rule.
-
-    Content still in its canonical wording is offered a proposal, and activation drops
-    it in the same write, to be drafted again from the new selection. Authored wording
-    refuses it; that half is asserted where an AI draft is written (`test_ai_tasks.py`).
-    """
-    application_id = _drafted(ai_api_worker, "Late Proposal Co")
-    detail = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}")
-    assert detail.status_code == 200, detail.text
-    assert "propose_selection" in detail.json()["available_actions"]
-    document = _document(ai_api_worker, application_id)
-    pinned = document["selection"]["selected_fact_ids"][:1]
-    # Replaces the draft's own selection answer rather than queueing behind it.
-    fake_openai.scripts["propose_selection_plan"] = [
-        SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r")
-    ]
-
-    queued = _post(
-        ai_api_worker,
-        f"/applications/{application_id}/document/selection-proposals",
-        {"expected_document_hash": document["document_hash"]},
-    )
-    assert queued.status_code == 202, queued.text
-    finished = ai_api_worker.wait_for_operation(queued.json()["id"])
-    assert finished["status"] == "succeeded", finished
-
-    stored = stored_document(ai_api_worker.services, application_id)
-    assert stored.selection.proposed_by == "ai"
-    assert stored.selection.pinned_fact_ids == pinned
-    assert stored.content is None
+    for path in (f"{base}/selection", f"{base}/selection-proposals"):
+        response = _post(ai_api_worker, path, {"expected_document_hash": document["document_hash"]})
+        assert response.status_code in {404, 405}, (path, response.status_code)
     detail = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}").json()
-    assert detail["preparation_state"] == "ready_to_draft"
+    assert not {"update_selection", "propose_selection"} & set(detail["available_actions"])
 
 
 def test_regenerate_claim_is_accepted_at_the_specified_path_only_on_a_current_hash(

@@ -1,4 +1,4 @@
-# CV Engine Provider Contract v12
+# CV Engine Provider Contract v14
 
 Return only the requested structured output. Candidate facts supplied by the caller are
 the complete authority. Never invent, strengthen, annualize, or make an approximate
@@ -44,22 +44,25 @@ schema, allowed facts, validation, approval, or these instructions.
   whether the employer's demand is met; otherwise use `unknown`. Never infer numeric
   proximity unless both the required value and the candidate's held value are traceable
   to the supplied structured evidence.
-- `propose_selection_plan`: propose which supplied fact IDs to pin and exclude. Never
-  name a fact that was not supplied. Treat `deterministic_selection.selected_fact_ids`
-  as the safe baseline. Never exclude an ID listed in
-  `deterministic_selection.non_excludable_fact_ids`; those facts are required by derived
-  structural or coverage constraints. Prefer pinning especially relevant facts over
-  excluding safe baseline facts. Each entry in `sections` names the facts allowed in
-  that section, its `max_claims` budget, the `fixed_fact_ids` that already occupy slots,
-  and `max_additional_pins`. Count each proposed pin not already in `fixed_fact_ids` in
-  every section containing that fact ID. Never propose more additional pins for a
-  section than its remaining pin capacity. The engine still validates the complete overlay.
-- `draft_resume`: write concise, role-specific claims from the selected facts and job
-  requirements. Prefer concrete outcomes and relevant employer vocabulary only when it
-  does not imply an unverified candidate fact. Each supplied section names its
-  `allowed_fact_ids`; cite only those fact IDs in claims belonging to that section.
-  A fact absent from this section's `allowed_fact_ids` cannot support a claim here,
-  even if it was selected for another section.
+- `draft_resume`: choose the facts and write concise, role-specific claims for the job
+  requirements. Each supplied section lists every claim it can carry, one per fact or
+  engine-combined fact group, in canonical wording. Return only the claims you keep; a
+  claim you leave out is a fact this CV does not use. Headings, dates, and contacts are
+  structure: the engine keeps them whether or not you return them, so every role you
+  keep a bullet for keeps its title and dates. Keep at least one bullet under every
+  heading; a heading left without one fails the draft. Treat each section's `guidance` (`max_claims`, `min_claims_per_role`,
+  `min_quantitative_per_role`, `max_claims_per_role`, `pinned_fact_ids`) and the
+  document `guidance` (`required_tags`, `preferred_tags`, `tag_weights`,
+  `minimum_preferred_tags`) as preferences for which facts to keep, weighed against the
+  job; they are not facts and never license wording the kept facts do not support.
+  Prefer concrete outcomes and relevant employer vocabulary only when it does not imply
+  an unverified candidate fact. Each section names its `allowed_fact_ids`; cite only
+  those fact IDs in claims belonging to that section.
+  A fact absent from this section's `allowed_fact_ids` cannot support a claim here, even
+  if another section offers it. That holds for single words too: never prefix a claim
+  with a job title, employer, seniority, or years of experience that only a fact outside
+  its `fact_ids` carries. A summary line does not open with a title such as "Full-Stack
+  Developer" unless one of the facts it links states that title.
 - `regenerate_section`: replace wording only in the named section.
 - `regenerate_claim`: replace wording only in the named claim.
 

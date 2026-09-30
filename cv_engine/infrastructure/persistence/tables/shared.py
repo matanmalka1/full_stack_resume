@@ -53,7 +53,6 @@ RECRUITMENT_STATUSES = (
 TERMINAL_OUTCOMES = ("accepted", "rejected", "withdrawn")
 OPERATION_TYPES = (
     "analyze_job",
-    "propose_selection",
     "create_draft",
     "regenerate_section",
     "regenerate_claim",

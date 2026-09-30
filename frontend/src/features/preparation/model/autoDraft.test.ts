@@ -25,7 +25,7 @@ const analyzed = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail
   baseDetail({
     preparation_state: "ready_to_draft",
     content_check: "none",
-    available_actions: ["update_selection", "create_draft"],
+    available_actions: ["edit_matching_configuration", "create_draft"],
     recommended_action: "create_draft",
     ...overrides,
   });

@@ -13,13 +13,10 @@ import { actionLabel } from "./preparationLabels";
 export interface WorkflowActionPlan {
   /* `analyze` is offered as re-analysis once an analysis is already in force. */
   analyze: { emphasized: boolean; reanalysis: boolean } | null;
-  /* The fact selection screen: the document's own selection, which exists from the first
-     analysis on. */
-  selection: { emphasized: boolean } | null;
   /* The generate command, addressed to the document at the hash the projection reports. */
   createDraft: { documentHash: string; emphasized: boolean } | null;
   /* §14 `build_from_analysis`: a newer analysis exists than the one the document is pinned
-     to. Explicit, because it replaces the selection and clears content and every stamp -
+     to. Explicit, because it clears content and every stamp -
      `discardsContent` says whether that loses written work, which is what decides whether
      the press asks first. */
   buildFromAnalysis: {
@@ -49,8 +46,8 @@ export interface WorkflowActionPlan {
 }
 
 /* Whether `WorkflowActions` has anything to put inside its surface. Some actions are
-   deliberately handled elsewhere on the preparation screen: the fact selection in its own
-   panel and re-analysis beside the diagnostics. Treating those as content here leaves an
+   deliberately handled elsewhere on the preparation screen: re-analysis sits beside the
+   diagnostics. Treating those as content here leaves an
    emphasized but empty card behind. */
 export const hasWorkflowActionsContent = (plan: WorkflowActionPlan): boolean =>
   (plan.analyze !== null && !plan.analyze.reanalysis) ||
@@ -73,11 +70,6 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
   const analyze = available("analyze")
     ? { emphasized: recommended === "analyze", reanalysis: recommended !== "analyze" }
     : null;
-
-  const selection =
-    documentHash !== null && (available("update_selection") || available("propose_selection"))
-      ? { emphasized: recommended === "update_selection" || recommended === "propose_selection" }
-      : null;
 
   const createDraft =
     available("create_draft") && documentHash !== null
@@ -131,8 +123,6 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
   const handledHere = new Set(
     [
       analyze === null ? null : "analyze",
-      selection === null ? null : "update_selection",
-      selection === null ? null : "propose_selection",
       createDraft === null ? null : "create_draft",
       buildFromAnalysis === null ? null : "build_from_analysis",
       editHref === null ? null : "edit",
@@ -153,7 +143,6 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
     createDraft,
     draftScreen,
     ready,
-    selection,
     unbuiltRecommendation,
   };
 };

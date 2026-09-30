@@ -20,7 +20,7 @@ export const DraftIdentityCard = ({ actions, draft, facts }: DraftIdentityCardPr
       </h3>
       {/* Said once for every contact line, rather than repeated under each of them. */}
       <p className="text-caption leading-5 text-cv-text-muted">
-        נבנים מהפרופיל ולא מבחירת העובדות, ולכן חוזרים בכל בנייה מחדש ואי אפשר להסיר אותם כאן.
+        נבנים מהפרופיל ולא מהעובדות שנבחרו לטיוטה, ולכן חוזרים בכל בנייה מחדש ואי אפשר להסיר אותם כאן.
       </p>
     </header>
 

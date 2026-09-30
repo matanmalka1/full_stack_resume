@@ -1,4 +1,4 @@
-"""Analysis and selection-proposal activation in a caller-owned transaction.
+"""Analysis activation in a caller-owned transaction.
 
 No external effects happen here: every provider call and file read is finished
 before these run, inside the Operation runner's activation scope or a service's
@@ -7,28 +7,21 @@ own write scope.
 
 from __future__ import annotations
 
-from ....domain.knowledge import Knowledge
 from ....util import utc_now
-from ...commands import AnalysisResult, AnalyzeCommand, ProposeSelectionCommand
+from ...commands import AnalysisResult, AnalyzeCommand
 from ...errors import LineageBroken, PreconditionFailed
-from ...ports.analysis_plans import AnalysisSelectionSourceReader, AnalysisStore
+from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisStore
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.transactions import WriteTransaction
-from ..documents import (
-    changed_selection,
-    lock_document_source,
-    refuse_deleted,
-    require_hash,
-)
+from ..documents import refuse_deleted, require_hash
 from .preparation import PreparedAnalysis
-from .selection_policy import PreparedSelectionProposal
 
 
 class AnalysisActivation:
     def __init__(
         self,
         analyses: AnalysisStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         documents: DocumentStore,
     ):
         self.analyses = analyses
@@ -77,7 +70,7 @@ class AnalysisActivation:
             document = self.documents.create_document(
                 tx,
                 command.application_id,
-                DocumentBody(analysis_id=analysis_id, selection=prepared.selection, content=None),
+                DocumentBody(analysis_id=analysis_id, content=None),
                 prepared.built_with,
                 created_at=utc_now(),
             )
@@ -90,39 +83,3 @@ class AnalysisActivation:
             created_document=created,
             analysis=prepared.result,
         )
-
-    def activate_selection_proposal(
-        self,
-        tx: WriteTransaction,
-        command: ProposeSelectionCommand,
-        prepared: PreparedSelectionProposal,
-        knowledge: Knowledge,
-    ) -> str:
-        """Replace the selection with an AI proposal, after repeating every check (§14).
-
-        The expected hash is re-checked under the row lock, and the overlay is run
-        through selection policy again against the Knowledge loaded for activation.
-        The provider's proposal is never trusted on its own. The write follows
-        `update_selection`'s content rule: content nobody has worded is dropped, to be
-        drafted again, and authored wording refuses the activation. Rendered files it
-        releases are left to orphan maintenance.
-        """
-        source = lock_document_source(tx, self.documents, self.sources, command.application_id)
-        refuse_deleted(command.application_id, source.deleted_at)
-        require_hash(source.document, command.expected_document_hash)
-        selection = changed_selection(
-            source,
-            knowledge,
-            pinned_fact_ids=prepared.proposal.pinned_fact_ids,
-            excluded_fact_ids=prepared.proposal.excluded_fact_ids,
-            emphasis_override=None,
-            ai_rationale=prepared.proposal.rationale,
-        )
-        updated, _released = self.documents.replace_selection(
-            tx,
-            command.application_id,
-            command.expected_document_hash,
-            selection,
-            updated_at=utc_now(),
-        )
-        return updated.id

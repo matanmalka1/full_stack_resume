@@ -67,7 +67,7 @@
       },
       "AnalysisDecisionsResponse": {
         "additionalProperties": false,
-        "description": "Which analysis is in force after the decision, and whether it is a new one.\n\n`job_analysis_id` names the analysis the client should work from now: the\nnew one when the decision changed meaning, the original when only the\nselection moved. `created_analysis` is what tells the two apart. Neither\nbranch re-pins the document; `document_hash` is its token now.",
+        "description": "The new analysis created by the decision.\n\n`job_analysis_id` names the analysis the client should work from now, the new\none every decision creates. The decision never re-pins the document;\n`document_hash` is its token now.",
         "properties": {
           "analysis": {
             "additionalProperties": true,
@@ -77,10 +77,6 @@
           "application_id": {
             "title": "Application Id",
             "type": "string"
-          },
-          "created_analysis": {
-            "title": "Created Analysis",
-            "type": "boolean"
           },
           "document_hash": {
             "anyOf": [
@@ -115,7 +111,6 @@
         "required": [
           "application_id",
           "job_analysis_id",
-          "created_analysis",
           "analysis",
           "state"
         ],
@@ -1199,7 +1194,7 @@
       },
       "ApplyAnalysisDecisionsRequest": {
         "additionalProperties": false,
-        "description": "One review-form submission (§13).\n\nCarries analysis and selection decisions because one form may submit both.\nTrack/Profile/language create a new JobAnalysis; Emphasis and the fact overlay\nchange only the document's selection, in place. Two overlay lists, not three:\nexplicit inclusion is a pin.",
+        "description": "One review-form submission (§13).\n\nEvery decision it carries - Track, Profile, language, Emphasis - is\nclassification, and a change to any of them creates a new JobAnalysis.",
         "properties": {
           "application_id": {
             "title": "Application Id",
@@ -1214,14 +1209,6 @@
                 "type": "null"
               }
             ]
-          },
-          "excluded_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Excluded Fact Ids",
-            "type": "array"
           },
           "expected_analysis_id": {
             "title": "Expected Analysis Id",
@@ -1253,14 +1240,6 @@
               }
             ],
             "title": "Language Override"
-          },
-          "pinned_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Pinned Fact Ids",
-            "type": "array"
           },
           "profile_override": {
             "anyOf": [
@@ -1630,15 +1609,10 @@
           "profile_version": {
             "title": "Profile Version",
             "type": "string"
-          },
-          "selection_policy_version": {
-            "title": "Selection Policy Version",
-            "type": "string"
           }
         },
         "required": [
-          "profile_version",
-          "selection_policy_version"
+          "profile_version"
         ],
         "title": "BuiltWithResponse",
         "type": "object"
@@ -1989,15 +1963,10 @@
       },
       "ConfirmAndUseFactRequest": {
         "additionalProperties": false,
-        "description": "Confirm, attach, and select one fact as a single recoverable command.",
+        "description": "Confirm one fact and attach it to a Profile section as one recoverable command.",
         "properties": {
           "application_id": {
             "title": "Application Id",
-            "type": "string"
-          },
-          "expected_document_hash": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Expected Document Hash",
             "type": "string"
           },
           "job_analysis_id": {
@@ -2022,15 +1991,14 @@
           "application_id",
           "job_analysis_id",
           "profile",
-          "section",
-          "expected_document_hash"
+          "section"
         ],
         "title": "ConfirmAndUseFactRequest",
         "type": "object"
       },
       "ConfirmAndUseFactResponse": {
         "additionalProperties": false,
-        "description": "The one logical command's whole outcome: confirmed, attached, selected.\n\nThe document whose selection the fact joined, and its token afterwards.",
+        "description": "The one command's outcome and the unchanged document token beside it.",
         "properties": {
           "document_hash": {
             "title": "Document Hash",
@@ -2460,70 +2428,6 @@
         "title": "DocumentActionRequest",
         "type": "object"
       },
-      "DocumentCandidateResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "fact_id": {
-            "title": "Fact Id",
-            "type": "string"
-          },
-          "outcome": {
-            "enum": [
-              "pinned",
-              "selected",
-              "rescued",
-              "omitted"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "enum": [
-                  "below_section_budget",
-                  "not_relevant_to_emphasis",
-                  "evicted_by_required_tag_rescue",
-                  "not_in_profile_pool",
-                  "excluded_by_user"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "section": {
-            "title": "Section",
-            "type": "string"
-          },
-          "text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Text"
-          },
-          "user_selectable": {
-            "title": "User Selectable",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "fact_id",
-          "section",
-          "outcome",
-          "user_selectable"
-        ],
-        "title": "DocumentCandidateResponse",
-        "type": "object"
-      },
       "DocumentCheckResponse": {
         "additionalProperties": false,
         "description": "`check` and `approve`. A failed check is `200` with `passed=false` (§22).",
@@ -2726,9 +2630,6 @@
           "preparation_state": {
             "$ref": "#/components/schemas/PreparationState"
           },
-          "selection": {
-            "$ref": "#/components/schemas/DocumentSelectionResponse"
-          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"
@@ -2741,92 +2642,12 @@
           "document_hash",
           "built_with",
           "language",
-          "selection",
           "preparation_state",
           "content_check",
           "created_at",
           "updated_at"
         ],
         "title": "DocumentResponse",
-        "type": "object"
-      },
-      "DocumentSelectionResponse": {
-        "additionalProperties": false,
-        "description": "The selection with its candidate accounting (§20).",
-        "properties": {
-          "candidates": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentCandidateResponse"
-            },
-            "title": "Candidates",
-            "type": "array"
-          },
-          "emphasis": {
-            "$ref": "#/components/schemas/Emphasis"
-          },
-          "emphasis_override": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Emphasis"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "excluded_fact_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Excluded Fact Ids",
-            "type": "array"
-          },
-          "pinned_fact_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Pinned Fact Ids",
-            "type": "array"
-          },
-          "proposal_rationale": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposal Rationale"
-          },
-          "proposed_by": {
-            "anyOf": [
-              {
-                "const": "ai",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposed By"
-          },
-          "selected_fact_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Selected Fact Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "emphasis",
-          "selected_fact_ids",
-          "pinned_fact_ids",
-          "excluded_fact_ids",
-          "candidates"
-        ],
-        "title": "DocumentSelectionResponse",
         "type": "object"
       },
       "DraftClaimResponse": {
@@ -2907,7 +2728,7 @@
       },
       "DraftFactResponse": {
         "additionalProperties": false,
-        "description": "One fact the content uses, or one the document's selection considered.\n\n`text` is nullable: a fact the store can no longer resolve is already\nreported as a stale reason by the state projection, and a read that raised\nover it would turn an explainable staleness into a `500`.\n\n`outcome` is null for a fact the selection never ranked - a contact, or a fact\na manual relink attached. That null is what says no include/exclude decision\napplies to it, so no second flag is needed to say the same thing.",
+        "description": "One fact the content's claims link.\n\n`text` is nullable: a fact the store can no longer resolve is already\nreported as a review reason by the state projection, and a read that raised\nover it would turn an explainable staleness into a `500`. `section` is the\ncontent section whose claims first link it, null for the headline and contacts.",
         "properties": {
           "fact_id": {
             "title": "Fact Id",
@@ -2920,41 +2741,6 @@
             },
             "title": "Linked Claim Ids",
             "type": "array"
-          },
-          "outcome": {
-            "anyOf": [
-              {
-                "enum": [
-                  "pinned",
-                  "selected",
-                  "rescued",
-                  "omitted"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Outcome"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "enum": [
-                  "below_section_budget",
-                  "not_relevant_to_emphasis",
-                  "evicted_by_required_tag_rescue",
-                  "not_in_profile_pool",
-                  "excluded_by_user"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
           },
           "section": {
             "anyOf": [
@@ -4503,7 +4289,6 @@
       "OperationType": {
         "enum": [
           "analyze_job",
-          "propose_selection",
           "create_draft",
           "regenerate_section",
           "regenerate_claim",
@@ -4618,27 +4403,6 @@
         ],
         "title": "ProfileName",
         "type": "string"
-      },
-      "ProposeSelectionRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "expected_document_hash": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Expected Document Hash",
-            "type": "string"
-          },
-          "provider": {
-            "const": "openai",
-            "default": "openai",
-            "title": "Provider",
-            "type": "string"
-          }
-        },
-        "required": [
-          "expected_document_hash"
-        ],
-        "title": "ProposeSelectionRequest",
-        "type": "object"
       },
       "ReasonResponse": {
         "additionalProperties": false,
@@ -4964,6 +4728,33 @@
             ],
             "title": "Heading"
           },
+          "problems": {
+            "items": {
+              "enum": [
+                "invalid-review-evidence",
+                "incomplete-review-coverage",
+                "invalid-review-claim-quote",
+                "invalid-review-source-quote",
+                "stale-review-source",
+                "review-fact-coverage-mismatch",
+                "unsupported-review-number"
+              ],
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
           "section": {
             "title": "Section",
             "type": "string"
@@ -4982,7 +4773,8 @@
           "verdict": {
             "enum": [
               "uncertain",
-              "unsupported"
+              "unsupported",
+              "unattested"
             ],
             "title": "Verdict",
             "type": "string"
@@ -5361,7 +5153,7 @@
           },
           "claim_removals": {
             "default": [],
-            "description": "Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming the selection change, and the headline and contacts are structural.",
+            "description": "Section claims to delete outright. Headlines, contacts, role headings, and dates are structural and cannot be removed.",
             "items": {
               "type": "string"
             },
@@ -5370,48 +5162,6 @@
           }
         },
         "title": "UpdateDocumentRequest",
-        "type": "object"
-      },
-      "UpdateSelectionRequest": {
-        "additionalProperties": false,
-        "description": "A deterministic selection change (§14 `update_selection`).\n\nTwo lists, not three: explicit inclusion is a pin, and what ends up selected is a\nresponse field. `emphasis_override` null means \"leave the effective Emphasis as it\nis\", not \"clear the override\".",
-        "properties": {
-          "emphasis_override": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Emphasis"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "excluded_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Excluded Fact Ids",
-            "type": "array"
-          },
-          "expected_document_hash": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Expected Document Hash",
-            "type": "string"
-          },
-          "pinned_fact_ids": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Pinned Fact Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "expected_document_hash"
-        ],
-        "title": "UpdateSelectionRequest",
         "type": "object"
       },
       "UpdateSettingsRequest": {
@@ -5589,7 +5339,7 @@
   "paths": {
     "/api/v1/analyses/{analysis_id}/apply-decisions": {
       "post": {
-        "description": "`201`: a meaning change creates an immutable JobAnalysis; a selection-only\nchange updates the document's selection in place (§13).\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and the command, the recorded `user_override`, and the stored\nanalysis all hold plain strings. Handing the member across would make the\nstored value's exact type depend on how Pydantic coerces a `str` subclass.",
+        "description": "`201`: every changed classification value creates an immutable JobAnalysis (§13).\n\n`application_id` is in the body rather than inferred from the analysis. The\nclient states which Application it believes it is deciding for, and a\nmismatch is a `412` naming the broken lineage instead of a decision landing\nsilently on another Application's analysis.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and the command, the recorded `user_override`, and the stored\nanalysis all hold plain strings. Handing the member across would make the\nstored value's exact type depend on how Pydantic coerces a `str` subclass.",
         "operationId": "apply_analysis_decisions_api_v1_analyses__analysis_id__apply_decisions_post",
         "parameters": [
           {
@@ -5909,7 +5659,7 @@
     },
     "/api/v1/applications/{application_id}/analyses": {
       "post": {
-        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis - and, for the first\nanalysis, the document's initial selection - were committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/apply-decisions`.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and this command is persisted as the Operation's request payload. A\npayload holding enum members rather than plain strings would depend on how\nPydantic coerces a `str` subclass to survive the round trip.",
+        "description": "`202` and a `Location`: analysis is a durable Operation (§13).\n\nNeedsReview is not an error here or anywhere else. An analysis that needs a\ndecision is a *successful* Operation whose JobAnalysis - and, for the first\nanalysis and the empty document pinned to it were committed; what needs deciding is reported by the\nApplication's review reasons, and is resolved through\n`POST /analyses/{id}/apply-decisions`.\n\nDumped as JSON, not Python: the override fields are `StrEnum` members on the\nschema, and this command is persisted as the Operation's request payload. A\npayload holding enum members rather than plain strings would depend on how\nPydantic coerces a `str` subclass to survive the round trip.",
         "operationId": "create_analysis_api_v1_applications__application_id__analyses_post",
         "parameters": [
           {
@@ -6265,7 +6015,7 @@
     },
     "/api/v1/applications/{application_id}/document/build-from-analysis": {
       "post": {
-        "description": "`200` with a document that has a fresh selection and no content.",
+        "description": "`200` with a document pinned to the named analysis and no content.",
         "operationId": "build_from_analysis_api_v1_applications__application_id__document_build_from_analysis_post",
         "parameters": [
           {
@@ -6821,130 +6571,6 @@
           }
         },
         "summary": "Render the approved document",
-        "tags": [
-          "documents"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/document/selection": {
-      "post": {
-        "description": "`200`; `412` when the change needs wording judgment and a regeneration instead.\n\nDumped as JSON: `emphasis_override` is a `StrEnum` on the schema and a plain string\non the command and in the stored selection.",
-        "operationId": "update_selection_api_v1_applications__application_id__document_selection_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateSelectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DocumentMutationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Change the document's fact selection deterministically",
-        "tags": [
-          "documents"
-        ]
-      }
-    },
-    "/api/v1/applications/{application_id}/document/selection-proposals": {
-      "post": {
-        "description": "`202` and a `Location`. No provider call happens inside this request.",
-        "operationId": "propose_selection_api_v1_applications__application_id__document_selection_proposals_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProposeSelectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            },
-            "description": "The request did not match the API contract."
-          }
-        },
-        "summary": "Ask the provider to propose a selection",
         "tags": [
           "documents"
         ]
@@ -7809,7 +7435,7 @@
     },
     "/api/v1/facts/{fact_id}/confirm-and-use": {
       "post": {
-        "description": "One logical command: it confirms, attaches, and adds the fact to the\ndocument's selection, or it reports a complete failure. There is no partial outcome to\nreport, so there is no partial success status.",
+        "description": "One logical command: it confirms the fact and attaches it to the Profile\nsection, or it reports a complete failure. There is no partial outcome to report, so\nthere is no partial success status. The document is not written.",
         "operationId": "confirm_and_use_fact_api_v1_facts__fact_id__confirm_and_use_post",
         "parameters": [
           {
@@ -7854,7 +7480,7 @@
             "description": "The request did not match the API contract."
           }
         },
-        "summary": "Confirm, attach, and select one fact as one command",
+        "summary": "Confirm one fact and attach it to a Profile section as one command",
         "tags": [
           "facts"
         ]
@@ -7862,7 +7488,7 @@
     },
     "/api/v1/facts/{fact_id}/delete": {
       "post": {
-        "description": "One-way; `confirm: false` is refused rather than interpreted.\n\nAlways permitted, even for a fact attached to a Profile section or\nreferenced by a document selection, claim, or gap resolution: this command\ndoes not pre-check those, the review reason and warning it produces do\n(state-and-use-cases.md §17).",
+        "description": "One-way; `confirm: false` is refused rather than interpreted.\n\n    Always permitted, even for a fact attached to a Profile section or\n    referenced by a claim or gap resolution: this command\ndoes not pre-check those, the review reason and warning it produces do\n(state-and-use-cases.md §17).",
         "operationId": "delete_fact_api_v1_facts__fact_id__delete_post",
         "parameters": [
           {

@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..domain.claim_review import ReviewProblemCode
 from ..util import canonical_json, sha256_text
 from .ai_configuration import ReasoningEffort
 
@@ -70,21 +71,19 @@ def available_operation_actions(
 
 class OperationType(StrEnum):
     ANALYZE_JOB = "analyze_job"
-    PROPOSE_SELECTION = "propose_selection"
     CREATE_DRAFT = "create_draft"
     REGENERATE_SECTION = "regenerate_section"
     REGENERATE_CLAIM = "regenerate_claim"
     RENDER_DOCUMENT = "render_document"
 
 
-#: Operations whose successful activation replaces the analysis or the document
-#: selection a matching-configuration decision is taken against.  Kept beside the closed
+#: Operations whose successful activation replaces the analysis a
+#: matching-configuration decision is taken against.  Kept beside the closed
 #: OperationType vocabulary so both the action projection and the persistence
 #: CAS use one definition of "competing with this context".
 MATCHING_CONTEXT_OPERATION_TYPES = frozenset(
     {
         OperationType.ANALYZE_JOB,
-        OperationType.PROPOSE_SELECTION,
     }
 )
 
@@ -279,8 +278,16 @@ class RejectedClaimReview(OperationModel):
     section: str
     heading: str | None = None
     text: str
-    verdict: Literal["uncertain", "unsupported"]
+    #: `unattested`: the reviewer answered `supported`, but its evidence failed the
+    #: deterministic check (`problems` says which), so the line is not authorized.
+    verdict: Literal["uncertain", "unsupported", "unattested"]
     sources: list[ClaimReviewSource]
+    #: The deterministic checks an `unattested` line's evidence failed; empty otherwise.
+    problems: list[ReviewProblemCode] = Field(default_factory=list)
+    #: The reviewer's own explanation for this line, as it answered. An opinion that
+    #: helps the user find what to fix, never evidence; failures recorded before it
+    #: was kept carry none.
+    rationale: str | None = None
 
 
 class ClaimReviewReason(OperationModel):
@@ -291,11 +298,9 @@ class ClaimReviewReason(OperationModel):
 
 
 #: Why a failed Operation failed, in a closed vocabulary with typed parameters.
-#: `safe_failure_detail` is the same reason as an English sentence for logs and
-#: legacy clients; this is what a client reads to explain the failure in its own
-#: words, so no client has to parse that sentence back apart. Written when the
-#: failure is recorded; absent on records from before it existed and on failures
-#: whose code already says everything.
+#: `safe_failure_detail` is the safe English diagnostic for logs and generic
+#: failures; this structured value lets a client explain supported failures in
+#: its own words without parsing that sentence. Both are written with the failure.
 FailureReason = Annotated[
     PdfPageLimitReason | MissingFactRenderingReason | RenderCheckReason | ClaimReviewReason,
     Field(discriminator="code"),
@@ -376,7 +381,6 @@ def required_operation_resources(request: CreateOperation) -> tuple[OperationRes
         resources.append(OperationResource(kind=OperationResourceKind.RENDER_BROWSER, key="global"))
     always_ai = {
         OperationType.CREATE_DRAFT,
-        OperationType.PROPOSE_SELECTION,
         OperationType.REGENERATE_SECTION,
         OperationType.REGENERATE_CLAIM,
     }

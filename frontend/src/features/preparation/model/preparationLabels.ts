@@ -32,8 +32,6 @@ const actionLabels: Record<string, string> = {
   analyze: "ניתוח המשרה",
   edit_matching_configuration: "עריכת הגדרות ההתאמה",
   build_from_analysis: "בנייה מחדש מהניתוח החדש",
-  update_selection: "בחירת העובדות",
-  propose_selection: "הצעת בחירה מ־AI",
   confirm_and_use_fact: "אישור עובדה ושימוש בה",
   create_draft: "יצירת טיוטה",
   edit: "עריכת הטיוטה",
@@ -54,12 +52,10 @@ export const actionLabel = (action: string): string => actionLabels[action] ?? a
    reads the backend's action vocabulary requires both for every action. */
 const actionDescriptions: Record<string, string> = {
   analyze: "קריאת דרישות המשרה ובדיקה אילו עובדות מאושרות עונות עליהן.",
-  edit_matching_configuration: "עדכון הגדרות ההתאמה לפני בחירת העובדות.",
+  edit_matching_configuration: "עדכון הגדרות ההתאמה לפני יצירת הטיוטה.",
   build_from_analysis: "קיים ניתוח חדש יותר מזה שהמסמך בנוי עליו, ואפשר לבנות ממנו את המסמך מחדש.",
-  update_selection: "בחירת העובדות המאושרות שייכנסו לקורות החיים עבור המשרה.",
-  propose_selection: "בקשה מ־AI להציע אילו עובדות ייכנסו לקורות החיים.",
   confirm_and_use_fact: "עובדה ממתינה לאישור לפני שאפשר להשתמש בה בטיוטה.",
-  create_draft: "יצירת טיוטה ראשונה מהעובדות שנבחרו.",
+  create_draft: "יצירת טיוטה ראשונה: ה־AI בוחר עובדות מאושרות ומנסח אותן.",
   edit: "הטיוטה פתוחה לעריכה ועדיין לא אושרה.",
   regenerate_section: "יצירה מחדש של פרק בטיוטה מאותן עובדות.",
   regenerate_claim: "יצירה מחדש של טענה בטיוטה מאותה עובדה.",
@@ -112,7 +108,6 @@ const warningTitles: Record<string, string> = {
   NEXT_ACTION_OVERDUE: "הפעולה הבאה באיחור",
   DOCUMENT_ON_OLDER_ANALYSIS: "המסמך בנוי על ניתוח ישן יותר",
   PROFILE_CHANGED: "הפרופיל השתנה מאז שהמסמך נבנה",
-  POLICY_CHANGED: "כללי הבחירה השתנו מאז שהמסמך נבנה",
   FACT_SUPERSEDED: "עובדה בטיוטה הוחלפה בגרסה חדשה יותר",
   FACT_KNOWN_INCORRECT: "עובדה בטיוטה סומנה כשגויה",
 };
@@ -121,11 +116,9 @@ export const warningTitle = (code: string): string => warningTitles[code] ?? "כ
 
 const warningDetails: Record<string, string> = {
   DOCUMENT_ON_OLDER_ANALYSIS:
-    "קיים ניתוח חדש יותר של המשרה. המסמך נשאר כפי שהוא עד שתבחרו לבנות אותו מחדש מהניתוח החדש - פעולה שמחליפה את בחירת העובדות ומוחקת את תוכן הטיוטה.",
+    "קיים ניתוח חדש יותר של המשרה. המסמך נשאר כפי שהוא עד שתבחרו לבנות אותו מחדש מהניתוח החדש - פעולה שמוחקת את תוכן הטיוטה.",
   PROFILE_CHANGED:
     "המסמך נבנה עם גרסה קודמת של הפרופיל. הבדיקה והאישור נעשים מול הפרופיל הנוכחי, כך שהאזהרה אינה מתירה דבר שאינו תקף.",
-  POLICY_CHANGED:
-    "המסמך נבנה עם גרסה קודמת של כללי הבחירה. הבדיקה והאישור נעשים מול הכללים הנוכחיים, כך שהאזהרה אינה מתירה דבר שאינו תקף.",
 };
 
 export const warningDetail = (code: string, fallback: string): string => warningDetails[code] ?? fallback;

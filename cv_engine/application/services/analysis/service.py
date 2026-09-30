@@ -9,43 +9,36 @@ from ...commands import (
     AnalysisResult,
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
-    ProposeSelectionCommand,
 )
 from ...errors import InfrastructureFailure, LineageBroken, ProviderNotConfigured, StateConflict
 from ...ports import AIProvider, TransactionManager
 from ...ports.analysis_plans import (
+    AnalysisContextSource,
+    AnalysisContextSourceReader,
     AnalysisKnowledgeSource,
     AnalysisPayloadStore,
-    AnalysisSelectionSourceReader,
     AnalysisSnapshotSource,
     AnalysisStore,
-    SelectionSource,
 )
 from ...ports.documents import DocumentStore
 from ...ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
-from ...ports.transactions import WriteTransaction
 from ...transactions import assert_external_io_allowed
 from ..documents import DocumentSource, load_knowledge, read_document_source
 from ..proposals import ProviderEvidence
 from .activation import AnalysisActivation
 from .correction import AnalysisCorrection
 from .preparation import AnalysisPreparation, PreparedAnalysis
-from .selection_plans import AnalysisSelectionService
-from .selection_policy import PreparedSelectionProposal
-
-#: Kept under its historical name for the modules that load Knowledge through it.
-load_analysis_knowledge = load_knowledge
 
 
 class AnalysisService:
-    """Own preparation scopes and synchronous analysis/selection transaction boundaries."""
+    """Own preparation scopes and synchronous analysis transaction boundaries."""
 
     def __init__(
         self,
         *,
         transactions: TransactionManager,
         analyses: AnalysisStore,
-        sources: AnalysisSelectionSourceReader,
+        sources: AnalysisContextSourceReader,
         documents: DocumentStore,
         evidence: ProviderEvidenceStore,
         knowledge: AnalysisKnowledgeSource,
@@ -76,9 +69,11 @@ class AnalysisService:
             )
         return source
 
-    def selection_source(self, application_id: str, job_analysis_id: str) -> SelectionSource:
+    def analysis_context_source(
+        self, application_id: str, job_analysis_id: str
+    ) -> AnalysisContextSource:
         with self.transactions.read() as tx:
-            source = self.sources.selection_source(tx, job_analysis_id)
+            source = self.sources.analysis_context_source(tx, job_analysis_id)
         if source.application_id != application_id:
             raise LineageBroken(
                 f"job analysis {job_analysis_id} does not belong to application {application_id}"
@@ -98,7 +93,7 @@ class AnalysisService:
 
     @staticmethod
     def assert_provider_io_allowed() -> None:
-        assert_external_io_allowed("analysis/selection provider execution")
+        assert_external_io_allowed("analysis provider execution")
 
     @property
     def provider(self) -> AIProvider:
@@ -170,26 +165,6 @@ class AnalysisService:
     def activate(self, command: AnalyzeCommand, prepared: PreparedAnalysis) -> AnalysisResult:
         with self.transactions.write() as tx:
             return self.activation.activate(tx, command, prepared)
-
-    def prepare_selection_proposal(
-        self,
-        command: ProposeSelectionCommand,
-        *,
-        operation_id: str,
-    ) -> PreparedSelectionProposal:
-        assert_external_io_allowed("selection provider preparation")
-        return AnalysisSelectionService.prepare_selection_proposal(
-            self, command, operation_id=operation_id
-        )
-
-    def activate_selection_proposal(
-        self,
-        tx: WriteTransaction,
-        command: ProposeSelectionCommand,
-        prepared: PreparedSelectionProposal,
-        knowledge: Knowledge,
-    ) -> str:
-        return self.activation.activate_selection_proposal(tx, command, prepared, knowledge)
 
     def apply_analysis_decisions(
         self, command: ApplyAnalysisDecisionsCommand

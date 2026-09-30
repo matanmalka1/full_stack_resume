@@ -2,7 +2,6 @@ import { ArrowLeft, OctagonAlert } from "lucide-react";
 
 import type { ApplicationDetail, DraftClaim } from "@/api/contracts";
 import { outlineClaims } from "@/api/documents";
-import { routePaths } from "@/app/routePaths";
 import { ReasonCallout } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import type { EditableDocument } from "../model/drafts.types";
@@ -12,7 +11,6 @@ type ReviewReason = ApplicationDetail["review_reasons"][number];
 interface DraftAttentionPanelProps {
   detail: ApplicationDetail;
   draft: EditableDocument;
-  onNavigate: (href: string) => void;
   onShowClaim: (claimId: string) => void;
   /* Every line nothing authorizes, in reading order. Each blocks approval where it sits. */
   unsupportedClaims: DraftClaim[];
@@ -53,13 +51,11 @@ const UnsupportedLines = ({
 );
 
 const DraftReasonCallout = ({
-  detail,
   draft,
-  onNavigate,
   onShowClaim,
   reason,
   unsupportedClaims,
-}: DraftAttentionPanelProps & { reason: ReviewReason }) => {
+}: Omit<DraftAttentionPanelProps, "detail"> & { reason: ReviewReason }) => {
   const claims = outlineClaims(draft.outline);
   const pending = reason.code === "PENDING_FACT_REQUIRES_RESOLUTION";
   const deleted = reason.code === "FACT_DELETED_REQUIRES_RESOLUTION";
@@ -72,9 +68,8 @@ const DraftReasonCallout = ({
     claim !== undefined &&
     draft.outline.sections.some((section) => section.claims.some((item) => item.claim_id === claim.claim_id));
   const editAllowed = reason.allowed_resolution_actions.some((action) =>
-    ["edit", "update_selection", "confirm_and_use_fact"].includes(action),
+    ["edit", "confirm_and_use_fact"].includes(action),
   );
-  const selectionAllowed = reason.allowed_resolution_actions.includes("update_selection");
   const toClaim = claim !== undefined && editAllowed;
 
   return (
@@ -83,10 +78,6 @@ const DraftReasonCallout = ({
         toClaim ? (
           <Button onClick={() => onShowClaim(claim.claim_id)} variant="secondary">
             {pending ? "מעבר לפתרון השורה" : "מעבר לשורה להסרת התלות בעובדה"}
-          </Button>
-        ) : selectionAllowed ? (
-          <Button onClick={() => onNavigate(routePaths.application(detail.application.id))} variant="secondary">
-            פתרון בחירת העובדות בהכנה
           </Button>
         ) : undefined
       }
@@ -101,9 +92,7 @@ const DraftReasonCallout = ({
               ? "בשורה יש אפשרויות לפתרון: בדיקת הניסוח מול העובדות, הפיכת הטקסט לעובדה מאושרת, או תיקון והסרה. עובדה ממתינה לבדה אינה מתירה אישור."
               : `השורה "${claim.text}" בכותרת או בפרטי הקשר נערכה לנוסח שאינו נתמך. עריכה חוזרת שלה פותרת זאת.`
             : "עובדה שנמחקה אינה ניתנת לקידום. יש להסיר את התלות בה או לבחור עובדה תקפה; העובדה ההיסטורית לא משתנה."
-          : selectionAllowed
-            ? "יש לשנות את בחירת העובדות של המסמך במסך ההכנה."
-            : "אין בעורך פעולה שסוגרת את הסיבה הזו. יש לפתור את התלות במקור לפני המשך."}
+          : "אין בעורך פעולה שסוגרת את הסיבה הזו. יש לפתור את התלות במקור לפני המשך."}
       </p>
       {pending && unsupportedClaims.length > 0 ? (
         <div className="mt-2">
@@ -122,13 +111,7 @@ const DraftReasonCallout = ({
    unsupported lines were only findable by scrolling the whole document for a red badge;
    the reader now sees the full list first and jumps to each line from it. Silent when
    there is nothing to do. */
-export const DraftAttentionPanel = ({
-  detail,
-  draft,
-  onNavigate,
-  onShowClaim,
-  unsupportedClaims,
-}: DraftAttentionPanelProps) => {
+export const DraftAttentionPanel = ({ detail, draft, onShowClaim, unsupportedClaims }: DraftAttentionPanelProps) => {
   if (detail.review_reasons.length === 0 && unsupportedClaims.length === 0) return null;
   /* The projection's pending-fact reason is about exactly these lines, so they are listed
      inside it rather than a second time beneath it. */
@@ -146,10 +129,8 @@ export const DraftAttentionPanel = ({
 
       {detail.review_reasons.map((reason) => (
         <DraftReasonCallout
-          detail={detail}
           draft={draft}
           key={reason.code}
-          onNavigate={onNavigate}
           onShowClaim={onShowClaim}
           reason={reason}
           unsupportedClaims={unsupportedClaims}

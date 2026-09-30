@@ -1,4 +1,4 @@
-"""Analysis/selection lifecycle and consumer-specific source contracts."""
+"""Analysis lifecycle and consumer-specific source contracts."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.taxonomy import Emphasis
 from ...domain.knowledge import Knowledge
 from .transactions import ReadTransaction, WriteTransaction
 from .values import SnapshotPayload
@@ -24,21 +23,13 @@ class AnalysisSnapshotSource:
 
 
 @dataclass(frozen=True)
-class ActiveSelectionSource:
-    id: str
-    emphasis: Emphasis
-    emphasis_override: Emphasis | None
-
-
-@dataclass(frozen=True)
-class SelectionSource:
+class AnalysisContextSource:
     application_id: str
     job_analysis_id: str
     job_snapshot_id: str
     analysis: JobAnalysis
     active_analysis_id: str | None
     active_snapshot_id: str
-    active_plan: ActiveSelectionSource | None
     deleted_at: str | None
 
 
@@ -64,21 +55,20 @@ class AnalysisKnowledgeSource(Protocol):
     def load(self) -> Knowledge: ...
 
 
-class AnalysisSelectionSourceReader(Protocol):
+class AnalysisContextSourceReader(Protocol):
     def knowledge_is_prepared(self, tx: ReadTransaction) -> bool: ...
 
     def analysis_source(
         self, tx: ReadTransaction, job_snapshot_id: str
     ) -> AnalysisSnapshotSource: ...
 
-    def selection_source(self, tx: ReadTransaction, job_analysis_id: str) -> SelectionSource: ...
+    def analysis_context_source(
+        self, tx: ReadTransaction, job_analysis_id: str
+    ) -> AnalysisContextSource: ...
 
 
 class AnalysisStore(Protocol):
-    """Analysis writes and the Application's current matching configuration.
-
-    Selection lives on the CV document; this store owns no selection state.
-    """
+    """Analysis writes and the Application's current matching configuration."""
 
     def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
 
@@ -101,8 +91,4 @@ class AnalysisStore(Protocol):
 
     def set_normalized_role(
         self, tx: WriteTransaction, application_id: str, normalized_role: str
-    ) -> None: ...
-
-    def set_matching_emphasis(
-        self, tx: WriteTransaction, application_id: str, emphasis: str
     ) -> None: ...

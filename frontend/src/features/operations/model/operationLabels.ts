@@ -30,7 +30,6 @@ export const statusLabels: Record<OperationStatus, string> = {
    heading untranslated. */
 export const operationTypeLabels: Record<OperationType, string> = {
   analyze_job: "ניתוח המשרה",
-  propose_selection: "בחירת העובדות",
   create_draft: "יצירת הטיוטה",
   regenerate_section: "יצירה מחדש של פרק",
   regenerate_claim: "יצירה מחדש של טענה",
@@ -216,11 +215,11 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
   },
   CLAIM_REVIEW_UNCERTAIN: {
     title: "הבדיקה לא הצליחה לקבוע שהניסוח נתמך",
-    guidance: "הניסוח לא הופעל והטיוטה הקיימת נשמרה. אפשר לנסות יצירה מחדש או לערוך את השורה.",
+    guidance: "הניסוח לא הופעל ודבר לא השתנה. אפשר לנסות יצירה מחדש או לערוך את השורה.",
   },
   CLAIM_REVIEW_UNSUPPORTED: {
     title: "הבדיקה מצאה טענה שאינה נתמכת בעובדות",
-    guidance: "הניסוח לא הופעל והטיוטה הקיימת נשמרה. יש ליצור ניסוח חדש או להסיר את הטענה שאינה נתמכת.",
+    guidance: "הניסוח לא הופעל ודבר לא השתנה. יש ליצור ניסוח חדש או להסיר את הטענה שאינה נתמכת.",
   },
   SCHEMA_VIOLATION: {
     title: "תשובת הספק לא הייתה במבנה הנדרש",

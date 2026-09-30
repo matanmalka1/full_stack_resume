@@ -92,8 +92,8 @@ Evidence: `tests/drafts/` (`test_document_basis.py`, `test_state_projection.py`,
   refuses a moved document and writes nothing; document writes block on the row lock.
 - The first analysis and its document commit together or not at all; one document per
   Application is enforced by the database.
-- A running context Operation blocks voluntary editing; a selection plan that moved
-  while AI ran is not replaced.
+- A running context Operation blocks voluntary editing; a document that moved while AI
+  ran is not replaced.
 - Snapshot writes are exact, atomic, and refuse repeats; duplicate intake requires
   acknowledgement.
 
@@ -166,8 +166,7 @@ Evidence: `tests/operations/`.
   pending fact does not invalidate drafts built from canonical facts.
 - `create_fact_from_claim` preserves the exact claim text; `confirm_and_use_fact` is one
   journaled command.
-- Journal crash windows (before/after file activation, hash mismatch, audit failure,
-  document-selection failure) end in deterministic recovery or explicit quarantine.
+- Journal crash windows (before/after file activation, hash mismatch, audit failure) end in deterministic recovery or explicit quarantine.
   Under quarantine, history stays readable and approval is blocked.
 - A hand edit to a dependent fact moves the basis without a document write.
 - Canonical IDs are unique and stable; profiles reference existing facts; seed and
@@ -175,19 +174,22 @@ Evidence: `tests/operations/`.
 
 Evidence: `tests/knowledge/`, `tests/drafts/test_state_projection.py`.
 
-### 3.7 Selection and validation
+### 3.7 Fact choice and validation
 
-- Selection is deterministic from profile, emphasis, and requirement semantics; job
-  keywords cannot outrank them; mandatory requirements outrank preferred ones; every
-  role block reaches its floor.
-- Overlays are honoured within advertised capacity and refused rather than trimmed
-  otherwise; an overlay-free build is byte-for-byte the prior build.
+- `draft_resume` chooses the facts (`docs/decisions/ai-owned-selection.md`). The engine
+  refuses a chosen fact that is not canonical, not in its section's pool, or has no
+  rendering in the document language, and never adds one the provider did not choose.
+- Structural facts (headings, dates, contacts) are always present; chosen facts are laid
+  out in pool order; every bullet sits under its own role and no role heading is left
+  without a bullet.
+- Section budgets, tags, per-role minimums, and Profile pins reach the provider as
+  guidance and never block a draft, a check, or approval.
 - Generated drafts carry exact canonical claim links. Validation blocks unlinked manual
   changes, stale claims, inverted boundary facts, forged derived-claim manifests, and
   misplaced titles.
 
-Evidence: `tests/selection/`, `tests/drafts/test_draft_validation.py`,
-`test_draft_files.py`.
+Evidence: `tests/drafts/test_draft_validation.py`, `test_draft_files.py`,
+`tests/ai/test_ai_tasks.py`, `tests/e2e/test_golden.py`.
 
 ### 3.8 Rendering, artifacts, Ready, and Submission
 
@@ -222,7 +224,7 @@ Evidence: `tests/applications/`, `tests/artifacts/test_ready_integrity.py`.
 ### 3.10 Frontend
 
 Colocated tests under `frontend/src/` hold: Hebrew RTL shell with explicit LTR islands;
-intake and duplicate choices; analysis decisions; selection; draft editor autosave,
+intake and duplicate choices; analysis decisions; draft editor autosave,
 history, and conflicts; validation presentation; approval; Operation progress and
 failure; Ready download; recruitment; application list; facts; settings; routing and
 error boundary. `frontend/e2e/` holds dialog focus and backdrop behavior, search
@@ -302,18 +304,18 @@ this list it touches.
 
 Four fixtures in `tests/fixtures/golden/`: Development, Sales English, Sales Hebrew
 (RTL), Tech Sales. `tests/e2e/test_golden.py` pins, in the default suite, the analysis
-fields, the Markdown body (front matter is split off because knowledge versions move
-whenever any fact is added), the selection, and the HTML hash. A browser-marked test
-re-asserts the same HTML hash and requires the PDF layout/ATS report to pass; a third
-proves the stored selection equals a fresh computation.
+fields, the facts chosen per section (fixture input standing in for the provider's
+choice), the Markdown body (front matter is split off because knowledge versions move
+whenever any fact is added), and the HTML hash. A browser-marked test re-asserts the
+same HTML hash and requires the PDF layout/ATS report to pass.
 
 **Semantic parity.** For the same input, knowledge, and policy versions, a change must
-not move selected facts, rendered claims, validation outcomes, Ready eligibility, or
+not move rendered claims, validation outcomes, Ready eligibility, or
 decision behavior unless it was meant to. A golden hash that moves without an intended
 output change is a failure, not a fixture to refresh; an intended move is stated in the
 commit.
 
-Sales subtypes are covered by analysis, selection, and golden tests rather than a
+Sales subtypes are covered by analysis and golden tests rather than a
 journey per subtype.
 
 ## 5. Journeys
@@ -321,8 +323,7 @@ journey per subtype.
 ### 5.1 Happy path
 
 ```text
-Create → Analyze (creates the pinned CVDocument with its deterministic selection,
-content NULL) → Draft → Edit → Check → Approve → Render → Ready → Submit
+Create → Analyze (creates the pinned CVDocument, content NULL) → Draft → Edit → Check → Approve → Render → Ready → Submit
 ```
 
 Over HTTP with a real API, worker, and PostgreSQL and no provider:
@@ -356,11 +357,10 @@ Evidence: `tests/operations/test_operation_runner.py`,
 
 ### 5.5 Ready, then a newer analysis
 
-A new JobAnalysis leaves the document's pin, selection, content, and state unchanged
-and raises `DOCUMENT_ON_OLDER_ANALYSIS`; submission still succeeds with the warning.
-`build_from_analysis` replaces the selection, clears content and every stamp, and
-deletes prior rendered files best-effort. Profile and policy changes warn without
-changing the basis.
+A new JobAnalysis leaves the document's pin, content, and state unchanged and raises
+`DOCUMENT_ON_OLDER_ANALYSIS`; submission still succeeds with the warning.
+`build_from_analysis` clears content and every stamp, and deletes prior rendered files
+best-effort. A Profile change warns without changing the basis.
 
 Evidence: `tests/drafts/test_state_projection.py`, `tests/analysis/test_analyses_api.py`.
 
@@ -368,7 +368,7 @@ Evidence: `tests/drafts/test_state_projection.py`, `tests/analysis/test_analyses
 
 Re-approving a current `approved_basis` returns the existing approval without
 rewriting `approved_at` or appending audit. Approval is explicit and cannot bypass a
-blocker or review reason. Selection, draft, regeneration, and render Operations
+blocker or review reason. Draft, regeneration, and render Operations
 activate only against the hash they froze.
 
 Evidence: `tests/drafts/test_approval_chain.py`, `tests/operations/test_operation_runner.py`,

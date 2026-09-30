@@ -7,7 +7,7 @@ from ..util import canonical_json, sha256_text
 from .contracts.knowledge import FactStatus, Profile
 from .contracts.taxonomy import Emphasis, ProfileName, Track
 from .facts import FactStore
-from .selection import ROLE_BLOCK_TAG
+from .frame import ROLE_BLOCK_TAG
 
 
 class ProfileStoreError(ValueError):
@@ -52,15 +52,10 @@ def _dated_roles(facts: FactStore) -> dict[str, tuple[int, int]]:
     that a timeline is continuous. Refusing them keeps the sweep's inputs
     meaningful rather than merely well-formed.
 
-    The heading style is checked rather than assumed. Coverage only proves a
-    Profile *offers* a role; what makes offering it enough is that selection
-    treats a heading as structure and carries it unconditionally. A role styled
-    as a bullet is scored as evidence instead, competes for the section budget,
-    and can be dropped below it - so it would satisfy this rule and still vanish
-    from the page, which is precisely the disappearance the rule exists to
-    prevent. `_refuse_structural_exclusion` already guards the overlay against a
-    title that is not structural; this closes the same hole on the budget side,
-    at the one place that can see every role at once.
+    The heading style is checked rather than assumed. The draft frame carries a
+    heading unconditionally, while a bullet remains optional writing material.
+    Requiring role facts to be headings is therefore what makes offering every
+    dated role sufficient to keep its identity visible in any resulting draft.
     """
     spans: dict[str, tuple[int, int]] = {}
     for fact_id in sorted(facts.facts):
@@ -70,7 +65,7 @@ def _dated_roles(facts: FactStore) -> dict[str, tuple[int, int]]:
         if fact.resume_style != "heading":
             raise ProfileStoreError(
                 f"role fact {fact_id} is styled {fact.resume_style!r}, not 'heading': a role "
-                "title selection does not treat as structure can be dropped by a section budget"
+                "role titles must be structural headings in every draft frame"
             )
         match = _ROLE_SPAN.match(fact.effective_dates or "")
         if match is None:
@@ -174,12 +169,11 @@ class ProfileStore:
         none duplicated, every fact it names known to the fact store, and every
         dated role in that store either carried or explicitly declined.
 
-        The employment-history rules belong here rather than in selection
-        because they are a property of the profile set crossed with the fact
-        store, fixed before any job is analysed. A role title is heading-styled
-        and therefore structural, so selection already carries every one a
-        Profile offers and refuses every attempt to exclude one; the only place
-        a role can go missing is the pool declared here.
+        The employment-history rules belong here because they are a property of
+        the profile set crossed with the fact store, fixed before any job is
+        analysed. A role title is heading-styled and therefore structural, so the
+        draft frame always carries every one a Profile offers; the only place a
+        role can go missing is the pool declared here.
         """
         if not documents:
             raise ProfileStoreError("no profile files found")
@@ -245,8 +239,3 @@ def attach_fact_to_section(
     if pin and fact_id not in spec.setdefault("pinned_fact_ids", []):
         spec["pinned_fact_ids"].append(fact_id)
     return Profile.model_validate(payload), payload
-
-
-def allowed_fact_pool(profile: Profile) -> set[str]:
-    """Every fact a Profile permits across all of its sections."""
-    return {fact_id for section in profile.sections for fact_id in section.fact_ids}

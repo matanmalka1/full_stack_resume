@@ -13,12 +13,10 @@ from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.drafts import build_draft
 from cv_engine.domain.facts import FactStore
 from cv_engine.domain.profiles import ProfileStore
-from cv_engine.domain.selection import EmphasisPolicyStore
 from cv_engine.infrastructure.artifacts import FilesystemArtifactStore
 from cv_engine.infrastructure.knowledge import (
     FileKnowledge,
     load_candidate_context,
-    load_emphasis_policies,
     load_fact_store,
     load_presentations,
     load_profile_store,
@@ -89,11 +87,6 @@ def profile_store(project_root: Path, fact_store: FactStore) -> ProfileStore:
 
 
 @pytest.fixture
-def policy_store(project_root: Path) -> EmphasisPolicyStore:
-    return load_emphasis_policies(project_root)
-
-
-@pytest.fixture
 def presentation_store(project_root: Path, fact_store: FactStore):
     return load_presentations(project_root, fact_store)
 
@@ -128,7 +121,6 @@ def draft_factory(
     project_root: Path,
     fact_store: FactStore,
     profile_store: ProfileStore,
-    policy_store: EmphasisPolicyStore,
     candidate_context,
 ):
     def build(
@@ -138,6 +130,7 @@ def draft_factory(
         job_snapshot_id: str = "snapshot-golden",
         job_analysis_id: str = "analysis-golden",
         write: bool = False,
+        chosen=None,
         **overrides,
     ) -> DraftSetup:
         profile_name = ProfileName(overrides.pop("profile_override", None) or "account-manager")
@@ -164,9 +157,9 @@ def draft_factory(
             analysis=analysis,
             profile=profile,
             facts=fact_store,
-            policies=policy_store,
             candidate=candidate_context,
             presentations=load_presentations(project_root, fact_store),
+            chosen=chosen,
         )
         store = FilesystemArtifactStore(AppPaths.from_root(project_root))
         markdown = store.write_working_draft(draft).paths.markdown if write else None

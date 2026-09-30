@@ -1,15 +1,12 @@
 import { Sparkles } from "lucide-react";
-import { Link } from "react-router-dom";
-
-import { routePaths } from "@/app/routePaths";
+import type { Emphasis } from "@/api/contracts";
 import { cx } from "@/ui/cx";
-import { emphasisLabels, factSelectionAnchor } from "@/features/preparation";
+import { emphasisLabels } from "@/features/preparation";
 import type { ContentSummary, SelectionSummary } from "../model/draftOverview";
 import { claimOriginLabels } from "../model/draftLabels";
 import type { EditableDocument } from "../model/drafts.types";
 
 interface DraftContentSummaryProps {
-  applicationId: string;
   content: ContentSummary;
   draft: EditableDocument;
   selection: SelectionSummary;
@@ -17,17 +14,13 @@ interface DraftContentSummaryProps {
 
 /* How the content in front of the reader was produced.
 
-   The draft is the result of two decisions: which facts the selection took from the
-   knowledge base for this role, and how each chosen fact became a line - as written,
+   The draft is the result of two decisions, both the writer's: which facts it took from
+   the Profile's pool for this role, and how each chosen fact became a line - as written,
    reworded for the role, or not backed at all. This says both in one place, above the
-   lines they describe. It reports the selection and does not edit it: the selection has
-   one screen, the analysis step, where each fact is shown against the requirements it
-   answers and both include and exclude are offered together with the AI proposal. A
-   second, narrower editor here disagreed with that one on what a change was and when it
-   was saved. Removing a line is still the editor's, and stays in the outline. Every
+   lines they describe. Removing a line is the editor's, and stays in the outline. Every
    number is the document's own accounting; nothing is re-derived from the pool. */
-export const DraftContentSummary = ({ applicationId, content, draft, selection }: DraftContentSummaryProps) => {
-  const emphasis = draft.selection.emphasis_override ?? draft.selection.emphasis;
+export const DraftContentSummary = ({ content, draft, selection }: DraftContentSummaryProps) => {
+  const emphasis = draft.content?.["emphasis"] as Emphasis;
 
   const origins = [
     { key: "verbatim", count: content.verbatim, tone: "text-cv-success" },
@@ -50,8 +43,8 @@ export const DraftContentSummary = ({ applicationId, content, draft, selection }
           איך נבנה התוכן
         </h2>
         <p className="text-support leading-6 text-cv-text-muted">
-          עובדות נבחרו מהמאגר לפי ניתוח המשרה והדגש <span className="font-semibold">{emphasisLabels[emphasis]}</span>,
-          ומהן נבנו השורות. כל שורה מסומנת לפי המקור שלה, ומתחת לכל שורה אפשר לראות את העובדה שממנה נבנתה.
+          ה־AI בחר עובדות מהמאגר לפי ניתוח המשרה והדגש <span className="font-semibold">{emphasisLabels[emphasis]}</span>
+          , ומהן נבנו השורות. כל שורה מסומנת לפי המקור שלה, ומתחת לכל שורה אפשר לראות את העובדה שממנה נבנתה.
         </p>
       </div>
 
@@ -66,15 +59,6 @@ export const DraftContentSummary = ({ applicationId, content, draft, selection }
 
       <p className="text-support leading-6 text-cv-text-muted">
         {selection.included === 1 ? "עובדה אחת נכנסה לקורות החיים" : `${selection.included} עובדות נכנסו לקורות החיים`}
-        {selection.pinned === 0 ? null : <> · {selection.pinned} מהן נקבעו במפורש</>}
-        {selection.omitted.length === 0 ? null : <> · {selection.omitted.length} נשארו בחוץ</>}
-        {" · "}
-        <Link
-          className="font-semibold text-cv-accent hover:text-cv-accent-hover"
-          to={`${routePaths.application(applicationId)}#${factSelectionAnchor}`}
-        >
-          שינוי בחירת העובדות
-        </Link>
       </p>
     </section>
   );

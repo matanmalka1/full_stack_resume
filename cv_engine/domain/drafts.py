@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from ..util import canonical_json, sha256_text
@@ -16,11 +17,10 @@ from .contracts.drafts import (
     ResumeSection,
 )
 from .contracts.knowledge import CandidateContext, Profile
-from .contracts.selection import OmissionReason, SelectionManifest
 from .draft_markdown import serialize_markdown as _serialize_markdown
 from .facts import FactStore
+from .frame import STRUCTURAL_STYLES, lay_out_choice, require_fact_renderings
 from .presentations import PresentationStore, PresentedClaim
-from .selection import EmphasisPolicyStore, build_selection, require_fact_renderings
 
 
 def draft_content_hash(draft: DraftDocument) -> str:
@@ -126,29 +126,7 @@ def authorize_reviewed_claim(
         review_evidence=evidence,
     ).model_copy(update={"claim_id": current.claim_id})
     _replace_claim(draft, claim_id, replacement)
-    return _refresh_selection(draft, facts)
-
-
-def _omitted_facts(
-    facts: FactStore,
-    selection: SelectionManifest,
-    selected: set[str],
-) -> dict[str, OmissionReason]:
-    """Why each unused canonical fact is absent, in codes rather than prose.
-
-    A fact the Profile never offered is a different situation from one that
-    competed and lost, and both are different from one evicted to restore a
-    required tag. Callers and tests can tell them apart.
-    """
-    considered: dict[str, OmissionReason] = {
-        candidate.fact_id: candidate.reason
-        for candidate in selection.candidates
-        if candidate.reason is not None
-    }
-    return {
-        fact_id: considered.get(fact_id, "not_in_profile_pool")
-        for fact_id in sorted(set(facts.facts) - selected)
-    }
+    return _reseal(draft)
 
 
 def build_draft(
@@ -159,46 +137,26 @@ def build_draft(
     analysis: JobAnalysis,
     profile: Profile,
     facts: FactStore,
-    policies: EmphasisPolicyStore,
     candidate: CandidateContext,
     presentations: PresentationStore | None = None,
-    selection: SelectionManifest | None = None,
+    chosen: Mapping[str, Iterable[str]] | None = None,
 ) -> DraftDocument:
+    """Lay out a document in canonical wording.
+
+    `chosen` maps each section's English name to the facts picked for it; the section's
+    structure is added and everything is laid out in pool order (`lay_out_choice`).
+    `None` lays out every pool in full: the frame `draft_resume` chooses from.
+    """
     if analysis.profile is not profile.profile or analysis.track is not profile.track:
         raise ValueError("analysis and profile do not match")
 
-    # Emphasis is the SelectionPlan's policy decision. Older plans always
-    # mirror the analysis; newer ones may carry an explicit plan-only override.
-    effective_emphasis = selection.emphasis if selection is not None else analysis.emphasis
+    effective_emphasis = analysis.emphasis
     if effective_emphasis not in profile.allowed_emphases:
         raise ValueError(f"emphasis {effective_emphasis} is not allowed for {profile.profile}")
 
     language = analysis.language
     contact_ids = candidate.contacts_for_track(analysis.track.value)
-
-    if selection is None:
-        selected_by_section, selection = build_selection(
-            analysis=analysis,
-            profile=profile,
-            policy=policies.get(effective_emphasis),
-            policy_store_version=policies.version,
-            facts=facts,
-            line_groups=(
-                presentations.line_groups(profile, effective_emphasis)
-                if presentations is not None
-                else None
-            ),
-        )
-    else:
-        selected = set(selection.selected_fact_ids)
-        # Plans written before the selection invariant existed are still valid
-        # records, but they may not enter composition if their eligible facts
-        # cannot be expressed in the target language.
-        require_fact_renderings(facts, selected, language)
-        selected_by_section = {
-            spec.name_en: [fact_id for fact_id in spec.fact_ids if fact_id in selected]
-            for spec in profile.sections
-        }
+    selected_by_section = lay_out_choice(profile, facts, language, chosen)
 
     # Contacts are eligible through CandidateContext rather than a Profile
     # section, so they need the same language invariant before the first claim
@@ -223,7 +181,6 @@ def build_draft(
         "headline",
     )
 
-    selected = set(contact_ids)
     sections: list[ResumeSection] = []
     for spec in profile.sections:
         claims = []
@@ -233,7 +190,7 @@ def build_draft(
                 profile=profile,
                 section=spec.name_en,
                 emphasis=effective_emphasis,
-                selected_fact_ids=selected_ids,
+                fact_ids=selected_ids,
                 language=language,
                 facts=facts,
             )
@@ -275,7 +232,6 @@ def build_draft(
                         template_version=item.rule_version,
                     )
                 )
-            selected.update(fact_ids)
         if claims or not spec.optional:
             sections.append(
                 ResumeSection(
@@ -296,9 +252,6 @@ def build_draft(
         headline=headline,
         contacts=contacts,
         sections=sections,
-        selected_fact_ids=sorted(selected),
-        omitted_facts=_omitted_facts(facts, selection, selected),
-        selection=selection,
         fact_store_version=facts.version,
     )
     return draft.model_copy(update={"content_hash": draft_content_hash(draft)})
@@ -364,28 +317,33 @@ def reorder_draft(
     return reordered.model_copy(update={"content_hash": draft_content_hash(reordered)})
 
 
-def carries_authored_wording(draft: DraftDocument) -> bool:
-    """Whether this document carries wording a selection change would lose.
+def keep_frame_claims(
+    frame: DraftDocument, profile: Profile, kept_claim_ids: set[str]
+) -> DraftDocument:
+    """The frame narrowed to the claims a writer kept, plus its structure.
 
-    Four markers, none of which the engine's own composition ever sets.
-    `superseded_by_manual_edit` says a claim was relinked to a fact the engine
-    did not choose. A `pending` claim is free text nothing could authorize, kept
-    rather than discarded. The extractive derivation is the one derivation
-    `apply_claim_edit` writes; presentation rules carry their own rule IDs. A
-    `reviewed` claim is wording that passed semantic review - written by the AI
-    (`create_draft`, `regenerate_section`, `regenerate_claim`) or kept by the user
-    under review. Content left in its canonical wording matches none of the four.
-
-    A selection change drops the content to be drafted again, which would silently
-    lose that wording; §14 sends that case to a regeneration command instead.
+    Claims are filtered, not rebuilt, so every kept claim keeps its identity and its
+    place in pool order: a role's title, dates and bullets stay together. Headings,
+    dates and contacts stay whether or not they were kept. An optional section left
+    with no claims is dropped, as `build_draft` drops one.
     """
-    if draft.selection is not None and draft.selection.superseded_by_manual_edit:
-        return True
-    return any(
-        claim.claim_type in {"pending", "reviewed"}
-        or (claim.derivation_id, claim.derivation_version) == EXTRACTIVE_DERIVATION
-        for claim in draft_claims(draft)
-    )
+    optional = {
+        (spec.name_he if frame.language == "he" else spec.name_en)
+        for spec in profile.sections
+        if spec.optional
+    }
+    narrowed = frame.model_copy(deep=True)
+    sections = []
+    for section in narrowed.sections:
+        section.claims = [
+            claim
+            for claim in section.claims
+            if claim.claim_id in kept_claim_ids or claim.style in STRUCTURAL_STYLES
+        ]
+        if section.claims or section.name not in optional:
+            sections.append(section)
+    narrowed.sections = sections
+    return _reseal(narrowed)
 
 
 def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) -> None:
@@ -404,31 +362,8 @@ def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) 
     raise KeyError(claim_id)
 
 
-def _refresh_selection(draft: DraftDocument, facts: FactStore) -> DraftDocument:
-    selected = {fact_id for claim in draft_claims(draft) for fact_id in claim.fact_ids}
-    draft.selected_fact_ids = sorted(selected)
-    if draft.selection is not None:
-        # A manual edit may relink a claim to a different fact in the pool. The
-        # engine's decision record is not rewritten to match: it is flagged, so
-        # the audit trail keeps saying what the policy actually chose.
-        body = {
-            fact_id
-            for section in draft.sections
-            for claim in section.claims
-            for fact_id in claim.fact_ids
-        }
-        if body != set(draft.selection.selected_fact_ids):
-            draft.selection = draft.selection.model_copy(update={"superseded_by_manual_edit": True})
-    draft.omitted_facts = _omitted_facts(
-        facts,
-        draft.selection
-        or SelectionManifest(
-            policy_version="",
-            emphasis=draft.emphasis,
-            emphasis_policy_version="",
-        ),
-        selected,
-    )
+def _reseal(draft: DraftDocument) -> DraftDocument:
+    """Restate the content hash after an edit."""
     return draft.model_copy(update={"content_hash": draft_content_hash(draft)})
 
 
@@ -620,25 +555,16 @@ def apply_claim_edit(
                     derivation_version=EXTRACTIVE_DERIVATION[1],
                 )
     _replace_claim(draft, claim_id, replacement.model_copy(update={"claim_id": claim_id}))
-    return _refresh_selection(draft, facts)
+    return _reseal(draft)
 
 
-def remove_claim(draft: DraftDocument, claim_id: str, facts: FactStore) -> DraftDocument:
-    """Remove one unauthorized section claim, and reseal.
+def remove_claim(draft: DraftDocument, claim_id: str) -> DraftDocument:
+    """Remove one section claim, and reseal.
 
-    product-spec §10 lists removal as one of the three resolutions for free text
-    nothing could authorize, and it is the only one of the three that no other
-    command can reach: a `pending` claim has no fact to exclude, and its very
-    presence makes `carries_authored_wording` true, which is what refuses the
-    deterministic selection path.
-
-    So the removal is narrow on purpose. It refuses anything a fact selection
-    authorizes, because removing such a claim here would leave the SelectionPlan
-    asserting a fact the document no longer carries - that decision belongs to
-    `apply_selection_change`, which rewrites both together. It refuses the
-    headline and the contacts because they are structural: the model requires a
-    headline, and contacts come from the candidate context rather than from any
-    selection, so a rebuild reproduces them.
+    The document holds no separate fact manifest, so a fact-backed line may go like
+    any other: the facts it linked simply stop being used. Structure may not. The
+    headline and contacts are required by the model and the candidate context, and a
+    heading or date is what keeps a role's bullets attributed to it.
 
     A section left with no claims keeps its heading. Removing a line is not
     permission to restructure the document.
@@ -652,13 +578,12 @@ def remove_claim(draft: DraftDocument, claim_id: str, facts: FactStore) -> Draft
         for index, claim in enumerate(section.claims):
             if claim.claim_id != claim_id:
                 continue
-            if claim.claim_type != "pending" and claim.fact_ids:
+            if claim.style in STRUCTURAL_STYLES:
                 raise ValueError(
-                    "this claim is authorized by the fact selection; remove it by "
-                    "excluding its facts through apply_selection_change"
+                    "headings and dates are structure; a role keeps its title and dates"
                 )
             del section.claims[index]
-            return _refresh_selection(draft, facts)
+            return _reseal(draft)
     raise KeyError(claim_id)
 
 
@@ -666,7 +591,6 @@ def add_claim(
     draft: DraftDocument,
     section: str,
     text: str,
-    facts: FactStore,
     *,
     style: ClaimStyle = "bullet",
 ) -> tuple[DraftDocument, str]:
@@ -695,4 +619,4 @@ def add_claim(
         pending_reason=MANUAL_CLAIM_PENDING_REASON,
     )
     target.claims.append(claim)
-    return _refresh_selection(draft, facts), claim.claim_id
+    return _reseal(draft), claim.claim_id

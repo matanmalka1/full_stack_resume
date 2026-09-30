@@ -15,7 +15,6 @@ from .handlers import (
     DraftOperationHandler,
     RegenerationOperationHandler,
     RenderOperationHandler,
-    SelectionPlanOperationHandler,
 )
 from .lifecycle import OperationLifecycleService
 from .service import OperationSubmissionService
@@ -29,7 +28,6 @@ __all__ = [
     "OperationSubmissionService",
     "RegenerationOperationHandler",
     "RenderOperationHandler",
-    "SelectionPlanOperationHandler",
     "analysis_knowledge_context_hash",
     "failure_code_for",
     "failure_reason_for",

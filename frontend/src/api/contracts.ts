@@ -63,13 +63,10 @@ export type Reason = ApiSchemas["ReasonResponse"];
    carries it as `expected_document_hash`. `content` stays the opaque versioned document;
    `outline` is the editable structure derived from it on each read. */
 export type CVDocument = ApiSchemas["DocumentResponse"];
-export type DocumentCandidate = ApiSchemas["DocumentCandidateResponse"];
 export type DocumentMutation = ApiSchemas["DocumentMutationResponse"];
 export type DocumentCheck = ApiSchemas["DocumentCheckResponse"];
 export type DocumentActionRequest = ApiSchemas["DocumentActionRequest"];
 export type UpdateDocumentRequest = ApiSchemas["UpdateDocumentRequest"];
-export type UpdateSelectionRequest = ApiSchemas["UpdateSelectionRequest"];
-export type ProposeSelectionRequest = ApiSchemas["ProposeSelectionRequest"];
 export type BuildFromAnalysisRequest = ApiSchemas["BuildFromAnalysisRequest"];
 export type CreateDraftRequest = ApiSchemas["CreateDraftRequest"];
 export type RegenerateDocumentSectionRequest = ApiSchemas["RegenerateDocumentSectionRequest"];
@@ -99,8 +96,6 @@ export type DraftClaim = ApiSchemas["DraftClaimResponse"];
 export type ClaimType = DraftClaim["claim_type"];
 
 export type DraftFact = ApiSchemas["DraftFactResponse"];
-export type SelectionOutcome = NonNullable<DraftFact["outcome"]>;
-export type OmissionReason = NonNullable<DraftFact["reason"]>;
 
 export type ClaimPatch = ApiSchemas["ClaimPatchRequest"];
 export type ClaimAddition = ApiSchemas["ClaimAdditionRequest"];

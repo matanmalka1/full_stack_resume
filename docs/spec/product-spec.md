@@ -86,13 +86,17 @@ boundary applicability and scale ordering, and both only lower a verdict.
 There is no rules-based analysis and no rules-based drafting. Without a provider the
 application cannot create a new JobAnalysis or draft a document's content, and a
 provider failure never triggers a silent fallback; the UI offers configuration or retry.
-Everything downstream of existing content — selection changes, editing, checking,
-approval, rendering, submission, export, and recruitment tracking — works with no
-provider.
+Everything downstream of existing content — editing, checking, approval, rendering,
+submission, export, and recruitment tracking — works with no provider.
 
-A matching correction that changes requirement meaning or classification creates a new
-immutable JobAnalysis. A correction that only changes Emphasis or fact selection updates
-the document's selection in place (§9).
+Which canonical facts answer the job is also AI's proposal: `draft_resume` chooses them
+from each Profile section's pool while it words them (§10). The engine keeps the checks
+that stop an invented fact — canonical, in the section's pool, rendered in the document
+language, structurally placed — and treats section budgets, tags, per-role minimums, and
+Profile pins as guidance, never as refusals (`docs/decisions/ai-owned-selection.md`).
+
+A matching correction that changes requirement meaning or classification, Emphasis
+included, creates a new immutable JobAnalysis (§9).
 
 ### Current product contract
 
@@ -112,7 +116,7 @@ database details, or architecture. Those stay available in provenance views.
   candidate selector, candidate CRUD, or multi-candidate UI.
 - Facts, CandidateContext, and each user's Profile binding (section pools, pins,
   headlines, omitted roles) are per-user state in PostgreSQL (§17, §22). Profile
-  templates, selection and emphasis policy, prompts, task contracts, requirement
+  templates, emphasis policy, prompts, task contracts, requirement
   concepts, and rendering rules stay version-controlled files under the project root
   (`profiles/`, `config/`, `ai/`, `rendering/`) and are their own source of truth.
   *Designed, not built:* today facts, CandidateContext, and whole Profiles are files
@@ -145,9 +149,9 @@ The product includes:
   snapshots when the posting changes.
 - Provider-backed JobAnalysis with requirements, coverage, gaps, Fit, and analysis
   issues shown as diagnostics; a matching-configuration form for Track, Profile,
-  language, Emphasis, pins, and exclusions.
-- Exactly one mutable CVDocument per Application: deterministic selection, optional
-  AI selection proposal, AI drafting, a structured section/claim editor
+  language, and Emphasis.
+- Exactly one mutable CVDocument per Application: AI drafting that chooses and words
+  the facts, a structured section/claim editor
   with autosave, claim reordering within a section, session undo/redo, targeted section
   and claim regeneration, semantic review of a pending line as written, and isolated
   HTML and stamped draft-PDF previews.
@@ -224,7 +228,7 @@ decision.
 6. Approval and Ready are not stored entities. They are derived on every read by
    comparing the stored `approved_basis` and `rendered_basis` with the current `basis`
    (state-and-use-cases.md §3–§4).
-7. The basis covers the document's content, selection, and analysis pin
+7. The basis covers the document's content and analysis pin
    (`document_hash`) and the current state of every fact it depends on (`facts_hash`).
    A change to any of them outdates every stamp at once; nothing invalidates a stamp by
    writing.
@@ -305,32 +309,24 @@ A changed posting creates a new immutable JobSnapshot and makes it active. Older
 snapshots and their analyses stay valid in their own context, and the document does not
 change until the user runs `build_from_analysis` against a newer analysis.
 
-## 9. Analysis, selection, and review
+## 9. Analysis and review
 
 JobAnalysis owns classification, normalized requirements, coverage, analysis issues,
 and source coverage. Fit and gaps are projections of its requirements. Each analysis is
 immutable and is its own version.
 
 The first successful `analyze_job` for an Application creates the JobAnalysis and, in
-the same transaction, the CVDocument pinned to it, with that analysis's deterministic
-selection and no content. A later analysis never touches the document; it is reported
-as the `DOCUMENT_ON_OLDER_ANALYSIS` warning until the user runs `build_from_analysis`,
-which re-pins the document, replaces its selection, and clears its content and every
-stamp.
+the same transaction, the CVDocument pinned to it with no content. A later analysis
+never touches the document; it is reported as the `DOCUMENT_ON_OLDER_ANALYSIS` warning
+until the user runs `build_from_analysis`, which re-pins the document and clears its
+content and every stamp.
 
-The document's `selection` owns selected, pinned, and excluded facts, the Emphasis
-override, and candidate accounting. It is part of the document and its hash, not a
-separate versioned entity. It changes:
+The document holds no selection. The facts it uses are the facts its content links;
+they are chosen when the content is drafted (§10) and changed by editing it.
 
-- deterministically through `update_selection` (§10);
-- through the matching-configuration form (`apply_analysis_decisions`): a Track,
-  Profile, or language change creates one new immutable JobAnalysis without calling the
-  provider; an Emphasis or fact decision alone updates the selection in place;
-- through an optional AI `propose_selection` Operation, while the document has no
-  content or only content in its canonical wording (which it then drops, as
-  `update_selection` does). Its input names each Profile section's allowed facts, claim budget, occupied
-  budget, and pin capacity. Deterministic selection policy validates every proposal
-  before activation. It is never required to reach a draft.
+The matching-configuration form (`apply_analysis_decisions`) changes classification
+only: a Track, Profile, language, or Emphasis change creates one new immutable
+JobAnalysis without calling the provider.
 
 Fit, hard gaps, low Fit, and analysis issues are diagnostics. They stay visible and
 never require acknowledgement or block an action. An uncertain requirement stays
@@ -338,8 +334,7 @@ never require acknowledgement or block an action. An uncertain requirement stays
 
 Review reasons are reserved for the integrity of the document's own dependencies: a
 dependent fact that is pending or deleted (state-and-use-cases.md §7). They block
-approve, render, and submit, and are resolved by confirming, changing the selection,
-editing, or regenerating.
+approve, render, and submit, and are resolved by confirming, editing, or regenerating.
 
 When the user has turned on automatic generation (off by default), the Web client
 queues a draft right after the analysis that created the document activates, provided
@@ -352,14 +347,16 @@ The structured DraftDocument in `cv_documents.content` is the only source of tru
 content. Markdown and HTML are projections.
 
 `create_draft` runs as an AI Operation while the document has no content; there is no
-rules-based drafting lane. When the user has not chosen the selection (no pins,
-exclusions, Emphasis override, or activated AI proposal), `propose_selection_plan`
-chooses it first, under the same selection policy as `propose_selection`; a selection the
-user chose is kept. The engine lays out that selection as the frame the provider writes
-into, `draft_resume` proposes wording per section from the facts that section permits,
-and the wording activates only through §10.1. The selection and the content activate
-together. A selected fact without a
-rendering in the document language fails the draft (`MISSING_FACT_RENDERING`).
+rules-based drafting lane. The engine sends `draft_resume` each Profile section's
+pool — every canonical fact with its rendering in the document language — the structural
+facts that are always present, and the section's guidance: claim budget, per-role
+minimums and ceiling, required and preferred tags, tag weights, and Profile pins.
+`draft_resume` chooses the facts per section and words them. The engine narrows the
+answer and never widens it: a fact outside the section's pool or not canonical is
+refused, and a chosen fact without a rendering in the document language fails the draft
+(`MISSING_FACT_RENDERING`). Guidance is never enforced. The engine lays the chosen facts
+out in pool order, so every role keeps its title, dates, and bullets together, and the
+wording activates only through §10.1.
 
 The editor works with sections and claims. Each claim shows its text, linked facts,
 status, warnings, and edit, regenerate, and remove controls. Section order is Profile
@@ -368,11 +365,8 @@ client-side editing history saved through the same autosave. Headline and contac
 structural: the headline is not a factual claim and is accepted only when it is one of
 the Profile's safe headlines.
 
-`update_selection` changes the selection synchronously. Content is composed only by
-`create_draft`, so content still in its canonical wording is dropped in the same write,
-with every stamp built on it and its rendered files, and the document is drafted again.
-Content carrying manual or AI wording that the drop would discard is refused
-(`REGENERATION_REQUIRED`) and the client is directed to regeneration.
+Any section claim may be removed; the fact it linked simply stops being used. There
+is no separate fact selection to change.
 
 Free-text edits are always saved, even when unsupported. They become pending or
 unlinked claims, are shown as unsafe, and block approval until they are supported
@@ -427,10 +421,15 @@ failure, cancellation, invalid output, missing assertion coverage, or stale evid
 never makes wording eligible.
 
 Failed semantic reviews expose a focused clarification panel: the rejected sentence,
-its section and preceding heading when present, and the exact canonical meanings and
-renderings read during that review. This context is recorded with the failure, not
+its section and preceding heading when present, the exact canonical meanings and
+renderings read during that review, and the reviewer's explanation when one was
+recorded, labeled as the reviewer's reading rather than proof. This context is recorded with the failure, not
 reconstructed from the current document or fact store. Older failures without recorded
 context retain generic guidance; missing historical content is never invented.
+
+A `supported` answer whose evidence fails the deterministic review check is refused as
+invalid output; the same panel shows that line as unattested, with the failed checks in
+the reader's words, because the reviewer's own explanation reads as approval.
 
 The panel distinguishes an uncertain verdict from an unsupported one and offers the
 existing editor and fact lifecycle as resolution paths. A claim link opens the current
@@ -489,14 +488,12 @@ to draft) and submission.
 
 One OpenAI adapter implements the provider-neutral `AIProvider` port, using the
 Responses API with strict Structured Outputs. The task contract (`ai/contracts/
-task_contracts.json`, with the prompt `ai/prompts/system.md`) defines six tasks:
+task_contracts.json`, with the prompt `ai/prompts/system.md`) defines five tasks:
 
 - `propose_analysis` — requirements with importance, evidence-linked coverage, shortfall
   severity and reason, and the Track/Profile/Emphasis/language classification, as one
   Proposal from one call. Called by the `analyze_job` command.
-- `propose_selection_plan` — a selection overlay (pins, exclusions, rationale). Called by
-  the `propose_selection` command.
-- `draft_resume` — wording for a new draft.
+- `draft_resume` — the facts chosen per section and their wording, for a new draft.
 - `regenerate_section`, `regenerate_claim` — targeted rewording.
 - `assess_claim_support` — the separate semantic reviewer used by every writing
   Operation. It returns evidence proposals only.
@@ -640,12 +637,12 @@ Downloads are addressed by ID, verify the registered hash, and use a friendly fi
 `content`, `document_hash`, the `job_snapshot_id` of the document's analysis, the copied
 HTML and PDF with their SHA-256, `submitted_at`, and user metadata. The content itself
 carries its binding (Application, snapshot, analysis), Track/Profile/Emphasis, language,
-selected fact IDs, each claim's fact links and evidence, and the coarse fact-store
+each claim's fact links and evidence, and the coarse fact-store
 version. The Submission does **not** store `facts_hash`, the CandidateContext version,
 or policy versions; those are not recoverable for it later, and no field may claim them.
 
-**The document's own provenance.** `built_with` (Profile and selection-policy version)
-drives the `PROFILE_CHANGED` and `POLICY_CHANGED` warnings. Approval and rendering always
+**The document's own provenance.** `built_with` (Profile version) drives the
+`PROFILE_CHANGED` warning. Approval and rendering always
 validate against current Knowledge rather than trusting `built_with`. `facts_hash` covers
 only the facts the document depends on, so an unrelated fact change does not move its
 basis.
@@ -666,8 +663,8 @@ PostgreSQL and bucket backup are the environment's responsibility.
 ## 17. Knowledge lifecycle
 
 *Designed, not built (§22):* facts belong to a user and live in PostgreSQL. A fact
-mutation is then one database transaction — fact row, fact events, and any document
-selection update commit together — and the mutation journal, its recovery, and
+mutation is then one database transaction — fact row and fact events commit
+together — and the mutation journal, its recovery, and
 quarantine are retired. Hand edits to Knowledge files are no longer an input; `base/`
 is import input for an existing installation only. The lifecycle rules below (statuses,
 create, confirm, delete, attach, confirm and use, from a claim) are unchanged. Until
@@ -677,7 +674,7 @@ Knowledge stays file-based and version-controlled. A fact mutation from the Web 
 
 ```text
 React -> FastAPI -> FactLifecycleService -> validate/stage -> PREPARED journal entry
-      -> replace file -> fact events (+ document selection) + COMMITTED, one transaction
+      -> replace file -> fact events + COMMITTED, one transaction
 ```
 
 File work runs outside database scopes. The journal and audit never replace the files as
@@ -698,10 +695,11 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
   unaffected.
 - **Attach.** Offers a canonical fact to an existing Profile section's pool, optionally
   pinned. It changes no Profile structure and grants no Profile editing.
-- **Confirm and use.** One journaled command that confirms, attaches, and selects the
-  fact in the named Application's document, or fails as a whole.
+- **Confirm and use.** One journaled command that confirms the fact and attaches it to
+  the named Profile section, or fails as a whole. It writes no document; the next draft
+  of that Application's document can choose the fact.
 - **From a claim.** Copies the claim's exact text as a rendering without AI rewriting.
-  The claim is not authorized until the fact is canonical and selected.
+  The claim is not authorized until the fact is canonical and in its section's pool.
 
 There are no archive, withdrawal, retirement, or known-incorrect transitions, and no
 client may present them.
@@ -716,10 +714,10 @@ fact is never silently reloaded into an open editor form.
 
 ## 18. Operations and failure behavior
 
-AI tasks (`analyze_job`, `propose_selection`, `create_draft`, `regenerate_section`,
+AI tasks (`analyze_job`, `create_draft`, `regenerate_section`,
 `regenerate_claim`) and `render_document` run as persisted Operations in the worker,
 never inside an HTTP request.
-Saves, selection changes, matching decisions, `build_from_analysis`, check, approval,
+Saves, matching decisions, `build_from_analysis`, check, approval,
 submission, fact commands, and recruitment changes are synchronous.
 
 Status and failure reason are separate, and a failure carries a structured reason in a

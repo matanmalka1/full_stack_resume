@@ -4,9 +4,9 @@ Two layers, deliberately separate.
 
 `StructuredOutputClient` is *transport*. It knows the Responses API, the strict
 JSON-Schema envelope, HTTP status classification, and how to sanitize a raw
-response. It knows nothing about job analyses, selection plans, or drafts. It
+response. It knows nothing about job analyses or drafts. It
 was called `AIProvider` until Stage G, which is the name the application layer
-needs for its own contract - a protocol describing six product tasks, not one
+needs for its own contract - a protocol describing five product tasks, not one
 describing an HTTP call.
 
 `OpenAIProvider` is the *contract*. It implements `application.ports.AIProvider`,
@@ -54,7 +54,6 @@ from ..application.ports import (
     DraftResumeContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
-    SelectionPlanContext,
     TaskContracts,
 )
 from ..application.transactions import assert_external_io_allowed
@@ -70,7 +69,6 @@ from ..domain.contracts.providers import (
     ProviderTaskResult,
     ProviderUsage,
     SectionProposal,
-    SelectionProposal,
 )
 from ..util import canonical_json, sha256_text
 
@@ -152,7 +150,7 @@ def schema_hash(schema: dict[str, Any] | None) -> str:
     document on both sides. The output schema is the strict one in the request:
     `_strict_schema` rewrites `required` and closes every object, so hashing
     `model_json_schema()` would record a shape the provider was never sent -
-    `SelectionProposal` alone goes from one required field to three. The input
+    `DraftProposal`'s claims alone go from two required fields to four. The input
     schema is the model's own, because no input schema is transmitted at all;
     what crosses is a payload serialized from that model.
     """
@@ -395,7 +393,6 @@ class OpenAIResponsesProvider:
 #: task cannot be requested under one schema and validated against another.
 TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
     "propose_analysis": AnalysisProposal,
-    "propose_selection_plan": SelectionProposal,
     "draft_resume": DraftProposal,
     "assess_claim_support": ClaimSupportProposal,
     "regenerate_section": SectionProposal,
@@ -404,7 +401,7 @@ TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
 
 
 class OpenAIProvider:
-    """The six contracted tasks, behind the application's `AIProvider` port.
+    """The five contracted tasks, behind the application's `AIProvider` port.
 
     An Operation supplies the model and reasoning values it froze at submission.
     The task-contract model remains a backend-only fallback for direct application
@@ -471,18 +468,6 @@ class OpenAIProvider:
             "propose_analysis", context, model=model, reasoning_effort=reasoning_effort
         )
         return AIProposal(proposal=cast(AnalysisProposal, proposal), provenance=provenance)
-
-    def propose_selection_plan(
-        self,
-        context: SelectionPlanContext,
-        *,
-        model: str | None = None,
-        reasoning_effort: str | None = None,
-    ) -> AIProposal[SelectionProposal]:
-        proposal, provenance = self._run(
-            "propose_selection_plan", context, model=model, reasoning_effort=reasoning_effort
-        )
-        return AIProposal(proposal=cast(SelectionProposal, proposal), provenance=provenance)
 
     def draft_resume(
         self,

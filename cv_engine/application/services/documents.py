@@ -2,9 +2,8 @@
 
 state-and-use-cases.md §3 and §14–§18. The basis is computed here, in the application
 layer, from the document and the Knowledge loaded with it; stores never compute it.
-Selection, composition and validation are the domain's; this module binds them to
-the document so update_selection, apply_analysis_decisions, confirm_and_use_fact,
-generation, check, approve, render and submit all make the same decision the same
+Composition and validation are the domain's; this module binds them to the document
+so generation, check, approve, render and submit all make the same decision the same
 way.
 
 Nothing here opens a transaction or performs I/O except `load_knowledge`, which
@@ -13,24 +12,21 @@ reads Knowledge files and must therefore run outside a database scope.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.document import BuiltWith, CVDocument
 from ...domain.contracts.drafts import DraftDocument
-from ...domain.contracts.selection import SelectionManifest
-from ...domain.contracts.taxonomy import Emphasis
 from ...domain.contracts.validation import ValidationIssue, ValidationReport
 from ...domain.document import basis
 from ...domain.draft_markdown import serialize_markdown
-from ...domain.drafts import build_draft, carries_authored_wording
+from ...domain.drafts import build_draft
+from ...domain.frame import MissingFactRendering as DomainMissingFactRendering
 from ...domain.knowledge import Knowledge
-from ...domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ...domain.validation import validate_draft
 from ..errors import (
     DOCUMENT_CHANGED,
-    REGENERATION_REQUIRED,
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
@@ -39,11 +35,10 @@ from ..errors import (
     StateConflict,
     UnknownRecord,
 )
-from ..ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
+from ..ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ..ports.documents import DocumentStore
 from ..ports.transactions import ReadTransaction, WriteTransaction
 from ..state import document_review_reasons
-from .analysis.selection_policy import AnalysisSelection
 
 
 def load_knowledge(source: AnalysisKnowledgeSource) -> Knowledge:
@@ -80,26 +75,26 @@ class DocumentSource:
 def _source(
     tx: ReadTransaction,
     document: CVDocument | None,
-    sources: AnalysisSelectionSourceReader,
+    sources: AnalysisContextSourceReader,
     application_id: str,
 ) -> DocumentSource:
     if document is None:
         raise UnknownRecord(f"application {application_id} has no CV document yet; analyze first")
-    selection = sources.selection_source(tx, document.analysis_id)
+    context = sources.analysis_context_source(tx, document.analysis_id)
     return DocumentSource(
         document=document,
-        analysis=selection.analysis,
-        job_snapshot_id=selection.job_snapshot_id,
-        latest_analysis_id=selection.active_analysis_id,
-        active_snapshot_id=selection.active_snapshot_id,
-        deleted_at=selection.deleted_at,
+        analysis=context.analysis,
+        job_snapshot_id=context.job_snapshot_id,
+        latest_analysis_id=context.active_analysis_id,
+        active_snapshot_id=context.active_snapshot_id,
+        deleted_at=context.deleted_at,
     )
 
 
 def read_document_source(
     tx: ReadTransaction,
     documents: DocumentStore,
-    sources: AnalysisSelectionSourceReader,
+    sources: AnalysisContextSourceReader,
     application_id: str,
 ) -> DocumentSource:
     return _source(tx, documents.document(tx, application_id), sources, application_id)
@@ -108,7 +103,7 @@ def read_document_source(
 def lock_document_source(
     tx: WriteTransaction,
     documents: DocumentStore,
-    sources: AnalysisSelectionSourceReader,
+    sources: AnalysisContextSourceReader,
     application_id: str,
 ) -> DocumentSource:
     """The same read, with the document row locked until the transaction ends."""
@@ -135,61 +130,16 @@ def current_basis(document: CVDocument, knowledge: Knowledge) -> str:
 
 
 def built_with(knowledge: Knowledge) -> BuiltWith:
-    return BuiltWith(
-        profile_version=knowledge.profiles.version,
-        selection_policy_version=knowledge.policies.version,
-    )
+    return BuiltWith(profile_version=knowledge.profiles.version)
 
 
-def refuse_review_reasons(
-    document: CVDocument, knowledge: Knowledge, requested_fact_ids: Iterable[str] = ()
-) -> None:
+def refuse_review_reasons(document: CVDocument, knowledge: Knowledge) -> None:
     """A review reason blocks approve, render and submit (§7); name the first."""
-    reasons = document_review_reasons(document, knowledge, requested_fact_ids)
+    reasons = document_review_reasons(document, knowledge)
     if reasons:
         raise PreconditionFailed(
             f"blocked by {reasons[0].code}: {reasons[0].message}", code=reasons[0].code
         )
-
-
-def build_document_selection(
-    analysis: JobAnalysis,
-    knowledge: Knowledge,
-    *,
-    current: SelectionManifest | None = None,
-    pinned_fact_ids: Iterable[str] = (),
-    excluded_fact_ids: Iterable[str] = (),
-    emphasis_override: str | None = None,
-    ai_rationale: str | None = None,
-) -> SelectionManifest:
-    """The deterministic selection for one analysis, with a user or AI overlay.
-
-    The effective Emphasis is the explicit override when one is given, otherwise the
-    one the current selection already carries, otherwise the analysis's. The
-    selection records the effective `emphasis` separately from the nullable
-    `emphasis_override` (§14). A rationale marks the selection as an activated AI
-    proposal; it is provenance only and is never read back.
-    """
-    try:
-        requested = Emphasis(emphasis_override) if emphasis_override is not None else None
-    except ValueError as exc:
-        raise PreconditionFailed(f"unknown Emphasis: {emphasis_override}") from exc
-    effective = requested or (current.emphasis if current is not None else analysis.emphasis)
-    explicit = requested or (current.emphasis_override if current is not None else None)
-    selection_analysis = analysis.model_copy(update={"emphasis": effective})
-    AnalysisSelection.profile(selection_analysis, knowledge.profiles)
-    manifest = AnalysisSelection.manifest(
-        selection_analysis,
-        knowledge,
-        pinned_fact_ids=frozenset(pinned_fact_ids),
-        excluded_fact_ids=frozenset(excluded_fact_ids),
-    )
-    provenance = (
-        {"proposed_by": "ai", "proposal_rationale": ai_rationale.strip() or None}
-        if ai_rationale is not None
-        else {}
-    )
-    return manifest.model_copy(update={"emphasis_override": explicit, **provenance})
 
 
 def compose_content(
@@ -197,10 +147,14 @@ def compose_content(
     analysis_id: str,
     job_snapshot_id: str,
     analysis: JobAnalysis,
-    selection: SelectionManifest,
     knowledge: Knowledge,
+    chosen: Mapping[str, Iterable[str]] | None = None,
 ) -> DraftDocument:
-    """The deterministic content one analysis and one selection produce."""
+    """The canonical content one analysis and one choice of facts produce.
+
+    `chosen` maps each section's English name to its chosen facts; `None` lays out
+    every section's whole pool, the frame `draft_resume` chooses from.
+    """
     try:
         return build_draft(
             application_id=application_id,
@@ -209,60 +163,14 @@ def compose_content(
             analysis=analysis,
             profile=knowledge.profiles.get(analysis.profile),
             facts=knowledge.facts,
-            policies=knowledge.policies,
             candidate=knowledge.candidate,
             presentations=knowledge.presentations,
-            selection=selection,
+            chosen=chosen,
         )
     except DomainMissingFactRendering as exc:
         raise MissingFactRendering(exc.fact_id, exc.language) from exc
     except ValueError as exc:
         raise PreconditionFailed(f"document content could not be built: {exc}") from exc
-
-
-def refuse_authored_wording(content: DraftDocument | None) -> None:
-    """A selection change may discard only content nobody has worded (§14).
-
-    Content carrying manual or AI wording is refused with a pointer to regeneration,
-    before anything is written - or, for `propose_selection`, before a paid call.
-    """
-    if content is not None and carries_authored_wording(content):
-        raise PreconditionFailed(
-            "the document carries wording a selection change would discard; use "
-            "regenerate_section or regenerate_claim to change its selection",
-            code=REGENERATION_REQUIRED,
-        )
-
-
-def changed_selection(
-    source: DocumentSource,
-    knowledge: Knowledge,
-    *,
-    pinned_fact_ids: Iterable[str],
-    excluded_fact_ids: Iterable[str],
-    emphasis_override: str | None,
-    ai_rationale: str | None = None,
-) -> SelectionManifest:
-    """§14 `update_selection`, as the selection it would write.
-
-    Written through `DocumentStore.replace_selection`, which drops the content with
-    it: content is composed only by `create_draft`, so the document is drafted again
-    from the new selection. Content carrying wording that drop would discard is
-    refused with a pointer to regeneration. An activated `propose_selection` writes
-    through the same rule, with its rationale recorded as provenance.
-    """
-    document = source.document
-    selection = build_document_selection(
-        source.analysis,
-        knowledge,
-        current=document.selection,
-        pinned_fact_ids=pinned_fact_ids,
-        excluded_fact_ids=excluded_fact_ids,
-        emphasis_override=emphasis_override,
-        ai_rationale=ai_rationale,
-    )
-    refuse_authored_wording(document.content)
-    return selection
 
 
 def validate_document(source: DocumentSource, knowledge: Knowledge) -> ValidationReport:
@@ -306,7 +214,5 @@ def validate_document(source: DocumentSource, knowledge: Knowledge) -> Validatio
         knowledge.facts,
         profile,
         source.analysis,
-        selection=document.selection,
-        policies=knowledge.policies,
         presentations=knowledge.presentations,
     )

@@ -38,16 +38,12 @@ const baseFacts = (): DraftFact[] => [
     text: "Owned the CRM migration end to end.",
     linked_claim_ids: ["c-1"],
     section: "Core Skills",
-    outcome: "selected",
-    reason: null,
   },
   {
     fact_id: "f-mail",
     text: "matan@example.com",
     linked_claim_ids: ["c-mail"],
     section: null,
-    outcome: null,
-    reason: null,
   },
 ];
 
@@ -152,7 +148,7 @@ const isDocumentRead = (url: string, init?: RequestInit) => url === DOC_PATH && 
 const stubReads = (
   answers: Partial<
     Record<
-      "detail" | "document" | "operation" | "selection" | "regenerate" | "check" | "render",
+      "detail" | "document" | "operation" | "patch" | "regenerate" | "check" | "render",
       () => Response | Promise<Response>
     >
   >,
@@ -166,8 +162,8 @@ const stubReads = (
     if (url.startsWith("/api/v1/operations/")) {
       return Promise.resolve(answers.operation?.() ?? jsonResponse({}, 404));
     }
-    if (url === `${DOC_PATH}/selection`) {
-      return Promise.resolve(answers.selection?.() ?? updateResponse(5));
+    if (url === DOC_PATH && init?.method === "PATCH") {
+      return Promise.resolve(answers.patch?.() ?? updateResponse(5));
     }
     if (url === `${DOC_PATH}/render`) {
       return Promise.resolve(answers.render?.() ?? jsonResponse({}, 500));
@@ -482,11 +478,8 @@ describe("DraftEditorPage", () => {
     expect(within(summary).getByText("נוסח מחדש").nextElementSibling).toHaveTextContent("0");
     expect(within(summary).getByText("ללא עובדה מאחוריה").nextElementSibling).toHaveTextContent("0");
     expect(within(summary).getByText(/עובדה אחת נכנסה לקורות החיים/)).toBeInTheDocument();
-    /* The summary reports the selection; changing it happens on the analysis screen. */
-    expect(within(summary).getByRole("link", { name: "שינוי בחירת העובדות" })).toHaveAttribute(
-      "href",
-      "/applications/app-1#fact-selection",
-    );
+    /* The summary reports the writer's choice; there is no separate selection to change. */
+    expect(within(summary).queryByRole("link")).not.toBeInTheDocument();
     expect(within(summary).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "מחזור חיי העובדות" })).not.toBeInTheDocument();
     expect(screen.queryByText("יצירת עובדה ממתינה חדשה")).not.toBeInTheDocument();
@@ -595,7 +588,7 @@ describe("DraftEditorPage", () => {
                 code: "FACT_DELETED_REQUIRES_RESOLUTION",
                 message: "A selected fact was deleted.",
                 entity_references: { fact_id: "f-1" },
-                allowed_resolution_actions: ["update_selection"],
+                allowed_resolution_actions: ["edit"],
               },
             ],
           }),
@@ -698,7 +691,7 @@ describe("DraftEditorPage", () => {
                       code: "FACT_DELETED_REQUIRES_RESOLUTION",
                       message: "The document depends on a fact that has been deleted.",
                       entity_references: { fact_id: "f-gone" },
-                      allowed_resolution_actions: ["update_selection"],
+                      allowed_resolution_actions: ["edit"],
                     },
                   ]
                 : [],
@@ -723,7 +716,7 @@ describe("DraftEditorPage", () => {
         });
         await act(async () => finishConfirmation(jsonResponse({ fact_id: "f-captured" })));
       }
-      expect(await screen.findByText("העובדה אושרה ונבחרה")).toBeInTheDocument();
+      expect(await screen.findByText("העובדה אושרה וצורפה לפרופיל")).toBeInTheDocument();
       if (outcome.endsWith("error")) {
         const retryButton = await screen.findByRole("button", { name: "ניסיון נוסף לעדכון מצב הטיוטה" });
         expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
@@ -734,7 +727,9 @@ describe("DraftEditorPage", () => {
       if (outcome === "blocked") {
         /* The projection no longer offers the check, so none is sent: the blocker is the
            answer, reported where the editor reports blockers. */
-        expect(await screen.findByText("יש לשנות את בחירת העובדות של המסמך במסך ההכנה.")).toBeInTheDocument();
+        expect(
+          await screen.findByText("אין בעורך פעולה שסוגרת את הסיבה הזו. יש לפתור את התלות במקור לפני המשך."),
+        ).toBeInTheDocument();
         expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/check`)).toBe(false);
         expect(screen.getByRole("button", { name: "בדיקה והכנת PDF" })).toBeDisabled();
       } else {
@@ -916,74 +911,16 @@ describe("DraftEditorPage", () => {
   });
 });
 
-describe("DraftEditorPage selection changes", () => {
-  /* The document as it stands after one earlier pin: the fact accounting shows it, and
-     the selection overlay records it - the overlay is what a new decision is added to. */
-  const omittedDraft = (): CVDocument =>
-    draft(
-      {},
-      {
-        selection: { ...cvDocument().selection, pinned_fact_ids: ["f-pinned"] },
-        facts: [
-          ...baseFacts(),
-          {
-            fact_id: "f-pinned",
-            text: "Built the reporting pipeline.",
-            linked_claim_ids: ["c-9"],
-            section: "Core Skills",
-            outcome: "pinned",
-            reason: null,
-          },
-          {
-            fact_id: "f-out",
-            text: "Ran the partner onboarding programme.",
-            linked_claim_ids: [],
-            section: "Core Skills",
-            outcome: "omitted",
-            reason: "below_section_budget",
-          },
-        ],
-      },
-    );
-
-  /* Removing a fact-backed line is the editor's one selection change: it excludes the
-     facts behind the line once the undo window closes. The caller owns the fake clock,
-     installed before render (see the removal tests below). */
-  const removeFirstLine = async () => {
-    fireEvent.click((await screen.findAllByRole("button", { name: "הסרת השורה" }))[0]!);
-    const dialog = await screen.findByRole("dialog", { name: "הסרת השורה?" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
-    await vi.advanceTimersByTimeAsync(6000);
-  };
-
-  it("refuses a selection change when saving local wording failed", async () => {
-    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
-      const url = String(input);
-      if (url === DOC_PATH && init?.method === "PATCH") return Promise.resolve(jsonResponse({}, 503));
-      if (url === DOC_PATH) return Promise.resolve(jsonResponse(omittedDraft()));
-      if (url === "/api/v1/facts/history") return Promise.resolve(jsonResponse({ events: [] }));
-      return Promise.resolve(jsonResponse(detail()));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      renderPage();
-      await editRow(2);
-      fireEvent.change(await screen.findByDisplayValue("Owned the CRM migration."), {
-        target: { value: "Keep before selection." },
-      });
-      await removeFirstLine();
-      await screen.findByText("בחירת העובדות לא שונתה");
-      /* Opening the removal closes the edit field; the unsaved wording stays on the line. */
-      expect(screen.getAllByText("Keep before selection.").length).toBeGreaterThan(0);
-      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+describe("DraftEditorPage line removal", () => {
+  /* A fact-backed line goes through the same patch as any other: the document holds no
+     separate fact selection, so its facts simply stop being used. */
+  const patchRemovals = (fetchMock: ReturnType<typeof vi.fn>): unknown[] =>
+    fetchMock.mock.calls
+      .filter((call) => String(call[0]) === DOC_PATH && (call[1] as RequestInit)?.method === "PATCH")
+      .map((call) => JSON.parse(String((call[1] as RequestInit).body)).claim_removals);
 
   it("asks for confirmation before removing a line, then stages it behind an undo window", async () => {
-    const fetchMock = stubReads({ document: () => jsonResponse(omittedDraft()) });
+    const fetchMock = stubReads({});
     /* The undo timer is created by the confirmation click, so the fake clock must own
        timers before that click (and before render). Switching clocks after staging leaves
        the real timeout behind, where advancing the fake clock cannot settle it. */
@@ -991,73 +928,39 @@ describe("DraftEditorPage selection changes", () => {
 
     try {
       renderPage();
-      fireEvent.click(await screen.findByRole("button", { name: "הסרת השורה" }));
+      fireEvent.click((await screen.findAllByRole("button", { name: "הסרת השורה" }))[0]!);
 
       /* A single click on the trash icon must not fire the removal by itself. */
       const dialog = await screen.findByRole("dialog", { name: "הסרת השורה?" });
-      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
+      expect(patchRemovals(fetchMock)).toEqual([]);
 
       fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
 
       /* Confirming stages the removal instead of sending it straight away, offering an undo. */
       expect(await screen.findByRole("button", { name: "ביטול ההסרה" })).toBeVisible();
-      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
+      expect(patchRemovals(fetchMock)).toEqual([]);
 
       await vi.advanceTimersByTimeAsync(6000);
 
-      await waitFor(() =>
-        expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(true),
-      );
-      const call = fetchMock.mock.calls.find((entry) => String(entry[0]) === `${DOC_PATH}/selection`);
-      expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body)).excluded_fact_ids).toEqual(["f-1"]);
-      expect(fetchMock.mock.calls.some((entry) => (entry[1] as RequestInit)?.method === "PATCH")).toBe(false);
+      await waitFor(() => expect(patchRemovals(fetchMock)).toEqual([["c-1"]]));
+      expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/selection"))).toBe(false);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("cancels a staged removal with the undo action, never sending the exclusion", async () => {
-    const fetchMock = stubReads({ document: () => jsonResponse(omittedDraft()) });
+  it("cancels a staged removal with the undo action, never sending it", async () => {
+    const fetchMock = stubReads({});
 
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "הסרת השורה" }));
+    fireEvent.click((await screen.findAllByRole("button", { name: "הסרת השורה" }))[0]!);
     const dialog = await screen.findByRole("dialog", { name: "הסרת השורה?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "ביטול ההסרה" }));
 
     await waitFor(() => expect(screen.queryByRole("button", { name: "ביטול ההסרה" })).not.toBeInTheDocument());
-    expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
-  });
-
-  it("presents the manual-wording refusal in Hebrew, keeping the backend's detail out of the page", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    stubReads({
-      document: () => jsonResponse(omittedDraft()),
-      selection: () =>
-        jsonResponse(
-          {
-            type: "about:blank#regeneration_required",
-            title: "Precondition Failed",
-            status: 412,
-            code: "REGENERATION_REQUIRED",
-            detail: "the document carries wording a deterministic rebuild would discard",
-          },
-          412,
-        ),
-    });
-
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      renderPage();
-      await removeFirstLine();
-
-      expect(await screen.findByText("בחירת העובדות לא שונתה")).toBeInTheDocument();
-      expect(screen.getByText(/המסמך כולל ניסוח ידני שבנייה מחדש הייתה מוחקת/)).toBeInTheDocument();
-      expect(screen.queryByText(/deterministic rebuild/)).not.toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(patchRemovals(fetchMock)).toEqual([]);
   });
 });
 

@@ -11,12 +11,10 @@ from __future__ import annotations
 from typing import Any
 
 from ....domain.contracts.knowledge import Fact, FactStatus
-from ....domain.drafts import carries_authored_wording
+from ....domain.emphasis import EmphasisPolicyStore
 from ....domain.facts import FactStore, FactStoreError
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import ProfileStore
-from ....domain.selection import EmphasisPolicyStore
-from ....domain.selection import MissingFactRendering as DomainMissingFactRendering
 from ....util import new_id, utc_now
 from ...commands import (
     ConfirmAndUseFactResult,
@@ -36,10 +34,8 @@ from ...commands import (
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
-    DOCUMENT_CHANGED,
     InfrastructureFailure,
     KnowledgeRejected,
-    MissingFactRendering,
     PreconditionFailed,
     StateConflict,
     UnknownRecord,
@@ -48,7 +44,6 @@ from ...knowledge_mutations import PrepareKnowledgeMutation
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import TransactionManager
-from ..documents import build_document_selection
 from .mutations import KnowledgeMutationEngine
 
 
@@ -369,17 +364,13 @@ class FactLifecycleService(KnowledgeMutationEngine):
         job_analysis_id: str,
         profile: str,
         section: str,
-        expected_document_hash: str,
         reason: str = "",
     ) -> ConfirmAndUseFactResult:
-        """Confirm, attach, and select one pending fact as one recoverable command (§17).
+        """Confirm one pending fact and attach it to a Profile section, recoverably (§17).
 
-        The selection step is a document selection update guarded by
-        `expected_document_hash`, applied by the journal in the same commit as the
-        fact events. The document must be built on the named analysis; content the
-        engine composed is recomposed with the fact selected, and content carrying
-        wording a rebuild would discard refuses the whole command before anything is
-        written.
+        The document must be built on the named analysis, whose Profile is `profile`.
+        Nothing is written to the document: a claim already linking the fact stops
+        raising the pending-fact review reason, and the next draft can choose it.
         """
         self._ensure_mutations_allowed()
         try:
@@ -392,11 +383,6 @@ class FactLifecycleService(KnowledgeMutationEngine):
             raise KnowledgeRejected("job analysis belongs to another application")
         if document is None:
             raise KnowledgeRejected(f"application {application_id} has no CV document yet")
-        if document.document_hash != expected_document_hash:
-            raise StateConflict(
-                "the CV document changed since it was read (expected_document_hash)",
-                code=DOCUMENT_CHANGED,
-            )
         if document.analysis_id != job_analysis_id:
             raise KnowledgeRejected(
                 f"the document is built on analysis {document.analysis_id}, not {job_analysis_id}"
@@ -417,30 +403,8 @@ class FactLifecycleService(KnowledgeMutationEngine):
                 _profile_source,
                 proposed,
             ) = self._knowledge.stage_confirm_and_use_fact(mutation_id, fact_id, profile, section)
-            current = document.selection
-            selection = build_document_selection(
-                analysis,
-                proposed,
-                current=current,
-                pinned_fact_ids=current.pinned_fact_ids,
-                excluded_fact_ids=[item for item in current.excluded_fact_ids if item != fact_id],
-            )
-            if fact_id not in selection.selected_fact_ids:
-                raise ValueError("confirmed fact was not selected by the document's selection")
-            # The selection change drops the content, to be drafted again; wording
-            # that drop would discard refuses it instead.
-            if document.content is not None and carries_authored_wording(document.content):
-                raise ValueError(
-                    "the document carries wording a selection change would discard; "
-                    "select the fact after regenerating instead"
-                )
         except OSError as exc:
             raise InfrastructureFailure(f"could not prepare Knowledge mutation: {exc}") from exc
-        except (DomainMissingFactRendering, MissingFactRendering) as exc:
-            if "staged_files" in locals():
-                for staged in staged_files:
-                    self._knowledge.discard_staged(staged)
-            raise MissingFactRendering(exc.fact_id, exc.language) from exc
         except (FactStoreError, ValueError, PreconditionFailed, StateConflict) as exc:
             if "staged_files" in locals():
                 for staged in staged_files:
@@ -469,16 +433,6 @@ class FactLifecycleService(KnowledgeMutationEngine):
                 application_id=application_id,
             ),
         ]
-        selection_step_id = new_id()
-        actions.append(
-            {
-                "type": "document_selection",
-                "application_id": application_id,
-                "expected_document_hash": expected_document_hash,
-                "selection": selection.model_dump(mode="json"),
-                "updated_at": utc_now(),
-            }
-        )
         payload = {
             "knowledge_files": [self._stored_staged_file(staged) for staged in staged_files[1:]],
             "actions": actions,
@@ -491,8 +445,8 @@ class FactLifecycleService(KnowledgeMutationEngine):
             staged_reference=primary.staged_reference,
             old_sha256=primary.old_sha256,
             new_sha256=primary.new_sha256,
-            db_mutation_type="document_selection",
-            db_mutation_id=selection_step_id,
+            db_mutation_type="fact_event",
+            db_mutation_id=actions[0]["event_id"],
             db_mutation=payload,
             recovery_strategy="finish_or_restore",
         )
