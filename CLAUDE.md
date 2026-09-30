@@ -70,9 +70,10 @@ Three kinds of change need additional focused evidence:
   (`tests/e2e/test_pipeline_end_to_end.py`) — `ingest → analyze → draft → validate → approve
   → render → ready → reconcile`, `OPENAI_API_KEY` unset. It drives the application
   services directly, so it proves the engine works rather than that one client knows how
-  to call it. Analysis is the one step that needs a provider (see Facts and AI
-  boundaries); the rest of the chain runs with none, and that is what this test holds:
-  everything downstream of an existing analysis reaches Ready without AI.
+  to call it. Analysis and drafting are the steps that need a provider (see Facts and AI
+  boundaries); the test seeds the analysis and answers the draft through the scripted
+  transport, and everything
+  downstream of existing content reaches Ready without AI.
 
 While iterating, hand over only the focused commands. Hand over the boundary's scoped gates
 once, when the work closes, ordered, with what each command proves. A gate that already
@@ -106,8 +107,8 @@ Report what passed, what failed, and what remains. Never claim completion with
   no-pause flow may bypass that; a blocker refuses whatever is driving it.
 - AI proposes classification, selection, wording, and — per `docs/spec/product-spec.md`
   §2 "Semantic analysis authority" — requirement extraction, interpretation, and which
-  canonical facts answer a requirement. Creating a new analysis needs a provider; there
-  is no rules-based fallback for it, silent or otherwise. Canonical facts and
+  canonical facts answer a requirement. Creating a new analysis or drafting content needs a
+  provider; there is no rules-based fallback for either, silent or otherwise. Canonical facts and
   deterministic validation stay authoritative — authoritative over meaning, not over
   exact wording. Deterministic validation may enforce semantic equivalence to the
   canonical fact; it is not required to demand verbatim copying, and a check that does
@@ -143,8 +144,8 @@ Report what passed, what failed, and what remains. Never claim completion with
   argument, setting, or environment variable. A test needing another root injects
   `AppPaths.from_root(...)` into composition.
 - Routers map HTTP to a use-case and back. Logic belongs to the application layer,
-  which the API calls directly. Once an analysis exists, the deterministic workflow
-  reaches Ready with no AI key.
+  which the API calls directly. Analysis and drafting are AI-only; once content exists,
+  the rest of the workflow reaches Ready with no AI key.
 - Do not edit generated HTML by hand; fix the source, template, renderer, or rules.
 - Add a dependency only when it enforces a contract, reduces rendering risk, or gives a
   concrete portability benefit. The baseline is `docs/spec/architecture.md` section 2.

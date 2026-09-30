@@ -81,11 +81,12 @@ explicit (`unknown`) rather than being turned into matched or unsupported. The c
 concept vocabulary in `config/requirements.json` does not decide coverage; it states
 boundary applicability and scale ordering, and both only lower a verdict.
 
-There is no rules-based analysis. Without a provider the application cannot create a
-new JobAnalysis, and a provider failure never triggers a silent fallback; the UI offers
-configuration or retry. Everything downstream of an existing analysis — selection,
-deterministic drafting, editing, checking, approval, rendering, submission, export, and
-recruitment tracking — works with no provider.
+There is no rules-based analysis and no rules-based drafting. Without a provider the
+application cannot create a new JobAnalysis or draft a document's content, and a
+provider failure never triggers a silent fallback; the UI offers configuration or retry.
+Everything downstream of existing content — selection changes, editing, checking,
+approval, rendering, submission, export, and recruitment tracking — works with no
+provider.
 
 A matching correction that changes requirement meaning or classification creates a new
 immutable JobAnalysis. A correction that only changes Emphasis or fact selection updates
@@ -139,7 +140,7 @@ The product includes:
   issues shown as diagnostics; a matching-configuration form for Track, Profile,
   language, Emphasis, pins, and exclusions.
 - Exactly one mutable CVDocument per Application: deterministic selection, optional
-  AI selection proposal, deterministic or AI drafting, a structured section/claim editor
+  AI selection proposal, AI drafting, a structured section/claim editor
   with autosave, claim reordering within a section, session undo/redo, targeted section
   and claim regeneration, semantic review of a pending line as written, and isolated
   HTML and stamped draft-PDF previews.
@@ -220,8 +221,8 @@ decision.
     by a deterministic proof or complete eligible reviewed evidence (§10.1).
 11. AI outputs are Proposals. Schema validation, deterministic policy, and an
     application commit decide what becomes state.
-12. AI failure never triggers a silent deterministic fallback. The user may retry, or
-    explicitly choose the deterministic path where one exists.
+12. AI failure never triggers a silent fallback, and analysis and drafting have no
+    rules-based form to fall back to. The user may retry.
 13. Provider, cancelled, or stale output may exist as inactive immutable evidence. It
     becomes current only through a successful commit against its original
     preconditions.
@@ -311,7 +312,7 @@ separate versioned entity. It changes:
   Profile, or language change creates one new immutable JobAnalysis without calling the
   provider; an Emphasis or fact decision alone updates the selection in place;
 - through an optional AI `propose_selection` Operation, while the document has no
-  content or only content the engine composed (which it then recomposes, as
+  content or only content in its canonical wording (which it then drops, as
   `update_selection` does). Its input names each Profile section's allowed facts, claim budget, occupied
   budget, and pin capacity. Deterministic selection policy validates every proposal
   before activation. It is never required to reach a draft.
@@ -335,10 +336,14 @@ This is a client convenience over the same command; it grants no authority.
 The structured DraftDocument in `cv_documents.content` is the only source of truth for
 content. Markdown and HTML are projections.
 
-`create_draft` runs as an Operation while the document has no content. The
-deterministic lane composes content from the analysis and selection with no AI. The AI
-lane (`draft_resume`) proposes wording per composed section from the facts that section
-permits, and the wording activates only through §10.1. A selected fact without a
+`create_draft` runs as an AI Operation while the document has no content; there is no
+rules-based drafting lane. When the user has not chosen the selection (no pins,
+exclusions, Emphasis override, or activated AI proposal), `propose_selection_plan`
+chooses it first, under the same selection policy as `propose_selection`; a selection the
+user chose is kept. The engine lays out that selection as the frame the provider writes
+into, `draft_resume` proposes wording per section from the facts that section permits,
+and the wording activates only through §10.1. The selection and the content activate
+together. A selected fact without a
 rendering in the document language fails the draft (`MISSING_FACT_RENDERING`).
 
 The editor works with sections and claims. Each claim shows its text, linked facts,
@@ -348,9 +353,11 @@ client-side editing history saved through the same autosave. Headline and contac
 structural: the headline is not a factual claim and is accepted only when it is one of
 the Profile's safe headlines.
 
-`update_selection` changes the selection synchronously. Content the engine composed is
-recomposed in the same write. Content carrying manual or AI wording that a rebuild would
-discard is refused (`REGENERATION_REQUIRED`) and the client is directed to regeneration.
+`update_selection` changes the selection synchronously. Content is composed only by
+`create_draft`, so content still in its canonical wording is dropped in the same write,
+with every stamp built on it and its rendered files, and the document is drafted again.
+Content carrying manual or AI wording that the drop would discard is refused
+(`REGENERATION_REQUIRED`) and the client is directed to regeneration.
 
 Free-text edits are always saved, even when unsupported. They become pending or
 unlinked claims, are shown as unsafe, and block approval until they are supported
@@ -596,11 +603,8 @@ Safe settings are server-owned and optimistic (a stale write is a conflict the u
 resolves; nothing is overwritten automatically):
 
 - `auto_generate_when_review_not_required` (§9), off by default;
-- `ai_enabled_override`, from which `ai_enabled` is derived: true when a provider is
-  configured and the override is not `false`. The Web client hides AI actions when it is
-  false; the backend gates AI only on provider configuration;
-- `default_execution_mode` (`deterministic` default, or `ai`); `ai` is refused unless AI
-  is enabled and configured. It chooses the drafting lane the Web client requests;
+- there is no AI switch: AI is available exactly when a provider is configured
+  (`provider_configured`, read-only), and the Web client disables AI actions without one;
 - `default_ai_model` and `default_reasoning_effort`, from closed allowlists;
 - UI preferences: `ui_theme` (`system` default, `light`, `dark`), `ui_density`,
   `ui_text_size`. The server is authoritative for theme; a local cache is for startup
@@ -683,9 +687,9 @@ fact is never silently reloaded into an open editor form.
 
 ## 18. Operations and failure behavior
 
-AI tasks (`analyze_job`, `propose_selection`, AI `create_draft`, `regenerate_section`,
+AI tasks (`analyze_job`, `propose_selection`, `create_draft`, `regenerate_section`,
 `regenerate_claim`) and `render_document` run as persisted Operations in the worker,
-never inside an HTTP request; deterministic `create_draft` uses the same Operation path.
+never inside an HTTP request.
 Saves, selection changes, matching decisions, `build_from_analysis`, check, approval,
 submission, fact commands, and recruitment changes are synchronous.
 
@@ -729,7 +733,7 @@ existing analysis through Ready.
 State as of this revision (details: `tailoring-decisions.md` §2–§3):
 
 - **Implemented and gated:** the full engine and Web workflow described above, from
-  intake through submission and tracking, including the deterministic pipeline.
+  intake through submission and tracking.
 - **Implemented, live acceptance incomplete:** AI tailoring (writer/reviewer v1, sectioned
   selection and writer context). The sales sample reached Ready. The development
   sample needed repeated drafting and a content exclusion before its PDF fit the page

@@ -385,8 +385,7 @@ state-and-use-cases.md §11 and §19. This section covers execution.
 
 - one mutating Operation per Application (every type)
 - one global render/browser slot (`render_document`)
-- two global AI slots (every AI task, and `analyze_job`/`create_draft` unless the
-  provider is `deterministic`)
+- two global AI slots (every AI task, including `analyze_job` and `create_draft`)
 
 Locks are resource-specific: a render for one Application does not block analysis for
 another. Contention is queueing, not failure; a waiting Operation stays `queued` with an
