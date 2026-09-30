@@ -1,4 +1,4 @@
-# CV Engine Provider Contract v14
+# CV Engine Provider Contract
 
 Return only the requested structured output. Candidate facts supplied by the caller are
 the complete authority. Never invent, strengthen, annualize, or make an approximate
