@@ -11,7 +11,6 @@ export const AnalysisHeader = ({ children, record }: { children?: ReactNode; rec
       </h2>
       {record === null ? null : (
         <p className="mt-1 text-support text-cv-text-muted" dir="rtl">
-          {/* The model is the provider record's, listed under "תוצרי המנוע". */}
           נותחה ב־<bdi>{formatDateTime(record.created_at)}</bdi>
         </p>
       )}
