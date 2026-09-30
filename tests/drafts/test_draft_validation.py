@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
 
-from cv_engine.domain.claim_review import REVIEW_POLICY_VERSION
+from cv_engine.domain.claim_review import REVIEW_POLICY_VERSION, review_problems
 from cv_engine.domain.contracts.drafts import ClaimLine, ClaimReviewAssertion, ClaimReviewEvidence
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.drafts import apply_claim_edit, authorize_reviewed_claim, draft_content_hash
@@ -343,6 +343,46 @@ def test_reviewed_wording_cannot_carry_a_number_its_facts_lack(
 
     assert not report.passed
     assert "unsupported-review-number" in {issue.code for issue in report.issues}
+
+
+@pytest.mark.parametrize(
+    ("order", "passes"),
+    [
+        ("as-linked", True),
+        # docs/acceptance/2026-09-29.md: a reviewer listed the right quotes in the other
+        # order. The pairing attests support; the order attests nothing.
+        ("swapped", True),
+        # Both quotes fit the first fact only: the second fact has no quote of its own.
+        ("one-fact-twice", False),
+    ],
+)
+def test_source_quotes_pair_with_their_facts_in_any_order(
+    fact_store, order: str, passes: bool
+) -> None:
+    canonical = [
+        fact_id for fact_id, fact in fact_store.facts.items() if fact.status.value == "canonical"
+    ]
+    first, second = canonical[:2]
+    one, two = (fact_store.rendering(fact_id, "en") for fact_id in (first, second))
+    assert one not in two and two not in one
+    text = f"{one} {two}"
+    quotes = {"as-linked": [one, two], "swapped": [two, one], "one-fact-twice": [one, one]}[order]
+
+    problems = review_problems(
+        claim_id="claim-1",
+        text=text,
+        style="bullet",
+        fact_ids=[first, second],
+        assertions=[
+            ClaimReviewAssertion(claim_quote=text, fact_ids=[first, second], source_quotes=quotes)
+        ],
+        facts=fact_store,
+        language="en",
+    )
+
+    assert (problems == []) is passes, problems
+    if not passes:
+        assert {problem.code for problem in problems} == {"invalid-review-source-quote"}
 
 
 def test_profile_presentation_wording_is_recomputed_during_validation(
