@@ -2,14 +2,17 @@
 
 Status: **Binding.** Describes the product as implemented (2026-09-29), including the
 single-document model ([`../decisions/single-document-model.md`](../decisions/single-document-model.md)).
-What is designed but not built is named as such, here or in §20.
+What is designed but not built is named as such, here or in §20. User accounts and
+per-user isolation (§22, [`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md))
+are approved and not built; every section they change says so.
 
 Section numbers are cited from code, tests, and other documents; keep them stable.
 
 ## תקציר מנהלים
 
-כלי מקומי למועמד יחיד שמתאים קורות חיים למשרה, קושר כל טענה לעובדות הקנוניות של
-המועמד, ומפיק PDF קריא לאדם ול־ATS.
+כלי שמתאים קורות חיים למשרה, קושר כל טענה לעובדות הקנוניות של המועמד, ומפיק PDF קריא
+לאדם ול־ATS. כל משתמש הוא מועמד אחד ורואה רק את המידע שלו (§22 — מאופיין, טרם מומש;
+היום הכלי מקומי למועמד יחיד וללא הזדהות).
 
 הזרימה המרכזית:
 
@@ -93,30 +96,35 @@ the document's selection in place (§9).
 
 ### Current product contract
 
-> A single candidate can create a job application, analyze the job, produce and edit a
+> A signed-in user — one candidate — can create a job application, analyze the job, produce and edit a
 > fact-linked CV, check and explicitly approve its exact current content, render a valid
 > ATS-readable PDF, understand every blocker and available action, record what was sent,
 > and track the recruitment process — through the Web client, backed by one application
-> layer.
+> layer — and can never reach another user's data (§22).
 
 The Web UI must not require the user to know entity IDs, hashes, filesystem paths,
 database details, or architecture. Those stay available in provenance views.
 
 ## 3. Product boundaries
 
-- One candidate. A single `CandidateContext` supplies candidate-specific policy; the
-  domain hardcodes no candidate name, filename, or identity. There is no candidate
-  selector, candidate CRUD, or multi-candidate UI.
-- Facts, CandidateContext, Profiles, selection and emphasis policy, prompts, task
-  contracts, requirement concepts, and rendering rules are version-controlled files under
-  the project root (`base/`, `profiles/`, `config/`, `ai/`, `rendering/`) and are their
-  own source of truth.
+- One candidate per user. Each user's `CandidateContext` supplies candidate-specific
+  policy; the domain hardcodes no candidate name, filename, or identity. There is no
+  candidate selector, candidate CRUD, or multi-candidate UI.
+- Facts, CandidateContext, and each user's Profile binding (section pools, pins,
+  headlines, omitted roles) are per-user state in PostgreSQL (§17, §22). Profile
+  templates, selection and emphasis policy, prompts, task contracts, requirement
+  concepts, and rendering rules stay version-controlled files under the project root
+  (`profiles/`, `config/`, `ai/`, `rendering/`) and are their own source of truth.
+  *Designed, not built:* today facts, CandidateContext, and whole Profiles are files
+  under `base/` and `profiles/`.
 - React is the product interface. FastAPI is the only user-facing adapter; React
   reaches the system through it and nowhere else. The worker is an internal execution
   host for Operations, not a second client. A second user-facing surface for a use-case
   the API already owns is not added.
-- The system is local: two processes (API and worker) over one PostgreSQL database
-  (architecture.md §3.5).
+- The system is a hosted service: two processes (API and worker) over one PostgreSQL
+  database (architecture.md §3.5), reached over HTTPS in production, with
+  authentication always on (§22). *Designed, not built:* today it binds to loopback with
+  no authentication.
 - macOS is the official target. Portable code is preferred; Windows and Linux do not
   block release.
 - The UI supports current Chrome/Chromium only. PDFs always render with
@@ -162,8 +170,11 @@ The product includes:
 
 ## 5. Explicit non-goals
 
-- Multiple candidates or candidate administration.
-- Authentication, multi-user or multi-tenant behavior, sync.
+- More than one candidate per user, or candidate administration.
+- Roles, permissions, RBAC, organizations, teams, sharing between users, or an admin UI.
+- SSO, MFA, or social login (Google, Microsoft, or any other identity provider).
+- A mode without authentication, or any setting that disables it (§22).
+- Sync.
 - Additional structured-state databases, an ORM, or storage abstractions beyond
   PostgreSQL/SQLAlchemy Core and the local and S3-compatible object stores.
 - Automatic job extraction from URLs, LinkedIn, or JS-heavy sites; job-description PDF
@@ -195,8 +206,11 @@ decision.
 ## 6. Core invariants
 
 1. An `Application` is the container for one target job and its history.
-2. The system represents one candidate. Candidate identity is not a column on
-   Application rows.
+2. Each user is exactly one candidate. Every record belongs to exactly one user,
+   directly (a root) or through its Application; no command or query reaches a record
+   of another user, and such a record is indistinguishable from one that does not exist
+   (§22). *Designed, not built:* today the system represents one candidate and
+   Application rows carry no owner.
 3. `CVDocument` is the only mutable resume document. Exactly one exists per Application
    once its first analysis activates.
 4. JobSnapshot, JobAnalysis, provider-response Artifact, Submission, recruitment/audit/
@@ -240,14 +254,14 @@ decision.
 21. API and worker concurrency stays correct through the document hash, optimistic
     versions, atomic PostgreSQL claims, resource leases, idempotency keys, and
     commit-time precondition checks.
-22. A fresh installation starts with an empty database and proves itself through its own
-    workflow.
+22. A fresh installation starts with an empty database — no users — and proves itself
+    through its own workflow.
 23. Commands name their sources; only a query may resolve "latest".
 
 ## 7. Candidate and application behavior
 
-One CandidateContext (`base/candidate.json`) points to the canonical name and contact
-fact IDs (with track-specific contacts, such as GitHub for development) and supplies
+Each user has one CandidateContext (per-user state, §22; today `base/candidate.json`).
+It points to the user's canonical name and contact fact IDs (with track-specific contacts, such as GitHub for development) and supplies
 filename language, locale, timezone, and link schemes. Names and contacts stay canonical
 facts, not duplicated metadata.
 
@@ -256,7 +270,7 @@ language (English by default), including for a Hebrew CV. Renderers and filename
 receive CandidateContext explicitly and contain no candidate literal.
 
 Knowledge, artifacts, temporary files, and logs live at fixed directories below the
-installed project root. The root is not selectable (architecture.md §4).
+installed project root (once accounts ship, only policy files remain there; §22). The root is not selectable (architecture.md §4).
 
 ## 8. Job intake and snapshots
 
@@ -581,17 +595,21 @@ notifications.
 There is no hard delete. An Application may be closed, or soft-deleted (invariant 20)
 from any status; deletion is orthogonal to recruitment status and has no undo.
 
-Audit identity is local and unauthenticated: `actor_type` (`user` | `system`) and
-`client` (`web` | `worker`). The UI may show "You" for `actor_type = user`; client
-identity belongs to provenance.
+Audit identity is `actor_type` (`user` | `system`) and `client` (`web` | `worker`),
+and the acting user is the owner of the record audited: a user acts only on their own
+records, and the worker acts for the owner of the Operation it runs (§22). The UI may
+show "You" for `actor_type = user`; client identity belongs to provenance. Account
+events have their own audit (§22).
 
-## 15. Runtime and local security
+## 15. Runtime and security
 
-The product binds to loopback and serves UI and API from one origin. It has no
-authentication, validates `Origin` on every mutation, and uses an explicit CORS list with
-no wildcard (architecture.md §14).
+The product serves UI and API from one origin. Every route except sign-up, sign-in,
+and the account-recovery routes requires a session (§22). It validates `Origin` on every
+mutation, accepts only its configured hosts, and uses an explicit CORS list with no
+wildcard (architecture.md §14). *Designed, not built:* today it binds to loopback and has
+no authentication.
 
-Safe settings are server-owned and optimistic (a stale write is a conflict the user
+Safe settings are per-user, server-owned, and optimistic (a stale write is a conflict the user
 resolves; nothing is overwritten automatically):
 
 - `auto_generate_when_review_not_required` (§9), off by default;
@@ -631,13 +649,23 @@ Submission files stay forever. Replaced document content is not archived —
 `build_from_analysis` and editing overwrite it — and superseded rendered files are
 working outputs deleted best-effort. Only a Submission keeps what was sent.
 
-**Maintenance.** Reconciliation checks every registered payload against its hash and the
+**Maintenance.** Maintenance is an operator task, not a user one: once accounts ship,
+reconciliation and orphan inspection span every user and move from the API to the
+operator CLI (§22). Reconciliation checks every registered payload against its hash and the
 fact lifecycle against its trail, reports both halves, and repairs nothing. Orphan
 inspection lists unreferenced payloads older than one hour and deletes nothing
 (state-and-use-cases.md §19b). Schema upgrade is the explicit `alembic upgrade head`;
 PostgreSQL and bucket backup are the environment's responsibility.
 
 ## 17. Knowledge lifecycle
+
+*Designed, not built (§22):* facts belong to a user and live in PostgreSQL. A fact
+mutation is then one database transaction — fact row, fact events, and any document
+selection update commit together — and the mutation journal, its recovery, and
+quarantine are retired. Hand edits to Knowledge files are no longer an input; `base/`
+is import input for an existing installation only. The lifecycle rules below (statuses,
+create, confirm, delete, attach, confirm and use, from a claim) are unchanged. Until
+then, the implemented mechanism is:
 
 Knowledge stays file-based and version-controlled. A fact mutation from the Web runs:
 
@@ -738,6 +766,10 @@ State as of this revision (details: `tailoring-decisions.md` §2–§3):
   inactive, with correction through the editor or fact lifecycle.
 - Live acceptance and experience measurements are recorded separately in
   `../acceptance/2026-09-29.md`; an unsuccessful run does not constitute acceptance.
+- **Approved, not built:** user accounts, per-user isolation, and per-user Knowledge
+  (§22). Until they ship, the implementation is the single-candidate, loopback-only,
+  unauthenticated tool, and every section marked *designed, not built* describes the
+  target. Delivery order: `../decisions/multi-user-accounts.md` §5.
 
 Executable evidence and the release matrix are defined only in
 `test-and-acceptance-plan.md`.
@@ -748,3 +780,64 @@ Naming, folder structure, and other internal details that preserve contracts pro
 without approval. Work stops for an unresolved semantic conflict, a scope expansion,
 migration or data-loss risk, any path that could let unsupported claims through
 approval, a deployment-model change, or any dual-write behavior.
+
+## 22. Accounts and isolation
+
+*Designed, not built.* Why and how an existing installation maps onto it:
+[`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md). Commands,
+error codes, and routes: state-and-use-cases.md §23. Mechanisms and defaults:
+architecture.md §18. Evidence: test-and-acceptance-plan.md §3.11.
+
+**Isolation is the invariant this section exists for.** A user reaches only their own
+records, and only through the backend's check; the Web client hiding something is never
+the check. Another user's record answers exactly like one that does not exist (`404`),
+for every read, write, delete, download, preview, and Operation, including through an
+ID taken from a URL or a log. Lists, facets, counts, duplicate detection, and
+idempotency never see across users.
+
+**Ownership.** A user owns their Applications, their Knowledge (facts, fact events,
+CandidateContext, Profile binding), their settings, and their account records (sessions,
+tokens, account events). Everything else — JobSnapshots, analyses, the CVDocument,
+Operations, artifacts, Submissions, recruitment and audit events — belongs to an
+Application and through it to its user. A canonical fact belongs to a user, not to an
+Application; Applications reference facts. The worker runs every Operation as the owner
+of its Application and reads only that user's Knowledge.
+
+**Accounts.** A user signs up with an email and a password, verifies the email, and signs
+in. The email is stored normalized and is unique. Passwords are stored only as a
+memory-hard hash; no password, token, or session secret is stored or logged in raw form.
+Until the email is verified, only the account routes are open to the user. The user can
+sign out, sign out of every device, change the password, change the email (confirmed at
+the new address), reset a forgotten password, and delete the account. Changing the
+password, changing the email, and deleting the account require the current password.
+Changing or resetting the password ends every other session.
+
+**Sessions** expire, can be revoked, and are carried only in an `HttpOnly`, `Secure`,
+`SameSite=Lax` cookie; the Web client never holds a token in script-readable storage. A
+request with no valid session is `401`, and the Web client then clears its state and
+returns to sign-in.
+
+**No enumeration.** Sign-in failure says only that the email or password is wrong.
+Sign-up, forgotten-password, and verification requests give the same answer whether or
+not an account exists.
+
+**Abuse limits.** Sign-in, sign-up, password reset, and email verification are rate
+limited. Repeated sign-in failures slow down progressively and throttle temporarily;
+there is no permanent lockout. AI Operations are subject to a per-user quota, because
+the provider key and its cost are the operator's, not the user's.
+
+**Account deletion** deactivates and anonymizes; it never deletes a row. It revokes every
+session and token, erases the account's email and password, and erases mutable personal
+content. Immutable records — Submissions, JobSnapshots, provider evidence, audit and
+fact events — stay, owned by a user row that no longer identifies anyone and that nobody
+can sign in to. A hard delete is not a product capability; it would only ever be an
+explicit, separately approved operator procedure.
+
+**Audit.** Sign-in, failed sign-in, sign-out, password change and reset, email change,
+and account deletion are recorded as immutable account events, never with a password,
+raw token, or session secret.
+
+**Unchanged.** Every rule in §1–§21 still holds inside one user's data: factual safety,
+approval boundaries, immutability, the provider-free path from an existing analysis to
+Ready, and the Operation model.
+

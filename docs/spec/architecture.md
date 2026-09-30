@@ -6,6 +6,10 @@ does: layer boundaries, storage, transactions, the Operation runner, security, a
 runtime. Where a topic is owned elsewhere it is linked, not restated. Section numbers are
 cited from code and other specifications; keep them stable.
 
+Accounts, per-user isolation, and per-user Knowledge are approved and not built (§18,
+[`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md)). Sections
+they change say *designed, not built* and describe the target next to what exists.
+
 ## 1. Architecture objective
 
 One synchronous application layer, called by two processes:
@@ -45,6 +49,9 @@ Backend:
 - Alembic for explicit numbered schema revisions
 - Jinja2 for resume HTML; Playwright-managed Chromium for rendering and render
   validation; `pypdf` for PDF extraction and ATS checks
+- *Designed, not built (§18):* `argon2-cffi` for password hashing — it enforces the
+  password-storage contract, which the standard library cannot. Email goes out through
+  the standard library's `smtplib`, with no dependency.
 - `boto3`, in the optional `s3` extra only, imported inside the adapter so the local
   path — which must reach Ready from an existing analysis with nothing configured —
   never needs it
@@ -164,6 +171,10 @@ The application root is the installed repository root, computed from the code lo
 variable. A test that needs another root injects `AppPaths.from_root(...)` into
 composition.
 
+*Designed, not built (§18):* `knowledge_root` holds policy only — Profile templates,
+`config/`, `ai/`, `rendering/`. `base/` and the candidate-specific parts of `profiles/`
+become import input for an existing installation and are not read at runtime.
+
 ```text
 knowledge_root   = {root}            base/, profiles/, config/, ai/, rendering/
 artifacts_root   = {root}/artifacts
@@ -175,6 +186,10 @@ logs_root        = {root}/logs
 path resolves inside the root.
 
 ## 5. CandidateContext
+
+*Designed, not built (§18):* each user has one CandidateContext, stored per user in
+PostgreSQL and referencing that user's facts. Application rows then carry `user_id`, not
+a candidate ID: the user is the candidate.
 
 One CandidateContext is loaded from Knowledge. It references canonical name and contact
 fact IDs and defines filename/display policy, timezone, and locale, with its own
@@ -199,7 +214,9 @@ PostgreSQL holds structured state and relationships: Applications and their recr
 projection, recruitment and audit history, JobSnapshot metadata, JobAnalyses, the one
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
 provider-evidence artifacts, Submissions, Operations and their resource leases, fact
-events, the Knowledge mutation journal, and safe settings.
+events, the Knowledge mutation journal, and safe settings. *Designed, not built (§18):*
+also users, sessions, single-use tokens, account events, rate-limit buckets, and
+per-user facts, CandidateContext, Profile binding, and settings.
 
 The database is addressed by `database_url` (`CV_DATABASE_URL`). Composition creates one
 `Engine` (`pool_pre_ping=True`) that owns pooling and connection health. Transaction
@@ -264,6 +281,9 @@ Every payload has SHA-256 metadata in PostgreSQL. Friendly names are
 `Content-Disposition` names, never physical identity. There is no `latest.pdf`.
 
 ### 6.3 Knowledge files
+
+*Designed, not built (§18):* facts, CandidateContext, and each user's Profile binding
+move to PostgreSQL; only policy stays file-backed.
 
 Facts, CandidateContext, Profiles, selection/emphasis policy, prompts, task contracts,
 requirement concepts, rendering rules, and templates are file-backed and
@@ -352,6 +372,10 @@ Recovery runs during composition and decides from durable hashes and identities 
 to finish or restore each `PREPARED` entry. It never guesses; an unrecoverable entry is
 `QUARANTINED`. What quarantine blocks is state-and-use-cases.md §17.
 
+*Designed, not built (§18):* once facts live in PostgreSQL a fact mutation is one write
+scope, so this journal, its recovery at composition, and quarantine are retired. Existing
+journal rows stay as read-only history.
+
 ## 8. Domain lineage and provenance
 
 Commands receive explicit source IDs. `latest` belongs to query and UI convenience, not
@@ -387,6 +411,9 @@ state-and-use-cases.md §11 and §19. This section covers execution.
 - one global render/browser slot (`render_document`)
 - two global AI slots (every AI task, and `analyze_job`/`create_draft` unless the
   provider is `deterministic`)
+
+*Designed, not built (§18):* one running AI Operation per user, so one user cannot hold
+both global AI slots; the rest of that user's AI work queues.
 
 Locks are resource-specific: a render for one Application does not block analysis for
 another. Contention is queueing, not failure; a waiting Operation stays `queued` with an
@@ -503,6 +530,13 @@ TanStack Query owns server state and polling. React Hook Form owns local forms.
 Component state owns transient editor dialogs and save-conflict UI. There is no Redux
 and no client-side workflow state machine.
 
+*Designed, not built (§18):* one auth state (`loading`, `authenticated`,
+`unauthenticated`) from `GET /auth/me` gates every private route. A `401` clears it,
+clears the TanStack Query cache, and returns to `/login`; a `403 EMAIL_NOT_VERIFIED`
+leads to the verification screen, not to sign-in. Sign-out also clears every
+per-user browser store, including the intake recovery copy (product-spec.md §8), so the
+next person at the browser inherits nothing.
+
 The UI is Hebrew and its shell is RTL. CV language is independent. The HTML preview is
 rendered by the backend and shown in an isolated iframe.
 
@@ -514,6 +548,10 @@ Autosave uses debounce and blur. A `409` opens an explicit local/current compari
 never merges silently.
 
 ## 14. Local security
+
+*Designed, not built (§18):* the security model below is replaced by §18.4. Origin
+validation on every mutation and the explicit CORS list stay; loopback-only binding and
+"no authentication and no CSRF token" do not.
 
 The service binds to `127.0.0.1`, serves UI and API same-origin, and validates `Origin`
 on mutation. CORS uses an explicit origin list with no wildcard and no credentials;
@@ -566,6 +604,9 @@ Masking happens only at display boundaries: a configured secret shows as `***` w
 source label, and an unset secret shows as unset. Connectors always receive the real
 value. `.env` and `.env.*` are Git-ignored.
 
+*Designed, not built (§18):* the SMTP password and the key for the audit hashes
+(`CV_AUDIT_HASH_KEY`) are secret and environment-only, like `OPENAI_API_KEY`.
+
 ## 16. Database lifecycle and upgrade
 
 Schema upgrade is explicit: `alembic upgrade head`. `/health` reports the current schema
@@ -583,3 +624,121 @@ Provenance and compatibility track, each where it applies:
 - task-contract version, prompt version/hash, input/output schema hashes
 
 The product version does not substitute for any of them.
+
+## 18. Identity, sessions, and isolation
+
+*Designed, not built.* Product rules: product-spec.md §22. Commands and codes:
+state-and-use-cases.md §23. Why, the migration of an existing installation, and the
+delivery order: `../decisions/multi-user-accounts.md`.
+
+### 18.1 Tables
+
+Mutable (they join the mutable exception set, §6.1): `users`, `user_sessions`,
+`auth_tokens`, `rate_limit_buckets`, `user_settings`, `candidate_contexts`,
+`profile_bindings`, and `facts` (current status and content). Immutable: `auth_events`.
+
+- `users`: `id`, `email` (normalized, `UNIQUE`), `password_hash` (nullable only after
+  deletion), `is_active`, `email_verified_at`, `deactivated_at`, `created_at`,
+  `updated_at`. The email is normalized as NFC, trimmed, and lowercased; nothing else
+  (no plus- or dot-stripping).
+- `user_sessions`: `id`, `user_id`, `token_hash` (`UNIQUE`), `created_at`,
+  `last_seen_at`, `idle_expires_at`, `expires_at`, `revoked_at`, `revoke_reason`.
+- `auth_tokens`: `id`, `user_id`, `purpose` (`verify_email` | `reset_password` |
+  `change_email`), `token_hash` (`UNIQUE`), `target_email` (change only), `created_at`,
+  `expires_at`, `consumed_at`.
+- `auth_events`: `id`, `user_id` (NULL for a failed sign-in with no matching account),
+  `event_type`, `occurred_at`, a keyed hash of the attempted email for failures, and a
+  keyed hash of the client IP. Never a password, a token, or a raw address.
+- `facts`: `id` (UUID), `user_id`, `fact_id` (the semantic or UUID string documents cite,
+  `UNIQUE (user_id, fact_id)`), status and content. `fact_events` gains `user_id`.
+- `applications` gains `user_id NOT NULL` with `(user_id, created_at)`,
+  `(user_id, current_status)`, and `(user_id, updated_at)` indexes.
+
+Only aggregate roots carry `user_id`. Every other table reaches its user through its
+Application, and nothing duplicates that owner.
+
+### 18.2 Ownership in the application layer
+
+The API resolves the session to an `Actor` (the user ID) and passes it to every service
+call; no service reads identity from anywhere else. A service resolves the root first
+and children through it:
+
+```python
+application = applications.get_for_user(tx, application_id, actor.user_id)
+analysis = analyses.get_for_application(tx, analysis_id, application.id)
+```
+
+A child lookup is constrained by the Application already resolved (`WHERE id = :child
+AND application_id = :app`), never by its own ID alone. A record addressed by its own ID
+at the edge — an Operation, an artifact version, a fact — joins to its root in the same
+query. A miss on ownership is the same `UnknownRecord` as a miss on existence. Uniqueness
+that clients can name is scoped the same way: idempotency keys by Application, `fact_id`
+and duplicate detection by user.
+
+The worker loads an Operation, resolves its Application's owner, and runs the handler
+with that `Actor`; handlers read Knowledge only for that user. It never queries across
+users and derives ownership afterwards.
+
+### 18.3 Sessions, tokens, and passwords
+
+- Session token: 32 random bytes, sent only in the `__Host-cv_session` cookie
+  (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`); stored as SHA-256.
+  Browsers treat `http://localhost` as secure, so the same cookie works in development.
+  Defaults: 30 days absolute, 7 days idle; `last_seen_at` is written at most once every
+  5 minutes. Login always mints a new session.
+- Single-use tokens: 32 random bytes, stored as SHA-256, consumed by one conditional
+  update (`consumed_at IS NULL AND expires_at > now()`), so two concurrent uses cannot
+  both succeed. Issuing a token invalidates the user's earlier unconsumed ones of the
+  same purpose. Defaults: verification 24 hours, reset 30 minutes, email change 24 hours.
+- Passwords: Argon2id with the library's current recommended parameters, rehashed at
+  sign-in when they change. Policy: 12 to 256 characters, no composition rules.
+  Verification against a fixed dummy hash when the email is unknown keeps timing
+  comparable.
+- Email: an `EmailSender` port. SMTP adapter in production; in development an adapter
+  that prints the link to the console only — never to a log file; in tests an in-memory
+  outbox. Mail is sent after the write scope commits. A send failure is logged without
+  the link and does not change the answer.
+
+### 18.4 Transport and browser security
+
+Supersedes §14 once built.
+
+- One public origin (`CV_PUBLIC_ORIGIN`, HTTPS in production) replaces the host and
+  port the origin policy derives today. Allowed Origins are that origin plus, in
+  development only, the one Vite origin. Allowed `Host` values are the public origin's
+  host only; any other is refused before routing.
+- Every mutation must carry an allowed `Origin`, including `login` and `register`.
+  With `SameSite=Lax` cookies that is the CSRF defence; there is no CSRF token.
+  Mutations accept `application/json` only.
+- HSTS on an HTTPS public origin. The app shell sends a restrictive CSP and
+  `frame-ancestors 'none'`; previews keep their own CSP and allow framing only by the
+  app's own origin.
+- The PDF renderer's page blocks every network request except its own attempt
+  directory.
+- The client IP used for rate limiting and audit comes from a forwarding header only
+  when `CV_TRUSTED_PROXY_HOPS` says how many proxies to trust; otherwise it is the
+  socket peer.
+
+### 18.5 Rate limiting and AI quota
+
+Both are PostgreSQL-backed, because there is no Redis (§2) and two processes share the
+database.
+
+- `rate_limit_buckets`: fixed windows keyed by a hash of (route, subject). Defaults:
+  login — 5 failures per email per 15 minutes, then a progressive delay capped at
+  30 seconds, and 20 attempts per IP per 15 minutes; register — 5 per IP per hour;
+  forgot-password and resend-verification — 3 per email per hour and 10 per IP per
+  hour; reset-password, verify-email, confirm-email-change — 10 per IP per 15 minutes.
+  No permanent lockout. Expired buckets are removed by the worker.
+- AI quota: counted from the user's own AI Operations created in the last 24 hours, not
+  from a counter, so it cannot drift from the work it counts. Default: 50 per user per
+  24 hours (`CV_AI_DAILY_OPERATION_LIMIT`). The check runs in the write scope that
+  queues the Operation, under a lock on the user row, so concurrent requests cannot
+  both pass.
+
+### 18.6 Operator CLI
+
+`python -m cv_engine.admin` runs as the operator, not as a user, and has no HTTP
+surface: `create-user`, `import-knowledge`, `reconcile`, `inspect-orphans`, and
+`deactivate-user`. It calls the same application layer.
+

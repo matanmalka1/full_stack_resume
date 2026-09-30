@@ -2,6 +2,8 @@
 
 Status: **Binding.** Describes the single-document model as implemented
 ([`../decisions/single-document-model.md`](../decisions/single-document-model.md)).
+Accounts and per-user isolation (§23, product-spec.md §22) are approved and not built;
+each rule they change is marked *designed, not built*.
 
 Product authority: [`product-spec.md`](product-spec.md). Section numbers are cited from
 code docstrings; keep them stable.
@@ -18,7 +20,9 @@ CVDocument is named by its Application and guarded by the `expected_document_has
 client last read. A query may resolve "latest" for presentation; a command never does.
 
 Every write records `actor_type` (`user` | `system`) and `client` (`web` | `worker`).
-There is no authenticated username.
+*Designed, not built (§23):* every command and query runs for one signed-in user and
+reaches only that user's records; the acting user is the owner of what it touches, and
+the worker acts for the owner of the Operation. Today there is no authenticated user.
 
 ## 2. Entity lifecycle summary
 
@@ -28,7 +32,9 @@ Mutable:
   `deleted_at` disposition
 - exactly one CVDocument per Application, once the first analysis activates
 - the active JobSnapshot pointer
-- the Settings row
+- the Settings row (one per user once accounts ship)
+- *designed, not built (§23):* the user, their sessions and single-use tokens, and their
+  facts' current status
 
 Immutable or append-only:
 
@@ -37,6 +43,7 @@ Immutable or append-only:
 - Submission, including the content it sent and the files it copied
 - provider-response Artifacts and their payloads
 - recruitment, status, audit, and fact lifecycle events
+- *designed, not built (§23):* account events
 - a terminal Operation record
 
 What is frozen is what left the system or what was observed: the posting as captured,
@@ -462,6 +469,9 @@ deleted Application is 409.
 
 Every command in §13–§18, and `close_application`, resolves its Application through
 one shared precondition: 404 if it does not exist, 409 if it is deleted.
+*Designed, not built (§23):* resolution is always for the signed-in user, and an
+Application of another user is 404 exactly as if it did not exist; this applies to every
+command and query below, including the ones exempt from the deleted check.
 `create_job_snapshot` and `update_application_notes` check existence only. Reads of
 history are exempt by design: the detail projection, document read, JobSnapshot
 history, `export_recruiter_pdf`, `export_decision_markdown`, and previews.
@@ -690,6 +700,10 @@ dependent facts, and stored content report. Writes nothing.
 Every fact mutation runs through the Knowledge mutation journal
 (architecture.md §7.2). While any mutation is quarantined, every fact mutation is
 refused (`KNOWLEDGE_REJECTED`, 412) and approval is refused (§15).
+*Designed, not built (§23):* facts are the signed-in user's, in PostgreSQL; a fact
+mutation is one transaction, and the journal and quarantine are retired along with
+these two refusals. A `fact_id` is unique per user, and another user's fact is 404.
+Attachment targets are the user's Profile binding over the shared templates.
 
 Fact statuses: `pending`, `canonical`, `deleted`. The lifecycle is
 `pending -> canonical` on one explicit confirmation; any live fact may be deleted.
@@ -842,9 +856,13 @@ document.
 Every asynchronous command accepts an optional `Idempotency-Key`; the boundary
 generates one when absent. Keys are scoped per Operation type. Reusing a key with the
 same payload returns the existing Operation; with a different payload it is
-`IDEMPOTENCY_KEY_REUSED` (409).
+`IDEMPOTENCY_KEY_REUSED` (409). *Designed, not built (§23):* keys are also scoped per
+Application, so a key another user already used is a new key, never their Operation.
 
 ## 19a. Settings commands
+
+*Designed, not built (§23):* settings are per user; each user has one row with its own
+`edit_version`. Provider configuration stays the operator's and is only reported.
 
 ### `read_settings()`
 
@@ -863,6 +881,9 @@ there is no automatic overwrite. Arbitrary model IDs, per-task overrides, timezo
 secrets are never writable.
 
 ## 19b. Maintenance commands
+
+*Designed, not built (§23):* both commands span every user, so they leave the API and
+become operator CLI commands with the same semantics. No user route reaches them.
 
 ### `reconcile()`
 
@@ -929,6 +950,10 @@ storage and is only reported (architecture.md §7.1).
 There is no revision history and no revision comparison. The history of what was sent
 is the list of Submissions.
 
+*Designed, not built (§23):* every query above returns only the signed-in user's
+records, and every list, count, and facet is computed over them alone. Health returns
+only liveness and versions to an anonymous caller.
+
 Queries return DTOs, never database rows or local paths.
 
 ## 21. HTTP mapping
@@ -948,6 +973,8 @@ idempotency, and synchronous versus asynchronous behavior.
 - Settings use the ETag `"settings-<edit_version>"` with `If-Match` on `PATCH`.
 - CORS exposes `ETag`, `Location`, and `Content-Disposition`, and allows `If-Match` and
   `Idempotency-Key`.
+- *Designed, not built (§23):* the session travels only in its cookie. Every route
+  requires a session except the public account routes in §23 and health.
 
 ## 22. HTTP outcomes
 
@@ -958,11 +985,14 @@ The status comes from the refusal's class, never its message:
 | `200` | query, synchronous update, or a successful outcome such as a failed check or reconciliation |
 | `201` | synchronous creation |
 | `202` | accepted Operation with `Location` |
-| `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, or unknown route |
+| `401` | *designed, not built:* no valid session (`AUTHENTICATION_REQUIRED`), or a wrong current password on a sensitive account command (`REAUTHENTICATION_FAILED`) |
+| `403` | refused Origin (`ORIGIN_NOT_ALLOWED`), or *designed, not built:* a signed-in user whose email is not verified reaching a product route (`EMAIL_NOT_VERIFIED`). Never used for another user's record |
+| `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, an unknown route, and — *designed, not built* — a record of another user |
 | `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed status transition; duplicate snapshot; idempotency-key payload mismatch |
 | `412` | a named state cannot satisfy the command: missing precondition, blocker, review reason, intake refusal, lineage or Knowledge refusal |
 | `413` | body limit exceeded |
 | `422` | request does not match the schema (`REQUEST_VALIDATION_FAILED`) |
+| `429` | *designed, not built:* rate limit (`RATE_LIMITED`) or AI quota (`AI_QUOTA_EXCEEDED`), with `Retry-After` |
 | `500` | infrastructure failure |
 | `503` | a required collaborator is not configured |
 
@@ -984,3 +1014,95 @@ PENDING_FACT_REQUIRES_RESOLUTION    FACT_DELETED_REQUIRES_RESOLUTION
 
 Review reasons, warnings, and validation issues are data in the projection, not
 exceptions. They become a refusal only when a command they block is attempted.
+
+## 23. Account commands
+
+*Designed, not built.* Product rules: product-spec.md §22. Mechanisms, tables, and
+default limits: architecture.md §18. Why: `../decisions/multi-user-accounts.md`.
+
+All routes are under `/api/v1/auth`. Every body is JSON; every mutation passes the Origin
+check (architecture.md §14). A session is an opaque cookie; no route returns a token in
+a body. Public routes need no session: `register`, `login`, `forgot-password`,
+`reset-password`, `verify-email`. Every other route in this section needs one, and
+`me` and `resend-verification` are the only ones open before the email is verified
+(besides `logout`).
+
+Rate-limited routes (architecture.md §18) answer `429 RATE_LIMITED` with `Retry-After`
+before any other check, so a throttled request reveals nothing about the account.
+
+### `register(email, password)`
+
+`POST /auth/register`. Normalizes the email and checks the password policy
+(`PASSWORD_POLICY_FAILED`, 422, naming only the rule). If the email is free, creates the
+user unverified and sends a verification link. If it is taken, sends that address a
+notice instead and creates nothing. Both answer `202` with the same body; no session is
+created.
+
+### `verify_email(token)`
+
+`POST /auth/verify-email`. Consumes a live verification token and sets
+`email_verified_at`. An unknown, used, or expired token is `400 TOKEN_INVALID`, the same
+for each. `POST /auth/resend-verification` (session, unverified) issues a new token and
+invalidates the previous one.
+
+### `login(email, password)`
+
+`POST /auth/login`. On success creates a new session, sets its cookie, records `login`,
+and returns `me`. On any failure — unknown email, wrong password, deactivated account —
+answers `401 INVALID_CREDENTIALS` with the same body and comparable timing, and records
+`failed_login`. An existing session cookie is replaced, never reused.
+
+### `logout()` / `logout_all()`
+
+`POST /auth/logout` revokes the current session and clears the cookie.
+`POST /auth/logout-all` revokes every session of the user, the current one included.
+Both `204` and record `logout`.
+
+### `me()`
+
+`GET /auth/me`: the user's ID, email, `email_verified`, and `created_at`. `401` with no
+valid session. The Web client calls it at startup to decide between the signed-in and
+signed-out shells.
+
+### `forgot_password(email)` / `reset_password(token, new_password)`
+
+`POST /auth/forgot-password` always answers `202` with the same body; when an active
+account exists it sends a reset link and invalidates earlier reset tokens.
+`POST /auth/reset-password` consumes a live reset token, sets the new password, revokes
+every session, and records `password_reset`; it does not sign the user in. Token
+failures are `400 TOKEN_INVALID`.
+
+### `change_password(current_password, new_password)`
+
+`POST /auth/change-password` (session). A wrong current password is `401
+REAUTHENTICATION_FAILED` and changes nothing. On success revokes every other session,
+rotates the current one, and records `password_changed`.
+
+### `change_email(current_password, new_email)`
+
+`POST /auth/change-email` (session). Re-authenticates, then sends a confirmation link to
+the new address and a notice to the current one; the email does not change yet. An
+address already taken gets the same answer and nothing is sent to it that reveals the
+account. `POST /auth/confirm-email-change` (public) consumes the token, sets the new
+email as verified, and records `email_changed`.
+
+### `delete_account(current_password)`
+
+`DELETE /auth/account` (session). Re-authenticates, then in one transaction:
+deactivates the user, erases the email (replaced by a non-deliverable pseudonym) and the
+password hash, revokes every session and token, erases mutable personal content —
+Application notes and next actions, the CVDocument content, and the fact rows' content —
+and records `account_deleted`. Immutable records stay (product-spec.md §22). `204`; the
+cookie is cleared. There is no undo and no reactivation route.
+
+### Codes
+
+```text
+AUTHENTICATION_REQUIRED     INVALID_CREDENTIALS       REAUTHENTICATION_FAILED
+EMAIL_NOT_VERIFIED          TOKEN_INVALID             PASSWORD_POLICY_FAILED
+RATE_LIMITED                AI_QUOTA_EXCEEDED
+```
+
+`AI_QUOTA_EXCEEDED` is returned by any command that would queue an AI Operation (§11),
+including `retry_operation`, when the user's quota is spent; nothing is queued.
+
