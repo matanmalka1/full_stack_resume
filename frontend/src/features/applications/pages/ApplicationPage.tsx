@@ -224,8 +224,7 @@ export const ApplicationPage = () => {
                 means a fresh run against current Settings, not a repeat of the failed
                 one's provider. Withholding this step's action panel here left the retry
                 inside the Operation overlay as the only way forward, which can only ever
-                repeat the same provider/model that just failed - even after Settings is
-                switched to deterministic. */}
+                repeat the same provider/model that just failed. */}
             {viewState === "content" || viewState === "analysis_failed" ? (
               <PreparationView detail={detail} onQueued={watch} operationLive={operationLive} />
             ) : null}

@@ -1,8 +1,8 @@
 """What the application calls out to: files, knowledge, rendering, AI.
 
 These are not repositories. They are the effects the application cannot
-perform itself, declared as protocols so the deterministic workflow can run
-against local adapters with no AI key present.
+perform itself, declared as protocols so each can be substituted at the
+composition root.
 """
 
 from __future__ import annotations

@@ -29,23 +29,10 @@ export const updateSettings = async (body: UpdateSettingsRequest, etag: string):
   return { settings: response.data, etag: response.etag };
 };
 
-/* Which lane a command that has both of them runs in when the screen did not ask the
-   reader to choose one. All three answers have to agree: a provider configured, AI
-   enabled, and the Settings default naming the AI lane. Enabling AI is permission, not
-   the choice itself - a reader who left the default on deterministic asked for the
-   deterministic lane, and this used to hand them the paid one anyway.
-
-   `undefined` omits `provider` from the request, which is the deterministic lane.
-
-   Analysis does not read this. It is AI-only with no deterministic form to default to,
-   so it reads `aiAvailability` and is simply unavailable without a provider. */
-export const executionProvider = (settings: Settings | undefined): "openai" | undefined =>
-  settings?.provider_configured && settings.ai_enabled && settings.default_execution_mode === "ai"
-    ? "openai"
-    : undefined;
-
-const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
-  settings?.provider_configured === true && settings.ai_enabled === true;
+/* Analysis, drafting and regeneration are AI-only and AI has no switch: without a
+   configured provider none of them can run, and the screens offering them say so. */
+export const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
+  settings?.provider_configured === true;
 
 /* Whether an AI command can run, with "settings not read yet" kept apart from "no usable
    provider". Screens decide for themselves what to do while it is "loading" - some hold

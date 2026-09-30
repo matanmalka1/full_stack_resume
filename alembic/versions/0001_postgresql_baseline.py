@@ -128,8 +128,6 @@ def upgrade() -> None:
         sa.Column("singleton_id", sa.Integer(), autoincrement=False, nullable=False),
         sa.Column("edit_version", sa.Integer(), nullable=False),
         sa.Column("auto_generate_when_review_not_required", sa.Boolean(), nullable=False),
-        sa.Column("ai_enabled_override", sa.Boolean(), nullable=True),
-        sa.Column("default_execution_mode", sa.Text(), nullable=False),
         sa.Column("default_ai_model", sa.Text(), nullable=True),
         sa.Column(
             "default_reasoning_effort",
@@ -144,10 +142,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "default_ai_model IS NULL OR default_ai_model IN ('gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol')",
             name=op.f("ck_app_settings_default_ai_model"),
-        ),
-        sa.CheckConstraint(
-            "default_execution_mode IN ('deterministic', 'ai')",
-            name=op.f("ck_app_settings_default_execution_mode"),
         ),
         sa.CheckConstraint(
             "default_reasoning_effort IN ('low', 'medium', 'high')",

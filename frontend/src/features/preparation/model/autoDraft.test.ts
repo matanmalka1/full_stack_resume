@@ -30,7 +30,7 @@ const analyzed = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail
     ...overrides,
   });
 
-const automatic = settings({ auto_generate_when_review_not_required: true });
+const automatic = settings({ auto_generate_when_review_not_required: true, provider_configured: true });
 
 const succeeded = () =>
   queued({
@@ -48,24 +48,31 @@ describe("autoDraftSources", () => {
     });
   });
 
-  it.each(["blocked", "other-analysis", "inactive-output", "cancelled", "deleted", "has-content", "opted-out"])(
-    "does not authorize a restored automatic draft with %s",
-    (scenario) => {
-      const operation = succeeded();
-      const projection = analyzed();
-      let current = automatic;
-      if (scenario === "blocked")
-        projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
-      if (scenario === "other-analysis") projection.document_analysis_id = "analysis-2";
-      if (scenario === "inactive-output")
-        operation.outputs.forEach((output) => {
-          output.active = false;
-        });
-      if (scenario === "cancelled") operation.status = "cancelled";
-      if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
-      if (scenario === "has-content") projection.preparation_state = "draft_in_progress";
-      if (scenario === "opted-out") current = settings();
-      expect(autoDraftSources(operation, current, projection)).toBeNull();
-    },
-  );
+  it.each([
+    "blocked",
+    "other-analysis",
+    "inactive-output",
+    "cancelled",
+    "deleted",
+    "has-content",
+    "opted-out",
+    "no-provider",
+  ])("does not authorize a restored automatic draft with %s", (scenario) => {
+    const operation = succeeded();
+    const projection = analyzed();
+    let current = automatic;
+    if (scenario === "blocked")
+      projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
+    if (scenario === "other-analysis") projection.document_analysis_id = "analysis-2";
+    if (scenario === "inactive-output")
+      operation.outputs.forEach((output) => {
+        output.active = false;
+      });
+    if (scenario === "cancelled") operation.status = "cancelled";
+    if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
+    if (scenario === "has-content") projection.preparation_state = "draft_in_progress";
+    if (scenario === "opted-out") current = settings({ provider_configured: true });
+    if (scenario === "no-provider") current = settings({ auto_generate_when_review_not_required: true });
+    expect(autoDraftSources(operation, current, projection)).toBeNull();
+  });
 });

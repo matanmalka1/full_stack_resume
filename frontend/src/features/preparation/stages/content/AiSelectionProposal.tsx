@@ -131,7 +131,7 @@ export const AiSelectionProposal = ({
     </div>
 
     {!aiAvailable && settingsLoaded ? (
-      <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
+      <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הגדרת ספק AI.</p>
     ) : aiAvailable && !offered ? (
       <p className="text-support text-cv-text-muted">
         {authoredWording

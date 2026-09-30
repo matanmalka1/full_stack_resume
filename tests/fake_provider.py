@@ -8,8 +8,10 @@ that the fake works.
 
 Scripts are per task. A script entry is either a Proposal model (answered
 normally), an `HTTPStatus` (answered with that status), a `Timeout` (the request
-never returns), or a raw dict (used as the response envelope verbatim, which is
-how a schema-violating or refusing answer is expressed).
+never returns), a raw dict (used as the response envelope verbatim, which is
+how a schema-violating or refusing answer is expressed), or a function of the
+request's task input returning any of those (for an answer that depends on
+what the application sent, such as `echo_draft`).
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from email.message import Message
 from io import BytesIO
 from typing import Any
 
+from cv_engine.domain.contracts.providers import DraftProposal, ProposedClaim, SelectionProposal
 from cv_engine.infrastructure.providers import OpenAIProvider, OpenAIResponsesProvider
 
 
@@ -89,6 +92,29 @@ def refusal_envelope(reason: str = "I can't help with that.") -> dict[str, Any]:
     }
 
 
+def echo_draft(payload: dict[str, Any]) -> DraftProposal:
+    """A `draft_resume` answer that keeps every claim of the frame it was sent word for word."""
+    return DraftProposal(
+        claims=[
+            ProposedClaim(
+                section=section["section"],
+                claim_id=claim["claim_id"],
+                text=claim["text"],
+                fact_ids=list(claim["fact_ids"]),
+            )
+            for section in payload["sections"]
+            for claim in section["claims"]
+        ],
+        rationale="echo",
+    )
+
+
+#: A `propose_selection_plan` answer with no overlay: the engine's selection, as the AI's.
+KEEP_SELECTION = SelectionProposal(
+    pinned_fact_ids=[], excluded_fact_ids=[], rationale="keep the engine's selection"
+)
+
+
 @dataclass
 class FakeOpenAI:
     """One scripted transport, shared by every task in a test."""
@@ -99,6 +125,15 @@ class FakeOpenAI:
     def script(self, task: str, *answers: Any) -> FakeOpenAI:
         self.scripts.setdefault(task, []).extend(answers)
         return self
+
+    def script_draft(self, *wording: Any) -> FakeOpenAI:
+        """Script one `create_draft` over an untouched selection.
+
+        The selection call keeps the engine's selection; the wording call answers
+        with `wording`, or echoes the frame it is sent.
+        """
+        self.script("propose_selection_plan", KEEP_SELECTION)
+        return self.script("draft_resume", *(wording or (echo_draft,)))
 
     def _next(self, task: str) -> Any:
         queue = self.scripts.get(task)
@@ -114,6 +149,8 @@ class FakeOpenAI:
         payload = json.loads(body["input"][1]["content"])["input"]
         self.calls.append(Call(task=task, payload=payload, body=body))
         answer = self._next(task)
+        if callable(answer):
+            answer = answer(payload)
         if isinstance(answer, Timeout):
             raise TimeoutError("scripted timeout")
         if isinstance(answer, HTTPStatus):

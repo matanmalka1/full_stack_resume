@@ -8,9 +8,6 @@ from cv_engine.api.app import API_PREFIX
 SETTINGS_FIELDS = {
     "edit_version",
     "auto_generate_when_review_not_required",
-    "ai_enabled",
-    "ai_enabled_override",
-    "default_execution_mode",
     "default_ai_model",
     "default_reasoning_effort",
     "available_ai_models",
@@ -25,8 +22,6 @@ SETTINGS_FIELDS = {
 def _update_body(**overrides) -> dict:
     return {
         "auto_generate_when_review_not_required": False,
-        "ai_enabled_override": None,
-        "default_execution_mode": "deterministic",
         "default_ai_model": "gpt-5.6-terra",
         "default_reasoning_effort": "medium",
         "ui_density": "comfortable",
@@ -52,9 +47,6 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
     assert response.json() == {
         "edit_version": 0,
         "auto_generate_when_review_not_required": False,
-        "ai_enabled": False,
-        "ai_enabled_override": None,
-        "default_execution_mode": "deterministic",
         # The catalog's `recommended` model. This assertion used to read
         # `gpt-5.6-sol` - it pinned the defect rather than the contract, because
         # the `CV_MODEL` default was the `gpt-5.6` family alias and resolving it
@@ -107,68 +99,18 @@ def test_settings_api_returns_pure_defaults_etag_and_no_secret_surface(api_worke
     )
 
 
-def _assert_configured_provider_derivation(harness) -> None:
-    initial = harness.client.get(f"{API_PREFIX}/settings")
-    assert initial.status_code == 200, initial.text
-    assert initial.json()["provider_configured"] is True
-    assert initial.json()["ai_enabled"] is True
-    assert initial.json()["ai_enabled_override"] is None
-
-    refused_disabled = _patch(
-        harness,
-        initial.headers["ETag"],
-        _update_body(ai_enabled_override=False, default_execution_mode="ai"),
-    )
-    assert refused_disabled.status_code == 412, refused_disabled.text
-    assert refused_disabled.json()["code"] == "PRECONDITION_FAILED"
-    assert harness.client.get(f"{API_PREFIX}/settings").headers["ETag"] == initial.headers["ETag"]
-
-    disabled = _patch(
-        harness,
-        initial.headers["ETag"],
-        _update_body(ai_enabled_override=False),
-    )
-    assert disabled.status_code == 200, disabled.text
-    assert disabled.json()["provider_configured"] is True
-    assert disabled.json()["ai_enabled_override"] is False
-    assert disabled.json()["ai_enabled"] is False
-
-
-def _assert_unconfigured_provider_derivation(harness) -> None:
-    initial = harness.client.get(f"{API_PREFIX}/settings")
-    refused_unconfigured = _patch(
-        harness,
-        initial.headers["ETag"],
-        _update_body(ai_enabled_override=True, default_execution_mode="ai"),
-    )
-    assert refused_unconfigured.status_code == 412, refused_unconfigured.text
-    assert refused_unconfigured.json()["code"] == "PRECONDITION_FAILED"
-
-    stored = _patch(
-        harness,
-        initial.headers["ETag"],
-        _update_body(ai_enabled_override=True),
-    )
-    assert stored.status_code == 200, stored.text
-    assert stored.json()["provider_configured"] is False
-    assert stored.json()["ai_enabled_override"] is True
-    assert stored.json()["ai_enabled"] is False
-
-
 @pytest.mark.parametrize(
-    ("harness_fixture", "assert_derivation"),
-    [
-        ("ai_api_worker", _assert_configured_provider_derivation),
-        ("api_worker", _assert_unconfigured_provider_derivation),
-    ],
+    ("harness_fixture", "configured"),
+    [("ai_api_worker", True), ("api_worker", False)],
     ids=["provider-configured", "provider-unconfigured"],
 )
-def test_ai_enabled_and_ai_default_mode_derive_from_provider_and_override(
-    request, harness_fixture, assert_derivation
+def test_ai_availability_is_the_provider_configuration(
+    request, harness_fixture, configured
 ) -> None:
-    """`ai_enabled` follows the provider until an override is stored, a stored `true`
-    never reports AI without a provider, and the AI default mode needs both."""
-    assert_derivation(request.getfixturevalue(harness_fixture))
+    """AI has no switch of its own: it is available exactly when a provider is configured."""
+    response = request.getfixturevalue(harness_fixture).client.get(f"{API_PREFIX}/settings")
+    assert response.status_code == 200, response.text
+    assert response.json()["provider_configured"] is configured
 
 
 def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
@@ -177,7 +119,6 @@ def test_settings_patch_updates_live_and_rejects_a_stale_etag_without_writing(
     initial = api_worker.client.get(f"{API_PREFIX}/settings")
     requested = _update_body(
         auto_generate_when_review_not_required=True,
-        ai_enabled_override=False,
         ui_density="compact",
         ui_text_size="large",
         default_ai_model="gpt-5.6-luna",

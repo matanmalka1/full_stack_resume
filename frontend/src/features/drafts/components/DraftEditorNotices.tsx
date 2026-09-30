@@ -30,7 +30,7 @@ export const DraftEditorNotices = ({
   <>
     {aiUnavailable ? (
       <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
-        יש להגדיר ספק ולהפעיל AI במסך ההגדרות. לא יתבצע מעבר דטרמיניסטי שקט.
+        יש להגדיר ספק AI בסביבת הריצה.
         <div className="mt-3">
           <Link className={buttonClasses("secondary")} to={routePaths.settings}>
             מעבר להגדרות

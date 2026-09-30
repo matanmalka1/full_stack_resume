@@ -1802,10 +1802,10 @@ export interface components {
             expected_document_hash: string;
             /**
              * Provider
-             * @default deterministic
-             * @enum {string}
+             * @default openai
+             * @constant
              */
-            provider: "deterministic" | "openai";
+            provider: "openai";
         };
         /** CreateJobSnapshotRequest */
         CreateJobSnapshotRequest: {
@@ -2833,10 +2833,6 @@ export interface components {
         };
         /** SettingsResponse */
         SettingsResponse: {
-            /** Ai Enabled */
-            ai_enabled: boolean;
-            /** Ai Enabled Override */
-            ai_enabled_override?: boolean | null;
             /** Auto Generate When Review Not Required */
             auto_generate_when_review_not_required: boolean;
             /** Available Ai Models */
@@ -2846,11 +2842,6 @@ export interface components {
              * @enum {string}
              */
             default_ai_model: "gpt-5.6-luna" | "gpt-5.6-terra" | "gpt-5.6-sol";
-            /**
-             * Default Execution Mode
-             * @enum {string}
-             */
-            default_execution_mode: "deterministic" | "ai";
             /**
              * Default Reasoning Effort
              * @enum {string}
@@ -3025,8 +3016,6 @@ export interface components {
         };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {
-            /** Ai Enabled Override */
-            ai_enabled_override?: boolean | null;
             /** Auto Generate When Review Not Required */
             auto_generate_when_review_not_required: boolean;
             /**
@@ -3034,11 +3023,6 @@ export interface components {
              * @enum {string}
              */
             default_ai_model: "gpt-5.6-luna" | "gpt-5.6-terra" | "gpt-5.6-sol";
-            /**
-             * Default Execution Mode
-             * @enum {string}
-             */
-            default_execution_mode: "deterministic" | "ai";
             /**
              * Default Reasoning Effort
              * @enum {string}

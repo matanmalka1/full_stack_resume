@@ -208,9 +208,6 @@ const renderPage = (aiEnabled = true, search = "") => {
     settings: {
       edit_version: 0,
       auto_generate_when_review_not_required: false,
-      ai_enabled: aiEnabled,
-      ai_enabled_override: aiEnabled,
-      default_execution_mode: "deterministic",
       default_ai_model: "gpt-5.6-terra",
       default_reasoning_effort: "medium",
       available_ai_models: [],

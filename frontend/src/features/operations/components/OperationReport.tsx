@@ -95,7 +95,7 @@ export const OperationReport = ({
   const missingProvider =
     settings !== undefined && !providerUsable && (notConfigured || operation.failure_code === "PROVIDER_REFUSED");
   const failure = missingProvider
-    ? missingProviderPresentation(settings.provider_configured)
+    ? missingProviderPresentation
     : notConfigured && providerUsable
       ? providerNowConfiguredPresentation
       : operation.failure_code == null

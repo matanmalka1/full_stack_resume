@@ -16,12 +16,13 @@ from helpers import (
     REVIEW_DECISION_JOB,
     analysis_proposal,
     persisted_counts,
+    seed_draft,
     seed_existing_analysis,
     stored_document,
 )
 
 from cv_engine.api.app import API_PREFIX
-from cv_engine.application.commands import AnalyzeCommand, DraftCommand, IngestCommand
+from cv_engine.application.commands import AnalyzeCommand, IngestCommand
 from cv_engine.domain.contracts.analysis import Requirement
 from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
 
@@ -253,11 +254,7 @@ def test_a_decision_changes_only_what_it_decides(
         assert document["selection"]["emphasis"] == "new-business"
         assert document["selection"]["emphasis_override"] == "new-business"
         assert state["application"]["emphasis"] == "new-business"
-        api_worker.services.drafts.draft(
-            DraftCommand(
-                application_id=application_id, expected_document_hash=body["document_hash"]
-            )
-        )
+        seed_draft(api_worker.services, application_id)
         content = stored_document(api_worker.services, application_id).content
         assert content is not None
         assert content.emphasis.value == "new-business"

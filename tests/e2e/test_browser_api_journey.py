@@ -85,12 +85,18 @@ def test_browser_analysis_through_ready_and_submission(
             ]
         ),
     )
+    fake_openai.script_draft()
     stop = Event()
     worker = Thread(target=ai_services.operation_worker.serve, args=(stop,), daemon=True)
     worker.start()
     try:
         run_browser(live_api_server, "preparation.spec.ts")
-        assert [call.task for call in fake_openai.calls] == ["propose_analysis", "propose_analysis"]
+        assert [call.task for call in fake_openai.calls] == [
+            "propose_analysis",
+            "propose_analysis",
+            "propose_selection_plan",
+            "draft_resume",
+        ]
     finally:
         stop.set()
         worker.join(timeout=15)

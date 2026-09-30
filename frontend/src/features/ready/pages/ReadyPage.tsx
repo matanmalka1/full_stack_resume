@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Download, FileCheck2, Lock, PencilLine, Send, ShieldCheck } from "lucide-react";
+import { ArrowRight, Download, FileCheck2, PencilLine, Send, ShieldCheck } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -21,7 +21,6 @@ import { LiveRegion } from "@/ui/LiveRegion";
 import { QueryState } from "@/ui/QueryState";
 import { Skeleton } from "@/ui/Skeleton";
 import { SuccessNotice } from "@/ui/SuccessNotice";
-import { SummaryList } from "@/ui/SummaryList";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { DecisionDocument } from "../components/DecisionDocument";
 import { SubmissionDialog } from "../components/SubmissionDialog";
@@ -34,7 +33,7 @@ const readyLoading = (
   </div>
 );
 
-const CardHeading = ({ children, icon: Icon, id }: { children: ReactNode; icon: typeof Lock; id: string }) => (
+const CardHeading = ({ children, icon: Icon, id }: { children: ReactNode; icon: typeof FileCheck2; id: string }) => (
   <h2 className="flex items-center gap-2 font-semibold text-cv-text" id={id}>
     <Icon aria-hidden="true" className="size-icon-md shrink-0 text-cv-accent" />
     {children}
@@ -246,22 +245,6 @@ export const ReadyPage = () => {
                       </div>
                     </Disclosure>
                   )}
-
-                  <Disclosure flush summary="פרטים טכניים">
-                    <Card className="overflow-x-auto rounded-surface bg-cv-surface p-4">
-                      <CardHeading icon={Lock} id="ready-record-heading">
-                        המסמך המוכן
-                      </CardHeading>
-                      <SummaryList
-                        className="mt-4"
-                        items={[
-                          { term: "חתימת המסמך", value: documentHash ?? "", ltr: true },
-                          { term: "ניתוח", value: detail.document_analysis_id ?? "", ltr: true },
-                          { term: "תצלום משרה", value: detail.active_job_snapshot_id, ltr: true },
-                        ]}
-                      />
-                    </Card>
-                  </Disclosure>
 
                   <Disclosure flush summary="הסבר ההחלטות">
                     <Card className="rounded-surface bg-cv-surface p-4">

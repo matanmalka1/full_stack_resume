@@ -12,13 +12,13 @@ from helpers import (
     analysis_proposal,
     approve_active_draft,
     seed_document,
+    seed_draft,
     stored_document,
     validate_active_draft,
 )
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
-    DraftCommand,
     IngestCommand,
     RenderCommand,
     SubmissionCommand,
@@ -84,12 +84,7 @@ def document_created(services: Services):
 def drafted_application(document_created):
     def build(company="Draft Co", role="Account Manager", job_text=ACCOUNT_MANAGER_JOB):
         setup = document_created(company, role, job_text)
-        drafted = setup.services.drafts.draft(
-            DraftCommand(
-                application_id=setup.application_id,
-                expected_document_hash=setup.document_hash,
-            )
-        )
+        drafted = seed_draft(setup.services, setup.application_id)
         return replace(setup, document_hash=drafted.document_hash)
 
     return build
