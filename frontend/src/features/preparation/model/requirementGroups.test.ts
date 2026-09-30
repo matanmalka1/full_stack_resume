@@ -36,7 +36,7 @@ describe("requirements as the analysis panel groups them", () => {
     ]);
   });
 
-  it("narrows the rows to the filter", () => {
+  it("narrows the rows to the filter, but counts coverage over the whole group", () => {
     const [mandatory, preferred] = requirementGroups(requirements, "attention");
 
     expect(mandatory?.requirements.map((item) => item.requirementId)).toEqual([
@@ -44,6 +44,8 @@ describe("requirements as the analysis panel groups them", () => {
       "mandatory.partial",
     ]);
     expect(preferred?.requirements).toEqual([]);
+    expect([mandatory?.matched, mandatory?.total]).toEqual([1, 3]);
+    expect([preferred?.matched, preferred?.total]).toEqual([1, 1]);
   });
 
   it("indexes which requirements each fact supports", () => {
