@@ -10,6 +10,7 @@ const requirement = (id: string, overrides: Partial<Requirement> = {}): Requirem
   coverage: "matched",
   shortfallSeverity: null,
   shortfallReason: null,
+  rationale: null,
   supportingFactIds: [],
   boundaryFactIds: [],
   ...overrides,

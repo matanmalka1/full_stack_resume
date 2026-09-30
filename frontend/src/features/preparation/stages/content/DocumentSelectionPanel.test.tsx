@@ -84,6 +84,7 @@ const panel = (client: QueryClient, value: ApplicationDetail, doc: CVDocument, o
           coverage: "matched",
           shortfallSeverity: null,
           shortfallReason: null,
+          rationale: null,
           supportingFactIds: ["fact.omitted"],
           boundaryFactIds: [],
         },

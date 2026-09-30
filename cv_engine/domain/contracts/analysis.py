@@ -64,6 +64,11 @@ class Requirement(StrictModel):
     #: meaning rather than silently reinterpreting history.
     shortfall_severity: ShortfallSeverity | None = None
     shortfall_reason: str | None = None
+    #: The provider's account of why it chose this coverage. Displayed, never
+    #: matched on. Kept only while the stored coverage is the one it explains:
+    #: a coverage the engine narrowed drops it rather than showing a reason for
+    #: a verdict that no longer stands.
+    rationale: str | None = None
     supporting_fact_ids: list[str] = []
     boundary_fact_ids: list[str] = []
     #: How the posting was found to carry this text, when it was found at all.

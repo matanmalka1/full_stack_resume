@@ -21,6 +21,7 @@ const requirement = (overrides: Partial<Requirement> = {}): Requirement => ({
   coverage: "matched",
   shortfallSeverity: null,
   shortfallReason: null,
+  rationale: null,
   supportingFactIds: ["fact.a"],
   boundaryFactIds: [],
   ...overrides,

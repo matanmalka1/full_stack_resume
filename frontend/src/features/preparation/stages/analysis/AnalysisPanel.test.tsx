@@ -32,6 +32,7 @@ const classification: Classification = {
       coverage: "unsupported",
       shortfallSeverity: null,
       shortfallReason: null,
+      rationale: null,
       supportingFactIds: [],
       boundaryFactIds: [],
     },
@@ -42,6 +43,7 @@ const classification: Classification = {
       coverage: "matched",
       shortfallSeverity: null,
       shortfallReason: null,
+      rationale: null,
       supportingFactIds: [],
       boundaryFactIds: [],
     },
@@ -92,7 +94,7 @@ describe("AnalysisPanel", () => {
     expect(screen.getByText("Fluent English")).toBeInTheDocument();
   });
 
-  it("shows a minor mandatory shortfall with its own severity and reason", () => {
+  it("shows a minor mandatory shortfall with its own severity, reason and the AI's rationale", () => {
     renderPanel({
       ...classification,
       fit: "high",
@@ -103,6 +105,7 @@ describe("AnalysisPanel", () => {
           coverage: "partial",
           shortfallSeverity: "minor",
           shortfallReason: "The verified duration is slightly below the requested threshold.",
+          rationale: "AWS work is verified, but not for the requested duration.",
         },
       ],
     });
@@ -110,5 +113,7 @@ describe("AnalysisPanel", () => {
     expect(screen.getByText("ללא פער קשיח")).toBeInTheDocument();
     expect(screen.getByText(/פער קטן:/)).toBeInTheDocument();
     expect(screen.getByText(/verified duration is slightly below/)).toBeInTheDocument();
+    expect(screen.getByText(/הסבר ה-AI:/)).toBeInTheDocument();
+    expect(screen.getByText("AWS work is verified, but not for the requested duration.")).toBeInTheDocument();
   });
 });

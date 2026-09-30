@@ -95,6 +95,13 @@ export const RequirementRow = ({
         </StatusBadge>
       </div>
 
+      {requirement.rationale === null ? null : (
+        <p className="text-support leading-6 text-cv-text-muted" dir="auto">
+          <span className="font-semibold text-cv-text">הסבר ה-AI: </span>
+          <bdi>{requirement.rationale}</bdi>
+        </p>
+      )}
+
       {shortfall === null ? null : (
         <p className={cx("ps-3 text-support leading-6 text-cv-text-muted", shortfallRules[severity])} dir="auto">
           <span className="font-semibold text-cv-text">{shortfallLabels[severity]}: </span>
