@@ -56,12 +56,7 @@ const renderPage = (fetchImplementation?: (input: RequestInfo | URL, init?: Requ
     },
   });
 
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(
-      fetchImplementation ?? (() => Promise.resolve(jsonResponse(detail()))),
-    ),
-  );
+  vi.stubGlobal("fetch", vi.fn(fetchImplementation ?? (() => Promise.resolve(jsonResponse(detail())))));
 
   return render(
     <QueryClientProvider client={client}>

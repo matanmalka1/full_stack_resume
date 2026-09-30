@@ -263,7 +263,6 @@ export const ApplicationPage = () => {
                       </div>
                     </Disclosure>
                   )}
-
                 </div>
               </WideRow>
             ) : null}

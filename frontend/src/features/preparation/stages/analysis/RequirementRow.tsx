@@ -118,11 +118,10 @@ export const RequirementRow = ({
   const detailRationale = !matched && shortfall !== requirement.rationale ? requirement.rationale : null;
   /* The disclosure's summary already names what leads it (the supporting facts, or the
      rationale when nothing is cited); captions are needed only to tell parts apart. */
-  const captioned = [
-    requirement.supportingFactIds.length,
-    requirement.boundaryFactIds.length,
-    detailRationale === null ? 0 : 1,
-  ].filter((count) => count > 0).length > 1;
+  const captioned =
+    [requirement.supportingFactIds.length, requirement.boundaryFactIds.length, detailRationale === null ? 0 : 1].filter(
+      (count) => count > 0,
+    ).length > 1;
 
   return (
     <li className="flex flex-col gap-2 py-4">
@@ -163,11 +162,7 @@ export const RequirementRow = ({
           </DisclosureSummary>
           <div className="mt-2 flex flex-col gap-4 rounded-control bg-cv-surface-muted p-3">
             {detailRationale === null ? null : (
-              <DetailSection
-                icon={Sparkles}
-                iconClassName="text-cv-text-muted"
-                title={captioned ? "הסבר ה-AI" : null}
-              >
+              <DetailSection icon={Sparkles} iconClassName="text-cv-text-muted" title={captioned ? "הסבר ה-AI" : null}>
                 <p className="text-support leading-6 text-cv-text">
                   <bdi>{detailRationale}</bdi>
                 </p>
