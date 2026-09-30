@@ -282,8 +282,8 @@
       "fact_id": "development.project.mami",
       "meaning": "Personal Mami Supermarket project is a full-stack grocery platform using Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind, JWT, Alembic, and Pydantic.",
       "renderings": {
-        "en": "Mami Supermarket: full-stack grocery delivery and operations platform built with Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic, and Pydantic.",
-        "he": "Mami Supermarket: פלטפורמת full-stack למשלוחי מכולת וניהול תפעול, שנבנתה עם Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic ו-Pydantic."
+        "en": "Mami Supermarket (personal project): full-stack grocery delivery and operations platform built with Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic, and Pydantic.",
+        "he": "Mami Supermarket (פרויקט אישי): פלטפורמת full-stack למשלוחי מכולת וניהול תפעול, שנבנתה עם Flask, PostgreSQL, SQLAlchemy, React, TypeScript, Vite, Tailwind CSS, JWT, Alembic ו-Pydantic."
       },
       "tags": [
         "development",
@@ -302,8 +302,8 @@
       "fact_id": "development.project.bar_exam",
       "meaning": "Personal Bar Exam Practice App uses FastAPI, PostgreSQL, SQLAlchemy, Alembic, Pydantic, JWT, slowapi, Sentry, PDF parsing, React, TypeScript, React Query, Zod, Tailwind, and pytest.",
       "renderings": {
-        "en": "Bar Exam Practice App: FastAPI/PostgreSQL backend and React/TypeScript frontend with authentication, migrations, rate limiting, monitoring, PDF ingestion, and pytest coverage.",
-        "he": "Bar Exam Practice App: backend מבוסס FastAPI/PostgreSQL ו-frontend מבוסס React/TypeScript, כולל אימות משתמשים, מיגרציות, הגבלת קצב בקשות, ניטור, קליטת PDF וכיסוי בדיקות pytest."
+        "en": "Bar Exam Practice App (personal project): FastAPI/PostgreSQL backend and React/TypeScript frontend with authentication, migrations, rate limiting, monitoring, PDF ingestion, and pytest coverage.",
+        "he": "Bar Exam Practice App (פרויקט אישי): backend מבוסס FastAPI/PostgreSQL ו-frontend מבוסס React/TypeScript, כולל אימות משתמשים, מיגרציות, הגבלת קצב בקשות, ניטור, קליטת PDF וכיסוי בדיקות pytest."
       },
       "tags": [
         "development",
@@ -449,8 +449,8 @@
       "fact_id": "development.project.mm_backend_core",
       "meaning": "Personal open-source project: built and published mm-backend-core, an npm-distributed Node.js/Express CLI that scaffolds a MongoDB REST API template with JWT auth and refresh tokens, RBAC, Passport OAuth, file uploads, Zod validation, Helmet/rate-limiting/mongo-sanitize security middleware, Winston logging, and Vitest/Supertest tests. Not PH.Digital work.",
       "renderings": {
-        "en": "Built and published mm-backend-core on npm, a Node.js/Express backend scaffolding CLI generating a MongoDB REST API with JWT/RBAC authentication, OAuth, validation, security middleware, and automated testing.",
-        "he": "פיתוח ופרסום של mm-backend-core ב-npm — CLI ליצירת שלד backend ב-Node.js/Express, המייצר REST API על MongoDB עם אימות JWT/RBAC, OAuth, ולידציה, middleware אבטחה ובדיקות אוטומטיות."
+        "en": "Built and published mm-backend-core on npm as a personal open-source project, a Node.js/Express backend scaffolding CLI generating a MongoDB REST API with JWT/RBAC authentication, OAuth, validation, security middleware, and automated testing.",
+        "he": "פיתוח ופרסום של mm-backend-core ב-npm כפרויקט קוד פתוח אישי — CLI ליצירת שלד backend ב-Node.js/Express, המייצר REST API על MongoDB עם אימות JWT/RBAC, OAuth, ולידציה, middleware אבטחה ובדיקות אוטומטיות."
       },
       "tags": [
         "development",
