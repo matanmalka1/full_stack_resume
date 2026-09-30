@@ -13,6 +13,7 @@ const verdictLabels: Record<RejectedClaim["verdict"], string> = {
   uncertain: "לא הוכרע",
   unsupported: "לא נתמך",
   unattested: "הראיות לא אומתו",
+  refused: "נדחה לפני בדיקה",
 };
 
 /* The checks a `supported` answer's evidence failed. The reviewer said yes, so its own
@@ -38,28 +39,39 @@ const FieldLabel = ({ children }: { children: string }) => (
   <p className="text-support font-medium text-cv-text-muted">{children}</p>
 );
 
-/* The failure callout above already names the verdict and that nothing was applied. This
-   panel adds only what the callout cannot: which line, what it said, the facts it was
-   checked against as they were read then, and where to fix it. */
+/* Two uses, one panel. On a failure the callout above already names the verdict and that
+   nothing was applied; the panel adds only what the callout cannot: which line, what it
+   said, the facts it was checked against as they were read then, and where to fix it.
+   On a success (`withheld`) the rest of the answer was written, and these are the lines
+   that were not: each kept the wording it had before the run. */
 export const ClaimReviewClarification = ({
   operation,
   reason,
+  withheld = false,
   onNavigate,
 }: {
   operation: Operation;
   reason: ReviewReason;
+  withheld?: boolean;
   onNavigate?: (() => void) | undefined;
 }) => {
-  const initialDraft = operation.operation_type === "create_draft";
-  /* A verdict per line only says something when the lines disagree; otherwise it is the
-     callout's title again. */
-  const mixedVerdicts = new Set(reason.claims.map((claim) => claim.verdict)).size > 1;
+  /* A refused first draft left no document to open a line in; a withheld line has one. */
+  const noDocument = !withheld && operation.operation_type === "create_draft";
+  /* On a failure a verdict per line only says something when the lines disagree;
+     otherwise it is the callout's title again. A success has no such title. */
+  const showVerdicts = withheld || new Set(reason.claims.map((claim) => claim.verdict)).size > 1;
 
   return (
-    <section aria-label="בירור הניסוח שנדחה" className="flex flex-col gap-4">
+    <section aria-label={withheld ? "שורות שלא עודכנו" : "בירור הניסוח שנדחה"} className="flex flex-col gap-4">
       <p className="text-support text-cv-text-muted">
-        {initialDraft ? "לא נוצרה טיוטה." : "המסמך לא השתנה."} להלן הניסוח שנדחה והעובדות שמולן נבדק, כפי שהיו בזמן
-        הבדיקה; ייתכן שהשתנו מאז.
+        {withheld
+          ? operation.operation_type === "create_draft"
+            ? "הטיוטה נוצרה. השורות הבאות נשארו בנוסח שהורכב ישירות מהעובדות, כי הניסוח שהוצע להן לא אושר."
+            : "שאר השינויים נשמרו. השורות הבאות נשארו בנוסח הקודם שלהן, כי הניסוח שהוצע להן לא אושר."
+          : noDocument
+            ? "לא נוצרה טיוטה."
+            : "המסמך לא השתנה."}{" "}
+        להלן הניסוח שנדחה והעובדות שמולן נבדק, כפי שהיו בזמן הבדיקה; ייתכן שהשתנו מאז.
       </p>
 
       {reason.claims.map((claim) => (
@@ -68,7 +80,7 @@ export const ClaimReviewClarification = ({
             <p className="font-semibold" dir="auto">
               {claimContext(claim)}
             </p>
-            {mixedVerdicts ? (
+            {showVerdicts ? (
               <StatusBadge tone={claim.verdict === "uncertain" ? "warning" : "blocker"}>
                 {verdictLabels[claim.verdict]}
               </StatusBadge>
@@ -81,6 +93,12 @@ export const ClaimReviewClarification = ({
               {claim.text}
             </blockquote>
           </div>
+
+          {claim.verdict === "refused" ? (
+            <p className="text-support text-cv-text-muted">
+              הניסוח לא הגיע לבדיקה: הוא קושר לעובדה שלא ניתנה למשימה, לא קושר לאף עובדה, או שלא ניתן היה להחיל אותו.
+            </p>
+          ) : null}
 
           {claim.problems == null || claim.problems.length === 0 ? null : (
             <div className="flex flex-col gap-1">
@@ -135,7 +153,7 @@ export const ClaimReviewClarification = ({
             </ul>
           </div>
 
-          {initialDraft ? null : (
+          {noDocument ? null : (
             <Link
               onClick={onNavigate}
               className={buttonClasses("secondary", "self-start")}
@@ -148,12 +166,12 @@ export const ClaimReviewClarification = ({
       ))}
 
       <p className="text-support text-cv-text-muted">
-        {initialDraft
+        {noDocument
           ? "אפשר להריץ שוב את יצירת הטיוטה. אם חסר מידע במקורות, יש להוסיף אותו במאגר העובדות ולאשר אותו לפני שימוש בו."
           : "אפשר להשאיר את המסמך כפי שהוא, או לערוך או להסיר את השורה - ניסוח חדש ייבדק שוב. אם חסר מידע במקורות, יש להוסיף אותו במאגר העובדות ולאשר אותו לפני שימוש בו."}
       </p>
       <div className="flex flex-wrap gap-3">
-        {initialDraft ? (
+        {noDocument ? (
           <Link
             onClick={onNavigate}
             className={buttonClasses("secondary")}

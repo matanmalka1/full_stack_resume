@@ -84,6 +84,10 @@ export const activeOutputLabels = (operation: Operation): string[] =>
 export const joinHebrewList = (labels: string[]): string =>
   labels.length <= 1 ? (labels[0] ?? "") : `${labels.slice(0, -1).join(", ")} ו${labels[labels.length - 1]}`;
 
+/* How many proposed lines a succeeded run withheld, as its status and callout say it. */
+export const withheldLabel = (count: number): string =>
+  count === 1 ? "שורה אחת לא עודכנה" : `${count} שורות לא עודכנו`;
+
 export const failureTones: Partial<Record<OperationStatus, Tone>> = {
   failed: "blocker",
   cancelled: "neutral",
