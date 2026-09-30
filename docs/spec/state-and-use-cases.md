@@ -383,9 +383,9 @@ CANCELLED_BEFORE_ACTIVATION
   nothing was sent. `PROVIDER_REFUSED`: a provider answered and declined.
 - `CLAIM_REVIEW_UNCERTAIN`: the semantic reviewer could not establish support for a
   proposed wording. `CLAIM_REVIEW_UNSUPPORTED`: it found the wording exceeds or
-  contradicts the cited facts. Both leave the document unchanged. Malformed reviewer
-  output is `INVALID_OUTPUT`. A writing Operation fails with these codes only when every
-  line its answer named was withheld; otherwise it succeeds with `withheld_claims`.
+  contradicts the cited facts. Malformed reviewer output is `INVALID_OUTPUT`. A writing
+  Operation fails with these codes only when every line its answer named was withheld,
+  and then the document is unchanged; otherwise it succeeds with `withheld_claims`.
 
 A failed or cancelled Operation may own inactive immutable output (provider evidence).
 Output existence and activation are separate. An output reference is one of
@@ -556,9 +556,12 @@ unsupported content cannot be overridden by approval.
 
 AI wording is proposed, then reviewed by the semantic reviewer against the exact
 proposed claims, section context, linked fact IDs, allowed canonical sources, and an
-ordered assertion-to-source mapping. Only a fully supported result activates.
-Uncertain or unsupported results fail the Operation (§11) with inactive provider
-evidence and leave the document unchanged. Unsupported manual text is saved as a
+ordered assertion-to-source mapping. The answer is judged line by line (product-spec
+§10.1): a line becomes state only through a hard check it passes or a fully `supported`,
+attested review, and any other line is withheld - it keeps exactly the wording, links and
+proof it held before the Operation. The Operation succeeds with `withheld_claims` unless
+every line its answer named was withheld; then it fails (§11) with inactive provider
+evidence and the document unchanged. Unsupported manual text is saved as a
 pending, unlinked claim; it is never rejected or discarded, and it cannot pass the check.
 
 ### `read_document(application_id)`
