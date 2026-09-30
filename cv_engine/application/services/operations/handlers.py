@@ -143,12 +143,13 @@ class AITaskHandler:
 
     service: Any
     task: str
+    knowledge: AnalysisKnowledgeSource
+
+    def load_knowledge(self):
+        return load_knowledge(self.knowledge)
 
     def after_activation(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
         pass
-
-    def verify_external_sources(self, operation: PersistedOperation) -> None:
-        del operation
 
     def discard(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
         """Nothing to clean up: provider evidence is immutable and stays inactive."""
@@ -188,52 +189,35 @@ class AITaskHandler:
     ) -> tuple[OperationOutputReference, ...]:
         """Record a refused provider answer as inactive immutable evidence.
 
-        Two shapes arrive here. A `ProposalRejected` carries evidence that
-        `preserve` already wrote and registered, so only the Operation output
-        reference is missing. An adapter-level refusal or schema violation
-        carries raw sanitized bytes and nothing else, so the payload is
-        committed and registered here - it is the only place those bytes still
-        exist.
-
-        Registering the first kind twice would violate `artifact_versions.path`
-        UNIQUE, which is the constraint that makes "one payload, one row" a
-        property of the schema rather than of this function remembering.
+        Two shapes arrive here. A refusal of content (`ProposalRejected`, or any
+        failure after a call already succeeded) carries evidence that `preserve`
+        already wrote and registered together with its inactive Operation output, so
+        there is nothing left to record. An adapter-level refusal or schema violation
+        carries only its provenance and sanitized bytes, so they are committed and
+        registered here - it is the only place those bytes still exist.
 
         A failure here is swallowed deliberately. The Operation already has a
         classified failure the user needs to see; replacing that diagnosis with
         an error about storing evidence for it would be a worse report.
         """
-        # Earlier successful calls survive a later call's failure too.
-        completed = getattr(error, "completed_evidence", ())
-        evidence = getattr(error, "evidence", None)
+        if getattr(error, "evidence", None) is not None or getattr(error, "completed_evidence", ()):
+            return ()
         provenance = getattr(error, "provenance", None)
-        outputs = [
-            OperationOutputReference(
-                output_type="provider_response", output_id=item.artifact_version_id, active=False
-            )
-            for item in completed
-        ]
+        if provenance is None:
+            return ()
         try:
-            if evidence is not None and any(
-                item.artifact_version_id == evidence.artifact_version_id for item in completed
-            ):
-                return tuple(outputs)
-            if evidence is not None:
-                artifact_version_id = evidence.artifact_version_id
-            elif provenance is not None:
-                artifact_version_id = self.service.preserve(
-                    operation.application_id, operation.id, provenance.task, provenance
-                ).artifact_version_id
-            else:
-                return tuple(outputs)
-            outputs.append(
-                OperationOutputReference(
-                    output_type="provider_response", output_id=artifact_version_id, active=False
-                )
+            evidence = self.service.preserve(
+                operation.application_id, operation.id, provenance.task, provenance
             )
         except ApplicationError:
-            pass
-        return tuple(outputs)
+            return ()
+        return (
+            OperationOutputReference(
+                output_type="provider_response",
+                output_id=evidence.artifact_version_id,
+                active=False,
+            ),
+        )
 
     def _classified(
         self, operation: PersistedOperation, error: ApplicationError
@@ -248,40 +232,7 @@ class AITaskHandler:
         )
 
 
-class RegisteredEvidenceTaskHandler(AITaskHandler):
-    """AI task whose service registers provider evidence before activation."""
-
-    service: Any
-    knowledge: AnalysisKnowledgeSource
-
-    def load_knowledge(self):
-        return load_knowledge(self.knowledge)
-
-    def _preserve_rejected(
-        self, operation: PersistedOperation, error: ApplicationError
-    ) -> tuple[OperationOutputReference, ...]:
-        # Completed evidence already includes its durable inactive output registration.
-        if getattr(error, "evidence", None) is not None or getattr(error, "completed_evidence", ()):
-            return ()
-        provenance = getattr(error, "provenance", None)
-        if provenance is not None:
-            try:
-                evidence = self.service.preserve(
-                    operation.application_id, operation.id, provenance.task, provenance
-                )
-                return (
-                    OperationOutputReference(
-                        output_type="provider_response",
-                        output_id=evidence.artifact_version_id,
-                        active=False,
-                    ),
-                )
-            except ApplicationError:
-                return ()
-        return ()
-
-
-class AnalysisTaskHandler(RegisteredEvidenceTaskHandler):
+class AnalysisTaskHandler(AITaskHandler):
     service: AnalysisService
     sources: AnalysisContextSourceReader
 
@@ -364,7 +315,7 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
         return tuple(outputs)
 
 
-class DraftTaskHandler(RegisteredEvidenceTaskHandler):
+class DraftTaskHandler(AITaskHandler):
     service: DraftAuthoringService
     knowledge: AnalysisKnowledgeSource
     documents: DocumentStore
@@ -522,9 +473,6 @@ class RenderOperationHandler:
         verify_document_hash(tx, self.documents, operation)
         if self.sources.knowledge_is_prepared(tx):
             raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
-
-    def verify_external_sources(self, operation: PersistedOperation) -> None:
-        del operation
 
     def _fail(
         self,

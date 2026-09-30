@@ -10,40 +10,35 @@
       "input": "AnalysisContext",
       "input_schema_version": "1.0.0",
       "output": "AnalysisProposal",
-      "output_schema_version": "2.0.0",
-      "critical_state": true
+      "output_schema_version": "2.0.0"
     },
     "draft_resume": {
       "version": "4.0.0",
       "input": "DraftResumeContext",
       "input_schema_version": "4.0.0",
       "output": "DraftProposal",
-      "output_schema_version": "2.0.0",
-      "critical_state": true
+      "output_schema_version": "2.0.0"
     },
     "assess_claim_support": {
       "version": "1.0.0",
       "input": "AssessClaimSupportContext",
       "input_schema_version": "1.0.0",
       "output": "ClaimSupportProposal",
-      "output_schema_version": "1.0.0",
-      "critical_state": true
+      "output_schema_version": "1.0.0"
     },
     "regenerate_section": {
       "version": "2.0.0",
       "input": "RegenerateSectionContext",
       "input_schema_version": "2.0.0",
       "output": "SectionProposal",
-      "output_schema_version": "2.0.0",
-      "critical_state": true
+      "output_schema_version": "2.0.0"
     },
     "regenerate_claim": {
       "version": "2.0.0",
       "input": "RegenerateClaimContext",
       "input_schema_version": "2.0.0",
       "output": "ClaimProposal",
-      "output_schema_version": "2.0.0",
-      "critical_state": true
+      "output_schema_version": "2.0.0"
     }
   }
 }

@@ -84,9 +84,6 @@ class _Handler:
         self._check = check or (lambda _operation, _tx: None)
         self._activate = activate or (lambda _operation, _prepared, _tx: ())
 
-    def verify_external_sources(self, operation):
-        del operation
-
     def verify_sources(self, tx, operation):
         return self._check(operation, tx)
 

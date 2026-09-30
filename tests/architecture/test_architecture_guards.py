@@ -656,8 +656,6 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
     def scope(body: str) -> str:
         if "analysis_knowledge_context_hash" in body:
             return "analysis"
-        if "document_knowledge_context_hash" in body:
-            return "document"
         return "none"
 
     def bodies(source: str, kind: type[ast.ClassDef] | type[ast.FunctionDef]) -> dict[str, str]:
@@ -991,7 +989,6 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         body = ast.get_source_segment(runner_source, scope) or ""
         if "self.transactions." in body:
             assert "handler.execute(" not in body
-            assert "verify_external_sources(" not in body
 
     handlers = ast.parse((services / "handlers.py").read_text(encoding="utf-8"))
     for node in ast.walk(handlers):

@@ -71,7 +71,6 @@ class PreparedOperation:
 
 class OperationHandler(Protocol):
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None: ...
-    def verify_external_sources(self, operation: PersistedOperation) -> None: ...
     def execute(
         self, operation: PersistedOperation, cancellation_requested: Callable[[], bool]
     ) -> PreparedOperation: ...
@@ -253,7 +252,6 @@ class OperationRunner:
         while True:
             try:
                 operation = self._set_phase(operation.id, OperationPhase.PRE_EXECUTION_CHECK)
-                handler.verify_external_sources(operation)
                 with self.transactions.read() as tx:
                     handler.verify_sources(tx, operation)
                 if self._cancelled(operation.id):
@@ -355,7 +353,6 @@ class OperationRunner:
     ) -> PersistedOperation:
         phase_events = []
         terminal_failure: OperationExecutionError | None = None
-        handler.verify_external_sources(operation)
         with self.transactions.write() as tx:
             store = self.execution_store
             store.lock_application(tx, operation.application_id)

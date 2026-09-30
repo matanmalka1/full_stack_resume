@@ -1,29 +1,49 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.engine import Connection
 
+from ...application.ai_configuration import usd
 from ...application.errors import UnknownRecord
 from ...application.operations import OperationOutputReference, OperationSources, PersistedOperation
 from .tables import artifact_versions, operation_outputs, operation_resource_leases
+
+_USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens")
+
+
+def _provider_totals(outputs: list[Any]) -> tuple[dict[str, int | None], str | None]:
+    """Usage and cost of every provider call the Operation owns, summed.
+
+    Each registered response counts once, active or not: a call whose answer was
+    refused or superseded by a retry was still billed. A usage field or the cost is
+    NULL when any call lacks it, rather than a partial sum that reads as the total.
+    """
+    calls = {
+        output["output_id"]: output.get("metadata_json") or {}
+        for output in outputs
+        if output["output_type"] == "provider_response"
+    }
+    if not calls:
+        return dict.fromkeys(_USAGE_FIELDS), None
+    usage: dict[str, int | None] = {}
+    for field in _USAGE_FIELDS:
+        values = [(metadata.get("usage") or {}).get(field) for metadata in calls.values()]
+        known = [int(value) for value in values if value is not None]
+        usage[field] = sum(known) if len(known) == len(values) else None
+    costs = [(metadata.get("cost") or {}).get("total_usd") for metadata in calls.values()]
+    priced = [Decimal(cost) for cost in costs if cost is not None]
+    cost_usd = usd(sum(priced, Decimal(0))) if len(priced) == len(costs) else None
+    return usage, cost_usd
 
 
 def _operation_record(row: Any, outputs: list[Any]) -> PersistedOperation:
     if row is None:
         raise UnknownRecord("operation does not exist")
     record = dict(row)
-    provider_metadata = next(
-        (
-            output.get("metadata_json") or {}
-            for output in outputs
-            if output["output_type"] == "provider_response"
-        ),
-        {},
-    )
-    usage = provider_metadata.get("usage") or {}
-    cost = provider_metadata.get("cost") or {}
+    usage, cost_usd = _provider_totals(outputs)
     return PersistedOperation(
         id=record["id"],
         application_id=record["application_id"],
@@ -36,11 +56,8 @@ def _operation_record(row: Any, outputs: list[Any]) -> PersistedOperation:
         provider=record["provider"],
         model=record["model"],
         reasoning_effort=record["reasoning_effort"],
-        input_tokens=usage.get("input_tokens"),
-        cached_input_tokens=usage.get("cached_input_tokens"),
-        output_tokens=usage.get("output_tokens"),
-        total_tokens=usage.get("total_tokens"),
-        cost_usd=cost.get("total_usd"),
+        **usage,
+        cost_usd=cost_usd,
         status=record["status"],
         phase=record["phase"],
         message=record["message"],

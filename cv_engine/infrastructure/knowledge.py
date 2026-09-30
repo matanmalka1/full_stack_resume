@@ -101,7 +101,6 @@ def load_task_contracts(knowledge_root: Path) -> TaskContracts:
         declared[name] = TaskContract(
             name=name,
             version=task_version,
-            critical_state=bool(entry.get("critical_state", True)),
             model=entry.get("model"),
             **fields,
         )

@@ -18,7 +18,7 @@ from operations_support import (
     _stored_request,
 )
 from pydantic import ValidationError
-from sqlalchemy import delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.application.commands import (
@@ -54,6 +54,7 @@ from cv_engine.application.operations import (
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
+from cv_engine.infrastructure.persistence.operation_sql import _operation_record
 from cv_engine.infrastructure.persistence.tables import (
     OPERATION_FAILURE_CODES,
     operations,
@@ -365,6 +366,67 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
 
     assert first == second
     assert _operation(ai_services, first).status is OperationStatus.SUCCEEDED
+
+
+def test_operation_usage_and_cost_sum_every_provider_call_once(services, database_engine) -> None:
+    """An Operation reports what all its provider calls cost, and never guesses.
+
+    Each registered response counts once, active or not. When one call carries no
+    usage or cost, that total is NULL rather than the sum of the calls that do.
+    """
+    created = _operation_for_runner(services, "Cost Totals Co")
+    with database_engine.connect() as connection:
+        row = (
+            connection.execute(select(operations).where(operations.c.id == created.id))
+            .mappings()
+            .one()
+        )
+
+    def call(output_id, *, active, usage=None, total_usd=None):
+        metadata = {}
+        if usage is not None:
+            metadata["usage"] = dict(
+                zip(
+                    ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens"),
+                    usage,
+                    strict=True,
+                )
+            )
+        if total_usd is not None:
+            metadata["cost"] = {"total_usd": total_usd}
+        return {
+            "output_type": "provider_response",
+            "output_id": output_id,
+            "active": active,
+            "metadata_json": metadata,
+        }
+
+    document = {
+        "output_type": "cv_document",
+        "output_id": "document",
+        "active": True,
+        "metadata_json": None,
+    }
+    writer = call("writer", active=False, usage=(10, 2, 5, 15), total_usd="0.00010000")
+    reviewer = call("reviewer", active=False, usage=(4, 0, 1, 5), total_usd="0.00002500")
+
+    none = _operation_record(row, [document])
+    assert (none.input_tokens, none.total_tokens, none.cost_usd) == (None, None, None)
+
+    single = _operation_record(row, [writer])
+    assert (single.input_tokens, single.total_tokens, single.cost_usd) == (10, 15, "0.00010000")
+
+    summed = _operation_record(row, [writer, reviewer, document, writer])
+    assert (summed.input_tokens, summed.cached_input_tokens) == (14, 2)
+    assert (summed.output_tokens, summed.total_tokens) == (6, 20)
+    assert summed.cost_usd == "0.00012500"
+
+    unknown = _operation_record(row, [writer, call("unpriced", active=False, usage=(1, 0, 1, 2))])
+    assert unknown.total_tokens == 17
+    assert unknown.cost_usd is None
+    no_usage = _operation_record(row, [writer, call("bare", active=False, total_usd="0.1")])
+    assert no_usage.total_tokens is None
+    assert no_usage.cost_usd == "0.10010000"
 
 
 def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, database_engine) -> None:
