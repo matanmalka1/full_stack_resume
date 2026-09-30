@@ -116,6 +116,9 @@ describe("OperationReport", () => {
       </QueryClientProvider>,
     );
     const clarification = screen.getByRole("region", { name: "בירור הניסוח שנדחה" });
+    expect(within(clarification).getByText("Experience · Account Manager")).toBeVisible();
+    /* The panel owns the next steps; the callout above keeps only its title. */
+    expect(screen.queryByText(/הניסוח לא הופעל ודבר לא השתנה/)).not.toBeInTheDocument();
     expect(within(clarification).getByText("<script>unsupported claim</script>")).toBeVisible();
     expect(clarification.querySelector("script")).toBeNull();
     expect(within(clarification).getByText("Managed accounts.")).toBeVisible();

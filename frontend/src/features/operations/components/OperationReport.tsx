@@ -111,6 +111,12 @@ export const OperationReport = ({
     }
   }, [operation.failure_code, unreportedDetail]);
   const hasFailure = failure !== null || operation.safe_failure_detail != null;
+  /* A recorded review failure has its own panel with the line, its facts, and the ways
+     on; the callout then keeps only its title, or it would say the next steps twice. */
+  const claimReview =
+    operation.status === "failed" && operation.failure_reason?.code === "claim_review"
+      ? operation.failure_reason
+      : null;
   const produced = activeOutputLabels(operation);
   /* A finished run says what it came to in one line - unless it failed, where the reason
      below is that line and a second, vaguer one above it only delayed it. */
@@ -178,7 +184,7 @@ export const OperationReport = ({
               {actionableDetail}
             </p>
           )}
-          {failure === null ? null : (
+          {failure === null || claimReview !== null ? null : (
             <p className={actionableDetail === null ? undefined : "mt-1"} dir="auto">
               {failure.guidance}
             </p>
@@ -186,9 +192,9 @@ export const OperationReport = ({
         </Callout>
       )}
 
-      {operation.status === "failed" && operation.failure_reason?.code === "claim_review" ? (
-        <ClaimReviewClarification onNavigate={onNavigate} operation={operation} reason={operation.failure_reason} />
-      ) : null}
+      {claimReview === null ? null : (
+        <ClaimReviewClarification onNavigate={onNavigate} operation={operation} reason={claimReview} />
+      )}
 
       {operation.cancellation_requested_at != null && !operation.is_terminal ? (
         <Callout title="בקשת הביטול התקבלה" tone="info">
