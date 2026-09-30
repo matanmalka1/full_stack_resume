@@ -1,7 +1,7 @@
 {
-  "version": "10.1.0",
+  "version": "11.0.0",
   "prompt": {
-    "version": "system-v13",
+    "version": "system-v14",
     "file": "ai/prompts/system.md"
   },
   "tasks": {
@@ -13,18 +13,10 @@
       "output_schema_version": "2.0.0",
       "critical_state": true
     },
-    "propose_selection_plan": {
-      "version": "4.0.0",
-      "input": "SelectionPlanContext",
-      "input_schema_version": "4.0.0",
-      "output": "SelectionProposal",
-      "output_schema_version": "2.0.0",
-      "critical_state": true
-    },
     "draft_resume": {
-      "version": "3.0.0",
+      "version": "4.0.0",
       "input": "DraftResumeContext",
-      "input_schema_version": "3.0.0",
+      "input_schema_version": "4.0.0",
       "output": "DraftProposal",
       "output_schema_version": "2.0.0",
       "critical_state": true

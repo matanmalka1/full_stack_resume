@@ -25,7 +25,6 @@ from ...domain.contracts.providers import (
     DraftProposal,
     ProviderTaskResult,
     SectionProposal,
-    SelectionProposal,
 )
 from ...domain.contracts.validation import ValidationReport
 from ...domain.knowledge import Knowledge
@@ -231,36 +230,16 @@ class AnalysisContext(StrictModel):
     overrides: dict[str, str] = {}
 
 
-class SelectionSectionContext(StrictModel):
-    """One Profile section's candidate pool and pin capacity.
-
-    `max_additional_pins` is the budget left after structural facts, Profile
-    pins and role-block floor reservations, as `build_selection` counts them.
-    """
-
-    section: str
-    fact_ids: list[str]
-    max_claims: int
-    fixed_fact_ids: list[str]
-    max_additional_pins: int
-
-
-class SelectionPlanContext(StrictModel):
-    """`propose_selection_plan`: the analysis, and only the allowed facts.
-
-    `allowed_facts` is the Profile's pool for this analysis, not the fact
-    store. A provider that never sees a fact cannot select it, which is a
-    stronger guarantee than checking afterwards that it did not.
-    """
-
-    job_analysis: dict[str, Any]
-    allowed_facts: list[dict[str, Any]]
-    deterministic_selection: dict[str, Any]
-    sections: list[SelectionSectionContext]
-
-
 class DraftResumeContext(StrictModel):
-    """`draft_resume`: the composed sections and the facts each one selected."""
+    """`draft_resume`: every section's whole pool as claims, and the guidance.
+
+    The writer chooses the facts by keeping claims and words them in the same call.
+    Each section carries its claims, the facts it offers, and its guidance (claim
+    budget, per-role minimums and ceiling, Profile pins); `guidance` carries what
+    spans sections (required and preferred tags, tag weights). `allowed_facts` is
+    the Profile's pool, not the fact store: a provider that never sees a fact
+    cannot choose it.
+    """
 
     job_analysis: dict[str, Any]
     job_text: str
@@ -268,6 +247,7 @@ class DraftResumeContext(StrictModel):
     language: str
     sections: list[dict[str, Any]]
     allowed_facts: list[dict[str, Any]]
+    guidance: dict[str, Any] = {}
 
 
 class AssessClaimSupportContext(StrictModel):
@@ -302,7 +282,7 @@ class RegenerateClaimContext(StrictModel):
 
 
 class AIProvider(Protocol):
-    """The six contracted AI tasks, as the application declares them.
+    """The five contracted AI tasks, as the application declares them.
 
     One method per task rather than one `run(task, payload)`, because the
     tasks take different inputs and return different Proposal types, and a
@@ -327,14 +307,6 @@ class AIProvider(Protocol):
         model: str | None = None,
         reasoning_effort: str | None = None,
     ) -> AIProposal[AnalysisProposal]: ...
-
-    def propose_selection_plan(
-        self,
-        context: SelectionPlanContext,
-        *,
-        model: str | None = None,
-        reasoning_effort: str | None = None,
-    ) -> AIProposal[SelectionProposal]: ...
 
     def draft_resume(
         self,

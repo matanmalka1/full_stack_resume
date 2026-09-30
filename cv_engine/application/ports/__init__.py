@@ -25,8 +25,6 @@ from .outbound import (
     RegenerateSectionContext,
     Renderer,
     RevisionPayloadStore,
-    SelectionPlanContext,
-    SelectionSectionContext,
     SnapshotPayloadStore,
 )
 from .settings import SettingsStore
@@ -63,8 +61,6 @@ __all__ = [
     "Renderer",
     "ReadTransaction",
     "RevisionPayloadStore",
-    "SelectionPlanContext",
-    "SelectionSectionContext",
     "SettingsStore",
     "SnapshotPayload",
     "SnapshotPayloadStore",
