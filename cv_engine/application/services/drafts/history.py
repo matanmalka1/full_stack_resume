@@ -50,7 +50,7 @@ class DraftHistoryService:
         document = source.document
         analysis = source.analysis
         current = current_basis(document, knowledge)
-        selection = document.selection
+        used = [] if document.content is None else document.content.selected_fact_ids
 
         def value(item: object) -> str:
             if isinstance(item, (dict, list)):
@@ -71,33 +71,21 @@ class DraftHistoryService:
             "",
             f"- Track: {analysis.track.value}",
             f"- Profile: {analysis.profile.value}",
-            f"- Emphasis: {selection.emphasis.value}",
-            f"- Emphasis override: {value(selection.emphasis_override.value if selection.emphasis_override else '')}",
+            f"- Emphasis: {analysis.emphasis.value}",
             f"- Language: {analysis.language}",
             f"- Fit: {fit_level(analysis.requirements).value}",
             "",
-            "## Selected facts",
+            f"- User overrides: {value(analysis.user_override)}",
+            "",
+            "## Facts the content uses",
             "",
         ]
-        lines.extend(f"- `{fact_id}`" for fact_id in selection.selected_fact_ids)
-        if not selection.selected_fact_ids:
+        lines.extend(f"- `{fact_id}`" for fact_id in used)
+        if not used:
             lines.append("- None recorded")
-        lines.extend(
-            [
-                "",
-                "## Overlay",
-                "",
-                f"- Pinned: {value(list(selection.pinned_fact_ids))}",
-                f"- Excluded: {value(list(selection.excluded_fact_ids))}",
-                f"- Proposed by: {selection.proposed_by or ''}",
-                f"- User overrides: {value(analysis.user_override)}",
-                "",
-                "## Facts the document depends on",
-                "",
-            ]
-        )
+        lines.extend(["", "## Facts the document depends on", ""])
         facts = knowledge.facts.facts
-        for fact_id in sorted(dependent_fact_ids(selection, document.content)):
+        for fact_id in sorted(dependent_fact_ids(document.content)):
             fact = facts.get(fact_id)
             lines.append(f"- `{fact_id}`: {fact.status.value if fact is not None else 'missing'}")
         report = document.content_report
@@ -122,7 +110,6 @@ class DraftHistoryService:
                 f"- Job snapshot ID: `{source.job_snapshot_id}`",
                 f"- Job analysis ID: `{document.analysis_id}`",
                 f"- Built with Profile version: `{document.built_with.profile_version}`",
-                f"- Built with selection policy: `{document.built_with.selection_policy_version}`",
             ]
         )
         content = "\n".join(lines) + "\n"

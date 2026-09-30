@@ -22,7 +22,6 @@ from ....domain.contracts.validation import ValidationReport
 from ...commands import (
     AnalyzeCommand,
     DraftCommand,
-    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RenderCommand,
@@ -55,7 +54,6 @@ from ...ports.documents import DocumentStore, RenderedFiles
 from ...ports.transactions import ReadTransaction, WriteTransaction
 from ..analysis.activation import AnalysisActivation
 from ..analysis.preparation import PreparedAnalysis
-from ..analysis.selection_policy import PreparedSelectionProposal
 from ..analysis.service import AnalysisService, load_analysis_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
@@ -359,66 +357,6 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
         if result.created_document and result.document_id is not None:
             outputs.extend(_document_output(result.document_id))
         return tuple(outputs)
-
-
-class SelectionPlanOperationHandler(AnalysisTaskHandler):
-    """`propose_selection`: the AI form of §14 `update_selection`, under its content rule."""
-
-    task = "propose_selection_plan"
-
-    def __init__(
-        self,
-        service: AnalysisService,
-        sources: AnalysisSelectionSourceReader,
-        activation: AnalysisActivation,
-        knowledge: AnalysisKnowledgeSource,
-    ):
-        self.service = service
-        self.sources = sources
-        self.activation = activation
-        self.knowledge = knowledge
-
-    @staticmethod
-    def _command(operation: PersistedOperation) -> ProposeSelectionCommand:
-        return ProposeSelectionCommand.model_validate(operation.payload)
-
-    def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
-        verify_document_hash(tx, self.service.documents, operation)
-
-    def execute(self, operation, cancellation_requested) -> PreparedOperation:
-        if cancellation_requested():
-            return PreparedOperation()
-        try:
-            return self.prepared(
-                self.service.prepare_selection_proposal(
-                    self._command(operation), operation_id=operation.id
-                )
-            )
-        except (
-            DependencyUnavailable,
-            InfrastructureFailure,
-            MissingFactRendering,
-            ProposalRejected,
-            # The document moved between the source check and execution.
-            StateConflict,
-        ) as exc:
-            raise self._classified(operation, exc) from exc
-
-    def activate(self, tx: WriteTransaction, operation, prepared):
-        if not isinstance(prepared.value, PreparedSelectionProposal):
-            raise TypeError("selection handler received an invalid prepared value")
-        try:
-            document_id = self.activation.activate_selection_proposal(
-                tx, self._command(operation), prepared.value, self.load_knowledge()
-            )
-        except StateConflict as exc:
-            raise SourceChanged("The CV document changed before the proposal activated.") from exc
-        except PreconditionFailed as exc:
-            raise OperationExecutionError(
-                OperationFailureCode.INVALID_OUTPUT,
-                "The AI proposal was rejected.",
-            ) from exc
-        return _document_output(document_id)
 
 
 class DraftTaskHandler(RegisteredEvidenceTaskHandler):

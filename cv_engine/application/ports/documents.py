@@ -18,7 +18,6 @@ from typing import Protocol
 
 from ...domain.contracts.document import BuiltWith, CVDocument, DocumentSubmission
 from ...domain.contracts.drafts import DraftDocument
-from ...domain.contracts.selection import SelectionManifest
 from ...domain.contracts.validation import ValidationReport
 from .transactions import ReadTransaction, WriteTransaction
 from .values import ArtifactStream
@@ -29,7 +28,6 @@ class DocumentBody:
     """The hashed part of the document. The store derives `document_hash` from it."""
 
     analysis_id: str
-    selection: SelectionManifest
     content: DraftDocument | None
 
 
@@ -78,27 +76,10 @@ class DocumentStore(Protocol):
         *,
         updated_at: str,
     ) -> CVDocument:
-        """Replace selection and/or content under the same analysis; stamps are kept.
+        """Replace the content under the same analysis; stamps are kept.
 
         A kept stamp is simply outdated from here on, because the basis moved.
         `body.analysis_id` must equal the stored one; re-pinning is `repin`.
-        """
-        ...
-
-    def replace_selection(
-        self,
-        tx: WriteTransaction,
-        application_id: str,
-        expected_document_hash: str,
-        selection: SelectionManifest,
-        *,
-        updated_at: str,
-    ) -> tuple[CVDocument, RenderedFiles | None]:
-        """A selection change: new selection, no content, no stamps, same analysis.
-
-        Content is composed only by `create_draft`, so a selection change leaves the
-        document to be drafted again. Returns the rendered files the document no
-        longer references, for the caller to discard after commit.
         """
         ...
 
@@ -112,7 +93,7 @@ class DocumentStore(Protocol):
         *,
         updated_at: str,
     ) -> tuple[CVDocument, RenderedFiles | None]:
-        """`build_from_analysis`: new analysis and selection, no content, no stamps.
+        """`build_from_analysis`: new analysis, no content, no stamps.
 
         Returns the rendered files the document no longer references, for the caller to
         discard after commit.

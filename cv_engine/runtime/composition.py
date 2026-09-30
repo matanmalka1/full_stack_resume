@@ -24,7 +24,7 @@ from ..application.services.applications.queries import ApplicationQueryService
 from ..application.services.drafts import DraftAuthoringService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
-from ..application.services.drafts.selection import SelectionChangeService
+from ..application.services.drafts.repin import RepinService
 from ..application.services.drafts.validation import DraftValidationService
 from ..application.services.knowledge import (
     FactLifecycleService,
@@ -39,7 +39,6 @@ from ..application.services.operations import (
     OperationSubmissionService,
     RegenerationOperationHandler,
     RenderOperationHandler,
-    SelectionPlanOperationHandler,
 )
 from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
@@ -129,7 +128,7 @@ class Services:
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
-    selection: SelectionChangeService
+    repin: RepinService
     drafts: DraftAuthoringService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService
@@ -285,11 +284,10 @@ def build_services(
     operation_lifecycle = OperationLifecycleService(
         transactions, operation_client, documents=documents
     )
-    selection_service = SelectionChangeService(
+    repin_service = RepinService(
         transactions=transactions,
         documents=documents,
         sources=analysis_sources,
-        analyses=analysis_plans,
         files=document_files,
         knowledge=resolved_knowledge,
     )
@@ -370,12 +368,6 @@ def build_services(
                 analysis_service.activation,
                 resolved_activation_knowledge,
             ),
-            OperationType.PROPOSE_SELECTION: SelectionPlanOperationHandler(
-                analysis_service,
-                analysis_sources,
-                analysis_service.activation,
-                resolved_activation_knowledge,
-            ),
         },
         transactions=transactions,
         execution_store=operation_execution,
@@ -431,7 +423,7 @@ def build_services(
             payloads=resolved_payloads,
         ),
         analysis=analysis_service,
-        selection=selection_service,
+        repin=repin_service,
         drafts=draft_service,
         draft_validation=draft_validation,
         draft_history=draft_history,
@@ -474,7 +466,7 @@ def build_api_services(
         applications=services.applications,
         queries=services.queries,
         analysis=services.analysis,
-        selection=services.selection,
+        repin=services.repin,
         drafts=services.drafts,
         draft_validation=services.draft_validation,
         draft_history=services.draft_history,

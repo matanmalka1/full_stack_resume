@@ -88,7 +88,7 @@ class FactAttachmentResult(FactMutationResult):
 class ConfirmAndUseFactResult(BoundaryDTO):
     fact: Fact
     event_ids: list[str]
-    #: The document whose selection the fact joined, and its token afterwards.
+    #: The Application's document, unchanged by the command, and its token.
     document_id: str
     document_hash: str
     facts_version: str

@@ -24,6 +24,7 @@ from ..domain.contracts.knowledge import (
     FactSource,
     Profile,
 )
+from ..domain.emphasis import EmphasisPolicyError, EmphasisPolicyStore
 from ..domain.facts import (
     FACT_SOURCE_NAMES,
     FactStore,
@@ -39,7 +40,6 @@ from ..domain.facts import (
 from ..domain.knowledge import Knowledge
 from ..domain.presentations import PresentationError, PresentationStore
 from ..domain.profiles import ProfileStore, ProfileStoreError, attach_fact_to_section
-from ..domain.selection import EmphasisPolicyStore, SelectionError
 from ..util import sha256_file, sha256_text, utc_now
 from .paths import relative_within, resolve_within
 
@@ -147,11 +147,11 @@ def load_profile_store(knowledge_root: Path, facts: FactStore) -> ProfileStore:
 def load_emphasis_policies(knowledge_root: Path) -> EmphasisPolicyStore:
     path = knowledge_root / "config" / "emphasis.json"
     if not path.is_file():
-        raise SelectionError(f"missing emphasis policy: {path}")
+        raise EmphasisPolicyError(f"missing emphasis policy: {path}")
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise SelectionError(f"invalid emphasis policy {path}: {exc}") from exc
+        raise EmphasisPolicyError(f"invalid emphasis policy {path}: {exc}") from exc
     return EmphasisPolicyStore.from_payload(payload, origin=str(path))
 
 

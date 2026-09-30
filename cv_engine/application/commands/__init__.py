@@ -46,17 +46,14 @@ from .prep import (
     DuplicateMatch,
     IngestCommand,
     IngestedApplication,
-    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RegenerationResult,
     RenderCommand,
     RenderResult,
-    SelectionOverlay,
     UpdateApplicationNotesCommand,
     UpdatedApplicationNotes,
     UpdateDocumentCommand,
-    UpdateSelectionCommand,
 )
 from .shared import ReconciliationResult
 from .tracking import (
@@ -82,10 +79,7 @@ __all__ = [
     "CloseApplicationCommand",
     "DeleteApplicationCommand",
     "AnalyzeCommand",
-    "SelectionOverlay",
     "ApplyAnalysisDecisionsCommand",
-    "ProposeSelectionCommand",
-    "UpdateSelectionCommand",
     "BuildFromAnalysisCommand",
     "UpdateDocumentCommand",
     "CheckDocumentCommand",

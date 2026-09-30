@@ -6,8 +6,6 @@ from typing import Any, Literal
 
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.drafts import ClaimStyle, ClaimType, DraftDocument
-from ...domain.contracts.selection import OmissionReason, ProposalSource, SelectionOutcome
-from ...domain.contracts.taxonomy import Emphasis
 from ...domain.contracts.validation import ValidationReport
 from ...domain.document import ContentCheck, PreparationState
 from ..commands import BoundaryDTO
@@ -122,55 +120,22 @@ class DraftOutlineView(BoundaryDTO):
 
 
 class DraftFactView(BoundaryDTO):
-    """One fact this draft either uses or considered.
+    """One fact this draft's claims link.
 
     `text` is nullable because a fact the store can no longer resolve is a state
-    the projection already reports as a stale reason; a read that raised instead
-    would turn an explainable staleness into a 500.
-
-    `outcome` is null for a fact that is not a SelectionPlan candidate - a
-    contact, or a fact a manual relink attached. That null is what says no
-    include/exclude decision applies to it, so nothing needs a second flag.
+    the projection already reports as a review reason; a read that raised instead
+    would turn an explainable staleness into a 500. `section` is the content
+    section whose claims first link it, null for the headline and contacts.
     """
 
     fact_id: str
     text: str | None = None
     linked_claim_ids: list[str] = []
     section: str | None = None
-    outcome: SelectionOutcome | None = None
-    reason: OmissionReason | None = None
 
 
 class BuiltWithView(BoundaryDTO):
     profile_version: str
-    selection_policy_version: str
-
-
-class DocumentCandidateView(BoundaryDTO):
-    """One candidate in the document's selection, with safe display text."""
-
-    fact_id: str
-    text: str | None = None
-    section: str
-    outcome: SelectionOutcome
-    reason: OmissionReason | None = None
-    user_selectable: bool
-
-
-class DocumentSelectionView(BoundaryDTO):
-    """The document's selection with its complete candidate accounting (§20)."""
-
-    emphasis: Emphasis
-    emphasis_override: Emphasis | None = None
-    selected_fact_ids: list[str]
-    pinned_fact_ids: list[str]
-    excluded_fact_ids: list[str]
-    #: `"ai"` when an AI selection proposal was activated; null for engine and
-    #: user selections.
-    proposed_by: ProposalSource | None = None
-    #: The provider's own written rationale, verbatim; provenance only.
-    proposal_rationale: str | None = None
-    candidates: list[DocumentCandidateView]
 
 
 class DocumentView(BoundaryDTO):
@@ -187,7 +152,6 @@ class DocumentView(BoundaryDTO):
     document_hash: str
     built_with: BuiltWithView
     language: str
-    selection: DocumentSelectionView
     content: DraftDocument | None = None
     outline: DraftOutlineView | None = None
     facts: list[DraftFactView] = []

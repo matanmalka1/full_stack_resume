@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from ...domain.contracts.analysis import JobAnalysis
-from ...domain.contracts.taxonomy import Emphasis
 from ...domain.knowledge import Knowledge
 from .transactions import ReadTransaction, WriteTransaction
 from .values import SnapshotPayload
@@ -24,13 +23,6 @@ class AnalysisSnapshotSource:
 
 
 @dataclass(frozen=True)
-class ActiveSelectionSource:
-    id: str
-    emphasis: Emphasis
-    emphasis_override: Emphasis | None
-
-
-@dataclass(frozen=True)
 class SelectionSource:
     application_id: str
     job_analysis_id: str
@@ -38,7 +30,6 @@ class SelectionSource:
     analysis: JobAnalysis
     active_analysis_id: str | None
     active_snapshot_id: str
-    active_plan: ActiveSelectionSource | None
     deleted_at: str | None
 
 
@@ -101,8 +92,4 @@ class AnalysisStore(Protocol):
 
     def set_normalized_role(
         self, tx: WriteTransaction, application_id: str, normalized_role: str
-    ) -> None: ...
-
-    def set_matching_emphasis(
-        self, tx: WriteTransaction, application_id: str, emphasis: str
     ) -> None: ...

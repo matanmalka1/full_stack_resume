@@ -70,21 +70,19 @@ def available_operation_actions(
 
 class OperationType(StrEnum):
     ANALYZE_JOB = "analyze_job"
-    PROPOSE_SELECTION = "propose_selection"
     CREATE_DRAFT = "create_draft"
     REGENERATE_SECTION = "regenerate_section"
     REGENERATE_CLAIM = "regenerate_claim"
     RENDER_DOCUMENT = "render_document"
 
 
-#: Operations whose successful activation replaces the analysis or the document
-#: selection a matching-configuration decision is taken against.  Kept beside the closed
+#: Operations whose successful activation replaces the analysis a
+#: matching-configuration decision is taken against.  Kept beside the closed
 #: OperationType vocabulary so both the action projection and the persistence
 #: CAS use one definition of "competing with this context".
 MATCHING_CONTEXT_OPERATION_TYPES = frozenset(
     {
         OperationType.ANALYZE_JOB,
-        OperationType.PROPOSE_SELECTION,
     }
 )
 
@@ -376,7 +374,6 @@ def required_operation_resources(request: CreateOperation) -> tuple[OperationRes
         resources.append(OperationResource(kind=OperationResourceKind.RENDER_BROWSER, key="global"))
     always_ai = {
         OperationType.CREATE_DRAFT,
-        OperationType.PROPOSE_SELECTION,
         OperationType.REGENERATE_SECTION,
         OperationType.REGENERATE_CLAIM,
     }

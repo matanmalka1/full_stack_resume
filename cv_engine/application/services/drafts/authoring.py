@@ -11,16 +11,23 @@ from __future__ import annotations
 
 from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.drafts import DraftDocument
+from ....domain.contracts.knowledge import EmphasisPolicy, Profile, ResumeSectionSpec
 from ....domain.contracts.providers import ProposedClaim
-from ....domain.contracts.selection import SelectionManifest
 from ....domain.document import content_check, preparation_state
-from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
+from ....domain.drafts import (
+    add_claim,
+    apply_claim_edit,
+    draft_claims,
+    frame_choice,
+    remove_claim,
+    reorder_draft,
+)
+from ....domain.frame import dangling_heading
 from ....domain.knowledge import Knowledge
 from ....util import utc_now
 from ...commands import (
     DocumentMutationResult,
     DraftCommand,
-    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RegenerationResult,
@@ -47,7 +54,6 @@ from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSo
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.drafts import DraftEvidencePreserver
 from ...transactions import assert_external_io_allowed
-from ..analysis.selection_plans import AnalysisSelectionService
 from ..documents import (
     DocumentSource,
     compose_content,
@@ -82,14 +88,28 @@ def _changed_claim_ids(before: DraftDocument, after: DraftDocument) -> set[str]:
     }
 
 
-def user_chose_selection(selection: SelectionManifest) -> bool:
-    """Whether the document's selection carries a choice `create_draft` must keep."""
-    return bool(
-        selection.pinned_fact_ids
-        or selection.excluded_fact_ids
-        or selection.emphasis_override is not None
-        or selection.proposed_by is not None
-    )
+def _section_guidance(spec: ResumeSectionSpec) -> dict:
+    """What a section's Profile prefers; the writer weighs it, nothing enforces it."""
+    return {
+        "max_claims": spec.max_claims,
+        "min_claims_per_role": spec.min_claims_per_role,
+        "min_quantitative_per_role": spec.min_quantitative_per_role,
+        "max_claims_per_role": spec.max_claims_per_role,
+        "pinned_fact_ids": list(spec.pinned_fact_ids),
+    }
+
+
+def _document_guidance(profile: Profile, policy: EmphasisPolicy) -> dict:
+    """What the Profile and Emphasis prefer across sections; guidance only."""
+    weights = dict(profile.tag_weights)
+    for tag, weight in policy.tag_weights.items():
+        weights[tag] = weights.get(tag, 0) + weight
+    return {
+        "required_tags": list(profile.required_tags),
+        "preferred_tags": list(policy.preferred_tags),
+        "tag_weights": weights,
+        "minimum_preferred_tags": policy.minimum_coverage,
+    }
 
 
 class DraftAuthoringService:
@@ -155,12 +175,9 @@ class DraftAuthoringService:
     def prepare(self, command: DraftCommand, *, operation_id: str) -> PreparedDraft:
         """Compose the document's content without changing durable state.
 
-        The provider chooses the facts and then words them. A selection the user has not
-        touched is replaced by a `propose_selection_plan` overlay, validated by the same
-        selection policy `propose_selection` passes; a selection the user already chose
-        - pins, exclusions, an emphasis, or an activated AI proposal - is kept as it is.
-        The engine lays that selection out as the frame the provider writes into, and
-        `draft_resume` proposes the wording over it. `operation_id` is where every
+        The engine lays out every section's whole pool as canonical claims, and
+        `draft_resume` chooses among them and words the ones it keeps, in one call
+        (docs/decisions/ai-owned-selection.md). `operation_id` is where every
         sanitized response is preserved.
         """
         source = self._target(command.application_id, command.expected_document_hash)
@@ -171,33 +188,18 @@ class DraftAuthoringService:
                 "again from its analysis"
             )
         knowledge = self.load_knowledge()
-        selection = document.selection
-        selection_evidence: ProviderEvidence | None = None
-        if not user_chose_selection(selection):
-            proposed = AnalysisSelectionService.prepare_selection_proposal(
-                self,
-                ProposeSelectionCommand(
-                    application_id=command.application_id,
-                    expected_document_hash=command.expected_document_hash,
-                    model=command.model,
-                    reasoning_effort=command.reasoning_effort,
-                ),
-                operation_id=operation_id,
-            )
-            selection, selection_evidence = proposed.selection, proposed.evidence
         frame = compose_content(
             command.application_id,
             document.analysis_id,
             source.job_snapshot_id,
             source.analysis,
-            selection,
             knowledge,
         )
-        content, evidence, review_evidence = self._propose_wording(
+        content, evidence, review_evidence = self._propose_draft(
             command.application_id,
             operation_id,
             frame,
-            source.analysis,
+            source,
             knowledge,
             model=command.model,
             reasoning_effort=command.reasoning_effort,
@@ -208,38 +210,44 @@ class DraftAuthoringService:
             content=content,
             evidence=evidence,
             review_evidence=review_evidence,
-            selection=None if selection_evidence is None else selection,
-            selection_evidence=selection_evidence,
         )
 
-    def _propose_wording(
+    def _propose_draft(
         self,
         application_id: str,
         operation_id: str,
-        draft: DraftDocument,
-        analysis: JobAnalysis,
+        frame: DraftDocument,
+        source: DocumentSource,
         knowledge: Knowledge,
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
     ) -> tuple[DraftDocument, ProviderEvidence, ProviderEvidence | None]:
-        """`draft_resume`: ask for wording over a document the engine composed.
+        """`draft_resume`: choose from the frame and word the choice.
 
-        The provider never decides *which* facts appear - the document's selection
-        already did. It proposes how the selected facts are worded, and every line
-        comes back through `apply_claim_edit`. Wording its own facts do not support is
-        refused as `ProposalRejected`, not saved as a pending claim: §14's pending rule
-        is for a person mid-edit, not for a wrong answer.
+        The provider keeps the claims it wants and words them; a claim it leaves out
+        is a fact the document does not use. The engine then narrows: the choice is
+        laid out again from the kept claims' facts, which adds back every heading,
+        date and contact and keeps pool order, so each role keeps its title, dates
+        and bullets together. A role left with no bullet is refused. Every line comes
+        back through `apply_claim_edit`, and wording its facts do not support goes to
+        semantic review or is refused as `ProposalRejected`.
         """
-        selected = sorted(
+        analysis = source.analysis
+        profile = knowledge.profiles.get(analysis.profile)
+        specs = {
+            (spec.name_he if frame.language == "he" else spec.name_en): spec
+            for spec in profile.sections
+        }
+        pool = sorted(
             {
                 fact_id
-                for section in draft.sections
+                for section in frame.sections
                 for claim in section.claims
                 for fact_id in claim.fact_ids
             }
         )
-        snapshot = self.snapshot_source(draft.job_snapshot_id)
+        snapshot = self.snapshot_source(frame.job_snapshot_id)
         job_text = ""
         if self.snapshot_payloads is not None and snapshot.get("payload_path"):
             try:
@@ -253,42 +261,62 @@ class DraftAuthoringService:
                 job_analysis={
                     "track": analysis.track.value,
                     "profile": analysis.profile.value,
-                    "emphasis": draft.emphasis.value,
+                    "emphasis": frame.emphasis.value,
                     "language": analysis.language,
                     "keywords": list(analysis.keywords),
                 },
                 job_text=job_text,
                 requirements=[item.model_dump(mode="json") for item in analysis.requirements],
-                language=draft.language,
+                language=frame.language,
                 sections=[
                     {
                         "section": section.name,
                         "allowed_fact_ids": sorted(
                             {fact_id for claim in section.claims for fact_id in claim.fact_ids}
                         ),
+                        "guidance": _section_guidance(specs[section.name]),
                         "claims": [
                             {
                                 "claim_id": claim.claim_id,
+                                "style": claim.style,
                                 "text": claim.text,
                                 "fact_ids": list(claim.fact_ids),
                             }
                             for claim in section.claims
                         ],
                     }
-                    for section in draft.sections
+                    for section in frame.sections
                 ],
-                allowed_facts=fact_context(knowledge.facts, selected, draft.language),
+                allowed_facts=fact_context(knowledge.facts, pool, frame.language),
+                guidance=_document_guidance(profile, knowledge.policies.get(frame.emphasis)),
             ),
             model=model,
             reasoning_effort=reasoning_effort,
         )
         evidence = self.preserve(application_id, operation_id, "draft_resume", answered.provenance)
+        proposed = answered.proposal.claims
         with evidence_attached(evidence):
+            kept = {str(claim.claim_id) for claim in proposed if claim.claim_id is not None}
+            chosen = compose_content(
+                application_id,
+                source.document.analysis_id,
+                frame.job_snapshot_id,
+                analysis,
+                knowledge,
+                chosen=frame_choice(frame, profile, kept),
+            )
+            for section in chosen.sections:
+                empty = dangling_heading(section.claims)
+                if empty is not None:
+                    raise ProposalRejected(
+                        f"draft_resume kept no bullet under {empty!r} in {section.name}",
+                        unsupported=[],
+                    )
             updated = apply_proposed_claims(
-                draft,
-                answered.proposal.claims,
+                chosen,
+                proposed,
                 knowledge.facts,
-                set(selected),
+                set(pool),
                 task="draft_resume",
                 allow_semantic_review=True,
             )
@@ -297,9 +325,9 @@ class DraftAuthoringService:
             operation_id,
             updated,
             knowledge,
-            selected,
+            list(updated.selected_fact_ids),
             evidence,
-            claim_ids=_changed_claim_ids(draft, updated),
+            claim_ids=_changed_claim_ids(chosen, updated),
             model=model,
             reasoning_effort=reasoning_effort,
         )
@@ -338,7 +366,7 @@ class DraftAuthoringService:
                 raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
         for claim_id in command.claim_removals:
             try:
-                patched = remove_claim(patched, claim_id, facts)
+                patched = remove_claim(patched, claim_id)
             except KeyError as exc:
                 raise UnknownRecord(f"unknown claim in the document: {claim_id}") from exc
             except ValueError as exc:
@@ -346,7 +374,7 @@ class DraftAuthoringService:
         added_claim_ids: set[str] = set()
         for addition in command.claim_additions:
             try:
-                patched, new_claim_id = add_claim(patched, addition.section, addition.text, facts)
+                patched, new_claim_id = add_claim(patched, addition.section, addition.text)
             except KeyError as exc:
                 raise UnknownRecord(f"unknown section in the document: {addition.section}") from exc
             except ValueError as exc:
@@ -363,11 +391,7 @@ class DraftAuthoringService:
                 tx,
                 command.application_id,
                 command.expected_document_hash,
-                DocumentBody(
-                    analysis_id=document.analysis_id,
-                    selection=document.selection,
-                    content=patched,
-                ),
+                DocumentBody(analysis_id=document.analysis_id, content=patched),
                 updated_at=utc_now(),
             )
         edited = {edit.claim_id for edit in command.claim_edits} | added_claim_ids

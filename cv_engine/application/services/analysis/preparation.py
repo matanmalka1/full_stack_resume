@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from ....domain.analysis.normalize import normalize_analysis_proposal
 from ....domain.contracts.analysis import JobAnalysis, OverrideKey
 from ....domain.contracts.document import BuiltWith
-from ....domain.contracts.selection import SelectionManifest
 from ...commands import AnalyzeCommand
 from ...errors import (
     ApplicationError,
@@ -17,20 +16,19 @@ from ...errors import (
 )
 from ...ports import AnalysisContext
 from ..proposals import ProviderEvidence, analysis_fact_context
-from .selection_policy import AnalysisSelection
+from .classification import analysis_profile
 
 
 @dataclass(frozen=True)
 class PreparedAnalysis:
     """One analysis, computed but not written.
 
-    `selection` is the analysis's deterministic selection and `built_with` the
-    Knowledge versions it was built with: they become the CV document when this
-    analysis is the Application's first (§13), and are otherwise unused.
+    `built_with` is the Knowledge versions it was built with: it becomes the CV
+    document's when this analysis is the Application's first (§13), and is otherwise
+    unused.
     """
 
     result: JobAnalysis
-    selection: SelectionManifest
     built_with: BuiltWith
     provider: str
     model: str
@@ -116,16 +114,11 @@ class AnalysisPreparation:
         # and Emphasis disagree can never produce a draft, so persisting it would
         # only leave the application classified by a combination the engine
         # refuses to act on.
-        selected_profile = AnalysisSelection.profile(result, profiles)
-        selection = AnalysisSelection.manifest(result, knowledge)
+        selected_profile = analysis_profile(result, profiles)
 
         return PreparedAnalysis(
             result=result,
-            selection=selection,
-            built_with=BuiltWith(
-                profile_version=profiles.version,
-                selection_policy_version=knowledge.policies.version,
-            ),
+            built_with=BuiltWith(profile_version=profiles.version),
             provider=used_provider,
             model=used_model,
             normalized_role=selected_profile.normalized_role,

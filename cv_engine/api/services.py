@@ -20,7 +20,7 @@ from ..application.services.applications.queries import ApplicationQueryService
 from ..application.services.drafts import DraftAuthoringService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
-from ..application.services.drafts.selection import SelectionChangeService
+from ..application.services.drafts.repin import RepinService
 from ..application.services.drafts.validation import DraftValidationService
 from ..application.services.knowledge import FactLifecycleService, KnowledgeQueryService
 from ..application.services.maintenance import MaintenanceService
@@ -61,7 +61,7 @@ class ApiServices:
     applications: ApplicationService
     queries: ApplicationQueryService
     analysis: AnalysisService
-    selection: SelectionChangeService
+    repin: RepinService
     drafts: DraftAuthoringService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService

@@ -11,19 +11,15 @@ from ...domain.analysis.projection import gaps as project_gaps
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.contracts.document import CVDocument, DocumentSubmission
 from ...domain.contracts.drafts import DraftDocument
-from ...domain.contracts.selection import SelectionManifest
 from ...domain.document import ContentCheck, PreparationState, current_approved_at
 from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
-from ...domain.selection import ROLE_BLOCK_TAG, STRUCTURAL_STYLES
 from .narrowing import application_is_closed
 from .views_prep import (
     ArtifactVersionView,
     BuiltWithView,
     ClaimReviewAssertionView,
     ClaimReviewEvidenceView,
-    DocumentCandidateView,
-    DocumentSelectionView,
     DocumentView,
     DraftClaimView,
     DraftFactView,
@@ -99,72 +95,29 @@ def _rendering(facts: FactStore, fact_id: str, language: str) -> str | None:
         return None
 
 
-def document_selection_view(
-    selection: SelectionManifest, facts: FactStore, language: str
-) -> DocumentSelectionView:
-    """Pair the selection's ranking with readable current canonical fact renderings.
-
-    A fact that no longer resolves is shown without text and is not selectable,
-    rather than turning the read into a technical failure.
-    """
-    candidates: list[DocumentCandidateView] = []
-    for candidate in selection.candidates:
-        try:
-            fact = facts.get(candidate.fact_id, canonical_only=True)
-            text = facts.rendering(candidate.fact_id, language)
-            user_selectable = (
-                fact.resume_style not in STRUCTURAL_STYLES and ROLE_BLOCK_TAG not in fact.tags
-            )
-        except (KeyError, ValueError):
-            text = None
-            user_selectable = False
-        candidates.append(
-            DocumentCandidateView(
-                fact_id=candidate.fact_id,
-                text=text,
-                section=candidate.section,
-                outcome=candidate.outcome,
-                reason=candidate.reason,
-                user_selectable=user_selectable,
-            )
-        )
-    return DocumentSelectionView(
-        emphasis=selection.emphasis,
-        emphasis_override=selection.emphasis_override,
-        selected_fact_ids=list(selection.selected_fact_ids),
-        pinned_fact_ids=list(selection.pinned_fact_ids),
-        excluded_fact_ids=list(selection.excluded_fact_ids),
-        proposed_by=selection.proposed_by,
-        proposal_rationale=selection.proposal_rationale,
-        candidates=candidates,
-    )
-
-
 def document_facts_view(
-    selection: SelectionManifest, content: DraftDocument | None, facts: FactStore, language: str
+    content: DraftDocument | None, facts: FactStore, language: str
 ) -> list[DraftFactView]:
-    """§20 candidate accounting: every fact the content links, and every candidate.
-
-    The union of the two, because neither covers the other. Contacts come from the
-    candidate context and never appear in a selection, while an omitted candidate
-    appears in no claim.
-    """
+    """§20: every fact the content links, with the claims that link it."""
+    if content is None:
+        return []
     linked: dict[str, list[str]] = {}
-    if content is not None:
-        for claim in draft_claims(content):
+    section_of: dict[str, str] = {}
+    for claim in draft_claims(content):
+        for fact_id in claim.fact_ids:
+            linked.setdefault(fact_id, []).append(claim.claim_id)
+    for section in content.sections:
+        for claim in section.claims:
             for fact_id in claim.fact_ids:
-                linked.setdefault(fact_id, []).append(claim.claim_id)
-    candidates = {candidate.fact_id: candidate for candidate in selection.candidates}
+                section_of.setdefault(fact_id, section.name)
     return [
         DraftFactView(
             fact_id=fact_id,
             text=_rendering(facts, fact_id, language),
-            linked_claim_ids=linked.get(fact_id, []),
-            section=candidates[fact_id].section if fact_id in candidates else None,
-            outcome=candidates[fact_id].outcome if fact_id in candidates else None,
-            reason=candidates[fact_id].reason if fact_id in candidates else None,
+            linked_claim_ids=linked[fact_id],
+            section=section_of.get(fact_id),
         )
-        for fact_id in sorted(set(linked) | set(candidates))
+        for fact_id in sorted(linked)
     ]
 
 
@@ -182,15 +135,11 @@ def document_view(
         application_id=document.application_id,
         analysis_id=document.analysis_id,
         document_hash=document.document_hash,
-        built_with=BuiltWithView(
-            profile_version=document.built_with.profile_version,
-            selection_policy_version=document.built_with.selection_policy_version,
-        ),
+        built_with=BuiltWithView(profile_version=document.built_with.profile_version),
         language=language,
-        selection=document_selection_view(document.selection, facts, language),
         content=document.content,
         outline=None if document.content is None else draft_outline_view(document.content),
-        facts=document_facts_view(document.selection, document.content, facts, language),
+        facts=document_facts_view(document.content, facts, language),
         preparation_state=preparation_state,
         content_check=content_check,
         content_report=document.content_report,

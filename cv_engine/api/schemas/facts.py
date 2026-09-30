@@ -241,14 +241,12 @@ class AttachFactRequest(HttpSchema):
 
 
 class ConfirmAndUseFactRequest(HttpSchema):
-    """Confirm, attach, and select one fact as a single recoverable command."""
+    """Confirm one fact and attach it to a Profile section as one recoverable command."""
 
     application_id: str
     job_analysis_id: str
     profile: str
     section: str
-    #: The document the user was looking at; the selection step is guarded by it.
-    expected_document_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     reason: str = ""
 
 

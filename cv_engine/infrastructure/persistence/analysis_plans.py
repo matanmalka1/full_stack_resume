@@ -62,19 +62,3 @@ class SqlAlchemyAnalysisPlanRepository:
         )
         if result.rowcount != 1:
             raise UnknownRecord(application_id)
-
-    def set_matching_emphasis(
-        self, tx: WriteTransaction, application_id: str, emphasis: str
-    ) -> None:
-        """`Application.emphasis` is the current matching configuration, not history.
-
-        An Emphasis decision on the document's selection advances it while the
-        JobAnalysis row stays untouched.
-        """
-        result = self._transactions.connection_for(tx, access="write").execute(
-            update(applications)
-            .where(applications.c.id == application_id)
-            .values(emphasis=emphasis, updated_at=utc_now())
-        )
-        if result.rowcount != 1:
-            raise UnknownRecord(application_id)

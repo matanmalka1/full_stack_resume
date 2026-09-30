@@ -23,11 +23,10 @@ from __future__ import annotations
 from typing import Any
 
 from ....domain.contracts.knowledge import Fact
-from ....domain.contracts.selection import SelectionManifest
+from ....domain.emphasis import EmphasisPolicyStore
 from ....domain.facts import FactStore
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import ProfileStore
-from ....domain.selection import EmphasisPolicyStore
 from ...commands import FactMutationResult
 from ...errors import InfrastructureFailure, KnowledgeRejected, PreconditionFailed
 from ...knowledge_mutations import (
@@ -93,9 +92,7 @@ class KnowledgeMutationEngine:
     ) -> None:
         """Apply the database half of one mutation inside the journal's commit.
 
-        The only document write the journal makes is `confirm_and_use_fact`'s
-        selection step, guarded by the hash the command read (decision 6: fact
-        changes otherwise write nothing to any document).
+        Fact events only: a fact change writes nothing to any document (decision 6).
         """
         for action in payload.get("actions", []):
             if action.get("type") == "fact_event":
@@ -114,16 +111,6 @@ class KnowledgeMutationEngine:
                     claim_id=action["claim_id"],
                     event_id=action["event_id"],
                     created_at=action["created_at"],
-                )
-            elif action.get("type") == "document_selection":
-                # Rendered files it releases are left to orphan maintenance: nothing
-                # here runs after the journal's commit.
-                self.documents.replace_selection(
-                    tx,
-                    action["application_id"],
-                    action["expected_document_hash"],
-                    SelectionManifest.model_validate(action["selection"]),
-                    updated_at=action["updated_at"],
                 )
             else:
                 raise ValueError(f"unknown Knowledge DB action: {action.get('type')}")
