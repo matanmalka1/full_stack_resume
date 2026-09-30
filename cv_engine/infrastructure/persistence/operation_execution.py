@@ -19,7 +19,7 @@ from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import new_id, utc_now
 from .analysis_sql import _lock_application
 from .connection import SqlAlchemyTransactionManager
-from .operation_sql import _operation_record, _outputs, _release
+from .operation_sql import _operation_record, _release
 from .tables import operation_outputs, operation_resource_leases, operations
 
 _RESOURCE_CAPACITY = {"application_mutation": 1, "render_browser": 1, "ai": 2}
@@ -95,8 +95,6 @@ class SqlAlchemyOperationExecutionStore:
             return None
         if row["status"] != OperationStatus.QUEUED.value:
             return None
-        if row["next_attempt_at"] is not None and row["next_attempt_at"] > timestamp:
-            return None
         acquired: list[tuple[str, str, int]] = []
         blocked_kind = None
         for resource in row["resources_json"]:
@@ -148,7 +146,7 @@ class SqlAlchemyOperationExecutionStore:
             .mappings()
             .one_or_none()
         )
-        return _operation_record(current, _outputs(connection, operation_id))
+        return _operation_record(current, connection)
 
     def claim_next_operation(
         self,
@@ -162,11 +160,7 @@ class SqlAlchemyOperationExecutionStore:
         candidates = (
             connection.execute(
                 select(operations.c.id)
-                .where(
-                    operations.c.status == "queued",
-                    operations.c.next_attempt_at.is_(None)
-                    | (operations.c.next_attempt_at <= timestamp),
-                )
+                .where(operations.c.status == "queued")
                 .order_by(operations.c.created_at, operations.c.id)
             )
             .scalars()
@@ -225,7 +219,7 @@ class SqlAlchemyOperationExecutionStore:
             .mappings()
             .one_or_none()
         )
-        return _operation_record(row, _outputs(connection, operation_id))
+        return _operation_record(row, connection)
 
     def set_operation_phase(
         self,
@@ -263,6 +257,24 @@ class SqlAlchemyOperationExecutionStore:
         if row is None:
             raise UnknownRecord("operation does not exist")
         return row["cancellation_requested_at"] is not None
+
+    def execution_still_owned(
+        self, tx: ReadTransaction, operation_id: str, *, runner_id: str
+    ) -> bool:
+        """The Operation is still running, held by `runner_id`, with no cancellation asked.
+
+        What must hold before this runner starts another provider call for it.
+        """
+        connection = self._transactions.connection_for(tx)
+        owned = connection.execute(
+            select(operations.c.id).where(
+                operations.c.id == operation_id,
+                operations.c.status == OperationStatus.RUNNING.value,
+                operations.c.lease_owner == runner_id,
+                operations.c.cancellation_requested_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        return owned is not None
 
     def record_operation_output(
         self,
@@ -344,34 +356,6 @@ class SqlAlchemyOperationExecutionStore:
         if changed != 1:
             raise StateConflict("operation output cannot be activated")
 
-    def record_operation_attempt(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        *,
-        runner_id: str,
-        retry_at: str | None = None,
-    ) -> int:
-        connection = self._transactions.connection_for(tx, access="write")
-        changed = connection.execute(
-            update(operations)
-            .where(
-                operations.c.id == operation_id,
-                operations.c.status == "running",
-                operations.c.lease_owner == runner_id,
-            )
-            .values(
-                attempts_completed=operations.c.attempts_completed + 1,
-                phase=OperationPhase.RETRY_WAIT.value,
-                next_attempt_at=retry_at,
-            )
-        ).rowcount
-        if changed != 1:
-            raise StateConflict("operation lease is not owned by this runner")
-        return connection.execute(
-            select(operations.c.attempts_completed).where(operations.c.id == operation_id)
-        ).scalar_one()
-
     def complete_operation(
         self,
         tx: WriteTransaction,
@@ -426,7 +410,6 @@ class SqlAlchemyOperationExecutionStore:
                     null() if withheld_claims is None else withheld_claims.model_dump(mode="json")
                 ),
                 lease_owner=None,
-                next_attempt_at=None,
                 attempts_completed=operations.c.attempts_completed + 1,
             )
         )
@@ -435,7 +418,7 @@ class SqlAlchemyOperationExecutionStore:
             .mappings()
             .one_or_none()
         )
-        return _operation_record(current, _outputs(connection, operation_id))
+        return _operation_record(current, connection)
 
     def fail_operation(
         self,
@@ -473,7 +456,6 @@ class SqlAlchemyOperationExecutionStore:
                 technical_log_reference=technical_log_reference,
                 attempts_completed=operations.c.attempts_completed + 1,
                 lease_owner=None,
-                next_attempt_at=None,
             )
         ).rowcount
         if changed != 1:
@@ -483,4 +465,4 @@ class SqlAlchemyOperationExecutionStore:
             .mappings()
             .one_or_none()
         )
-        return _operation_record(current, _outputs(connection, operation_id))
+        return _operation_record(current, connection)

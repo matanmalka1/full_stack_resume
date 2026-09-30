@@ -52,18 +52,14 @@ export const phaseLabels: Record<OperationPhase, string> = {
   waiting_for_ai_slot: "ממתינה לתור המודל",
   pre_execution_check: "בדיקה לפני ביצוע",
   executing: "בביצוע",
-  retry_wait: "המתנה לפני ניסיון חוזר",
   pre_activation_check: "בדיקה לפני הפעלת התוצר",
   activating: "מפעילה את התוצר",
   completed: "הושלמה",
 };
 
-/* What an operation produced, named for the reader.
-
-   `provider_response` is deliberately absent. It is registered as an output, but it is
-   the provider's own text, and this screen states elsewhere that it shows no provider
-   text. It stays in the record and out of the result line. */
-const outputTypeLabels: Partial<Record<OperationOutput["output_type"], string>> = {
+/* What an operation produced, named for the reader. Provider calls are not outputs: they
+   live in the AI call log, and this screen shows no provider text. */
+const outputTypeLabels: Record<OperationOutput["output_type"], string> = {
   job_analysis: "ניתוח המשרה",
   cv_document: "קורות החיים",
 };

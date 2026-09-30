@@ -6,30 +6,28 @@ in this file reaches the network, and none of them needs `OPENAI_API_KEY`.
 
 Covers test-and-acceptance-plan §6 at the transport level: strict schema
 generation for every contracted task, per-task Proposal parsing, refusal and
-invalid-output handling, raw sanitization, and exact provider/model/usage/
-latency/response metadata. The application-level items - semantic support, no
-silent fallback, artifact registration, retries, injection - are in
-`test_ai_tasks.py`, which drives the same adapter through Operations.
+invalid-output handling, sanitization, the classification of every attempt's
+outcome, and exact provider/model/usage/cost/latency/response metadata. Each call
+is one attempt returned as a record, never an exception. The application-level
+items - semantic support, no silent fallback, the AI call log, retries,
+injection - are in `test_ai_tasks.py`, which drives the same adapter through
+Operations.
 """
 
 from __future__ import annotations
 
+import http.client
 import json
+import socket
 import urllib.error
 import urllib.request
+from email.message import Message
 from pathlib import Path
 
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
 
 from cv_engine.application.ai_configuration import execution_cost
-from cv_engine.application.errors import (
-    ProviderRateLimited,
-    ProviderRefused,
-    ProviderSchemaViolation,
-    ProviderTimeout,
-    ProviderUnavailable,
-)
 from cv_engine.application.ports import (
     AnalysisContext,
     AssessClaimSupportContext,
@@ -128,12 +126,61 @@ def test_long_context_cost_uses_the_pricing_snapshot_multipliers() -> None:
         "gpt-5.6-terra",
         input_tokens=300_000,
         cached_input_tokens=0,
+        cache_write_tokens=0,
         output_tokens=1_000,
     ) == {
         "input_usd": "1.20000000",
         "output_usd": "0.01800000",
         "total_usd": "1.21800000",
     }
+
+
+@pytest.mark.parametrize(
+    ("cached", "written", "input_usd"),
+    [
+        # 1,000 ordinary input tokens at $2.00 per million.
+        (0, 0, "0.00200000"),
+        # Cache read: 400 at $0.20 and 600 ordinary at $2.00.
+        (400, 0, "0.00128000"),
+        # Cache write: 400 at 1.25 x $2.00 and 600 ordinary at $2.00.
+        (0, 400, "0.00220000"),
+        # Both: 300 read, 200 written, 500 ordinary.
+        (300, 200, "0.00156000"),
+    ],
+)
+def test_input_is_billed_once_as_ordinary_cached_or_cache_write(cached, written, input_usd):
+    """Every input token has exactly one rate: ordinary = input - cached - cache_write."""
+    cost = execution_cost(
+        "gpt-5.6-terra",
+        input_tokens=1_000,
+        cached_input_tokens=cached,
+        cache_write_tokens=written,
+        output_tokens=0,
+    )
+    assert cost is not None
+    assert cost["input_usd"] == input_usd
+
+
+def test_a_cost_that_needs_cache_writes_is_unknown_without_them() -> None:
+    """GPT-5.6 prices cache writes, so a usage without that count cannot be priced."""
+    assert (
+        execution_cost(
+            "gpt-5.6-terra",
+            input_tokens=1_000,
+            cached_input_tokens=0,
+            cache_write_tokens=None,
+            output_tokens=10,
+        )
+        is None
+    )
+    with pytest.raises(ValueError, match="inconsistent"):
+        execution_cost(
+            "gpt-5.6-terra",
+            input_tokens=10,
+            cached_input_tokens=8,
+            cache_write_tokens=5,
+            output_tokens=0,
+        )
 
 
 def _call(provider, task, context):
@@ -193,6 +240,7 @@ def test_each_task_sends_a_strict_schema_and_parses_its_own_proposal(
         fake_openai.script(task, proposal)
         answered = _call(provider, task, context)
 
+        assert answered.record.outcome == "succeeded", task
         assert answered.proposal == proposal, task
         assert type(answered.proposal) is TASK_OUTPUT_MODELS[task]
 
@@ -251,10 +299,9 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     answered = _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
     body = fake_openai.calls_for("propose_analysis")[-1].body
     assert body["input"][0]["content"] == task_contracts.prompt_text
-    context = answered.provenance.context
+    context = answered.record
     assert context.prompt_version == task_contracts.prompt_version
     assert context.prompt_hash == task_contracts.prompt_hash
-    assert context.system_version == task_contracts.version
     contract = task_contracts.get("propose_analysis")
     assert context.task_contract_version == contract.version
     assert context.input_schema_version == contract.input_schema_version
@@ -278,15 +325,24 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
     assert context.response_id == "resp_fake_1"
     assert (context.usage.input_tokens, context.usage.output_tokens) == (11, 22)
     assert context.usage.cached_input_tokens == 3
+    assert context.usage.cache_write_tokens == 0
     assert context.usage.total_tokens == 33
     assert context.pricing is not None
-    assert context.pricing.version == "openai-2026-09-03"
+    assert context.pricing.version == "openai-2026-09-30"
     assert context.cost is not None
     assert context.cost.total_usd == "0.00028060"
     assert context.latency_ms >= 0
-    assert len(answered.provenance.input_hash) == 64
-    assert len(answered.provenance.output_hash) == 64
-    assert len(answered.provenance.raw_output_hash) == 64
+    assert context.started_at <= context.finished_at
+    assert context.input_hash == sha256_text(
+        canonical_json(ANALYSIS_CONTEXT.model_dump(mode="json"))
+    )
+    assert context.output_hash == sha256_text(canonical_json(ANALYSIS.model_dump(mode="json")))
+    # The evidence is the sanitized envelope in canonical form, hashed as such.
+    assert context.sanitized_response is not None
+    assert context.sanitized_response["id"] == "resp_fake_1"
+    assert context.sanitized_response_hash == sha256_text(
+        canonical_json(context.sanitized_response)
+    )
 
     # The rules the tasks rely on are in that one prompt. Analysis splits a
     # sentence only into self-contained quotes and judges qualitative and
@@ -312,22 +368,24 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
         assert rule in prompt, rule
 
 
-def test_a_refusal_is_a_provider_refusal_carrying_its_own_evidence(
+def test_a_refusal_is_an_attempt_record_as_complete_as_a_success(
     fake_openai: FakeOpenAI, task_contracts
 ) -> None:
-    """§6: refusal handling, with the answer kept as evidence."""
+    """§6: refusal handling. The attempt comes back as a record, never an exception."""
     fake_openai.script("propose_analysis", refusal_envelope())
-    with pytest.raises(ProviderRefused) as raised:
-        _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
-    provenance = raised.value.provenance
-    assert provenance is not None
-    assert "resp_fake_refusal" in provenance.sanitized_response
+    answered = _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
+    record = answered.record
+    assert answered.proposal is None
+    assert record.outcome == "refused"
     # A refusal is exactly when "which model refused, under which contract"
     # has to be answerable, so the record is as complete as a success's.
-    assert provenance.context.provider == "openai"
-    assert provenance.context.model == "gpt-5.6-terra"
-    assert provenance.context.response_id == "resp_fake_refusal"
-    assert provenance.output == {}
+    assert record.provider == "openai"
+    assert record.model == "gpt-5.6-terra"
+    assert record.response_id == "resp_fake_refusal"
+    assert record.sanitized_response is not None
+    assert record.output_hash is None
+    # Its usage leaves out the cached count, so usage and cost are unknown, not zero.
+    assert (record.usage, record.cost) == (None, None)
 
 
 def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
@@ -338,7 +396,7 @@ def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
     Including the case that matters most: an answer that adds a policy field.
     The Proposal model forbids extras, so a provider cannot smuggle `fit` in
     beside the fields it is allowed to send. A body that is not a Responses
-    envelope at all - a gateway's HTML page - is the same violation.
+    envelope at all - a gateway's HTML page - is the same violation, kept as text.
     """
     texts = [
         '{"track": "sales"}',
@@ -351,12 +409,16 @@ def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
     for text in texts:
         fake_openai.scripts["propose_analysis"].clear()
         fake_openai.script("propose_analysis", envelope(text))
-        with pytest.raises(ProviderSchemaViolation) as raised:
-            _call(provider, "propose_analysis", ANALYSIS_CONTEXT)
-        assert raised.value.provenance is not None, text
-        assert raised.value.provenance.sanitized_response, text
+        answered = _call(provider, "propose_analysis", ANALYSIS_CONTEXT)
+        assert answered.proposal is None, text
+        assert answered.record.outcome == "schema_violation", text
+        assert answered.record.sanitized_response, text
+        assert answered.record.usage is not None, text
 
     class _Raw:
+        status = 200
+        headers = Message()
+
         def __enter__(self):
             return self
 
@@ -364,34 +426,112 @@ def test_invalid_output_is_a_schema_violation_and_never_a_partial_proposal(
             return False
 
         def read(self) -> bytes:
-            return b"<html>gateway</html>"
+            return b"<html>gateway Bearer sk-live-abcdefgh1234</html>"
 
+    _Raw.headers["Content-Type"] = "text/html"
     monkeypatch.setattr(urllib.request, "urlopen", lambda *_a, **_k: _Raw())
-    with pytest.raises(ProviderSchemaViolation):
-        _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
+    answered = _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
+    assert answered.record.outcome == "schema_violation"
+    kept = answered.record.sanitized_response
+    assert kept is not None
+    assert kept["content_type"] == "text/html"
+    assert kept["truncated"] is False
+    assert "sk-live" not in kept["body_text"] and "[redacted]" in kept["body_text"]
 
 
-def test_transport_failures_are_classified_by_status_not_by_message(
-    fake_openai: FakeOpenAI, task_contracts
+@pytest.mark.parametrize(
+    ("answer", "outcome", "error_type", "error_code", "retry_after"),
+    [
+        (
+            HTTPStatus(429, headers=(("Retry-After", "2"),)),
+            "rate_limited",
+            None,
+            None,
+            2.0,
+        ),
+        (HTTPStatus(429), "rate_limited", None, None, None),
+        (
+            HTTPStatus(
+                429,
+                body='{"error": {"type": "rate_limit_error", "code": "slow_down"}}',
+                headers=(("Retry-After", "Wed, 21 Oct 2015 07:28:00 GMT"),),
+            ),
+            "rate_limited",
+            "rate_limit_error",
+            "slow_down",
+            0.0,
+        ),
+        (
+            HTTPStatus(429, body='{"error": {"code": "credit_balance_exhausted"}}'),
+            "quota_exhausted",
+            None,
+            "credit_balance_exhausted",
+            None,
+        ),
+        (
+            HTTPStatus(429, body='{"error": {"type": "insufficient_quota"}}'),
+            "quota_exhausted",
+            "insufficient_quota",
+            None,
+            None,
+        ),
+        (HTTPStatus(500), "http_error", None, None, None),
+        (HTTPStatus(503, headers=(("Retry-After", "5"),)), "http_error", None, None, 5.0),
+        (HTTPStatus(400), "http_error", None, None, None),
+        (HTTPStatus(401), "http_error", None, None, None),
+        # Provably never sent: no name to connect to, or a connection refused.
+        (
+            urllib.error.URLError(socket.gaierror(-2, "no name")),
+            "not_delivered",
+            "gaierror",
+            None,
+            None,
+        ),
+        (
+            urllib.error.URLError(ConnectionRefusedError(111, "refused")),
+            "not_delivered",
+            "ConnectionRefusedError",
+            None,
+            None,
+        ),
+        # Wrapped, but possibly after the request was on the wire.
+        (urllib.error.URLError(TimeoutError()), "outcome_unknown", "TimeoutError", None, None),
+        (
+            urllib.error.URLError(ConnectionResetError()),
+            "outcome_unknown",
+            "ConnectionResetError",
+            None,
+            None,
+        ),
+        (urllib.error.URLError("no route"), "outcome_unknown", "URLError", None, None),
+        # Raised while waiting for or reading the answer: the request was sent.
+        (Timeout(), "outcome_unknown", "TimeoutError", None, None),
+        (ConnectionResetError(), "outcome_unknown", "ConnectionResetError", None, None),
+        (http.client.RemoteDisconnected(), "outcome_unknown", "RemoteDisconnected", None, None),
+        (http.client.IncompleteRead(b""), "outcome_unknown", "IncompleteRead", None, None),
+    ],
+)
+def test_every_attempt_outcome_is_classified_from_its_evidence_not_a_message(
+    fake_openai: FakeOpenAI, task_contracts, answer, outcome, error_type, error_code, retry_after
 ) -> None:
-    """The classification a retry decision depends on, pinned to the status.
+    """Classified by status, error code and failure stage - never by a message.
 
-    Before Stage G this was decided by searching the exception message for
-    "429", "timeout", and "http 5". A reworded message silently reclassified a
-    failure, and only the transient four may be retried.
+    `urlopen` wraps connect *and send* failures alike in `URLError`, so only a failed
+    name lookup or a refused connection proves nothing was sent. Every other
+    transport failure may have reached the provider, which may have billed it.
     """
-    cases = [
-        (HTTPStatus(429), ProviderRateLimited),
-        (HTTPStatus(500), ProviderUnavailable),
-        (HTTPStatus(503), ProviderUnavailable),
-        (HTTPStatus(400), ProviderRefused),
-        (HTTPStatus(401), ProviderRefused),
-        (Timeout(), ProviderTimeout),
-        (urllib.error.URLError("no route"), ProviderUnavailable),
-    ]
-    provider = fake_openai.provider(task_contracts)
-    for answer, expected in cases:
-        fake_openai.scripts["propose_analysis"].clear()
-        fake_openai.script("propose_analysis", answer)
-        with pytest.raises(expected):
-            _call(provider, "propose_analysis", ANALYSIS_CONTEXT)
+    fake_openai.script("propose_analysis", answer)
+    answered = _call(fake_openai.provider(task_contracts), "propose_analysis", ANALYSIS_CONTEXT)
+    record = answered.record
+    assert answered.proposal is None
+    assert record.outcome == outcome
+    assert record.error_type == error_type
+    assert record.error_code == error_code
+    assert record.retry_after_seconds == retry_after
+    assert (record.usage, record.cost) == (None, None)
+    if isinstance(answer, HTTPStatus):
+        assert record.http_status == answer.code
+        assert record.sanitized_response is not None
+    else:
+        assert record.http_status is None
+        assert record.sanitized_response is None

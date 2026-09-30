@@ -20,10 +20,10 @@ from ...domain.contracts.knowledge import (
     Profile,
 )
 from ...domain.contracts.providers import (
+    AICallRecord,
     ClaimProposal,
     ClaimSupportProposal,
     DraftProposal,
-    ProviderTaskResult,
     SectionProposal,
 )
 from ...domain.contracts.validation import ValidationReport
@@ -34,7 +34,6 @@ from ..knowledge_mutations import (
     StagedKnowledgeFile,
 )
 from .values import (
-    ArtifactStream,
     SnapshotPayload,
     StoredDraft,
     TaskContracts,
@@ -72,8 +71,6 @@ class SnapshotPayloadStore(Protocol):
         """
         ...
 
-    def open_artifact(self, reference: str, expected_hash: str) -> ArtifactStream: ...
-
 
 class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
@@ -82,14 +79,6 @@ class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
         `modified_before` keeps only payloads stored before that instant.
         """
         ...
-
-    def commit_provider_response(
-        self,
-        application_id: str,
-        operation_id: str,
-        artifact_id: str,
-        sanitized_json: str,
-    ) -> SnapshotPayload: ...
 
 
 class KnowledgeStore(Protocol):
@@ -193,16 +182,16 @@ ProposalT = TypeVar("ProposalT", bound=StrictModel)
 
 
 @dataclass(frozen=True)
-class AIProposal(Generic[ProposalT]):
-    """What every AI task returns: a Proposal, and proof of what produced it.
+class AIAttempt(Generic[ProposalT]):
+    """One provider call: what the call log records, and the Proposal if there is one.
 
-    The two travel together because they are useless apart. A Proposal with no
-    provenance cannot be audited, and provenance for a Proposal that was
-    discarded records an execution nobody can point at.
+    Every attempt returns one, whether it succeeded or failed, so the application
+    can append the record before it decides anything else. `proposal` is present
+    only when `record.outcome` is `succeeded`.
     """
 
-    proposal: ProposalT
-    provenance: ProviderTaskResult
+    record: AICallRecord
+    proposal: ProposalT | None = None
 
 
 class AnalysisContext(StrictModel):
@@ -287,14 +276,13 @@ class AIProvider(Protocol):
     One method per task rather than one `run(task, payload)`, because the
     tasks take different inputs and return different Proposal types, and a
     single stringly-typed entry point makes that invisible at the call site.
-    The transport - strict Structured Outputs over the Responses API - is an
-    infrastructure concern behind `StructuredOutputClient`, and no rule in this
-    layer may depend on it.
 
-    Every method takes one explicit, minimal context and returns a Proposal
-    with its provenance. Nothing here can save state: an implementation is
-    handed no repository, no payload store, and no filesystem paths, so activation
-    stays a decision the application commits (invariant 13).
+    Every method makes exactly one provider call and returns its `AIAttempt`,
+    successful or not: a classified failure is an outcome in the record, never an
+    exception, so the application appends every attempt before deciding whether to
+    try again. Nothing here can save state or retry: an implementation is handed no
+    repository and no policy, so the call log and the retry decision stay with the
+    application (invariant 13).
 
     Calls are stateless. No method takes a conversation, a prior response ID,
     or anything that would make a second call depend on a first.
@@ -306,7 +294,7 @@ class AIProvider(Protocol):
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> AIProposal[AnalysisProposal]: ...
+    ) -> AIAttempt[AnalysisProposal]: ...
 
     def draft_resume(
         self,
@@ -314,7 +302,7 @@ class AIProvider(Protocol):
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> AIProposal[DraftProposal]: ...
+    ) -> AIAttempt[DraftProposal]: ...
 
     def assess_claim_support(
         self,
@@ -322,7 +310,7 @@ class AIProvider(Protocol):
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> AIProposal[ClaimSupportProposal]: ...
+    ) -> AIAttempt[ClaimSupportProposal]: ...
 
     def regenerate_section(
         self,
@@ -330,7 +318,7 @@ class AIProvider(Protocol):
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> AIProposal[SectionProposal]: ...
+    ) -> AIAttempt[SectionProposal]: ...
 
     def regenerate_claim(
         self,
@@ -338,4 +326,4 @@ class AIProvider(Protocol):
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> AIProposal[ClaimProposal]: ...
+    ) -> AIAttempt[ClaimProposal]: ...

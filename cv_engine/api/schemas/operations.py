@@ -79,6 +79,7 @@ class OperationResponse(HttpSchema):
     reasoning_effort: ReasoningEffort | None = None
     input_tokens: int | None = None
     cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
     cost_usd: str | None = None

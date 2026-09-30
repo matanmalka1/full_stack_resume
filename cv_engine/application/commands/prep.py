@@ -315,7 +315,7 @@ class RegenerationResult(BoundaryDTO):
     document_id: str
     document_hash: str
     regenerated_claim_ids: list[str]
-    provider_artifact_version_id: str
+    ai_call_id: str
 
 
 class RenderResult(BoundaryDTO):

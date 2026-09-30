@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from ....domain.contracts.drafts import DraftDocument
 from ...operations import ClaimReviewReason
-from ..proposals import ProviderEvidence
 
 
 @dataclass(frozen=True)
@@ -21,8 +20,6 @@ class PreparedDraft:
     application_id: str
     expected_document_hash: str
     content: DraftDocument
-    evidence: ProviderEvidence
-    review_evidence: ProviderEvidence | None = None
     #: Proposed lines withheld from `content`; each kept its frame wording.
     withheld_claims: ClaimReviewReason | None = None
 
@@ -42,6 +39,7 @@ class PreparedRegeneration:
     expected_document_hash: str
     content: DraftDocument
     claim_ids: list[str]
-    evidence: ProviderEvidence
-    review_evidence: ProviderEvidence | None = None
+    #: The logged call that produced the change: the writer's, or the reviewer's when
+    #: the user's own wording was reviewed.
+    ai_call_id: str
     withheld_claims: ClaimReviewReason | None = None

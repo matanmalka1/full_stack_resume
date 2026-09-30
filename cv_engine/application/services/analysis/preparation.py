@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ....domain.analysis.normalize import normalize_analysis_proposal
@@ -9,13 +10,12 @@ from ....domain.contracts.analysis import JobAnalysis, OverrideKey
 from ....domain.contracts.document import BuiltWith
 from ...commands import AnalyzeCommand
 from ...errors import (
-    ApplicationError,
     InfrastructureFailure,
     PreconditionFailed,
     ProviderInvalidOutput,
 )
 from ...ports import AnalysisContext
-from ..proposals import ProviderEvidence, analysis_fact_context
+from ..proposals import analysis_fact_context
 from .classification import analysis_profile
 
 
@@ -33,22 +33,22 @@ class PreparedAnalysis:
     provider: str
     model: str
     normalized_role: str
-    evidence: ProviderEvidence | None = None
 
 
 class AnalysisPreparation:
     @staticmethod
     def prepare(
-        service, command: AnalyzeCommand, *, operation_id: str | None = None
+        service,
+        command: AnalyzeCommand,
+        *,
+        operation_id: str | None = None,
+        still_owned: Callable[[], bool] = lambda: True,
     ) -> PreparedAnalysis:
         """Validate and compute an analysis without mutating durable application state.
 
-        `operation_id` is required. It is
-        where the sanitized provider response is preserved, and it is the
-        Operation's own ID rather than the analysis's. A distinct provider output
-        from a retry is written beside the first attempt's evidence. Re-observing
-        the same provider-assigned response identity reuses immutable evidence;
-        the new Operation still receives its own inactive output reference.
+        `operation_id` is required: every provider attempt is logged against the
+        Operation, not the analysis. `still_owned` is what the runner checks before
+        any retry; a caller outside the runner has no lease to lose.
         """
         snapshot = service.snapshot_source(command.application_id, command.job_snapshot_id)
         service.refuse_deleted(snapshot.application_id, snapshot.deleted_at)
@@ -62,7 +62,6 @@ class AnalysisPreparation:
         profiles = knowledge.profiles
         if command.provider != "openai" or operation_id is None:
             raise PreconditionFailed("analysis requires an OpenAI Operation")
-        evidence: ProviderEvidence | None = None
         override_candidates: dict[OverrideKey, str | None] = {
             "track": command.track_override,
             "profile": command.profile_override,
@@ -73,42 +72,35 @@ class AnalysisPreparation:
             key: value for key, value in override_candidates.items() if value is not None
         }
         service.assert_provider_io_allowed()
+        context = AnalysisContext(
+            job_text=job_text,
+            candidate_facts=analysis_fact_context(knowledge.facts),
+            overrides={str(key): value for key, value in overrides.items()},
+        )
+        recorded = service.ai_calls.run(
+            operation_id,
+            lambda: service.provider.propose_analysis(
+                context, model=command.model, reasoning_effort=command.reasoning_effort
+            ),
+            knowledge_context_hash=knowledge.context_hash(),
+            still_owned=still_owned,
+        )
         try:
-            answered = service.provider.propose_analysis(
-                AnalysisContext(
-                    job_text=job_text,
-                    candidate_facts=analysis_fact_context(knowledge.facts),
-                    overrides={str(key): value for key, value in overrides.items()},
-                ),
-                model=command.model,
-                reasoning_effort=command.reasoning_effort,
+            # Normalization does not raise over one bad requirement; what
+            # can still fail here is a reading the engine cannot act on at
+            # all - a Track/Profile/Emphasis combination the Profile does
+            # not allow, or a language outside the supported set.
+            result = normalize_analysis_proposal(
+                recorded.proposal,
+                source_text=job_text,
+                facts=knowledge.facts,
+                profiles=profiles,
+                concepts=knowledge.requirement_concepts,
+                normalized_hash=snapshot.normalized_hash,
+                overrides=overrides,
             )
-            evidence = service.preserve(
-                command.application_id, operation_id, "propose_analysis", answered.provenance
-            )
-            try:
-                # Normalization does not raise over one bad requirement; what
-                # can still fail here is a reading the engine cannot act on at
-                # all - a Track/Profile/Emphasis combination the Profile does
-                # not allow, or a language outside the supported set.
-                result = normalize_analysis_proposal(
-                    answered.proposal,
-                    source_text=job_text,
-                    facts=knowledge.facts,
-                    profiles=profiles,
-                    concepts=knowledge.requirement_concepts,
-                    normalized_hash=snapshot.normalized_hash,
-                    overrides=overrides,
-                )
-            except ValueError as exc:
-                failure = ProviderInvalidOutput(str(exc), provenance=answered.provenance)
-                failure.evidence = evidence
-                raise failure from exc
-            used_provider = answered.provenance.context.provider
-            used_model = answered.provenance.context.model
-        except ApplicationError as exc:
-            exc.completed_evidence = tuple(item for item in (evidence,) if item is not None)
-            raise
+        except ValueError as exc:
+            raise ProviderInvalidOutput(str(exc)) from exc
 
         # Checked before anything is written. An analysis whose Track, Profile,
         # and Emphasis disagree can never produce a draft, so persisting it would
@@ -119,8 +111,7 @@ class AnalysisPreparation:
         return PreparedAnalysis(
             result=result,
             built_with=BuiltWith(profile_version=profiles.version),
-            provider=used_provider,
-            model=used_model,
+            provider=recorded.record.provider,
+            model=recorded.record.model,
             normalized_role=selected_profile.normalized_role,
-            evidence=evidence,
         )

@@ -172,7 +172,13 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                     <p>
                       <LtrText className="font-semibold text-cv-text">{selectedModel.label}</LtrText> — לכל מיליון
                       טוקנים: קלט <LtrText>${selectedModel.input_per_million_usd}</LtrText>, קלט שמור במטמון{" "}
-                      <LtrText>${selectedModel.cached_input_per_million_usd}</LtrText>, ופלט{" "}
+                      <LtrText>${selectedModel.cached_input_per_million_usd}</LtrText>,{" "}
+                      {selectedModel.cache_write_per_million_usd == null ? null : (
+                        <>
+                          כתיבה למטמון <LtrText>${selectedModel.cache_write_per_million_usd}</LtrText>,{" "}
+                        </>
+                      )}
+                      ופלט{" "}
                       <LtrText>${selectedModel.output_per_million_usd}</LtrText>. העלות בפועל תוצג לאחר כל פעולה.
                     </p>
                     <p className="mt-2 text-support text-cv-text-muted">

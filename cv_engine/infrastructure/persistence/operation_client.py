@@ -13,7 +13,7 @@ from ...application.operations import (
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import utc_now
 from .connection import SqlAlchemyTransactionManager
-from .operation_sql import _operation_record, _outputs
+from .operation_sql import _operation_record
 from .tables import (
     applications,
     operation_resource_leases,
@@ -77,7 +77,7 @@ class SqlAlchemyOperationClientStore:
                     "idempotency key already used with a different Operation payload",
                     code=IDEMPOTENCY_KEY_REUSED,
                 )
-            return _operation_record(existing, _outputs(connection, existing["id"]))
+            return _operation_record(existing, connection)
         connection.execute(
             insert(operations).values(
                 id=operation_id,
@@ -106,7 +106,7 @@ class SqlAlchemyOperationClientStore:
             .mappings()
             .one()
         )
-        return _operation_record(row, [])
+        return _operation_record(row, connection)
 
     def operation(self, tx: ReadTransaction, operation_id: str) -> PersistedOperation:
         connection = self._transactions.connection_for(tx)
@@ -115,7 +115,7 @@ class SqlAlchemyOperationClientStore:
             .mappings()
             .one_or_none()
         )
-        return _operation_record(row, _outputs(connection, operation_id))
+        return _operation_record(row, connection)
 
     def request_cancellation(
         self, tx: WriteTransaction, operation_id: str, *, now: str | None = None
@@ -162,4 +162,4 @@ class SqlAlchemyOperationClientStore:
             .mappings()
             .one()
         )
-        return _operation_record(current, _outputs(connection, operation_id))
+        return _operation_record(current, connection)

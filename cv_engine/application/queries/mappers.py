@@ -16,7 +16,6 @@ from ...domain.drafts import draft_claims
 from ...domain.facts import FactStore
 from .narrowing import application_is_closed
 from .views_prep import (
-    ArtifactVersionView,
     BuiltWithView,
     ClaimReviewAssertionView,
     ClaimReviewEvidenceView,
@@ -259,18 +258,5 @@ def analysis_view(record: dict[str, Any], facts: FactStore) -> JobAnalysisView:
             "fit_level": fit_level(analysis.requirements).value,
             "fit_score": fit_score(analysis.requirements),
             "gaps": [asdict(gap) for gap in project_gaps(analysis.requirements, facts)],
-        }
-    )
-
-
-def artifact_version_view(record: dict[str, Any]) -> ArtifactVersionView:
-    return ArtifactVersionView.model_validate(
-        {
-            **{
-                key: record.get(key)
-                for key in ArtifactVersionView.model_fields
-                if key != "metadata"
-            },
-            "metadata": json.loads(record.get("metadata_json") or "{}"),
         }
     )

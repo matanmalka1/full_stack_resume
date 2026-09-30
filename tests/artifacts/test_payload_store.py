@@ -23,7 +23,6 @@ def payload_store(tmp_path: Path) -> PayloadStore:
 def test_immutable_payload_families_include_submissions(payload_store: PayloadStore):
     destinations = [
         payload_store.snapshot_path("app", "snapshot"),
-        payload_store.provider_path("app", "operation", "response"),
         *(
             payload_store.submission_path("app", "submission", suffix=suffix)
             for suffix in ("html", "pdf")

@@ -928,6 +928,8 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "KnowledgeMutationEngine",
         "KnowledgeQueryService",
         "SettingsService",
+        # Appends each provider attempt in its own short scope before deciding a retry.
+        "AICallRunner",
     }
     owners = set()
     paths = (ENGINE / "application").rglob("*.py")

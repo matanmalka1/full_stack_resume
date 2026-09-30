@@ -216,7 +216,7 @@ def _reviewed_draft(draft_factory):
         facts,
         ClaimReviewEvidence(
             policy_version=REVIEW_POLICY_VERSION,
-            provider_artifact_version_id="artifact-review",
+            ai_call_id="artifact-review",
             input_hash="input-review",
             assertions=[
                 ClaimReviewAssertion(

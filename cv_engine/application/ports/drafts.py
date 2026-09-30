@@ -1,8 +1,7 @@
 """Ports the document's content services read through, besides the document store.
 
 The document itself is reached through `ports/documents.py`. What stays here is what
-authoring and the provenance export need from elsewhere: provider evidence
-preservation, and the Application's labels.
+the provenance export needs from elsewhere: the Application's labels.
 """
 
 from __future__ import annotations
@@ -10,17 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from ...domain.contracts.providers import ProviderTaskResult
-from ..services.proposals import ProviderEvidence
 from .transactions import ReadTransaction
-
-
-class DraftEvidencePreserver(Protocol):
-    """External payload preservation followed by durable inactive registration."""
-
-    def preserve(
-        self, application_id: str, operation_id: str, task: str, provenance: ProviderTaskResult
-    ) -> ProviderEvidence: ...
 
 
 @dataclass(frozen=True)

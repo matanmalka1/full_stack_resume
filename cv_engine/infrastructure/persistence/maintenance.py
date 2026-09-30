@@ -17,7 +17,7 @@ from sqlalchemy import (
 
 from ...application.ports.transactions import ReadTransaction
 from .connection import SqlAlchemyTransactionManager
-from .tables import artifact_versions, job_snapshots, submissions
+from .tables import ai_calls, job_snapshots, submissions
 
 
 def _integrity_problems(connection) -> list[str]:
@@ -58,11 +58,10 @@ class SqlAlchemyMaintenanceInspection:
     def integrity_problems(self, tx: ReadTransaction) -> list[str]:
         return _integrity_problems(self._transactions.connection_for(tx))
 
-    def artifact_inventory(self, tx: ReadTransaction) -> list[dict[str, Any]]:
+    def registered_payloads(self, tx: ReadTransaction) -> list[dict[str, Any]]:
         """Every registered immutable file and the hash it was registered with.
 
-        JobSnapshot payloads, provider-response artifact versions and every Submission
-        file (§19b). The document's rendered files are mutable working outputs and are
+        JobSnapshot payloads and every Submission file (§19b). The document's rendered files are mutable working outputs and are
         not listed.
         """
         connection = self._transactions.connection_for(tx)
@@ -73,17 +72,6 @@ class SqlAlchemyMaintenanceInspection:
                     job_snapshots.c.payload_path.label("path"),
                     job_snapshots.c.source_hash.label("content_hash"),
                 ).order_by(job_snapshots.c.captured_at, job_snapshots.c.id)
-            )
-            .mappings()
-            .all()
-        )
-        artifacts = (
-            connection.execute(
-                select(
-                    artifact_versions.c.id,
-                    artifact_versions.c.path,
-                    artifact_versions.c.content_hash,
-                ).order_by(artifact_versions.c.created_at, artifact_versions.c.id)
             )
             .mappings()
             .all()
@@ -110,7 +98,7 @@ class SqlAlchemyMaintenanceInspection:
             .mappings()
             .all()
         )
-        return [dict(row) for row in (*snapshots, *artifacts)] + [
+        return [dict(row) for row in snapshots] + [
             {"id": row["id"], "path": row["path"], "content_hash": row["content_hash"]}
             for row in submitted
         ]
@@ -118,8 +106,24 @@ class SqlAlchemyMaintenanceInspection:
     def registered_payload_references(self, tx: ReadTransaction) -> set[str]:
         statement = union(
             select(job_snapshots.c.payload_path),
-            select(artifact_versions.c.path),
             select(submissions.c.html_path).where(submissions.c.html_path.is_not(None)),
             select(submissions.c.pdf_path).where(submissions.c.pdf_path.is_not(None)),
         )
         return set(self._transactions.connection_for(tx).execute(statement).scalars())
+
+    def ai_call_evidence(self, tx: ReadTransaction) -> list[dict[str, Any]]:
+        """Every logged call that kept a response, with the hash it was logged under."""
+        return [
+            dict(row)
+            for row in self._transactions.connection_for(tx)
+            .execute(
+                select(
+                    ai_calls.c.id,
+                    ai_calls.c.sanitized_response,
+                    ai_calls.c.sanitized_response_hash,
+                )
+                .where(ai_calls.c.sanitized_response.is_not(None))
+                .order_by(ai_calls.c.started_at, ai_calls.c.id)
+            )
+            .mappings()
+        ]

@@ -4,9 +4,8 @@
 it carries prep columns (`track`, `profile`, `emphasis`) and
 tracking columns (`current_status`, `next_action`, ...) side by side on
 purpose — see the architecture spec on `applications` as the authoritative
-current-state projection paired with append-only event tables. `artifacts`/
-`artifact_versions` hold provider-response evidence, which the Operation runner
-(below) registers for any operation type. `audit_records` is written from both prep and
+current-state projection paired with append-only event tables. `ai_calls` is
+the AI call log, one immutable row per provider call attempt of an Operation. `audit_records` is written from both prep and
 tracking services. `operations`/its support tables are generic Operation-runner
 infrastructure read by the combined query projection (`active_operation`/
 `latest_operation` span both domains); every operation type it runs today
@@ -23,6 +22,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     PrimaryKeyConstraint,
     String,
     Table,
@@ -118,42 +118,6 @@ applications = Table(
     ),
 )
 
-artifacts = Table(
-    "artifacts",
-    metadata,
-    Column("id", UUID(as_uuid=False), primary_key=True),
-    Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id"), nullable=False),
-    Column("artifact_type", Text, nullable=False),
-    Column("logical_name", Text, nullable=False),
-    Column("created_at", IsoTimestamp(), nullable=False),
-    # Rendered and approved outputs live on the document and on Submissions; the only
-    # artifact left is AI provenance.
-    CheckConstraint("artifact_type = 'provider_response'", name="artifact_type"),
-    UniqueConstraint("application_id", "artifact_type", "logical_name"),
-)
-
-artifact_versions = Table(
-    "artifact_versions",
-    metadata,
-    Column("id", UUID(as_uuid=False), primary_key=True),
-    Column("artifact_id", UUID(as_uuid=False), ForeignKey("artifacts.id"), nullable=False),
-    Column("version_number", Integer, nullable=False),
-    Column("lifecycle_status", Text, nullable=False),
-    Column("path", Text, nullable=False, unique=True),
-    Column("content_hash", Text, nullable=False),
-    Column("created_at", IsoTimestamp(), nullable=False),
-    Column("track", Text),
-    Column("profile", Text),
-    Column("emphasis", Text),
-    Column("facts_version", Text),
-    Column("job_snapshot_id", UUID(as_uuid=False), ForeignKey("job_snapshots.id")),
-    Column("metadata_json", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
-    CheckConstraint("version_number > 0", name="version_number_positive"),
-    CheckConstraint("lifecycle_status = 'provider-output'", name="lifecycle_status"),
-    UniqueConstraint("artifact_id", "version_number"),
-)
-Index("idx_versions_artifact", artifact_versions.c.artifact_id)
-
 audit_records = Table(
     "audit_records",
     metadata,
@@ -209,7 +173,6 @@ operations = Table(
     Column("technical_log_reference", Text),
     Column("retry_of_operation_id", UUID(as_uuid=False), ForeignKey("operations.id")),
     Column("attempts_completed", Integer, nullable=False, server_default=text("0")),
-    Column("next_attempt_at", IsoTimestamp()),
     CheckConstraint(
         f"operation_type IN ({sql_values(OPERATION_TYPES)})",
         name="operation_type",
@@ -278,7 +241,6 @@ Index(
 Index(
     "idx_operations_claimable",
     operations.c.status,
-    operations.c.next_attempt_at,
     operations.c.created_at,
     operations.c.id,
 )
@@ -323,6 +285,119 @@ Index(
     operation_outputs.c.created_at,
     operation_outputs.c.id,
 )
+
+AI_CALL_TASKS = (
+    "propose_analysis",
+    "draft_resume",
+    "assess_claim_support",
+    "regenerate_section",
+    "regenerate_claim",
+)
+AI_CALL_OUTCOMES = (
+    "succeeded",
+    "refused",
+    "schema_violation",
+    "rate_limited",
+    "quota_exhausted",
+    "http_error",
+    "not_delivered",
+    "outcome_unknown",
+)
+
+#: The AI call log: one row per provider call attempt, appended as soon as the
+#: attempt ends and never changed. Its only lineage is `operation_id`; the
+#: Application is the Operation's. `attempt` is the ordinal of the call for its task
+#: within the Operation, assigned by the store - how many attempts are allowed is
+#: application policy, not a storage invariant.
+ai_calls = Table(
+    "ai_calls",
+    metadata,
+    Column("id", UUID(as_uuid=False), primary_key=True),
+    Column("operation_id", UUID(as_uuid=False), ForeignKey("operations.id"), nullable=False),
+    Column("task", Text, nullable=False),
+    Column("attempt", Integer, nullable=False),
+    Column("provider", Text, nullable=False),
+    Column("model", Text, nullable=False),
+    Column("reasoning_effort", Text),
+    Column("task_contract_version", Text, nullable=False),
+    Column("input_schema_version", Text, nullable=False),
+    Column("input_schema_hash", Text, nullable=False),
+    Column("output_schema_version", Text, nullable=False),
+    Column("output_schema_hash", Text, nullable=False),
+    Column("prompt_version", Text, nullable=False),
+    Column("prompt_hash", Text, nullable=False),
+    Column("input_hash", Text, nullable=False),
+    Column("knowledge_context_hash", Text, nullable=False),
+    Column("outcome", Text, nullable=False),
+    Column("http_status", Integer),
+    Column("error_type", Text),
+    Column("error_code", Text),
+    Column("retry_after_seconds", Numeric),
+    Column("response_id", Text),
+    Column("sanitized_response", JSONB),
+    Column("sanitized_response_hash", Text),
+    Column("output_hash", Text),
+    Column("input_tokens", Integer),
+    Column("cached_input_tokens", Integer),
+    Column("cache_write_tokens", Integer),
+    Column("output_tokens", Integer),
+    Column("total_tokens", Integer),
+    Column("pricing", JSONB),
+    Column("cost_usd", Numeric(18, 8)),
+    Column("latency_ms", Integer, nullable=False),
+    Column("started_at", IsoTimestamp(), nullable=False),
+    Column("finished_at", IsoTimestamp(), nullable=False),
+    CheckConstraint(f"task IN ({sql_values(AI_CALL_TASKS)})", name="task"),
+    CheckConstraint(f"outcome IN ({sql_values(AI_CALL_OUTCOMES)})", name="outcome"),
+    CheckConstraint("attempt >= 1", name="attempt_positive"),
+    CheckConstraint(
+        "retry_after_seconds IS NULL OR retry_after_seconds >= 0",
+        name="retry_after_nonnegative",
+    ),
+    CheckConstraint(
+        "sanitized_response IS NULL OR jsonb_typeof(sanitized_response) = 'object'",
+        name="sanitized_response_shape",
+    ),
+    CheckConstraint(
+        "(sanitized_response IS NULL) = (sanitized_response_hash IS NULL)",
+        name="sanitized_response_hash_present",
+    ),
+    CheckConstraint(
+        "outcome <> 'succeeded' OR (sanitized_response IS NOT NULL AND output_hash IS NOT NULL)",
+        name="succeeded_has_output",
+    ),
+    CheckConstraint(
+        "(input_tokens IS NULL OR input_tokens >= 0)"
+        " AND (cached_input_tokens IS NULL OR cached_input_tokens >= 0)"
+        " AND (cache_write_tokens IS NULL OR cache_write_tokens >= 0)"
+        " AND (output_tokens IS NULL OR output_tokens >= 0)"
+        " AND (total_tokens IS NULL OR total_tokens >= 0)",
+        name="tokens_nonnegative",
+    ),
+    CheckConstraint(
+        "cached_input_tokens IS NULL OR cache_write_tokens IS NULL OR input_tokens IS NULL"
+        " OR cached_input_tokens + cache_write_tokens <= input_tokens",
+        name="cache_tokens_within_input",
+    ),
+    CheckConstraint(
+        "total_tokens IS NULL OR input_tokens IS NULL OR total_tokens >= input_tokens",
+        name="total_covers_input",
+    ),
+    CheckConstraint(
+        "total_tokens IS NULL OR output_tokens IS NULL OR total_tokens >= output_tokens",
+        name="total_covers_output",
+    ),
+    CheckConstraint("cost_usd IS NULL OR cost_usd >= 0", name="cost_nonnegative"),
+    CheckConstraint(
+        "cost_usd IS NULL OR (input_tokens IS NOT NULL AND output_tokens IS NOT NULL"
+        " AND pricing IS NOT NULL)",
+        name="cost_has_usage",
+    ),
+    CheckConstraint("latency_ms >= 0", name="latency_nonnegative"),
+    CheckConstraint("finished_at >= started_at", name="finished_after_started"),
+    UniqueConstraint("operation_id", "task", "attempt"),
+)
+Index("idx_ai_calls_operation", ai_calls.c.operation_id, ai_calls.c.started_at, ai_calls.c.id)
 
 app_settings = Table(
     "app_settings",

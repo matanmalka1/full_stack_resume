@@ -28,7 +28,6 @@ from ..schemas.analyses import CreateAnalysisRequest
 from ..schemas.applications import (
     ApplicationDetailResponse,
     ApplicationListResponse,
-    ArtifactVersionsResponse,
     CloseApplicationResponse,
     CreateApplicationRequest,
     CreateApplicationResponse,
@@ -148,16 +147,6 @@ def update_application_notes(
         )
     )
     return UpdateApplicationNotesResponse.model_validate(result.model_dump(mode="json"))
-
-
-@router.get(
-    "/{application_id}/artifacts",
-    response_model=ArtifactVersionsResponse,
-    summary="List registered artifact metadata for an application",
-)
-def artifact_versions(application_id: str, services: Services) -> ArtifactVersionsResponse:
-    result = services.queries.artifact_versions(application_id)
-    return ArtifactVersionsResponse.model_validate(result.model_dump(mode="json"))
 
 
 @router.get(
