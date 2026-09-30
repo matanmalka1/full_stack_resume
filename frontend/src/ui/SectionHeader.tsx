@@ -16,6 +16,11 @@ interface SectionHeaderProps {
   title: ReactNode;
 }
 
+/* The accent tile an icon sits in beside a heading - shared by this header and any card
+   heading that draws the same mark without the header's rule and spacing. */
+export const iconTileClasses =
+  "flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent";
+
 const alignmentClasses: Record<NonNullable<SectionHeaderProps["align"]>, string> = {
   start: "items-start",
   center: "items-center",
@@ -70,7 +75,7 @@ export const SectionHeader = ({
         text
       ) : (
         <div className="flex min-w-0 items-start gap-2.5">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent">
+          <span className={iconTileClasses}>
             <Icon aria-hidden="true" className="size-icon-md" />
           </span>
           {text}

@@ -1,8 +1,6 @@
-import { Search } from "lucide-react";
-
 import type { FactStatus } from "@/api/contracts";
 import { Field } from "@/ui/Field";
-import { Input } from "@/ui/Input";
+import { SearchInput } from "@/ui/Input";
 import { Select } from "@/ui/Select";
 import type { FactFilters } from "../model/factFilters";
 import { factSourceLabel, factStatusLabels } from "../model/factLabels";
@@ -21,20 +19,12 @@ export const FactPoolFilters = ({ filters, onChange, sources, tags }: FactPoolFi
   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
     <Field label="חיפוש">
       {(control) => (
-        <div className="relative">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
-          />
-          <Input
-            {...control}
-            className="!ps-9"
-            onChange={(event) => onChange({ ...filters, query: event.target.value })}
-            placeholder="תוכן, מקור או תגית"
-            type="search"
-            value={filters.query}
-          />
-        </div>
+        <SearchInput
+          {...control}
+          onChange={(event) => onChange({ ...filters, query: event.target.value })}
+          placeholder="תוכן, מקור או תגית"
+          value={filters.query}
+        />
       )}
     </Field>
     <Field label="מעמד">

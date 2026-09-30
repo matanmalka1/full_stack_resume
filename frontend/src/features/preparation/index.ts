@@ -47,6 +47,7 @@ export {
   profileLabels,
   trackLabel,
 } from "./model/analysisLabels";
+export { ReasonCallout, ReasonDetails } from "./components/ReasonCallout";
 export {
   actionDescription,
   actionLabel,

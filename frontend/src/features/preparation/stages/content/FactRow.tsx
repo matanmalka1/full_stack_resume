@@ -4,6 +4,7 @@ import { useId } from "react";
 import type { Requirement } from "@/api/analyses";
 import type { DocumentCandidate } from "@/api/contracts";
 import { cx } from "@/ui/cx";
+import { toneBackgroundClasses, toneTextClasses } from "@/ui/tone";
 import { candidateIncluded, candidateLocked } from "../../model/factGroups";
 import { type FactSignal, decisionSource, factSignals } from "../../model/selectionManifest";
 import { decisionSourceLabels, omissionReasonLabels, selectionOutcomeLabels } from "../../model/selectionLabels";
@@ -106,7 +107,8 @@ export const FactRow = ({
         <p
           className={cx(
             "inline-flex w-fit items-center gap-1.5 rounded-control px-2 py-0.5 text-caption font-semibold",
-            change === "added" ? "bg-cv-accent-soft text-cv-accent" : "bg-cv-warning-soft text-cv-warning",
+            toneBackgroundClasses[change === "added" ? "progress" : "warning"],
+            toneTextClasses[change === "added" ? "progress" : "warning"],
           )}
         >
           <Sparkles aria-hidden="true" className="size-icon-sm" />

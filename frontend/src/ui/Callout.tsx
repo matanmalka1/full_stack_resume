@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { type ClassValue, cx } from "./cx";
-import { type Tone, tonePresentation } from "./tone";
+import { type Tone, toneBackgroundClasses, toneBorderClasses, tonePresentation, toneTextClasses } from "./tone";
 
 const toneClasses: Record<Tone, string> = {
   success: "border-s-cv-success",
@@ -12,27 +12,11 @@ const toneClasses: Record<Tone, string> = {
   neutral: "border-s-cv-text-muted",
 };
 
-const toneIconClasses: Record<Tone, string> = {
-  success: "text-cv-success",
-  warning: "text-cv-warning",
-  blocker: "text-cv-blocker",
-  info: "text-cv-info",
-  progress: "text-cv-accent",
-  neutral: "text-cv-text-muted",
-};
-
 /* The banner emphasis trades the compact inline treatment - a thin accent edge, tight
    padding, body text in plain muted grey - for a full-bordered block whose own text is
    tinted in the tone. Reserved for the one verdict a whole screen opens with and is
    organized around; every other Callout on the page stays the quieter inline notice. */
-const bannerToneClasses: Record<Tone, string> = {
-  success: "border-cv-success/30 bg-cv-success-soft",
-  warning: "border-cv-warning/30 bg-cv-warning-soft",
-  blocker: "border-cv-blocker/30 bg-cv-blocker-soft",
-  info: "border-cv-info/30 bg-cv-info-soft",
-  progress: "border-cv-accent/30 bg-cv-accent-soft",
-  neutral: "border-cv-border bg-cv-surface-muted",
-};
+const bannerToneClasses = (tone: Tone): string => cx(toneBorderClasses[tone], toneBackgroundClasses[tone]);
 
 interface CalloutProps {
   action?: ReactNode;
@@ -75,7 +59,7 @@ export const Callout = ({
     <Tag
       className={cx(
         banner ? "rounded-surface border p-card-padding" : "border-s-2 py-1 ps-3",
-        banner ? bannerToneClasses[tone] : toneClasses[tone],
+        banner ? bannerToneClasses(tone) : toneClasses[tone],
         className,
       )}
       role={role === "status" ? undefined : role}
@@ -86,7 +70,7 @@ export const Callout = ({
           className={cx(
             "mt-0.5 shrink-0",
             banner ? "size-icon-lg" : "size-icon-md",
-            toneIconClasses[tone],
+            toneTextClasses[tone],
             tone === "progress" && "motion-safe:animate-spin",
           )}
         />
@@ -96,7 +80,7 @@ export const Callout = ({
                 screen opens with said nothing its title does not. Every other tone keeps
                 its label, which is what separates it from colour alone (A.2). */}
             {banner && tone === "neutral" ? null : (
-              <span className={cx("text-support font-bold", toneIconClasses[tone])}>{label}</span>
+              <span className={cx("text-support font-bold", toneTextClasses[tone])}>{label}</span>
             )}
             {/* A.3: the tone label is Hebrew, but a callout usually carries a backend
                 title and detail that may be English. dir="auto" lets each run pick its
@@ -105,8 +89,8 @@ export const Callout = ({
               className={cx(
                 "leading-6",
                 banner
-                  ? cx("text-body font-bold", toneIconClasses[tone])
-                  : cx("text-support font-semibold", toneIconClasses[tone]),
+                  ? cx("text-body font-bold", toneTextClasses[tone])
+                  : cx("text-support font-semibold", toneTextClasses[tone]),
               )}
               dir="auto"
             >
@@ -115,7 +99,7 @@ export const Callout = ({
           </div>
           {children === undefined ? null : (
             <div
-              className={cx("mt-1 text-support leading-6", banner ? toneIconClasses[tone] : "text-cv-text-muted")}
+              className={cx("mt-1 text-support leading-6", banner ? toneTextClasses[tone] : "text-cv-text-muted")}
               dir="auto"
             >
               {children}

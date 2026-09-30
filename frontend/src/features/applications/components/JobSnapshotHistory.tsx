@@ -7,6 +7,8 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Disclosure, DisclosureSummary } from "@/ui/Disclosure";
 import { Select } from "@/ui/Select";
+import { cx } from "@/ui/cx";
+import { toneBackgroundClasses, toneTextClasses } from "@/ui/tone";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { snapshotComparison } from "../model/snapshotComparison";
 
@@ -50,9 +52,10 @@ const Comparison = ({ before, after }: { before: Snapshot; after: Snapshot }) =>
                   <>
                     {diff.prefix}
                     <span
-                      className={
-                        side === "before" ? "bg-cv-blocker-soft text-cv-blocker" : "bg-cv-success-soft text-cv-success"
-                      }
+                      className={cx(
+                        toneBackgroundClasses[side === "before" ? "blocker" : "success"],
+                        toneTextClasses[side === "before" ? "blocker" : "success"],
+                      )}
                     >
                       {side === "before" ? diff.removed : diff.added}
                     </span>

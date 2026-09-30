@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import type { ComponentProps } from "react";
 
 import { cx } from "./cx";
@@ -26,3 +27,15 @@ export const Textarea = ({ className, ...rest }: ComponentProps<"textarea">) => 
     />
   );
 };
+
+/* A filter's free-text box: the input with a search mark at its inline start. The mark is
+   decoration - the field's label names it - and the text starts clear of it. */
+export const SearchInput = ({ className, ...rest }: Omit<ComponentProps<"input">, "type">) => (
+  <div className="relative">
+    <Search
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
+    />
+    <Input className={cx("!ps-9", className)} type="search" {...rest} />
+  </div>
+);

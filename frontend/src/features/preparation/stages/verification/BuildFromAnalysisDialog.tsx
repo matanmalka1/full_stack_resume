@@ -1,5 +1,4 @@
-import { Button } from "@/ui/Button";
-import { Dialog } from "@/ui/Dialog";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 interface BuildFromAnalysisDialogProps {
   commandsBlocked: boolean;
@@ -22,27 +21,16 @@ export const BuildFromAnalysisDialog = ({
   open,
   pending,
 }: BuildFromAnalysisDialogProps) => (
-  <Dialog
+  <ConfirmDialog
+    confirmDisabled={commandsBlocked}
+    confirmLabel="בנייה מחדש מהניתוח החדש"
     dismissible={false}
-    footer={
-      <>
-        <Button onClick={onClose} variant="secondary">
-          ביטול
-        </Button>
-        <Button
-          disabled={commandsBlocked}
-          onClick={onConfirm}
-          pending={pending}
-          pendingLabel="בונה מחדש…"
-          variant="primary"
-        >
-          בנייה מחדש מהניתוח החדש
-        </Button>
-      </>
-    }
     headingId="build-from-analysis-heading"
-    onClose={onClose}
+    onCancel={onClose}
+    onConfirm={onConfirm}
     open={open}
+    pending={pending}
+    pendingLabel="בונה מחדש…"
     title="בניית המסמך מחדש מהניתוח החדש"
   >
     <div className="flex flex-col gap-3">
@@ -54,5 +42,5 @@ export const BuildFromAnalysisDialog = ({
         הגשות שכבר נרשמו אינן משתנות: הן שומרות את התוכן והקבצים שנשלחו בפועל.
       </p>
     </div>
-  </Dialog>
+  </ConfirmDialog>
 );

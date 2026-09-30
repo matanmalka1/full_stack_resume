@@ -1,4 +1,4 @@
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { ActivityFilter, ApplicationSort, PreparationState } from "@/api/contracts";
@@ -6,7 +6,7 @@ import { preparationStateLabels } from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 import { Field } from "@/ui/Field";
-import { Input } from "@/ui/Input";
+import { SearchInput } from "@/ui/Input";
 import { Select } from "@/ui/Select";
 import { flatSurfaceClasses } from "@/ui/surface";
 import { ViewSwitch } from "@/ui/ViewSwitch";
@@ -86,21 +86,13 @@ export const ApplicationListToolbar = ({
       >
         <Field className="w-full sm:w-72 md:min-w-56 md:max-w-2xl md:flex-1" label="חיפוש במועמדויות">
           {(control) => (
-            <div className="relative">
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 start-3 my-auto size-icon-md text-cv-text-muted"
-              />
-              <Input
-                {...control}
-                className="!ps-9"
-                dir="rtl"
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="חברה או תפקיד"
-                type="search"
-                value={search}
-              />
-            </div>
+            <SearchInput
+              {...control}
+              dir="rtl"
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="חברה או תפקיד"
+              value={search}
+            />
           )}
         </Field>
 

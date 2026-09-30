@@ -1,6 +1,5 @@
 import type { ApplicationListItem } from "@/api/contracts";
-import { Button } from "@/ui/Button";
-import { Dialog } from "@/ui/Dialog";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { applicationLabel } from "@/features/applications";
 
 interface DeleteApplicationDialogProps {
@@ -19,20 +18,15 @@ export const DeleteApplicationDialog = ({
   onCancel,
   onConfirm,
 }: DeleteApplicationDialogProps) => (
-  <Dialog
-    footer={
-      <>
-        <Button onClick={onCancel} variant="secondary">
-          ביטול
-        </Button>
-        <Button onClick={onConfirm} pending={pending} pendingLabel="מוחק…" variant="destructive">
-          מחיקת המועמדות
-        </Button>
-      </>
-    }
+  <ConfirmDialog
+    confirmLabel="מחיקת המועמדות"
+    confirmVariant="destructive"
     headingId="delete-application-heading"
-    onClose={onCancel}
+    onCancel={onCancel}
+    onConfirm={onConfirm}
     open={application !== null}
+    pending={pending}
+    pendingLabel="מוחק…"
     title="למחוק את המועמדות?"
   >
     <p dir="auto">
@@ -44,5 +38,5 @@ export const DeleteApplicationDialog = ({
       הפעולה סופית ואין לה ביטול. תצלומי המשרה, הניתוחים, מסמך קורות החיים, ההגשות וכל קובץ שהופק נשארים בדיוק כפי שהם
       ונגישים דרך הקישור הישיר של המועמדות - רק הרשימה מפסיקה להציג אותה.
     </p>
-  </Dialog>
+  </ConfirmDialog>
 );

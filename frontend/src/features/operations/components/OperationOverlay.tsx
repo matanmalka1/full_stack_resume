@@ -8,10 +8,11 @@ import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { cx } from "@/ui/cx";
 import { Dialog } from "@/ui/Dialog";
+import { IconButton } from "@/ui/IconButton";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { StatusSlot } from "@/ui/StatusSlot";
-import { type Tone, tonePresentation } from "@/ui/tone";
+import { type Tone, toneBorderClasses, tonePresentation, toneTextClasses } from "@/ui/tone";
 import { operationTypeLabels, statusLabels, statusTones } from "../model/operationLabels";
 import { isOperationStarting } from "../model/operationLive";
 import { operationProgressLabel } from "../model/operationProgress";
@@ -24,15 +25,6 @@ export interface PendingWork {
 }
 
 const PENDING_LABEL = "נשלחה לביצוע";
-
-const chipToneClasses: Record<Tone, string> = {
-  success: "border-cv-success/30 text-cv-success",
-  warning: "border-cv-warning/30 text-cv-warning",
-  blocker: "border-cv-blocker/30 text-cv-blocker",
-  info: "border-cv-info/30 text-cv-info",
-  progress: "border-cv-accent/30 text-cv-accent",
-  neutral: "border-cv-border text-cv-text-muted",
-};
 
 interface Session {
   /* A run this screen watched starting is still in progress, or is finishing: it
@@ -239,7 +231,8 @@ export const OperationOverlay = ({
             aria-haspopup="dialog"
             className={cx(
               "cv-settle-in flex w-full items-center gap-3 rounded-surface border bg-cv-surface px-4 py-2.5 text-start text-support shadow-surface transition-colors hover:bg-cv-surface-muted",
-              chipToneClasses[tone],
+              toneBorderClasses[tone],
+              toneTextClasses[tone],
             )}
             onClick={openDialog}
             ref={chipRef}
@@ -274,7 +267,8 @@ export const OperationOverlay = ({
                    steps still ahead - what the reader checks while waiting - for as long
                    as the run lasted. */
                 "fixed inset-x-4 top-[4.5rem] z-(--cv-z-toast) shadow-floating lg:inset-x-auto lg:end-6 lg:top-auto lg:bottom-28 lg:w-[22rem]",
-            chipToneClasses[tone],
+            toneBorderClasses[tone],
+            toneTextClasses[tone],
           )}
         >
           <div className="flex items-start gap-2.5">
@@ -289,14 +283,15 @@ export const OperationOverlay = ({
               <p className="text-cv-text-muted">{statusText}</p>
             </div>
             {showingSuccess || inline ? null : (
-              <button
+              <IconButton
                 aria-label="סגירה"
-                className="-m-1 rounded-control p-1 text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text"
+                className="-m-2"
                 onClick={() => setSession((current) => ({ ...current, panelHidden: true }))}
-                type="button"
+                size="sm"
+                variant="quiet"
               >
                 <X aria-hidden="true" className="size-icon-md" />
-              </button>
+              </IconButton>
             )}
           </div>
           {showingSuccess ? null : record === undefined || continuing ? (

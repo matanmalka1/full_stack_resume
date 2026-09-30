@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
+import { IconButton } from "@/ui/IconButton";
 import { Tooltip } from "@/ui/Tooltip";
 import { cx } from "@/ui/cx";
 import { sourceHostname } from "@/features/applications";
@@ -76,18 +77,18 @@ export const ApplicationRecordActions = ({
       ref={containerRef}
     >
       <Tooltip label="פעולות נוספות">
-        <button
+        <IconButton
           aria-controls={menuId}
           aria-expanded={open}
           aria-haspopup="menu"
           aria-label={`פעולות נוספות עבור ${item.company}`}
-          className="inline-flex size-9 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
           onClick={() => setOpen((current) => !current)}
           ref={triggerRef}
-          type="button"
+          size="md"
+          variant="quiet"
         >
           <EllipsisVertical aria-hidden="true" className="size-icon-md" />
-        </button>
+        </IconButton>
       </Tooltip>
       {open ? (
         <div

@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { buttonClasses } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
 import { Tooltip } from "@/ui/Tooltip";
 import { cx } from "@/ui/cx";
+import { toneBackgroundClasses, toneBorderClasses, toneDotClasses } from "@/ui/tone";
 import { useOpenRecord } from "../hooks/useOpenRecord";
 import { applicationAttention } from "../model/applicationListPresentation";
 import { closedStage, recruitmentStages } from "../model/recruitmentStages";
@@ -64,10 +66,7 @@ const AttentionMark = ({ item }: { item: ApplicationListItem }) => {
 
   return (
     <Tooltip className="mt-1.5 shrink-0" label={attention.label} wrap>
-      <span
-        aria-hidden="true"
-        className={cx("size-2 rounded-pill", attention.tone === "blocker" ? "bg-cv-blocker" : "bg-cv-warning")}
-      />
+      <span aria-hidden="true" className={cx("size-2 rounded-pill", toneDotClasses[attention.tone])} />
       <span className="sr-only">דורש טיפול</span>
     </Tooltip>
   );
@@ -108,9 +107,8 @@ const PipelineCard = ({
         <div
           className={cx(
             "rounded-control border px-2 py-1.5",
-            attention.tone === "blocker"
-              ? "border-cv-blocker/30 bg-cv-blocker-soft"
-              : "border-cv-warning/30 bg-cv-warning-soft",
+            toneBorderClasses[attention.tone],
+            toneBackgroundClasses[attention.tone],
           )}
         >
           <AttentionLink attention={attention} className="leading-tight" item={item} />
@@ -143,24 +141,26 @@ const PipelineCard = ({
         )}
         {/* The card body opens the details on a click; this is the same for the keyboard. */}
         <Tooltip label="פרטי משרה">
-          <button
+          <IconButton
             aria-label={`פרטי המשרה של ${item.company}`}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+            className="shrink-0"
             onClick={() => onRequestDetails(item)}
-            type="button"
+            size="sm"
+            variant="quiet"
           >
             <Info aria-hidden="true" className="size-icon-sm" />
-          </button>
+          </IconButton>
         </Tooltip>
         <Tooltip label="עדכון שלב הגיוס">
-          <button
+          <IconButton
             aria-label={`עדכון שלב הגיוס של ${item.company}`}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text"
+            className="shrink-0"
             onClick={() => onRequestUpdate(item)}
-            type="button"
+            size="sm"
+            variant="quiet"
           >
             <Pencil aria-hidden="true" className="size-icon-sm" />
-          </button>
+          </IconButton>
         </Tooltip>
       </div>
     </article>

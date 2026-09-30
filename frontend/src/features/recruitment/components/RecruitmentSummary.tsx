@@ -1,9 +1,9 @@
 import { CalendarClock } from "lucide-react";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { StatusBadge } from "@/ui/StatusBadge";
 import { formatDate } from "@/utils/formatDateTime";
-import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "../model/recruitmentStatus";
+import { recruitmentStatusLabel } from "../model/recruitmentStatus";
+import { RecruitmentStatusBadge } from "./RecruitmentStatusBadge";
 
 export const RecruitmentSummary = ({ detail }: { detail: ApplicationDetail }) => (
   <section
@@ -19,13 +19,7 @@ export const RecruitmentSummary = ({ detail }: { detail: ApplicationDetail }) =>
     <div className="grid gap-4 ps-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
       <div>
         <p className="text-support font-semibold text-cv-text-muted">השלב הנוכחי</p>
-        <StatusBadge
-          className="mt-2"
-          icon={recruitmentStatusIcon(detail.recruitment_status)}
-          tone={recruitmentStatusTone(detail.recruitment_status)}
-        >
-          {recruitmentStatusLabel(detail.recruitment_status)}
-        </StatusBadge>
+        <RecruitmentStatusBadge className="mt-2" status={detail.recruitment_status} />
         {detail.terminal_outcome == null ? null : (
           <p className="mt-2 text-support text-cv-text-muted">
             תוצאה סופית:{" "}

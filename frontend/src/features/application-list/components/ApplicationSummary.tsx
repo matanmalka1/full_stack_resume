@@ -1,6 +1,5 @@
 import type { ApplicationListItem } from "@/api/contracts";
-import { StatusBadge } from "@/ui/StatusBadge";
-import { recruitmentStatusIcon, recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
+import { RecruitmentStatusBadge } from "@/features/recruitment";
 import { CompanyMark } from "./ApplicationIdentity";
 import { ApplicationPreparationStatus } from "./ApplicationListStatuses";
 
@@ -26,13 +25,7 @@ export const ApplicationSummary = ({ item }: { item: ApplicationListItem }) => (
 
     <div className="flex shrink-0 items-center gap-2">
       <ApplicationPreparationStatus item={item} variant="pipeline" />
-      <StatusBadge
-        className="whitespace-nowrap px-2 py-0.5"
-        icon={recruitmentStatusIcon(item.recruitment_status)}
-        tone={recruitmentStatusTone(item.recruitment_status)}
-      >
-        {recruitmentStatusLabel(item.recruitment_status)}
-      </StatusBadge>
+      <RecruitmentStatusBadge className="whitespace-nowrap px-2 py-0.5" status={item.recruitment_status} />
     </div>
   </>
 );

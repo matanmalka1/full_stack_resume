@@ -7,7 +7,9 @@ import { factLabel, factStatusLabel } from "@/features/facts/model/factLabels";
 import { preparationResumeDestination } from "@/features/preparation";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
 import { cx } from "@/ui/cx";
+import { DateTime } from "@/ui/DateTime";
 import { wrapDialogFocus } from "@/ui/dialogFocus";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { routePaths } from "../routePaths";
@@ -158,17 +160,17 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
           value={search}
         />
         {search === "" ? null : (
-          <button
+          <IconButton
             aria-label="ניקוי חיפוש"
-            className="rounded-control p-1 text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text"
             onClick={() => {
               updateSearch("");
               inputRef.current?.focus();
             }}
-            type="button"
+            size="sm"
+            variant="quiet"
           >
             <X aria-hidden="true" className="size-icon-md" />
-          </button>
+          </IconButton>
         )}
         <Kbd className="hidden bg-cv-surface-muted text-cv-text-muted sm:inline-block">ESC</Kbd>
       </div>
@@ -230,7 +232,7 @@ export const GlobalSearchDialog = ({ onClose, open }: GlobalSearchDialogProps) =
                           {item.event.reason || item.event.event_type}
                         </span>
                         <span className="block truncate text-support text-cv-text-muted">
-                          {item.event.created_at} · {item.event.fact_id}
+                          <DateTime format="short" value={item.event.created_at} /> · {item.event.fact_id}
                         </span>
                       </span>
                     </div>
