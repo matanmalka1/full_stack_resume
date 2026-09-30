@@ -72,6 +72,9 @@ export const RequirementRow = ({
   const shortfall = matched ? null : (requirement.shortfallReason ?? requirement.rationale ?? gapReason ?? null);
   const rationale = matched ? requirement.rationale : null;
   const detailRationale = !matched && shortfall !== requirement.rationale ? requirement.rationale : null;
+  /* The disclosure's summary already names the supporting facts; their own heading is
+     needed only to tell them apart from something else shown beside them. */
+  const supportingHeading = requirement.boundaryFactIds.length > 0 || detailRationale !== null;
 
   return (
     <li className="flex flex-col gap-2 py-4">
@@ -122,10 +125,12 @@ export const RequirementRow = ({
             )}
             {requirement.supportingFactIds.length === 0 ? null : (
               <div>
-                <p className="mb-2 flex items-center gap-1.5 text-caption font-semibold text-cv-text-muted">
-                  <FileCheck2 aria-hidden="true" className="size-icon-sm text-cv-success" />
-                  ראיות תומכות
-                </p>
+                {supportingHeading ? (
+                  <p className="mb-2 flex items-center gap-1.5 text-caption font-semibold text-cv-text-muted">
+                    <FileCheck2 aria-hidden="true" className="size-icon-sm text-cv-success" />
+                    ראיות תומכות
+                  </p>
+                ) : null}
                 <ul className="flex flex-col gap-2.5">
                   {requirement.supportingFactIds.map((factId) => (
                     <EvidenceFact evidence={evidence} factId={factId} key={factId} />

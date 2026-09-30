@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 
 import type { AnalysisGap, Requirement, RequirementImportance } from "@/api/analyses";
 import type { ApplicationDetail } from "@/api/contracts";
-import { Callout } from "@/ui/Callout";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { ViewSwitch } from "@/ui/ViewSwitch";
@@ -59,10 +58,6 @@ export const RequirementList = ({
           title="לא ניתן לטעון את העובדות התומכות"
         />
       )}
-      {evidence.loading ? (
-        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout role="status" title="טוען את הראיות התומכות…" tone="progress" />
-      ) : null}
 
       {visible === 0 ? (
         <EmptyState>

@@ -13,7 +13,6 @@ export const AnalysisHeader = ({ children, record }: { children?: ReactNode; rec
         <p className="mt-1 text-support text-cv-text-muted" dir="rtl">
           {/* The model is the provider record's, listed under "תוצרי המנוע". */}
           נותחה ב־<bdi>{formatDateTime(record.created_at)}</bdi>
-          {record.version_number <= 1 ? null : ` · ניתוח מס' ${record.version_number}`}
         </p>
       )}
     </div>
