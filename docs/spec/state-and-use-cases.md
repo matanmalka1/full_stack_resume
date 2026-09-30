@@ -580,8 +580,8 @@ Editing an approved or Ready document is allowed; the basis changes and the docu
 ### `regenerate_section` / `regenerate_claim`
 
 AI Operations against `expected_document_hash`, a named section or claim, and an
-optional instruction. An unknown section or claim is 404. `regenerate_section` chooses
-again from the section's pool, as `create_draft` does. `regenerate_claim` with
+optional instruction. An unknown section or claim is 404. Both reword the facts the
+section or claim already links; neither chooses facts again. `regenerate_claim` with
 `keep_text` reviews the claim's own wording instead of rewriting it; it requires a
 pending claim linked to at least one fact. Activation follows the `create_draft` hash
 rule.
@@ -732,10 +732,9 @@ pending -> canonical
 
 Preconditions, checked before any write: the document exists and is built on
 `job_analysis_id`; the analysis belongs to the Application and its Profile is `profile`.
-It writes no document: a claim already linking the fact is authorized once the fact is
-canonical and in its section's pool, and the next `create_draft` or `regenerate_section`
-can choose it. Every transition gets its own event. Partial completion is never
-visible.
+It writes no document: a claim already linking the fact stops raising
+`PENDING_FACT_REQUIRES_RESOLUTION`, and the next `create_draft` can choose the fact.
+Every transition gets its own event. Partial completion is never visible.
 
 ### `create_fact_from_claim(application_id, claim_id, ...)`
 

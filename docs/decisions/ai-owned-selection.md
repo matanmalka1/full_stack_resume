@@ -63,8 +63,9 @@ engine narrows what comes back; it never widens it.
   calling the provider (user decision 2026-09-30). There is no in-place emphasis
   override on the document.
 - **Confirm and use.** It confirms the fact and attaches it to the named Profile
-  section. It no longer writes the document. The next draft or regeneration can use the
-  fact.
+  section. It no longer writes the document. The next draft (after `build_from_analysis`)
+  can choose the fact. `regenerate_section` and `regenerate_claim` reword the claims a
+  section already has and do not choose again.
 - **`build_from_analysis`** re-pins the analysis and clears content and every stamp. It
   computes nothing.
 - **Schema.** The baseline migration drops `cv_documents.selection` and

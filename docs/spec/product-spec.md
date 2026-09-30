@@ -692,7 +692,7 @@ Fact statuses are `pending`, `canonical`, and `deleted`:
   pinned. It changes no Profile structure and grants no Profile editing.
 - **Confirm and use.** One journaled command that confirms the fact and attaches it to
   the named Profile section, or fails as a whole. It writes no document; the next draft
-  or regeneration of that Application's document can use the fact.
+  of that Application's document can choose the fact.
 - **From a claim.** Copies the claim's exact text as a rendering without AI rewriting.
   The claim is not authorized until the fact is canonical and in its section's pool.
 
