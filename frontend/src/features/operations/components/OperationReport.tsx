@@ -26,6 +26,7 @@ import {
   statusTones,
   terminalSummaries,
   unknownFailureGuidance,
+  withheldLabel,
 } from "../model/operationLabels";
 import { operationProgressLabel } from "../model/operationProgress";
 
@@ -117,6 +118,9 @@ export const OperationReport = ({
     operation.status === "failed" && operation.failure_reason?.code === "claim_review"
       ? operation.failure_reason
       : null;
+  /* A run that succeeded with some proposed lines withheld: the result stands, and those
+     lines - each back to its wording before the run - are listed so none changes unseen. */
+  const withheld = operation.status === "succeeded" ? (operation.withheld_claims ?? null) : null;
   const produced = activeOutputLabels(operation);
   /* A finished run says what it came to in one line - unless it failed, where the reason
      below is that line and a second, vaguer one above it only delayed it. */
@@ -194,6 +198,15 @@ export const OperationReport = ({
 
       {claimReview === null ? null : (
         <ClaimReviewClarification onNavigate={onNavigate} operation={operation} reason={claimReview} />
+      )}
+
+      {withheld === null || withheld.claims.length === 0 ? null : (
+        <>
+          <Callout title={withheldLabel(withheld.claims.length)} tone="warning">
+            <p>הניסוח שהוצע להן לא אושר, ולכן הן נשארו כפי שהיו. כדאי לעבור עליהן לפני אישור.</p>
+          </Callout>
+          <ClaimReviewClarification onNavigate={onNavigate} operation={operation} reason={withheld} withheld />
+        </>
       )}
 
       {operation.cancellation_requested_at != null && !operation.is_terminal ? (

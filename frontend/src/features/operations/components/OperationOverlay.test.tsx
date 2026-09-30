@@ -597,6 +597,43 @@ describe("OperationOverlay", () => {
     expect(overlay().open).toBe(true);
   });
 
+  it("opens the report on a success that withheld lines, and lists them", () => {
+    const { update } = renderOverlay({ operation: operation({ operation_type: "regenerate_section" }) });
+
+    update({
+      operation: succeeded({
+        operation_type: "regenerate_section",
+        withheld_claims: {
+          code: "claim_review",
+          claims: [
+            {
+              claim_id: "claim-2",
+              section: "Experience",
+              heading: "Account Manager",
+              text: "Refused wording",
+              verdict: "refused",
+              sources: [{ fact_id: "sales.one", rendering: "Managed accounts.", meaning: "Account management" }],
+            },
+          ],
+        },
+      }),
+      settled: true,
+    });
+
+    /* The result stands, but one line kept its old wording: that is for the reader. */
+    expect(overlay().open).toBe(true);
+    const listed = within(overlay()).getByRole("region", { name: "שורות שלא עודכנו" });
+    expect(within(listed).getByText("Refused wording")).toBeVisible();
+    expect(within(listed).getByText("נדחה לפני בדיקה")).toBeVisible();
+    expect(within(listed).getByRole("link", { name: "פתיחת השורה במסמך" })).toHaveAttribute(
+      "href",
+      "/applications/application-1/draft?claim=claim-2",
+    );
+
+    fireEvent.click(within(overlay()).getByRole("button", { name: "סגירה" }));
+    expect(chip()).toHaveTextContent("שורה אחת לא עודכנה");
+  });
+
   it("keeps one session from pending work to the record that replaces it", () => {
     const pending = { heading: <>הרצת ניתוח המשרה</>, note: "יוצרים את המועמדות ומנתחים את המשרה…" };
     const { update } = renderOverlay({ pending });

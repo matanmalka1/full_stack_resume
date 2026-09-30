@@ -442,7 +442,9 @@ Postings live in `tests/fixtures/` and are replaceable; no specification names o
 
 Over a scripted transport: strict schema and Proposal parsing per task; prompt and
 versions from `ai/contracts/task_contracts.json`; refusal and invalid output as distinct
-failures, never a partial Proposal; one transient retry and none for schema, business
+failures; a Proposal line the engine does not authorize is withheld - kept as it was
+and listed in `withheld_claims` - never partially applied, and only an answer with every
+named line withheld fails; one transient retry and none for schema, business
 validation, unsupported claim, conflict, or stale source; the sanitized response
 registered with provider, model, usage, and latency; preferences frozen before
 execution; cost from the dated price snapshot; a minimal per-task fact pool.

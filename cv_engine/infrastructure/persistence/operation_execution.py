@@ -8,6 +8,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.operations import (
+    ClaimReviewReason,
     FailureReason,
     OperationFailureCode,
     OperationPhase,
@@ -377,6 +378,7 @@ class SqlAlchemyOperationExecutionStore:
         operation_id: str,
         *,
         runner_id: str,
+        withheld_claims: ClaimReviewReason | None = None,
         now: str | None = None,
     ) -> PersistedOperation:
         timestamp = now or utc_now()
@@ -399,6 +401,8 @@ class SqlAlchemyOperationExecutionStore:
             status = OperationStatus.CANCELLED.value
             failure_code = OperationFailureCode.CANCELLED_BEFORE_ACTIVATION.value
             message = "Cancelled before output activation."
+            # Nothing activated, so nothing was withheld from anything written.
+            withheld_claims = None
         else:
             status = OperationStatus.SUCCEEDED.value
             failure_code = None
@@ -417,6 +421,10 @@ class SqlAlchemyOperationExecutionStore:
                 finished_at=timestamp,
                 failure_code=failure_code,
                 safe_failure_detail=message or None,
+                # SQL NULL for "none withheld", as `fail_operation` does for its reason.
+                withheld_claims=(
+                    null() if withheld_claims is None else withheld_claims.model_dump(mode="json")
+                ),
                 lease_owner=None,
                 next_attempt_at=None,
                 attempts_completed=operations.c.attempts_completed + 1,

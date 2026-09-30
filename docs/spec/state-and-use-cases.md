@@ -384,14 +384,16 @@ CANCELLED_BEFORE_ACTIVATION
 - `CLAIM_REVIEW_UNCERTAIN`: the semantic reviewer could not establish support for a
   proposed wording. `CLAIM_REVIEW_UNSUPPORTED`: it found the wording exceeds or
   contradicts the cited facts. Both leave the document unchanged. Malformed reviewer
-  output is `INVALID_OUTPUT`.
+  output is `INVALID_OUTPUT`. A writing Operation fails with these codes only when every
+  line its answer named was withheld; otherwise it succeeds with `withheld_claims`.
 
 A failed or cancelled Operation may own inactive immutable output (provider evidence).
 Output existence and activation are separate. An output reference is one of
 `job_analysis`, `cv_document`, or `provider_response`.
 
 The Operation read returns status, phase, message, timestamps, failure code, safe
-failure detail, structured `failure_reason`, retry reference, cancellation state,
+failure detail, structured `failure_reason`, `withheld_claims` (succeeded writing
+Operations only), retry reference, cancellation state,
 output references, provider/model/reasoning/usage metadata, and `available_actions`
 (`cancel`, `retry`). The structured reason is the cause in a closed vocabulary with
 typed parameters (a page count against its limit, a fact missing a rendering in a
@@ -414,6 +416,20 @@ the user find what to fix; it is never evidence and authorizes nothing. Other pr
 output, responses, credentials and internal paths are excluded. Existing failure records
 remain unchanged and may have no context; one recorded before the explanation was kept
 has none, and none is reconstructed.
+
+A line the writer's answer named but the engine refused before review - a fact outside
+the task's pool, no linked fact, wording the edit path rejects - has verdict `refused`
+and no `problems`. Refused lines appear in the same reason, and a failure made only of
+them is `INVALID_OUTPUT`.
+
+A succeeded `create_draft`, `regenerate_section` or `regenerate_claim` records
+`withheld_claims` when some of its answer's lines were withheld (product-spec §10.1): the
+same `code=claim_review` shape, one entry per withheld line, recorded with the success
+and never reconstructed. Each withheld line holds the wording it had before the
+Operation; the entry carries the proposed wording that was not applied. The field is
+NULL on every other Operation, and the database refuses it on any status but
+`succeeded`. The UI opens the report for such a success, as it does for a failure, so
+no line stays unchanged unseen.
 Resolution uses the existing document editing and fact commands; no acknowledgement
 command is introduced.
 

@@ -313,14 +313,22 @@ def test_draft_resume_commits_wording_its_facts_support(
         draft_service=ai_services.drafts,
     )
     completed = _run(ai_services, queued)
-    if change_composite:
-        assert completed.status.value == "failed"
-        assert completed.failure_code is OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED
-        actual = stored_document(ai_services, ingested.application_id)
-        assert actual.content is None
-        assert actual.document_hash == working.document_hash
-        return
     assert completed.status.value == "succeeded", completed.safe_failure_detail
+    if change_composite:
+        # The one line review refused is withheld, not the draft: the composite keeps
+        # its frame wording, every other line stands, and the refused sentence is
+        # listed with its verdict.
+        assert isinstance(completed.withheld_claims, ClaimReviewReason)
+        [withheld] = completed.withheld_claims.claims
+        assert withheld.claim_id == composite.claim_id
+        assert withheld.text == changed_text
+        assert withheld.verdict == "unsupported"
+        assert (
+            ai_services.operation_lifecycle.get(completed.id).withheld_claims
+            == completed.withheld_claims
+        )
+    else:
+        assert completed.withheld_claims is None
     draft_call = fake_openai.calls_for("draft_resume")[-1]
     for section in draft_call.payload["sections"]:
         assert set(section["allowed_fact_ids"]) == {
@@ -820,6 +828,83 @@ def test_a_fact_outside_the_claims_own_support_is_refused(
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+    # The refusal still names the line, as a deterministic one.
+    assert isinstance(completed.failure_reason, ClaimReviewReason)
+    assert [item.verdict for item in completed.failure_reason.claims] == ["refused"]
+
+
+def test_a_section_answer_keeps_its_good_lines_and_withholds_the_bad_one(
+    ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
+) -> None:
+    """One refused line costs only itself: it keeps its prior wording and is listed.
+
+    Two lines of one section are answered. One is sound; the other names a fact the
+    task was never given and an ID the document does not hold rides along. The sound
+    line is written, the refused one stays exactly as it was, and the unknown ID
+    names no line at all.
+    """
+    ingested, analysed, working = _drafted(
+        ai_services, "Partial Co", transaction_manager, application_projection_reader
+    )
+    assert working.content is not None
+    section = next(
+        section
+        for section in working.content.sections
+        if sum(
+            claim.claim_type == "canonical" and len(claim.fact_ids) == 1 for claim in section.claims
+        )
+        >= 2
+    )
+    good, bad = [
+        claim
+        for claim in section.claims
+        if claim.claim_type == "canonical" and len(claim.fact_ids) == 1
+    ][:2]
+    fake_openai.script(
+        "regenerate_section",
+        SectionProposal(
+            section=section.name,
+            claims=[
+                ProposedClaim(
+                    section=section.name,
+                    claim_id=good.claim_id,
+                    text=good.text,
+                    fact_ids=list(good.fact_ids),
+                ),
+                ProposedClaim(
+                    section=section.name,
+                    claim_id=bad.claim_id,
+                    text=f"Refused: {bad.text}",
+                    fact_ids=[*bad.fact_ids, "not.a.supplied.fact"],
+                ),
+                ProposedClaim(
+                    section=section.name,
+                    claim_id="claim-not-in-this-draft",
+                    text="Anything",
+                    fact_ids=list(good.fact_ids),
+                ),
+            ],
+            rationale="r",
+        ),
+    )
+    completed = _run(
+        ai_services,
+        _regenerate_section(ai_services, ingested, analysed, working, section, [good, bad]),
+    )
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    assert isinstance(completed.withheld_claims, ClaimReviewReason)
+    [withheld] = completed.withheld_claims.claims
+    assert withheld.claim_id == bad.claim_id
+    assert withheld.section == section.name
+    assert withheld.text == f"Refused: {bad.text}"
+    assert withheld.verdict == "refused"
+    actual = stored_document(ai_services, ingested.application_id)
+    assert actual.content is not None
+    claims = {item.claim_id: item for item in draft_claims(actual.content)}
+    assert claims[bad.claim_id] == bad
+    assert claims[good.claim_id].text == good.text
+    assert "claim-not-in-this-draft" not in claims
 
 
 # --------------------------------------------------------------------------

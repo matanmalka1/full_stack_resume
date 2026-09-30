@@ -177,7 +177,11 @@ class AITaskHandler:
         )
 
     def prepared(self, value: Any) -> PreparedOperation:
-        return PreparedOperation(value=value, outputs=self.evidence_outputs(value))
+        return PreparedOperation(
+            value=value,
+            outputs=self.evidence_outputs(value),
+            withheld_claims=getattr(value, "withheld_claims", None),
+        )
 
     def _preserve_rejected(
         self, operation: PersistedOperation, error: ApplicationError

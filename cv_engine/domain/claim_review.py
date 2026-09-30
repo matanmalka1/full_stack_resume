@@ -62,6 +62,39 @@ def _protected_numbers(value: str) -> set[str]:
     return set(re.findall(r"\d+(?:[.,]\d+)?%?", value))
 
 
+def _quotes_pair_with_facts(
+    linked: list[str], quotes: list[str], texts: dict[str, tuple[str, str]]
+) -> bool:
+    """Whether every linked fact takes its own verbatim quote, in whatever order.
+
+    The pairing is what attests support; the order the reviewer listed its quotes in
+    attests nothing, so the pairing is found rather than read positionally. Each quote
+    serves one fact at most. A small bipartite match: an assertion cites a handful of
+    facts.
+    """
+    fits = [
+        [
+            index
+            for index, quote in enumerate(quotes)
+            if any(quote in text for text in texts[fact_id])
+        ]
+        for fact_id in linked
+    ]
+    owner: dict[int, int] = {}
+
+    def assign(fact: int, seen: set[int]) -> bool:
+        for quote in fits[fact]:
+            if quote in seen:
+                continue
+            seen.add(quote)
+            if quote not in owner or assign(owner[quote], seen):
+                owner[quote] = fact
+                return True
+        return False
+
+    return all(assign(fact, set()) for fact in range(len(linked)))
+
+
 def review_problems(
     *,
     claim_id: str,
@@ -76,7 +109,8 @@ def review_problems(
 
     An empty list is the only passing result. The assertions must cover the whole
     claim, quote only the claim itself, cite each linked fact and nothing else with
-    one verbatim source quote per fact, and introduce no number the facts lack.
+    one verbatim source quote per fact (paired in any order), and introduce no number
+    the facts lack.
     """
     if style not in EDITABLE_STYLES or not assertions:
         return [
@@ -120,17 +154,23 @@ def review_problems(
                 )
             )
             continue
-        for fact_id, quote in zip(assertion.fact_ids, assertion.source_quotes, strict=True):
-            if fact_id not in fact_ids:
-                continue  # reported once below as a coverage mismatch
-            fact = facts.get(fact_id, canonical_only=True)
-            if quote not in fact.meaning and quote not in facts.rendering(fact_id, language):
-                problems.append(
-                    ReviewProblem(
-                        "invalid-review-source-quote",
-                        f"claim {claim_id} has unverified source quotes",
-                    )
+        # A fact outside the claim's links is reported once below as a coverage
+        # mismatch, so only the linked ones need a quote here.
+        linked = [fact_id for fact_id in assertion.fact_ids if fact_id in fact_ids]
+        texts = {
+            fact_id: (
+                facts.get(fact_id, canonical_only=True).meaning,
+                facts.rendering(fact_id, language),
+            )
+            for fact_id in linked
+        }
+        if not _quotes_pair_with_facts(linked, list(assertion.source_quotes), texts):
+            problems.append(
+                ReviewProblem(
+                    "invalid-review-source-quote",
+                    f"claim {claim_id} has unverified source quotes",
                 )
+            )
     if cited != set(fact_ids):
         problems.append(
             ReviewProblem(

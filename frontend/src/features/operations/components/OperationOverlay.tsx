@@ -12,7 +12,7 @@ import { LiveRegion } from "@/ui/LiveRegion";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { StatusSlot } from "@/ui/StatusSlot";
 import { type Tone, toneBorderClasses, tonePresentation, toneTextClasses } from "@/ui/tone";
-import { operationTypeLabels, statusLabels, statusTones } from "../model/operationLabels";
+import { operationTypeLabels, statusLabels, statusTones, withheldLabel } from "../model/operationLabels";
 import { isOperationStarting } from "../model/operationLive";
 import { operationProgressLabel } from "../model/operationProgress";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
@@ -45,6 +45,15 @@ interface Session {
 
 const SUCCESS_LINGER_MS = 3_000;
 
+/* Proposed lines a succeeded run withheld. Its result stands, but those lines kept their
+   wording from before the run, so it is an outcome that needs the reader like a failure:
+   one that goes by itself would let a line stay unchanged without anyone seeing why. */
+const withheldCount = (operation: Operation): number =>
+  operation.status === "succeeded" ? (operation.withheld_claims?.claims.length ?? 0) : 0;
+
+const needsReader = (operation: Operation): boolean =>
+  isTerminalOperation(operation) && (operation.status !== "succeeded" || withheldCount(operation) > 0);
+
 /* Work in progress, beside the screen that queued it rather than over it.
 
    Live work shows in a small panel at the top corner of the viewport. It does not dim
@@ -54,7 +63,8 @@ const SUCCESS_LINGER_MS = 3_000;
    delay, so a run that finishes in a fraction of a second never flashes a frame, and a
    success stays a moment and goes - it leaves no permanent row behind.
 
-   An outcome that needs the reader - a failure, a cancellation, an interruption - opens
+   An outcome that needs the reader - a failure, a cancellation, an interruption, a success
+   that withheld some of its proposed lines - opens
    the full report as a dialog, because that is where a decision is asked for. Such an
    outcome also leaves a status row in the step's one status slot, which reopens it. So
    does live work whose panel the reader put away.
@@ -153,10 +163,10 @@ export const OperationOverlay = ({
     const outcome = operation !== undefined && operation.id !== session.historyId ? operation : undefined;
     setSession({
       active: false,
-      dialogOpen: outcome !== undefined && outcome.status !== "succeeded",
+      dialogOpen: outcome !== undefined && needsReader(outcome),
       historyId: null,
       panelHidden: false,
-      succeededId: outcome?.status === "succeeded" ? outcome.id : null,
+      succeededId: outcome?.status === "succeeded" && withheldCount(outcome) === 0 ? outcome.id : null,
     });
   }
 
@@ -190,8 +200,13 @@ export const OperationOverlay = ({
     record?.status === "failed" &&
     (record.failure_code === "PROVIDER_REFUSED" || record.failure_code === "PROVIDER_NOT_CONFIGURED") &&
     ai === "available";
+  const withheld = record === undefined ? 0 : withheldCount(record);
   const tone: Tone =
-    record === undefined || continuing ? "progress" : retryableRefusal ? "warning" : statusTones[record.status];
+    record === undefined || continuing
+      ? "progress"
+      : retryableRefusal || withheld > 0
+        ? "warning"
+        : statusTones[record.status];
   const statusText =
     record === undefined
       ? PENDING_LABEL
@@ -200,7 +215,9 @@ export const OperationOverlay = ({
         : isTerminalOperation(record)
           ? retryableRefusal
             ? `${statusLabels[record.status]} · אפשר לנסות שוב`
-            : statusLabels[record.status]
+            : withheld > 0
+              ? `${statusLabels[record.status]} · ${withheldLabel(withheld)}`
+              : statusLabels[record.status]
           : operationProgressLabel(record);
   /* A.5: the live region is mounted for as long as there is anything to report, so it is
      the one place the run's progress is announced from. The same single sentence the
@@ -211,11 +228,10 @@ export const OperationOverlay = ({
   const showingSuccess = !session.active && session.succeededId !== null && session.succeededId === record?.id;
   const showPanel = (session.active && !session.panelHidden) || showingSuccess;
   /* The row in the step's status slot: an outcome that needs the reader, or live work
-     whose panel was put away. A success leaves nothing behind - the page shows its
-     result - and neither does a success the screen found on arrival. */
+     whose panel was put away. A plain success leaves nothing behind - the page shows its
+     result - and neither does one the screen found on arrival. */
   const showChip =
-    (session.active && session.panelHidden) ||
-    (!session.active && record !== undefined && isTerminalOperation(record) && record.status !== "succeeded");
+    (session.active && session.panelHidden) || (!session.active && record !== undefined && needsReader(record));
   const openDialog = () => {
     setNavigating(false);
     setSession((current) => ({ ...current, dialogOpen: true }));

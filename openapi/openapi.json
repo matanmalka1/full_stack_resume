@@ -4257,6 +4257,16 @@
               }
             ],
             "title": "Total Tokens"
+          },
+          "withheld_claims": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimReviewReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4774,7 +4784,8 @@
             "enum": [
               "uncertain",
               "unsupported",
-              "unattested"
+              "unattested",
+              "refused"
             ],
             "title": "Verdict",
             "type": "string"

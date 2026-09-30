@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ....domain.contracts.drafts import DraftDocument
+from ...operations import ClaimReviewReason
 from ..proposals import ProviderEvidence
 
 
@@ -22,6 +23,8 @@ class PreparedDraft:
     content: DraftDocument
     evidence: ProviderEvidence
     review_evidence: ProviderEvidence | None = None
+    #: Proposed lines withheld from `content`; each kept its frame wording.
+    withheld_claims: ClaimReviewReason | None = None
 
 
 @dataclass(frozen=True)
@@ -30,8 +33,9 @@ class PreparedRegeneration:
 
     The content already carries the proposed wording: it passed
     `apply_proposed_claims`, the same authority a manual edit passes, so anything
-    unsupported was refused before this value could exist. What is left is the
-    optimistic commit against the exact document hash that was read.
+    unsupported was withheld - left as it was, and listed in `withheld_claims` -
+    before this value could exist. What is left is the optimistic commit against the
+    exact document hash that was read.
     """
 
     application_id: str
@@ -40,3 +44,4 @@ class PreparedRegeneration:
     claim_ids: list[str]
     evidence: ProviderEvidence
     review_evidence: ProviderEvidence | None = None
+    withheld_claims: ClaimReviewReason | None = None

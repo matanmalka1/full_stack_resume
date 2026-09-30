@@ -21,6 +21,7 @@ from ....domain.drafts import (
     keep_frame_claims,
     remove_claim,
     reorder_draft,
+    restore_claims,
 )
 from ....domain.frame import dangling_heading
 from ....domain.knowledge import Knowledge
@@ -41,6 +42,7 @@ from ...errors import (
     ProviderNotConfigured,
     UnknownRecord,
 )
+from ...operations import ClaimReviewReason
 from ...ports import (
     AIProvider,
     AssessClaimSupportContext,
@@ -65,10 +67,13 @@ from ..documents import (
 )
 from ..proposals import (
     ProviderEvidence,
+    WithheldClaim,
     apply_proposed_claims,
-    authorize_semantically_reviewed_claims,
     evidence_attached,
     fact_context,
+    refusal,
+    review_semantically,
+    withheld_reason,
 )
 from .activation import DraftActivation
 from .inputs import PreparedDraft, PreparedRegeneration
@@ -86,6 +91,12 @@ def _changed_claim_ids(before: DraftDocument, after: DraftDocument) -> set[str]:
         for claim in draft_claims(after)
         if (claim.claim_id, claim.text) not in unchanged
     }
+
+
+def _named_claim_ids(draft: DraftDocument, proposed: list[ProposedClaim]) -> set[str]:
+    """The lines of `draft` a Proposal answered for; an ID it does not hold names none."""
+    held = {claim.claim_id for claim in draft_claims(draft)}
+    return {str(claim.claim_id) for claim in proposed if claim.claim_id in held}
 
 
 def _section_guidance(spec: ResumeSectionSpec) -> dict:
@@ -195,7 +206,7 @@ class DraftAuthoringService:
             source.analysis,
             knowledge,
         )
-        content, evidence, review_evidence = self._propose_draft(
+        content, evidence, review_evidence, withheld = self._propose_draft(
             command.application_id,
             operation_id,
             frame,
@@ -210,6 +221,7 @@ class DraftAuthoringService:
             content=content,
             evidence=evidence,
             review_evidence=review_evidence,
+            withheld_claims=withheld,
         )
 
     def _propose_draft(
@@ -222,7 +234,7 @@ class DraftAuthoringService:
         *,
         model: str | None = None,
         reasoning_effort: str | None = None,
-    ) -> tuple[DraftDocument, ProviderEvidence, ProviderEvidence | None]:
+    ) -> tuple[DraftDocument, ProviderEvidence, ProviderEvidence | None, ClaimReviewReason | None]:
         """`draft_resume`: choose from the frame and word the choice.
 
         The provider keeps the claims it wants and words them; a claim it leaves out
@@ -231,7 +243,8 @@ class DraftAuthoringService:
         keeps its title, dates and bullets together. A heading left with no bullet
         is refused. Every line comes
         back through `apply_claim_edit`, and wording its facts do not support goes to
-        semantic review or is refused as `ProposalRejected`.
+        semantic review; a line neither authorizes keeps its frame wording and is
+        listed as withheld.
         """
         analysis = source.analysis
         profile = knowledge.profiles.get(analysis.profile)
@@ -305,26 +318,23 @@ class DraftAuthoringService:
                         f"draft_resume kept no bullet under {empty!r} in {section.name}",
                         unsupported=[],
                     )
-            updated = apply_proposed_claims(
-                chosen,
-                proposed,
-                knowledge.facts,
-                set(pool),
-                task="draft_resume",
-                allow_semantic_review=True,
+            updated, withheld = apply_proposed_claims(
+                chosen, proposed, knowledge.facts, set(pool), task="draft_resume"
             )
-        updated, review_evidence = self._review_pending_claims(
+        updated, review_evidence, reason = self._review_and_settle(
             application_id,
             operation_id,
+            chosen,
             updated,
+            withheld,
             knowledge,
             sorted({fact_id for claim in draft_claims(updated) for fact_id in claim.fact_ids}),
             evidence,
-            claim_ids=_changed_claim_ids(chosen, updated),
+            proposed_ids=_named_claim_ids(chosen, proposed),
             model=model,
             reasoning_effort=reasoning_effort,
         )
-        return (updated, evidence, review_evidence)
+        return (updated, evidence, review_evidence, reason)
 
     def update_document(self, command: UpdateDocumentCommand) -> DocumentMutationResult:
         """§14 autosave: apply one structured patch against one exact hash.
@@ -423,10 +433,11 @@ class DraftAuthoringService:
         claim_ids: set[str],
         model: str | None,
         reasoning_effort: str | None,
-    ) -> tuple[DraftDocument, ProviderEvidence | None]:
+    ) -> tuple[DraftDocument, ProviderEvidence | None, list[WithheldClaim]]:
         """Semantic review of the pending claims among `claim_ids` - only those.
 
         A pending line the Operation did not touch is not its to authorize or to fail on.
+        A line the review does not authorize comes back still pending, with its reason.
         """
         pending_ids = {
             claim.claim_id
@@ -434,7 +445,7 @@ class DraftAuthoringService:
             if claim.claim_type == "pending" and claim.claim_id in claim_ids
         }
         if not pending_ids:
-            return draft, None
+            return draft, None, []
         claims = [
             {
                 "claim_id": claim.claim_id,
@@ -460,14 +471,68 @@ class DraftAuthoringService:
                 application_id, operation_id, "assess_claim_support", reviewed.provenance
             )
             with evidence_attached(evidence):
-                authorized = authorize_semantically_reviewed_claims(
+                authorized, withheld = review_semantically(
                     draft, reviewed.proposal, knowledge.facts, evidence, claim_ids=pending_ids
                 )
         except ApplicationError as exc:
             if writer_evidence is not None:
                 exc.completed_evidence = (writer_evidence,)
             raise
-        return authorized, evidence
+        return authorized, evidence, withheld
+
+    def _review_and_settle(
+        self,
+        application_id: str,
+        operation_id: str,
+        before: DraftDocument,
+        applied: DraftDocument,
+        withheld: list[WithheldClaim],
+        knowledge: Knowledge,
+        selected: list[str],
+        writer_evidence: ProviderEvidence | None,
+        *,
+        proposed_ids: set[str],
+        review_ids: set[str] | None = None,
+        model: str | None,
+        reasoning_effort: str | None,
+    ) -> tuple[DraftDocument, ProviderEvidence | None, ClaimReviewReason | None]:
+        """Review what the writer changed, withhold what is not authorized, or refuse.
+
+        `before` is the document the proposal was applied to and `applied` the result.
+        Every withheld line - refused by the edit path, or not authorized by review -
+        goes back to exactly its `before` form, so none of its proposed wording or links
+        reaches the document. What survives is written; the withheld lines travel with
+        it as the Operation's `withheld_claims`.
+
+        Only when every line in `proposed_ids` - the lines the answer named that
+        `before` holds, echoed ones included - is withheld does the Operation fail:
+        nothing of the answer is left to write.
+
+        Review covers the lines the writer changed; `review_ids` names them instead when
+        there was no writer, as for the user's own wording.
+        """
+        reviewed, review_evidence, review_withheld = self._review_pending_claims(
+            application_id,
+            operation_id,
+            applied,
+            knowledge,
+            selected,
+            writer_evidence,
+            claim_ids=_changed_claim_ids(before, applied) if review_ids is None else review_ids,
+            model=model,
+            reasoning_effort=reasoning_effort,
+        )
+        withheld = [*withheld, *review_withheld]
+        withheld_ids = {item.claim_id for item in withheld}
+        settled = restore_claims(reviewed, before, withheld_ids)
+        if withheld and proposed_ids <= withheld_ids:
+            error = refusal(settled, withheld, knowledge.facts)
+            error.evidence = review_evidence or writer_evidence
+            if review_evidence is not None and writer_evidence is not None:
+                error.completed_evidence = (writer_evidence,)
+            raise error
+        reason = withheld_reason(settled, withheld, knowledge.facts) if withheld else None
+        return settled, review_evidence, reason
 
     def prepare_section_regeneration(
         self, command: RegenerateSectionCommand, *, operation_id: str
@@ -509,32 +574,36 @@ class DraftAuthoringService:
                 raise ProposalRejected(
                     f"regenerate_section answered for section {proposed.section!r}, not {section.name!r}"
                 )
-            updated = apply_proposed_claims(
-                draft,
-                proposed.claims,
-                knowledge.facts,
-                set(allowed),
-                task="regenerate_section",
-                allow_semantic_review=True,
+            updated, withheld = apply_proposed_claims(
+                draft, proposed.claims, knowledge.facts, set(allowed), task="regenerate_section"
             )
-        updated, review_evidence = self._review_pending_claims(
+        named = _named_claim_ids(draft, proposed.claims)
+        updated, review_evidence, reason = self._review_and_settle(
             command.application_id,
             operation_id,
+            draft,
             updated,
+            withheld,
             knowledge,
             allowed,
             evidence,
-            claim_ids=_changed_claim_ids(draft, updated),
+            proposed_ids=named,
             model=command.model,
             reasoning_effort=command.reasoning_effort,
         )
+        kept_back = set() if reason is None else {item.claim_id for item in reason.claims}
         return PreparedRegeneration(
             application_id=command.application_id,
             expected_document_hash=command.expected_document_hash,
             content=updated,
-            claim_ids=[str(claim.claim_id) for claim in proposed.claims],
+            claim_ids=[
+                str(claim.claim_id)
+                for claim in proposed.claims
+                if claim.claim_id in named and claim.claim_id not in kept_back
+            ],
             evidence=evidence,
             review_evidence=review_evidence,
+            withheld_claims=reason,
         )
 
     def prepare_claim_regeneration(
@@ -561,20 +630,23 @@ class DraftAuthoringService:
         if command.keep_text:
             # The user's own wording, reviewed as written: the reviewer is the only
             # provider call, and its evidence is the Operation's evidence. Review decides
-            # nothing on its own - `authorize_semantically_reviewed_claims` applies the
-            # same hard checks it applies to writer output.
+            # nothing on its own - `review_semantically` applies the same hard checks it
+            # applies to writer output. One line, so a line withheld is a refusal.
             if claim.claim_type != "pending" or not claim.fact_ids:
                 raise ProposalRejected(
                     "only a pending claim linked to at least one fact can have its own wording reviewed"
                 )
-            reviewed, review_evidence = self._review_pending_claims(
+            reviewed, review_evidence, _reason = self._review_and_settle(
                 command.application_id,
                 operation_id,
                 draft,
+                draft,
+                [],
                 knowledge,
                 allowed,
                 None,
-                claim_ids={claim.claim_id},
+                proposed_ids={claim.claim_id},
+                review_ids={claim.claim_id},
                 model=command.model,
                 reasoning_effort=command.reasoning_effort,
             )
@@ -609,7 +681,7 @@ class DraftAuthoringService:
                 raise ProposalRejected(
                     f"regenerate_claim answered for claim {proposed.claim_id!r}, not {claim.claim_id!r}"
                 )
-            updated = apply_proposed_claims(
+            updated, withheld = apply_proposed_claims(
                 draft,
                 [
                     ProposedClaim(
@@ -622,16 +694,18 @@ class DraftAuthoringService:
                 knowledge.facts,
                 set(allowed),
                 task="regenerate_claim",
-                allow_semantic_review=True,
             )
-        updated, review_evidence = self._review_pending_claims(
+        # One line: withheld means refused, so nothing is ever written partially here.
+        updated, review_evidence, _reason = self._review_and_settle(
             command.application_id,
             operation_id,
+            draft,
             updated,
+            withheld,
             knowledge,
             allowed,
             evidence,
-            claim_ids=_changed_claim_ids(draft, updated),
+            proposed_ids={proposed.claim_id},
             model=command.model,
             reasoning_effort=command.reasoning_effort,
         )
