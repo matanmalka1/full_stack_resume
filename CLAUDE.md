@@ -23,7 +23,8 @@ One thing is not regenerable, and that is where care belongs:
 
 **Immutable records already written** — what left the system: a Submission (the CV
 content that was sent, its HTML and PDF copies and their checksums), the job snapshot
-it references, provider evidence, and past application history. A job snapshot
+it references, the AI call log (every provider call attempt, in `ai_calls`), and past
+application history. A job snapshot
 preserves a posting that later vanishes from the web. The CV document itself is
 mutable until it is submitted: approval and Ready are stamps derived against its
 current basis, not frozen revisions. Never overwrite or relocate one; overwriting destroys evidence
