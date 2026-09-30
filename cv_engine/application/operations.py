@@ -279,6 +279,10 @@ class RejectedClaimReview(OperationModel):
     text: str
     verdict: Literal["uncertain", "unsupported"]
     sources: list[ClaimReviewSource]
+    #: The reviewer's own explanation for this line, as it answered. An opinion that
+    #: helps the user find what to fix, never evidence; failures recorded before it
+    #: was kept carry none.
+    rationale: str | None = None
 
 
 class ClaimReviewReason(OperationModel):

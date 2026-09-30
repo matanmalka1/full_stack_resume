@@ -307,7 +307,8 @@ def authorize_semantically_reviewed_claims(
     if unsupported or uncertain:
         # Capture from the exact in-memory draft and Knowledge used by this review.
         # Reconstructing from today's document or facts on a later GET would invent
-        # historical evidence. Provider explanations are not needed for this view.
+        # historical evidence. The reviewer's explanation is kept with its line: without
+        # it the user sees a near-identical sentence refused and cannot tell why.
         rejected = []
         for section in draft.sections:
             heading = None
@@ -331,6 +332,7 @@ def authorize_semantically_reviewed_claims(
                             )
                             for fact_id in claim.fact_ids
                         ],
+                        rationale=assessments[claim.claim_id].rationale.strip() or None,
                     )
                 )
         error = (

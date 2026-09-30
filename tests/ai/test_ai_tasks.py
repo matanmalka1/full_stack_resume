@@ -756,6 +756,7 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
     assert rejected.section == _section.name
     assert rejected.text == "Consistently exceeded every quota by 400% across all regions."
     assert rejected.verdict == verdict
+    assert rejected.rationale == "The supplied fact does not support the strengthened quota claim."
     assert [source.fact_id for source in rejected.sources] == claim.fact_ids
     facts = ai_services.drafts.load_knowledge().facts
     for source in rejected.sources:
