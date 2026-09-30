@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Requirement } from "@/api/analyses";
 import type { ApplicationDetail, CVDocument } from "@/api/contracts";
@@ -16,6 +16,7 @@ import { type FactFilter, factTotals } from "../../model/factGroups";
 import { requirementsByFact } from "../../model/requirementGroups";
 import { includedFactIds, selectionChanges } from "../../model/selectionManifest";
 import { AiSelectionProposal } from "./AiSelectionProposal";
+import { factSelectionAnchor } from "./factSelectionAnchor";
 import type { FactChoice } from "./FactRow";
 import { FactSelectionList } from "./FactSelectionList";
 import { useSelectionProposal } from "./useSelectionProposal";
@@ -67,6 +68,13 @@ export const DocumentSelectionPanel = ({
   const proposal = useSelectionProposal(applicationId);
   const [edits, setEdits] = useState<FactOverrides | null>(null);
   const [filter, setFilter] = useState<FactFilter>("all");
+  const panelRef = useRef<HTMLElement>(null);
+
+  /* The editor sends the reader here to change the selection. The panel mounts only after
+     the document loads, after the browser's own jump to the anchor has already missed it. */
+  useEffect(() => {
+    if (window.location.hash === `#${factSelectionAnchor}`) panelRef.current?.scrollIntoView?.({ block: "start" });
+  }, []);
 
   const { selection } = document;
   const candidates = selection.candidates;
@@ -158,6 +166,8 @@ export const DocumentSelectionPanel = ({
   return (
     <section
       aria-labelledby="selection-plan-heading"
+      id={factSelectionAnchor}
+      ref={panelRef}
       className={surfaceClasses("flex flex-col gap-5 bg-cv-surface p-5")}
     >
       <div className="flex flex-col gap-3 border-b border-cv-border pb-4">
