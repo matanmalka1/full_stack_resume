@@ -660,10 +660,8 @@ describe("ApplicationPage at the preparation route", () => {
 
     /* Coverage is split by how much the employer insists, and the malformed record is
        reported rather than silently dropped. */
-    const overview = screen.getByRole("region", { name: "סיכום הכיסוי" });
-    expect(within(overview).getByText("1/2")).toBeInTheDocument();
-    expect(within(overview).getByText("0/1")).toBeInTheDocument();
-    expect(within(overview).getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("1/2 מכוסות")).toBeInTheDocument();
+    expect(screen.getByText("0/1 מכוסות")).toBeInTheDocument();
     expect(screen.getByText("הערות על אמינות הניתוח (1)")).toBeInTheDocument();
     expect(screen.getByText("דרישה אחת לא הייתה תקינה ואינה מוצגת.")).toBeInTheDocument();
     expect(screen.queryByText("Malformed requirement")).not.toBeInTheDocument();

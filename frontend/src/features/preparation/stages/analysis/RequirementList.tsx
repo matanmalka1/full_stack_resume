@@ -35,12 +35,9 @@ export const RequirementList = ({
   return (
     <section aria-labelledby="requirements-heading" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-body font-semibold text-cv-text" id="requirements-heading">
-            דרישות המשרה
-          </h3>
-          <p className="text-support text-cv-text-muted">מה המשרה דורשת, ואילו עובדות מאושרות עונות על כל דרישה.</p>
-        </div>
+        <h3 className="text-body font-semibold text-cv-text" id="requirements-heading">
+          דרישות המשרה
+        </h3>
         <div className="max-w-full overflow-x-auto">
           <ViewSwitch
             label="סינון הדרישות"
@@ -77,11 +74,12 @@ export const RequirementList = ({
         groups.map((group) =>
           group.requirements.length === 0 ? null : (
             <section aria-labelledby={`requirements-${group.importance}`} key={group.importance}>
-              <h4
-                className="border-b border-cv-border pb-2 text-support font-bold text-cv-text"
-                id={`requirements-${group.importance}`}
-              >
-                {importanceTitles[group.importance]}
+              {/* Coverage per importance is stated here, once; the filter counts the states. */}
+              <h4 className="flex items-baseline justify-between gap-3 border-b border-cv-border pb-2 text-support font-bold text-cv-text">
+                <span id={`requirements-${group.importance}`}>{importanceTitles[group.importance]}</span>
+                <span className="text-caption font-semibold text-cv-text-muted">
+                  {group.matched}/{group.total} מכוסות
+                </span>
               </h4>
               <ul aria-labelledby={`requirements-${group.importance}`} className="divide-y divide-cv-border">
                 {group.requirements.map((requirement) => (

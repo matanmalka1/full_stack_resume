@@ -18,9 +18,8 @@ export const ReanalyzeCard = ({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="max-w-md text-support leading-6 text-cv-text-muted">
-          {detail.document_id != null
-            ? "ניתוח מחדש יוצר ניתוח חדש ונפרד לאותו תצלום משרה. המסמך נשאר בנוי על הניתוח הנוכחי עד שתבחרו לבנות אותו מחדש מהניתוח החדש."
-            : "ניתוח מחדש כדאי רק אם הסיווג שלמעלה נראה שגוי. הוא יוצר ניתוח חדש ונפרד לאותו תצלום משרה, ואינו מושך נוסח משרה מעודכן."}{" "}
+          יוצר ניתוח חדש לאותו תצלום משרה.
+          {detail.document_id != null ? " המסמך נשאר על הניתוח הנוכחי עד שתבנו אותו מחדש." : null}{" "}
           {settings === undefined
             ? null
             : aiRegenerationAvailable(settings)

@@ -6,7 +6,7 @@ import { DisclosureSummary } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { cx } from "@/ui/cx";
 import { coverageLabels, coverageTones } from "../../model/analysisLabels";
-import type { EvidenceInclusion, RequirementEvidence } from "./useRequirementEvidence";
+import type { RequirementEvidence } from "./useRequirementEvidence";
 
 const shortfallLabels: Record<ShortfallSeverity, string> = {
   none: "אין פער",
@@ -33,38 +33,24 @@ const coverageIcons: Record<RequirementCoverage, LucideIcon> = {
   unknown: CircleHelp,
 };
 
-const inclusionLabels: Record<EvidenceInclusion, string | null> = {
-  included: "בקורות החיים",
-  omitted: "לא נבחרה לקורות החיים",
-  unknown: null,
-};
+/* Only an omission is worth a word: a cited fact is expected to be in the CV. */
+const EvidenceFact = ({ factId, evidence }: { evidence: RequirementEvidence; factId: string }) => (
+  <li className="flex flex-col gap-0.5">
+    <bdi className="text-support text-cv-text">{evidence.label(factId)}</bdi>
+    {evidence.inclusion(factId) === "omitted" ? (
+      <span className="text-caption font-semibold text-cv-warning">לא נבחרה לקורות החיים</span>
+    ) : null}
+  </li>
+);
 
-const EvidenceFact = ({ factId, evidence }: { evidence: RequirementEvidence; factId: string }) => {
-  const inclusion = evidence.inclusion(factId);
-  const label = inclusionLabels[inclusion];
-  return (
-    <li className="flex flex-col gap-0.5">
-      <bdi className="text-support text-cv-text">{evidence.label(factId)}</bdi>
-      {label === null ? null : (
-        <span
-          className={cx(
-            "text-caption",
-            inclusion === "included" ? "text-cv-text-muted" : "font-semibold text-cv-warning",
-          )}
-        >
-          {label}
-        </span>
-      )}
-    </li>
-  );
-};
-
-const evidenceSummary = (supporting: number) =>
+const evidenceSummary = (supporting: number, cited: number) =>
   supporting === 1
     ? "עובדה אחת מעידה על הדרישה"
     : supporting > 1
       ? `${supporting} עובדות מעידות על הדרישה`
-      : "מה מגביל את הכיסוי";
+      : cited > 0
+        ? "מה מגביל את הכיסוי"
+        : "הסבר ה-AI";
 
 export const RequirementRow = ({
   evidence,
@@ -79,7 +65,13 @@ export const RequirementRow = ({
   const matched = requirement.coverage === "matched";
   const citedCount = requirement.supportingFactIds.length + requirement.boundaryFactIds.length;
   const severity = requirement.shortfallSeverity ?? "unknown";
-  const shortfall = matched ? null : (requirement.shortfallReason ?? gapReason ?? "לא סופק הסבר מפורט לפער.");
+  /* One explanation on the row. A covered requirement shows why it is covered; an uncovered
+     one shows its shortfall, falling back to the rationale or the gap's reason, and shows
+     no line at all when none was given. A rationale the shortfall displaced is kept behind
+     the row's disclosure rather than dropped. */
+  const shortfall = matched ? null : (requirement.shortfallReason ?? requirement.rationale ?? gapReason ?? null);
+  const rationale = matched ? requirement.rationale : null;
+  const detailRationale = !matched && shortfall !== requirement.rationale ? requirement.rationale : null;
 
   return (
     <li className="flex flex-col gap-2 py-4">
@@ -99,10 +91,10 @@ export const RequirementRow = ({
         </StatusBadge>
       </div>
 
-      {requirement.rationale === null ? null : (
+      {rationale === null ? null : (
         <p className="text-support leading-6 text-cv-text-muted" dir="auto">
           <span className="font-semibold text-cv-text">הסבר ה-AI: </span>
-          <bdi>{requirement.rationale}</bdi>
+          <bdi>{rationale}</bdi>
         </p>
       )}
 
@@ -113,15 +105,21 @@ export const RequirementRow = ({
         </p>
       )}
 
-      {citedCount === 0 ? null : (
+      {citedCount === 0 && detailRationale === null ? null : (
         <details onToggle={(event) => setOpen(event.currentTarget.open)}>
           <DisclosureSummary
             className="w-fit text-support font-medium text-cv-text-muted transition-colors hover:text-cv-text"
             open={open}
           >
-            {evidenceSummary(requirement.supportingFactIds.length)}
+            {evidenceSummary(requirement.supportingFactIds.length, citedCount)}
           </DisclosureSummary>
           <div className="mt-2 flex flex-col gap-4 rounded-control bg-cv-surface-muted p-3">
+            {detailRationale === null ? null : (
+              <p className="text-support leading-6 text-cv-text-muted" dir="auto">
+                <span className="font-semibold text-cv-text">הסבר ה-AI: </span>
+                <bdi>{detailRationale}</bdi>
+              </p>
+            )}
             {requirement.supportingFactIds.length === 0 ? null : (
               <div>
                 <p className="mb-2 flex items-center gap-1.5 text-caption font-semibold text-cv-text-muted">

@@ -1,19 +1,24 @@
 import type { AnalysisIssue } from "@/api/analyses";
 import { Disclosure } from "@/ui/Disclosure";
-import { analysisIssueLabel } from "../../model/analysisLabels";
+import { analysisIssueLabel, confidenceText } from "../../model/analysisLabels";
 
 export const AnalysisNotes = ({
   issues,
+  sourceCoverage,
   unreadableRequirementCount,
 }: {
   issues: AnalysisIssue[];
+  sourceCoverage: number | null;
   unreadableRequirementCount: number;
 }) => {
   const counts = issues.reduce((result, issue) => {
     result.set(issue.code, (result.get(issue.code) ?? 0) + 1);
     return result;
   }, new Map<string, number>());
-  const total = counts.size + (unreadableRequirementCount > 0 ? 1 : 0);
+  /* Source anchoring is a reliability note only when some requirement was not found in the
+     posting's wording; full anchoring has nothing to report. */
+  const unanchored = sourceCoverage !== null && sourceCoverage < 1;
+  const total = counts.size + (unreadableRequirementCount > 0 ? 1 : 0) + (unanchored ? 1 : 0);
   if (total === 0) {
     return null;
   }
@@ -29,6 +34,7 @@ export const AnalysisNotes = ({
                 : `${unreadableRequirementCount} דרישות לא היו תקינות ואינן מוצגות.`}
             </li>
           )}
+          {unanchored ? <li>רק {confidenceText(sourceCoverage)} מהדרישות אותרו בנוסח המודעה.</li> : null}
           {[...counts].map(([code, count]) => (
             <li dir="auto" key={code}>
               {analysisIssueLabel(code)}
