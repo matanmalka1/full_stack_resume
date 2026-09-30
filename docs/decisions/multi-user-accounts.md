@@ -57,9 +57,10 @@ isolation.
 8. **Profiles: a shared template plus a per-user binding.** Track, sections,
    `max_claims`, emphases, and tag weights stay a version-controlled system file. The
    parts that name one candidate's facts (section pools, pins, `safe_headlines`,
-   `omitted_roles`) move to a per-user binding in PostgreSQL. A new user's binding is
-   derived from the tags on their own facts, so a new user can reach a CV from facts
-   alone. Web editing of Profiles stays a non-goal.
+   `omitted_roles`) move to a per-user binding in PostgreSQL. A user's binding comes
+   from `import-knowledge` and changes only through `attach_fact` and
+   `confirm_and_use_fact`; nothing derives it automatically. Web editing of Profiles
+   stays a non-goal.
 9. **An account ends by deactivation, never deletion.** The contract is deactivate,
    revoke every session, and anonymize the PII in a named list of mutable fields
    (state-and-use-cases §23). Immutable triggers are not bypassed for a user lifecycle, and immutable records (Submissions, JobSnapshots,
