@@ -4728,6 +4728,17 @@
             ],
             "title": "Heading"
           },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
           "section": {
             "title": "Section",
             "type": "string"

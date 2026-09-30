@@ -2686,6 +2686,8 @@ export interface components {
             claim_id: string;
             /** Heading */
             heading?: string | null;
+            /** Rationale */
+            rationale?: string | null;
             /** Section */
             section: string;
             /** Sources */
