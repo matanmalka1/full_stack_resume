@@ -4728,6 +4728,22 @@
             ],
             "title": "Heading"
           },
+          "problems": {
+            "items": {
+              "enum": [
+                "invalid-review-evidence",
+                "incomplete-review-coverage",
+                "invalid-review-claim-quote",
+                "invalid-review-source-quote",
+                "stale-review-source",
+                "review-fact-coverage-mismatch",
+                "unsupported-review-number"
+              ],
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
           "rationale": {
             "anyOf": [
               {
@@ -4757,7 +4773,8 @@
           "verdict": {
             "enum": [
               "uncertain",
-              "unsupported"
+              "unsupported",
+              "unattested"
             ],
             "title": "Verdict",
             "type": "string"

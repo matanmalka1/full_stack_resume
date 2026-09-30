@@ -2686,6 +2686,8 @@ export interface components {
             claim_id: string;
             /** Heading */
             heading?: string | null;
+            /** Problems */
+            problems?: ("invalid-review-evidence" | "incomplete-review-coverage" | "invalid-review-claim-quote" | "invalid-review-source-quote" | "stale-review-source" | "review-fact-coverage-mismatch" | "unsupported-review-number")[];
             /** Rationale */
             rationale?: string | null;
             /** Section */
@@ -2698,7 +2700,7 @@ export interface components {
              * Verdict
              * @enum {string}
              */
-            verdict: "uncertain" | "unsupported";
+            verdict: "uncertain" | "unsupported" | "unattested";
         };
         /**
          * RenderCheckReason
