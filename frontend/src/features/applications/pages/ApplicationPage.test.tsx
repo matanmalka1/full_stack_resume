@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { JOB_TEXT_MAX_BYTES } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
 import { ApplicationPage } from "./ApplicationPage";
 
@@ -243,6 +244,27 @@ describe("ApplicationPage", () => {
     expect(
       await screen.findByText("הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה."),
     ).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
+  });
+
+  /* The same budget intake enforces (applicationInput.isJobTextWithinBudget): an oversized
+     posting is refused under its field instead of being sent for the server to refuse. */
+  it("blocks a job posting update whose text exceeds the byte budget, without a request", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
+    );
+    renderPage(fetchMock);
+
+    fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
+    fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
+      target: { value: "a".repeat(JOB_TEXT_MAX_BYTES + 1) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
+
+    expect(
+      await screen.findByText("טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת התצלום."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("aria-invalid", "true");
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
   });
 

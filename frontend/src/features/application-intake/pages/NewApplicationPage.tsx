@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useAiAvailability } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
+import { isJobTextWithinBudget } from "@/features/applications";
 import { WizardStepShell } from "@/features/preparation";
 import { useAppForm } from "@/hooks/useAppForm";
 import { Button } from "@/ui/Button";
@@ -11,12 +12,7 @@ import { CommitBar, NEXT_STEP_LABEL } from "@/ui/CommitBar";
 import { ApplicationIntakeForm } from "../components/ApplicationIntakeForm";
 import { useApplicationIntakeSubmission } from "../hooks/useApplicationIntakeSubmission";
 import { readApplicationIntakeDraft, useApplicationIntakeDraft } from "../hooks/useApplicationIntakeDraft";
-import {
-  emptyApplicationIntake,
-  intakeFromFields,
-  isJobTextWithinBudget,
-  type ApplicationIntakeFields,
-} from "../model/applicationIntake";
+import { emptyApplicationIntake, intakeFromFields, type ApplicationIntakeFields } from "../model/applicationIntake";
 
 const INTAKE_FORM_ID = "application-intake-form";
 

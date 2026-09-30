@@ -13,15 +13,13 @@ import { Dialog } from "@/ui/Dialog";
 import { Field } from "@/ui/Field";
 import { Input, Textarea } from "@/ui/Input";
 import { SuccessNotice } from "@/ui/SuccessNotice";
-import { SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "../model/applicationInput";
-
-/* The save rule this mirrors: text is sent verbatim and an empty URL becomes `null`.
-   Comparing the raw field to that same shape is what "unchanged" means here - trimming
-   the text before comparing would call a whitespace-only edit unchanged too. */
-const normalizedSourceUrl = (value: string): string | null => {
-  const trimmed = value.trim();
-  return trimmed === "" ? null : trimmed;
-};
+import {
+  isJobTextWithinBudget,
+  JOB_TEXT_REQUIRED_MESSAGE,
+  normalizedSourceUrl,
+  SOURCE_URL_MAX_CHARACTERS,
+  validateSourceUrl,
+} from "../model/applicationInput";
 
 interface PostingFields {
   job_text: string;
@@ -87,15 +85,12 @@ export const JobPostingUpdate = ({
     operationLive || (detail.active_operation != null && !isTerminalOperation(detail.active_operation));
 
   const create = useMutation({
-    mutationFn: (fields: PostingFields) => {
-      const sourceUrl = fields.source_url.trim();
-
-      return createJobSnapshot(applicationId, {
+    mutationFn: (fields: PostingFields) =>
+      createJobSnapshot(applicationId, {
         /* The snapshot is the posting's exact content, so the text is never trimmed. */
         jobText: fields.job_text,
-        sourceUrl: sourceUrl === "" ? null : sourceUrl,
-      });
-    },
+        sourceUrl: normalizedSourceUrl(fields.source_url),
+      }),
     /* The projection is what reports the new snapshot, the analysis it superseded, and
        the action now recommended. Nothing from the response is seeded into the cache. */
     onSuccess: async () => {
@@ -182,7 +177,13 @@ export const JobPostingUpdate = ({
                 {...control}
                 {...register("job_text", {
                   validate: (value) => {
-                    if (value.trim() === "") return "יש להזין את טקסט המשרה.";
+                    if (value.trim() === "") return JOB_TEXT_REQUIRED_MESSAGE;
+                    if (!isJobTextWithinBudget(value)) {
+                      return "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת התצלום.";
+                    }
+                    /* The save rule: text is sent verbatim and an empty URL becomes `null`.
+                       Comparing in that same shape is what "unchanged" means - trimming the
+                       text first would call a whitespace-only edit unchanged too. */
                     const unchanged =
                       value === originalJobText && normalizedSourceUrl(getValues("source_url")) === originalSourceUrl;
                     return !unchanged || "הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה.";

@@ -126,6 +126,7 @@ Evidence: `tests/platform/` (`test_transactions.py`, `test_persistence_constrain
 - 413 on oversize bodies; intake field-length and control-character limits.
 - Origin policy guards mutations; no wildcard CORS; the dev origin only when configured;
   loopback bind by default.
+  *Designed, not built:* the account, session, and isolation evidence is §3.11.
 - No endpoint accepts or exposes a filesystem path. Artifacts are served by ID only;
   traversal, encoded traversal, symlink escape, and unregistered paths are refused; a
   delivery streams the bytes it verified.
@@ -249,6 +250,53 @@ provider transport is scripted (`draft_resume` echoes the frame it is sent);
 the draft. Chromium renders the PDF.
 This is offline integration evidence, not a live-provider smoke test. Both browser
 journeys are launched by `tests/e2e/test_browser_api_journey.py`.
+
+### 3.11 Accounts and isolation
+
+*Designed, not built* (product-spec.md §22, state-and-use-cases.md §23, architecture.md
+§18). Each delivery step in `../decisions/multi-user-accounts.md` §5 owes the part of
+this list it touches.
+
+- **Cross-user matrix, derived.** User A drives one Application through Submission,
+  plus facts and settings. User B, signed in, calls every route in
+  `openapi/openapi.json` that names a record, with A's IDs — read, write, delete,
+  download, preview, Operation cancel and retry — and gets `404` with nothing changed
+  and nothing streamed. The route list comes from the schema; a route left out of the
+  matrix must be in a named exception list (`login`, health), and a
+  stale exception fails. Lists, facets, counts, and duplicate detection for B contain
+  nothing of A's.
+- **Ownership in the schema, derived.** Every table either carries `user_id`, reaches a
+  table that does through a `NOT NULL` foreign-key path, or is in a named list of system
+  tables; a new table with no owner fails.
+- **Scoped persistence, derived.** The route matrix proves what a request reaches, not
+  how. A guard over the persistence port Protocols fails on any public method that
+  takes the ID of a user-owned root without `user_id`, or the ID of a child without its
+  `application_id` (architecture.md §18.3); its exceptions are a named list, and a
+  stale exception fails.
+- **Idempotency and uniqueness.** B reusing A's `Idempotency-Key` gets a new Operation of
+  B's own; B may create a fact with A's `fact_id`, and each resolves to its owner.
+- **Worker.** An Operation of A reads only A's Knowledge; an Operation whose source names
+  a record of B fails without reading it; a payload naming a `user_id` is refused at
+  creation; the owner comes from the Operation's Application, not the payload.
+- **Renderer.** A template or content that references an external URL, another local
+  file, or a navigation renders without any of those requests leaving the browser.
+- **Authentication.** Login; wrong password and unknown email give the same answer;
+  logout; logout-all; expired and revoked sessions are `401`; change password needs the
+  current one and revokes the other sessions; `set-password` revokes every session;
+  `deactivate_account` changes exactly the fields §23 lists, leaves every immutable
+  record byte-identical, and sign-in is refused afterwards; `create-user` refuses a second user before isolation ships.
+- **Secrets.** No password or session secret appears in the database, the logs,
+  Problem Details, or Operation payloads; the cookie carries `HttpOnly`, `Secure`, and
+  `SameSite=Lax`.
+- **Limits.** Sign-in answers `429` with `Retry-After` past its limit, across both
+  processes, and recovers when the window passes; the AI quota refuses the Operation past
+  the limit and queues nothing.
+- **Transport.** A foreign `Host` and a mutation without an allowed `Origin` are refused
+  before routing, `login` included.
+- **Pipeline.** `tests/e2e/test_pipeline_end_to_end.py` runs as a signed-in user and still
+  reaches Ready with `OPENAI_API_KEY` unset.
+- **Frontend.** Private routes redirect to `/login` when signed out; a `401` clears the
+  auth state and the query cache; sign-out clears per-user browser storage.
 
 ## 4. Golden matrix and semantic parity
 
