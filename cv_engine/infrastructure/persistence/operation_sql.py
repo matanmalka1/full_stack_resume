@@ -31,9 +31,11 @@ def _provider_totals(outputs: list[Any]) -> tuple[dict[str, int | None], str | N
     usage: dict[str, int | None] = {}
     for field in _USAGE_FIELDS:
         values = [(metadata.get("usage") or {}).get(field) for metadata in calls.values()]
-        usage[field] = None if None in values else sum(int(value) for value in values)
+        known = [int(value) for value in values if value is not None]
+        usage[field] = sum(known) if len(known) == len(values) else None
     costs = [(metadata.get("cost") or {}).get("total_usd") for metadata in calls.values()]
-    cost_usd = None if None in costs else usd(sum((Decimal(cost) for cost in costs), Decimal(0)))
+    priced = [Decimal(cost) for cost in costs if cost is not None]
+    cost_usd = usd(sum(priced, Decimal(0))) if len(priced) == len(costs) else None
     return usage, cost_usd
 
 
