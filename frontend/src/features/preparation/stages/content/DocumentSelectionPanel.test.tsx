@@ -243,7 +243,9 @@ describe("DocumentSelectionPanel", () => {
     const added = screen.getByRole("heading", { name: "נוספו לקורות החיים (1)" }).parentElement;
     if (added === null) throw new Error("the added list was not rendered");
     expect(within(added).getByText("עובדה שהושמטה")).toBeInTheDocument();
-    expect(within(added).getByText("Priority ERP")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "הוסרו מקורות החיים (1)" })).toBeInTheDocument();
+    expect(within(added).getByText(/ראיה לדרישת חובה/)).toBeInTheDocument();
+    const removed = screen.getByRole("heading", { name: "הוסרו מקורות החיים (1)" }).parentElement;
+    if (removed === null) throw new Error("the removed list was not rendered");
+    expect(within(removed).getByText("עובדה שנבחרה")).toBeInTheDocument();
   });
 });
