@@ -5,8 +5,7 @@ import type { Requirement } from "@/api/analyses";
 import type { ApplicationDetail, CVDocument } from "@/api/contracts";
 import { invalidateDocumentViews, proposeSelection, updateSelection } from "@/api/documents";
 import { operationQueryKey } from "@/api/operations";
-import { aiRegenerationAvailable } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
+import { useAiAvailability } from "@/api/useSettings";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
 import { Disclosure } from "@/ui/Disclosure";
@@ -63,8 +62,8 @@ export const DocumentSelectionPanel = ({
 }) => {
   const queryClient = useQueryClient();
   const applicationId = detail.application.id;
-  const { settings } = useSettings();
-  const aiAvailable = aiRegenerationAvailable(settings);
+  const aiState = useAiAvailability();
+  const aiAvailable = aiState === "available";
   const proposal = useSelectionProposal(applicationId);
   const [edits, setEdits] = useState<FactOverrides | null>(null);
   const [filter, setFilter] = useState<FactFilter>("all");
@@ -216,7 +215,7 @@ export const DocumentSelectionPanel = ({
         pending={ai.isPending}
         rationale={aiProposed ? (selection.proposal_rationale ?? null) : undefined}
         resultVisible={proposalResultVisible}
-        settingsLoaded={settings !== undefined}
+        settingsLoaded={aiState !== "loading"}
         status={proposal.status}
         supportsByFact={supportsByFact}
       />

@@ -4,6 +4,7 @@ import type { Requirement } from "@/api/analyses";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { cx } from "@/ui/cx";
+import { toneTextClasses } from "@/ui/tone";
 import { type SelectionChange, factSignals } from "../../model/selectionManifest";
 import type { ProposalStatus } from "./useSelectionProposal";
 
@@ -36,7 +37,7 @@ const ChangeList = ({
       <h4 className="mb-2 flex items-center gap-1.5 text-support font-bold text-cv-text">
         <Icon
           aria-hidden="true"
-          className={cx("size-icon-md", direction === "added" ? "text-cv-success" : "text-cv-warning")}
+          className={cx("size-icon-md", toneTextClasses[direction === "added" ? "success" : "warning"])}
         />
         {direction === "added" ? `נוספו לקורות החיים (${items.length})` : `הוסרו מקורות החיים (${items.length})`}
       </h4>

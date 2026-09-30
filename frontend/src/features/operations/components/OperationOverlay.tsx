@@ -4,8 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { aiRegenerationAvailable } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
+import { useAiAvailability } from "@/api/useSettings";
 import { cx } from "@/ui/cx";
 import { Dialog } from "@/ui/Dialog";
 import { IconButton } from "@/ui/IconButton";
@@ -113,7 +112,7 @@ export const OperationOverlay = ({
   const [navigating, setNavigating] = useState(false);
   const location = useLocation();
   const [shownAtLocation, setShownAtLocation] = useState(location.key);
-  const { settings } = useSettings();
+  const ai = useAiAvailability();
   const [session, setSession] = useState<Session>({
     active: false,
     dialogOpen: false,
@@ -190,8 +189,7 @@ export const OperationOverlay = ({
   const retryableRefusal =
     record?.status === "failed" &&
     (record.failure_code === "PROVIDER_REFUSED" || record.failure_code === "PROVIDER_NOT_CONFIGURED") &&
-    settings !== undefined &&
-    aiRegenerationAvailable(settings);
+    ai === "available";
   const tone: Tone =
     record === undefined || continuing ? "progress" : retryableRefusal ? "warning" : statusTones[record.status];
   const statusText =

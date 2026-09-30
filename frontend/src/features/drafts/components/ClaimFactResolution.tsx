@@ -7,13 +7,7 @@ import { Link } from "react-router-dom";
 
 import { invalidateApplicationViews } from "@/api/applications";
 import type { DraftClaim } from "@/api/contracts";
-import {
-  confirmAndUseFact,
-  factDetailQueryKey,
-  factHistoryQueryKey,
-  factHistoryQueryOptions,
-  factsQueryPrefix,
-} from "@/api/facts";
+import { confirmAndUseFact, factHistoryQueryOptions, invalidateFactViews } from "@/api/facts";
 import { type DocumentRead, documentQueryKey } from "@/api/documents";
 import type { EditableDocument } from "../model/drafts.types";
 import { routePaths } from "@/app/routePaths";
@@ -146,11 +140,7 @@ export const ClaimFactResolution = ({
     /* Confirming reaches past the fact store: it changes the document's selection, so the
        document and its projection are out of date too. */
     onSuccess: async () => {
-      void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
-      void queryClient.invalidateQueries({ queryKey: factHistoryQueryKey });
-      if (factId !== null) {
-        void queryClient.invalidateQueries({ queryKey: factDetailQueryKey(factId) });
-      }
+      invalidateFactViews(queryClient, factId);
       await refresh.mutateAsync().catch(() => {});
     },
     onSettled: () => onResolvingChange?.(false),

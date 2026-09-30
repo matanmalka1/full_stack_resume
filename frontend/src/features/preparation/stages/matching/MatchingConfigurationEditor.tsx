@@ -12,7 +12,14 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Field } from "@/ui/Field";
 import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
-import { emphasisLabels, languageLabels, optionsFrom, profileLabels, trackLabels } from "../../model/analysisLabels";
+import {
+  classificationFieldLabels,
+  emphasisLabels,
+  languageLabels,
+  optionsFrom,
+  profileLabels,
+  trackLabels,
+} from "../../model/analysisLabels";
 import {
   type MatchingKey,
   type MatchingValues,
@@ -26,10 +33,10 @@ import {
 } from "../../model/matchingConfiguration";
 
 const fields: Record<MatchingKey, { cost: string; label: string; labels: Record<string, string> }> = {
-  track: { label: "מסלול", labels: trackLabels, cost: "ניתוח חדש" },
-  profile: { label: "פרופיל", labels: profileLabels, cost: "ניתוח חדש" },
-  emphasis: { label: "דגש", labels: emphasisLabels, cost: "בחירת עובדות חדשה" },
-  language: { label: "שפת קורות החיים", labels: languageLabels, cost: "ניתוח חדש" },
+  track: { label: classificationFieldLabels.track, labels: trackLabels, cost: "ניתוח חדש" },
+  profile: { label: classificationFieldLabels.profile, labels: profileLabels, cost: "ניתוח חדש" },
+  emphasis: { label: classificationFieldLabels.emphasis, labels: emphasisLabels, cost: "בחירת עובדות חדשה" },
+  language: { label: classificationFieldLabels.language, labels: languageLabels, cost: "ניתוח חדש" },
 };
 
 export const MatchingConfigurationEditor = ({

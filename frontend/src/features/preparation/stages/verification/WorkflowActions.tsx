@@ -1,7 +1,7 @@
 import { type ReactElement, useId, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { aiRegenerationAvailable } from "@/api/settings";
+import { aiAvailability } from "@/api/settings";
 import { routePaths } from "@/app/routePaths";
 import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -59,13 +59,13 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
   /* A first analysis with no provider cannot be pressed, so the bar leads with the one
      thing that unblocks it. The inert analysis button stays beside it, secondary, so the
      step still names its action. */
-  const providerMissing =
-    plan.analyze !== null && !plan.analyze.reanalysis && settings !== undefined && !aiRegenerationAvailable(settings);
+  const ai = aiAvailability(settings);
+  const providerMissing = plan.analyze !== null && !plan.analyze.reanalysis && ai === "missing";
   const analyzeButton =
     plan.analyze === null || plan.analyze.reanalysis ? null : (
       <Button
         aria-describedby={providerMissing ? analyzeReasonId : undefined}
-        disabled={workInFlight || settings === undefined || !aiRegenerationAvailable(settings)}
+        disabled={workInFlight || ai !== "available"}
         key="analyze"
         onClick={() => analyze.mutate()}
         pending={analyze.isPending}
@@ -125,7 +125,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
       : routeButton(
           "draft-screen",
           plan.draftScreen.href,
-          plan.draftScreen.label === "אישור הגרסה" ? "מעבר לעורך לבדיקה ואישור" : plan.draftScreen.label,
+          plan.draftScreen.action === "approve" ? "מעבר לעורך לבדיקה ואישור" : plan.draftScreen.label,
           /* The projection's own recommendation, not a constant. A generate queued here
              advances to the editor by itself, so this link is what a reader who
              deliberately returned to analysis presses - and when the workflow is waiting
@@ -141,9 +141,9 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
      pressed: an inert button with no reason beside it reads as a broken one. The way to
      fix a missing provider is the bar's own lead action. */
   const analyzeNote =
-    plan.analyze === null || plan.analyze.reanalysis || settings === undefined ? undefined : (
+    plan.analyze === null || plan.analyze.reanalysis || ai === "loading" ? undefined : (
       <p className="text-support leading-6 text-cv-text-muted" id={analyzeReasonId}>
-        {aiRegenerationAvailable(settings)
+        {ai === "available"
           ? "הניתוח כולל קריאת AI בתשלום, והעבודה מתבצעת ברקע."
           : "הניתוח דורש ספק AI, ועדיין לא הוגדר כזה."}
       </p>

@@ -38,11 +38,19 @@ export const updateSettings = async (body: UpdateSettingsRequest, etag: string):
    `undefined` omits `provider` from the request, which is the deterministic lane.
 
    Analysis does not read this. It is AI-only with no deterministic form to default to,
-   so it reads `aiRegenerationAvailable` and is simply unavailable without a provider. */
+   so it reads `aiAvailability` and is simply unavailable without a provider. */
 export const executionProvider = (settings: Settings | undefined): "openai" | undefined =>
   settings?.provider_configured && settings.ai_enabled && settings.default_execution_mode === "ai"
     ? "openai"
     : undefined;
 
-export const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
+const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
   settings?.provider_configured === true && settings.ai_enabled === true;
+
+/* Whether an AI command can run, with "settings not read yet" kept apart from "no usable
+   provider". Screens decide for themselves what to do while it is "loading" - some hold
+   the control, some assume the common case - but none re-derives the three states. */
+export type AiAvailability = "loading" | "available" | "missing";
+
+export const aiAvailability = (settings: Settings | undefined): AiAvailability =>
+  settings === undefined ? "loading" : aiRegenerationAvailable(settings) ? "available" : "missing";

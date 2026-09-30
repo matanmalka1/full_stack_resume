@@ -17,7 +17,7 @@ import { Select } from "@/ui/Select";
 import { SuccessNotice } from "@/ui/SuccessNotice";
 import { Switch } from "@/ui/Switch";
 import { SettingsConflict } from "./SettingsConflict";
-import { editableSettings } from "../settings.model";
+import { editableSettings, reasoningEffortLabels } from "../settings.model";
 
 interface SettingsFormProps {
   etag: string | null;
@@ -181,9 +181,9 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                   >
                     {(control) => (
                       <Select {...control} {...register("default_reasoning_effort")}>
-                        <option value="low">נמוך — מהיר</option>
-                        <option value="medium">בינוני — מאוזן</option>
-                        <option value="high">גבוה — איכות</option>
+                        <option value="low">{reasoningEffortLabels.low} — מהיר</option>
+                        <option value="medium">{reasoningEffortLabels.medium} — מאוזן</option>
+                        <option value="high">{reasoningEffortLabels.high} — איכות</option>
                       </Select>
                     )}
                   </Field>

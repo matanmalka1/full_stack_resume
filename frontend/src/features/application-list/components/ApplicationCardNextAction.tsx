@@ -14,6 +14,7 @@ import { operationTypeLabels, statusLabels } from "@/features/operations";
 import { buttonClasses } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { cx } from "@/ui/cx";
+import { toneTextClasses } from "@/ui/tone";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
 import { applicationAttention, formatApplicationDate, isNextActionOverdue } from "../model/applicationListPresentation";
@@ -30,11 +31,21 @@ interface Command {
   to: string;
 }
 
+/* Which of the sources below the heading came from. Callers branch on this, never on the
+   heading's words: a reworded label must not change which controls a card draws. */
+type HeadingKind = "failed_run" | "running" | "recommended" | "ready" | "reminder";
+
 interface Heading {
   command: Command | null;
   description: string | null;
-  failed: boolean;
+  kind: HeadingKind;
   title: string;
+}
+
+interface HeadingOptions {
+  /* The finished CV is shown by the caller in a block of its own, so the heading reads the
+     record as if it had none and never names it a second time. */
+  omitReady?: boolean;
 }
 
 /* What a record asks for next, in the order the reader should see it: a failed run
@@ -42,13 +53,17 @@ interface Heading {
    step the server recommends; then a finished CV; and only then the reader's own
    recruitment reminder. The first that applies is the heading - the rest stays below it
    as detail. */
-export const nextActionHeading = (item: ApplicationListItem, attentive: boolean): Heading | null => {
+export const nextActionHeading = (
+  item: ApplicationListItem,
+  attentive: boolean,
+  { omitReady = false }: HeadingOptions = {},
+): Heading | null => {
   const operation = reportedOperation(item);
   if (operation !== null && (operation.status === "failed" || operation.status === "interrupted")) {
     return {
       command: { label: STEP_COMMAND, strong: true, to: preparationResumeDestination(item) },
       description: null,
-      failed: true,
+      kind: "failed_run",
       /* Worded as the run, like the status row on the step itself: "ניתוח המשרה · נכשלה"
          paired a masculine action with the run's feminine status, and named it differently
          from the screen it opens. */
@@ -59,7 +74,7 @@ export const nextActionHeading = (item: ApplicationListItem, attentive: boolean)
     return {
       command: null,
       description: null,
-      failed: false,
+      kind: "running",
       title: `ממתין לסיום: ${operationTypeLabels[operation.operation_type]}`,
     };
   }
@@ -71,20 +86,20 @@ export const nextActionHeading = (item: ApplicationListItem, attentive: boolean)
         to: actionDestination(item.recommended_action, item.id) ?? routePaths.application(item.id),
       },
       description: actionDescription(item.recommended_action),
-      failed: false,
+      kind: "recommended",
       title: actionLabel(item.recommended_action),
     };
   }
-  if (item.preparation_state === "ready") {
+  if (item.preparation_state === "ready" && !omitReady) {
     return {
       command: { label: "פתיחה", strong: false, to: routePaths.ready(item.id) },
       description: null,
-      failed: false,
+      kind: "ready",
       title: "קורות החיים מוכנים",
     };
   }
   if (item.next_action != null) {
-    return { command: null, description: null, failed: false, title: item.next_action };
+    return { command: null, description: null, kind: "reminder", title: item.next_action };
   }
   return null;
 };
@@ -107,7 +122,7 @@ export const AttentionLink = ({
       aria-label={`${item.company}: ${full}`}
       className={cx(
         "line-clamp-2 text-support font-medium hover:underline",
-        attention.tone === "blocker" ? "text-cv-blocker" : "text-cv-warning",
+        toneTextClasses[attention.tone],
         className,
       )}
       to={preparationResumeDestination(item)}
@@ -130,28 +145,33 @@ export const AttentionLink = ({
 export const ApplicationCardNextAction = ({
   clearing,
   item,
+  omitReady = false,
   onClearNextAction,
 }: {
   clearing: boolean;
   item: ApplicationListItem;
+  omitReady?: boolean;
   onClearNextAction: (item: ApplicationListItem) => void;
 }) => {
   const attention = applicationAttention(item);
-  const head = nextActionHeading(item, attention !== null);
+  const head = nextActionHeading(item, attention !== null, { omitReady });
 
   if (head === null) {
     return <span className="text-support text-cv-text-muted">אין פעולה מתוזמנת</span>;
   }
 
-  const reminderIsHeading = head.title === item.next_action && head.command === null;
+  const reminderIsHeading = head.kind === "reminder";
   const overdue = !item.is_closed && isNextActionOverdue(item.next_action_date);
-  const showReadyDocument = item.preparation_state === "ready" && head.title !== "קורות החיים מוכנים";
+  const showReadyDocument = !omitReady && item.preparation_state === "ready" && head.kind !== "ready";
 
   return (
     <div className="flex w-full items-center gap-2">
       <div className="min-w-0 flex-1">
         <p
-          className={cx("line-clamp-2 text-support font-semibold", head.failed ? "text-cv-blocker" : "text-cv-text")}
+          className={cx(
+            "line-clamp-2 text-support font-semibold",
+            head.kind === "failed_run" ? "text-cv-blocker" : "text-cv-text",
+          )}
           dir="auto"
         >
           {head.title}

@@ -6,7 +6,14 @@ import type { Fact } from "@/api/contracts";
 import { factsQueryOptions } from "@/api/facts";
 import type { DecisionExport } from "@/api/contracts";
 import { factLabelInLanguage, factSourceLabel } from "@/features/facts";
-import { emphasisLabels, fitLevelLabel, languageLabels, profileLabels, trackLabel } from "@/features/preparation";
+import {
+  classificationFieldLabels,
+  emphasisLabels,
+  fitLevelLabel,
+  languageLabels,
+  profileLabels,
+  trackLabel,
+} from "@/features/preparation";
 import { Button } from "@/ui/Button";
 import { Disclosure } from "@/ui/Disclosure";
 import { EmptyState } from "@/ui/EmptyState";
@@ -120,10 +127,10 @@ const Part = ({ children, title }: { children: ReactNode; title: string }) => (
    no map knows is shown as written. */
 const byKey = (labels: Record<string, string>) => (value: string) => labels[value] ?? value;
 const classificationTerms: Record<string, { label: (value: string) => string; term: string }> = {
-  track: { term: "מסלול", label: trackLabel },
-  profile: { term: "פרופיל", label: byKey(profileLabels) },
-  emphasis: { term: "דגש", label: byKey(emphasisLabels) },
-  language: { term: "שפת קורות החיים", label: byKey(languageLabels) },
+  track: { term: classificationFieldLabels.track, label: trackLabel },
+  profile: { term: classificationFieldLabels.profile, label: byKey(profileLabels) },
+  emphasis: { term: classificationFieldLabels.emphasis, label: byKey(emphasisLabels) },
+  language: { term: classificationFieldLabels.language, label: byKey(languageLabels) },
   fit: { term: "התאמה למשרה", label: fitLevelLabel },
 };
 

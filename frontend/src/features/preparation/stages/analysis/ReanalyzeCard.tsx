@@ -1,4 +1,4 @@
-import { aiRegenerationAvailable } from "@/api/settings";
+import { aiAvailability } from "@/api/settings";
 import type { ApplicationDetail } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { useAnalyzeCommand } from "../../api/mutations";
@@ -13,6 +13,7 @@ export const ReanalyzeCard = ({
   operationLive: boolean;
 }) => {
   const { analyze, settings } = useAnalyzeCommand(detail, onQueued);
+  const ai = aiAvailability(settings);
 
   return (
     <div className="flex flex-col gap-3">
@@ -20,14 +21,14 @@ export const ReanalyzeCard = ({
         <p className="max-w-md text-support leading-6 text-cv-text-muted">
           יוצר ניתוח חדש לאותו תצלום משרה.
           {detail.document_id != null ? " המסמך נשאר על הניתוח הנוכחי עד שתבנו אותו מחדש." : null}{" "}
-          {settings === undefined
+          {ai === "loading"
             ? null
-            : aiRegenerationAvailable(settings)
+            : ai === "available"
               ? "ניתוח מחדש זה יכלול קריאת AI בתשלום."
               : "כדי לנתח מחדש יש להגדיר ולהפעיל ספק AI."}
         </p>
         <Button
-          disabled={operationLive || settings === undefined || !aiRegenerationAvailable(settings)}
+          disabled={operationLive || ai !== "available"}
           onClick={() => analyze.mutate()}
           pending={analyze.isPending}
           pendingLabel="מפעיל ניתוח…"
