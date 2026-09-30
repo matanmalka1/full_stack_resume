@@ -107,8 +107,6 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
     save.reset();
     refresh.reset();
   };
-  const aiEnabled = form.ai_enabled_override ?? settings.ai_enabled;
-  const aiAvailable = settings.provider_configured && aiEnabled;
   const selectedModel = settings.available_ai_models.find((model) => model.id === form.default_ai_model);
 
   return (
@@ -134,34 +132,14 @@ export const SettingsForm = ({ etag, settings, themeOnly = false }: SettingsForm
                 </Switch>
               </FormSection>
 
-              <FormSection description="הפעלה ומדיניות עבור פעולות שנעזרות במודל שפה." title="בינה מלאכותית">
-                <Switch
-                  checked={aiEnabled}
-                  description={
-                    settings.provider_configured ? "מפעיל פעולות AI ידניות." : "לא הוגדר ספק AI בסביבת הריצה."
-                  }
-                  disabled={!settings.provider_configured}
-                  onChange={(checked) => {
-                    setValue("ai_enabled_override", checked, { shouldDirty: true });
-                    if (!checked) {
-                      setValue("default_execution_mode", "deterministic", { shouldDirty: true });
-                    }
-                  }}
-                >
-                  הפעלת AI
-                </Switch>
+              <FormSection description="מדיניות עבור פעולות שנעזרות במודל שפה." title="בינה מלאכותית">
+                <p className="text-support leading-6 text-cv-text-muted">
+                  {settings.provider_configured
+                    ? "ניתוח משרה, יצירת טיוטה וניסוח מחדש רצים עם AI בלבד."
+                    : "לא הוגדר ספק AI בסביבת הריצה, ולכן אי אפשר לנתח משרה או ליצור טיוטה."}
+                </p>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Switch
-                    checked={form.default_execution_mode === "ai"}
-                    disabled={!aiAvailable}
-                    description="כשהמתג כבוי, הטיוטה נוצרת במסלול דטרמיניסטי ללא קריאת AI. ניתוח משרה רץ תמיד עם AI."
-                    onChange={(checked) =>
-                      setValue("default_execution_mode", checked ? "ai" : "deterministic", { shouldDirty: true })
-                    }
-                  >
-                    יצירת טיוטה עם AI כברירת מחדל
-                  </Switch>
                   <Field hint="הבחירה נשמרת לכל פעולת AI חדשה; פעולה שכבר נשלחה שומרת את המודל שלה." label="מודל AI">
                     {(control) => (
                       <Select {...control} {...register("default_ai_model")}>

@@ -199,18 +199,16 @@ export const buildFromAnalysis = async (
   return response.data;
 };
 
-/* §14 `create_draft`: asynchronous. Activation writes content only while the document
-   still carries the hash this call was addressed to. `provider` is omitted for the
-   deterministic path because the server owns that default. */
+/* §14 `create_draft`: asynchronous, and always an AI run. Activation writes content only
+   while the document still carries the hash this call was addressed to. */
 export const createDraft = async (
   applicationId: string,
   expectedDocumentHash: string,
   idempotencyKey: string,
-  options: { provider?: "openai" } = {},
 ): Promise<QueuedOperation> => {
-  const body: Omit<CreateDraftRequest, "provider"> & Partial<Pick<CreateDraftRequest, "provider">> = {
+  const body: CreateDraftRequest = {
     expected_document_hash: expectedDocumentHash,
-    ...(options.provider === undefined ? {} : { provider: options.provider }),
+    provider: "openai",
   };
   return queuedOperation(
     await apiRequest<Operation>(documentPath(applicationId, "/draft"), {

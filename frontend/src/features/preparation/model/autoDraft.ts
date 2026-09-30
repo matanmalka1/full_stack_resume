@@ -1,4 +1,5 @@
 import type { ApplicationDetail, Operation, Settings } from "@/api/contracts";
+import { aiRegenerationAvailable } from "@/api/settings";
 
 /* What an automatic generate is addressed to: the document the first analysis created,
    at the exact hash the projection reports. `create_draft` activates only while the
@@ -22,6 +23,7 @@ export const autoDraftSources = (
     operation?.operation_type !== "analyze_job" ||
     operation.status !== "succeeded" ||
     settings?.auto_generate_when_review_not_required !== true ||
+    !aiRegenerationAvailable(settings) ||
     detail === undefined ||
     operation.application_id !== detail.application.id ||
     detail.application.deleted_at != null ||
@@ -80,6 +82,7 @@ export const autoDraftIsContinuing = (
   if (autoDraftSources(operation, settings, detail) !== null) return true;
   if (
     settings?.auto_generate_when_review_not_required !== true ||
+    !aiRegenerationAvailable(settings) ||
     operation?.operation_type !== "analyze_job" ||
     operation.status !== "succeeded" ||
     detail === undefined ||

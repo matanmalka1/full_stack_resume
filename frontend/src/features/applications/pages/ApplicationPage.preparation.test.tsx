@@ -114,15 +114,10 @@ const acceptedResponse = (operation: Operation): Response =>
     },
   });
 
-/* No AI provider configured. Named for the draft lane, which still has a deterministic
-   path; analysis does not - these settings are simply the state in which analysis cannot
-   run at all. */
-const deterministicSettings: Settings = {
+/* No AI provider configured: the state in which neither analysis nor drafting can run. */
+const noProviderSettings: Settings = {
   edit_version: 0,
   auto_generate_when_review_not_required: false,
-  ai_enabled: false,
-  ai_enabled_override: null,
-  default_execution_mode: "deterministic",
   default_ai_model: "gpt-5.6-terra",
   default_reasoning_effort: "medium",
   available_ai_models: [],
@@ -134,17 +129,9 @@ const deterministicSettings: Settings = {
   updated_at: null,
 };
 
-/* The only state analysis can be commanded from. Analysis is an AI-only lane, so the
-   analyze button reads `provider_configured && ai_enabled` and is inert without both. */
-const aiSettings: Settings = { ...deterministicSettings, ai_enabled: true, provider_configured: true };
-
-/* A provider is configured and AI is on, and the reader still left the default execution
-   mode on deterministic. Analysis runs either way; the draft lane is what this state
-   actually decides. */
-const aiEnabledDeterministicLane: Settings = { ...aiSettings };
-
-/* The same provider, with the AI lane actually chosen. */
-const aiLaneSettings: Settings = { ...aiSettings, default_execution_mode: "ai" };
+/* The only state analysis and drafting can be commanded from. Both are AI-only, so their
+   buttons read `provider_configured` and are inert without it. */
+const aiSettings: Settings = { ...noProviderSettings, provider_configured: true };
 
 /* Retries are off. Query-specific polling options override the client's default,
    so tests that require a completion tick explicitly refresh the watched Operation. */
@@ -160,7 +147,7 @@ const HistoryControls = () => {
   );
 };
 
-const renderPage = (settings: Settings = deterministicSettings, routeState?: unknown) => {
+const renderPage = (settings: Settings = aiSettings, routeState?: unknown) => {
   const client = new QueryClient({
     defaultOptions: {
       /* Settings is shell-owned in production and deliberately seeded here. Keep that
@@ -217,7 +204,7 @@ describe("ApplicationPage at the preparation route", () => {
       ),
     );
 
-    renderPage(deterministicSettings, {
+    renderPage(noProviderSettings, {
       createdApplication: { analysisProblem: null, operationId: "op-1" },
     });
 
@@ -268,9 +255,7 @@ describe("ApplicationPage at the preparation route", () => {
       /* The opt-in is read from the live Settings query, not only from the seeded cache,
          so this read has to answer with the setting under test. */
       if (url.includes("/settings")) {
-        return Promise.resolve(
-          jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
-        );
+        return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
       }
       if (url.includes("/operations/")) {
         return Promise.resolve(jsonResponse(analyzed));
@@ -287,7 +272,7 @@ describe("ApplicationPage at the preparation route", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     renderPage({
-      ...deterministicSettings,
+      ...aiSettings,
       auto_generate_when_review_not_required: true,
     });
 
@@ -295,7 +280,7 @@ describe("ApplicationPage at the preparation route", () => {
     const posts = fetchMock.mock.calls.filter((call) => call[1]?.method === "POST");
     expect(posts).toHaveLength(1);
     expect(String(posts[0]?.[0])).toBe("/api/v1/applications/app-1/document/draft");
-    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({ expected_document_hash: HASH });
+    expect(JSON.parse(String(posts[0]?.[1]?.body))).toEqual({ expected_document_hash: HASH, provider: "openai" });
   });
 
   it("moves to the editor after the automatically generated draft succeeds", async () => {
@@ -327,9 +312,7 @@ describe("ApplicationPage at the preparation route", () => {
           return Promise.resolve(jsonResponse(drafted));
         }
         if (url.includes("/settings")) {
-          return Promise.resolve(
-            jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
-          );
+          return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
         }
         if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
         projectionReads += 1;
@@ -349,7 +332,7 @@ describe("ApplicationPage at the preparation route", () => {
       }),
     );
 
-    const { client } = renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+    const { client } = renderPage({ ...aiSettings, auto_generate_when_review_not_required: true });
 
     /* The accepted response seeds the queued Operation before it is watched. Drive
        its next read explicitly rather than spending the test budget on a poll timer. */
@@ -379,6 +362,7 @@ describe("ApplicationPage at the preparation route", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return Promise.resolve(acceptedResponse(drafting));
+      if (url.includes("/settings")) return Promise.resolve(jsonResponse(aiSettings));
       if (url.endsWith("/operations/op-draft")) {
         draftActivated = true;
         return Promise.resolve(jsonResponse(drafted));
@@ -408,23 +392,9 @@ describe("ApplicationPage at the preparation route", () => {
        so nothing else may queue a second generate behind it. */
     expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
   });
-  /* The draft lane follows the Settings execution mode, not the mere presence of a
-     provider. Enabling AI is permission; the mode is the choice, and a reader who left it
-     on deterministic was still being charged for every generated draft. */
-  it.each([
-    {
-      body: { expected_document_hash: HASH },
-      name: "runs the draft deterministically while AI is enabled but the mode is not",
-      note: "היא נוצרת ברקע, בלי קריאת AI.",
-      settings: aiEnabledDeterministicLane,
-    },
-    {
-      body: { expected_document_hash: HASH, provider: "openai" },
-      name: "runs the draft through the provider once the mode names the AI lane",
-      note: "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע.",
-      settings: aiLaneSettings,
-    },
-  ])("$name", async ({ body, note, settings }) => {
+  /* Drafting is AI-only: every generate names the provider, and the bar says what the
+     press costs. */
+  it("runs the draft through the provider", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") {
         return Promise.resolve(acceptedResponse(queued({ id: "op-draft", operation_type: "create_draft" })));
@@ -432,7 +402,7 @@ describe("ApplicationPage at the preparation route", () => {
       return Promise.resolve(
         jsonResponse(
           String(input).includes("/settings")
-            ? settings
+            ? aiSettings
             : analyzed_detail({
                 available_actions: ["create_draft"],
                 recommended_action: "create_draft",
@@ -442,17 +412,40 @@ describe("ApplicationPage at the preparation route", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderPage(settings);
+    renderPage(aiSettings);
 
-    /* The sentence shares its paragraph with the line naming the draft's sources, so the
-       lane clause is matched inside it rather than as a whole element. */
-    expect(await screen.findByText(note, { exact: false })).toBeInTheDocument();
+    expect(
+      await screen.findByText("היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע.", { exact: false }),
+    ).toBeInTheDocument();
     await clickEnabledButton("יצירת טיוטה");
 
     await waitFor(() => expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1));
     const post = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
     expect(String(post?.[0])).toContain("/applications/app-1/document/draft");
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual(body);
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ expected_document_hash: HASH, provider: "openai" });
+  });
+
+  it("refuses to command a draft with no AI provider configured", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(
+        jsonResponse(
+          String(input).includes("/settings")
+            ? noProviderSettings
+            : analyzed_detail({
+                available_actions: ["create_draft"],
+                recommended_action: "create_draft",
+              }),
+        ),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage(noProviderSettings);
+
+    expect(await screen.findByText("יצירת הטיוטה דורשת ספק AI, ועדיין לא הוגדר כזה.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "יצירת טיוטה" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(0);
   });
 
   it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
@@ -502,12 +495,12 @@ describe("ApplicationPage at the preparation route", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL) =>
         Promise.resolve(
-          String(input).includes("/settings") ? jsonResponse(deterministicSettings) : jsonResponse(detail()),
+          String(input).includes("/settings") ? jsonResponse(noProviderSettings) : jsonResponse(detail()),
         ),
       ),
     );
 
-    renderPage(deterministicSettings);
+    renderPage(noProviderSettings);
 
     expect(await screen.findByRole("button", { name: "ניתוח המשרה" })).toBeDisabled();
     /* The reason sits in the bar beside the inert button, and the bar leads with the way
@@ -771,12 +764,8 @@ describe("ApplicationPage at the preparation route", () => {
      resend the failed run's own frozen execution. The fix renders this step's own action
      panel beside the failure, so its analyze button - wired to current Settings via
      `useAnalyzeCommand` - is reachable without leaving the screen or predicting the
-     projection in a new way.
-
-     The finding was originally about a reader who switched Settings to deterministic
-     after an AI failure. That switch no longer exists: analysis is one AI lane. What the
-     test still holds is the part that survives it - a fresh analyze is offered beside
-     retry, and it queues a new Operation rather than resending the failed one. */
+     projection in a new way: a fresh analyze is offered beside retry, and it queues a new
+     Operation rather than resending the failed one. */
   it("offers a fresh analysis beside retry after a terminal analysis failure", async () => {
     const failed = queued({
       status: "failed",
@@ -824,13 +813,13 @@ describe("ApplicationPage at the preparation route", () => {
       vi.fn((input: RequestInfo | URL) =>
         Promise.resolve(
           String(input).includes("/settings")
-            ? jsonResponse(deterministicSettings)
+            ? jsonResponse(noProviderSettings)
             : jsonResponse(detail({ latest_operation: failed, active_operation: null })),
         ),
       ),
     );
 
-    renderPage(deterministicSettings);
+    renderPage(noProviderSettings);
 
     expect(await screen.findByText("צפייה בנוסח המשרה שנשמר")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "עדכון נוסח המשרה" })).not.toBeVisible();
@@ -890,14 +879,12 @@ describe("ApplicationPage at the preparation route", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return Promise.reject(new TypeError("response lost"));
       if (String(input).includes("/settings"))
-        return Promise.resolve(
-          jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
-        );
+        return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
       if (String(input).includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
       return Promise.resolve(jsonResponse(analyzed_detail({ latest_operation: analyzed })));
     });
     vi.stubGlobal("fetch", fetchMock);
-    const settings = { ...deterministicSettings, auto_generate_when_review_not_required: true };
+    const settings = { ...aiSettings, auto_generate_when_review_not_required: true };
     const first = renderPage(settings);
     await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1));
     await waitFor(() => expect(screen.queryByText("הניתוח הושלם. יצירת הטיוטה מתחילה מיד.")).not.toBeInTheDocument());
@@ -960,9 +947,7 @@ describe("ApplicationPage at the preparation route", () => {
           resolveOld = resolve;
         });
       if (url.includes("/settings"))
-        return Promise.resolve(
-          jsonResponse({ ...deterministicSettings, auto_generate_when_review_not_required: true }),
-        );
+        return Promise.resolve(jsonResponse({ ...aiSettings, auto_generate_when_review_not_required: true }));
       if (url.includes("/operations/")) return Promise.resolve(jsonResponse(analyzed));
       return Promise.resolve(
         jsonResponse(
@@ -973,7 +958,7 @@ describe("ApplicationPage at the preparation route", () => {
       );
     });
     vi.stubGlobal("fetch", fetchMock);
-    renderPage({ ...deterministicSettings, auto_generate_when_review_not_required: true });
+    renderPage({ ...aiSettings, auto_generate_when_review_not_required: true });
     await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
     fireEvent.click(screen.getByRole("button", { name: "Another application" }));
     expect(await screen.findByText("Other — Backend Engineer")).toBeInTheDocument();
@@ -1002,7 +987,7 @@ describe("ApplicationPage at the preparation route", () => {
         Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
       ),
     );
-    const { client } = renderPage(deterministicSettings, {
+    const { client } = renderPage(noProviderSettings, {
       preparationContinuation: { applicationId: "app-1", draftOperationId: "op-draft" },
     });
     expect(await screen.findByText("Acme — Backend Engineer")).toBeInTheDocument();
@@ -1056,7 +1041,7 @@ describe("ApplicationPage at the preparation route", () => {
           Promise.resolve(jsonResponse(String(input).includes("/operations/") ? generated : projection)),
         ),
       );
-      renderPage(deterministicSettings, {
+      renderPage(noProviderSettings, {
         preparationContinuation: {
           applicationId: "app-1",
           draftOperationId: scenario === "other-operation" ? "op-other" : "op-draft",

@@ -10,14 +10,17 @@ afterEach(() => {
 });
 
 describe("SettingsPage", () => {
-  it("shows provider availability and keeps AI mode unavailable without one", async () => {
+  it("shows provider availability, with no AI switch to toggle", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(json(settings(), 200, { ETag: '"settings-0"' }))),
     );
     renderRoute("/settings", "/settings", <SettingsPage />);
-    expect(await screen.findByText("לא הוגדר ספק AI בסביבת הריצה.")).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "יצירת טיוטה עם AI כברירת מחדל" })).toBeDisabled();
+    expect(
+      await screen.findByText("לא הוגדר ספק AI בסביבת הריצה, ולכן אי אפשר לנתח משרה או ליצור טיוטה."),
+    ).toBeInTheDocument();
+    /* AI has no switch: it is available exactly when a provider is configured. */
+    expect(screen.queryByRole("switch", { name: "הפעלת AI" })).not.toBeInTheDocument();
   });
 
   it("owns policy and display only: the fact store and its check live on the facts screen", async () => {
@@ -64,9 +67,7 @@ describe("SettingsPage", () => {
     const request = fetchMock.mock.calls.find((call) => call[1]?.method === "PATCH");
     expect((request?.[1]?.headers as Headers | undefined)?.get("If-Match")).toBe('"settings-1"');
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
-      ai_enabled_override: null,
       auto_generate_when_review_not_required: true,
-      default_execution_mode: "deterministic",
       default_ai_model: "gpt-5.6-luna",
       default_reasoning_effort: "high",
       ui_density: "compact",
