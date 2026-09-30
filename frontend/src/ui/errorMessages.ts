@@ -227,7 +227,6 @@ const validationIssueMessages: Record<string, string> = {
   "fact-outside-profile-section": "עובדה מקושרת לפרק שאינו מתאים לה.",
   "role-block-empty": "כותרת תפקיד מופיעה ללא תוכן מתחתיה.",
   "role-claim-misplaced": "שורה מופיעה תחת תפקיד שהעובדות שלה אינן שייכות לו.",
-  "selected-fact-set-mismatch": "רשימת העובדות שבשימוש אינה תואמת לטענות בטיוטה.",
   "historical-title-placement": "שמות תפקידים קודמים חייבים להישאר ככותרות מדויקות.",
   "unsafe-headline": "כותרת קורות החיים אינה נתמכת בפרופיל המאושר.",
   "stale-team-size": "הטיוטה כוללת נתון ישן על גודל הצוות.",

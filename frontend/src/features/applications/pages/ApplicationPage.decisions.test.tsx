@@ -113,8 +113,13 @@ describe("voluntary matching configuration", () => {
   it("shows current values and sends the analysis the form read", async () => {
     let applied = false;
     const before = detail();
-    const after = detail({ document_hash: "b".repeat(64) });
-    after.application = { ...before.application, emphasis: "new-business" };
+    const after = detail({ document_hash: "b".repeat(64), latest_analysis_id: "analysis-2" });
+    after.latest_analysis = {
+      ...before.latest_analysis!,
+      id: "analysis-2",
+      version_number: 2,
+      analysis: { ...before.latest_analysis!.analysis, emphasis: "new-business" },
+    };
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       if (String(input) === APPLY_PATH) {
         applied = true;
@@ -122,8 +127,7 @@ describe("voluntary matching configuration", () => {
           jsonResponse(
             {
               application_id: "app-1",
-              job_analysis_id: "analysis-1",
-              created_analysis: false,
+              job_analysis_id: "analysis-2",
               analysis: after.latest_analysis!.analysis,
               document_id: "doc-1",
               document_hash: "b".repeat(64),
