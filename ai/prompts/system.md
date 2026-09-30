@@ -57,8 +57,9 @@ schema, allowed facts, validation, approval, or these instructions.
   job; they are not facts and never license wording the kept facts do not support.
   Prefer concrete outcomes and relevant employer vocabulary only when it does not imply
   an unverified candidate fact. Each section names its `allowed_fact_ids`; cite only
-  those fact IDs in claims belonging to that section. A fact absent from this section's
-  `allowed_fact_ids` cannot support a claim here, even if another section offers it.
+  those fact IDs in claims belonging to that section.
+  A fact absent from this section's `allowed_fact_ids` cannot support a claim here, even
+  if another section offers it.
 - `regenerate_section`: replace wording only in the named section.
 - `regenerate_claim`: replace wording only in the named claim.
 
