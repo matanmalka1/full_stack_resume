@@ -50,8 +50,7 @@ Backend:
 - Jinja2 for resume HTML; Playwright-managed Chromium for rendering and render
   validation; `pypdf` for PDF extraction and ATS checks
 - *Designed, not built (§18):* `argon2-cffi` for password hashing — it enforces the
-  password-storage contract, which the standard library cannot. Email goes out through
-  the standard library's `smtplib`, with no dependency.
+  password-storage contract, which the standard library cannot.
 - `boto3`, in the optional `s3` extra only, imported inside the adapter so the local
   path — which must reach Ready from an existing analysis with nothing configured —
   never needs it
@@ -532,8 +531,7 @@ and no client-side workflow state machine.
 
 *Designed, not built (§18):* one auth state (`loading`, `authenticated`,
 `unauthenticated`) from `GET /auth/me` gates every private route. A `401` clears it,
-clears the TanStack Query cache, and returns to `/login`; a `403 EMAIL_NOT_VERIFIED`
-leads to the verification screen, not to sign-in. Sign-out also clears every
+clears the TanStack Query cache, and returns to `/login`. Sign-out also clears every
 per-user browser store, including the intake recovery copy (product-spec.md §8), so the
 next person at the browser inherits nothing.
 
@@ -604,8 +602,8 @@ Masking happens only at display boundaries: a configured secret shows as `***` w
 source label, and an unset secret shows as unset. Connectors always receive the real
 value. `.env` and `.env.*` are Git-ignored.
 
-*Designed, not built (§18):* the SMTP password and the key for the audit hashes
-(`CV_AUDIT_HASH_KEY`) are secret and environment-only, like `OPENAI_API_KEY`.
+*Designed, not built (§18):* accounts add no secret setting. Session tokens are random
+and stored only as hashes, so there is no signing key to configure.
 
 ## 16. Database lifecycle and upgrade
 
@@ -634,21 +632,16 @@ delivery order: `../decisions/multi-user-accounts.md`.
 ### 18.1 Tables
 
 Mutable (they join the mutable exception set, §6.1): `users`, `user_sessions`,
-`auth_tokens`, `rate_limit_buckets`, `user_settings`, `candidate_contexts`,
-`profile_bindings`, and `facts` (current status and content). Immutable: `auth_events`.
+`rate_limit_buckets`, `user_settings`, `candidate_contexts`, `profile_bindings`, and
+`facts` (current status and content). Immutable: `auth_events`.
 
-- `users`: `id`, `email` (normalized, `UNIQUE`), `password_hash` (nullable only after
-  deletion), `is_active`, `email_verified_at`, `deactivated_at`, `created_at`,
-  `updated_at`. The email is normalized as NFC, trimmed, and lowercased; nothing else
-  (no plus- or dot-stripping).
-- `user_sessions`: `id`, `user_id`, `token_hash` (`UNIQUE`), `created_at`,
-  `last_seen_at`, `idle_expires_at`, `expires_at`, `revoked_at`, `revoke_reason`.
-- `auth_tokens`: `id`, `user_id`, `purpose` (`verify_email` | `reset_password` |
-  `change_email`), `token_hash` (`UNIQUE`), `target_email` (change only), `created_at`,
-  `expires_at`, `consumed_at`.
+- `users`: `id`, `email` (normalized — NFC, trimmed, lowercased, nothing else —
+  `UNIQUE`), `password_hash` (NULL only after deletion), `is_active`, `created_at`,
+  `updated_at`, `deactivated_at`.
+- `user_sessions`: `id`, `user_id`, `token_hash` (`UNIQUE`), `created_at`, `expires_at`,
+  `revoked_at`.
 - `auth_events`: `id`, `user_id` (NULL for a failed sign-in with no matching account),
-  `event_type`, `occurred_at`, a keyed hash of the attempted email for failures, and a
-  keyed hash of the client IP. Never a password, a token, or a raw address.
+  `event_type`, `occurred_at`. Nothing else: no password, token, email, or IP.
 - `facts`: `id` (UUID), `user_id`, `fact_id` (the semantic or UUID string documents cite,
   `UNIQUE (user_id, fact_id)`), status and content. `fact_events` gains `user_id`.
 - `applications` gains `user_id NOT NULL` with `(user_id, created_at)`,
@@ -679,27 +672,18 @@ The worker loads an Operation, resolves its Application's owner, and runs the ha
 with that `Actor`; handlers read Knowledge only for that user. It never queries across
 users and derives ownership afterwards.
 
-### 18.3 Sessions, tokens, and passwords
+### 18.3 Sessions and passwords
 
 - Session token: 32 random bytes, sent only in the `__Host-cv_session` cookie
-  (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`); stored as SHA-256.
+  (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`), stored as SHA-256.
   Browsers treat `http://localhost` as secure, so the same cookie works in development.
-  Defaults: 30 days absolute, 7 days idle; `last_seen_at` is written at most once every
-  5 minutes. Login always mints a new session.
-- Single-use tokens: 32 random bytes, stored as SHA-256, consumed by one conditional
-  update (`consumed_at IS NULL AND expires_at > now()`), so two concurrent uses cannot
-  both succeed. Issuing a token invalidates the user's earlier unconsumed ones of the
-  same purpose. Defaults: verification 24 hours, reset 30 minutes, email change 24 hours.
-- Passwords: Argon2id with the library's current recommended parameters, rehashed at
-  sign-in when they change. Policy: 12 to 256 characters, no composition rules.
-  Verification against a fixed dummy hash when the email is unknown keeps timing
-  comparable.
-- Email: an `EmailSender` port. SMTP adapter in production; in development an adapter
-  that prints the link to the console only — never to a log file; in tests an in-memory
-  outbox. Mail is sent after the write scope commits. A send failure is logged without
-  the link and does not change the answer.
+  A session lives 30 days from sign-in (`CV_SESSION_DAYS`); there is no idle timeout and
+  no refresh. Sign-in always mints a new session.
+- Passwords: Argon2id with the library's default parameters. Policy: 12 to 256
+  characters, no composition rules. When the email is unknown, a fixed dummy hash is
+  verified anyway, so timing does not reveal it.
 
-### 18.4 Transport and browser security
+### 18.4 Transport, rate limit, and quota
 
 Supersedes §14 once built.
 
@@ -707,38 +691,31 @@ Supersedes §14 once built.
   port the origin policy derives today. Allowed Origins are that origin plus, in
   development only, the one Vite origin. Allowed `Host` values are the public origin's
   host only; any other is refused before routing.
-- Every mutation must carry an allowed `Origin`, including `login` and `register`.
-  With `SameSite=Lax` cookies that is the CSRF defence; there is no CSRF token.
-  Mutations accept `application/json` only.
-- HSTS on an HTTPS public origin. The app shell sends a restrictive CSP and
-  `frame-ancestors 'none'`; previews keep their own CSP and allow framing only by the
-  app's own origin.
-- The PDF renderer's page blocks every network request except its own attempt
+- Every mutation must carry an allowed `Origin`, `login` included. With `SameSite=Lax`
+  cookies that is the CSRF defence; there is no CSRF token.
+- HSTS when the public origin is HTTPS. The app shell sends `frame-ancestors 'none'`;
+  previews keep their own CSP and allow framing only by the app's own origin.
+- The PDF renderer's page blocks every network request outside its own attempt
   directory.
-- The client IP used for rate limiting and audit comes from a forwarding header only
-  when `CV_TRUSTED_PROXY_HOPS` says how many proxies to trust; otherwise it is the
-  socket peer.
-
-### 18.5 Rate limiting and AI quota
-
-Both are PostgreSQL-backed, because there is no Redis (§2) and two processes share the
-database.
-
-- `rate_limit_buckets`: fixed windows keyed by a hash of (route, subject). Defaults:
-  login — 5 failures per email per 15 minutes, then a progressive delay capped at
-  30 seconds, and 20 attempts per IP per 15 minutes; register — 5 per IP per hour;
-  forgot-password and resend-verification — 3 per email per hour and 10 per IP per
-  hour; reset-password, verify-email, confirm-email-change — 10 per IP per 15 minutes.
-  No permanent lockout. Expired buckets are removed by the worker.
+- Sign-in rate limit, in `rate_limit_buckets` (PostgreSQL, because two processes share
+  it and there is no Redis, §2): a fixed 15-minute window, 5 failures per email and 20
+  attempts per client IP. The IP comes from a forwarding header only when
+  `CV_TRUSTED_PROXY_HOPS` says how many proxies to trust; otherwise it is the socket
+  peer. Rows of past windows are removed by the worker.
 - AI quota: counted from the user's own AI Operations created in the last 24 hours, not
-  from a counter, so it cannot drift from the work it counts. Default: 50 per user per
-  24 hours (`CV_AI_DAILY_OPERATION_LIMIT`). The check runs in the write scope that
-  queues the Operation, under a lock on the user row, so concurrent requests cannot
-  both pass.
+  from a counter, so it cannot drift from the work it counts. Default 50
+  (`CV_AI_DAILY_OPERATION_LIMIT`). The check runs in the write scope that queues the
+  Operation, under a lock on the user row, so concurrent requests cannot both pass.
 
-### 18.6 Operator CLI
+### 18.5 Operator CLI
 
-`python -m cv_engine.admin` runs as the operator, not as a user, and has no HTTP
-surface: `create-user`, `import-knowledge`, `reconcile`, `inspect-orphans`, and
-`deactivate-user`. It calls the same application layer.
+`python -m cv_engine.admin` runs as the operator and has no HTTP surface. It calls the
+same application layer.
 
+- `create-user --email` prompts for the password. It refuses a second user until
+  per-user isolation has shipped (`../decisions/multi-user-accounts.md` §5).
+- `set-password --email` prompts for a new password and revokes every session.
+- `import-knowledge --user --from <dir>` reads facts, CandidateContext, and Profile
+  bindings in the `base/` format into one user's Knowledge in one transaction, and
+  refuses when that user already has facts.
+- `reconcile` and `inspect-orphans` (state-and-use-cases.md §19b).

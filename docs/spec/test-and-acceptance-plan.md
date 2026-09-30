@@ -261,7 +261,7 @@ this list it touches.
   `openapi/openapi.json` that names a record, with A's IDs — read, write, delete,
   download, preview, Operation cancel and retry — and gets `404` with nothing changed
   and nothing streamed. The route list comes from the schema; a route left out of the
-  matrix must be in a named exception list (the public account routes, health), and a
+  matrix must be in a named exception list (`login`, health), and a
   stale exception fails. Lists, facets, counts, and duplicate detection for B contain
   nothing of A's.
 - **Ownership in the schema, derived.** Every table either carries `user_id`, reaches a
@@ -271,20 +271,17 @@ this list it touches.
   B's own; B may create a fact with A's `fact_id`, and each resolves to its owner.
 - **Worker.** An Operation of A reads only A's Knowledge; an Operation whose source names
   a record of B fails without reading it.
-- **Authentication.** Register, duplicate email (same answer, nothing created), login,
-  wrong password and unknown email (same answer), logout, logout-all, expired and
-  revoked sessions (`401`), unverified user on a product route (`403`), change password
-  and email (re-authentication required; other sessions revoked), delete account
-  (deactivated, anonymized, immutable records intact, sign-in refused).
-- **Tokens.** Verification, reset, and email-change tokens are single-use, expire, are
-  invalidated by a newer token of the same purpose, and two concurrent uses yield one
-  success.
-- **Secrets.** No password, raw token, or session secret appears in the database, the
-  logs, Problem Details, or Operation payloads; the cookie carries `HttpOnly`, `Secure`,
-  and `SameSite=Lax`.
-- **Limits.** Each rate-limited route answers `429` with `Retry-After` past its limit,
-  across both processes; sign-in failures slow down and recover without a lockout; the AI
-  quota refuses the Operation past the limit and queues nothing.
+- **Authentication.** Login; wrong password and unknown email give the same answer;
+  logout; logout-all; expired and revoked sessions are `401`; change password needs the
+  current one and revokes the other sessions; `set-password` revokes every session;
+  delete account deactivates and anonymizes, leaves immutable records intact, and sign-in
+  is refused afterwards; `create-user` refuses a second user before isolation ships.
+- **Secrets.** No password or session secret appears in the database, the logs,
+  Problem Details, or Operation payloads; the cookie carries `HttpOnly`, `Secure`, and
+  `SameSite=Lax`.
+- **Limits.** Sign-in answers `429` with `Retry-After` past its limit, across both
+  processes, and recovers when the window passes; the AI quota refuses the Operation past
+  the limit and queues nothing.
 - **Transport.** A foreign `Host` and a mutation without an allowed `Origin` are refused
   before routing, `login` included.
 - **Pipeline.** `tests/e2e/test_pipeline_end_to_end.py` runs as a signed-in user and still

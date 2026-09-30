@@ -33,8 +33,7 @@ Mutable:
 - exactly one CVDocument per Application, once the first analysis activates
 - the active JobSnapshot pointer
 - the Settings row (one per user once accounts ship)
-- *designed, not built (§23):* the user, their sessions and single-use tokens, and their
-  facts' current status
+- *designed, not built (§23):* the user, their sessions, and their facts' current status
 
 Immutable or append-only:
 
@@ -974,7 +973,7 @@ idempotency, and synchronous versus asynchronous behavior.
 - CORS exposes `ETag`, `Location`, and `Content-Disposition`, and allows `If-Match` and
   `Idempotency-Key`.
 - *Designed, not built (§23):* the session travels only in its cookie. Every route
-  requires a session except the public account routes in §23 and health.
+  requires a session except `login` (§23) and health.
 
 ## 22. HTTP outcomes
 
@@ -985,8 +984,8 @@ The status comes from the refusal's class, never its message:
 | `200` | query, synchronous update, or a successful outcome such as a failed check or reconciliation |
 | `201` | synchronous creation |
 | `202` | accepted Operation with `Location` |
-| `401` | *designed, not built:* no valid session (`AUTHENTICATION_REQUIRED`), or a wrong current password on a sensitive account command (`REAUTHENTICATION_FAILED`) |
-| `403` | refused Origin (`ORIGIN_NOT_ALLOWED`), or *designed, not built:* a signed-in user whose email is not verified reaching a product route (`EMAIL_NOT_VERIFIED`). Never used for another user's record |
+| `401` | *designed, not built:* no valid session (`AUTHENTICATION_REQUIRED`), failed sign-in (`INVALID_CREDENTIALS`), or a wrong current password (`REAUTHENTICATION_FAILED`) |
+| `403` | refused Origin or Host (`ORIGIN_NOT_ALLOWED`). Never used for another user's record |
 | `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, an unknown route, and — *designed, not built* — a record of another user |
 | `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed status transition; duplicate snapshot; idempotency-key payload mismatch |
 | `412` | a named state cannot satisfy the command: missing precondition, blocker, review reason, intake refusal, lineage or Knowledge refusal |
@@ -1020,37 +1019,17 @@ exceptions. They become a refusal only when a command they block is attempted.
 *Designed, not built.* Product rules: product-spec.md §22. Mechanisms, tables, and
 default limits: architecture.md §18. Why: `../decisions/multi-user-accounts.md`.
 
-All routes are under `/api/v1/auth`. Every body is JSON; every mutation passes the Origin
+Routes are under `/api/v1/auth`. Bodies are JSON; every mutation passes the Origin
 check (architecture.md §14). A session is an opaque cookie; no route returns a token in
-a body. Public routes need no session: `register`, `login`, `forgot-password`,
-`reset-password`, `verify-email`. Every other route in this section needs one, and
-`me` and `resend-verification` are the only ones open before the email is verified
-(besides `logout`).
-
-Rate-limited routes (architecture.md §18) answer `429 RATE_LIMITED` with `Retry-After`
-before any other check, so a throttled request reveals nothing about the account.
-
-### `register(email, password)`
-
-`POST /auth/register`. Normalizes the email and checks the password policy
-(`PASSWORD_POLICY_FAILED`, 422, naming only the rule). If the email is free, creates the
-user unverified and sends a verification link. If it is taken, sends that address a
-notice instead and creates nothing. Both answer `202` with the same body; no session is
-created.
-
-### `verify_email(token)`
-
-`POST /auth/verify-email`. Consumes a live verification token and sets
-`email_verified_at`. An unknown, used, or expired token is `400 TOKEN_INVALID`, the same
-for each. `POST /auth/resend-verification` (session, unverified) issues a new token and
-invalidates the previous one.
+a body. `login` is the only route that needs no session.
 
 ### `login(email, password)`
 
-`POST /auth/login`. On success creates a new session, sets its cookie, records `login`,
-and returns `me`. On any failure — unknown email, wrong password, deactivated account —
-answers `401 INVALID_CREDENTIALS` with the same body and comparable timing, and records
-`failed_login`. An existing session cookie is replaced, never reused.
+`POST /auth/login`. Rate limited first: past the limit it is `429 RATE_LIMITED` with
+`Retry-After`, whatever the credentials. On success creates a new session, sets its
+cookie, records `login`, and returns `me`. On any failure — unknown email, wrong
+password, deactivated account — answers `401 INVALID_CREDENTIALS` with the same body and
+comparable timing, and records `failed_login`.
 
 ### `logout()` / `logout_all()`
 
@@ -1060,49 +1039,36 @@ Both `204` and record `logout`.
 
 ### `me()`
 
-`GET /auth/me`: the user's ID, email, `email_verified`, and `created_at`. `401` with no
-valid session. The Web client calls it at startup to decide between the signed-in and
-signed-out shells.
-
-### `forgot_password(email)` / `reset_password(token, new_password)`
-
-`POST /auth/forgot-password` always answers `202` with the same body; when an active
-account exists it sends a reset link and invalidates earlier reset tokens.
-`POST /auth/reset-password` consumes a live reset token, sets the new password, revokes
-every session, and records `password_reset`; it does not sign the user in. Token
-failures are `400 TOKEN_INVALID`.
+`GET /auth/me`: the user's ID, email, and `created_at`; `401` with no valid session. The
+Web client calls it at startup to choose between the signed-in and signed-out shells.
 
 ### `change_password(current_password, new_password)`
 
-`POST /auth/change-password` (session). A wrong current password is `401
-REAUTHENTICATION_FAILED` and changes nothing. On success revokes every other session,
-rotates the current one, and records `password_changed`.
-
-### `change_email(current_password, new_email)`
-
-`POST /auth/change-email` (session). Re-authenticates, then sends a confirmation link to
-the new address and a notice to the current one; the email does not change yet. An
-address already taken gets the same answer and nothing is sent to it that reveals the
-account. `POST /auth/confirm-email-change` (public) consumes the token, sets the new
-email as verified, and records `email_changed`.
+`POST /auth/change-password`. A wrong current password is `401 REAUTHENTICATION_FAILED`
+and changes nothing; a new password outside the policy is `422 PASSWORD_POLICY_FAILED`,
+naming only the rule. On success revokes every other session, rotates the current one,
+and records `password_changed`.
 
 ### `delete_account(current_password)`
 
-`DELETE /auth/account` (session). Re-authenticates, then in one transaction:
-deactivates the user, erases the email (replaced by a non-deliverable pseudonym) and the
-password hash, revokes every session and token, erases mutable personal content —
-Application notes and next actions, the CVDocument content, and the fact rows' content —
-and records `account_deleted`. Immutable records stay (product-spec.md §22). `204`; the
-cookie is cleared. There is no undo and no reactivation route.
+`DELETE /auth/account`. Re-authenticates, then in one transaction: deactivates the user,
+erases the email (replaced by a non-deliverable pseudonym) and the password hash,
+revokes every session, erases mutable personal content — Application notes and next
+actions, the CVDocument content, and the fact rows' content — and records
+`account_deleted`. Immutable records stay (product-spec.md §22). `204`; the cookie is
+cleared. There is no undo.
+
+### Operator commands
+
+`create-user`, `set-password`, and `import-knowledge` are operator CLI commands
+(architecture.md §18.5), not routes. `set-password` revokes every session of the user.
 
 ### Codes
 
 ```text
 AUTHENTICATION_REQUIRED     INVALID_CREDENTIALS       REAUTHENTICATION_FAILED
-EMAIL_NOT_VERIFIED          TOKEN_INVALID             PASSWORD_POLICY_FAILED
-RATE_LIMITED                AI_QUOTA_EXCEEDED
+PASSWORD_POLICY_FAILED      RATE_LIMITED              AI_QUOTA_EXCEEDED
 ```
 
-`AI_QUOTA_EXCEEDED` is returned by any command that would queue an AI Operation (§11),
-including `retry_operation`, when the user's quota is spent; nothing is queued.
-
+`AI_QUOTA_EXCEEDED` (429) is returned by any command that would queue an AI Operation
+(§11), including `retry_operation`, when the user's quota is spent; nothing is queued.

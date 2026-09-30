@@ -172,6 +172,8 @@ The product includes:
 
 - More than one candidate per user, or candidate administration.
 - Roles, permissions, RBAC, organizations, teams, sharing between users, or an admin UI.
+- Self sign-up, email verification, password reset by email, and email change. Users are
+  created by the operator (§22).
 - SSO, MFA, or social login (Google, Microsoft, or any other identity provider).
 - A mode without authentication, or any setting that disables it (§22).
 - Sync.
@@ -603,8 +605,8 @@ events have their own audit (§22).
 
 ## 15. Runtime and security
 
-The product serves UI and API from one origin. Every route except sign-up, sign-in,
-and the account-recovery routes requires a session (§22). It validates `Origin` on every
+The product serves UI and API from one origin. Every route except sign-in and health
+requires a session (§22). It validates `Origin` on every
 mutation, accepts only its configured hosts, and uses an explicit CORS list with no
 wildcard (architecture.md §14). *Designed, not built:* today it binds to loopback and has
 no authentication.
@@ -796,48 +798,40 @@ ID taken from a URL or a log. Lists, facets, counts, duplicate detection, and
 idempotency never see across users.
 
 **Ownership.** A user owns their Applications, their Knowledge (facts, fact events,
-CandidateContext, Profile binding), their settings, and their account records (sessions,
-tokens, account events). Everything else — JobSnapshots, analyses, the CVDocument,
-Operations, artifacts, Submissions, recruitment and audit events — belongs to an
-Application and through it to its user. A canonical fact belongs to a user, not to an
-Application; Applications reference facts. The worker runs every Operation as the owner
-of its Application and reads only that user's Knowledge.
+CandidateContext, Profile binding), their settings, and their sessions and account
+events. Everything else — JobSnapshots, analyses, the CVDocument, Operations,
+artifacts, Submissions, recruitment and audit events — belongs to an Application and
+through it to its user. A canonical fact belongs to a user, not to an Application;
+Applications reference facts. The worker runs every Operation as the owner of its
+Application and reads only that user's Knowledge.
 
-**Accounts.** A user signs up with an email and a password, verifies the email, and signs
-in. The email is stored normalized and is unique. Passwords are stored only as a
-memory-hard hash; no password, token, or session secret is stored or logged in raw form.
-Until the email is verified, only the account routes are open to the user. The user can
-sign out, sign out of every device, change the password, change the email (confirmed at
-the new address), reset a forgotten password, and delete the account. Changing the
-password, changing the email, and deleting the account require the current password.
-Changing or resetting the password ends every other session.
+**Accounts.** There is no self sign-up. The operator creates a user from the command
+line with an email and a password, and imports that user's initial facts. The email is
+stored normalized and is unique. Passwords are stored only as a memory-hard hash; no
+password or session secret is stored or logged in raw form. A user can sign in, sign
+out, sign out of every device, change the password (with the current one), and delete
+the account (with the current password). Changing the password ends every other
+session. A forgotten password is reset by the operator, which also ends every session.
 
-**Sessions** expire, can be revoked, and are carried only in an `HttpOnly`, `Secure`,
-`SameSite=Lax` cookie; the Web client never holds a token in script-readable storage. A
-request with no valid session is `401`, and the Web client then clears its state and
-returns to sign-in.
+**Sessions** expire and can be revoked, and are carried only in an `HttpOnly`,
+`Secure`, `SameSite=Lax` cookie; the Web client never holds a token in script-readable
+storage. A request with no valid session is `401`, and the Web client then clears its
+state and returns to sign-in.
 
-**No enumeration.** Sign-in failure says only that the email or password is wrong.
-Sign-up, forgotten-password, and verification requests give the same answer whether or
-not an account exists.
-
-**Abuse limits.** Sign-in, sign-up, password reset, and email verification are rate
-limited. Repeated sign-in failures slow down progressively and throttle temporarily;
-there is no permanent lockout. AI Operations are subject to a per-user quota, because
-the provider key and its cost are the operator's, not the user's.
+**Sign-in** fails with one answer — the email or password is wrong — whatever the
+reason, and is rate limited with a temporary throttle and no permanent lockout. AI
+Operations are subject to a per-user quota, because the provider key and its cost are
+the operator's.
 
 **Account deletion** deactivates and anonymizes; it never deletes a row. It revokes every
-session and token, erases the account's email and password, and erases mutable personal
-content. Immutable records — Submissions, JobSnapshots, provider evidence, audit and
-fact events — stay, owned by a user row that no longer identifies anyone and that nobody
-can sign in to. A hard delete is not a product capability; it would only ever be an
-explicit, separately approved operator procedure.
+session, erases the account's email and password, and erases mutable personal content.
+Immutable records — Submissions, JobSnapshots, provider evidence, audit and fact events
+— stay, owned by a user row that no longer identifies anyone and that nobody can sign
+in to. A hard delete is not a product capability.
 
-**Audit.** Sign-in, failed sign-in, sign-out, password change and reset, email change,
-and account deletion are recorded as immutable account events, never with a password,
-raw token, or session secret.
+**Audit.** Sign-in, failed sign-in, sign-out, password change, and account deletion are
+recorded as immutable account events, never with a password or a session secret.
 
 **Unchanged.** Every rule in §1–§21 still holds inside one user's data: factual safety,
 approval boundaries, immutability, the provider-free path from an existing analysis to
 Ready, and the Operation model.
-

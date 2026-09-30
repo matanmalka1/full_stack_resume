@@ -61,22 +61,29 @@ isolation.
    alone. Web editing of Profiles stays a non-goal.
 9. **Account deletion is deactivation plus anonymization, never a hard delete.**
    Immutable triggers are not bypassed for a user lifecycle. Mutable PII is erased,
-   sessions and tokens are revoked, and immutable records (Submissions, JobSnapshots,
+   sessions are revoked, and immutable records (Submissions, JobSnapshots,
    provider evidence, audit, fact events) stay, owned by a user row that no longer
    identifies anyone. A hard delete is only ever an explicit, separately approved
    operator procedure, never part of the API.
 10. **Rate limiting and AI quota live in PostgreSQL.** There is no Redis (architecture
-    §2). Login throttling is progressive, with no permanent lockout. A per-user AI quota
+    §2). Sign-in is the only rate-limited route: a fixed window, a temporary throttle,
+    no permanent lockout. A per-user AI quota
     is counted from the user's own Operations, so no counter can drift from the work it
     counts.
 11. **The first user is created by CLI.** An existing single-candidate installation is
     assigned to that user. The CLI requires a real email address; the migration never
     invents one.
+12. **No self sign-up for now; the operator creates users.** Today there is one user,
+    the operator. With no sign-up there is no email to verify, so the whole email side —
+    verification, reset by email, email change, single-use tokens, and SMTP — is not
+    built. A forgotten password is reset with `set-password` on the CLI. A new user's
+    first facts come from `import-knowledge`, so onboarding needs no new screen.
+13. **Keep the account model minimal.** A session has one absolute lifetime (no idle
+    timeout, no refresh). Account events store the event and the user only, no IP or
+    email. Password hashes use the library defaults, with no rehash policy.
 
-Defaults adopted with this decision: the exact limits (session lifetime, token lifetimes,
-throttle windows, quota size) are configuration with the defaults stated in architecture
-§18. A user must verify their email before any product route, including AI work, opens
-to them.
+Defaults adopted with this decision: the exact limits (session lifetime, sign-in window,
+quota size) are configuration with the defaults stated in architecture §18.
 
 ## 3. Rejected
 
@@ -85,6 +92,9 @@ to them.
   which one wins.
 - **JWT in `localStorage`, or JWT with a refresh token.** Readable by any script on the
   origin, and not revocable without a server-side list, which is a session table anyway.
+- **Self sign-up with email verification, now.** One user does not need it, and it
+  brings SMTP, tokens, enumeration defences, and more rate limits. It returns as its own
+  decision if the product opens to other people.
 - **A local no-auth mode.** Two security models to test, and a flag that can ship
   switched on.
 - **Bypassing immutability triggers to delete an account.** It breaks the one
@@ -103,11 +113,10 @@ A fresh installation starts empty, and nothing below applies to it. For an exist
 installation:
 
 1. **Schema step one:** create the account tables (`users`, `user_sessions`,
-   `auth_tokens`, `auth_events`, `rate_limit_buckets`) and the per-user Knowledge and
-   settings tables.
+   `auth_events`, `rate_limit_buckets`) and the per-user Knowledge and settings tables.
 2. **Operator:** `create-user --email <real address>` creates the one user and prompts
    for a password.
-3. **Operator:** `import-knowledge --user <id>` reads `base/*.json`,
+3. **Operator:** `import-knowledge --user <id> --from base/` reads `base/*.json`,
    `base/candidate.json`, and the candidate-specific parts of `profiles/*.yaml` into that
    user's Knowledge in one transaction. It refuses when the user already has facts.
    Existing semantic fact IDs (`common.contact.email`, …) keep their exact spelling for
@@ -132,33 +141,32 @@ input only. They are no longer read at runtime.
 
 ## 5. Delivery order
 
-Each step is its own pull request, with the gates `CLAUDE.md` assigns to it.
+Each step is its own pull request, with the gates `CLAUDE.md` assigns to it. The order
+puts what one hosted user needs first and what a second user needs before that user
+exists.
 
 1. **Spec migration** (this change). Documentation only.
-2. **Knowledge to PostgreSQL**, still single-user: the fact tables, the import CLI,
-   retiring the journal, the Profile template/binding split. The riskiest step for
-   fact semantics, and it does not depend on accounts.
-3. **Identity and sessions:** the account tables, the account commands, cookie sessions,
-   rate limiting, auth audit, the email port, and the bootstrap CLI.
-4. **Ownership:** `applications.user_id`, per-user settings, ownership-scoped
-   resolution in every service and in the worker, per-application idempotency, and the
-   derived cross-user guards. From this step on, every route requires a session.
-5. **Frontend:** the auth state, the account screens, and clearing per-user browser
-   state on logout.
-6. **Production hardening:** public origin and Host allowlist, HTTPS-only cookies and
-   HSTS, network-blocked rendering, AI quota, and account deactivation.
+2. **Sign-in and hosting:** `users`, `user_sessions`, `auth_events`, sign-in rate limit;
+   `login`, `logout`, `logout-all`, `me`, `change-password`; the `create-user` and
+   `set-password` CLI; the sign-in screen, the auth state, and the account screen; the
+   public origin, Host allowlist, HSTS, and network-blocked rendering. After this step
+   the product is safe to host for its one user. Every route requires a session.
+3. **Knowledge to PostgreSQL**, still one user: the fact tables, `import-knowledge`,
+   retiring the journal, the Profile template/binding split. The riskiest step for fact
+   semantics.
+4. **Isolation:** `applications.user_id`, per-user settings, ownership-scoped resolution
+   in every service and in the worker, per-application idempotency, the derived
+   cross-user guards, the AI quota, account deletion, and clearing per-user browser
+   state on sign-out. Only after this step does `create-user` accept a second user.
 
 ## 6. Open items
 
-1. **Onboarding a new user's identity.** A new user has no name or contact facts and no
-   `CandidateContext` references. Proposed default: `CandidateContext` is derived from
-   the user's canonical facts by tag (`identity` for the name, `contact` for contacts),
-   and rendering is refused with a named precondition until a name fact exists. The
-   alternative is a small explicit command to set it. Needs a decision before step 2.
-2. **PII retained in immutable records after account deletion.** JobSnapshots,
+1. **PII retained in immutable records after account deletion.** JobSnapshots,
    Submissions, provider evidence, and `fact_events.fact_json` keep the candidate's name
    and contacts. Anonymization makes them unreachable and unlinked to an identity; it
-   does not erase them. Whether that is acceptable for the jurisdictions served is a
-   legal decision, not a technical one.
-3. **Numeric limits.** The defaults in architecture §18 are starting values, not
+   does not erase them. Whether that is acceptable matters once there is a second user;
+   it is a legal decision, not a technical one.
+2. **Numeric limits.** The defaults in architecture §18 are starting values, not
    measured ones.
+3. **Hosting.** Where it runs, who terminates TLS, and PostgreSQL and bucket backup are
+   the operator's choice and are not specified here; step 2 needs them decided.
