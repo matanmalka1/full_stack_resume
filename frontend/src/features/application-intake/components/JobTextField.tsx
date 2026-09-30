@@ -8,7 +8,8 @@ import { LtrText } from "@/ui/LtrText";
 import { Textarea } from "@/ui/Input";
 import { cx } from "@/ui/cx";
 import { formatBytes } from "@/utils/formatBytes";
-import { isJobTextWithinBudget, jobTextByteLength, type ApplicationIntakeFields } from "../model/applicationIntake";
+import { isJobTextWithinBudget, JOB_TEXT_REQUIRED_MESSAGE, jobTextByteLength } from "@/features/applications";
+import type { ApplicationIntakeFields } from "../model/applicationIntake";
 
 const NOTICE_RATIO = 0.8;
 
@@ -61,7 +62,7 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
               {...register("job_text", {
                 onChange: () => onInputChanged("job_text"),
                 validate: {
-                  required: (value) => value.trim() !== "" || "יש להזין את טקסט המשרה.",
+                  required: (value) => value.trim() !== "" || JOB_TEXT_REQUIRED_MESSAGE,
                   withinBudget: (value) =>
                     isJobTextWithinBudget(value) || "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת המועמדות.",
                 },
