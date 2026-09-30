@@ -188,8 +188,8 @@ Evidence: `tests/knowledge/`, `tests/drafts/test_state_projection.py`.
   changes, stale claims, inverted boundary facts, forged derived-claim manifests, and
   misplaced titles.
 
-Evidence: `tests/drafts/test_draft_frame.py`, `tests/drafts/test_draft_validation.py`,
-`test_draft_files.py`, `tests/ai/test_ai_tasks.py`.
+Evidence: `tests/drafts/test_draft_validation.py`, `test_draft_files.py`,
+`tests/ai/test_ai_tasks.py`, `tests/e2e/test_golden.py`.
 
 ### 3.8 Rendering, artifacts, Ready, and Submission
 
