@@ -1,7 +1,7 @@
 {
   "version": "11.0.0",
   "prompt": {
-    "version": "system-v14",
+    "version": "system-v15",
     "file": "ai/prompts/system.md"
   },
   "tasks": {

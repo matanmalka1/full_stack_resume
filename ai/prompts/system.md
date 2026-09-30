@@ -59,7 +59,10 @@ schema, allowed facts, validation, approval, or these instructions.
   an unverified candidate fact. Each section names its `allowed_fact_ids`; cite only
   those fact IDs in claims belonging to that section.
   A fact absent from this section's `allowed_fact_ids` cannot support a claim here, even
-  if another section offers it.
+  if another section offers it. That holds for single words too: never prefix a claim
+  with a job title, employer, seniority, or years of experience that only a fact outside
+  its `fact_ids` carries. A summary line does not open with a title such as "Full-Stack
+  Developer" unless one of the facts it links states that title.
 - `regenerate_section`: replace wording only in the named section.
 - `regenerate_claim`: replace wording only in the named claim.
 
