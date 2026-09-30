@@ -104,6 +104,7 @@ describe("OperationReport", () => {
             text: "<script>unsupported claim</script>",
             verdict: "uncertain",
             sources: [{ fact_id: "sales.one", rendering: "Managed accounts.", meaning: "Account management" }],
+            rationale: "The fact does not mention quotas.",
           },
         ],
       },
@@ -120,6 +121,7 @@ describe("OperationReport", () => {
     /* The panel owns the next steps; the callout above keeps only its title. */
     expect(screen.queryByText(/הניסוח לא הופעל ודבר לא השתנה/)).not.toBeInTheDocument();
     expect(within(clarification).getByText("<script>unsupported claim</script>")).toBeVisible();
+    expect(within(clarification).getByText("The fact does not mention quotas.")).toBeVisible();
     expect(clarification.querySelector("script")).toBeNull();
     expect(within(clarification).getByText("Managed accounts.")).toBeVisible();
     expect(within(clarification).getByRole("link", { name: "פתיחת השורה במסמך" })).toHaveAttribute(

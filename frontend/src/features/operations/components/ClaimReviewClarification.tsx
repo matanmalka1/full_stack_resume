@@ -66,6 +66,17 @@ export const ClaimReviewClarification = ({
             </blockquote>
           </div>
 
+          {/* The reviewer's words, in its own language. Without them a sentence almost
+              identical to its fact is refused and nothing says why; with them, the
+              reader still has to be told this is a reading, not a proof. */}
+          {claim.rationale == null ? null : (
+            <div className="flex flex-col gap-1">
+              <FieldLabel>הסבר הבודק</FieldLabel>
+              <p dir="auto">{claim.rationale}</p>
+              <p className="text-support text-cv-text-muted">זו הקריאה של הבודק האוטומטי, לא הוכחה.</p>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1">
             <FieldLabel>{claim.sources.length > 1 ? "העובדות שנבדקו" : "העובדה שנבדקה"}</FieldLabel>
             <ul aria-label="המקורות שנבדקו" className="flex flex-col gap-2">
