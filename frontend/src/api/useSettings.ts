@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { settingsQueryOptions } from "./settings";
+import { type AiAvailability, aiAvailability, settingsQueryOptions } from "./settings";
 import type { Settings } from "./contracts";
 
 /* App owns the live settings read; every other screen consumes that cache rather than
@@ -13,3 +13,5 @@ export const useSettings = (): { settings: Settings | undefined; isPending: bool
 
   return { settings: query.data?.settings, isPending: query.isPending };
 };
+
+export const useAiAvailability = (): AiAvailability => aiAvailability(useSettings().settings);

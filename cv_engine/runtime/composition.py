@@ -152,7 +152,7 @@ def build_object_store(paths: AppPaths, config: RuntimeConfig) -> ObjectStore:
 
     Local is the default and stays the default: a caller that configures
     nothing gets exactly the filesystem behaviour it had, which is what keeps
-    the deterministic offline workflow working with no cloud SDK installed.
+    the local workflow working with no cloud SDK installed.
 
     The choice is made here, in the composition root, rather than inside
     `PayloadStore`. A store that branched on a backend name internally would
@@ -217,11 +217,10 @@ def build_services(
     resolved_artifacts = artifacts or FilesystemArtifactStore(paths)
     resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
     resolved_renderer = renderer or PlaywrightRenderer(paths.knowledge_root)
-    # Built only when a key is configured. The deterministic workflow must
-    # reach Ready with `OPENAI_API_KEY` unset, so constructing an adapter that
-    # refuses at import time would break the offline path for every command,
-    # including the ones that never call a provider. `None` here is what the
-    # services turn into an explicit refusal when AI mode is *requested*.
+    # Built only when a key is configured. Constructing an adapter that refuses
+    # at import time would break every command, including the ones that never
+    # call a provider. `None` here is what the services turn into an explicit
+    # refusal when an AI command runs.
     resolved_provider = provider
     api_key = resolved_config.get("openai_api_key")
     if resolved_provider is None and api_key:

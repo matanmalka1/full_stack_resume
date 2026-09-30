@@ -28,7 +28,13 @@ export const CompanyMark = ({ company }: { company: string }) => (
   </span>
 );
 
-const DUPLICATE_IDENTITY_HINT = "קיימת עוד מועמדות לאותה חברה ולאותו תפקיד";
+/* Said under a record when another Application names the same company and role, with the
+   date that tells the two apart. The board's cards and its action hub both draw it. */
+export const DuplicateIdentityHint = ({ createdAt }: { createdAt: string }) => (
+  <p className="line-clamp-2 text-support font-medium text-cv-text">
+    קיימת עוד מועמדות לאותה חברה ולאותו תפקיד · נפתחה ב־{formatApplicationDate(createdAt)}
+  </p>
+);
 
 /* "card" is the identity the cards draw, after demo_re: the company on the
    first line with the record's link beside it, the role and the track on the second.
@@ -107,11 +113,7 @@ export const ApplicationIdentity = ({
             </>
           )}
         </p>
-        {ambiguous ? (
-          <p className="line-clamp-2 text-support font-medium text-cv-text">
-            {DUPLICATE_IDENTITY_HINT} · נפתחה ב־{formatApplicationDate(item.created_at)}
-          </p>
-        ) : null}
+        {ambiguous ? <DuplicateIdentityHint createdAt={item.created_at} /> : null}
       </div>
     </div>
   );

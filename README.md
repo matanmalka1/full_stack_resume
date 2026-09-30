@@ -149,12 +149,11 @@ bucket alike.
 
 ## AI provider
 
-Creating a new `JobAnalysis` requires a configured provider, with no rules-based
-fallback (`docs/spec/product-spec.md` §2, "Semantic analysis authority"). Everything
-downstream of an existing analysis — editing, validation, approval, rendering, Ready,
-export, and recruitment tracking — runs with no key at all. Draft creation keeps its own
-separate deterministic path (`provider=deterministic` on `create_draft`), unaffected by
-this.
+Creating a new `JobAnalysis` and drafting a document's content both require a
+configured provider, with no rules-based fallback (`docs/spec/product-spec.md` §2,
+"Semantic analysis authority"). Everything downstream of existing content — editing,
+validation, approval, rendering, Ready, export, and recruitment tracking — runs with no
+key at all.
 
 A configured key enables six structured OpenAI tasks: `propose_analysis`,
 `propose_selection_plan`, `draft_resume`, `regenerate_section`, `regenerate_claim`, and
@@ -322,8 +321,8 @@ Pytest builds React into a temporary directory, starts FastAPI serving that buil
 one origin, and launches the separate Playwright integration configuration. The intake
 test drives creation, reload, list navigation, and duplicate acknowledgement with no
 provider or worker. The preparation test runs the real worker outside the API process
-and drives analysis, deterministic drafting, checking, approval, real PDF rendering and
-download, and submission through the UI. Only the analysis provider transport is scripted;
+and drives analysis, AI drafting, checking, approval, real PDF rendering and
+download, and submission through the UI. Only the provider transport is scripted;
 neither test intercepts API requests, and `OPENAI_API_KEY` remains unset. The preparation
 test also needs the Python renderer's Chromium (`./.venv/bin/python -m playwright install chromium`).
 Do not run other database suites concurrently against the same test database.

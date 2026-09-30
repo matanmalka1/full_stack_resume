@@ -130,9 +130,6 @@ export const operation = (): Operation => ({
 export const settings = (overrides: Partial<Settings> = {}): Settings => ({
   edit_version: 0,
   auto_generate_when_review_not_required: false,
-  ai_enabled: false,
-  ai_enabled_override: null,
-  default_execution_mode: "deterministic",
   default_ai_model: "gpt-5.6-terra",
   default_reasoning_effort: "medium",
   available_ai_models: [

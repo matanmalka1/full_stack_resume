@@ -22,10 +22,7 @@ async function operationSucceeded(request: APIRequestContext, id: string) {
     .toBe("succeeded");
 }
 
-test("analysis, deterministic draft, approval, real PDF and submission compose through the browser", async ({
-  page,
-  request,
-}) => {
+test("analysis, AI draft, approval, real PDF and submission compose through the browser", async ({ page, request }) => {
   test.setTimeout(120_000);
   const applications = "/api/v1/applications";
   await page.goto("/applications/new");

@@ -6,8 +6,6 @@ import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
    `reset` can never drift out of sync with what the request actually sends. */
 export const editableSettings = (settings: Settings): UpdateSettingsRequest => ({
   auto_generate_when_review_not_required: settings.auto_generate_when_review_not_required,
-  ai_enabled_override: settings.ai_enabled_override,
-  default_execution_mode: settings.default_execution_mode,
   default_ai_model: settings.default_ai_model,
   default_reasoning_effort: settings.default_reasoning_effort,
   ui_density: settings.ui_density,
@@ -15,10 +13,16 @@ export const editableSettings = (settings: Settings): UpdateSettingsRequest => (
   ui_theme: settings.ui_theme,
 });
 
+/* The three reasoning efforts by name: the setting that picks the default, and every run
+   report that says which one a run used. */
+export const reasoningEffortLabels: Record<NonNullable<Settings["default_reasoning_effort"]>, string> = {
+  low: "נמוך",
+  medium: "בינוני",
+  high: "גבוה",
+};
+
 export const settingsFieldLabels: Record<keyof UpdateSettingsRequest, string> = {
   auto_generate_when_review_not_required: "יצירת טיוטה אוטומטית",
-  ai_enabled_override: "הפעלת AI",
-  default_execution_mode: "מצב ביצוע",
   default_ai_model: "מודל AI",
   default_reasoning_effort: "מאמץ חשיבה",
   ui_density: "צפיפות תצוגה",
@@ -37,11 +41,7 @@ export const settingValueLabel = (value: UpdateSettingsRequest[keyof UpdateSetti
     compact: "צפופה",
     normal: "רגיל",
     large: "גדול",
-    deterministic: "דטרמיניסטי",
-    ai: "AI",
-    low: "נמוך",
-    medium: "בינוני",
-    high: "גבוה",
+    ...reasoningEffortLabels,
   };
   return labels[value] ?? value;
 };

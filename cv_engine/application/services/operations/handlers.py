@@ -431,7 +431,7 @@ class DraftTaskHandler(RegisteredEvidenceTaskHandler):
 
 
 class DraftOperationHandler(DraftTaskHandler):
-    """`create_draft`: deterministic or AI content, written only at the frozen hash."""
+    """`create_draft`: AI content, written only at the frozen hash."""
 
     task = "draft_resume"
 

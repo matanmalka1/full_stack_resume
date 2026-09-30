@@ -5,8 +5,7 @@ import type { Requirement } from "@/api/analyses";
 import type { ApplicationDetail, CVDocument } from "@/api/contracts";
 import { invalidateDocumentViews, proposeSelection, updateSelection } from "@/api/documents";
 import { operationQueryKey } from "@/api/operations";
-import { aiRegenerationAvailable } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
+import { useAiAvailability } from "@/api/useSettings";
 import { ActionBar } from "@/ui/ActionBar";
 import { Button } from "@/ui/Button";
 import { Disclosure } from "@/ui/Disclosure";
@@ -43,8 +42,9 @@ interface FactOverrides {
    the engine's deterministic selection, so this panel always opens on a selection; saving
    a change is `update_selection` against the exact document it was read from, and an AI
    proposal is `propose_selection` over the same document. With content present, the server
-   updates selection and content together or refuses with a pointer to regeneration - the
-   panel reports that refusal rather than second-guessing it. */
+   drops the content with the change, to be drafted again by AI, or refuses with a pointer to
+   regeneration when that would discard wording - the panel reports that refusal rather than
+   second-guessing it. */
 export const DocumentSelectionPanel = ({
   detail,
   document,
@@ -63,8 +63,8 @@ export const DocumentSelectionPanel = ({
 }) => {
   const queryClient = useQueryClient();
   const applicationId = detail.application.id;
-  const { settings } = useSettings();
-  const aiAvailable = aiRegenerationAvailable(settings);
+  const aiState = useAiAvailability();
+  const aiAvailable = aiState === "available";
   const proposal = useSelectionProposal(applicationId);
   const [edits, setEdits] = useState<FactOverrides | null>(null);
   const [filter, setFilter] = useState<FactFilter>("all");
@@ -216,7 +216,7 @@ export const DocumentSelectionPanel = ({
         pending={ai.isPending}
         rationale={aiProposed ? (selection.proposal_rationale ?? null) : undefined}
         resultVisible={proposalResultVisible}
-        settingsLoaded={settings !== undefined}
+        settingsLoaded={aiState !== "loading"}
         status={proposal.status}
         supportsByFact={supportsByFact}
       />
@@ -269,7 +269,7 @@ export const DocumentSelectionPanel = ({
             {changed
               ? `${totals.included} מתוך ${totals.total} עובדות ייכנסו ${hasContent ? "למסמך" : "לטיוטה"} · יש שינוי שטרם נשמר.`
               : `${totals.included} מתוך ${totals.total} עובדות ייכנסו ${hasContent ? "למסמך" : "לטיוטה"}.`}
-            {changed && hasContent ? " השמירה תעדכן גם את תוכן הטיוטה." : null}
+            {changed && hasContent ? " השמירה תמחק את תוכן הטיוטה, ויהיה צריך ליצור טיוטת AI חדשה." : null}
           </p>
         }
       />

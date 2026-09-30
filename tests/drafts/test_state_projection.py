@@ -14,6 +14,7 @@ import pytest
 from helpers import (
     persisted_counts,
     seed_document,
+    seed_draft,
     seed_existing_analysis,
     stored_document,
     stored_submissions,
@@ -24,7 +25,6 @@ from cv_engine.application.commands import (
     BuildFromAnalysisCommand,
     CheckDocumentCommand,
     ClaimAddition,
-    DraftCommand,
     IngestedApplication,
     RenderCommand,
     SubmissionCommand,
@@ -47,10 +47,7 @@ def _detail(services: Services, application_id: str):
 
 
 def _draft(services: Services, application_id: str) -> str:
-    document = stored_document(services, application_id)
-    return services.drafts.draft(
-        DraftCommand(application_id=application_id, expected_document_hash=document.document_hash)
-    ).document_hash
+    return seed_draft(services, application_id).document_hash
 
 
 def _approve(services: Services, application_id: str, document_hash: str):

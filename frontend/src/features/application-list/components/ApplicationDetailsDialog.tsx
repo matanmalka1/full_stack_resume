@@ -102,11 +102,8 @@ export const ApplicationDetailsDialog = ({
   /* The finished CV has its own block below, so the next-action block reads the record
      as if it had none: it then names only a run, a recommended step or the reminder,
      and never a second "the CV is ready" or a second link to it. */
-  const withoutReadyCv: ApplicationListItem = {
-    ...application,
-    preparation_state: application.preparation_state === "ready" ? "approved" : application.preparation_state,
-  };
-  const hasNextStep = nextActionHeading(withoutReadyCv, applicationAttention(application) !== null) !== null;
+  const hasNextStep =
+    nextActionHeading(application, applicationAttention(application) !== null, { omitReady: true }) !== null;
 
   const description = (
     <>
@@ -176,7 +173,8 @@ export const ApplicationDetailsDialog = ({
             <p className="mb-1.5 text-support font-semibold text-cv-text-muted">פעולה מומלצת הבאה</p>
             <ApplicationCardNextAction
               clearing={clearing}
-              item={withoutReadyCv}
+              item={application}
+              omitReady
               onClearNextAction={onClearNextAction}
             />
           </section>

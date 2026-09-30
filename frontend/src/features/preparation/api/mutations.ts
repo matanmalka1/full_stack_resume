@@ -6,7 +6,7 @@ import { applicationListQueryPrefix, invalidateApplicationViews, startAnalysis }
 import type { ApplicationDetail, Operation } from "@/api/contracts";
 import { buildFromAnalysis, createDraft, invalidateDocumentViews } from "@/api/documents";
 import { type QueuedOperation, isTerminalOperation, operationQueryKey, operationQueryOptions } from "@/api/operations";
-import { executionProvider, settingsQueryOptions } from "@/api/settings";
+import { settingsQueryOptions } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { type AutoDraftSources, autoDraftIsContinuing, autoDraftSources } from "../model/autoDraft";
@@ -92,8 +92,7 @@ export const useAutomaticDraft = ({
     };
   }, [applicationId]);
 
-  /* The automatic path stays deterministic and offline: no provider is named, so the
-     server's default lane drafts it. */
+  /* The automatic path is the same AI run the button starts, queued without the press. */
   const automaticDraft = useMutation({
     mutationFn: ({ sources }: AutomaticDraftAttempt) =>
       createDraft(sources.applicationId, sources.documentHash, `auto-draft:${sources.documentHash}`),
@@ -202,10 +201,6 @@ export const useWorkflowCommands = (
 
   const { analyze, settings } = useAnalyzeCommand(detail, follow);
 
-  /* The lane the generate runs in. The screen offers the reader no choice, so it takes the
-     Settings default - the only place that choice is made. */
-  const provider = executionProvider(settings);
-
   const queuedOperationQuery = useQuery({
     ...operationQueryOptions(queuedId ?? ""),
     enabled: queuedId !== null,
@@ -236,9 +231,6 @@ export const useWorkflowCommands = (
         detail.application.id,
         plan.createDraft.documentHash,
         `draft:${plan.createDraft.documentHash}`,
-        {
-          provider,
-        },
       );
     },
     onSuccess: followQueued,
@@ -269,7 +261,6 @@ export const useWorkflowCommands = (
     commandsBlocked,
     draft,
     error,
-    provider,
     rebuild,
     settings,
     workInFlight,

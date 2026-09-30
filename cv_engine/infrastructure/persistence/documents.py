@@ -95,6 +95,20 @@ def _locked(connection: Connection, application_id: str, expected_document_hash:
     return row
 
 
+#: What a document without content carries: no check, approval, or render of any content.
+_CLEARED_STAMPS: dict[str, Any] = {
+    "content_report": None,
+    "checked_basis": None,
+    "passed": None,
+    "approved_basis": None,
+    "approved_at": None,
+    "rendered_basis": None,
+    "html_path": None,
+    "pdf_path": None,
+    "last_render_error": None,
+}
+
+
 def _rendered_files(row: Any) -> RenderedFiles | None:
     if row["html_path"] is None or row["pdf_path"] is None:
         return None
@@ -186,8 +200,30 @@ class SqlAlchemyDocumentStore:
                 "a body update keeps the document's analysis; re-pinning is build_from_analysis"
             )
         if body.content is None and row["content"] is not None:
-            raise LineageBroken("only build_from_analysis removes a document's content")
+            raise LineageBroken(
+                "only replace_selection and build_from_analysis remove a document's content"
+            )
         return _write(connection, row["id"], {**_body_values(body), "updated_at": updated_at})
+
+    def replace_selection(
+        self,
+        tx: WriteTransaction,
+        application_id: str,
+        expected_document_hash: str,
+        selection: SelectionManifest,
+        *,
+        updated_at: str,
+    ) -> tuple[CVDocument, RenderedFiles | None]:
+        connection = self._transactions.connection_for(tx, access="write")
+        row = _locked(connection, application_id, expected_document_hash)
+        released = _rendered_files(row)
+        body = DocumentBody(analysis_id=row["analysis_id"], selection=selection, content=None)
+        document = _write(
+            connection,
+            row["id"],
+            {**_body_values(body), **_CLEARED_STAMPS, "updated_at": updated_at},
+        )
+        return document, released
 
     def repin(
         self,
@@ -212,15 +248,7 @@ class SqlAlchemyDocumentStore:
                 **_body_values(body),
                 "profile_version": built_with.profile_version,
                 "selection_policy_version": built_with.selection_policy_version,
-                "content_report": None,
-                "checked_basis": None,
-                "passed": None,
-                "approved_basis": None,
-                "approved_at": None,
-                "rendered_basis": None,
-                "html_path": None,
-                "pdf_path": None,
-                "last_render_error": None,
+                **_CLEARED_STAMPS,
                 "updated_at": updated_at,
             },
         )

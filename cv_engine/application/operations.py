@@ -375,6 +375,7 @@ def required_operation_resources(request: CreateOperation) -> tuple[OperationRes
     if request.operation_type is OperationType.RENDER_DOCUMENT:
         resources.append(OperationResource(kind=OperationResourceKind.RENDER_BROWSER, key="global"))
     always_ai = {
+        OperationType.CREATE_DRAFT,
         OperationType.PROPOSE_SELECTION,
         OperationType.REGENERATE_SECTION,
         OperationType.REGENERATE_CLAIM,

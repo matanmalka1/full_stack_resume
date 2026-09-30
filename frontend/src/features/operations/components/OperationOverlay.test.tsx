@@ -256,12 +256,9 @@ describe("OperationReport", () => {
   /* The backend files "no provider configured" under PROVIDER_REFUSED. With Settings
      saying no provider exists, the report names that cause, says the request went
      nowhere, and offers Settings rather than a retry that would fail the same way. */
-  it.each([
-    [false, "לא הוגדר ספק AI"],
-    [true, "ה־AI כבוי בהגדרות"],
-  ] as const)("routes a refusal with no usable provider (configured: %s) to Settings", (configured, title) => {
+  it("routes a refusal with no provider configured to Settings", () => {
     const queryClient = client();
-    const settings = settingsFixture({ provider_configured: configured, ai_enabled: false });
+    const settings = settingsFixture({ provider_configured: false });
     queryClient.setQueryData(settingsQueryKey, { settings, etag: null });
     render(
       <QueryClientProvider client={queryClient}>
@@ -274,7 +271,7 @@ describe("OperationReport", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent(title);
+    expect(screen.getByRole("alert")).toHaveTextContent("לא הוגדר ספק AI");
     expect(screen.queryByText("ספק הבינה המלאכותית סירב לבקשה")).not.toBeInTheDocument();
     /* The reason is the report's line on a failure; no vaguer one above it. */
     expect(screen.queryByText("הפעולה נכשלה ולא יצרה תוצאה.")).not.toBeInTheDocument();
@@ -306,7 +303,7 @@ describe("OperationReport", () => {
     const renderWith = (configured: boolean) => {
       const queryClient = client();
       queryClient.setQueryData(settingsQueryKey, {
-        settings: settingsFixture({ provider_configured: configured, ai_enabled: configured }),
+        settings: settingsFixture({ provider_configured: configured }),
         etag: null,
       });
       return render(
@@ -458,10 +455,7 @@ describe("OperationOverlay", () => {
      it can be tried again and stops wearing the blocker tone. */
   it("stops presenting a refused run as an open blocker once a provider is available", () => {
     const refused = failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] });
-    renderOverlay(
-      { operation: refused, settled: true },
-      settingsFixture({ provider_configured: true, ai_enabled: true }),
-    );
+    renderOverlay({ operation: refused, settled: true }, settingsFixture({ provider_configured: true }));
 
     expect(chip()).toHaveTextContent("נכשלה · אפשר לנסות שוב");
   });

@@ -98,7 +98,7 @@ const renderPanel = (value: ApplicationDetail, doc: CVDocument, ai: boolean, onQ
     defaultOptions: { queries: { retry: false, refetchInterval: false }, mutations: { retry: false } },
   });
   client.setQueryData(settingsQueryKey, {
-    settings: settings({ ai_enabled: ai, provider_configured: ai }),
+    settings: settings({ provider_configured: ai }),
     etag: '"settings-1"',
   });
   const rendered = render(panel(client, value, doc, onQueued));

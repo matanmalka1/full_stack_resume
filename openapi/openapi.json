@@ -2292,11 +2292,8 @@
             "type": "string"
           },
           "provider": {
-            "default": "deterministic",
-            "enum": [
-              "deterministic",
-              "openai"
-            ],
+            "const": "openai",
+            "default": "openai",
             "title": "Provider",
             "type": "string"
           }
@@ -5031,21 +5028,6 @@
       "SettingsResponse": {
         "additionalProperties": false,
         "properties": {
-          "ai_enabled": {
-            "title": "Ai Enabled",
-            "type": "boolean"
-          },
-          "ai_enabled_override": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Enabled Override"
-          },
           "auto_generate_when_review_not_required": {
             "title": "Auto Generate When Review Not Required",
             "type": "boolean"
@@ -5064,14 +5046,6 @@
               "gpt-5.6-sol"
             ],
             "title": "Default Ai Model",
-            "type": "string"
-          },
-          "default_execution_mode": {
-            "enum": [
-              "deterministic",
-              "ai"
-            ],
-            "title": "Default Execution Mode",
             "type": "string"
           },
           "default_reasoning_effort": {
@@ -5131,8 +5105,6 @@
         "required": [
           "edit_version",
           "auto_generate_when_review_not_required",
-          "ai_enabled",
-          "default_execution_mode",
           "default_ai_model",
           "default_reasoning_effort",
           "available_ai_models",
@@ -5445,17 +5417,6 @@
       "UpdateSettingsRequest": {
         "additionalProperties": false,
         "properties": {
-          "ai_enabled_override": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Enabled Override"
-          },
           "auto_generate_when_review_not_required": {
             "title": "Auto Generate When Review Not Required",
             "type": "boolean"
@@ -5467,14 +5428,6 @@
               "gpt-5.6-sol"
             ],
             "title": "Default Ai Model",
-            "type": "string"
-          },
-          "default_execution_mode": {
-            "enum": [
-              "deterministic",
-              "ai"
-            ],
-            "title": "Default Execution Mode",
             "type": "string"
           },
           "default_reasoning_effort": {
@@ -5514,7 +5467,6 @@
         },
         "required": [
           "auto_generate_when_review_not_required",
-          "default_execution_mode",
           "default_ai_model",
           "default_reasoning_effort",
           "ui_density",
