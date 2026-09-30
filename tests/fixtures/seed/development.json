@@ -466,7 +466,7 @@
       "fact_id": "development.project.mm_backend_core",
       "meaning": "Personal open-source project: built and published mm-backend-core, an npm-distributed Node.js/Express CLI that scaffolds a MongoDB REST API template with JWT auth and refresh tokens, RBAC, Passport OAuth, file uploads, Zod validation, Helmet/rate-limiting/mongo-sanitize security middleware, Winston logging, and Vitest/Supertest tests. Not PH.Digital work.",
       "renderings": {
-        "en": "Built and published mm-backend-core on npm as a personal open-source project, a Node.js/Express backend scaffolding CLI generating a MongoDB REST API with JWT/RBAC authentication, OAuth, validation, security middleware, and automated testing.",
+        "en": "Built and published mm-backend-core, a personal open-source Node.js/Express CLI on npm that scaffolds a MongoDB REST API with JWT/RBAC authentication, OAuth, validation, security middleware, and automated testing.",
         "he": "פיתוח ופרסום של mm-backend-core ב-npm כפרויקט קוד פתוח אישי — CLI ליצירת שלד backend ב-Node.js/Express, המייצר REST API על MongoDB עם אימות JWT/RBAC, OAuth, ולידציה, middleware אבטחה ובדיקות אוטומטיות."
       },
       "tags": [
