@@ -268,7 +268,8 @@ why. A deleted Application allows none.
 | `edit_matching_configuration` | a JobAnalysis exists |
 | `build_from_analysis` | a document exists and the newest analysis has a higher version than the document's |
 | `update_selection` | a document exists |
-| `propose_selection`, `create_draft` | a document exists and `content IS NULL` |
+| `create_draft` | a document exists and `content IS NULL` |
+| `propose_selection` | a document exists and its content is NULL or composed by the engine alone (no manual or AI wording) |
 | `confirm_and_use_fact` | a review reason names it as a resolution action |
 | `edit`, `regenerate_section`, `regenerate_claim` | `content IS NOT NULL` |
 | `check` | `content IS NOT NULL` and `content_check != passed` |
@@ -562,9 +563,13 @@ eligibility. The effective `emphasis` is recorded separately from the nullable
 
 ### `propose_selection(application_id, expected_document_hash, model?, reasoning_effort?)`
 
-AI Operation, only while `content IS NULL`. The proposal is an overlay (pins,
-exclusions, rationale). Activation re-checks the hash and empty content under the row
-lock and reruns selection policy against the Knowledge loaded for activation. The
+AI Operation under `update_selection`'s content rule. The proposal is an overlay (pins,
+exclusions, rationale). Content carrying manual or AI wording is refused with
+`REGENERATION_REQUIRED` (412) when the Operation is requested, before any provider
+call. Activation re-checks the hash under the row lock, reruns selection policy against
+the Knowledge loaded for activation, and writes as `update_selection` does: with
+`content IS NULL` only the selection changes; engine-composed content is recomposed
+from the new selection in the same write. The
 activated selection records `proposed_by = "ai"` and `proposal_rationale` as provenance;
 activation never reads them. Engine and user selections leave both null.
 

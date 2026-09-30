@@ -7,7 +7,7 @@ import { documentQueryOptions } from "@/api/documents";
 import { factsQueryOptions } from "@/api/facts";
 import { candidateIncluded } from "../../model/factGroups";
 
-export type EvidenceInclusion = "included" | "omitted" | "unknown";
+type EvidenceInclusion = "included" | "omitted" | "unknown";
 
 export interface RequirementEvidence {
   error: unknown;

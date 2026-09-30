@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from ....domain.contracts.knowledge import Fact, FactStatus
-from ....domain.drafts import manually_edited
+from ....domain.drafts import carries_authored_wording
 from ....domain.facts import FactStore, FactStoreError
 from ....domain.knowledge import Knowledge
 from ....domain.profiles import ProfileStore
@@ -429,7 +429,7 @@ class FactLifecycleService(KnowledgeMutationEngine):
                 raise ValueError("confirmed fact was not selected by the document's selection")
             content = document.content
             if content is not None:
-                if manually_edited(content):
+                if carries_authored_wording(content):
                     raise ValueError(
                         "the document carries wording a deterministic rebuild would discard; "
                         "select the fact after regenerating instead"

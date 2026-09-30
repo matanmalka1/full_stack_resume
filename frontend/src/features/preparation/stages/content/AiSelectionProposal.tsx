@@ -12,7 +12,8 @@ export const aiProposalSteps = [
   "ה־AI מקבל את ניתוח המשרה (דרישות, פערים ומילות מפתח), את העובדות שהפרופיל מתיר ואת הבחירה שהמנוע כבר עשה.",
   "הוא מציע אילו עובדות להוסיף לבחירה ואילו להחריג ממנה - רק מתוך העובדות המאושרות, בלי לנסח או לשנות אותן.",
   "המנוע בונה מחדש את הבחירה לפי ההצעה ובודק אותה מול כללי הבחירה: מכסת כל סעיף, רכיבים קבועים וכיסוי התגיות שהפרופיל מחייב. הצעה שחורגת מהם נדחית, והבחירה הקודמת נשארת.",
-  "הקיבועים וההחרגות הידניים הנוכחיים מוחלפים בהצעה. כל שינוי מסומן ברשימה ואפשר לבטל אותו לפני יצירת הטיוטה.",
+  "הקיבועים וההחרגות הידניים הנוכחיים מוחלפים בהצעה. כל שינוי מסומן ברשימה ואפשר לבטל אותו.",
+  "אם כבר יש טיוטה שהמנוע כתב, היא נבנית מחדש מהבחירה החדשה. טיוטה עם ניסוח ידני או של AI אינה מקבלת הצעה, כי בנייה מחדש הייתה מוחקת אותו.",
 ];
 
 const ChangeList = ({
@@ -62,8 +63,10 @@ const ChangeList = ({
 
 export const AiSelectionProposal = ({
   aiAvailable,
+  authoredWording,
   busy,
   changes,
+  hasContent,
   offered,
   onDismiss,
   onPropose,
@@ -75,8 +78,13 @@ export const AiSelectionProposal = ({
   supportsByFact,
 }: {
   aiAvailable: boolean;
+  /* The stage withholds a proposal because the draft carries manual or AI wording (§14),
+     as opposed to a blocker such as live work, which the projection reports separately. */
+  authoredWording: boolean;
   busy: boolean;
   changes: readonly SelectionChange[];
+  /* The document already has a draft, which an activated proposal rebuilds. */
+  hasContent: boolean;
   /* The projection offers `propose_selection` now. Whether it does is the server's answer
      (§9); this panel only says so. */
   offered: boolean;
@@ -101,7 +109,12 @@ export const AiSelectionProposal = ({
           <Sparkles aria-hidden="true" className="size-icon-md text-cv-accent" />
           הצעת בחירה באמצעות AI
         </h3>
-        <p className="mt-1 text-support text-cv-text-muted">ההצעה כוללת קריאת AI בתשלום.</p>
+        {/* The cost and the rebuild describe the press, so they stand only beside the button. */}
+        {aiAvailable && offered ? (
+          <p className="mt-1 text-support text-cv-text-muted">
+            ההצעה כוללת קריאת AI בתשלום.{hasContent ? " הטיוטה תיבנה מחדש מהבחירה החדשה." : null}
+          </p>
+        ) : null}
       </div>
       {aiAvailable && offered ? (
         <Button
@@ -119,7 +132,11 @@ export const AiSelectionProposal = ({
     {!aiAvailable && settingsLoaded ? (
       <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
     ) : aiAvailable && !offered ? (
-      <p className="text-support text-cv-text-muted">הצעת AI אינה זמינה למסמך במצבו הנוכחי.</p>
+      <p className="text-support text-cv-text-muted">
+        {authoredWording
+          ? "הטיוטה כוללת ניסוח ידני או של AI, ובנייה מחדש מבחירה חדשה הייתה מוחקת אותו. אפשר לשנות אותה בעורך, ביצירה מחדש של סעיף או שורה."
+          : "הצעת AI אינה זמינה למסמך במצבו הנוכחי."}
+      </p>
     ) : null}
 
     {rationale === undefined ? null : (

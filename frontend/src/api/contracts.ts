@@ -31,13 +31,6 @@ export type OperationPhase = ApiSchemas["OperationPhase"];
 export type OperationType = ApiSchemas["OperationType"];
 export type OperationFailureCode = ApiSchemas["OperationFailureCode"];
 export type ValidationReport = ApiSchemas["ValidationReportResponse"];
-/* §20 the artifact registry, read by ID. The list carries the registration; the detail
-   adds the three answers only a verification can give, so the two are separate types
-   rather than one optional-field union. `artifact_type` and `lifecycle_status` are
-   `string` at the boundary and are treated as open here on purpose. */
-export type ArtifactVersion = ApiSchemas["ArtifactVersionResponse"];
-export type ArtifactVersions = ApiSchemas["ArtifactVersionsResponse"];
-export type ArtifactVersionDetail = ApiSchemas["ArtifactVersionDetailResponse"];
 export type Settings = ApiSchemas["SettingsResponse"];
 export type UpdateSettingsRequest = ApiSchemas["UpdateSettingsRequest"];
 export type ReconciliationReport = ApiSchemas["ReconciliationResponse"];

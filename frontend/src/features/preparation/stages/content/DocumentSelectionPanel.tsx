@@ -162,6 +162,9 @@ export const DocumentSelectionPanel = ({
   // Recorded only on selections activated from an AI proposal; null means "not recorded", never "not AI".
   const aiProposed = selection.proposed_by === "ai";
   const hasContent = document.content != null;
+  /* Not offered and not blocked: with a draft present, the stage itself withholds it. */
+  const proposalWithheldByWording =
+    hasContent && !proposalOffered && !detail.blocked_actions.some(({ action }) => action === "propose_selection");
 
   return (
     <section
@@ -203,8 +206,10 @@ export const DocumentSelectionPanel = ({
 
       <AiSelectionProposal
         aiAvailable={aiAvailable}
+        authoredWording={proposalWithheldByWording}
         busy={busy}
         changes={proposalChanges}
+        hasContent={hasContent}
         offered={proposalOffered}
         onDismiss={proposal.dismiss}
         onPropose={() => ai.mutate()}

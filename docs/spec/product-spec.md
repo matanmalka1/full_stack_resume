@@ -310,8 +310,9 @@ separate versioned entity. It changes:
 - through the matching-configuration form (`apply_analysis_decisions`): a Track,
   Profile, or language change creates one new immutable JobAnalysis without calling the
   provider; an Emphasis or fact decision alone updates the selection in place;
-- through an optional AI `propose_selection` Operation while the document has no
-  content. Its input names each Profile section's allowed facts, claim budget, occupied
+- through an optional AI `propose_selection` Operation, while the document has no
+  content or only content the engine composed (which it then recomposes, as
+  `update_selection` does). Its input names each Profile section's allowed facts, claim budget, occupied
   budget, and pin capacity. Deterministic selection policy validates every proposal
   before activation. It is never required to reach a draft.
 

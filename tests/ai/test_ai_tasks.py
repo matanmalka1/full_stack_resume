@@ -37,7 +37,7 @@ from cv_engine.application.commands import (
     RegenerateSectionCommand,
     UpdateSelectionCommand,
 )
-from cv_engine.application.errors import StateConflict
+from cv_engine.application.errors import REGENERATION_REQUIRED, PreconditionFailed, StateConflict
 from cv_engine.application.operations import ClaimReviewReason, OperationFailureCode
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.projection import fit_level, fit_score
@@ -549,6 +549,30 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     public_evidence_fields = type(public_reviewed.review_evidence).model_fields
     assert "provider_artifact_version_id" not in public_evidence_fields
     assert "input_hash" not in public_evidence_fields
+
+    # AI wording is authored wording: a selection change would rebuild it away, so both
+    # selection paths refuse it (§14) - the proposal before any provider call.
+    current = stored_document(ai_services, ingested.application_id)
+    with pytest.raises(PreconditionFailed) as refused_change:
+        ai_services.selection.update_selection(
+            UpdateSelectionCommand(
+                application_id=ingested.application_id,
+                expected_document_hash=current.document_hash,
+            )
+        )
+    assert refused_change.value.code == REGENERATION_REQUIRED
+    with pytest.raises(PreconditionFailed) as refused_proposal:
+        ai_services.operation_submissions.submit_selection_proposal(
+            ProposeSelectionCommand(
+                application_id=ingested.application_id,
+                expected_document_hash=current.document_hash,
+            ),
+            idempotency_key=new_id(),
+            analysis_service=ai_services.analysis,
+        )
+    assert refused_proposal.value.code == REGENERATION_REQUIRED
+    assert fake_openai.calls_for("propose_selection_plan") == []
+    assert stored_document(ai_services, ingested.application_id) == current
 
 
 def _regenerate_section(services, ingested, analysed, working, section, claims):

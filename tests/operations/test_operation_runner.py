@@ -6,7 +6,7 @@ from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
-from helpers import seed_document, stored_document
+from helpers import edit_document_claim, seed_document, stored_document
 from operations_support import (
     _claim_operation,
     _enqueue_operation,
@@ -32,6 +32,7 @@ from cv_engine.application.commands import (
     UpdateSelectionCommand,
 )
 from cv_engine.application.errors import (
+    REGENERATION_REQUIRED,
     MissingFactRendering,
     PreconditionFailed,
     StateConflict,
@@ -730,8 +731,9 @@ def test_an_ai_selection_proposal_is_provenance_on_the_selection_it_activates(
 ) -> None:
     """§14 `propose_selection`: activated through the same policy, recorded as `ai`.
 
-    Only while the document has no content; the rationale is kept verbatim and never
-    read back.
+    Under `update_selection`'s content rule: offered over engine-composed content,
+    refused once the draft carries authored wording. The rationale is kept verbatim
+    and never read back.
     """
     services = ai_services
     ingested, _analysis = seed_document(services, "Proposal Co")
@@ -762,7 +764,27 @@ def test_an_ai_selection_proposal_is_provenance_on_the_selection_it_activates(
     services.drafts.draft(
         DraftCommand(application_id=application_id, expected_document_hash=proposed.document_hash)
     )
-    with pytest.raises(PreconditionFailed):
+    # Engine-composed content is offered a proposal; activation would recompose it.
+    assert (
+        "propose_selection" in services.queries.application_detail(application_id).available_actions
+    )
+
+    drafted = stored_document(services, application_id)
+    assert drafted.content is not None
+    claim = next(
+        claim
+        for section in drafted.content.sections
+        for claim in section.claims
+        if claim.claim_type == "canonical" and claim.style in {"paragraph", "bullet", "item"}
+    )
+    edit_document_claim(
+        services, application_id, claim.claim_id, list(claim.fact_ids), text="My own wording"
+    )
+    assert (
+        "propose_selection"
+        not in services.queries.application_detail(application_id).available_actions
+    )
+    with pytest.raises(PreconditionFailed) as refused:
         services.operation_submissions.submit_selection_proposal(
             ProposeSelectionCommand(
                 application_id=application_id,
@@ -771,6 +793,7 @@ def test_an_ai_selection_proposal_is_provenance_on_the_selection_it_activates(
             idempotency_key=new_id(),
             analysis_service=services.analysis,
         )
+    assert refused.value.code == REGENERATION_REQUIRED
 
 
 @pytest.mark.parametrize("outcome", ["cancel", "edit"])

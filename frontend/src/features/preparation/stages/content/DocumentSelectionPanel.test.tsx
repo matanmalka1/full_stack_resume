@@ -165,6 +165,23 @@ describe("DocumentSelectionPanel", () => {
 
     expect(screen.queryByRole("button", { name: "הצעת בחירה באמצעות AI" })).toBeNull();
     expect(screen.getByText("הצעת AI אינה זמינה למסמך במצבו הנוכחי.")).toBeInTheDocument();
+    expect(screen.queryByText(/קריאת AI בתשלום/)).toBeNull();
+  });
+
+  it("offers a proposal over an engine draft and says the draft is rebuilt", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    renderPanel(detail(), document({}, { content: cvDocument().content }), true);
+
+    expect(screen.getByRole("button", { name: "הצעת בחירה באמצעות AI" })).toBeInTheDocument();
+    expect(screen.getByText(/הטיוטה תיבנה מחדש מהבחירה החדשה/)).toBeInTheDocument();
+  });
+
+  it("names authored wording when the stage withholds a proposal over a draft", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const drafted = document({}, { content: cvDocument().content });
+    renderPanel(detail({ available_actions: ["update_selection"] }), drafted, true);
+
+    expect(screen.getByText(/הטיוטה כוללת ניסוח ידני או של AI/)).toBeInTheDocument();
   });
 
   it("shows an AI selection's own rationale and labels only the marks it still holds", () => {

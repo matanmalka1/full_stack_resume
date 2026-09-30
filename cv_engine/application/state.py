@@ -28,6 +28,7 @@ from ..domain.document import (
     dependent_fact_ids,
     preparation_state,
 )
+from ..domain.drafts import carries_authored_wording
 from ..domain.knowledge import Knowledge
 from .operations import OperationType, OperationView
 from .queries import ApplicationStateView, BlockedActionView, ReasonView, WarningView
@@ -284,6 +285,10 @@ def derive_actions(
         if not has_content:
             allowed |= {"create_draft", "propose_selection"}
         else:
+            # A proposal rebuilds engine-composed content, as `update_selection` does;
+            # authored wording would be discarded, so it is not offered then (§14).
+            if not carries_authored_wording(document.content):
+                allowed.add("propose_selection")
             allowed |= CONTENT_ACTIONS
             if check is not ContentCheck.PASSED:
                 allowed.add("check")

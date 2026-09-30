@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -157,7 +157,7 @@ describe("ApplicationPage", () => {
   });
 
   it("does not show provider artifacts in the preparation screen", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(detail())));
+    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(jsonResponse(detail())));
     renderPage(fetchMock);
 
     expect(await screen.findByRole("heading", { name: "ניתוח והתאמה" })).toBeInTheDocument();

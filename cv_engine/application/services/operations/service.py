@@ -35,7 +35,7 @@ from ...ports.operation_client import OperationClientStore
 from ...ports.settings import SettingsStore
 from ...ports.transactions import TransactionManager
 from ..analysis.service import AnalysisService
-from ..documents import DocumentSource, refuse_deleted, require_hash
+from ..documents import DocumentSource, refuse_authored_wording, refuse_deleted, require_hash
 from ..drafts import DraftAuthoringService
 from ..rendering import RenderingService
 from .common import analysis_knowledge_context_hash
@@ -190,10 +190,7 @@ class OperationSubmissionService:
         command = self._freeze_ai_execution(command)
         source = analysis_service.document_source(command.application_id)
         sources = self._document_sources(source, command.expected_document_hash)
-        if source.document.content is not None:
-            raise PreconditionFailed(
-                "a selection proposal applies only while the document has no content"
-            )
+        refuse_authored_wording(source.document.content)
         request = CreateOperation(
             application_id=command.application_id,
             operation_type=OperationType.PROPOSE_SELECTION,
