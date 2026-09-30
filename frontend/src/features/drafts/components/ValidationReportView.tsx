@@ -1,7 +1,10 @@
 import { CircleCheck, ShieldAlert, TriangleAlert } from "lucide-react";
 
+import { useState } from "react";
+
 import type { ValidationReport } from "@/api/contracts";
 import { Callout } from "@/ui/Callout";
+import { DisclosureSummary } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { localizedValidationIssue } from "@/ui/errorMessages";
 
@@ -21,6 +24,7 @@ const blockerResolution = (code: string): string => {
    a summary. The icons stay, so the three counts are still separable without colour
    (A.2). */
 export const ValidationReportView = ({ report }: { report: ValidationReport }) => {
+  const [warningsOpen, setWarningsOpen] = useState(false);
   const hard = report.issues.filter((issue) => issue.hard);
   const warnings = report.issues.filter((issue) => !issue.hard);
   const passedGroups = Object.values(report.groups).filter(Boolean).length;
@@ -59,10 +63,13 @@ export const ValidationReportView = ({ report }: { report: ValidationReport }) =
           warning is the common case and stays worth one line, so the fold opens for it
           too - closed, it is one row instead of one card. */}
       {warnings.length === 0 ? null : (
-        <details className="rounded-control border border-cv-warning/25 bg-cv-warning-soft px-3 py-2">
-          <summary className="cursor-pointer text-support font-semibold text-cv-warning">
+        <details
+          className="rounded-control border border-cv-warning/25 bg-cv-warning-soft px-3 py-2"
+          onToggle={(event) => setWarningsOpen(event.currentTarget.open)}
+        >
+          <DisclosureSummary className="text-support font-semibold text-cv-warning" open={warningsOpen}>
             {warnings.length} אזהרות שאינן חוסמות אישור
-          </summary>
+          </DisclosureSummary>
           <ul className="mt-2 flex flex-col gap-1.5">
             {warnings.map((issue) => (
               <li className="text-support leading-6 text-cv-text" dir="auto" key={`${issue.code}:${issue.message}`}>

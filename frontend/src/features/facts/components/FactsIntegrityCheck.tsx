@@ -9,6 +9,7 @@ import { cx } from "@/ui/cx";
 import { Disclosure } from "@/ui/Disclosure";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { surfaceClasses } from "@/ui/surface";
+import { toneTextClasses } from "@/ui/tone";
 
 /* The fact store checked against its lifecycle journal, and the stored artifacts against
    the database. It reports; it never writes. It sits on the facts screen because the
@@ -47,7 +48,7 @@ export const FactsIntegrityCheck = () => {
           aria-hidden="true"
           className={cx(
             "size-icon-md shrink-0",
-            report === undefined ? "text-cv-text-muted" : report.passed ? "text-cv-success" : "text-cv-blocker",
+            toneTextClasses[report === undefined ? "neutral" : report.passed ? "success" : "blocker"],
           )}
         />
         <span className="text-support font-semibold text-cv-text">בדיקת תקינות</span>

@@ -69,10 +69,21 @@ export const DisclosureSummary = ({
       className,
     )}
   >
-    <ChevronDown
-      aria-hidden="true"
-      className={cx("size-icon-md shrink-0 transition-transform duration-200", open ? "rotate-0" : "rotate-90")}
-    />
+    <DisclosureChevron open={open} />
     <span>{children}</span>
   </summary>
+);
+
+/* The disclosure mark alone, for a button that expands a region of its own (with
+   `aria-expanded`) rather than a `<details>`: closed it points along the reading
+   direction, open it points down, the same as every summary above. */
+export const DisclosureChevron = ({ className, open }: { className?: string; open: boolean }) => (
+  <ChevronDown
+    aria-hidden="true"
+    className={cx(
+      "size-icon-md shrink-0 transition-transform duration-200",
+      open ? "rotate-0" : "rotate-90",
+      className,
+    )}
+  />
 );

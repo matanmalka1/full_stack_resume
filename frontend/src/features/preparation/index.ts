@@ -40,6 +40,7 @@ export {
   preparationResumeDestinationFromDetail,
 } from "./model/actionDestinations";
 export {
+  classificationFieldLabels,
   confidenceText,
   emphasisLabels,
   fitLevelLabel,

@@ -6,6 +6,7 @@ import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { ViewSwitch } from "@/ui/ViewSwitch";
 import { cx } from "@/ui/cx";
 import { useRecruitmentUpdate } from "../hooks/useRecruitmentUpdate";
@@ -131,7 +132,9 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
   if (detailQuery.isPending) {
     return (
       <DialogFrame application={application} onClose={onClose}>
-        <p className="text-support text-cv-text-muted">טוען את פרטי המועמדות…</p>
+        <LiveRegion className="text-support text-cv-text-muted" visuallyHidden={false}>
+          טוען את פרטי המועמדות…
+        </LiveRegion>
       </DialogFrame>
     );
   }
@@ -139,9 +142,17 @@ export const RecruitmentUpdateDialog = ({ application, onClose }: RecruitmentUpd
   if (detailQuery.error !== null) {
     return (
       <DialogFrame application={application} onClose={onClose}>
+        {/* Not `QueryState`: its not-found answer replaces the whole route, which a
+            dialog over the board must not do. */}
         <ErrorCallout
+          action={
+            <Button onClick={() => void detailQuery.refetch()} variant="secondary">
+              ניסיון חוזר
+            </Button>
+          }
           error={detailQuery.error}
-          fallbackDetail="אפשר לרענן את העמוד ולנסות שוב."
+          fallbackDetail="הבקשה לא הושלמה. אפשר לנסות שוב."
+          label="שגיאה"
           title="לא ניתן לטעון את פרטי המועמדות"
         />
       </DialogFrame>

@@ -44,4 +44,10 @@ describe("filterFactEntries", () => {
     ).toHaveLength(1);
     expect(filterFactEntries(entries, { ...emptyFactFilters, source: "sales.json", status: "canonical" })).toEqual([]);
   });
+
+  it("finds a fact by its knowledge source, as the global search does", () => {
+    expect(
+      filterFactEntries(entries, { ...emptyFactFilters, query: "SALES.JSON" }).map(({ fact }) => fact.fact_id),
+    ).toEqual(["fact.sales"]);
+  });
 });

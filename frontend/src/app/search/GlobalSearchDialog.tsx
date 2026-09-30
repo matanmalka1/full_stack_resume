@@ -3,7 +3,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 
 import { useNavigate } from "react-router-dom";
 
 import { ApplicationSummary } from "@/features/application-list";
-import { factLabel, factStatusLabel } from "@/features/facts/model/factLabels";
+import { factLabel, factStatusLabel } from "@/features/facts";
 import { preparationResumeDestination } from "@/features/preparation";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";

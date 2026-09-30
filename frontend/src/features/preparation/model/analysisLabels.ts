@@ -6,6 +6,15 @@ import type { Tone } from "@/ui/tone";
 /* Keyed by the generated unions, so a classification value added to the backend fails
    the frontend build instead of reaching the review form untranslated. The runtime
    option lists are derived from these maps rather than written a second time. */
+/* What each classification field is called for a reader - on the matching editor that
+   changes it and in the decision document that records it. */
+export const classificationFieldLabels = {
+  track: "מסלול",
+  profile: "פרופיל",
+  emphasis: "דגש",
+  language: "שפת קורות החיים",
+} as const;
+
 export const trackLabels: Record<Track, string> = {
   development: "פיתוח",
   sales: "מכירות",

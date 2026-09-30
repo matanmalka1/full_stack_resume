@@ -1,6 +1,7 @@
 import type { ApplicationDetail } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
 import { actionDestination } from "./actionDestinations";
+import { actionLabel } from "./preparationLabels";
 
 /* What the preparation screen may offer, derived from the §9 projection alone.
 
@@ -31,7 +32,14 @@ export interface WorkflowActionPlan {
      a panel there, approval a dialog, render a panel. Offered side by side they read as
      destinations that all arrive at one URL, so they collapse to one control wearing the
      furthest-along name. The recommendation decides emphasis only. */
-  draftScreen: { emphasized: boolean; href: string; label: string } | null;
+  draftScreen: {
+    /* Which of the four the control stands for. Its label is for the reader; a caller that
+       draws it differently per action branches on this, never on the words. */
+    action: "render" | "approve" | "check" | "edit";
+    emphasized: boolean;
+    href: string;
+    label: string;
+  } | null;
   /* The ready step, offered only while the projection says the document is Ready. */
   ready: { emphasized: boolean; href: string } | null;
   /* A recommended action with no control here and no destination anywhere. It is a claim
@@ -100,13 +108,13 @@ export const workflowActionPlan = (detail: ApplicationDetail): WorkflowActionPla
      what the workflow is waiting on. */
   const draftScreenTarget =
     renderHref !== null
-      ? { href: renderHref, label: "יצירת קובץ קורות החיים" }
+      ? { action: "render" as const, href: renderHref, label: actionLabel("render") }
       : approvalHref !== null
-        ? { href: approvalHref, label: "אישור הגרסה" }
+        ? { action: "approve" as const, href: approvalHref, label: actionLabel("approve") }
         : checkHref !== null
-          ? { href: checkHref, label: "בדיקת הטיוטה" }
+          ? { action: "check" as const, href: checkHref, label: actionLabel("check") }
           : editHref !== null
-            ? { href: editHref, label: readyNow ? "חזרה לעריכת הטיוטה" : "עריכת הטיוטה" }
+            ? { action: "edit" as const, href: editHref, label: readyNow ? "חזרה לעריכת הטיוטה" : actionLabel("edit") }
             : null;
   const draftScreen =
     draftScreenTarget === null
