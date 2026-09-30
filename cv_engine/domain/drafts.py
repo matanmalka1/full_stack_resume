@@ -320,26 +320,33 @@ def reorder_draft(
     return reordered.model_copy(update={"content_hash": draft_content_hash(reordered)})
 
 
-def frame_choice(
+def keep_frame_claims(
     frame: DraftDocument, profile: Profile, kept_claim_ids: set[str]
-) -> dict[str, list[str]]:
-    """The facts a writer chose by keeping claims of the frame, per section.
+) -> DraftDocument:
+    """The frame narrowed to the claims a writer kept, plus its structure.
 
-    Keyed by the section's English name, as `build_draft` takes them. A frame
-    section's name is in the document language, so it is matched against both.
+    Claims are filtered, not rebuilt, so every kept claim keeps its identity and its
+    place in pool order: a role's title, dates and bullets stay together. Headings,
+    dates and contacts stay whether or not they were kept. An optional section left
+    with no claims is dropped, as `build_draft` drops one.
     """
-    by_name = {spec.name_he: spec.name_en for spec in profile.sections} | {
-        spec.name_en: spec.name_en for spec in profile.sections
+    optional = {
+        (spec.name_he if frame.language == "he" else spec.name_en)
+        for spec in profile.sections
+        if spec.optional
     }
-    return {
-        by_name[section.name]: [
-            fact_id
+    narrowed = frame.model_copy(deep=True)
+    sections = []
+    for section in narrowed.sections:
+        section.claims = [
+            claim
             for claim in section.claims
-            if claim.claim_id in kept_claim_ids
-            for fact_id in claim.fact_ids
+            if claim.claim_id in kept_claim_ids or claim.style in STRUCTURAL_STYLES
         ]
-        for section in frame.sections
-    }
+        if section.claims or section.name not in optional:
+            sections.append(section)
+    narrowed.sections = sections
+    return _reseal(narrowed)
 
 
 def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) -> None:

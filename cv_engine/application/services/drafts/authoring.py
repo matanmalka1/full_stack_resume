@@ -18,7 +18,7 @@ from ....domain.drafts import (
     add_claim,
     apply_claim_edit,
     draft_claims,
-    frame_choice,
+    keep_frame_claims,
     remove_claim,
     reorder_draft,
 )
@@ -226,10 +226,10 @@ class DraftAuthoringService:
         """`draft_resume`: choose from the frame and word the choice.
 
         The provider keeps the claims it wants and words them; a claim it leaves out
-        is a fact the document does not use. The engine then narrows: the choice is
-        laid out again from the kept claims' facts, which adds back every heading,
-        date and contact and keeps pool order, so each role keeps its title, dates
-        and bullets together. A role left with no bullet is refused. Every line comes
+        is a fact the document does not use. The engine then narrows the frame to the
+        kept claims plus every heading, date and contact, in pool order, so each role
+        keeps its title, dates and bullets together. A heading left with no bullet
+        is refused. Every line comes
         back through `apply_claim_edit`, and wording its facts do not support goes to
         semantic review or is refused as `ProposalRejected`.
         """
@@ -297,14 +297,7 @@ class DraftAuthoringService:
         proposed = answered.proposal.claims
         with evidence_attached(evidence):
             kept = {str(claim.claim_id) for claim in proposed if claim.claim_id is not None}
-            chosen = compose_content(
-                application_id,
-                source.document.analysis_id,
-                frame.job_snapshot_id,
-                analysis,
-                knowledge,
-                chosen=frame_choice(frame, profile, kept),
-            )
+            chosen = keep_frame_claims(frame, profile, kept)
             for section in chosen.sections:
                 empty = dangling_heading(section.claims)
                 if empty is not None:

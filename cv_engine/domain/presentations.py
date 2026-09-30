@@ -163,17 +163,19 @@ class PresentationStore:
                 raise PresentationError(
                     f"presentation {rule.rule_id} uses facts outside {profile.profile}/{section}: {outside}"
                 )
-            # A combined line is emitted where its first fact sits, so the facts
-            # it consumes must be neighbours in what this document actually
-            # says. Combining facts with a third selected fact between them
-            # would reorder the section around that third fact, silently
-            # breaking chronology.
-            positions = [selected_fact_ids.index(fact_id) for fact_id in rule.fact_ids]
-            if positions != list(range(positions[0], positions[0] + len(positions))):
-                raise PresentationError(
-                    f"presentation {rule.rule_id} combines facts that are not adjacent in "
-                    f"{profile.profile}/{section}"
-                )
+        # A combined line is emitted where its first fact sits, so the facts it
+        # consumes must be neighbours in what this document actually says.
+        # Combining facts with a third chosen fact between them would reorder the
+        # section around that third fact, silently breaking chronology, so such a
+        # rule does not apply and its facts are emitted as lines of their own. The
+        # frame `draft_resume` chooses from offers a section's whole pool, where a
+        # rule's facts may well have another fact between them.
+        matching = [
+            rule
+            for rule in matching
+            if (positions := [selected_fact_ids.index(fact_id) for fact_id in rule.fact_ids])
+            == list(range(positions[0], positions[0] + len(positions)))
+        ]
 
         consumed: set[str] = set()
         result: list[PresentedClaim] = []

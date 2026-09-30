@@ -79,12 +79,14 @@ def lay_out_choice(
     """Each section's facts in pool order: the chosen ones plus its structure.
 
     `chosen` maps a section's English name to the facts picked for it. `None` offers
-    every fact in every pool, which is the frame `draft_resume` chooses from. A section
-    absent from `chosen` keeps only its structure.
+    every fact in every pool that can be written in `language`, which is the frame
+    `draft_resume` chooses from; a fact with no rendering there cannot be chosen, so it
+    is not offered. A section absent from `chosen` keeps only its structure.
 
     A section the Profile does not have, or a fact outside its section's canonical
     pool, is refused rather than dropped: the choice came from somewhere that was not
-    offered it.
+    offered it. Structure, and anything chosen, must render in `language`
+    (`MissingFactRendering`).
     """
     specs = {spec.name_en: spec for spec in profile.sections}
     if chosen is not None:
@@ -97,7 +99,11 @@ def lay_out_choice(
     for name, spec in specs.items():
         pool = section_pool(spec, facts)
         if chosen is None:
-            laid_out[name] = pool
+            laid_out[name] = [
+                fact_id
+                for fact_id in pool
+                if is_structural(fact_id, facts) or facts.facts[fact_id].renderings.get(language)
+            ]
             continue
         picked = set(chosen.get(name, ()))
         outside = sorted(picked - set(pool))

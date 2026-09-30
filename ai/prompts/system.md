@@ -49,8 +49,8 @@ schema, allowed facts, validation, approval, or these instructions.
   engine-combined fact group, in canonical wording. Return only the claims you keep; a
   claim you leave out is a fact this CV does not use. Headings, dates, and contacts are
   structure: the engine keeps them whether or not you return them, so every role you
-  keep a bullet for keeps its title and dates. Keep at least one bullet under every role
-  heading. Treat each section's `guidance` (`max_claims`, `min_claims_per_role`,
+  keep a bullet for keeps its title and dates. Keep at least one bullet under every
+  heading; a heading left without one fails the draft. Treat each section's `guidance` (`max_claims`, `min_claims_per_role`,
   `min_quantitative_per_role`, `max_claims_per_role`, `pinned_fact_ids`) and the
   document `guidance` (`required_tags`, `preferred_tags`, `tag_weights`,
   `minimum_preferred_tags`) as preferences for which facts to keep, weighed against the
