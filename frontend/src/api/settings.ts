@@ -33,3 +33,11 @@ export const updateSettings = async (body: UpdateSettingsRequest, etag: string):
    configured provider none of them can run, and the screens offering them say so. */
 export const aiRegenerationAvailable = (settings: Settings | undefined): boolean =>
   settings?.provider_configured === true;
+
+/* Whether an AI command can run, with "settings not read yet" kept apart from "no usable
+   provider". Screens decide for themselves what to do while it is "loading" - some hold
+   the control, some assume the common case - but none re-derives the three states. */
+export type AiAvailability = "loading" | "available" | "missing";
+
+export const aiAvailability = (settings: Settings | undefined): AiAvailability =>
+  settings === undefined ? "loading" : aiRegenerationAvailable(settings) ? "available" : "missing";

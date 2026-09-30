@@ -5,7 +5,7 @@ import { applicationDetailQueryKey } from "@/api/applications";
 import type { DraftClaim } from "@/api/contracts";
 import { documentQueryKey, documentQueryOptions, regenerateClaim, regenerateSection } from "@/api/documents";
 import { type QueuedOperation, operationQueryKey } from "@/api/operations";
-import { aiRegenerationAvailable } from "@/api/settings";
+import { aiAvailability } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import type { DraftClaimActions, EditableDocument } from "../model/drafts.types";
 import { removability } from "../model/draftClaims";
@@ -74,7 +74,7 @@ export const useDraftEditing = ({
 }: UseDraftEditingOptions): DraftEditing => {
   const queryClient = useQueryClient();
   const { isPending: settingsPending, settings } = useSettings();
-  const regenerationAvailable = aiRegenerationAvailable(settings);
+  const regenerationAvailable = aiAvailability(settings) === "available";
 
   /* The document is keyed by its Application; with no content there is nothing to save. */
   const editingKey = draft === undefined ? null : applicationId;

@@ -4,8 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
-import { aiRegenerationAvailable } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
+import { useAiAvailability } from "@/api/useSettings";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
@@ -118,11 +117,11 @@ export const ApplicationPage = () => {
      cause the reader can fix there. A refusal with no usable provider is not one of
      them: the fix is in Settings, and an open posting with an edit action pointed the
      reader at the wrong place. */
-  const { settings } = useSettings();
+  const ai = useAiAvailability();
   const postingRepairRelevant =
     viewState === "analysis_failed" &&
     watched?.failure_code !== "PROVIDER_NOT_CONFIGURED" &&
-    !(watched?.failure_code === "PROVIDER_REFUSED" && settings !== undefined && !aiRegenerationAvailable(settings));
+    !(watched?.failure_code === "PROVIDER_REFUSED" && ai === "missing");
   const operationLive = isOperationLive({
     awaitingRecord,
     continuation,

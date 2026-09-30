@@ -7,11 +7,8 @@ import type { ApplicationListItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
-import {
-  attentionHubItems,
-  duplicatedApplicationIdentityIds,
-  formatApplicationDate,
-} from "../model/applicationListPresentation";
+import { DuplicateIdentityHint } from "./ApplicationIdentity";
+import { attentionHubItems, duplicatedApplicationIdentityIds } from "../model/applicationListPresentation";
 
 interface ApplicationAttentionSummaryProps {
   /* Whether the board has any Application at all. An empty database already says so in
@@ -113,10 +110,7 @@ export const ApplicationAttentionSummary = ({
                   {item.application.company} · {item.subtitle}
                 </p>
                 {ambiguous.has(item.application.id) ? (
-                  <p className="line-clamp-2 text-support font-medium text-cv-text">
-                    קיימת עוד מועמדות לאותה חברה ולאותו תפקיד · נפתחה ב־
-                    {formatApplicationDate(item.application.created_at)}
-                  </p>
+                  <DuplicateIdentityHint createdAt={item.application.created_at} />
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">

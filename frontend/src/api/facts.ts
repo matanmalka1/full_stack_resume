@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
 import { type ApiPath, apiRequest } from "./client";
 import type {
@@ -22,8 +22,20 @@ const factPath = (factId: string): ApiPath => `/api/v1/facts/${encodeURIComponen
 
 export const factsQueryPrefix = ["facts"] as const;
 export const factsQueryKey = (status?: FactStatus) => [...factsQueryPrefix, status ?? "all"] as const;
-export const factDetailQueryKey = (factId: string) => ["fact", factId] as const;
-export const factHistoryQueryKey = ["fact-history"] as const;
+const factDetailQueryKey = (factId: string) => ["fact", factId] as const;
+const factHistoryQueryKey = ["fact-history"] as const;
+
+/* Every write to the knowledge store moves the same three reads: the pool, the lifecycle
+   log, and - where the write named one fact - that fact's detail. Kept here, beside the
+   keys, because a write that forgets one of them leaves a stale status on screen next to
+   the button that just changed it, and fact writes are sent from more than one feature. */
+export const invalidateFactViews = (queryClient: QueryClient, factId?: string | null): void => {
+  void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
+  void queryClient.invalidateQueries({ queryKey: factHistoryQueryKey });
+  if (factId != null) {
+    void queryClient.invalidateQueries({ queryKey: factDetailQueryKey(factId) });
+  }
+};
 const factAttachmentTargetsQueryKey = (factId?: string) =>
   [...factsQueryPrefix, "attachment-targets", factId ?? "all"] as const;
 

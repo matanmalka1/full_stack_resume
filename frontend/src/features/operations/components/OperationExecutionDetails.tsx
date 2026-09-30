@@ -1,15 +1,10 @@
 import type { Operation } from "@/api/contracts";
+import { reasoningEffortLabels } from "@/features/settings";
 import { cx } from "@/ui/cx";
 import { Disclosure } from "@/ui/Disclosure";
 import { LtrText } from "@/ui/LtrText";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { formatUsd } from "@/utils/formatUsd";
-
-const effortLabels: Record<NonNullable<Operation["reasoning_effort"]>, string> = {
-  low: "נמוך",
-  medium: "בינוני",
-  high: "גבוה",
-};
 
 const duration = (start: string, end: string | number): string | null => {
   const milliseconds = (typeof end === "number" ? end : Date.parse(end)) - Date.parse(start);
@@ -48,7 +43,7 @@ const useRowGroups = (operation: Operation): [string, Row[]][] => {
       [
         ["ספק", operation.provider],
         ["מודל", operation.model],
-        ["מאמץ חשיבה", operation.reasoning_effort == null ? null : effortLabels[operation.reasoning_effort]],
+        ["מאמץ חשיבה", operation.reasoning_effort == null ? null : reasoningEffortLabels[operation.reasoning_effort]],
         ["הרצה", operation.retry_of_operation_id == null ? null : "ניסיון חוזר"],
       ],
     ],

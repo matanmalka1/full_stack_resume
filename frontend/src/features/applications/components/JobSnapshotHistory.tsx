@@ -6,6 +6,7 @@ import type { JobSnapshotHistory as History } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button } from "@/ui/Button";
 import { Disclosure, DisclosureSummary } from "@/ui/Disclosure";
+import { LiveRegion } from "@/ui/LiveRegion";
 import { Select } from "@/ui/Select";
 import { cx } from "@/ui/cx";
 import { toneBackgroundClasses, toneTextClasses } from "@/ui/tone";
@@ -144,7 +145,11 @@ export const JobSnapshotHistory = ({
       {open && (
         <>
           <p className="mt-2 text-support text-cv-text-muted">הצגת ההיסטוריה אינה משנה את נוסח המשרה הפעיל.</p>
-          {history.isPending && <output className="block">טוען נוסחים שמורים…</output>}
+          {history.isPending && (
+            <LiveRegion className="mt-2 block text-support text-cv-text-muted" visuallyHidden={false}>
+              טוען נוסחים שמורים…
+            </LiveRegion>
+          )}
           {history.isError && (
             <ErrorCallout
               action={

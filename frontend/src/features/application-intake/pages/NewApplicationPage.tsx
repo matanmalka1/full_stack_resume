@@ -2,8 +2,7 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { aiRegenerationAvailable } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
+import { useAiAvailability } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { isJobTextWithinBudget } from "@/features/applications";
 import { WizardStepShell } from "@/features/preparation";
@@ -32,8 +31,7 @@ export const NewApplicationPage = () => {
   /* Analysis is AI-only. Until the settings read settles, creation requests it as before;
      once Settings say there is no provider, the bar says so and creation does not queue a
      run the server would only refuse. */
-  const { settings } = useSettings();
-  const analysisUnavailable = settings !== undefined && !aiRegenerationAvailable(settings);
+  const analysisUnavailable = useAiAvailability() === "missing";
 
   const submission = useApplicationIntakeSubmission({
     analysisAvailable: !analysisUnavailable,

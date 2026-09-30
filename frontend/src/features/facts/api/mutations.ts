@@ -12,26 +12,15 @@ import {
   captureClaimFact,
   createPendingFact,
   deleteFact,
-  factDetailQueryKey,
-  factHistoryQueryKey,
-  factsQueryPrefix,
   confirmFact,
+  invalidateFactViews,
 } from "@/api/facts";
 
-/* Every write below moves the permanent knowledge store, so all of them invalidate the
-   same three reads: the pool, the lifecycle log, and - where the write named one fact -
-   that fact's detail. Kept in one place because a write that forgets one of them leaves
-   a stale status on screen next to the button that just changed it. */
+/* Every write below moves the permanent knowledge store (`invalidateFactViews`). */
 const useFactCacheRefresh = () => {
   const queryClient = useQueryClient();
 
-  return (factId?: string) => {
-    void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
-    void queryClient.invalidateQueries({ queryKey: factHistoryQueryKey });
-    if (factId !== undefined) {
-      void queryClient.invalidateQueries({ queryKey: factDetailQueryKey(factId) });
-    }
-  };
+  return (factId?: string) => invalidateFactViews(queryClient, factId);
 };
 
 export const useCreatePendingFact = (

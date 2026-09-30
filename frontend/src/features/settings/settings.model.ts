@@ -13,6 +13,14 @@ export const editableSettings = (settings: Settings): UpdateSettingsRequest => (
   ui_theme: settings.ui_theme,
 });
 
+/* The three reasoning efforts by name: the setting that picks the default, and every run
+   report that says which one a run used. */
+export const reasoningEffortLabels: Record<NonNullable<Settings["default_reasoning_effort"]>, string> = {
+  low: "נמוך",
+  medium: "בינוני",
+  high: "גבוה",
+};
+
 export const settingsFieldLabels: Record<keyof UpdateSettingsRequest, string> = {
   auto_generate_when_review_not_required: "יצירת טיוטה אוטומטית",
   default_ai_model: "מודל AI",
@@ -33,9 +41,7 @@ export const settingValueLabel = (value: UpdateSettingsRequest[keyof UpdateSetti
     compact: "צפופה",
     normal: "רגיל",
     large: "גדול",
-    low: "נמוך",
-    medium: "בינוני",
-    high: "גבוה",
+    ...reasoningEffortLabels,
   };
   return labels[value] ?? value;
 };

@@ -3,6 +3,7 @@ import { useDeferredValue, useState } from "react";
 
 import { applicationListQueryOptions } from "@/api/applications";
 import { factHistoryQueryOptions, factsQueryOptions } from "@/api/facts";
+import { factSearchText } from "@/features/facts";
 import type { ApplicationListItem, Fact, FactHistory } from "@/api/contracts";
 
 const RESULT_LIMIT = 8;
@@ -49,12 +50,7 @@ export const useApplicationSearch = (enabled: boolean): ApplicationSearch => {
   const normalized = deferred.toLocaleLowerCase();
   const matchingFacts = (facts.data?.items ?? [])
     .map(({ fact }) => fact)
-    .filter((fact) =>
-      [fact.meaning, ...Object.values(fact.renderings), fact.provenance, fact.source, ...fact.tags]
-        .join(" ")
-        .toLocaleLowerCase()
-        .includes(normalized),
-    );
+    .filter((fact) => factSearchText(fact).includes(normalized));
   const visibleFactIds = new Set((facts.data?.items ?? []).map(({ fact }) => fact.fact_id));
   const matchingHistory = (history.data?.events ?? []).filter(
     (event) =>

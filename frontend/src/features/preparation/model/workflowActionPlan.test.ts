@@ -72,6 +72,7 @@ describe("recommended action destinations", () => {
     );
 
     expect(plan.draftScreen).toEqual({
+      action: "render",
       emphasized: true,
       href: "/applications/app-1/draft",
       label: "יצירת קובץ קורות החיים",
@@ -92,6 +93,7 @@ describe("recommended action destinations", () => {
 
     expect(plan.ready).toEqual({ emphasized: true, href: "/applications/app-1/ready" });
     expect(plan.draftScreen).toEqual({
+      action: "edit",
       emphasized: false,
       href: "/applications/app-1/draft",
       label: "חזרה לעריכת הטיוטה",

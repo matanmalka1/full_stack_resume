@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { aiRegenerationAvailable } from "@/api/settings";
+import { aiAvailability } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
 import { routePaths } from "@/app/routePaths";
 import { buttonClasses } from "@/ui/Button";
@@ -85,7 +85,8 @@ export const OperationReport = ({
   const live = !terminal || continuation !== undefined;
   const progressLabel = operationProgressLabel(operation);
   const { settings } = useSettings();
-  const providerUsable = settings !== undefined && aiRegenerationAvailable(settings);
+  const ai = aiAvailability(settings);
+  const providerUsable = ai === "available";
   /* A run that needed a provider and had none: the server's own code, or - for a run
      recorded before that code existed - a refusal while Settings still show no usable
      provider. Settings is the fix while it is still true, and a retry would fail the same
