@@ -186,8 +186,8 @@ path resolves inside the root.
 
 ## 5. CandidateContext
 
-*Designed, not built (§18):* each user has one CandidateContext, stored per user in
-PostgreSQL and referencing that user's facts. Application rows then carry `user_id`, not
+*Designed, not built (§18):* each user has one CandidateContext, a row in
+`candidate_contexts` referencing that user's facts (§18.2). Application rows then carry `user_id`, not
 a candidate ID: the user is the candidate.
 
 One CandidateContext is loaded from Knowledge. It references canonical name and contact
@@ -411,8 +411,9 @@ state-and-use-cases.md §11 and §19. This section covers execution.
 - two global AI slots (every AI task, and `analyze_job`/`create_draft` unless the
   provider is `deterministic`)
 
-*Designed, not built (§18):* one running AI Operation per user, so one user cannot hold
-both global AI slots; the rest of that user's AI work queues.
+*Designed, not built (§18.3):* a fourth resource, one AI slot per user (key: the owning
+user's ID), so one user cannot hold both global AI slots; the rest of that user's AI
+work queues.
 
 Locks are resource-specific: a render for one Application does not block analysis for
 another. Contention is queueing, not failure; a waiting Operation stays `queued` with an
@@ -547,7 +548,7 @@ never merges silently.
 
 ## 14. Local security
 
-*Designed, not built (§18):* the security model below is replaced by §18.4. Origin
+*Designed, not built (§18):* the security model below is replaced by §18.5. Origin
 validation on every mutation and the explicit CORS list stay; loopback-only binding and
 "no authentication and no CSRF token" do not.
 
@@ -629,28 +630,77 @@ The product version does not substitute for any of them.
 state-and-use-cases.md §23. Why, the migration of an existing installation, and the
 delivery order: `../decisions/multi-user-accounts.md`.
 
-### 18.1 Tables
+### 18.1 Identity tables
 
 Mutable (they join the mutable exception set, §6.1): `users`, `user_sessions`,
-`rate_limit_buckets`, `user_settings`, `candidate_contexts`, `profile_bindings`, and
-`facts` (current status and content). Immutable: `auth_events`.
+`rate_limit_buckets`. Immutable: `auth_events`.
 
 - `users`: `id`, `email` (normalized — NFC, trimmed, lowercased, nothing else —
-  `UNIQUE`), `password_hash` (NULL only after deletion), `is_active`, `created_at`,
+  `UNIQUE`), `password_hash` (NULL only after deactivation), `is_active`, `created_at`,
   `updated_at`, `deactivated_at`.
 - `user_sessions`: `id`, `user_id`, `token_hash` (`UNIQUE`), `created_at`, `expires_at`,
   `revoked_at`.
 - `auth_events`: `id`, `user_id` (NULL for a failed sign-in with no matching account),
-  `event_type`, `occurred_at`. Nothing else: no password, token, email, or IP.
-- `facts`: `id` (UUID), `user_id`, `fact_id` (the semantic or UUID string documents cite,
-  `UNIQUE (user_id, fact_id)`), status and content. `fact_events` gains `user_id`.
+  `event_type` (`login`, `failed_login`, `logout`, `password_changed`,
+  `password_set`, `account_deactivated`), `occurred_at`. Nothing else: no password,
+  token, email, or IP. It is append-only and separate from `audit_records`, which
+  stays Application-scoped: an account event is not an Application event.
+- `user_settings`: `user_id` is the primary key and a foreign key to `users`; the
+  columns are today's `app_settings` columns without `singleton_id`. It replaces
+  `app_settings`.
 - `applications` gains `user_id NOT NULL` with `(user_id, created_at)`,
   `(user_id, current_status)`, and `(user_id, updated_at)` indexes.
 
 Only aggregate roots carry `user_id`. Every other table reaches its user through its
 Application, and nothing duplicates that owner.
 
-### 18.2 Ownership in the application layer
+### 18.2 Knowledge schema
+
+Knowledge is three per-user tables and the existing event table. Policy (Profile
+templates, `config/`, `ai/`, `rendering/`) stays in files.
+
+- **`facts`** (mutable). One row per fact, current state:
+  `id` (UUID, internal), `user_id`, `fact_id` (the stable ID documents cite — an existing
+  semantic ID or a new UUIDv4 — `UNIQUE (user_id, fact_id)`), `status` (`pending` |
+  `canonical` | `deleted`), `source` (the grouping that was a file: `common`,
+  `development`, `sales`, `situational_skills`, or `user` for facts created in the Web),
+  `ordinal` (order within `source`, kept from the file on import, appended for new
+  facts), content — `meaning`, `renderings` (`en` required, `he` optional),
+  `tags`, `provenance`, `effective_dates`, `resume_style`, `link_target` — and lifecycle
+  — `replaces` (a `fact_id` of the same user, enforced by a composite foreign key),
+  `confirmed_at`, `created_at`, `updated_at`.
+  Content columns never change once written: a correction is a new fact that
+  `replaces` the old one (product-spec.md §17). A guard trigger permits only `status`,
+  `confirmed_at`, and `updated_at` to change, plus erasing content during
+  `deactivate_account`.
+- **`fact_events`** (immutable, existing): gains `user_id`, `NOT NULL` for every new
+  row. It stays the lifecycle history, with the fact as it was in `fact_json`.
+- **`candidate_contexts`** (mutable): `user_id` is the primary key; `name_fact_id`,
+  `contact_fact_ids`, `track_contact_fact_ids`, `link_schemes`, `filename_language`,
+  `locale`, `timezone`, `context_version`, `updated_at` — exactly the fields of
+  `base/candidate.json` today. It is a table and not a projection over facts because
+  link schemes, locale, and filename language are not facts. Every referenced
+  `fact_id` must be a canonical fact of the same user when written and is checked again
+  when a document renders. It is written only by `import-knowledge`; there is no Web
+  editing.
+- **`profile_bindings`** (mutable): primary key `(user_id, profile_id)`; one row per
+  Profile template the user has, holding the candidate-specific part as validated
+  JSON — `sections` (section key → ordered fact references, each with `pinned`),
+  `safe_headlines`, `omitted_roles` — and `binding_version`. Written by
+  `import-knowledge` and by `attach_fact`/`confirm_and_use_fact`; the template supplies
+  everything else.
+
+**Versioning.** Each fact mutation increments the user's `fact_store_version`, kept on
+`candidate_contexts`, in the same transaction. It replaces today's per-file
+`source_version` as the coarse version a Submission's content records.
+`facts_hash` is still computed on read from the facts a document depends on.
+
+**How an Application references facts.** By `fact_id` only, inside the document's
+selection and content and inside Submission content — never by the internal `id`. A
+`fact_id` is always resolved as `(application.user_id, fact_id)`, so the same string in
+two users' data names two different facts and can never cross.
+
+### 18.3 Ownership in the application layer
 
 The API resolves the session to an `Actor` (the user ID) and passes it to every service
 call; no service reads identity from anywhere else. A service resolves the root first
@@ -661,18 +711,33 @@ application = applications.get_for_user(tx, application_id, actor.user_id)
 analysis = analyses.get_for_application(tx, analysis_id, application.id)
 ```
 
-A child lookup is constrained by the Application already resolved (`WHERE id = :child
-AND application_id = :app`), never by its own ID alone. A record addressed by its own ID
-at the edge — an Operation, an artifact version, a fact — joins to its root in the same
-query. A miss on ownership is the same `UnknownRecord` as a miss on existence. Uniqueness
-that clients can name is scoped the same way: idempotency keys by Application, `fact_id`
-and duplicate detection by user.
+- A child lookup is constrained by the Application already resolved (`WHERE id =
+  :child AND application_id = :app`), never by its own ID alone. A record addressed by
+  its own ID at the edge — an Operation, an artifact version, a fact — joins to its root
+  in the same query. A miss on ownership is the same `UnknownRecord` as a miss on
+  existence.
+- **No unscoped reads of user-owned data.** A persistence port has no public method
+  that reads or writes a user-owned root (`applications`, `facts`, `candidate_contexts`,
+  `profile_bindings`, `user_settings`, `user_sessions`) by ID without `user_id`, and none
+  that reads a child by its ID without the owning `application_id`. The worker's owner
+  resolution and the operator CLI are the deliberate exceptions.
+- **Idempotency.** Every Operation belongs to an Application, so the key is scoped
+  there: `UNIQUE (application_id, operation_type, idempotency_key)` on `operations`
+  replaces `UNIQUE (operation_type, idempotency_key)`. There is no separate receipts
+  table (dropped in revision `0003`).
+- **Resource leases.** `application_mutation` is keyed by the Application ID, which is
+  already owned. The render slot and the two AI slots are global on purpose: they
+  bound machine and provider load, not access, and hold no data. The per-user AI slot
+  (§10) is keyed by the owner's user ID, derived as below.
+- **The worker never trusts the payload for identity.** An Operation's owner is
+  `operations.application_id → applications.user_id`, read from the database when the
+  Operation is claimed. The payload carries no `user_id`; a payload that names one is
+  refused when the Operation is created, like a secret-named key. The worker runs the
+  handler with that owner's `Actor`, reads Knowledge only for that user, and every
+  source the payload names is resolved through that owner's Application. It never
+  queries across users and derives ownership afterwards.
 
-The worker loads an Operation, resolves its Application's owner, and runs the handler
-with that `Actor`; handlers read Knowledge only for that user. It never queries across
-users and derives ownership afterwards.
-
-### 18.3 Sessions and passwords
+### 18.4 Sessions and passwords
 
 - Session token: 32 random bytes, sent only in the `__Host-cv_session` cookie
   (`HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain`), stored as SHA-256.
@@ -683,7 +748,7 @@ users and derives ownership afterwards.
   characters, no composition rules. When the email is unknown, a fixed dummy hash is
   verified anyway, so timing does not reveal it.
 
-### 18.4 Transport, rate limit, and quota
+### 18.5 Transport, rate limit, and quota
 
 Supersedes §14 once built.
 
@@ -695,8 +760,6 @@ Supersedes §14 once built.
   cookies that is the CSRF defence; there is no CSRF token.
 - HSTS when the public origin is HTTPS. The app shell sends `frame-ancestors 'none'`;
   previews keep their own CSP and allow framing only by the app's own origin.
-- The PDF renderer's page blocks every network request outside its own attempt
-  directory.
 - Sign-in rate limit, in `rate_limit_buckets` (PostgreSQL, because two processes share
   it and there is no Redis, §2): a fixed 15-minute window, 5 failures per email and 20
   attempts per client IP. The IP comes from a forwarding header only when
@@ -707,15 +770,33 @@ Supersedes §14 once built.
   (`CV_AI_DAILY_OPERATION_LIMIT`). The check runs in the write scope that queues the
   Operation, under a lock on the user row, so concurrent requests cannot both pass.
 
-### 18.5 Operator CLI
+### 18.6 Renderer isolation
+
+A rendered CV carries one user's data and is produced from text that includes job
+postings, so the browser that renders it gets nothing else:
+
+- The page loads exactly one URL, its own `file://` HTML in the attempt directory
+  (§6.2). Every other request — any `http(s)`, any other file, any `data:` or
+  `blob:` fetch — is aborted by a route handler before it leaves the browser.
+- Templates reference no external asset: styles are inline and no font, image, or
+  script is fetched. A template that needs an asset ships it inside `rendering/` and
+  the renderer copies it into the attempt directory.
+- The HTML carries `script-src 'none'` in its CSP. The only script that runs is the
+  renderer's own geometry measurement through Playwright, not page content.
+- The page never navigates: links in the CV are text for the PDF, not destinations,
+  and a navigation after the first load is aborted.
+- Each render gets a fresh browser context, closed after the attempt, so no state
+  crosses attempts or users.
+
+### 18.7 Operator CLI
 
 `python -m cv_engine.admin` runs as the operator and has no HTTP surface. It calls the
 same application layer.
 
-- `create-user --email` prompts for the password. It refuses a second user until
-  per-user isolation has shipped (`../decisions/multi-user-accounts.md` §5).
+- `create-user --email` prompts for the password. It refuses a second user until the
+  isolation steps have shipped (`../decisions/multi-user-accounts.md` §5).
 - `set-password --email` prompts for a new password and revokes every session.
 - `import-knowledge --user --from <dir>` reads facts, CandidateContext, and Profile
-  bindings in the `base/` format into one user's Knowledge in one transaction, and
-  refuses when that user already has facts.
+  bindings in the `base/` format into one user's Knowledge (§18.2) in one transaction,
+  and refuses when that user already has facts.
 - `reconcile` and `inspect-orphans` (state-and-use-cases.md §19b).

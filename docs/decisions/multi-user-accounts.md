@@ -25,7 +25,8 @@ isolation.
 ## 2. Decisions
 
 1. **One user is one candidate.** No candidate selector, no second candidate per user.
-   `CandidateContext` becomes per-user state instead of a file.
+   `CandidateContext` moves from `base/candidate.json` to one `candidate_contexts` row
+   per user, with the same fields (architecture §18.2).
 2. **Authentication is always on.** There is one runtime mode. Local development creates
    a user through the CLI and logs in. No setting disables authentication, because a
    switch like that is where a production hole comes from.
@@ -59,9 +60,9 @@ isolation.
    `omitted_roles`) move to a per-user binding in PostgreSQL. A new user's binding is
    derived from the tags on their own facts, so a new user can reach a CV from facts
    alone. Web editing of Profiles stays a non-goal.
-9. **Account deletion is deactivation plus anonymization, never a hard delete.**
-   Immutable triggers are not bypassed for a user lifecycle. Mutable PII is erased,
-   sessions are revoked, and immutable records (Submissions, JobSnapshots,
+9. **An account ends by deactivation, never deletion.** The contract is deactivate,
+   revoke every session, and anonymize the PII in a named list of mutable fields
+   (state-and-use-cases §23). Immutable triggers are not bypassed for a user lifecycle, and immutable records (Submissions, JobSnapshots,
    provider evidence, audit, fact events) stay, owned by a user row that no longer
    identifies anyone. A hard delete is only ever an explicit, separately approved
    operator procedure, never part of the API.
@@ -129,7 +130,8 @@ installation:
    transition*: the guard allows exactly `user_id: NULL → value`, once, with no other
    column changing. That is the same pattern that already guards terminal Operation rows
    (architecture §6.1), not a trigger bypass.
-6. `app_settings` (one row) becomes that user's settings row. Existing
+6. `app_settings` (one row) becomes that user's `user_settings` row, keyed by
+   `user_id`. Existing
    `knowledge_mutation_journal` rows stay read-only history. A `PREPARED` or
    `QUARANTINED` entry refuses the upgrade until an operator resolves it on the old
    version.
@@ -141,27 +143,41 @@ input only. They are no longer read at runtime.
 
 ## 5. Delivery order
 
-Each step is its own pull request, with the gates `CLAUDE.md` assigns to it. The order
-puts what one hosted user needs first and what a second user needs before that user
-exists.
+Each step is its own pull request and brings the focused tests for what it changes, as
+`CLAUDE.md` requires. Data model and isolation come before any sign-in surface: a
+system that can identify a user but does not yet isolate their data is the state to
+avoid.
 
-1. **Spec migration** (this change). Documentation only.
-2. **Sign-in and hosting:** `users`, `user_sessions`, `auth_events`, sign-in rate limit;
-   `login`, `logout`, `logout-all`, `me`, `change-password`; the `create-user` and
-   `set-password` CLI; the sign-in screen, the auth state, and the account screen; the
-   public origin, Host allowlist, HSTS, and network-blocked rendering. After this step
-   the product is safe to host for its one user. Every route requires a session.
-3. **Knowledge to PostgreSQL**, still one user: the fact tables, `import-knowledge`,
-   retiring the journal, the Profile template/binding split. The riskiest step for fact
-   semantics.
-4. **Isolation:** `applications.user_id`, per-user settings, ownership-scoped resolution
-   in every service and in the worker, per-application idempotency, the derived
-   cross-user guards, the AI quota, account deletion, and clearing per-user browser
-   state on sign-out. Only after this step does `create-user` accept a second user.
+1. **Specs and decision records** (this change). Documentation only.
+2. **Users, sessions, bootstrap CLI:** `users`, `user_sessions`, `auth_events`;
+   `create-user` and `set-password`. No route yet.
+3. **Per-user Knowledge:** `facts`, `candidate_contexts`, `profile_bindings`
+   (architecture §18.2); `import-knowledge`; the journal retired; the Profile
+   template/binding split. The riskiest step for fact semantics.
+4. **Ownership on Application and settings:** `applications.user_id`, `user_settings`,
+   the existing installation assigned to its one user (§4).
+5. **Repository and query isolation:** every service resolves through the `Actor`
+   (architecture §18.3); every list, count, and duplicate check scoped.
+6. **Idempotency, leases, and worker isolation:** the per-Application idempotency key,
+   the per-user AI slot, owner derived from the Operation's Application.
+7. **Auth API and frontend:** `login`, `logout`, `logout-all`, `me`, `change-password`,
+   `deactivate_account`; the sign-in and account screens, the auth state, clearing
+   per-user browser state. From here every route requires a session.
+8. **Email verification and reset — not scheduled.** Decision 12 leaves them out while
+   users are created by the operator. They return only with a decision to open sign-up.
+9. **Quotas and rate limiting:** the sign-in limit and the per-user AI quota.
+10. **Renderer hardening** (architecture §18.6).
+11. **Derived isolation gates made complete and blocking:** the cross-user route
+    matrix, the schema ownership guard, and the persistence-port guard over the whole
+    surface, in CI. Steps 5 and 6 already introduce them for what they touch; this step
+    closes their exception lists. Only after it does `create-user` accept a second
+    user.
+12. **Hosted deployment:** public origin, Host allowlist, HSTS, and the hosting
+    decisions in §6.
 
 ## 6. Open items
 
-1. **PII retained in immutable records after account deletion.** JobSnapshots,
+1. **PII retained in immutable records after deactivation.** JobSnapshots,
    Submissions, provider evidence, and `fact_events.fact_json` keep the candidate's name
    and contacts. Anonymization makes them unreachable and unlinked to an identity; it
    does not erase them. Whether that is acceptable matters once there is a second user;
@@ -169,4 +185,4 @@ exists.
 2. **Numeric limits.** The defaults in architecture §18 are starting values, not
    measured ones.
 3. **Hosting.** Where it runs, who terminates TLS, and PostgreSQL and bucket backup are
-   the operator's choice and are not specified here; step 2 needs them decided.
+   the operator's choice and are not specified here; step 12 needs them decided.

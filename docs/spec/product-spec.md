@@ -2,9 +2,8 @@
 
 Status: **Binding.** Describes the product as implemented (2026-09-29), including the
 single-document model ([`../decisions/single-document-model.md`](../decisions/single-document-model.md)).
-What is designed but not built is named as such, here or in §20. User accounts and
-per-user isolation (§22, [`../decisions/multi-user-accounts.md`](../decisions/multi-user-accounts.md))
-are approved and not built; every section they change says so.
+Anything designed but not built — today, accounts and isolation (§22) — is marked
+*designed, not built* where it appears, and listed in §20.
 
 Section numbers are cited from code, tests, and other documents; keep them stable.
 
@@ -809,8 +808,8 @@ Application and reads only that user's Knowledge.
 line with an email and a password, and imports that user's initial facts. The email is
 stored normalized and is unique. Passwords are stored only as a memory-hard hash; no
 password or session secret is stored or logged in raw form. A user can sign in, sign
-out, sign out of every device, change the password (with the current one), and delete
-the account (with the current password). Changing the password ends every other
+out, sign out of every device, change the password (with the current one), and
+deactivate the account (with the current password). Changing the password ends every other
 session. A forgotten password is reset by the operator, which also ends every session.
 
 **Sessions** expire and can be revoked, and are carried only in an `HttpOnly`,
@@ -823,14 +822,15 @@ reason, and is rate limited with a temporary throttle and no permanent lockout. 
 Operations are subject to a per-user quota, because the provider key and its cost are
 the operator's.
 
-**Account deletion** deactivates and anonymizes; it never deletes a row. It revokes every
-session, erases the account's email and password, and erases mutable personal content.
-Immutable records — Submissions, JobSnapshots, provider evidence, audit and fact events
+**Account deactivation** is the only way an account ends: deactivate, revoke every
+session, and anonymize the personal data held in mutable fields — the exact list is
+state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, JobSnapshots, provider evidence, audit and fact events
 — stay, owned by a user row that no longer identifies anyone and that nobody can sign
 in to. A hard delete is not a product capability.
 
-**Audit.** Sign-in, failed sign-in, sign-out, password change, and account deletion are
-recorded as immutable account events, never with a password or a session secret.
+**Audit.** Sign-in, failed sign-in, sign-out, password change and reset, and account
+deactivation are recorded as append-only account events, separate from Application
+audit, never with a password or a session secret.
 
 **Unchanged.** Every rule in §1–§21 still holds inside one user's data: factual safety,
 approval boundaries, immutability, the provider-free path from an existing analysis to

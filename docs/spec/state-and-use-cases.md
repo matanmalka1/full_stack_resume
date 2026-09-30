@@ -856,7 +856,8 @@ Every asynchronous command accepts an optional `Idempotency-Key`; the boundary
 generates one when absent. Keys are scoped per Operation type. Reusing a key with the
 same payload returns the existing Operation; with a different payload it is
 `IDEMPOTENCY_KEY_REUSED` (409). *Designed, not built (§23):* keys are also scoped per
-Application, so a key another user already used is a new key, never their Operation.
+Application (architecture.md §18.3), so a key another user already used is a new key,
+never their Operation.
 
 ## 19a. Settings commands
 
@@ -1049,19 +1050,32 @@ and changes nothing; a new password outside the policy is `422 PASSWORD_POLICY_F
 naming only the rule. On success revokes every other session, rotates the current one,
 and records `password_changed`.
 
-### `delete_account(current_password)`
+### `deactivate_account(current_password)`
 
-`DELETE /auth/account`. Re-authenticates, then in one transaction: deactivates the user,
-erases the email (replaced by a non-deliverable pseudonym) and the password hash,
-revokes every session, erases mutable personal content — Application notes and next
-actions, the CVDocument content, and the fact rows' content — and records
-`account_deleted`. Immutable records stay (product-spec.md §22). `204`; the cookie is
-cleared. There is no undo.
+`POST /auth/account/deactivate`. There is no account deletion; this is the whole
+contract. It re-authenticates (`401 REAUTHENTICATION_FAILED` changes nothing), then in
+one transaction:
+
+1. **Deactivate:** `is_active = false`, `deactivated_at` set; sign-in is refused from
+   now on with the ordinary `INVALID_CREDENTIALS`.
+2. **Revoke sessions:** every session of the user, the current one included.
+3. **Anonymize permitted PII** — only mutable fields, each named here:
+   `users.email` becomes a non-deliverable pseudonym derived from the user ID;
+   `users.password_hash` becomes NULL; every Application's `notes`, `next_action`, and
+   `next_action_date` become NULL; every CVDocument's `content` becomes empty; every
+   fact's content columns are erased (status kept); the `candidate_contexts` and
+   `profile_bindings` rows and the user's `user_settings` row are deleted.
+4. **Record** `account_deactivated` in `auth_events`.
+
+Nothing immutable is touched: Submissions, JobSnapshots, provider evidence,
+`fact_events`, recruitment and audit events, and terminal Operations stay as written,
+owned by the now-anonymous user (product-spec.md §22). `204`; the cookie is cleared.
+There is no reactivation.
 
 ### Operator commands
 
 `create-user`, `set-password`, and `import-knowledge` are operator CLI commands
-(architecture.md §18.5), not routes. `set-password` revokes every session of the user.
+(architecture.md §18.7), not routes. `set-password` revokes every session of the user.
 
 ### Codes
 

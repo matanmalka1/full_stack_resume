@@ -4,16 +4,17 @@ How coding agents work in this repository. This is the whole rule set.
 
 ## What this system is
 
-A single-candidate CV tailoring tool. One user, no auth, one candidate. The database
-starts empty. `base/` and `profiles/` hold the live source facts.
+A CV tailoring tool.
 
-That is the implementation today. The approved target is a hosted, multi-user service
-where each user is one candidate and reaches only their own data
-(`docs/decisions/multi-user-accounts.md`, product-spec §22). Spec sections marked
-*designed, not built* describe that target. Work toward it follows the decision's
-delivery order; do not build part of it ahead of its step. Once it ships, cross-user
-isolation joins immutable records as the place where care belongs: a record reachable
-by another user is a data leak, not a re-run.
+- **Current implementation:** single candidate, no auth. The database starts empty.
+  `base/` and `profiles/` hold the live source facts.
+- **Approved target:** authenticated multi-user, one candidate per user, each reaching
+  only their own data (`docs/decisions/multi-user-accounts.md`, product-spec §22).
+
+Spec sections marked *designed, not built* describe that target. Work toward it follows
+the decision's delivery order; do not build part of it ahead of its step. Once it ships,
+cross-user isolation joins immutable records as the place where care belongs: a record
+reachable by another user is a data leak, not a re-run.
 
 Almost everything the engine produces is regenerable in seconds — drafts, selections,
 renders, projections. Getting one wrong costs a re-run. Calibrate effort to that.
