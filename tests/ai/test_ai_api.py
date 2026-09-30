@@ -50,6 +50,7 @@ def _drafted(harness, company: str) -> str:
     application_id = _application(harness.services, company)
     analyze_offline(harness, application_id, ACCOUNT_MANAGER_JOB)
     token = _document(harness, application_id)["document_hash"]
+    harness.fake_openai.script_draft()
     response = _post(
         harness,
         f"/applications/{application_id}/document/draft",
@@ -121,14 +122,14 @@ def test_the_selection_proposal_is_queued_and_the_selection_change_is_not(
     assert _document(ai_api_worker, application_id)["selection"]["proposed_by"] is None
 
 
-def test_a_selection_proposal_recomposes_an_engine_draft(
+def test_a_selection_proposal_drops_an_unworded_draft(
     ai_api_worker, fake_openai: FakeOpenAI
 ) -> None:
     """§14: a proposal follows `update_selection`'s content rule.
 
-    Content the engine composed is offered a proposal, and activation recomposes it
-    from the new selection in the same write. Authored wording refuses it; that half
-    is asserted where an AI draft is written (`test_ai_tasks.py`).
+    Content still in its canonical wording is offered a proposal, and activation drops
+    it in the same write, to be drafted again from the new selection. Authored wording
+    refuses it; that half is asserted where an AI draft is written (`test_ai_tasks.py`).
     """
     application_id = _drafted(ai_api_worker, "Late Proposal Co")
     detail = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}")
@@ -136,10 +137,10 @@ def test_a_selection_proposal_recomposes_an_engine_draft(
     assert "propose_selection" in detail.json()["available_actions"]
     document = _document(ai_api_worker, application_id)
     pinned = document["selection"]["selected_fact_ids"][:1]
-    fake_openai.script(
-        "propose_selection_plan",
-        SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r"),
-    )
+    # Replaces the draft's own selection answer rather than queueing behind it.
+    fake_openai.scripts["propose_selection_plan"] = [
+        SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r")
+    ]
 
     queued = _post(
         ai_api_worker,
@@ -153,9 +154,9 @@ def test_a_selection_proposal_recomposes_an_engine_draft(
     stored = stored_document(ai_api_worker.services, application_id)
     assert stored.selection.proposed_by == "ai"
     assert stored.selection.pinned_fact_ids == pinned
-    assert stored.content is not None
-    assert stored.content.selection is not None
-    assert stored.content.selection.pinned_fact_ids == pinned
+    assert stored.content is None
+    detail = ai_api_worker.client.get(f"{API_PREFIX}/applications/{application_id}").json()
+    assert detail["preparation_state"] == "ready_to_draft"
 
 
 def test_regenerate_claim_is_accepted_at_the_specified_path_only_on_a_current_hash(

@@ -159,8 +159,6 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
         "singleton_id": 1,
         "edit_version": 1,
         "auto_generate_when_review_not_required": False,
-        "ai_enabled_override": None,
-        "default_execution_mode": "deterministic",
         "default_ai_model": "gpt-5.6-terra",
         "default_reasoning_effort": "medium",
         "ui_density": "comfortable",
@@ -171,7 +169,6 @@ def test_app_settings_schema_rejects_non_singleton_and_invalid_values(
     invalid_values = (
         {**valid, "singleton_id": 2},
         {**valid, "edit_version": 0},
-        {**valid, "default_execution_mode": "automatic"},
         {**valid, "default_ai_model": "arbitrary-model"},
         {**valid, "default_reasoning_effort": "maximum"},
         {**valid, "ui_density": "dense"},
@@ -196,8 +193,6 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
     assert stored.model_dump(mode="python") == {
         "edit_version": 0,
         "auto_generate_when_review_not_required": False,
-        "ai_enabled_override": None,
-        "default_execution_mode": "deterministic",
         "default_ai_model": None,
         "default_reasoning_effort": "medium",
         "ui_density": "comfortable",
@@ -214,8 +209,6 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
             0,
             UpdateSettings(
                 auto_generate_when_review_not_required=True,
-                ai_enabled_override=False,
-                default_execution_mode="deterministic",
                 default_ai_model="gpt-5.6-terra",
                 default_reasoning_effort="medium",
                 ui_density="compact",
@@ -233,8 +226,6 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
                 0,
                 UpdateSettings(
                     auto_generate_when_review_not_required=False,
-                    ai_enabled_override=None,
-                    default_execution_mode="deterministic",
                     default_ai_model="gpt-5.6-terra",
                     default_reasoning_effort="medium",
                     ui_density="comfortable",
@@ -255,8 +246,6 @@ def test_app_settings_default_read_is_pure_and_updates_are_optimistic_and_atomic
             1,
             UpdateSettings(
                 auto_generate_when_review_not_required=False,
-                ai_enabled_override=None,
-                default_execution_mode="deterministic",
                 default_ai_model="gpt-5.6-luna",
                 default_reasoning_effort="low",
                 ui_density="comfortable",
