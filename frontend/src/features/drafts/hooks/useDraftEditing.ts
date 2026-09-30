@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import { applicationDetailQueryKey } from "@/api/applications";
-import type { DraftClaim, DraftFact } from "@/api/contracts";
+import type { DraftClaim } from "@/api/contracts";
 import {
   documentQueryKey,
   documentQueryOptions,
@@ -53,7 +53,6 @@ export interface DraftEditing {
   dirty: boolean;
   flush: () => void;
   settle: () => Promise<boolean>;
-  includeFact: (fact: DraftFact) => void;
   regenerateSection: (section: string) => void;
   regenerationError: unknown;
   saveState: AutosaveState;
@@ -221,9 +220,6 @@ export const useDraftEditing = ({
     dirty,
     flush: autosave.flush,
     settle: autosave.settle,
-    /* Including an omitted fact is a pin: in a budgeted deterministic selection, holding
-       it is the only way to say "keep this one". */
-    includeFact: (fact) => selection.mutate({ pinned: [fact.fact_id] }),
     history: {
       canRedo: history.canRedo,
       canUndo: history.canUndo,

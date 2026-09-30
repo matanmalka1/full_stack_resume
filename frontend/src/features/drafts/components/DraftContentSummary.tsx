@@ -1,49 +1,33 @@
-import { Plus, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import type { DraftFact } from "@/api/contracts";
 import { routePaths } from "@/app/routePaths";
-import { Button } from "@/ui/Button";
-import { Disclosure } from "@/ui/Disclosure";
 import { cx } from "@/ui/cx";
-import { emphasisLabels, omissionReasonLabels } from "@/features/preparation";
+import { emphasisLabels, factSelectionAnchor } from "@/features/preparation";
 import type { ContentSummary, SelectionSummary } from "../model/draftOverview";
 import { claimOriginLabels } from "../model/draftLabels";
 import type { EditableDocument } from "../model/drafts.types";
 
-/* How many left-out facts are listed before the reader asks for the rest. Most drafts
-   leave out a handful; a long list pushed the document itself below the fold. */
-const OMITTED_PREVIEW = 4;
-
 interface DraftContentSummaryProps {
-  busy: boolean;
+  applicationId: string;
   content: ContentSummary;
   draft: EditableDocument;
-  onInclude: (fact: DraftFact) => void;
   selection: SelectionSummary;
 }
 
-const omittedDetail = (fact: DraftFact): string =>
-  /* Joined from whatever resolved, rather than concatenated blind: both label maps are
-     exhaustive against the schema this build was compiled against and say nothing about a
-     server that has since learned another omission reason. */
-  [fact.reason == null ? undefined : omissionReasonLabels[fact.reason], fact.section ?? undefined]
-    .filter((part): part is string => part !== undefined && part !== "")
-    .join(" · ");
+/* How the content in front of the reader was produced.
 
-/* How the content in front of the reader was produced, and what was swapped in and out.
-
-   The draft is the result of two decisions the editor used to leave unsaid: which facts
-   the selection took from the knowledge base for this role, and how each chosen fact
-   became a line - as written, reworded for the role, or not backed at all. This says both
-   in one place, above the lines they describe, and keeps the one action it can take
-   itself: bringing back a fact the selection left out. Every number is the document's own
-   accounting; nothing is re-derived from the pool. */
-export const DraftContentSummary = ({ busy, content, draft, onInclude, selection }: DraftContentSummaryProps) => {
-  const [showAllOmitted, setShowAllOmitted] = useState(false);
+   The draft is the result of two decisions: which facts the selection took from the
+   knowledge base for this role, and how each chosen fact became a line - as written,
+   reworded for the role, or not backed at all. This says both in one place, above the
+   lines they describe. It reports the selection and does not edit it: the selection has
+   one screen, the analysis step, where each fact is shown against the requirements it
+   answers and both include and exclude are offered together with the AI proposal. A
+   second, narrower editor here disagreed with that one on what a change was and when it
+   was saved. Removing a line is still the editor's, and stays in the outline. Every
+   number is the document's own accounting; nothing is re-derived from the pool. */
+export const DraftContentSummary = ({ applicationId, content, draft, selection }: DraftContentSummaryProps) => {
   const emphasis = draft.selection.emphasis_override ?? draft.selection.emphasis;
-  const omitted = showAllOmitted ? selection.omitted : selection.omitted.slice(0, OMITTED_PREVIEW);
 
   const origins = [
     { key: "verbatim", count: content.verbatim, tone: "text-cv-success" },
@@ -84,71 +68,14 @@ export const DraftContentSummary = ({ busy, content, draft, onInclude, selection
         {selection.included === 1 ? "עובדה אחת נכנסה לקורות החיים" : `${selection.included} עובדות נכנסו לקורות החיים`}
         {selection.pinned === 0 ? null : <> · {selection.pinned} מהן נקבעו במפורש</>}
         {selection.omitted.length === 0 ? null : <> · {selection.omitted.length} נשארו בחוץ</>}
+        {" · "}
+        <Link
+          className="font-semibold text-cv-accent hover:text-cv-accent-hover"
+          to={`${routePaths.application(applicationId)}#${factSelectionAnchor}`}
+        >
+          שינוי בחירת העובדות
+        </Link>
       </p>
-
-      {draft.selection.proposed_by === "ai" ? (
-        <div className="flex flex-col gap-1">
-          <p className="text-support text-cv-text-muted">הבחירה הוצעה על ידי AI ונבדקה מול כללי הבחירה.</p>
-          {draft.selection.proposal_rationale == null ? null : (
-            <Disclosure summary="נימוק ההצעה">
-              <p dir="auto">{draft.selection.proposal_rationale}</p>
-            </Disclosure>
-          )}
-        </div>
-      ) : null}
-
-      {selection.omitted.length === 0 ? null : (
-        <div className="flex flex-col gap-2 border-t border-cv-border pt-3">
-          <div>
-            <h3 className="text-support font-semibold text-cv-text">עובדות שנשארו בחוץ</h3>
-            <p className="text-caption leading-5 text-cv-text-muted">
-              הכללה קובעת את העובדה במפורש ובונה את הטיוטה מחדש. שאר ההחלטות נשמרות.
-            </p>
-          </div>
-          <ul className="flex flex-col divide-y divide-cv-border">
-            {omitted.map((fact) => (
-              <li className="flex items-start justify-between gap-3 py-2" key={fact.fact_id}>
-                <div className="min-w-0 flex-1">
-                  <p className="text-support leading-6 text-cv-text" dir="auto">
-                    {fact.text ?? "לא ניתן לקרוא את העובדה הזו מהמאגר."}
-                  </p>
-                  <p className="text-caption text-cv-text-muted">
-                    {omittedDetail(fact)}
-                    {omittedDetail(fact) === "" ? null : " · "}
-                    <Link
-                      className="font-semibold text-cv-accent hover:text-cv-accent-hover"
-                      to={`${routePaths.facts}?fact=${encodeURIComponent(fact.fact_id)}`}
-                    >
-                      במאגר העובדות
-                    </Link>
-                  </p>
-                </div>
-                <Button
-                  aria-label="הכללת העובדה"
-                  className="shrink-0"
-                  disabled={busy || fact.text == null}
-                  onClick={() => onInclude(fact)}
-                  size="compact"
-                  variant="secondary"
-                >
-                  <Plus aria-hidden="true" className="size-icon-md" />
-                  הכללה
-                </Button>
-              </li>
-            ))}
-          </ul>
-          {selection.omitted.length <= OMITTED_PREVIEW ? null : (
-            <Button
-              className="self-start"
-              onClick={() => setShowAllOmitted(!showAllOmitted)}
-              size="compact"
-              variant="ghost"
-            >
-              {showAllOmitted ? "הצגת פחות" : `הצגת כל ${selection.omitted.length} העובדות`}
-            </Button>
-          )}
-        </div>
-      )}
     </section>
   );
 };

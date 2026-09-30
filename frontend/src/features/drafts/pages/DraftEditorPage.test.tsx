@@ -485,6 +485,12 @@ describe("DraftEditorPage", () => {
     expect(within(summary).getByText("נוסח מחדש").nextElementSibling).toHaveTextContent("0");
     expect(within(summary).getByText("ללא עובדה מאחוריה").nextElementSibling).toHaveTextContent("0");
     expect(within(summary).getByText(/עובדה אחת נכנסה לקורות החיים/)).toBeInTheDocument();
+    /* The summary reports the selection; changing it happens on the analysis screen. */
+    expect(within(summary).getByRole("link", { name: "שינוי בחירת העובדות" })).toHaveAttribute(
+      "href",
+      "/applications/app-1#fact-selection",
+    );
+    expect(within(summary).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "מחזור חיי העובדות" })).not.toBeInTheDocument();
     expect(screen.queryByText("יצירת עובדה ממתינה חדשה")).not.toBeInTheDocument();
   });
@@ -943,6 +949,16 @@ describe("DraftEditorPage selection changes", () => {
       },
     );
 
+  /* Removing a fact-backed line is the editor's one selection change: it excludes the
+     facts behind the line once the undo window closes. The caller owns the fake clock,
+     installed before render (see the removal tests below). */
+  const removeFirstLine = async () => {
+    fireEvent.click((await screen.findAllByRole("button", { name: "הסרת השורה" }))[0]!);
+    const dialog = await screen.findByRole("dialog", { name: "הסרת השורה?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "אישור ההסרה" }));
+    await vi.advanceTimersByTimeAsync(6000);
+  };
+
   it("refuses a selection change when saving local wording failed", async () => {
     const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       const url = String(input);
@@ -952,34 +968,21 @@ describe("DraftEditorPage selection changes", () => {
       return Promise.resolve(jsonResponse(detail()));
     });
     vi.stubGlobal("fetch", fetchMock);
-    renderPage();
-    await editRow(2);
-    fireEvent.change(await screen.findByDisplayValue("Owned the CRM migration."), {
-      target: { value: "Keep before selection." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "הכללת העובדה" }));
-    await screen.findByText("בחירת העובדות לא שונתה");
-    expect(screen.getByDisplayValue("Keep before selection.")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
-  });
-
-  it("includes an omitted fact as a pin, carrying every decision already recorded", async () => {
-    const fetchMock = stubReads({ document: () => jsonResponse(omittedDraft()) });
-
-    renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
-
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(true),
-    );
-    const call = fetchMock.mock.calls.find((entry) => String(entry[0]) === `${DOC_PATH}/selection`);
-    /* Absolute lists: the existing pin is resent alongside the new one, because the
-       selection is rebuilt from the overlay alone. */
-    expect(JSON.parse(String((call?.[1] as RequestInit | undefined)?.body))).toEqual({
-      expected_document_hash: HASH,
-      pinned_fact_ids: ["f-pinned", "f-out"],
-      excluded_fact_ids: [],
-    });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+      await editRow(2);
+      fireEvent.change(await screen.findByDisplayValue("Owned the CRM migration."), {
+        target: { value: "Keep before selection." },
+      });
+      await removeFirstLine();
+      await screen.findByText("בחירת העובדות לא שונתה");
+      /* Opening the removal closes the edit field; the unsaved wording stays on the line. */
+      expect(screen.getAllByText("Keep before selection.").length).toBeGreaterThan(0);
+      expect(fetchMock.mock.calls.some((call) => String(call[0]) === `${DOC_PATH}/selection`)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("asks for confirmation before removing a line, then stages it behind an undo window", async () => {
@@ -1047,12 +1050,17 @@ describe("DraftEditorPage selection changes", () => {
         ),
     });
 
-    renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "הכללת העובדה" }));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+      await removeFirstLine();
 
-    expect(await screen.findByText("בחירת העובדות לא שונתה")).toBeInTheDocument();
-    expect(screen.getByText(/המסמך כולל ניסוח ידני שבנייה מחדש הייתה מוחקת/)).toBeInTheDocument();
-    expect(screen.queryByText(/deterministic rebuild/)).not.toBeInTheDocument();
+      expect(await screen.findByText("בחירת העובדות לא שונתה")).toBeInTheDocument();
+      expect(screen.getByText(/המסמך כולל ניסוח ידני שבנייה מחדש הייתה מוחקת/)).toBeInTheDocument();
+      expect(screen.queryByText(/deterministic rebuild/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
