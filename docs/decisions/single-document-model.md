@@ -73,6 +73,9 @@ the numbers stay because §4–§6 below cite them.
 
 ## 5. SelectionPlan allocation
 
+Superseded by [`ai-owned-selection.md`](ai-owned-selection.md): the document no longer
+holds a selection, and `selection_policy_version` is gone.
+
 | Field | New owner | Reason |
 | --- | --- | --- |
 | `plan_json` (candidates, selected, pinned, excluded, tag coverage, `emphasis_override`) | `cv_documents.selection` | The user edits it before and after content exists (fact selection screen, `apply_selection_change`). It is part of the document, so it is part of the hash. |

@@ -155,10 +155,10 @@ configured provider, with no rules-based fallback (`docs/spec/product-spec.md` Â
 validation, approval, rendering, Ready, export, and recruitment tracking â€” runs with no
 key at all.
 
-A configured key enables six structured OpenAI tasks: `propose_analysis`,
-`propose_selection_plan`, `draft_resume`, `regenerate_section`, `regenerate_claim`, and
-`assess_claim_support`, the separate reviewer every writing Operation runs after the
-writer.
+A configured key enables five structured OpenAI tasks: `propose_analysis`,
+`draft_resume` (which chooses the facts and words them), `regenerate_section`,
+`regenerate_claim`, and `assess_claim_support`, the separate reviewer every writing
+Operation runs after the writer.
 The Web settings page offers a closed model catalog and low/medium/high reasoning
 effort, frozen onto each queued AI Operation:
 
