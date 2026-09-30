@@ -15,8 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Apply one review-form submission to an analysis
-         * @description `201`: a meaning change creates an immutable JobAnalysis; a selection-only
-         *     change updates the document's selection in place (§13).
+         * @description `201`: every changed classification value creates an immutable JobAnalysis (§13).
          *
          *     `application_id` is in the body rather than inferred from the analysis. The
          *     client states which Application it believes it is deciding for, and a
@@ -117,7 +116,7 @@ export interface paths {
          *
          *     NeedsReview is not an error here or anywhere else. An analysis that needs a
          *     decision is a *successful* Operation whose JobAnalysis - and, for the first
-         *     analysis, the document's initial selection - were committed; what needs deciding is reported by the
+         *     analysis and the empty document pinned to it were committed; what needs deciding is reported by the
          *     Application's review reasons, and is resolved through
          *     `POST /analyses/{id}/apply-decisions`.
          *
@@ -817,8 +816,8 @@ export interface paths {
          * Soft-delete a fact through the fact lifecycle
          * @description One-way; `confirm: false` is refused rather than interpreted.
          *
-         *     Always permitted, even for a fact attached to a Profile section or
-         *     referenced by a document selection, claim, or gap resolution: this command
+         *         Always permitted, even for a fact attached to a Profile section or
+         *         referenced by a claim or gap resolution: this command
          *     does not pre-check those, the review reason and warning it produces do
          *     (state-and-use-cases.md §17).
          */
@@ -1025,7 +1024,7 @@ export interface components {
         ActivityFilter: "open" | "closed" | "all";
         /**
          * AnalysisDecisionsResponse
-         * @description Which analysis is in force after the decision, and whether it is a new one.
+         * @description The new analysis created by the decision.
          *
          *     `job_analysis_id` names the analysis the client should work from now, the new
          *     one every decision creates. The decision never re-pins the document;
@@ -1038,8 +1037,6 @@ export interface components {
             };
             /** Application Id */
             application_id: string;
-            /** Created Analysis */
-            created_analysis: boolean;
             /** Document Hash */
             document_hash?: string | null;
             /** Document Id */
@@ -1642,9 +1639,7 @@ export interface components {
         };
         /**
          * ConfirmAndUseFactResponse
-         * @description The one logical command's whole outcome: confirmed, attached, selected.
-         *
-         *     The document whose selection the fact joined, and its token afterwards.
+         * @description The one command's outcome and the unchanged document token beside it.
          */
         ConfirmAndUseFactResponse: {
             /** Document Hash */
@@ -2869,7 +2864,7 @@ export interface components {
             };
             /**
              * Claim Removals
-             * @description Claims to delete outright. Only an unauthorized section claim may be removed this way; a claim the fact selection authorizes is a 412 naming the selection change, and the headline and contacts are structural.
+             * @description Section claims to delete outright. Headlines, contacts, role headings, and dates are structural and cannot be removed.
              * @default []
              */
             claim_removals: string[];
