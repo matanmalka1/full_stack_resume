@@ -20,7 +20,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-from ...domain.claim_review import REVIEW_POLICY_VERSION, SHAPE_PROBLEMS, review_problems
+from ...domain.claim_review import (
+    REVIEW_POLICY_VERSION,
+    SHAPE_PROBLEMS,
+    ReviewProblemCode,
+    review_problems,
+)
 from ...domain.contracts.drafts import ClaimReviewAssertion, ClaimReviewEvidence, DraftDocument
 from ...domain.contracts.knowledge import FactStatus
 from ...domain.contracts.providers import (
@@ -33,7 +38,7 @@ from ...domain.drafts import (
     authorize_reviewed_claim,
     draft_claims,
 )
-from ...domain.facts import FactStore
+from ...domain.facts import FactStore, FactStoreError
 from ..errors import ClaimReviewUncertain, ClaimReviewUnsupported, ProposalRejected
 from ..operations import ClaimReviewReason, ClaimReviewSource, RejectedClaimReview
 from ..ports import SnapshotPayload
@@ -228,6 +233,25 @@ def apply_proposed_claims(
     return updated
 
 
+def _review_sources(
+    facts: FactStore, fact_ids: list[str], language: str
+) -> list[ClaimReviewSource]:
+    """The linked facts as read for this review; one no longer canonical is left out.
+
+    A line refused for `stale-review-source` links a fact that cannot be read, and
+    inventing its meaning would be worse than showing the facts that can be.
+    """
+    sources = []
+    for fact_id in fact_ids:
+        try:
+            meaning = facts.get(fact_id, canonical_only=True).meaning
+            rendering = facts.rendering(fact_id, language)
+        except FactStoreError:
+            continue
+        sources.append(ClaimReviewSource(fact_id=fact_id, meaning=meaning, rendering=rendering))
+    return sources
+
+
 def authorize_semantically_reviewed_claims(
     draft: DraftDocument,
     proposal: ClaimSupportProposal,
@@ -257,7 +281,7 @@ def authorize_semantically_reviewed_claims(
         )
 
     updated = draft
-    refused: list[str] = []
+    refused: dict[str, list[ReviewProblemCode]] = {}
     uncertain: list[str] = []
     unsupported: list[str] = []
     for claim_id, claim in pending.items():
@@ -284,7 +308,7 @@ def authorize_semantically_reviewed_claims(
             unsupported.append(claim_id)
             continue
         if problems:
-            refused.append(claim_id)
+            refused[claim_id] = sorted(problems)
             continue
         updated = authorize_reviewed_claim(
             updated,
@@ -304,18 +328,24 @@ def authorize_semantically_reviewed_claims(
                 ],
             ),
         )
-    if unsupported or uncertain:
+    if unsupported or uncertain or refused:
         # Capture from the exact in-memory draft and Knowledge used by this review.
         # Reconstructing from today's document or facts on a later GET would invent
         # historical evidence. The reviewer's explanation is kept with its line: without
-        # it the user sees a near-identical sentence refused and cannot tell why.
+        # it the user sees a near-identical sentence refused and cannot tell why. A line
+        # the reviewer called supported but whose evidence failed the deterministic check
+        # is kept too, with the checks it failed - otherwise that refusal names nothing.
         rejected = []
         for section in draft.sections:
             heading = None
             for claim in section.claims:
                 if claim.style == "heading":
                     heading = claim.text
-                if claim.claim_id not in unsupported and claim.claim_id not in uncertain:
+                if (
+                    claim.claim_id not in unsupported
+                    and claim.claim_id not in uncertain
+                    and claim.claim_id not in refused
+                ):
                     continue
                 rejected.append(
                     RejectedClaimReview(
@@ -323,16 +353,16 @@ def authorize_semantically_reviewed_claims(
                         section=section.name,
                         heading=heading,
                         text=claim.text,
-                        verdict="unsupported" if claim.claim_id in unsupported else "uncertain",
-                        sources=[
-                            ClaimReviewSource(
-                                fact_id=fact_id,
-                                meaning=facts.get(fact_id, canonical_only=True).meaning,
-                                rendering=facts.rendering(fact_id, draft.language),
-                            )
-                            for fact_id in claim.fact_ids
-                        ],
+                        verdict=(
+                            "unsupported"
+                            if claim.claim_id in unsupported
+                            else "uncertain"
+                            if claim.claim_id in uncertain
+                            else "unattested"
+                        ),
+                        sources=_review_sources(facts, claim.fact_ids, draft.language),
                         rationale=assessments[claim.claim_id].rationale.strip() or None,
+                        problems=refused.get(claim.claim_id, []),
                     )
                 )
         error = (
@@ -345,12 +375,12 @@ def authorize_semantically_reviewed_claims(
                 f"semantic review was uncertain about claims: {', '.join(sorted(uncertain))}",
                 unsupported=sorted(uncertain),
             )
+            if uncertain
+            else ProposalRejected(
+                f"semantic review did not authorize claims: {', '.join(sorted(refused))}",
+                unsupported=sorted(refused),
+            )
         )
         error.review_reason = ClaimReviewReason(claims=rejected)
         raise error
-    if refused:
-        raise ProposalRejected(
-            f"semantic review did not authorize claims: {', '.join(sorted(refused))}",
-            unsupported=sorted(refused),
-        )
     return updated

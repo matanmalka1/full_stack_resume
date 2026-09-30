@@ -697,10 +697,18 @@ def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
 
 
 @pytest.mark.parametrize(
-    ("verdict", "expected_code"),
+    ("verdict", "expected_code", "expected_verdict", "expected_problems"),
     [
-        ("unsupported", OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED),
-        ("uncertain", OperationFailureCode.CLAIM_REVIEW_UNCERTAIN),
+        ("unsupported", OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED, "unsupported", []),
+        ("uncertain", OperationFailureCode.CLAIM_REVIEW_UNCERTAIN, "uncertain", []),
+        # A `supported` answer with no assertions attests nothing; the refused line
+        # still reaches the reader, with the check its evidence failed.
+        (
+            "supported",
+            OperationFailureCode.INVALID_OUTPUT,
+            "unattested",
+            ["invalid-review-evidence"],
+        ),
     ],
 )
 def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
@@ -710,6 +718,8 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
     application_projection_reader,
     verdict,
     expected_code,
+    expected_verdict,
+    expected_problems,
 ) -> None:
     """§6 and invariant 12: the ID is not the proof.
 
@@ -755,7 +765,8 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
     assert rejected.claim_id == claim.claim_id
     assert rejected.section == _section.name
     assert rejected.text == "Consistently exceeded every quota by 400% across all regions."
-    assert rejected.verdict == verdict
+    assert rejected.verdict == expected_verdict
+    assert rejected.problems == expected_problems
     assert rejected.rationale == "The supplied fact does not support the strengthened quota claim."
     assert [source.fact_id for source in rejected.sources] == claim.fact_ids
     facts = ai_services.drafts.load_knowledge().facts

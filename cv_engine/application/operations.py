@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..domain.claim_review import ReviewProblemCode
 from ..util import canonical_json, sha256_text
 from .ai_configuration import ReasoningEffort
 
@@ -277,8 +278,12 @@ class RejectedClaimReview(OperationModel):
     section: str
     heading: str | None = None
     text: str
-    verdict: Literal["uncertain", "unsupported"]
+    #: `unattested`: the reviewer answered `supported`, but its evidence failed the
+    #: deterministic check (`problems` says which), so the line is not authorized.
+    verdict: Literal["uncertain", "unsupported", "unattested"]
     sources: list[ClaimReviewSource]
+    #: The deterministic checks an `unattested` line's evidence failed; empty otherwise.
+    problems: list[ReviewProblemCode] = Field(default_factory=list)
     #: The reviewer's own explanation for this line, as it answered. An opinion that
     #: helps the user find what to fix, never evidence; failures recorded before it
     #: was kept carry none.
