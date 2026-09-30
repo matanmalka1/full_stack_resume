@@ -557,7 +557,9 @@ task-contract, schema and prompt versions and hashes, the dated USD price snapsh
 derived cost. The log is append-only. The request payload is not kept; its hash is.
 Secrets and hidden reasoning are never kept. A usage or cost the provider did not
 report is unknown, never zero, and an Operation's totals are unknown when any of its
-attempts' are. A provider call is retried at most once, per call, only where the
+attempts' are - except an attempt proven never delivered, which used nothing. A billing
+refusal (`PROVIDER_QUOTA_EXHAUSTED`) is reported apart from a rate limit, because the
+user fixes it in the provider account rather than by waiting. A provider call is retried at most once, per call, only where the
 second attempt cannot duplicate a processed request or the provider asks for it
 (architecture.md §11); a failure that may have reached the provider is never retried
 automatically.

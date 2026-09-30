@@ -24,28 +24,40 @@ def _call_totals(connection: Connection, operation_id: str) -> dict[str, Any]:
     """Usage and cost of every logged provider call of the Operation, summed.
 
     Every attempt counts once - a refused answer, or one a retry replaced, was still
-    billed. A total is NULL when any call lacks that value, rather than a partial sum
-    that reads as the whole; with no call logged, every total is NULL.
+    billed. An attempt proven never to have reached the provider (`not_delivered`)
+    used nothing, so it adds zero rather than an unknown. Any other attempt without a
+    value makes that total NULL, rather than a partial sum that reads as the whole;
+    with no call logged at all, every total is NULL.
     """
     columns = [*_USAGE_FIELDS, "cost_usd"]
+    delivered = ai_calls.c.outcome != "not_delivered"
     row = (
         connection.execute(
             select(
-                func.count().label("calls"),
-                *(func.sum(ai_calls.c[name]).label(f"sum_{name}") for name in columns),
-                *(func.count(ai_calls.c[name]).label(f"known_{name}") for name in columns),
+                func.count().label("attempts"),
+                func.count().filter(delivered).label("calls"),
+                *(
+                    func.coalesce(func.sum(ai_calls.c[name]).filter(delivered), 0).label(
+                        f"sum_{name}"
+                    )
+                    for name in columns
+                ),
+                *(
+                    func.count(ai_calls.c[name]).filter(delivered).label(f"known_{name}")
+                    for name in columns
+                ),
             ).where(ai_calls.c.operation_id == operation_id)
         )
         .mappings()
         .one()
     )
-    calls = row["calls"]
+    attempts, calls = row["attempts"], row["calls"]
     totals: dict[str, Any] = {
-        name: int(row[f"sum_{name}"]) if calls and row[f"known_{name}"] == calls else None
+        name: int(row[f"sum_{name}"]) if attempts and row[f"known_{name}"] == calls else None
         for name in _USAGE_FIELDS
     }
     totals["cost_usd"] = (
-        usd(Decimal(row["sum_cost_usd"])) if calls and row["known_cost_usd"] == calls else None
+        usd(Decimal(row["sum_cost_usd"])) if attempts and row["known_cost_usd"] == calls else None
     )
     return totals
 

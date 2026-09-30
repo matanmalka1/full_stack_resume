@@ -3692,6 +3692,7 @@
           "SOURCE_CHANGED",
           "PROVIDER_TIMEOUT",
           "PROVIDER_RATE_LIMITED",
+          "PROVIDER_QUOTA_EXHAUSTED",
           "PROVIDER_UNAVAILABLE",
           "PROVIDER_REFUSED",
           "INVALID_OUTPUT",

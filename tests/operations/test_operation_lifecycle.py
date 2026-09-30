@@ -387,13 +387,14 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
 def test_operation_usage_and_cost_sum_every_logged_call_once(services, database_engine) -> None:
     """An Operation reports what all its logged provider calls cost, and never guesses.
 
-    Every attempt counts once, whatever its outcome. When one call carries no value for
-    a total, that total is NULL rather than the sum of the calls that do.
+    Every attempt counts once, whatever its outcome. An attempt proven never delivered
+    adds zero. Any other call that carries no value for a total makes that total NULL,
+    rather than the sum of the calls that do.
     """
     created = _operation_for_runner(services, "Cost Totals Co")
     log = SqlAlchemyAICallLog(services.operation_runner.transactions)
 
-    def append(task, *, usage=None, cost=None):
+    def append(task, *, usage=None, cost=None, outcome=None):
         record = AICallRecord(
             task=task,
             provider="openai",
@@ -406,7 +407,7 @@ def test_operation_usage_and_cost_sum_every_logged_call_once(services, database_
             prompt_version="p",
             prompt_hash="h",
             input_hash="x",
-            outcome="succeeded" if usage else "outcome_unknown",
+            outcome=outcome or ("succeeded" if usage else "outcome_unknown"),
             sanitized_response={"id": task} if usage else None,
             sanitized_response_hash=(sha256_text(canonical_json({"id": task})) if usage else None),
             output_hash="out" if usage else None,
@@ -435,6 +436,34 @@ def test_operation_usage_and_cost_sum_every_logged_call_once(services, database_
 
     assert totals() == (None, None, None, None, None, None)
 
+    # An Operation whose only attempt never reached the provider used nothing.
+    only_undelivered = _operation_for_runner(services, "Undelivered Totals Co")
+    with services.operation_runner.transactions.write() as tx:
+        log.append(
+            tx,
+            only_undelivered.id,
+            AICallRecord(
+                task="propose_analysis",
+                provider="openai",
+                model="gpt-5.6-terra",
+                task_contract_version="1",
+                input_schema_version="1",
+                input_schema_hash="i",
+                output_schema_version="1",
+                output_schema_hash="o",
+                prompt_version="p",
+                prompt_hash="h",
+                input_hash="x",
+                outcome="not_delivered",
+                latency_ms=1,
+                started_at="2026-09-30T00:00:00+00:00",
+                finished_at="2026-09-30T00:00:01+00:00",
+            ),
+            knowledge_context_hash="k",
+        )
+    undelivered_view = _operation(services, only_undelivered.id)
+    assert (undelivered_view.total_tokens, undelivered_view.cost_usd) == (0, "0.00000000")
+
     writer = append(
         "draft_resume",
         usage={
@@ -461,10 +490,15 @@ def test_operation_usage_and_cost_sum_every_logged_call_once(services, database_
     )
     assert (review.attempt, totals()) == (1, (14, 2, 4, 6, 20, "0.00012500"))
 
-    # A review attempt whose outcome is unknown was maybe billed: its usage is
-    # unknown, so every total is.
+    # An attempt proven never delivered used nothing: it adds zero, not an unknown.
+    undelivered = append("assess_claim_support", outcome="not_delivered")
+    assert undelivered.attempt == 2
+    assert totals() == (14, 2, 4, 6, 20, "0.00012500")
+
+    # One whose outcome is unknown may have been billed: its usage is unknown, and
+    # so is every total.
     retried = append("assess_claim_support")
-    assert retried.attempt == 2
+    assert retried.attempt == 3
     assert totals() == (None, None, None, None, None, None)
 
 

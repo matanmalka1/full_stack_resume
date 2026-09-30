@@ -111,10 +111,6 @@ class ArtifactPayloadMissing(PreconditionFailed):
     """A registered artifact payload is no longer on disk."""
 
 
-class ArtifactHashMismatch(PreconditionFailed):
-    """A registered artifact payload no longer matches its registered hash."""
-
-
 class DependencyUnavailable(ApplicationError):
     """A required collaborator was not configured."""
 
@@ -152,7 +148,11 @@ class ProviderTimeout(ProviderFailure):
 
 
 class ProviderRateLimited(ProviderFailure):
-    """The provider answered 429."""
+    """The provider answered 429 for a rate limit: slow down and try later."""
+
+
+class ProviderQuotaExhausted(ProviderFailure):
+    """The provider refused for billing: no credit left, or a spend or usage limit hit."""
 
 
 class ProviderUnavailable(ProviderFailure):

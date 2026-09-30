@@ -41,7 +41,12 @@ from cv_engine.application.commands import (
     RegenerateSectionCommand,
 )
 from cv_engine.application.errors import StateConflict
-from cv_engine.application.operations import ClaimReviewReason, OperationFailureCode
+from cv_engine.application.operations import (
+    ClaimReviewReason,
+    OperationAction,
+    OperationFailureCode,
+    available_operation_actions,
+)
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.projection import fit_level, fit_score
 from cv_engine.domain.contracts.providers import (
@@ -461,9 +466,9 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     """A reviewed paraphrase activates, and every provider attempt is logged.
 
     A review that provably never reached the provider is retried by itself: the
-    writer's answer, already logged, is not asked for again. The failed attempt is
-    logged too, and because it reported no usage the Operation's totals are unknown
-    rather than a sum that leaves it out.
+    writer's answer, already logged, is not asked for again. The undelivered attempt
+    is logged too; it used nothing, so the Operation's totals are the two calls that
+    were delivered, not unknown.
     """
     delays: list[float] = []
     monkeypatch.setattr(ai_services.drafts.ai_calls, "sleeper", delays.append)
@@ -553,28 +558,22 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
         *([("assess_claim_support", 1, "not_delivered")] if reviewer_undelivered_once else []),
         ("assess_claim_support", reviews, "succeeded"),
     ]
-    if reviewer_undelivered_once:
-        assert (completed.input_tokens, completed.total_tokens, completed.cost_usd) == (
-            None,
-            None,
-            None,
-        )
-    else:
-        # Every call counts once: the writer and the review.
-        assert completed.input_tokens == 11 * 2
-        assert completed.cached_input_tokens == 3 * 2
-        assert completed.cache_write_tokens == 0
-        assert completed.output_tokens == 22 * 2
-        assert completed.total_tokens == 33 * 2
-        one_call = execution_cost(
-            completed.model,
-            input_tokens=11,
-            cached_input_tokens=3,
-            cache_write_tokens=0,
-            output_tokens=22,
-        )
-        assert one_call is not None
-        assert completed.cost_usd == usd(Decimal(one_call["total_usd"]) * 2)
+    # Every delivered call counts once - the writer and the successful review; an
+    # undelivered attempt adds zero.
+    assert completed.input_tokens == 11 * 2
+    assert completed.cached_input_tokens == 3 * 2
+    assert completed.cache_write_tokens == 0
+    assert completed.output_tokens == 22 * 2
+    assert completed.total_tokens == 33 * 2
+    one_call = execution_cost(
+        completed.model,
+        input_tokens=11,
+        cached_input_tokens=3,
+        cache_write_tokens=0,
+        output_tokens=22,
+    )
+    assert one_call is not None
+    assert completed.cost_usd == usd(Decimal(one_call["total_usd"]) * 2)
     actual = stored_document(ai_services, ingested.application_id)
     assert actual.content is not None
     reviewed = next(
@@ -1268,7 +1267,7 @@ RATE_LIMITED = HTTPStatus(429, headers=(("Retry-After", "3"),))
         (
             [HTTPStatus(429, body='{"error": {"code": "credit_balance_exhausted"}}')],
             "failed",
-            "PROVIDER_RATE_LIMITED",
+            "PROVIDER_QUOTA_EXHAUSTED",
             ["quota_exhausted"],
             [],
         ),
@@ -1312,6 +1311,13 @@ def test_one_call_is_retried_once_only_where_the_policy_allows(
     assert [row["attempt"] for row in logged] == list(range(1, len(outcomes) + 1))
     assert len(fake_openai.calls_for("propose_analysis")) == len(outcomes)
     assert slept == delays
+    if status == "failed":
+        # No failure here is retried again automatically, and none forbids the user
+        # from retrying once they have fixed the cause - a quota included.
+        actions = available_operation_actions(
+            completed.status, completed.cancellation_requested_at, completed.failure_code
+        )
+        assert OperationAction.RETRY in actions
 
 
 def test_a_due_retry_is_not_started_once_the_operation_is_cancelled(

@@ -198,8 +198,13 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
     guidance: providerRetryGuidance,
   },
   PROVIDER_RATE_LIMITED: {
-    title: "ספק הבינה המלאכותית הגביל את הבקשה",
+    title: "ספק הבינה המלאכותית הגביל את קצב הבקשות",
     guidance: providerRetryGuidance,
+  },
+  PROVIDER_QUOTA_EXHAUSTED: {
+    title: "נגמרה המכסה או היתרה בחשבון ספק הבינה המלאכותית",
+    guidance:
+      "המתנה לא תפתור את זה. יש להוסיף יתרה או להגדיל את מגבלת ההוצאה או השימוש בחשבון הספק, ואז לנסות שוב. המצב הקיים נשמר.",
   },
   PROVIDER_UNAVAILABLE: {
     title: "ספק הבינה המלאכותית אינו זמין",

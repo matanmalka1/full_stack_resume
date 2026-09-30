@@ -370,7 +370,8 @@ Failure codes:
 
 ```text
 SOURCE_CHANGED               PROVIDER_TIMEOUT           PROVIDER_RATE_LIMITED
-PROVIDER_UNAVAILABLE         PROVIDER_REFUSED           PROVIDER_NOT_CONFIGURED
+PROVIDER_QUOTA_EXHAUSTED     PROVIDER_UNAVAILABLE       PROVIDER_REFUSED
+PROVIDER_NOT_CONFIGURED
 INVALID_OUTPUT               SCHEMA_VIOLATION           CLAIM_REVIEW_UNCERTAIN
 CLAIM_REVIEW_UNSUPPORTED     RENDER_FAILED              BROWSER_START_FAILED
 MISSING_FACT_RENDERING       VALIDATION_EXECUTION_FAILED
@@ -380,8 +381,13 @@ CANCELLED_BEFORE_ACTIVATION
 Every code is final: the runner never retries an Operation. A provider call is retried
 at most once by the application before its failure is raised, per call and only where
 the policy allows (architecture.md §11); a browser that fails to start is started once
-more by the render handler. `PROVIDER_RATE_LIMITED` covers a rate limit and a billing
-refusal alike; the AI call log records which.
+more by the render handler.
+
+- `PROVIDER_RATE_LIMITED`: the provider throttled the request; slowing down and trying
+  later fixes it. `PROVIDER_QUOTA_EXHAUSTED`: the provider refused for billing - no
+  credit left, or a spend or usage limit reached; waiting does not fix it, a change to
+  the account does. Neither is retried automatically once raised; both keep the manual
+  `retry`, for after the cause is fixed.
 
 - `PROVIDER_NOT_CONFIGURED`: an AI task was requested with no provider configured;
   nothing was sent. `PROVIDER_REFUSED`: a provider answered and declined.
@@ -400,8 +406,9 @@ The Operation read returns status, phase, message, timestamps, failure code, saf
 failure detail, structured `failure_reason`, `withheld_claims` (succeeded writing
 Operations only), retry reference, cancellation state,
 output references, provider/model/reasoning metadata, usage and cost summed over every
-logged provider attempt (input, cached input, cache-write input, output, total, USD;
-each NULL when any attempt lacks it), and `available_actions`
+logged provider attempt (input, cached input, cache-write input, output, total, USD; an
+attempt proven never delivered adds zero, and any other attempt without the value makes
+that total NULL), and `available_actions`
 (`cancel`, `retry`). The structured reason is the cause in a closed vocabulary with
 typed parameters (a page count against its limit, a fact missing a rendering in a
 language, a named render check); the detail is the same cause as an English sentence.

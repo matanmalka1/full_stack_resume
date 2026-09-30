@@ -70,9 +70,8 @@ def content_disposition(filename: str) -> str:
     first time it is inconvenient stops being a guard - and the replacement is
     ten lines with no network in them.
 
-    The name is already free of quotes, separators, and control characters when
-    it gets here: `application.artifacts.safe_filename` guarantees that before
-    the name reaches transport, so a filename cannot inject a second parameter.
+    The name comes from the renderer's recruiter filename (`filename_for`); this
+    function does not sanitize it further.
     """
     ascii_fallback = filename.encode("ascii", "replace").decode("ascii").replace("?", "_")
     return (

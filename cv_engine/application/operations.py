@@ -104,6 +104,9 @@ class OperationFailureCode(StrEnum):
     SOURCE_CHANGED = "SOURCE_CHANGED"
     PROVIDER_TIMEOUT = "PROVIDER_TIMEOUT"
     PROVIDER_RATE_LIMITED = "PROVIDER_RATE_LIMITED"
+    #: The account has no credit or hit a spend or usage limit: fixed in billing, not
+    #: by waiting. Never retried automatically; a manual retry stays available.
+    PROVIDER_QUOTA_EXHAUSTED = "PROVIDER_QUOTA_EXHAUSTED"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_REFUSED = "PROVIDER_REFUSED"
     INVALID_OUTPUT = "INVALID_OUTPUT"

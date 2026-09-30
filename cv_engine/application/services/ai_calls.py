@@ -24,6 +24,7 @@ from ...domain.contracts.providers import AICallRecord
 from ..errors import (
     ExecutionStopped,
     ProviderFailure,
+    ProviderQuotaExhausted,
     ProviderRateLimited,
     ProviderRefused,
     ProviderSchemaViolation,
@@ -86,8 +87,10 @@ def failure_for(record: AICallRecord) -> ProviderFailure:
         return ProviderRefused(detail)
     if outcome == "schema_violation":
         return ProviderSchemaViolation(detail)
-    if outcome in ("rate_limited", "quota_exhausted"):
+    if outcome == "rate_limited":
         return ProviderRateLimited(detail)
+    if outcome == "quota_exhausted":
+        return ProviderQuotaExhausted(detail)
     if outcome == "http_error":
         status = record.http_status or 0
         return ProviderUnavailable(detail) if status >= 500 else ProviderRefused(detail)

@@ -512,7 +512,7 @@ answer as it was.
 | `not_delivered` | `URLError` whose reason is a failed name lookup or a refused connection | once, after 1-3 s |
 | `outcome_unknown` | any other transport failure: a timeout, reset or disconnect while sending or waiting, or a failure whose stage cannot be proven | never - the provider may have processed and billed it |
 | `rate_limited` | 429 that is not a billing refusal | once, only with a `Retry-After` of at most 20 s |
-| `quota_exhausted` | 429 with a billing `error.code` or `error.type = insufficient_quota` | never |
+| `quota_exhausted` | 429 with a billing `error.code` or `error.type = insufficient_quota`; fails the Operation as `PROVIDER_QUOTA_EXHAUSTED`, not as a rate limit | never |
 | `http_error` | 500, or 503 (honouring `Retry-After` up to 20 s) | once - duplicate risk is not zero, a 5xx can follow processing |
 | `http_error` | any other status | never |
 | `refused`, `schema_violation` | a 200 answer without structured text, or with text the output schema refuses | never |
@@ -550,8 +550,11 @@ cached_tokens - cache_write_tokens`, and cached and cache-write input have their
 rates in the price snapshot (cache writes cost 1.25x ordinary input on GPT-5.6 and
 later). A usage the provider did not report in full, or reported inconsistently, is
 unknown; so is a cost that needs a count it left out. None is never read as zero. An
-Operation's usage and cost are the sums over every logged attempt, each once, and a
-total is NULL when any attempt lacks it.
+Operation's usage and cost are the sums over every logged attempt, each once. An
+attempt proven never delivered (`not_delivered`) used nothing and adds zero - a derived
+value, not an invented one. Any other attempt without the value - a rate limit, a quota
+refusal, an HTTP error, an unknown outcome - makes that total NULL: a failed request
+still counts against the provider's limits and is not guaranteed to be free.
 
 ## 12. HTTP API
 

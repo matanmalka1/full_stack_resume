@@ -15,6 +15,7 @@ from ...errors import (
     ProposalRejected,
     ProviderInvalidOutput,
     ProviderNotConfigured,
+    ProviderQuotaExhausted,
     ProviderRateLimited,
     ProviderRefused,
     ProviderSchemaViolation,
@@ -35,6 +36,7 @@ from ...operations import FailureReason, MissingFactRenderingReason, OperationFa
 FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
     ProviderTimeout: OperationFailureCode.PROVIDER_TIMEOUT,
     ProviderRateLimited: OperationFailureCode.PROVIDER_RATE_LIMITED,
+    ProviderQuotaExhausted: OperationFailureCode.PROVIDER_QUOTA_EXHAUSTED,
     ProviderUnavailable: OperationFailureCode.PROVIDER_UNAVAILABLE,
     ProviderRefused: OperationFailureCode.PROVIDER_REFUSED,
     ProviderSchemaViolation: OperationFailureCode.SCHEMA_VIOLATION,
@@ -58,6 +60,9 @@ FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
 _FAILURE_DETAIL: dict[OperationFailureCode, str] = {
     OperationFailureCode.PROVIDER_TIMEOUT: "The AI provider did not answer in time.",
     OperationFailureCode.PROVIDER_RATE_LIMITED: "The AI provider rate limited the request.",
+    OperationFailureCode.PROVIDER_QUOTA_EXHAUSTED: (
+        "The AI provider account has no remaining credit or reached a spend or usage limit."
+    ),
     OperationFailureCode.PROVIDER_UNAVAILABLE: "The AI provider was unavailable.",
     OperationFailureCode.PROVIDER_REFUSED: "The AI provider refused the request.",
     OperationFailureCode.PROVIDER_NOT_CONFIGURED: "No AI provider is configured.",
