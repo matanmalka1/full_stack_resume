@@ -2521,6 +2521,7 @@ export interface components {
             status: components["schemas"]["OperationStatus"];
             /** Total Tokens */
             total_tokens?: number | null;
+            withheld_claims?: components["schemas"]["ClaimReviewReason"] | null;
         };
         /**
          * OperationStatus
@@ -2700,7 +2701,7 @@ export interface components {
              * Verdict
              * @enum {string}
              */
-            verdict: "uncertain" | "unsupported" | "unattested";
+            verdict: "uncertain" | "unsupported" | "unattested" | "refused";
         };
         /**
          * RenderCheckReason
