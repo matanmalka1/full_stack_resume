@@ -49,8 +49,6 @@ class SqlAlchemySettingsStore:
         values = {
             "edit_version": next_version,
             "auto_generate_when_review_not_required": settings.auto_generate_when_review_not_required,
-            "ai_enabled_override": settings.ai_enabled_override,
-            "default_execution_mode": settings.default_execution_mode,
             "default_ai_model": settings.default_ai_model,
             "default_reasoning_effort": settings.default_reasoning_effort,
             "ui_density": settings.ui_density,

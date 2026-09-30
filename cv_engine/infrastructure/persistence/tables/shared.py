@@ -318,8 +318,6 @@ app_settings = Table(
     Column("singleton_id", Integer, primary_key=True, autoincrement=False),
     Column("edit_version", Integer, nullable=False),
     Column("auto_generate_when_review_not_required", Boolean, nullable=False),
-    Column("ai_enabled_override", Boolean),
-    Column("default_execution_mode", Text, nullable=False),
     Column("default_ai_model", Text),
     Column("default_reasoning_effort", Text, nullable=False, server_default=text("'medium'")),
     Column("ui_density", Text, nullable=False),
@@ -328,10 +326,6 @@ app_settings = Table(
     Column("updated_at", IsoTimestamp(), nullable=False),
     CheckConstraint("singleton_id = 1", name="singleton"),
     CheckConstraint("edit_version > 0", name="edit_version_positive"),
-    CheckConstraint(
-        "default_execution_mode IN ('deterministic', 'ai')",
-        name="default_execution_mode",
-    ),
     CheckConstraint(
         f"default_ai_model IS NULL OR default_ai_model IN ({sql_values(AI_MODEL_IDS)})",
         name="default_ai_model",
