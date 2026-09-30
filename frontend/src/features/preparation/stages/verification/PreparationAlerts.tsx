@@ -5,20 +5,15 @@ import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";
 import { Disclosure } from "@/ui/Disclosure";
+import { ReasonCallout } from "../../components/ReasonCallout";
 import { type PreparationScreen, actionDestination, screenPath } from "../../model/actionDestinations";
-import {
-  actionLabel,
-  blockedReasonLabel,
-  reasonTitle,
-  warningDetail,
-  warningTitle,
-} from "../../model/preparationLabels";
+import { actionLabel, blockedReasonLabel, warningDetail, warningTitle } from "../../model/preparationLabels";
 
 /* A review reason is reported as a short title plus the control that resolves it. The server's complete message stays
    available behind a disclosure: it is useful evidence when a reader needs it, but does
    not turn several simultaneous reasons into the wall of text this screen used to open
    with. The internal code remains translated rather than exposed as UI vocabulary. */
-const ReasonCallout = ({
+const ResolvableReasonCallout = ({
   applicationId,
   currentPath,
   fallbackTitle,
@@ -40,7 +35,7 @@ const ReasonCallout = ({
     .find((candidate) => candidate.href !== null && candidate.href !== currentPath);
 
   return (
-    <Callout
+    <ReasonCallout
       action={
         resolution?.href == null ? undefined : (
           <Link className={buttonClasses("secondary")} to={resolution.href}>
@@ -48,13 +43,10 @@ const ReasonCallout = ({
           </Link>
         )
       }
-      title={reasonTitle(reason.code, fallbackTitle)}
+      fallbackTitle={fallbackTitle}
+      reason={reason}
       tone={tone}
-    >
-      <Disclosure summary="פרטי הסיבה">
-        <p dir="auto">{reason.message}</p>
-      </Disclosure>
-    </Callout>
+    />
   );
 };
 
@@ -100,7 +92,7 @@ export const PreparationAlerts = ({
   return (
     <Card aria-label="התראות" className="flex flex-col gap-3 bg-cv-surface-muted p-3">
       {reviewReasons.map((reason) => (
-        <ReasonCallout
+        <ResolvableReasonCallout
           applicationId={detail.application.id}
           currentPath={currentPath}
           fallbackTitle="נדרשת החלטה לפני המשך"

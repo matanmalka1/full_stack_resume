@@ -1,6 +1,5 @@
 import type { ApplicationListItem } from "@/api/contracts";
-import { Button } from "@/ui/Button";
-import { Dialog } from "@/ui/Dialog";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { applicationLabel } from "@/features/applications";
 
 interface CloseApplicationDialogProps {
@@ -11,20 +10,14 @@ interface CloseApplicationDialogProps {
 }
 
 export const CloseApplicationDialog = ({ application, pending, onCancel, onConfirm }: CloseApplicationDialogProps) => (
-  <Dialog
-    footer={
-      <>
-        <Button onClick={onCancel} variant="secondary">
-          ביטול
-        </Button>
-        <Button onClick={onConfirm} pending={pending} pendingLabel="סוגר…">
-          סגירת המועמדות
-        </Button>
-      </>
-    }
+  <ConfirmDialog
+    confirmLabel="סגירת המועמדות"
     headingId="close-application-heading"
-    onClose={onCancel}
+    onCancel={onCancel}
+    onConfirm={onConfirm}
     open={application !== null}
+    pending={pending}
+    pendingLabel="סוגר…"
     title="לסגור את המועמדות?"
   >
     <p dir="auto">
@@ -35,5 +28,5 @@ export const CloseApplicationDialog = ({ application, pending, onCancel, onConfi
     <p className="mt-2 text-support text-cv-text-muted">
       שום דבר לא נמחק. תצלום המשרה, מסמך קורות החיים וההגשות נשמרים כפי שהם, והמועמדות נשארת נגישה דרך הסינון.
     </p>
-  </Dialog>
+  </ConfirmDialog>
 );

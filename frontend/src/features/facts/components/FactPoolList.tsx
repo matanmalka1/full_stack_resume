@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { FactStatus } from "@/api/contracts";
 import { cx } from "@/ui/cx";
+import { toneTextClasses } from "@/ui/tone";
 import {
   factLabelInLanguage,
   factSourceLabel,
@@ -20,22 +21,13 @@ const defaultFactHref = (factId: string): string => `?fact=${encodeURIComponent(
    most of its width. What is left in the row is the fact and one icon: which lifecycle
    state it is in is what decides whether the row is even usable yet, and an icon carries
    that without taking a line. Its Hebrew word stays as the accessible name. */
-const statusToneClasses = {
-  success: "text-cv-success",
-  warning: "text-cv-warning",
-  blocker: "text-cv-blocker",
-  info: "text-cv-info",
-  progress: "text-cv-accent",
-  neutral: "text-cv-text-muted",
-} as const;
-
 const FactRowStatus = ({ status }: { status: FactStatus }) => {
   const Icon = factStatusIcons[status];
 
   return (
     <span
       aria-label={factStatusLabels[status]}
-      className={cx("mt-0.5 inline-flex shrink-0", statusToneClasses[factStatusTones[status]])}
+      className={cx("mt-0.5 inline-flex shrink-0", toneTextClasses[factStatusTones[status]])}
       // The icon inside is aria-hidden; role="img" presents the pair as one image for
       // assistive tech, which `<img>` (a void element) cannot do.
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role

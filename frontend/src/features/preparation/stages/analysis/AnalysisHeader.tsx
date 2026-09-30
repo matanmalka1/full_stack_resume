@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { JobAnalysisRecord } from "@/api/contracts";
-import { formatDateTime } from "@/utils/formatDateTime";
+import { DateTime } from "@/ui/DateTime";
 
 export const AnalysisHeader = ({ children, record }: { children?: ReactNode; record: JobAnalysisRecord | null }) => (
   <div className="border-b border-cv-border pb-4">
@@ -11,7 +11,8 @@ export const AnalysisHeader = ({ children, record }: { children?: ReactNode; rec
       </h2>
       {record === null ? null : (
         <p className="mt-1 text-support text-cv-text-muted" dir="rtl">
-          נותחה ב־<bdi>{formatDateTime(record.created_at)}</bdi>
+          נותחה ב־
+          <DateTime value={record.created_at} />
         </p>
       )}
     </div>

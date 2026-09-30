@@ -4,22 +4,13 @@ import type { ApplicationListItem } from "@/api/contracts";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
 import { cx } from "@/ui/cx";
-import type { Tone } from "@/ui/tone";
+import { toneDotClasses } from "@/ui/tone";
 import { confidenceText, fitLevelLabel } from "@/features/preparation";
 import { recruitmentStatusLabel, recruitmentStatusTone } from "@/features/recruitment";
 import { preparationStateIcons, preparationStateLabels, preparationStateTones } from "@/features/preparation";
 import type { ApplicationListViewVariant } from "../model/applicationList.types";
 import { preparationProgress } from "../model/applicationListPresentation";
 import { ApplicationRunningOperation } from "./ApplicationCardNextAction";
-
-const quietDotClasses: Record<Tone, string> = {
-  success: "bg-cv-success",
-  warning: "bg-cv-warning",
-  blocker: "bg-cv-blocker",
-  info: "bg-cv-info",
-  progress: "bg-cv-accent",
-  neutral: "bg-cv-text-muted",
-};
 
 /* One shape for every fit chip, score or mark, so the cards' headers line up. */
 const fitChipClasses =
@@ -74,7 +65,7 @@ export const ApplicationRecruitmentStatus = ({ item }: { item: ApplicationListIt
   >
     <span
       aria-hidden="true"
-      className={cx("size-1.5 shrink-0 rounded-pill", quietDotClasses[recruitmentStatusTone(item.recruitment_status)])}
+      className={cx("size-1.5 shrink-0 rounded-pill", toneDotClasses[recruitmentStatusTone(item.recruitment_status)])}
     />
     {recruitmentStatusLabel(item.recruitment_status)}
   </span>

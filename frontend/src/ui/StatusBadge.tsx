@@ -2,16 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { type ClassValue, cx } from "./cx";
-import { type Tone, tonePresentation } from "./tone";
-
-const toneClasses: Record<Tone, string> = {
-  success: "border-cv-success/30 bg-cv-success-soft text-cv-success",
-  warning: "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
-  blocker: "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker",
-  info: "border-cv-info/30 bg-cv-info-soft text-cv-info",
-  progress: "border-cv-accent/30 bg-cv-accent-soft text-cv-accent",
-  neutral: "border-cv-border bg-cv-surface-muted text-cv-text-muted",
-};
+import { type Tone, tonePresentation, toneSoftClasses } from "./tone";
 
 interface StatusBadgeProps {
   children?: ReactNode;
@@ -32,7 +23,7 @@ export const StatusBadge = ({ children, className, icon, tone }: StatusBadgeProp
     <span
       className={cx(
         "inline-flex items-center gap-2 rounded-pill border px-3 py-1 text-support font-semibold",
-        toneClasses[tone],
+        toneSoftClasses(tone),
         className,
       )}
     >

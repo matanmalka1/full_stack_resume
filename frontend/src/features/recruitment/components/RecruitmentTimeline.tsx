@@ -5,30 +5,23 @@ import { useState } from "react";
 import type { RecruitmentTimelineItem } from "@/api/contracts";
 import { Button } from "@/ui/Button";
 import { cx } from "@/ui/cx";
+import { toneSoftClasses } from "@/ui/tone";
 import { formatDateTime } from "@/utils/formatDateTime";
 import { recruitmentStatusIcon, recruitmentStatusTone } from "../model/recruitmentStatus";
 import { recruitmentEventDescription, recruitmentEventReason } from "../model/recruitmentTimeline";
 
 const markerFor = (event: RecruitmentTimelineItem): { classes: string; icon: LucideIcon } => {
   if (event.item_type === "submission") {
-    return { classes: "border-cv-success/30 bg-cv-success-soft text-cv-success", icon: Send };
+    return { classes: toneSoftClasses("success"), icon: Send };
   }
   if (event.item_type === "next_action") {
-    return { classes: "border-cv-accent/30 bg-cv-accent-soft text-cv-accent", icon: CalendarClock };
+    return { classes: toneSoftClasses("progress"), icon: CalendarClock };
   }
   if (event.item_type === "status_correction") {
-    return { classes: "border-cv-warning/30 bg-cv-warning-soft text-cv-warning", icon: RefreshCcw };
+    return { classes: toneSoftClasses("warning"), icon: RefreshCcw };
   }
 
-  const tone = recruitmentStatusTone(event.to_status ?? "saved");
-  const classes = {
-    blocker: "border-cv-blocker/30 bg-cv-blocker-soft text-cv-blocker",
-    info: "border-cv-info/30 bg-cv-info-soft text-cv-info",
-    neutral: "border-cv-border bg-cv-surface text-cv-text-muted",
-    progress: "border-cv-accent/30 bg-cv-accent-soft text-cv-accent",
-    success: "border-cv-success/30 bg-cv-success-soft text-cv-success",
-    warning: "border-cv-warning/30 bg-cv-warning-soft text-cv-warning",
-  }[tone];
+  const classes = toneSoftClasses(recruitmentStatusTone(event.to_status ?? "saved"));
 
   return { classes, icon: event.to_status == null ? Activity : recruitmentStatusIcon(event.to_status) };
 };

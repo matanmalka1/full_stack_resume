@@ -3,9 +3,10 @@ import { ArrowDown, ArrowUp, Check, ChevronDown, type LucideIcon, Pencil, Refres
 
 import type { DraftClaim, DraftFact } from "@/api/contracts";
 import { Button } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
-import { Disclosure } from "@/ui/Disclosure";
+import { ReasonDetails } from "@/features/preparation";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Textarea } from "@/ui/Input";
 import { Tooltip } from "@/ui/Tooltip";
@@ -42,9 +43,9 @@ const RowAction = ({
   onClick: () => void;
 }) => (
   <Tooltip label={label}>
-    <Button aria-label={label} className="min-h-8 px-1.5" disabled={disabled} onClick={onClick} variant="ghost">
-      <Icon aria-hidden="true" className={cx("size-icon-md", className ?? "text-cv-text-muted")} />
-    </Button>
+    <IconButton aria-label={label} disabled={disabled} onClick={onClick} size="sm" variant="quiet">
+      <Icon aria-hidden="true" className={cx("size-icon-md", className)} />
+    </IconButton>
   </Tooltip>
 );
 
@@ -342,13 +343,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
             {reviewable ? (
               <p className="mt-1">אם המשמעות זהה לעובדות שמאחוריה, הבדיקה תאשר את השורה בלי לשנות אותה.</p>
             ) : null}
-            {/* The validator's own reason is English and technical - evidence for a bug
-                report, not the explanation - so it is folded rather than shown. */}
-            {claim.pending_reason == null ? null : (
-              <Disclosure summary="פרטי הסיבה">
-                <p dir="auto">{claim.pending_reason}</p>
-              </Disclosure>
-            )}
+            {claim.pending_reason == null ? null : <ReasonDetails message={claim.pending_reason} />}
           </Callout>
           {factResolution}
         </>

@@ -1,10 +1,11 @@
-import { ListTodo, Milestone, NotebookPen } from "lucide-react";
-import type { FormEventHandler } from "react";
+import { ListTodo, type LucideIcon, Milestone, NotebookPen } from "lucide-react";
+import type { FormEventHandler, ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
 
 import type { ApplicationDetail, TransitionableRecruitmentStatus } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Callout } from "@/ui/Callout";
+import { iconTileClasses } from "@/ui/SectionHeader";
 import { Field } from "@/ui/Field";
 import { Select } from "@/ui/Select";
 import { Input, Textarea } from "@/ui/Input";
@@ -24,8 +25,31 @@ interface RecruitmentUpdateFormProps {
   visible: boolean;
 }
 
-const sectionIconClasses =
-  "inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-cv-accent-soft text-cv-accent";
+/* One group of the update form: what it changes, under its icon, and its fields. */
+const UpdateSection = ({
+  children,
+  description,
+  icon: Icon,
+  title,
+}: {
+  children: ReactNode;
+  description: string;
+  icon: LucideIcon;
+  title: string;
+}) => (
+  <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
+    <div className="mb-4 flex items-start gap-3">
+      <span className={iconTileClasses}>
+        <Icon aria-hidden="true" className="size-icon-md" />
+      </span>
+      <div>
+        <h3 className="font-semibold text-cv-text">{title}</h3>
+        <p className="text-support text-cv-text-muted">{description}</p>
+      </div>
+    </div>
+    {children}
+  </section>
+);
 
 export const RecruitmentUpdateForm = ({
   detail,
@@ -58,16 +82,7 @@ export const RecruitmentUpdateForm = ({
 
       <p className="text-support text-cv-text-muted">אפשר לעדכן רק את הפרטים שהשתנו ולהשאיר את היתר כפי שהם.</p>
 
-      <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-        <div className="mb-4 flex items-start gap-3">
-          <span className={sectionIconClasses}>
-            <Milestone aria-hidden="true" className="size-icon-md" />
-          </span>
-          <div>
-            <h3 className="font-semibold text-cv-text">שלב בתהליך</h3>
-            <p className="text-support text-cv-text-muted">עדכון ההתקדמות מול המעסיק.</p>
-          </div>
-        </div>
+      <UpdateSection description="עדכון ההתקדמות מול המעסיק." icon={Milestone} title="שלב בתהליך">
         <div className="flex flex-col gap-4">
           <Field error={errors.targetStatus?.message} label="עדכון שלב">
             {(control) => (
@@ -98,18 +113,9 @@ export const RecruitmentUpdateForm = ({
             </Field>
           )}
         </div>
-      </section>
+      </UpdateSection>
 
-      <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-        <div className="mb-4 flex items-start gap-3">
-          <span className={sectionIconClasses}>
-            <ListTodo aria-hidden="true" className="size-icon-md" />
-          </span>
-          <div>
-            <h3 className="font-semibold text-cv-text">הפעולה הבאה</h3>
-            <p className="text-support text-cv-text-muted">מה צריך לקרות ומתי כדאי לטפל בו.</p>
-          </div>
-        </div>
+      <UpdateSection description="מה צריך לקרות ומתי כדאי לטפל בו." icon={ListTodo} title="הפעולה הבאה">
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
           <Field error={errors.nextAction?.message} label="הפעולה הבאה">
             {(control) => <Input {...control} {...form.register("nextAction")} dir="auto" />}
@@ -120,22 +126,13 @@ export const RecruitmentUpdateForm = ({
             )}
           </Field>
         </div>
-      </section>
+      </UpdateSection>
 
-      <section className="rounded-surface border border-cv-border bg-cv-surface p-4 shadow-surface">
-        <div className="mb-4 flex items-start gap-3">
-          <span className={sectionIconClasses}>
-            <NotebookPen aria-hidden="true" className="size-icon-md" />
-          </span>
-          <div>
-            <h3 className="font-semibold text-cv-text">הערות</h3>
-            <p className="text-support text-cv-text-muted">מידע שימושי לשיחה או למעקב הבא.</p>
-          </div>
-        </div>
+      <UpdateSection description="מידע שימושי לשיחה או למעקב הבא." icon={NotebookPen} title="הערות">
         <Field error={errors.notes?.message} label="תוכן ההערה">
           {(control) => <Textarea {...control} {...form.register("notes")} className="min-h-28" dir="auto" />}
         </Field>
-      </section>
+      </UpdateSection>
       {saveError == null ? null : (
         <ErrorCallout
           error={saveError}

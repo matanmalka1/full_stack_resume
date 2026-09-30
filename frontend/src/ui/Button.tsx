@@ -3,7 +3,9 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { type ClassValue, cx } from "./cx";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
+/* "quiet" is the muted control that sits among content - a row's tools, a record's menu, a
+   dismiss mark - where an accent-coloured ghost would read as the step to take. */
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "quiet" | "destructive";
 
 /* Focus comes from the global :focus-visible rule in styles.css (A.2). No component
    opts in by hand, and none clears the outline. */
@@ -14,6 +16,8 @@ const sizeButtonClasses = {
   compact: "min-h-8 px-2.5",
   default: "min-h-11 px-4",
   icon: "size-11 px-0",
+  "icon-md": "size-9 px-0",
+  "icon-sm": "size-8 px-0",
   flush: "min-h-11 px-0",
 } as const;
 
@@ -23,6 +27,7 @@ const variantButtonClasses: Record<ButtonVariant, string> = {
   secondary:
     "border border-cv-border bg-cv-surface text-cv-text shadow-surface hover:border-cv-border-strong hover:bg-cv-surface-muted disabled:border-cv-border disabled:bg-cv-surface-muted disabled:text-cv-text-muted disabled:opacity-60",
   ghost: "text-cv-accent hover:bg-cv-accent-soft disabled:text-cv-text-muted",
+  quiet: "text-cv-text-muted hover:bg-cv-surface-muted hover:text-cv-text disabled:opacity-50",
   destructive:
     "bg-cv-blocker text-cv-on-accent shadow-surface hover:-translate-y-0.5 hover:bg-cv-blocker-hover disabled:bg-cv-surface-muted disabled:text-cv-text-muted",
 };

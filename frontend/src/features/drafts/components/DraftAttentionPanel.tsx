@@ -3,10 +3,8 @@ import { ArrowLeft, OctagonAlert } from "lucide-react";
 import type { ApplicationDetail, DraftClaim } from "@/api/contracts";
 import { outlineClaims } from "@/api/documents";
 import { routePaths } from "@/app/routePaths";
-import { reasonTitle } from "@/features/preparation";
+import { ReasonCallout } from "@/features/preparation";
 import { Button } from "@/ui/Button";
-import { Callout } from "@/ui/Callout";
-import { Disclosure } from "@/ui/Disclosure";
 import type { EditableDocument } from "../model/drafts.types";
 
 type ReviewReason = ApplicationDetail["review_reasons"][number];
@@ -54,7 +52,7 @@ const UnsupportedLines = ({
   </div>
 );
 
-const ReasonCallout = ({
+const DraftReasonCallout = ({
   detail,
   draft,
   onNavigate,
@@ -80,7 +78,7 @@ const ReasonCallout = ({
   const toClaim = claim !== undefined && editAllowed;
 
   return (
-    <Callout
+    <ReasonCallout
       action={
         toClaim ? (
           <Button onClick={() => onShowClaim(claim.claim_id)} variant="secondary">
@@ -92,7 +90,8 @@ const ReasonCallout = ({
           </Button>
         ) : undefined
       }
-      title={reasonTitle(reason.code, "נדרשת החלטה לפני אישור")}
+      fallbackTitle="נדרשת החלטה לפני אישור"
+      reason={reason}
       tone="blocker"
     >
       <p>
@@ -111,12 +110,7 @@ const ReasonCallout = ({
           <UnsupportedLines claims={unsupportedClaims} onShowClaim={onShowClaim} />
         </div>
       ) : null}
-      {/* The server's sentence is evidence, not the explanation: it is English and written
-          for a log, so it stays folded as it is in PreparationAlerts. */}
-      <Disclosure summary="פרטי הסיבה">
-        <p dir="auto">{reason.message}</p>
-      </Disclosure>
-    </Callout>
+    </ReasonCallout>
   );
 };
 
@@ -151,7 +145,7 @@ export const DraftAttentionPanel = ({
       </h2>
 
       {detail.review_reasons.map((reason) => (
-        <ReasonCallout
+        <DraftReasonCallout
           detail={detail}
           draft={draft}
           key={reason.code}

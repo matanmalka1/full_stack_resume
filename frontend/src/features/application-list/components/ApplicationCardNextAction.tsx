@@ -12,6 +12,7 @@ import {
 } from "@/features/preparation";
 import { operationTypeLabels, statusLabels } from "@/features/operations";
 import { buttonClasses } from "@/ui/Button";
+import { IconButton } from "@/ui/IconButton";
 import { cx } from "@/ui/cx";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Tooltip } from "@/ui/Tooltip";
@@ -197,15 +198,15 @@ export const ApplicationCardNextAction = ({
         )}
         {item.next_action == null ? null : (
           <Tooltip label="הסרת התזכורת, ללא רישום השלמה">
-            <button
+            <IconButton
               aria-label={`הסרת התזכורת של ${item.company}`}
-              className="inline-flex size-8 items-center justify-center rounded-control text-cv-text-muted transition-colors hover:bg-cv-surface-muted hover:text-cv-text disabled:opacity-50"
               disabled={clearing}
               onClick={() => onClearNextAction(item)}
-              type="button"
+              size="sm"
+              variant="quiet"
             >
               <X aria-hidden="true" className="size-icon-sm" />
-            </button>
+            </IconButton>
           </Tooltip>
         )}
       </div>

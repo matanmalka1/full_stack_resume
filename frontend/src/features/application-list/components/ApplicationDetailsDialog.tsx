@@ -9,7 +9,7 @@ import { sourceHostname } from "@/features/applications";
 import { preparationResumeDestination, preparationStateLabels, trackLabel } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
-import { formatDateTime } from "@/utils/formatDateTime";
+import { DateTime } from "@/ui/DateTime";
 import { applicationAttention, preparationProgress } from "../model/applicationListPresentation";
 import { ApplicationFitStatus, ApplicationRecruitmentStatus } from "./ApplicationListStatuses";
 import { ApplicationCardNextAction, nextActionHeading } from "./ApplicationCardNextAction";
@@ -70,10 +70,6 @@ const ReadyCv = ({
     </span>
   </div>
 );
-
-/* A timestamp as its own left-to-right island, so the date and time keep their order
-   inside the Hebrew sentence instead of the comma flipping them. */
-const Stamp = ({ value }: { value: string }) => <bdi dir="ltr">{formatDateTime(value, "short")}</bdi>;
 
 /* One Application at a glance, laid out after demo_re's job-details modal: who, its
    four states side by side, the one thing to do next, the finished CV, the posting, the
@@ -205,7 +201,8 @@ export const ApplicationDetailsDialog = ({
         )}
 
         <p className="text-support text-cv-text-muted tabular-nums">
-          נוצרה <Stamp value={application.created_at} /> · עודכנה <Stamp value={application.updated_at} />
+          נוצרה <DateTime format="short" value={application.created_at} /> · עודכנה{" "}
+          <DateTime format="short" value={application.updated_at} />
         </p>
       </div>
     </Dialog>
