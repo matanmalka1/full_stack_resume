@@ -437,7 +437,7 @@ def upgrade() -> None:
             name=op.f("ck_operations_failure_reason_status"),
         ),
         sa.CheckConstraint(
-            "operation_type IN ('analyze_job', 'propose_selection', 'create_draft', 'regenerate_section', 'regenerate_claim', 'render_document')",
+            "operation_type IN ('analyze_job', 'create_draft', 'regenerate_section', 'regenerate_claim', 'render_document')",
             name=op.f("ck_operations_operation_type"),
         ),
         sa.CheckConstraint(
@@ -718,10 +718,8 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("application_id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("analysis_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("selection", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("profile_version", sa.Text(), nullable=False),
-        sa.Column("selection_policy_version", sa.Text(), nullable=False),
         sa.Column("document_hash", sa.Text(), nullable=False),
         sa.Column("content_report", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("checked_basis", sa.Text(), nullable=True),
