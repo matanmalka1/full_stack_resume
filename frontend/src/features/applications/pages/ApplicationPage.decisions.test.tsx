@@ -166,10 +166,13 @@ describe("voluntary matching configuration", () => {
     });
   });
 
+  /* An Emphasis change is classification like any other: it creates a new analysis and
+     leaves the document - drafted or Ready - on the one it was built from. */
   it.each([
-    ["draft_in_progress" as const, { content_check: "outdated" as const }, /וייתכן שגם את תוכן הטיוטה/],
-    ["ready" as const, { content_check: "passed" as const }, /אישור קיים לא יחול עוד על המסמך שהשתנה/],
-  ])("explains the consequence from server state %s", async (preparation_state, extra, message) => {
+    ["draft_in_progress" as const, { content_check: "outdated" as const }],
+    ["ready" as const, { content_check: "passed" as const }],
+  ])("explains the consequence from server state %s", async (preparation_state, extra) => {
+    const message = /המסמך יישאר בנוי על הניתוח הנוכחי/;
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve(jsonResponse(detail({ preparation_state, ...extra })))),
@@ -180,7 +183,7 @@ describe("voluntary matching configuration", () => {
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("דגש"), { target: { value: "new-business" } });
     expect(screen.getByText(message)).toBeInTheDocument();
-    expect(screen.getByText("השמירה תבחר את העובדות מחדש")).toBeInTheDocument();
+    expect(screen.getByText("השמירה תיצור ניתוח חדש")).toBeInTheDocument();
   });
 
   it("keeps local choices visible when the server reports a context conflict", async () => {
