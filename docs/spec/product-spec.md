@@ -241,7 +241,9 @@ decision.
 11. AI outputs are Proposals. Schema validation, deterministic policy, and an
     application commit decide what becomes state.
 12. AI failure never triggers a silent fallback, and analysis and drafting have no
-    rules-based form to fall back to. The user may retry.
+    rules-based form to fall back to. The user may retry. A proposed line withheld under
+    §10.1 is not a fallback: it keeps the wording it already held, and the Operation
+    reports it.
 13. Provider, cancelled, or stale output may exist as inactive immutable evidence. It
     becomes current only through a successful commit against its original
     preconditions.
@@ -413,14 +415,24 @@ confirmation, and its provenance says semantic review, not deterministic proof. 
 contradiction overrides positive review. Unsupported or strengthened wording is a
 blocker. General CV approval resolves none of these.
 
-In the implemented lifecycle, the writer and the reviewer run inside one Operation. Only
-a fully `supported` result activates. `uncertain` and `unsupported` fail the Operation
-(`CLAIM_REVIEW_UNCERTAIN`, `CLAIM_REVIEW_UNSUPPORTED`): both provider responses stay as
-inactive evidence, the document is unchanged, and retry or correction is offered. Review
-failure, cancellation, invalid output, missing assertion coverage, or stale evidence
-never makes wording eligible.
+In the implemented lifecycle, the writer and the reviewer run inside one Operation, and
+their answer is judged line by line. A proposed line becomes state only through a hard
+check it passes or a fully `supported`, attested review. Any other line is *withheld*: it
+keeps exactly the wording, links and proof it held before the Operation (for a first
+draft, its frame line composed from canonical facts), and none of its proposed content
+reaches the document. The lines that passed are written, and the Operation succeeds and
+lists every withheld line. A writer line refused before review (a fact outside the task's
+pool, no linked fact, wording the edit path rejects) is withheld the same way; a claim ID
+the document does not hold names no line and is ignored. Only when every line the answer
+named is withheld does the Operation fail, with `unsupported` (`CLAIM_REVIEW_UNSUPPORTED`),
+then `uncertain` (`CLAIM_REVIEW_UNCERTAIN`), then `INVALID_OUTPUT` as its code: both
+provider responses stay as inactive evidence, the document is unchanged, and retry or
+correction is offered. A single-line task (`regenerate_claim`, or a review of the user's
+own wording) therefore succeeds or fails whole. Review failure, cancellation, invalid
+output, missing assertion coverage, or stale evidence never makes wording eligible.
 
-Failed semantic reviews expose a focused clarification panel: the rejected sentence,
+Failed semantic reviews and withheld lines expose a focused clarification panel: the
+rejected sentence,
 its section and preceding heading when present, the exact canonical meanings and
 renderings read during that review, and the reviewer's explanation when one was
 recorded, labeled as the reviewer's reading rather than proof. This context is recorded with the failure, not

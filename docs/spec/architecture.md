@@ -477,7 +477,10 @@ configured no adapter is built, and nothing is sent.
 Each task receives minimal allowed context. Provider output passes schema validation and
 deterministic checks before it becomes domain state; the claim-review evidence check
 (`domain/claim_review.py`) runs at activation and again at validation for approval, so
-the evidence that let a line in is the evidence that keeps it in. Pre-approval
+the evidence that let a line in is the evidence that keeps it in. It pairs each linked
+fact with its own verbatim source quote in whatever order the reviewer listed them: the
+pairing attests support, the order attests nothing. Checks apply per line; a line that
+fails keeps its prior wording and is reported (product-spec §10.1). Pre-approval
 validation is synchronous and deterministic over stored evidence and starts no AI work.
 
 **Analysis contract.** Requirement identity is the snapshot plus the requirement's
