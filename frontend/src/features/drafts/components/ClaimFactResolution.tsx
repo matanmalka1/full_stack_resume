@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 /* Cached history is copied before reversal; ES2022 does not expose Array#toReversed. */
@@ -37,6 +37,7 @@ import { useServerFieldErrors } from "@/hooks/useServerFieldErrors";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Checkbox } from "@/ui/Checkbox";
+import { DisclosureSummary } from "@/ui/Disclosure";
 import { QueryState } from "@/ui/QueryState";
 
 interface ClaimFactResolutionProps {
@@ -77,6 +78,7 @@ export const ClaimFactResolution = ({
   section,
 }: ClaimFactResolutionProps) => {
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
   /* The claim's own text is the fact's meaning, and the claim under this panel can
      change. `values` keeps that field tracking the claim without an effect writing into
      state after the fact, and `keepDirtyValues` stops it overwriting anything typed. */
@@ -172,10 +174,13 @@ export const ClaimFactResolution = ({
     });
 
   return (
-    <details className="rounded-control border border-cv-border px-3 py-2 open:bg-cv-surface-muted open:p-4">
-      <summary className="cursor-pointer text-support font-semibold text-cv-accent hover:text-cv-accent-hover">
+    <details
+      className="rounded-control border border-cv-border px-3 py-2 open:bg-cv-surface-muted open:p-4"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <DisclosureSummary className="text-support font-semibold text-cv-accent hover:text-cv-accent-hover" open={open}>
         הפיכת הטקסט לעובדה מאושרת
-      </summary>
+      </DisclosureSummary>
       {error === null ? null : (
         <ErrorCallout
           className="mt-4"

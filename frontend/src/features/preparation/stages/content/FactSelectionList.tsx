@@ -1,4 +1,4 @@
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useId, useState } from "react";
 
 import type { Requirement } from "@/api/analyses";
@@ -8,7 +8,7 @@ import { EmptyState } from "@/ui/EmptyState";
 import { Input } from "@/ui/Input";
 import { LtrText } from "@/ui/LtrText";
 import { ViewSwitch } from "@/ui/ViewSwitch";
-import { cx } from "@/ui/cx";
+import { DisclosureChevron } from "@/ui/Disclosure";
 import { type FactFilter, candidateIncluded, factGroups, includableFactIds } from "../../model/factGroups";
 import { type FactChoice, FactRow } from "./FactRow";
 
@@ -122,13 +122,7 @@ export const FactSelectionList = ({
                     }
                     type="button"
                   >
-                    <ChevronDown
-                      aria-hidden="true"
-                      className={cx(
-                        "size-icon-md shrink-0 text-cv-text-muted transition-transform duration-200",
-                        open ? "rotate-0" : "rotate-90",
-                      )}
-                    />
+                    <DisclosureChevron className="text-cv-text-muted" open={open} />
                     <span className="flex min-w-0 flex-col">
                       <LtrText className="text-support font-semibold text-cv-text">{group.section}</LtrText>
                       <span className="text-caption text-cv-text-muted">

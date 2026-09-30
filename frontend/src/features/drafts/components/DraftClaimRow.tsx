@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { ArrowDown, ArrowUp, Check, ChevronDown, type LucideIcon, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, type LucideIcon, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
 import type { DraftClaim, DraftFact } from "@/api/contracts";
 import { Button } from "@/ui/Button";
@@ -7,6 +7,7 @@ import { IconButton } from "@/ui/IconButton";
 import { Callout } from "@/ui/Callout";
 import { Dialog } from "@/ui/Dialog";
 import { ReasonDetails } from "@/features/preparation";
+import { DisclosureChevron } from "@/ui/Disclosure";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { Textarea } from "@/ui/Input";
 import { Tooltip } from "@/ui/Tooltip";
@@ -268,10 +269,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
               onClick={() => setSourceOpen(!sourceOpen)}
               type="button"
             >
-              <ChevronDown
-                aria-hidden="true"
-                className={cx("size-icon-md transition-transform duration-200", sourceOpen ? "rotate-0" : "rotate-90")}
-              />
+              <DisclosureChevron open={sourceOpen} />
               {sourceLabel}
             </button>
           ) : null}
