@@ -7,7 +7,6 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from .base import StrictModel
-from .selection import OmissionReason, SelectionManifest
 from .taxonomy import Emphasis, ProfileName, Track
 
 ClaimStyle = Literal["paragraph", "heading", "date", "bullet", "item", "contact", "headline"]
@@ -100,9 +99,8 @@ class DraftDocument(StrictModel):
     headline: ClaimLine
     contacts: list[ClaimLine]
     sections: list[ResumeSection]
+    #: Every fact the claims link, sorted: the facts this document uses.
     selected_fact_ids: list[str]
-    omitted_facts: dict[str, OmissionReason] = {}
-    selection: SelectionManifest | None = None
     fact_store_version: str = Field(frozen=True)
     content_hash: str = ""
 

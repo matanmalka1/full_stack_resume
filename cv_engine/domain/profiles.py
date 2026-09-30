@@ -7,7 +7,7 @@ from ..util import canonical_json, sha256_text
 from .contracts.knowledge import FactStatus, Profile
 from .contracts.taxonomy import Emphasis, ProfileName, Track
 from .facts import FactStore
-from .selection import ROLE_BLOCK_TAG
+from .frame import ROLE_BLOCK_TAG
 
 
 class ProfileStoreError(ValueError):

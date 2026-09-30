@@ -9,43 +9,18 @@ from .claim_review import REVIEW_POLICY_VERSION, review_problems
 from .contracts.analysis import JobAnalysis
 from .contracts.drafts import ClaimLine, DraftDocument
 from .contracts.knowledge import Profile
-from .contracts.selection import SelectionManifest
 from .contracts.validation import ValidationIssue, ValidationReport
 from .draft_markdown import serialize_markdown
 from .drafts import draft_content_hash, render_composite_claim, validate_derived_wording
 from .facts import FactStore, FactStoreError
+from .frame import dangling_heading, misplaced_role_claims
 from .presentations import PresentationStore
-from .selection import STRUCTURAL_STYLES, EmphasisPolicyStore
 
 STALE_OR_UNSUPPORTED = {
     r"\b3\s*[–-]\s*4\s+sales representatives\b": "stale-team-size",
     r"\b30%\s+(?:YoY|year[- ]over[- ]year)\b": "stale-annual-growth",
     r"\b(?:sold|selling|sales of)\s+(?:SaaS|software|subscriptions)\b": "unsupported-saas-sales",
 }
-
-
-def _dangling_heading(claims: list) -> str | None:
-    """The last heading in a section that no evidence follows, if any."""
-    heading: str | None = None
-    supported = True
-    for claim in claims:
-        if claim.style == "heading":
-            if heading is not None and not supported:
-                return heading
-            heading, supported = claim.text, False
-        elif claim.style not in STRUCTURAL_STYLES:
-            supported = True
-    return None if supported else heading
-
-
-def _uncovered_tags(tags: list[str], selected_fact_ids: list[str], facts: FactStore) -> list[str]:
-    present = {
-        tag
-        for fact_id in selected_fact_ids
-        if fact_id in facts.facts
-        for tag in facts.get(fact_id).tags
-    }
-    return sorted(set(tags) - present)
 
 
 @dataclass
@@ -55,11 +30,6 @@ class _ValidationContext:
     facts: FactStore
     profile: Profile
     analysis: JobAnalysis
-    #: The CV document's selection, the authoritative record of the decisions
-    #: the content was built from. Optional only so a caller with no document in
-    #: hand degrades to skipping the comparison rather than crashing.
-    selection: SelectionManifest | None
-    policies: EmphasisPolicyStore | None
     presentations: PresentationStore | None
     issues: list[ValidationIssue] = field(default_factory=list)
     groups: dict[str, bool] = field(
@@ -310,12 +280,6 @@ def _profile_matches(context: _ValidationContext) -> None:
         context.add_issue("profile", "profile-mismatch", "Draft and selected Profile disagree.")
     if draft.emphasis not in profile.allowed_emphases:
         context.add_issue("profile", "emphasis-not-allowed", draft.emphasis.value)
-    if context.selection is not None and draft.emphasis is not context.selection.emphasis:
-        context.add_issue(
-            "profile",
-            "selection-plan-emphasis-mismatch",
-            "Draft Emphasis differs from the document's authoritative selection.",
-        )
     # Neither low Fit nor an unaccepted hard gap is a validation finding. Both
     # say the candidate is a poor match for this posting, which is the user's
     # judgement to make and not a defect in the document: a CV may be submitted
@@ -361,62 +325,24 @@ def _sections_match_profile(context: _ValidationContext) -> None:
                     "fact-outside-profile-section",
                     f"claim {claim.claim_id} links facts outside {section.name}: {disallowed}",
                 )
-        if spec.max_claims is not None and len(section.claims) > spec.max_claims:
-            context.add_issue(
-                "structure",
-                "section-budget-exceeded",
-                f"{section.name}: {len(section.claims)} claims over a budget of {spec.max_claims}",
-            )
-        missing_pins = sorted(
-            set(spec.pinned_fact_ids)
-            - {fact_id for claim in section.claims for fact_id in claim.fact_ids}
-        )
-        if missing_pins:
-            context.add_issue(
-                "structure",
-                "pinned-fact-dropped",
-                f"{section.name} lost pinned facts: {missing_pins}",
-            )
-        trailing_structural = _dangling_heading(section.claims)
+        # Section budgets, per-role minimums, tags and pins are guidance the writer
+        # received (docs/decisions/ai-owned-selection.md). What is checked here is
+        # structure: no role title stands without evidence, and no line sits under a
+        # role its facts do not belong to.
+        trailing_structural = dangling_heading(section.claims)
         if trailing_structural:
             context.add_issue(
                 "structure",
                 "role-block-empty",
                 f"{section.name}: heading {trailing_structural} has no claims under it",
             )
-
-
-def _required_tags_are_covered(context: _ValidationContext) -> None:
-    uncovered = _uncovered_tags(
-        context.profile.required_tags, context.draft.selected_fact_ids, context.facts
-    )
-    if uncovered:
-        context.add_issue(
-            "profile",
-            "required-tag-uncovered",
-            f"no selected fact evidences required tags: {uncovered}",
-        )
-
-
-def _emphasis_tags_are_covered(context: _ValidationContext) -> None:
-    if context.policies is None:
-        return
-    policy = context.policies.get(context.draft.emphasis)
-    covered = [
-        tag
-        for tag in policy.preferred_tags
-        if tag not in _uncovered_tags([tag], context.draft.selected_fact_ids, context.facts)
-    ]
-    if len(covered) < policy.minimum_coverage:
-        context.add_issue(
-            "profile",
-            "emphasis-coverage-low",
-            (
-                f"{context.draft.emphasis.value} covers {len(covered)} of its preferred tags; "
-                f"policy expects {policy.minimum_coverage}"
-            ),
-            hard=False,
-        )
+        misplaced = misplaced_role_claims(section.claims, spec, context.facts)
+        if misplaced:
+            context.add_issue(
+                "structure",
+                "role-claim-misplaced",
+                f"{section.name}: claims under a role their facts do not belong to: {misplaced}",
+            )
 
 
 def _selected_fact_set_matches(context: _ValidationContext) -> None:
@@ -473,8 +399,6 @@ VALIDATION_RULES: tuple[DraftRule, ...] = (
     _claims_avoid_prohibited_wording,
     _profile_matches,
     _sections_match_profile,
-    _required_tags_are_covered,
-    _emphasis_tags_are_covered,
     _selected_fact_set_matches,
     _historical_titles_are_headings,
     _headline_is_safe,
@@ -488,8 +412,6 @@ def validate_draft(
     profile: Profile,
     analysis: JobAnalysis,
     *,
-    selection: SelectionManifest | None = None,
-    policies: EmphasisPolicyStore | None = None,
     presentations: PresentationStore | None = None,
 ) -> ValidationReport:
     """Check a draft against the Profile, the facts, and the classification.
@@ -497,12 +419,6 @@ def validate_draft(
     `markdown` is the stored document's exact text, read by the caller, so this
     stays a decision about content rather than about files. A document that does
     not exist is an empty string, which fails the manifest check as it should.
-
-    `policies` enables the Emphasis coverage warning, which needs the authoritative
-    tag policy rather than the draft's own selection manifest — the manifest travels
-    in an editable working file and is not trusted here. Omitting it drops that
-    warning only; every hard gate, the Profile's `required_tags` among them, is
-    derived from arguments that are always present.
     """
     context = _ValidationContext(
         draft=draft,
@@ -510,8 +426,6 @@ def validate_draft(
         facts=facts,
         profile=profile,
         analysis=analysis,
-        selection=selection,
-        policies=policies,
         presentations=presentations,
     )
     for rule in VALIDATION_RULES:

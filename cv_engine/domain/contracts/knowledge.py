@@ -81,20 +81,16 @@ class FactSource(StrictModel):
 class ResumeSectionSpec(StrictModel):
     """A section's candidate pool, not its output.
 
-    `fact_ids` is everything this section is *allowed* to say; the selection
-    policy chooses a subset of it under `max_claims`. `pinned_fact_ids` names
-    the non-structural facts that must survive regardless of score — the ones
-    that keep a role block from rendering as a heading with no evidence.
-    Structural facts (headings, dates, contacts) are pinned implicitly.
+    `fact_ids` is everything this section is *allowed* to say, in the order it is
+    laid out; `draft_resume` chooses a subset of it. Structural facts (headings,
+    dates, contacts) are always present.
 
-    A section budget alone says nothing about how the budget is spread across
-    the roles inside it, so a long, senior role can end up with two bullets
-    while an older one takes seven. `min_claims_per_role` and
-    `min_quantitative_per_role` are floors each role block must reach before
-    the rest of the budget is handed out by rank, and `max_claims_per_role` is
-    the ceiling that stops one role absorbing what is left: an older role
-    carrying seven bullets under a newer one carrying two reads as a career
-    running backwards, however the ranking got there.
+    The rest is guidance the writer receives and nothing enforces
+    (docs/decisions/ai-owned-selection.md): `max_claims` is the section budget,
+    `pinned_fact_ids` the facts the Profile prefers to keep, `min_claims_per_role`
+    and `min_quantitative_per_role` the floors a role block should reach, and
+    `max_claims_per_role` the ceiling that stops one role absorbing the section.
+    The validators below keep that guidance self-consistent.
     """
 
     name_en: str
@@ -134,10 +130,9 @@ class EmphasisPolicy(StrictModel):
     """How one Emphasis weights the shared canonical tag vocabulary.
 
     Emphasis is orthogonal to Profile, so its policy lives once here rather than
-    being copied into every Profile that allows it. `preferred_tags` is a
-    coverage expectation, not a structural invariant: unlike `Profile.required_tags`
-    it never forces a fact into the document, it only reports when the selected
-    content drifted away from what the Emphasis is supposed to be about.
+    being copied into every Profile that allows it. Weights, preferred tags and
+    minimum coverage are guidance `draft_resume` receives; none of them forces or
+    refuses a fact.
     """
 
     emphasis: Emphasis

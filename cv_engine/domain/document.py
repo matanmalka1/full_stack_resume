@@ -15,7 +15,6 @@ from ..util import canonical_json, sha256_text
 from .contracts.document import CVDocument
 from .contracts.drafts import DraftDocument
 from .contracts.knowledge import Fact
-from .contracts.selection import SelectionManifest
 
 
 class PreparationState(StrEnum):
@@ -40,37 +39,32 @@ class ContentCheck(StrEnum):
     PASSED = "passed"
 
 
-def document_hash(
-    analysis_id: str, selection: SelectionManifest, content: DraftDocument | None
-) -> str:
+def document_hash(analysis_id: str, content: DraftDocument | None) -> str:
     return sha256_text(
         canonical_json(
             {
                 "analysis_id": analysis_id,
-                "selection": selection.model_dump(mode="json"),
                 "content": None if content is None else content.model_dump(mode="json"),
             }
         )
     )
 
 
-def dependent_fact_ids(
-    selection: SelectionManifest, content: DraftDocument | None
-) -> frozenset[str]:
-    """The facts the document depends on: its selection united with its claims' facts.
+def dependent_fact_ids(content: DraftDocument | None) -> frozenset[str]:
+    """The facts the document depends on: every fact its claims link.
 
     The same set decides `facts_hash` and the fact review reasons (§7), so a fact can
-    never block a document without also being able to change its basis.
+    never block a document without also being able to change its basis. A document
+    without content depends on no fact.
     """
-    fact_ids = set(selection.selected_fact_ids) | set(selection.pinned_fact_ids)
-    if content is not None:
-        claims = [
-            content.headline,
-            *content.contacts,
-            *(claim for section in content.sections for claim in section.claims),
-        ]
-        fact_ids.update(fact_id for claim in claims for fact_id in claim.fact_ids)
-    return frozenset(fact_ids)
+    if content is None:
+        return frozenset()
+    claims = [
+        content.headline,
+        *content.contacts,
+        *(claim for section in content.sections for claim in section.claims),
+    ]
+    return frozenset(fact_id for claim in claims for fact_id in claim.fact_ids)
 
 
 def facts_hash(fact_ids: Iterable[str], facts: Mapping[str, Fact]) -> str:
@@ -91,7 +85,7 @@ def facts_hash(fact_ids: Iterable[str], facts: Mapping[str, Fact]) -> str:
 
 
 def basis(document: CVDocument, facts: Mapping[str, Fact]) -> str:
-    dependent = dependent_fact_ids(document.selection, document.content)
+    dependent = dependent_fact_ids(document.content)
     return sha256_text(f"{document.document_hash}:{facts_hash(dependent, facts)}")
 
 

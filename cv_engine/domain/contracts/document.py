@@ -13,28 +13,25 @@ from pydantic import Field, StringConstraints, model_validator
 
 from .base import StrictModel
 from .drafts import DraftDocument
-from .selection import SelectionManifest
 from .validation import ValidationReport
 
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
 class BuiltWith(StrictModel):
-    """The profile and selection-policy versions the selection was built with.
+    """The Profile version the document was built with.
 
-    Drives the PROFILE_CHANGED / POLICY_CHANGED warnings only: every gate validates
-    against the current versions, never against these.
+    Drives the PROFILE_CHANGED warning only: every gate validates against the current
+    version, never against this.
     """
 
     profile_version: str = Field(min_length=1)
-    selection_policy_version: str = Field(min_length=1)
 
 
 class CVDocument(StrictModel):
     id: str
     application_id: str
     analysis_id: str
-    selection: SelectionManifest
     content: DraftDocument | None = None
     built_with: BuiltWith
     document_hash: Sha256
