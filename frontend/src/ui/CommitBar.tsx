@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { cx } from "./cx";
@@ -55,57 +55,81 @@ export const CommitBarTargetContext = createContext<HTMLElement | null | undefin
    do now" in a shape of its own - a row of buttons in the flow on the preparation screen,
    a pinned approval in the editor, a download inside the identity card on the ready
    screen - and it is this component, at all three, that makes the answer one shape. */
-const CommitBarSurface = ({ back, children, inline, label, primary, result }: CommitBarProps) => (
-  <div
-    className={cx(
-      !inline && "sticky bottom-4 z-(--cv-z-sticky)",
-      "rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl",
-    )}
-  >
-    {/* Two sides only where there is room for two. The action column is `max-content`, so
+/* The pinned bar's height, plus its `bottom-4` offset and a little air, published as the
+   page's bottom scroll padding (styles.css) for as long as the bar is mounted. */
+const useScrollClearance = (pinned: boolean) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!pinned || node === null || typeof ResizeObserver === "undefined") return undefined;
+    const root = document.documentElement.style;
+    const observer = new ResizeObserver(() => {
+      root.setProperty("--cv-commit-bar-clearance", `${Math.ceil(node.getBoundingClientRect().height) + 32}px`);
+    });
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      root.removeProperty("--cv-commit-bar-clearance");
+    };
+  }, [pinned]);
+  return ref;
+};
+
+const CommitBarSurface = ({ back, children, inline, label, primary, result }: CommitBarProps) => {
+  const ref = useScrollClearance(!inline);
+  return (
+    <div
+      ref={ref}
+      className={cx(
+        !inline && "sticky bottom-4 z-(--cv-z-sticky)",
+        "rounded-surface border border-cv-border bg-cv-surface/95 p-card-padding shadow-floating backdrop-blur-xl",
+      )}
+    >
+      {/* Two sides only where there is room for two. The action column is `max-content`, so
         on a phone it took the width of "רישום הגשת הגרסה הזו" plus "הורדת PDF" and left
         the sentence beside it about ninety pixels - one word per line, for four lines.
 
         Below `sm` the sentence takes the first row and the way back shares the second
         with the command. Stacked one per row - back, label, sentence, command - the
         pinned bar covered a quarter of a phone's screen over the form it closes. */}
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_max-content] sm:gap-4">
-      <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
-        {/* The two wrappers exist for the phone grid only; from `sm` they dissolve and
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_max-content] sm:gap-4">
+        <div className="contents sm:flex sm:min-w-0 sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2">
+          {/* The two wrappers exist for the phone grid only; from `sm` they dissolve and
             their contents flow in the opening side's row as they always have. */}
-        {back === undefined ? null : <div className="col-start-1 row-start-2 min-w-0 sm:contents">{back}</div>}
-        {label === undefined && children === undefined ? null : (
-          <div className="col-span-2 min-w-0 sm:contents">
-            {label === undefined ? (
-              children
-            ) : (
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-caption font-bold text-cv-text-muted">{label}</span>
-                {children}
-              </div>
-            )}
-          </div>
-        )}
+          {back === undefined ? null : <div className="col-start-1 row-start-2 min-w-0 sm:contents">{back}</div>}
+          {label === undefined && children === undefined ? null : (
+            <div className="col-span-2 min-w-0 sm:contents">
+              {label === undefined ? (
+                children
+              ) : (
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-caption font-bold text-cv-text-muted">{label}</span>
+                  {children}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div
+          className={cx(
+            "flex flex-wrap items-center gap-3 sm:col-start-auto sm:row-start-auto sm:justify-self-end",
+            back === undefined ? "col-span-2 sm:col-span-1" : "col-start-2 row-start-2 justify-self-end",
+          )}
+        >
+          {primary}
+        </div>
       </div>
-      <div
-        className={cx(
-          "flex flex-wrap items-center gap-3 sm:col-start-auto sm:row-start-auto sm:justify-self-end",
-          back === undefined ? "col-span-2 sm:col-span-1" : "col-start-2 row-start-2 justify-self-end",
-        )}
-      >
-        {primary}
-      </div>
+      {result === undefined ? null : (
+        <LiveRegion
+          className="mt-3 border-t border-cv-border pt-3 text-support font-medium text-cv-text"
+          visuallyHidden={false}
+        >
+          {result}
+        </LiveRegion>
+      )}
     </div>
-    {result === undefined ? null : (
-      <LiveRegion
-        className="mt-3 border-t border-cv-border pt-3 text-support font-medium text-cv-text"
-        visuallyHidden={false}
-      >
-        {result}
-      </LiveRegion>
-    )}
-  </div>
-);
+  );
+};
 
 export const CommitBar = (props: CommitBarProps) => {
   const target = useContext(CommitBarTargetContext);
