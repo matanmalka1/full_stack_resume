@@ -76,7 +76,6 @@ class TaskContract:
     input_schema_version: str
     output: str
     output_schema_version: str
-    critical_state: bool
     model: str | None = None
 
 

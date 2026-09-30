@@ -160,7 +160,6 @@ class OperationSources(OperationModel):
     job_analysis_id: str | None = None
     expected_document_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     knowledge_context_hash: str | None = None
-    dependency_hashes: dict[str, str] = {}
 
 
 _SECRET_KEYS = frozenset(
