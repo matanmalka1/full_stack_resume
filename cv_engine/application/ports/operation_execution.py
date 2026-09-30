@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ..operations import FailureReason, OperationFailureCode, OperationPhase, PersistedOperation
+from ..operations import (
+    ClaimReviewReason,
+    FailureReason,
+    OperationFailureCode,
+    OperationPhase,
+    PersistedOperation,
+)
 from .transactions import ReadTransaction, WriteTransaction
 
 
@@ -69,7 +75,13 @@ class OperationExecutionStore(Protocol):
         retry_at: str | None = None,
     ) -> int: ...
     def complete_operation(
-        self, tx: WriteTransaction, operation_id: str, *, runner_id: str, now: str | None = None
+        self,
+        tx: WriteTransaction,
+        operation_id: str,
+        *,
+        runner_id: str,
+        withheld_claims: ClaimReviewReason | None = None,
+        now: str | None = None,
     ) -> PersistedOperation: ...
     def fail_operation(
         self,

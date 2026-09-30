@@ -202,6 +202,10 @@ operations = Table(
     Column("failure_code", Text),
     Column("safe_failure_detail", Text),
     Column("failure_reason", JSONB),
+    # Lines a succeeded writer Operation withheld (each kept its prior wording), with
+    # the refused wording and the sources read - the success-side twin of a
+    # `claim_review` failure reason.
+    Column("withheld_claims", JSONB),
     Column("technical_log_reference", Text),
     Column("retry_of_operation_id", UUID(as_uuid=False), ForeignKey("operations.id")),
     Column("attempts_completed", Integer, nullable=False, server_default=text("0")),
@@ -252,6 +256,15 @@ operations = Table(
         "failure_reason IS NULL OR "
         "(jsonb_typeof(failure_reason) = 'object' AND failure_reason ? 'code')",
         name="failure_reason_shape",
+    ),
+    CheckConstraint(
+        "withheld_claims IS NULL OR status = 'succeeded'",
+        name="withheld_claims_status",
+    ),
+    CheckConstraint(
+        "withheld_claims IS NULL OR "
+        "(jsonb_typeof(withheld_claims) = 'object' AND withheld_claims ? 'code')",
+        name="withheld_claims_shape",
     ),
     UniqueConstraint("operation_type", "idempotency_key"),
 )

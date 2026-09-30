@@ -9,6 +9,7 @@ from time import sleep
 from typing import Any, Protocol
 
 from .operations import (
+    ClaimReviewReason,
     FailureReason,
     OperationFailureCode,
     OperationOutputReference,
@@ -64,6 +65,8 @@ class PreparedOperation:
     outputs: tuple[OperationOutputReference, ...] = ()
     activate_outputs: bool = True
     terminal_failure: OperationExecutionError | None = None
+    #: Proposed lines the execution withheld; recorded only if the Operation succeeds.
+    withheld_claims: ClaimReviewReason | None = None
 
 
 class OperationHandler(Protocol):
@@ -383,7 +386,12 @@ class OperationRunner:
                         )
                 terminal_failure = prepared.terminal_failure
                 if terminal_failure is None:
-                    result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
+                    result = store.complete_operation(
+                        tx,
+                        operation.id,
+                        runner_id=self.runner_id,
+                        withheld_claims=prepared.withheld_claims,
+                    )
                 else:
                     # A terminal validation result is still immutable evidence.  The
                     # handler has recorded it against the inactive output above; commit

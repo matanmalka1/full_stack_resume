@@ -412,6 +412,7 @@ def upgrade() -> None:
         sa.Column("failure_code", sa.Text(), nullable=True),
         sa.Column("safe_failure_detail", sa.Text(), nullable=True),
         sa.Column("failure_reason", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("withheld_claims", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("technical_log_reference", sa.Text(), nullable=True),
         sa.Column("retry_of_operation_id", sa.UUID(as_uuid=False), nullable=True),
         sa.Column("attempts_completed", sa.Integer(), server_default=sa.text("0"), nullable=False),
@@ -435,6 +436,14 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "failure_reason IS NULL OR status IN ('failed', 'cancelled')",
             name=op.f("ck_operations_failure_reason_status"),
+        ),
+        sa.CheckConstraint(
+            "withheld_claims IS NULL OR status = 'succeeded'",
+            name=op.f("ck_operations_withheld_claims_status"),
+        ),
+        sa.CheckConstraint(
+            "withheld_claims IS NULL OR (jsonb_typeof(withheld_claims) = 'object' AND withheld_claims ? 'code')",
+            name=op.f("ck_operations_withheld_claims_shape"),
         ),
         sa.CheckConstraint(
             "operation_type IN ('analyze_job', 'create_draft', 'regenerate_section', 'regenerate_claim', 'render_document')",

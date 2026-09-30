@@ -280,7 +280,9 @@ class RejectedClaimReview(OperationModel):
     text: str
     #: `unattested`: the reviewer answered `supported`, but its evidence failed the
     #: deterministic check (`problems` says which), so the line is not authorized.
-    verdict: Literal["uncertain", "unsupported", "unattested"]
+    #: `refused`: the engine refused the writer's wording or links before any review -
+    #: a fact outside the pool, no linked fact, or wording the edit path rejects.
+    verdict: Literal["uncertain", "unsupported", "unattested", "refused"]
     sources: list[ClaimReviewSource]
     #: The deterministic checks an `unattested` line's evidence failed; empty otherwise.
     problems: list[ReviewProblemCode] = Field(default_factory=list)
@@ -321,6 +323,9 @@ class OperationView(OperationModel):
     failure_code: OperationFailureCode | None = None
     safe_failure_detail: str | None = None
     failure_reason: FailureReason | None = None
+    #: A succeeded writer Operation's proposed lines that were withheld: each kept the
+    #: wording it had before the Operation, and the refused wording is listed here.
+    withheld_claims: ClaimReviewReason | None = None
     retry_of_operation_id: str | None = None
     provider: str | None = None
     model: str | None = None
