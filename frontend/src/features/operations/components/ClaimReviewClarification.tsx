@@ -7,10 +7,26 @@ import { StatusBadge } from "@/ui/StatusBadge";
 
 type ReviewReason = Extract<NonNullable<Operation["failure_reason"]>, { code: "claim_review" }>;
 type RejectedClaim = ReviewReason["claims"][number];
+type ReviewProblem = NonNullable<RejectedClaim["problems"]>[number];
 
 const verdictLabels: Record<RejectedClaim["verdict"], string> = {
   uncertain: "לא הוכרע",
   unsupported: "לא נתמך",
+  unattested: "הראיות לא אומתו",
+};
+
+/* The checks a `supported` answer's evidence failed. The reviewer said yes, so its own
+   explanation reads as approval; only these say why the line was still refused. Keyed by
+   the generated union, so a new check fails the build until it is worded here. */
+const problemLabels: Record<ReviewProblem, string> = {
+  "invalid-review-evidence": "הבודק לא פירט על מה נשען אישור השורה.",
+  "incomplete-review-coverage": "הבודק לא בדק את כל השורה - חלק מהניסוח לא נבדק מול העובדות.",
+  "invalid-review-claim-quote": "הבודק ציטט מהשורה ניסוח שאינו מופיע בה.",
+  "invalid-review-source-quote": "הבודק ציטט מהעובדות טקסט שאינו מופיע בהן.",
+  "stale-review-source": "השורה מקושרת לעובדה שאינה מאושרת עוד.",
+  "review-fact-coverage-mismatch":
+    "השורה נשענת על עובדה שאינה מקושרת אליה, או מקושרת לעובדה שלא שימשה בה. לרוב זה ניסוח (כמו תואר תפקיד) שנלקח מעובדה אחרת.",
+  "unsupported-review-number": "השורה כוללת מספר שאינו מופיע בעובדות שלה.",
 };
 
 /* Where the line sat. The heading is the section's own title more often than not, and
@@ -53,7 +69,7 @@ export const ClaimReviewClarification = ({
               {claimContext(claim)}
             </p>
             {mixedVerdicts ? (
-              <StatusBadge tone={claim.verdict === "unsupported" ? "blocker" : "warning"}>
+              <StatusBadge tone={claim.verdict === "uncertain" ? "warning" : "blocker"}>
                 {verdictLabels[claim.verdict]}
               </StatusBadge>
             ) : null}
@@ -65,6 +81,17 @@ export const ClaimReviewClarification = ({
               {claim.text}
             </blockquote>
           </div>
+
+          {claim.problems == null || claim.problems.length === 0 ? null : (
+            <div className="flex flex-col gap-1">
+              <FieldLabel>למה השורה נדחתה</FieldLabel>
+              <ul className="list-disc ps-5">
+                {claim.problems.map((problem) => (
+                  <li key={problem}>{problemLabels[problem]}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* The reviewer's words, in its own language. Without them a sentence almost
               identical to its fact is refused and nothing says why; with them, the

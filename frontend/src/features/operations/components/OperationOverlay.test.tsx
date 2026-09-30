@@ -135,6 +135,37 @@ describe("OperationReport", () => {
     expect(within(clarification).queryByRole("button", { name: /אישור/ })).not.toBeInTheDocument();
   });
 
+  it("says why a line the reviewer approved was still refused", () => {
+    const value = failed({
+      operation_type: "create_draft",
+      failure_code: "INVALID_OUTPUT",
+      failure_reason: {
+        code: "claim_review",
+        claims: [
+          {
+            claim_id: "claim-1",
+            section: "Professional Summary",
+            text: "Full-Stack Developer with backend experience.",
+            verdict: "unattested",
+            problems: ["review-fact-coverage-mismatch"],
+            sources: [{ fact_id: "summary.backend", rendering: "Backend experience.", meaning: "Backend experience." }],
+            rationale: "The title and summary are supported.",
+          },
+        ],
+      },
+    });
+    render(
+      <QueryClientProvider client={client()}>
+        <MemoryRouter>
+          <OperationReport onQueued={vi.fn()} operation={value} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const clarification = screen.getByRole("region", { name: "בירור הניסוח שנדחה" });
+    expect(within(clarification).getByText("Full-Stack Developer with backend experience.")).toBeVisible();
+    expect(within(clarification).getByText(/נשענת על עובדה שאינה מקושרת אליה/)).toBeVisible();
+  });
+
   it("presents a queued operation as one status", () => {
     renderOverlay({ operation: operation({ status: "queued", phase: "queued" }) });
 
