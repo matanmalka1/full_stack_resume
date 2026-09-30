@@ -6,4 +6,12 @@
    posting's source line are exported for the screens that name the same record from
    outside. Its screens are not exported: the route table loads each one on its own. */
 export { applicationLabel, sourceHostname } from "./model/applicationPresentation";
-export { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "./model/applicationInput";
+export {
+  isJobTextWithinBudget,
+  JOB_TEXT_REQUIRED_MESSAGE,
+  jobTextByteLength,
+  LABEL_MAX_CHARACTERS,
+  normalizedSourceUrl,
+  SOURCE_URL_MAX_CHARACTERS,
+  validateSourceUrl,
+} from "./model/applicationInput";

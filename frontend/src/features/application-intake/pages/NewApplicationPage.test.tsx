@@ -654,21 +654,19 @@ describe("NewApplicationPage", () => {
     });
   });
 
-  it("highlights the field named by deterministic intake validation", async () => {
-    stubFetch({
-      [DUPLICATE_CHECK_PATH]: [
-        problemResponse(412, "APPLICATION_INTAKE_INVALID", "source URL must be an http or https URL", {
-          field: "source_url",
-        }),
-      ],
-    });
+  /* The same rule the Job Detail posting update applies (applicationInput.validateSourceUrl),
+     which mirrors the server's own pattern: a malformed address is refused under its field
+     before anything is sent, and editing it to a valid one clears the refusal. */
+  it("refuses a malformed source URL under its field before sending anything", async () => {
+    const calls = stubFetch({});
     renderPage();
     fillIntake();
     fireEvent.change(screen.getByLabelText("כתובת המשרה"), { target: { value: "ftp://example.com/job" } });
 
     submitForm();
 
-    expect(await screen.findByText(/יש לתקן את השדות המסומנים/)).toBeInTheDocument();
+    expect(await screen.findByText("הכתובת חייבת להתחיל ב-http:// או https:// וללא רווחים.")).toBeInTheDocument();
+    expect(calls).toEqual([]);
     expect(screen.getByLabelText("כתובת המשרה")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("כתובת המשרה")).toHaveValue("ftp://example.com/job");
     expect(jobTextArea()).toHaveValue("Job description text");

@@ -5,7 +5,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { Field } from "@/ui/Field";
 import { FormSection } from "@/ui/FormSection";
 import { Input } from "@/ui/Input";
-import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS } from "@/features/applications";
+import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "@/features/applications";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
 
 const examplePlaceholder = (example: string) => `לדוגמה: \u2066${example}\u2069`;
@@ -75,7 +75,7 @@ export const JobDetailsFields = ({ errors, onInputChanged, register }: JobDetail
         <IconField icon={Link2}>
           <Input
             {...control}
-            {...register("source_url", { onChange: () => onInputChanged("source_url") })}
+            {...register("source_url", { onChange: () => onInputChanged("source_url"), validate: validateSourceUrl })}
             /* Marked as an example like its two neighbours. A bare URL in muted grey read as
                an address already filled in. The empty field sits on the RTL edge with them;
                a typed address is still an LTR island. */
