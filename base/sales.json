@@ -448,7 +448,7 @@
       "fact_id": "sales.metric.team_size",
       "meaning": "Managed a team of approximately 2-3 Sales representatives.",
       "renderings": {
-        "en": "Managed a team of 2-3 sales representatives.",
+        "en": "Managed a team of approximately 2-3 sales representatives.",
         "he": "ניהול צוות של כ-2-3 נציגי מכירות."
       },
       "tags": [
