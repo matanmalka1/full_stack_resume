@@ -60,7 +60,11 @@ const EvidenceFact = ({ factId, evidence }: { evidence: RequirementEvidence; fac
 };
 
 const evidenceSummary = (supporting: number) =>
-  supporting === 1 ? "עובדה אחת מעידה על הדרישה" : supporting > 1 ? `${supporting} עובדות מעידות על הדרישה` : "מה מגביל את הכיסוי";
+  supporting === 1
+    ? "עובדה אחת מעידה על הדרישה"
+    : supporting > 1
+      ? `${supporting} עובדות מעידות על הדרישה`
+      : "מה מגביל את הכיסוי";
 
 export const RequirementRow = ({
   evidence,

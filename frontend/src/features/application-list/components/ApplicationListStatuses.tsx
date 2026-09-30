@@ -58,9 +58,7 @@ export const ApplicationFitStatus = ({ item }: { item: ApplicationListItem }) =>
 
   return (
     <Tooltip align="center" label={label}>
-      <span className={cx(fitChipClasses, "text-cv-text tabular-nums")}>
-        {score ?? label}
-      </span>
+      <span className={cx(fitChipClasses, "text-cv-text tabular-nums")}>{score ?? label}</span>
     </Tooltip>
   );
 };
