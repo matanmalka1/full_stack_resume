@@ -77,14 +77,12 @@ export const RequirementList = ({
         groups.map((group) =>
           group.requirements.length === 0 ? null : (
             <section aria-labelledby={`requirements-${group.importance}`} key={group.importance}>
-              <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-cv-border pb-2">
-                <h4 className="text-support font-bold text-cv-text" id={`requirements-${group.importance}`}>
-                  {importanceTitles[group.importance]}
-                </h4>
-                <span className="text-caption font-semibold text-cv-text-muted">
-                  {group.matched} מתוך {group.total} מכוסות במלואן
-                </span>
-              </div>
+              <h4
+                className="border-b border-cv-border pb-2 text-support font-bold text-cv-text"
+                id={`requirements-${group.importance}`}
+              >
+                {importanceTitles[group.importance]}
+              </h4>
               <ul aria-labelledby={`requirements-${group.importance}`} className="divide-y divide-cv-border">
                 {group.requirements.map((requirement) => (
                   <RequirementRow

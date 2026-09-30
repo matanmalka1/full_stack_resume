@@ -13,9 +13,7 @@ export const needsAttention = (requirement: Requirement): boolean => requirement
 
 interface RequirementGroup {
   importance: RequirementImportance;
-  matched: number;
   requirements: Requirement[];
-  total: number;
 }
 
 export type RequirementFilter = "all" | "attention" | "matched";
@@ -34,24 +32,8 @@ export const requirementGroups = (
     }
     // oxlint-disable-next-line unicorn/no-array-sort
     const ordered = [...all].sort((left, right) => coveragePriority[left.coverage] - coveragePriority[right.coverage]);
-    return [
-      {
-        importance,
-        matched: all.filter((requirement) => !needsAttention(requirement)).length,
-        requirements: ordered.filter((requirement) => passes(requirement, filter)),
-        total: all.length,
-      },
-    ];
+    return [{ importance, requirements: ordered.filter((requirement) => passes(requirement, filter)) }];
   });
-
-export const coverageCounts = (requirements: readonly Requirement[]): Record<RequirementCoverage, number> =>
-  requirements.reduce(
-    (result, requirement) => {
-      result[requirement.coverage] += 1;
-      return result;
-    },
-    { matched: 0, partial: 0, unsupported: 0, unknown: 0 } satisfies Record<RequirementCoverage, number>,
-  );
 
 export const requirementsByFact = (requirements: readonly Requirement[]): Map<string, Requirement[]> => {
   const index = new Map<string, Requirement[]>();

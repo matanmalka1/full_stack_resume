@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Requirement } from "@/api/analyses";
-import { coverageCounts, requirementGroups, requirementsByFact } from "./requirementGroups";
+import { requirementGroups, requirementsByFact } from "./requirementGroups";
 
 const requirement = (id: string, overrides: Partial<Requirement> = {}): Requirement => ({
   requirementId: id,
@@ -34,22 +34,19 @@ describe("requirements as the analysis panel groups them", () => {
       "mandatory.partial",
       "mandatory.matched",
     ]);
-    expect(groups[0]).toMatchObject({ matched: 1, total: 3 });
   });
 
-  it("narrows the rows but keeps each group's counts whole", () => {
+  it("narrows the rows to the filter", () => {
     const [mandatory, preferred] = requirementGroups(requirements, "attention");
 
     expect(mandatory?.requirements.map((item) => item.requirementId)).toEqual([
       "mandatory.unsupported",
       "mandatory.partial",
     ]);
-    expect(mandatory).toMatchObject({ matched: 1, total: 3 });
     expect(preferred?.requirements).toEqual([]);
   });
 
-  it("counts coverage and indexes which requirements each fact supports", () => {
-    expect(coverageCounts(requirements)).toEqual({ matched: 2, partial: 1, unsupported: 2, unknown: 0 });
+  it("indexes which requirements each fact supports", () => {
     expect(
       requirementsByFact([
         requirement("one", { supportingFactIds: ["fact.a"], boundaryFactIds: ["fact.b"] }),

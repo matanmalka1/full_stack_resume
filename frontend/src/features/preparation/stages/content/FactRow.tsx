@@ -132,18 +132,6 @@ export const FactRow = ({
         </ul>
       )}
 
-      {supports.length === 0 ? null : (
-        <p className="text-caption text-cv-text-muted">
-          עונה על:{" "}
-          {supports.map((requirement, index) => (
-            <span key={requirement.requirementId}>
-              {index === 0 ? null : " · "}
-              <bdi className="text-cv-text">{requirement.text}</bdi>
-            </span>
-          ))}
-        </p>
-      )}
-
       {locked ? null : (
         <fieldset className="flex flex-wrap items-center gap-2" disabled={busy || unreadable}>
           <legend className="sr-only">ההחלטה על העובדה</legend>

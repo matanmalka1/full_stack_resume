@@ -70,10 +70,10 @@ describe("AnalysisPanel", () => {
     expect(screen.getByText("A cloud sales role.")).toBeInTheDocument();
     const overview = screen.getByRole("region", { name: "סיכום הכיסוי" });
     expect(within(overview).getByText("0/1")).toBeInTheDocument();
-    expect(within(overview).getByText("פער קשיח אחד")).toBeInTheDocument();
     expect(within(overview).getByText("1/1")).toBeInTheDocument();
-    /* The classification and the verdict belong to the matching form and the step
-       banner; the panel does not restate either. */
+    /* The classification, the verdict and the hard-gap count belong to the matching form
+       and the step banner; the panel does not restate them. */
+    expect(screen.queryByText("פער קשיח אחד")).not.toBeInTheDocument();
     expect(screen.queryByText("סיווג שהוצע")).not.toBeInTheDocument();
     expect(screen.queryByText("התאמה נמוכה")).not.toBeInTheDocument();
   });
@@ -110,7 +110,6 @@ describe("AnalysisPanel", () => {
       ],
     });
 
-    expect(screen.getByText("ללא פער קשיח")).toBeInTheDocument();
     expect(screen.getByText(/פער קטן:/)).toBeInTheDocument();
     expect(screen.getByText(/verified duration is slightly below/)).toBeInTheDocument();
     expect(screen.getByText(/הסבר ה-AI:/)).toBeInTheDocument();

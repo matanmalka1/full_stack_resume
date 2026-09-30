@@ -1,16 +1,5 @@
-import type { Classification, RequirementCoverage } from "@/api/analyses";
-import { cx } from "@/ui/cx";
-import { confidenceText, coverageLabels } from "../../model/analysisLabels";
-import { coverageCounts } from "../../model/requirementGroups";
-
-const segmentClasses: Record<RequirementCoverage, string> = {
-  matched: "bg-cv-success",
-  partial: "bg-cv-warning",
-  unsupported: "bg-cv-blocker",
-  unknown: "bg-cv-border-strong",
-};
-
-const segmentOrder: readonly RequirementCoverage[] = ["matched", "partial", "unsupported", "unknown"];
+import type { Classification } from "@/api/analyses";
+import { confidenceText } from "../../model/analysisLabels";
 
 const Metric = ({ caption, label, value }: { caption?: string; label: string; value: string }) => (
   <div className="rounded-control bg-cv-surface-muted p-3">
@@ -20,6 +9,9 @@ const Metric = ({ caption, label, value }: { caption?: string; label: string; va
   </div>
 );
 
+/* Coverage is stated once, here, split by importance. The hard-gap count belongs to the
+   step banner, which explains how it caps the Fit level; the per-state breakdown is the
+   requirement filter's own labels. */
 export const AnalysisOverview = ({ classification }: { classification: Classification }) => {
   const { requirements } = classification;
   if (requirements.length === 0) {
@@ -28,61 +20,25 @@ export const AnalysisOverview = ({ classification }: { classification: Classific
   const mandatory = requirements.filter((requirement) => requirement.importance === "mandatory");
   const preferred = requirements.filter((requirement) => requirement.importance !== "mandatory");
   const covered = (items: typeof requirements) => items.filter((item) => item.coverage === "matched").length;
-  const hardGaps = classification.gaps.filter((gap) => gap.severity === "hard").length;
-  const counts = coverageCounts(requirements);
 
   return (
-    <section aria-label="סיכום הכיסוי" className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-3">
+    <section aria-label="סיכום הכיסוי" className="grid gap-3 sm:grid-cols-3">
+      <Metric
+        caption={mandatory.length === 0 ? "המשרה לא הגדירה דרישות חובה" : undefined}
+        label="דרישות חובה מכוסות"
+        value={mandatory.length === 0 ? "—" : `${covered(mandatory)}/${mandatory.length}`}
+      />
+      <Metric
+        label="דרישות נוספות מכוסות"
+        value={preferred.length === 0 ? "—" : `${covered(preferred)}/${preferred.length}`}
+      />
+      {classification.sourceCoverage === null ? null : (
         <Metric
-          caption={
-            mandatory.length === 0
-              ? "המשרה לא הגדירה דרישות חובה"
-              : hardGaps === 0
-                ? "ללא פער קשיח"
-                : hardGaps === 1
-                  ? "פער קשיח אחד"
-                  : `${hardGaps} פערים קשיחים`
-          }
-          label="דרישות חובה מכוסות"
-          value={mandatory.length === 0 ? "—" : `${covered(mandatory)}/${mandatory.length}`}
+          caption="מהדרישות אותרו בנוסח המודעה"
+          label="עיגון במודעה"
+          value={confidenceText(classification.sourceCoverage)}
         />
-        <Metric
-          label="דרישות נוספות מכוסות"
-          value={preferred.length === 0 ? "—" : `${covered(preferred)}/${preferred.length}`}
-        />
-        {classification.sourceCoverage === null ? null : (
-          <Metric
-            caption="מהדרישות אותרו בנוסח המודעה"
-            label="עיגון במודעה"
-            value={confidenceText(classification.sourceCoverage)}
-          />
-        )}
-      </div>
-
-      <div>
-        <div aria-hidden="true" className="flex h-2 overflow-hidden rounded-pill bg-cv-surface-muted">
-          {segmentOrder.map((coverage) =>
-            counts[coverage] === 0 ? null : (
-              <span
-                className={segmentClasses[coverage]}
-                key={coverage}
-                style={{ width: `${(counts[coverage] / requirements.length) * 100}%` }}
-              />
-            ),
-          )}
-        </div>
-        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-          {segmentOrder.map((coverage) =>
-            counts[coverage] === 0 ? null : (
-              <li className="flex items-center gap-1.5 text-caption text-cv-text-muted" key={coverage}>
-                <span aria-hidden="true" className={cx("size-2 rounded-pill", segmentClasses[coverage])} />
-                {coverageLabels[coverage]}: <span className="font-semibold text-cv-text">{counts[coverage]}</span>
-              </li>
-            ),
-          )}
-        </ul>
-      </div>
+      )}
     </section>
   );
 };
