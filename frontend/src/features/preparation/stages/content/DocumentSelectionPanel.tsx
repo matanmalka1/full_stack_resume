@@ -15,7 +15,7 @@ import { surfaceClasses } from "@/ui/surface";
 import { type FactFilter, factTotals } from "../../model/factGroups";
 import { requirementsByFact } from "../../model/requirementGroups";
 import { includedFactIds, selectionChanges } from "../../model/selectionManifest";
-import { AiSelectionProposal } from "./AiSelectionProposal";
+import { AiSelectionProposal, aiProposalSteps } from "./AiSelectionProposal";
 import type { FactChoice } from "./FactRow";
 import { FactSelectionList } from "./FactSelectionList";
 import { useSelectionProposal } from "./useSelectionProposal";
@@ -161,20 +161,12 @@ export const DocumentSelectionPanel = ({
       className={surfaceClasses("flex flex-col gap-5 bg-cv-surface p-5")}
     >
       <div className="flex flex-col gap-3 border-b border-cv-border pb-4">
-        {/* The count sits beside the heading it belongs to: at the full width of the row,
-            an opposite-edge counter read as detached from the panel it summarizes. */}
+        {/* The count is the action bar's, below: it says the same number and whether a
+            change is still unsaved. */}
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 className="text-heading-sm font-bold text-cv-text" id="selection-plan-heading">
-              בחירת העובדות לקורות החיים
-            </h2>
-            <p className="rounded-pill bg-cv-surface-muted px-2.5 py-0.5 text-caption text-cv-text-muted">
-              <span className="font-bold text-cv-text">
-                {totals.included}/{totals.total}
-              </span>{" "}
-              עובדות בקורות החיים
-            </p>
-          </div>
+          <h2 className="text-heading-sm font-bold text-cv-text" id="selection-plan-heading">
+            בחירת העובדות לקורות החיים
+          </h2>
           <p className="mt-1 max-w-2xl text-support text-cv-text-muted">
             המנוע דירג את כל העובדות המאושרות מול המשרה ובחר מה ייכנס לכל סעיף. אפשר להשאיר לו את ההחלטה, לכלול או
             להחריג עובדה במפורש, או לבקש הצעה מ־AI.
@@ -190,6 +182,12 @@ export const DocumentSelectionPanel = ({
             עובדה שנכללה או הוחרגה במפורש - ידנית או בהצעת AI - גוברת על הדירוג. שינוי כאן חל על המסמך עצמו, ולכן גם על
             הטיוטה בעורך.
           </p>
+          <p className="mt-3 font-semibold text-cv-text">הצעת בחירה באמצעות AI</p>
+          <ol className="mt-1 flex list-decimal flex-col gap-1 ps-4">
+            {aiProposalSteps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
         </Disclosure>
       </div>
 

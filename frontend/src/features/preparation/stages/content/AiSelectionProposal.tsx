@@ -3,12 +3,12 @@ import { Minus, Plus, Sparkles } from "lucide-react";
 import type { Requirement } from "@/api/analyses";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
-import { Disclosure } from "@/ui/Disclosure";
 import { cx } from "@/ui/cx";
 import { type SelectionChange, factSignals } from "../../model/selectionManifest";
 import type { ProposalStatus } from "./useSelectionProposal";
 
-const processSteps = [
+/* How a proposal works, explained once in the selection panel's own "how" disclosure. */
+export const aiProposalSteps = [
   "ה־AI מקבל את ניתוח המשרה (דרישות, פערים ומילות מפתח), את העובדות שהפרופיל מתיר ואת הבחירה שהמנוע כבר עשה.",
   "הוא מציע אילו עובדות להוסיף לבחירה ואילו להחריג ממנה - רק מתוך העובדות המאושרות, בלי לנסח או לשנות אותן.",
   "המנוע בונה מחדש את הבחירה לפי ההצעה ובודק אותה מול כללי הבחירה: מכסת כל סעיף, רכיבים קבועים וכיסוי התגיות שהפרופיל מחייב. הצעה שחורגת מהם נדחית, והבחירה הקודמת נשארת.",
@@ -52,11 +52,6 @@ const ChangeList = ({
                 <bdi>{candidate.section}</bdi>
                 {signals.length === 0 ? null : ` · ${signals.map((signal) => signal.text).join(" · ")}`}
               </p>
-              {supports.length === 0 ? null : (
-                <p className="mt-0.5 text-caption text-cv-text-muted">
-                  עונה על: <bdi className="text-cv-text">{supports.map((item) => item.text).join(" · ")}</bdi>
-                </p>
-              )}
             </li>
           );
         })}
@@ -106,9 +101,7 @@ export const AiSelectionProposal = ({
           <Sparkles aria-hidden="true" className="size-icon-md text-cv-accent" />
           הצעת בחירה באמצעות AI
         </h3>
-        <p className="mt-1 text-support text-cv-text-muted">
-          ה־AI עובר על העובדות מול דרישות המשרה ומציע אילו להוסיף ואילו להוציא. לאחר ההצעה יוצג בדיוק מה השתנה ולמה.
-        </p>
+        <p className="mt-1 text-support text-cv-text-muted">ההצעה כוללת קריאת AI בתשלום.</p>
       </div>
       {aiAvailable && offered ? (
         <Button
@@ -122,15 +115,6 @@ export const AiSelectionProposal = ({
         </Button>
       ) : null}
     </div>
-
-    <Disclosure summary="איך עובדת ההצעה?">
-      <ol className="flex list-decimal flex-col gap-1 ps-4">
-        {processSteps.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
-      </ol>
-      <p className="mt-2">ההצעה כוללת קריאת AI בתשלום.</p>
-    </Disclosure>
 
     {!aiAvailable && settingsLoaded ? (
       <p className="text-support text-cv-text-muted">הצעת AI זמינה לאחר הפעלת AI והגדרת ספק במסך ההגדרות.</p>
