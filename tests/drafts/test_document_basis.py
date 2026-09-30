@@ -14,7 +14,6 @@ from cv_engine.domain.contracts.drafts import (
     ResumeSection,
 )
 from cv_engine.domain.contracts.knowledge import Fact, FactStatus
-from cv_engine.domain.contracts.selection import SelectionManifest
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.domain.contracts.validation import ValidationReport
 from cv_engine.domain.document import (
@@ -42,15 +41,6 @@ def _fact(fact_id: str, text: str = "Built APIs", **changes) -> Fact:
         "source_file": "base/facts.md",
     }
     return Fact(**(values | changes))
-
-
-def _selection(*fact_ids: str) -> SelectionManifest:
-    return SelectionManifest(
-        policy_version="1",
-        emphasis=Emphasis.DEVELOPMENT_BALANCED,
-        emphasis_policy_version="1",
-        selected_fact_ids=list(fact_ids),
-    )
 
 
 def _claim(
@@ -85,36 +75,32 @@ def _content(*claim_fact_ids: str) -> DraftDocument:
 
 
 def _document(content: DraftDocument | None = None, **stamps) -> CVDocument:
-    selection = _selection("fact.selected")
     return CVDocument(
         id="doc",
         application_id="app",
         analysis_id="analysis",
-        selection=selection,
         content=content,
-        built_with=BuiltWith(profile_version="p1", selection_policy_version="s1"),
-        document_hash=document_hash("analysis", selection, content),
+        built_with=BuiltWith(profile_version="p1"),
+        document_hash=document_hash("analysis", content),
         created_at="2026-09-28T00:00:00+00:00",
         updated_at="2026-09-28T00:00:00+00:00",
         **stamps,
     )
 
 
-def test_document_hash_covers_analysis_selection_and_content() -> None:
-    selection, content = _selection("a"), _content("b")
-    reference = document_hash("analysis", selection, content)
+def test_document_hash_covers_analysis_and_content() -> None:
+    content = _content("b")
+    reference = document_hash("analysis", content)
 
-    assert document_hash("analysis", _selection("a"), _content("b")) == reference
-    assert document_hash("other-analysis", selection, content) != reference
-    assert document_hash("analysis", _selection("a", "c"), content) != reference
-    assert document_hash("analysis", selection, _content("c")) != reference
-    assert document_hash("analysis", selection, None) != reference
+    assert document_hash("analysis", _content("b")) == reference
+    assert document_hash("other-analysis", content) != reference
+    assert document_hash("analysis", _content("c")) != reference
+    assert document_hash("analysis", None) != reference
 
 
 def test_basis_moves_with_every_change_to_a_dependent_fact_and_no_other() -> None:
     document = _document(_content("fact.claimed"))
     facts = {
-        "fact.selected": _fact("fact.selected"),
         "fact.claimed": _fact("fact.claimed"),
         "fact.unrelated": _fact("fact.unrelated"),
     }
@@ -122,13 +108,13 @@ def test_basis_moves_with_every_change_to_a_dependent_fact_and_no_other() -> Non
 
     unaffected = [
         facts | {"fact.unrelated": _fact("fact.unrelated", "Edited")},
-        facts | {"fact.selected": _fact("fact.selected", source_file="base/moved.md")},
+        facts | {"fact.claimed": _fact("fact.claimed", source_file="base/moved.md")},
     ]
     for changed in unaffected:
         assert basis(document, changed) == reference
 
     affected = [
-        facts | {"fact.selected": _fact("fact.selected", "Edited by hand")},
+        facts | {"fact.claimed": _fact("fact.claimed", "Edited by hand")},
         facts | {"fact.claimed": _fact("fact.claimed", status=FactStatus.DELETED)},
         facts | {"fact.claimed": _fact("fact.claimed", status=FactStatus.PENDING)},
         {key: value for key, value in facts.items() if key != "fact.claimed"},

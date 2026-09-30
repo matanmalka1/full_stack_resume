@@ -22,7 +22,6 @@ from cv_engine.api.schemas.facts import CaptureClaimFactRequest
 from cv_engine.application.commands import AnalyzeCommand, BuildFromAnalysisCommand
 from cv_engine.application.errors import (
     KnowledgeRejected,
-    MissingFactRendering,
     PreconditionFailed,
     UnknownRecord,
 )
@@ -336,9 +335,10 @@ def test_quarantine_blocks_approval_but_keeps_history_readable(drafted_applicati
         approve_active_draft(services, application_id)
 
 
-def test_confirm_and_use_is_one_journaled_fact_profile_and_document_command(
+def test_confirm_and_use_is_one_journaled_fact_and_profile_command(
     drafted_application,
 ) -> None:
+    """§17: confirm and attach in one mutation; the document is not written."""
     setup = drafted_application("Contextual Knowledge Co")
     services, application_id = setup
     created = services.knowledge_lifecycle.add_fact(
@@ -351,22 +351,22 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_document_command(
         application_id=application_id,
     )
 
+    before = stored_document(services, application_id)
     result = services.knowledge_lifecycle.confirm_and_use_fact(
         created.fact.fact_id,
         application_id=application_id,
         job_analysis_id=setup.analysis_id,
-        expected_document_hash=stored_document(services, application_id).document_hash,
         profile="account-manager",
         section="Work Experience",
     )
 
     assert result.fact.status is FactStatus.CANONICAL
-    document = stored_document(services, application_id)
-    assert created.fact.fact_id in document.selection.selected_fact_ids
-    # The canonical content is dropped with the selection change, to be drafted again.
-    assert document.content is None
-    assert document.id == result.document_id
-    assert document.document_hash == result.document_hash != setup.document_hash
+    assert stored_document(services, application_id) == before
+    assert before.id == result.document_id
+    assert before.document_hash == result.document_hash == setup.document_hash
+    profile = services.knowledge.load().profiles.get("account-manager")
+    work = next(spec for spec in profile.sections if spec.name_en == "Work Experience")
+    assert created.fact.fact_id in work.fact_ids
     events = services.knowledge_queries.fact_history(created.fact.fact_id).events
     assert [(event.from_status, event.to_status) for event in events] == [
         (None, "pending"),
@@ -380,62 +380,7 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_document_command(
         assert store.quarantined_mutations(tx) == []
 
 
-def test_confirm_and_use_preserves_missing_rendering_as_a_domain_failure(
-    analyzed_application,
-) -> None:
-    setup = analyzed_application("Hebrew Contextual Knowledge Co")
-    services, application_id = setup
-    created = services.knowledge_lifecycle.add_fact(
-        "sales.json",
-        {
-            **NEW_FACT,
-            "fact_id": "sales.contextual.hebrew_gap",
-            "tags": ["sales", "leadership", "pipeline"],
-        },
-        application_id=application_id,
-    )
-    hebrew = seed_analysis_for_command(
-        services,
-        AnalyzeCommand(
-            application_id=application_id,
-            job_snapshot_id=setup.snapshot_id,
-            language_override="he",
-        ),
-    )
-    services.selection.build_from_analysis(
-        BuildFromAnalysisCommand(
-            application_id=application_id,
-            analysis_id=hebrew.analysis_id,
-            expected_document_hash=stored_document(services, application_id).document_hash,
-        )
-    )
-    fact_source = services.paths.knowledge_root / "base" / "sales.json"
-    profile_source = services.paths.knowledge_root / "profiles" / "sales" / "account-manager.yaml"
-    before_fact = fact_source.read_bytes()
-    before_profile = profile_source.read_bytes()
-
-    with pytest.raises(MissingFactRendering) as raised:
-        services.knowledge_lifecycle.confirm_and_use_fact(
-            created.fact.fact_id,
-            application_id=application_id,
-            job_analysis_id=hebrew.analysis_id,
-            expected_document_hash=stored_document(services, application_id).document_hash,
-            profile="account-manager",
-            section="Work Experience",
-        )
-
-    assert raised.value.fact_id == created.fact.fact_id
-    assert raised.value.language == "he"
-    assert fact_source.read_bytes() == before_fact
-    assert profile_source.read_bytes() == before_profile
-    assert _reload(services).get(created.fact.fact_id).status is FactStatus.PENDING
-    transactions, store = _knowledge_persistence(services)
-    with transactions.read() as tx:
-        assert store.prepared_mutations(tx) == []
-        assert store.quarantined_mutations(tx) == []
-
-
-def test_document_selection_failure_restores_both_knowledge_files_and_quarantines(
+def test_confirm_and_use_audit_failure_restores_both_knowledge_files_and_quarantines(
     drafted_application, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     setup = drafted_application("Contextual Rollback Co")
@@ -454,17 +399,16 @@ def test_document_selection_failure_restores_both_knowledge_files_and_quarantine
     before_fact = fact_source.read_bytes()
     before_profile = profile_source.read_bytes()
 
-    def refuse_plan(self, *_args, **_kwargs):
-        raise ValueError("simulated document selection constraint failure")
+    def refuse_event(self, _tx, **_values):
+        raise ValueError("simulated audit insertion failure")
 
     _transactions, store = _knowledge_persistence(services)
-    monkeypatch.setattr(type(services.drafts.documents), "replace_selection", refuse_plan)
-    with pytest.raises(KnowledgeRejected, match="document selection constraint failure"):
+    monkeypatch.setattr(type(store), "record_fact_event", refuse_event)
+    with pytest.raises(KnowledgeRejected, match="audit insertion failure"):
         services.knowledge_lifecycle.confirm_and_use_fact(
             created.fact.fact_id,
             application_id=application_id,
             job_analysis_id=setup.analysis_id,
-            expected_document_hash=stored_document(services, application_id).document_hash,
             profile="account-manager",
             section="Work Experience",
         )
@@ -692,7 +636,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
             job_snapshot_id=setup.snapshot_id,
         ),
     )
-    services.selection.build_from_analysis(
+    services.repin.build_from_analysis(
         BuildFromAnalysisCommand(
             application_id=app_id,
             analysis_id=refreshed.analysis_id,

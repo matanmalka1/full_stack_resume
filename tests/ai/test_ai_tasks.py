@@ -1,4 +1,4 @@
-"""The six AI tasks as the product runs them: Operations, evidence, refusals.
+"""The five AI tasks as the product runs them: Operations, evidence, refusals.
 
 Every test here drives the real Operation runner over the real adapter with a
 scripted transport, so a passing test says the product behaves this way, not
@@ -34,12 +34,10 @@ from cv_engine.application.commands import (
     CreateJobSnapshotCommand,
     DraftCommand,
     IngestCommand,
-    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
-    UpdateSelectionCommand,
 )
-from cv_engine.application.errors import REGENERATION_REQUIRED, PreconditionFailed, StateConflict
+from cv_engine.application.errors import StateConflict
 from cv_engine.application.operations import ClaimReviewReason, OperationFailureCode
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.projection import fit_level, fit_score
@@ -51,7 +49,6 @@ from cv_engine.domain.contracts.providers import (
     ProposedClaim,
     ReviewedAssertion,
     SectionProposal,
-    SelectionProposal,
 )
 from cv_engine.domain.drafts import draft_claims
 from cv_engine.util import new_id, sha256_text
@@ -159,67 +156,26 @@ def _analysis_operation(
 
 
 # --------------------------------------------------------------------------
-# The six tasks reach committed state
+# The five tasks reach committed state
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("task", ["propose_analysis", "propose_selection_plan"])
-def test_a_proposal_commits_through_its_operation(
+def test_an_analysis_proposal_commits_through_its_operation(
     ai_services,
     fake_openai: FakeOpenAI,
     transaction_manager,
     application_projection_reader,
-    task,
 ) -> None:
-    """§13: the Proposal becomes the deterministic command, and is validated by it.
-
-    An analysis commits with its initial plan; a selection proposal commits one
-    replacement plan carrying the proposed overlay.
-    """
-    if task == "propose_analysis":
-        fake_openai.script("propose_analysis", analysis_proposal())
-        ingested = _ingested(ai_services, "Analysis Co")
-        completed = _run(
-            ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
-        )
-
-        assert completed.status.value == "succeeded", completed.safe_failure_detail
-        outputs = {output.output_type for output in completed.outputs}
-        assert {"job_analysis", "cv_document"} <= outputs
-        return
-
-    ingested, analysed = _analyzed(ai_services, "Plan Co")
-    plan = stored_document(ai_services, ingested.application_id)
-    pinned = plan.selection.selected_fact_ids[:1]
-    fake_openai.script(
-        "propose_selection_plan",
-        SelectionProposal(pinned_fact_ids=pinned, excluded_fact_ids=[], rationale="r"),
+    """§13: the Proposal becomes the deterministic command; the first creates the document."""
+    fake_openai.script("propose_analysis", analysis_proposal())
+    ingested = _ingested(ai_services, "Analysis Co")
+    completed = _run(
+        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     )
-
-    queued = ai_services.operation_submissions.submit_selection_proposal(
-        ProposeSelectionCommand(
-            application_id=ingested.application_id,
-            expected_document_hash=stored_document(
-                ai_services, ingested.application_id
-            ).document_hash,
-        ),
-        idempotency_key=new_id(),
-        analysis_service=ai_services.analysis,
-    )
-    completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    plans = [output for output in completed.outputs if output.output_type == "cv_document"]
-    assert len(plans) == 1
-    committed = stored_document(ai_services, ingested.application_id)
-    assert committed.id == plan.id
-    assert committed.document_hash != plan.document_hash
-    assert set(pinned) <= set(committed.selection.selected_fact_ids)
-    assert (committed.selection.proposed_by, committed.selection.proposal_rationale) == ("ai", "r")
-    # Unset provenance is absent from the serialized manifest, so manifests and the
-    # drafts that embed and fingerprint them keep the bytes they had before it existed.
-    assert plan.selection.proposed_by is None
-    assert {"proposed_by", "proposal_rationale"}.isdisjoint(plan.selection.model_dump(mode="json"))
+    outputs = {output.output_type for output in completed.outputs}
+    assert {"job_analysis", "cv_document"} <= outputs
 
 
 def test_ai_preferences_are_frozen_before_settings_can_change(
@@ -266,54 +222,6 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
     assert completed.output_tokens == 22
     assert completed.total_tokens == 33
     assert completed.cost_usd == "0.00002806"
-
-
-def test_selection_proposal_refuses_to_replace_a_plan_that_moved_while_ai_ran(
-    ai_services,
-    fake_openai: FakeOpenAI,
-    monkeypatch,
-    transaction_manager,
-    application_projection_reader,
-) -> None:
-    ingested, analysed = _analyzed(ai_services, "Selection Race Co")
-    original_plan = stored_document(ai_services, ingested.application_id)
-    fake_openai.script(
-        "propose_selection_plan",
-        SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
-    )
-    queued = ai_services.operation_submissions.submit_selection_proposal(
-        ProposeSelectionCommand(
-            application_id=ingested.application_id,
-            expected_document_hash=stored_document(
-                ai_services, ingested.application_id
-            ).document_hash,
-        ),
-        idempotency_key=new_id(),
-        analysis_service=ai_services.analysis,
-    )
-    prepare = ai_services.analysis.prepare_selection_proposal
-    replacement_id: str | None = None
-
-    def prepare_then_replace(command, *, operation_id):
-        nonlocal replacement_id
-        prepared = prepare(command, operation_id=operation_id)
-        replacement = ai_services.selection.update_selection(
-            UpdateSelectionCommand(
-                application_id=ingested.application_id,
-                expected_document_hash=original_plan.document_hash,
-                emphasis_override=original_plan.selection.emphasis.value,
-            )
-        )
-        replacement_id = replacement.document_hash
-        return prepared
-
-    monkeypatch.setattr(ai_services.analysis, "prepare_selection_proposal", prepare_then_replace)
-    completed = _run(ai_services, queued)
-
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.SOURCE_CHANGED
-    latest_plan = stored_document(ai_services, ingested.application_id)
-    assert latest_plan.document_hash == replacement_id
 
 
 @pytest.mark.parametrize("change_composite", [False, True])
@@ -428,24 +336,52 @@ def test_draft_resume_commits_wording_its_facts_support(
     assert actual.content.sections == working.content.sections
 
 
-@pytest.mark.parametrize("user_chose", [False, True])
-def test_create_draft_chooses_the_facts_unless_the_user_already_did(
-    ai_services, fake_openai: FakeOpenAI, user_chose: bool
+@pytest.mark.parametrize("bare_role", [False, True])
+def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
+    ai_services, fake_openai: FakeOpenAI, bare_role: bool
 ) -> None:
-    """The AI selects the facts of an untouched selection; a user's choice is kept."""
-    ingested, _analysed = _analyzed(ai_services, "Selecting Draft Co")
+    """docs/decisions/ai-owned-selection.md: `draft_resume` chooses by keeping claims.
+
+    The frame offers every section's pool and carries the Profile's guidance. The
+    writer returns one bullet under each heading and nothing else; the document keeps
+    exactly those, plus every heading and date, in frame order. A role left with no
+    bullet is refused and nothing is written.
+    """
+    ingested, _analysed = _analyzed(ai_services, "Choosing Draft Co")
     application_id = ingested.application_id
     document = stored_document(ai_services, application_id)
-    if user_chose:
-        ai_services.selection.update_selection(
-            UpdateSelectionCommand(
-                application_id=application_id,
-                expected_document_hash=document.document_hash,
-                emphasis_override=document.selection.emphasis.value,
-            )
+    frame = composed_content(ai_services, application_id)
+    structural = {"heading", "date", "contact"}
+    kept: list[tuple[str, object]] = []
+    for section in frame.sections:
+        open_heading = True
+        for claim in section.claims:
+            if claim.style == "heading":
+                open_heading = True
+            elif claim.style not in structural and open_heading:
+                kept.append((section.name, claim))
+                open_heading = False
+    if bare_role:
+        # Drop the bullet kept under the last heading of the first section with two.
+        section = next(
+            s for s in frame.sections if sum(c.style == "heading" for c in s.claims) >= 2
         )
-        document = stored_document(ai_services, application_id)
-    fake_openai.script_draft()
+        last = [c.claim_id for name, c in kept if name == section.name][-1]
+        kept = [(name, c) for name, c in kept if c.claim_id != last]
+    fake_openai.script_draft(
+        DraftProposal(
+            claims=[
+                ProposedClaim(
+                    section=name,
+                    claim_id=claim.claim_id,
+                    text=claim.text,
+                    fact_ids=list(claim.fact_ids),
+                )
+                for name, claim in kept
+            ],
+            rationale="one line per heading",
+        )
+    )
 
     completed = _run(
         ai_services,
@@ -458,16 +394,38 @@ def test_create_draft_chooses_the_facts_unless_the_user_already_did(
         ),
     )
 
+    payload = fake_openai.calls_for("draft_resume")[-1].payload
+    profile = ai_services.drafts.load_knowledge().profiles.get(
+        ai_services.drafts.document_source(application_id).analysis.profile
+    )
+    budgets = {spec.name_en: spec.max_claims for spec in profile.sections}
+    assert [len(section["claims"]) for section in payload["sections"]] == [
+        len(section.claims) for section in frame.sections
+    ]
+    assert {
+        section["section"]: section["guidance"]["max_claims"] for section in payload["sections"]
+    } == {section.name: budgets[section.name] for section in frame.sections}
+    assert payload["guidance"]["required_tags"] == list(profile.required_tags)
+    if bare_role:
+        assert completed.status.value == "failed"
+        assert completed.failure_code is OperationFailureCode.INVALID_OUTPUT
+        assert stored_document(ai_services, application_id) == document
+        return
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     drafted = stored_document(ai_services, application_id)
     assert drafted.content is not None
-    if user_chose:
-        assert fake_openai.calls_for("propose_selection_plan") == []
-        assert drafted.selection == document.selection
-    else:
-        assert len(fake_openai.calls_for("propose_selection_plan")) == 1
-        assert drafted.selection.proposed_by == "ai"
-        assert drafted.selection.proposal_rationale == "keep the engine's selection"
+    chosen = {claim.claim_id for _name, claim in kept}
+    assert [
+        [claim.claim_id for claim in section.claims] for section in drafted.content.sections
+    ] == [
+        [
+            claim.claim_id
+            for claim in section.claims
+            if claim.claim_id in chosen or claim.style in structural
+        ]
+        for section in frame.sections
+    ]
+    assert len(drafted.content.selected_fact_ids) < len(frame.selected_fact_ids)
 
 
 def test_draft_resume_accepts_separately_reviewed_paraphrase(
@@ -542,8 +500,8 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    # The selection, the wording, and the review of the changed line.
-    assert sum(output.output_type == "provider_response" for output in completed.outputs) == 3
+    # The choice with its wording, and the review of the changed line.
+    assert sum(output.output_type == "provider_response" for output in completed.outputs) == 2
     assert any(output.output_type == "cv_document" for output in completed.outputs)
     assert len(fake_openai.calls_for("assess_claim_support")) == 1
     actual = stored_document(ai_services, ingested.application_id)
@@ -569,31 +527,6 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     public_evidence_fields = type(public_reviewed.review_evidence).model_fields
     assert "provider_artifact_version_id" not in public_evidence_fields
     assert "input_hash" not in public_evidence_fields
-
-    # AI wording is authored wording: a selection change would drop it, so both
-    # selection paths refuse it (§14) - the proposal before any provider call.
-    current = stored_document(ai_services, ingested.application_id)
-    with pytest.raises(PreconditionFailed) as refused_change:
-        ai_services.selection.update_selection(
-            UpdateSelectionCommand(
-                application_id=ingested.application_id,
-                expected_document_hash=current.document_hash,
-            )
-        )
-    assert refused_change.value.code == REGENERATION_REQUIRED
-    with pytest.raises(PreconditionFailed) as refused_proposal:
-        ai_services.operation_submissions.submit_selection_proposal(
-            ProposeSelectionCommand(
-                application_id=ingested.application_id,
-                expected_document_hash=current.document_hash,
-            ),
-            idempotency_key=new_id(),
-            analysis_service=ai_services.analysis,
-        )
-    assert refused_proposal.value.code == REGENERATION_REQUIRED
-    # The one selection call is the draft's own; the refused proposal made none.
-    assert len(fake_openai.calls_for("propose_selection_plan")) == 1
-    assert stored_document(ai_services, ingested.application_id) == current
 
 
 def _regenerate_section(services, ingested, analysed, working, section, claims):
@@ -1091,9 +1024,11 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
 def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
     ai_services, fake_openai: FakeOpenAI, transaction_manager, application_projection_reader
 ) -> None:
-    """Selection is given the Profile's pool; analysis the canonical store.
+    """Drafting is given the Profile's pool; analysis the canonical store.
 
-    Analysis proposes coverage, so it is given the facts to propose it from.
+    The writer chooses from the Profile's renderable pool, each section with its
+    own guidance, and sees no fact the Profile does not offer. Analysis proposes
+    coverage, so it is given the facts to propose it from.
     That pool is the canonical fact store rather than a Profile's allowed
     facts: which requirements the candidate meets is decided before and
     independently of which Profile presents them. What each fact carries is
@@ -1107,23 +1042,20 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
     assessed.
     """
     ingested, analysed = _analyzed(ai_services, "Pool Co")
-    fake_openai.script(
-        "propose_selection_plan",
-        SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
-    )
-    queued = ai_services.operation_submissions.submit_selection_proposal(
-        ProposeSelectionCommand(
+    fake_openai.script_draft()
+    queued = ai_services.operation_submissions.submit_draft(
+        DraftCommand(
             application_id=ingested.application_id,
             expected_document_hash=stored_document(
                 ai_services, ingested.application_id
             ).document_hash,
         ),
         idempotency_key=new_id(),
-        analysis_service=ai_services.analysis,
+        draft_service=ai_services.drafts,
     )
     _run(ai_services, queued)
 
-    payload = fake_openai.calls_for("propose_selection_plan")[-1].payload
+    payload = fake_openai.calls_for("draft_resume")[-1].payload
     supplied = {fact["fact_id"] for fact in payload["allowed_facts"]}
     every_fact = {fact.fact_id for fact in ai_services.knowledge.facts().by_status()}
     assert supplied
@@ -1136,17 +1068,11 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
         "tags",
         "style",
     }
-    protected = set(payload["deterministic_selection"]["non_excludable_fact_ids"])
-    assert protected <= set(payload["deterministic_selection"]["selected_fact_ids"])
-    assert protected
     sections = payload["sections"]
-    assert {fact_id for section in sections for fact_id in section["fact_ids"]} == supplied
+    assert {fact_id for section in sections for fact_id in section["allowed_fact_ids"]} == supplied
     summary = next(section for section in sections if section["section"] == "Professional Summary")
-    assert summary["max_claims"] == 1
-    # Floors and required-tag rescue may reserve part of what structure leaves;
-    # tests/selection proves the rest is honoured.
-    assert 0 <= summary["max_additional_pins"] <= 1 - len(summary["fixed_fact_ids"])
-    assert {fact_id for section in sections for fact_id in section["fixed_fact_ids"]} <= supplied
+    assert summary["guidance"]["max_claims"] == 1
+    assert len(summary["claims"]) > summary["guidance"]["max_claims"]
 
     job_text = "Account Manager.\nRequirements:\n- Must have led a sales team."
     completed = _analysis_run(ai_services, fake_openai, job_text, analysis_proposal())
@@ -1301,36 +1227,20 @@ def test_an_override_reaches_the_provider_and_is_applied_to_the_result(
 
 
 @pytest.fixture
-def analysis_selection_operation(ai_services, fake_openai):
+def analysis_operation_run(ai_services, fake_openai):
     def build(kind):
-        if kind == "analysis":
-            ingested = _ingested(ai_services, "Atomic Analysis Co")
-            return ingested, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
-        ingested, analysed = _analyzed(ai_services, "Atomic Selection Co")
-        fake_openai.script(
-            "propose_selection_plan",
-            SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="r"),
-        )
-        queued = ai_services.operation_submissions.submit_selection_proposal(
-            ProposeSelectionCommand(
-                application_id=ingested.application_id,
-                expected_document_hash=stored_document(
-                    ai_services, ingested.application_id
-                ).document_hash,
-            ),
-            idempotency_key=new_id(),
-            analysis_service=ai_services.analysis,
-        )
-        return ingested, queued
+        assert kind == "analysis"
+        ingested = _ingested(ai_services, "Atomic Analysis Co")
+        return ingested, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
 
     return build
 
 
-@pytest.mark.parametrize("kind", ["analysis", "selection"])
+@pytest.mark.parametrize("kind", ["analysis"])
 @pytest.mark.parametrize("failure_at", ["plan", "evidence", "completion"])
-def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
+def test_analysis_activation_rollback_keeps_durable_inactive_evidence(
     ai_services,
-    analysis_selection_operation,
+    analysis_operation_run,
     kind,
     failure_at,
     database_engine,
@@ -1346,7 +1256,7 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
     )
     from cv_engine.infrastructure.persistence.tables import cv_documents, job_analyses
 
-    ingested, queued = analysis_selection_operation(kind)
+    ingested, queued = analysis_operation_run(kind)
 
     def counts():
         with database_engine.connect() as connection:
@@ -1361,7 +1271,7 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
 
     baseline = counts()
     if failure_at == "plan":
-        method = "create_document" if kind == "analysis" else "replace_selection"
+        method = "create_document"
         original = getattr(SqlAlchemyDocumentStore, method)
 
         def fail_after_insert(*args, **kwargs):
@@ -1396,11 +1306,11 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
     )
 
 
-@pytest.mark.parametrize("kind", ["analysis", "selection"])
-def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
+@pytest.mark.parametrize("kind", ["analysis"])
+def test_analysis_activation_shares_one_token_and_has_no_external_io(
     ai_services,
     fake_openai,
-    analysis_selection_operation,
+    analysis_operation_run,
     kind,
     monkeypatch,
     transaction_manager,
@@ -1418,7 +1328,7 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
         SqlAlchemyOperationExecutionStore,
     )
 
-    ingested, queued = analysis_selection_operation(kind)
+    ingested, queued = analysis_operation_run(kind)
     network = fake_openai.urlopen
 
     def guarded_network(*args, **kwargs):
@@ -1447,7 +1357,7 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
 
         return call
 
-    plan_method = "create_document" if kind == "analysis" else "replace_selection"
+    plan_method = "create_document"
     monkeypatch.setattr(
         SqlAlchemyDocumentStore,
         plan_method,
@@ -1475,40 +1385,6 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
         )
         == 1
     )
-
-
-def test_selection_cancelled_before_activation_registers_no_new_plan(
-    ai_services,
-    analysis_selection_operation,
-    database_engine,
-    monkeypatch,
-) -> None:
-    from sqlalchemy import func, select
-
-    from cv_engine.infrastructure.persistence.tables import cv_documents, job_analyses
-
-    ingested, queued = analysis_selection_operation("selection")
-    method = "prepare_selection_proposal"
-    original = getattr(ai_services.analysis, method)
-
-    def prepare_then_cancel(*args, **kwargs):
-        value = original(*args, **kwargs)
-        ai_services.operation_lifecycle.cancel(queued.id)
-        return value
-
-    monkeypatch.setattr(ai_services.analysis, method, prepare_then_cancel)
-    completed = _run(ai_services, queued)
-    assert completed.status.value == "cancelled"
-    assert len(completed.outputs) == 1 and not completed.outputs[0].active
-    assert completed.outputs[0].output_type == "provider_response"
-    with database_engine.connect() as connection:
-        for table in (job_analyses, cv_documents):
-            count = connection.execute(
-                select(func.count())
-                .select_from(table)
-                .where(table.c.application_id == ingested.application_id)
-            ).scalar_one()
-            assert count == 1
 
 
 def test_retry_reuses_the_same_provider_output_without_rewriting_evidence(

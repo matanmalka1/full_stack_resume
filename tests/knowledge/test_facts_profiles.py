@@ -11,8 +11,8 @@ from knowledge_seed import V2_IDENTITY_FACT, facts_in, source_texts
 
 from cv_engine.domain.contracts.knowledge import FactStatus
 from cv_engine.domain.facts import FactStore
+from cv_engine.domain.frame import STRUCTURAL_STYLES
 from cv_engine.domain.profiles import ProfileStore, ProfileStoreError
-from cv_engine.domain.selection import STRUCTURAL_STYLES
 
 
 def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
@@ -201,7 +201,7 @@ def test_a_role_title_is_a_dated_heading_with_a_real_forward_span(
     is scored, competes for the section budget, and can be dropped below it -
     passing the coverage rule and still vanishing from the page. `bullet`,
     `paragraph` and `item` are the styles that would actually be dropped;
-    `date` and `contact` survive selection but are not a title either.
+    `date` and `contact` are always kept but are not a title either.
     """
     cases: list[tuple[dict, str]] = [
         ({"effective_dates": "2025-00/2025-06"}, "no readable span"),

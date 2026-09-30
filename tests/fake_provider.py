@@ -25,7 +25,7 @@ from email.message import Message
 from io import BytesIO
 from typing import Any
 
-from cv_engine.domain.contracts.providers import DraftProposal, ProposedClaim, SelectionProposal
+from cv_engine.domain.contracts.providers import DraftProposal, ProposedClaim
 from cv_engine.infrastructure.providers import OpenAIProvider, OpenAIResponsesProvider
 
 
@@ -93,7 +93,10 @@ def refusal_envelope(reason: str = "I can't help with that.") -> dict[str, Any]:
 
 
 def echo_draft(payload: dict[str, Any]) -> DraftProposal:
-    """A `draft_resume` answer that keeps every claim of the frame it was sent word for word."""
+    """A `draft_resume` answer that keeps every claim of the frame it was sent word for word.
+
+    Keeping every claim chooses every fact the frame offers.
+    """
     return DraftProposal(
         claims=[
             ProposedClaim(
@@ -109,12 +112,6 @@ def echo_draft(payload: dict[str, Any]) -> DraftProposal:
     )
 
 
-#: A `propose_selection_plan` answer with no overlay: the engine's selection, as the AI's.
-KEEP_SELECTION = SelectionProposal(
-    pinned_fact_ids=[], excluded_fact_ids=[], rationale="keep the engine's selection"
-)
-
-
 @dataclass
 class FakeOpenAI:
     """One scripted transport, shared by every task in a test."""
@@ -127,12 +124,7 @@ class FakeOpenAI:
         return self
 
     def script_draft(self, *wording: Any) -> FakeOpenAI:
-        """Script one `create_draft` over an untouched selection.
-
-        The selection call keeps the engine's selection; the wording call answers
-        with `wording`, or echoes the frame it is sent.
-        """
-        self.script("propose_selection_plan", KEEP_SELECTION)
+        """Script one `create_draft`: answer with `wording`, or echo the frame it is sent."""
         return self.script("draft_resume", *(wording or (echo_draft,)))
 
     def _next(self, task: str) -> Any:

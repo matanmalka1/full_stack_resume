@@ -34,6 +34,19 @@ def _golden_cases() -> list[tuple[Path, dict]]:
     ]
 
 
+def _golden_choice(profile, case: dict) -> dict[str, list[str]]:
+    """The facts each section keeps, standing in for the writer's choice.
+
+    Fixture input, not a computed selection: the golden cases pin what a document
+    with these facts renders to, while `draft_resume` owns the choice itself.
+    """
+    kept = set(case["snapshot"]["selected_fact_ids"])
+    return {
+        spec.name_en: [fact_id for fact_id in spec.fact_ids if fact_id in kept]
+        for spec in profile.sections
+    }
+
+
 def _build_case(services, case: dict):
     overrides = case.get("overrides", {})
     ingested, analysed = seed_document(
@@ -45,10 +58,13 @@ def _build_case(services, case: dict):
         emphasis_override=overrides.get("emphasis") or case["emphasis"],
         language_override=overrides.get("language") or case["language"],
     )
-    document = stored_document(services, ingested.application_id)
-    seed_draft(services, ingested.application_id)
-    document = stored_document(services, ingested.application_id)
     knowledge = services.knowledge.load()
+    seed_draft(
+        services,
+        ingested.application_id,
+        _golden_choice(knowledge.profiles.get(analysed.analysis.profile), case),
+    )
+    document = stored_document(services, ingested.application_id)
     return SimpleNamespace(
         facts=knowledge.facts,
         analysis=analysed.analysis,
@@ -64,7 +80,7 @@ def test_representative_profiles_match_their_golden_ready_outputs(
     tmp_path: Path,
     services,
 ) -> None:
-    """Pin content: analysis fields, Markdown, selection, and rendered HTML.
+    """Pin content: analysis fields, the chosen facts, Markdown, and rendered HTML.
 
     Nothing here needs a browser. `render_html` writes the document itself; only
     PDF geometry and the ATS/layout report below it need Chromium, and they are
@@ -145,51 +161,3 @@ def test_golden_outputs_pass_render_validation(
         )
         assert rendered.validation.passed, rendered.validation.model_dump()
         assert rendered.validation.evidence["page_count"] in {1, 2}
-
-
-def test_document_selection_reproduces_the_computed_selection(
-    project_root: Path,
-    services,
-    fact_store,
-    profile_store,
-    policy_store,
-    candidate_context,
-) -> None:
-    """The document path must render exactly what the computing path rendered.
-
-    Production drafts from the document selection, while the golden cases above
-    build their selection by computing it. Without this, the parity evidence would
-    cover a path the product no longer takes: the two could drift — in section
-    assignment or claim order — and every golden hash would still match.
-    """
-    from cv_engine.domain.drafts import build_draft
-    from cv_engine.infrastructure.knowledge import load_presentations
-
-    differences: list[str] = []
-    for fixture in sorted(GOLDEN_DIR.glob("*.json")):
-        case = json.loads(fixture.read_text(encoding="utf-8"))
-        computed = _build_case(services, case)
-        rebuilt = build_draft(
-            application_id=computed.draft.application_id,
-            job_snapshot_id=computed.draft.job_snapshot_id,
-            job_analysis_id=computed.draft.job_analysis_id,
-            analysis=computed.analysis,
-            profile=computed.profile,
-            facts=fact_store,
-            policies=policy_store,
-            candidate=candidate_context,
-            presentations=load_presentations(project_root, fact_store),
-        )
-        if serialize_markdown(computed.draft) != serialize_markdown(rebuilt):
-            differences.append(f"{fixture.name}: Markdown differs")
-        if computed.draft.selected_fact_ids != rebuilt.selected_fact_ids:
-            differences.append(f"{fixture.name}: selected fact IDs differ")
-        if len(computed.draft.sections) != len(rebuilt.sections):
-            differences.append(f"{fixture.name}: section count differs")
-        for original, replayed in zip(computed.draft.sections, rebuilt.sections, strict=False):
-            if [claim.fact_ids for claim in original.claims] != [
-                claim.fact_ids for claim in replayed.claims
-            ]:
-                differences.append(f"{fixture.name}: {original.name} claim order differs")
-
-    assert not differences, differences

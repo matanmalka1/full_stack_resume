@@ -13,11 +13,7 @@ from cv_engine.application.commands import (
 )
 from cv_engine.application.ports.documents import DocumentBody
 from cv_engine.application.services.analysis.preparation import PreparedAnalysis
-from cv_engine.application.services.documents import (
-    build_document_selection,
-    built_with,
-    compose_content,
-)
+from cv_engine.application.services.documents import built_with, compose_content
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
@@ -67,8 +63,8 @@ def seed_existing_analysis(
 ):
     """Persist an already-existing analysis for downstream tests without invoking AI.
 
-    The first analysis of an Application also creates its CV document, with the
-    analysis's deterministic selection and no content (§13).
+    The first analysis of an Application also creates its CV document, pinned to it
+    with no content (§13).
     """
     knowledge = services.analysis.load_knowledge()
     profile_name = ProfileName(overrides.pop("profile_override", "account-manager"))
@@ -92,7 +88,6 @@ def seed_existing_analysis(
         ),
         PreparedAnalysis(
             result=analysis,
-            selection=build_document_selection(analysis, knowledge),
             built_with=built_with(knowledge),
             provider="test",
             model="existing-analysis-fixture",
@@ -215,10 +210,12 @@ def seed_document(
     return ingested, seed_existing_analysis(services, ingested, **analysis_values)
 
 
-def composed_content(services: Services, application_id: str):
-    """The engine's frame for the document: its selection laid out as canonical claims.
+def composed_content(services: Services, application_id: str, chosen=None):
+    """The document's content in canonical wording.
 
-    What `create_draft` hands the provider to word.
+    With no `chosen`, the frame `create_draft` hands the provider: every section's
+    whole pool. With `chosen` (section English name -> fact IDs), what the engine lays
+    out once a writer kept those facts.
     """
     source = services.drafts.document_source(application_id)
     document = source.document
@@ -227,18 +224,19 @@ def composed_content(services: Services, application_id: str):
         document.analysis_id,
         source.job_snapshot_id,
         source.analysis,
-        document.selection,
         services.drafts.load_knowledge(),
+        chosen,
     )
 
 
-def seed_draft(services: Services, application_id: str):
+def seed_draft(services: Services, application_id: str, chosen=None):
     """Persist existing content for downstream tests without invoking AI.
 
-    The content is the engine's frame with its canonical wording, as a
-    `draft_resume` that echoed every claim (`fake_provider.echo_draft`) leaves it.
+    The content is canonical wording: the whole frame, as a `draft_resume` that kept
+    and echoed every claim (`fake_provider.echo_draft`) leaves it, or the `chosen`
+    facts laid out.
     """
-    content = composed_content(services, application_id)
+    content = composed_content(services, application_id, chosen)
     document = stored_document(services, application_id)
     transactions = services_transactions(services)
     with transactions.write() as tx:
@@ -246,11 +244,7 @@ def seed_draft(services: Services, application_id: str):
             tx,
             application_id,
             document.document_hash,
-            DocumentBody(
-                analysis_id=document.analysis_id,
-                selection=document.selection,
-                content=content,
-            ),
+            DocumentBody(analysis_id=document.analysis_id, content=content),
             updated_at=utc_now(),
         )
 

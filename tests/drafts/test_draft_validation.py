@@ -7,6 +7,7 @@ from helpers import PAYME_TECH_SALES_JOB, claim_by_id, store_draft
 
 from cv_engine.domain.claim_review import REVIEW_POLICY_VERSION
 from cv_engine.domain.contracts.drafts import ClaimLine, ClaimReviewAssertion, ClaimReviewEvidence
+from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.domain.drafts import apply_claim_edit, authorize_reviewed_claim, draft_content_hash
 from cv_engine.domain.validation import validate_draft
 from cv_engine.util import sha256_text
@@ -32,11 +33,7 @@ def test_generated_draft_has_exact_canonical_claim_links(draft_factory) -> None:
     moved = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     codes = {issue.code for issue in moved.issues}
     assert "section-order" in codes
-    assert not codes & {
-        "fact-outside-profile-section",
-        "section-budget-exceeded",
-        "pinned-fact-dropped",
-    }
+    assert not codes & {"fact-outside-profile-section", "role-claim-misplaced"}
 
 
 def test_an_unsafe_or_misplaced_headline_is_blocked(
@@ -449,3 +446,39 @@ def test_historical_title_placement_blocks_a_demoted_title_and_spares_a_project_
 
     report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
     assert not any(i.code == "historical-title-placement" for i in report.issues)
+
+
+def test_guidance_never_blocks_but_a_bullet_under_another_role_does(draft_factory) -> None:
+    """docs/decisions/ai-owned-selection.md: budgets, tags and pins are guidance.
+
+    A document carrying every fact its Profile offers overruns section budgets and
+    per-role ceilings and still passes. Moving one bullet under another role's title
+    attributes it to the wrong employer, which is a hard structural finding.
+    """
+    facts, profile, analysis, draft, markdown = draft_factory(
+        "Sales Manager team leader coaching forecast", write=True
+    )
+    report = validate_draft(draft, markdown.read_text(encoding="utf-8"), facts, profile, analysis)
+    assert report.passed, report.model_dump()
+    budgets = {spec.name_en: spec.max_claims for spec in profile.sections}
+    assert any(
+        budgets.get(section.name) is not None and len(section.claims) > budgets[section.name]
+        for section in draft.sections
+    ), "fixture overruns no budget"
+
+    def is_title(claim: ClaimLine) -> bool:
+        return claim.style == "heading" and any(
+            "historical-title" in facts.get(fact_id).tags for fact_id in claim.fact_ids
+        )
+
+    section = next(s for s in draft.sections if sum(is_title(c) for c in s.claims) >= 2)
+    first, second = [i for i, claim in enumerate(section.claims) if is_title(claim)][:2]
+    bullet = next(i for i in range(first + 1, second) if section.claims[i].style == "bullet")
+    moved = section.claims.pop(bullet)
+    section.claims.insert(second, moved)
+    draft = draft.model_copy(update={"content_hash": draft_content_hash(draft)})
+
+    report = validate_draft(draft, serialize_markdown(draft), facts, profile, analysis)
+    assert not report.passed
+    issue = next(i for i in report.issues if i.code == "role-claim-misplaced")
+    assert issue.hard and moved.claim_id in issue.message

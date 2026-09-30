@@ -1,10 +1,10 @@
-"""API review decisions and the document selection against existing AI analyses.
+"""API review decisions against existing AI analyses.
 
 §13 requires the first analysis activation to commit its immutable JobAnalysis *and*
-the Application's CV document, with the analysis's deterministic selection, in one
-transaction. The focused tests here hold that behavior as evidence, and the review
-decisions that follow: a meaning change creates a new analysis and leaves the
-document where it is; a selection decision changes the document's selection in place.
+the Application's CV document in one transaction. The focused tests here hold that
+behavior as evidence, and the review decisions that follow: every decision -
+Track, Profile, language, or Emphasis - creates a new analysis and leaves the
+document where it is.
 """
 
 from __future__ import annotations
@@ -16,9 +16,7 @@ from helpers import (
     REVIEW_DECISION_JOB,
     analysis_proposal,
     persisted_counts,
-    seed_draft,
     seed_existing_analysis,
-    stored_document,
 )
 
 from cv_engine.api.app import API_PREFIX
@@ -161,17 +159,15 @@ def test_an_analysis_creates_its_document_together_or_not_at_all(
 # --- POST /analyses/{id}/apply-decisions -------------------------------------
 
 
-@pytest.mark.parametrize("decision", ["classification", "fact_overlay", "emphasis"])
-def test_a_decision_changes_only_what_it_decides(
+@pytest.mark.parametrize("decision", ["classification", "emphasis"])
+def test_a_decision_creates_an_analysis_and_leaves_the_document(
     api_worker, transaction_manager, application_projection_reader, decision
 ) -> None:
-    """Three branches, one history rule.
+    """One branch, one history rule.
 
-    A classification decision is the meaning branch: a new immutable analysis, and
-    the document stays on the analysis it was built from until it is rebuilt. A fact
-    overlay or an emphasis decision is the selection branch: the document's own
-    selection changes in place, on the same analysis. The analysis decided against is
-    untouched history in every branch.
+    A Profile or an Emphasis decision is classification: a new immutable analysis,
+    and the document stays on the analysis it was built from until it is rebuilt.
+    The analysis decided against is untouched history.
     """
     if decision == "classification":
         application_id = _application(
@@ -184,26 +180,16 @@ def test_a_decision_changes_only_what_it_decides(
             application_projection_reader,
             **REVIEW_ANALYSIS,
         )
+        submitted = {"profile_override": "account-manager"}
     else:
-        application_id = _application(api_worker.services, f"Decided {decision} Co")
+        application_id = _application(api_worker.services, "Decided Emphasis Co")
         analysis_id = _existing_analysis(
             api_worker, application_id, transaction_manager, application_projection_reader
         )
+        submitted = {"emphasis_override": "new-business"}
     with transaction_manager.read() as tx:
         original_analysis = application_projection_reader.analysis(tx, analysis_id)
     original_document = _document(api_worker, application_id)
-    removed = None
-    if decision == "classification":
-        submitted = {"profile_override": "account-manager"}
-    elif decision == "fact_overlay":
-        removed = next(
-            candidate["fact_id"]
-            for candidate in original_document["selection"]["candidates"]
-            if candidate["section"] == "Core Skills" and candidate["outcome"] == "selected"
-        )
-        submitted = {"excluded_fact_ids": [removed]}
-    else:
-        submitted = {"emphasis_override": "new-business"}
 
     response = _post(
         api_worker,
@@ -218,11 +204,9 @@ def test_a_decision_changes_only_what_it_decides(
 
     assert response.status_code == 201, response.text
     body = response.json()
-    creates_analysis = decision == "classification"
-    assert body["created_analysis"] is creates_analysis
-    assert (body["job_analysis_id"] != analysis_id) is creates_analysis
+    assert body["created_analysis"] is True
+    assert body["job_analysis_id"] != analysis_id
     assert body["document_id"] == original_document["id"]
-
     with transaction_manager.read() as tx:
         assert application_projection_reader.analysis(tx, analysis_id) == original_analysis
 
@@ -233,33 +217,19 @@ def test_a_decision_changes_only_what_it_decides(
     assert body["state"]["latest_analysis_id"] == state["latest_analysis_id"]
     assert body["state"]["available_actions"] == state["available_actions"]
     assert body["state"]["recommended_action"] == state["recommended_action"]
-
+    # The document is pinned to the analysis it was built from (§13 decision 3).
+    assert document == original_document
+    assert state["document_analysis_id"] == analysis_id
+    assert "DOCUMENT_ON_OLDER_ANALYSIS" in {warning["code"] for warning in state["warnings"]}
     if decision == "classification":
         assert body["analysis"]["user_override"] == {"profile": "account-manager"}
-        # The document is pinned to the analysis it was built from (§13 decision 3).
-        assert document == original_document
-        assert state["document_analysis_id"] == analysis_id
-        assert "DOCUMENT_ON_OLDER_ANALYSIS" in {warning["code"] for warning in state["warnings"]}
         # The hard gap is still there and still hard. It is information for the
         # user, not a question they must answer before the document exists.
         assert state["review_reasons"] == []
-    elif decision == "fact_overlay":
-        assert document["analysis_id"] == analysis_id
-        assert removed not in document["selection"]["selected_fact_ids"]
-        assert {
-            candidate["fact_id"]: candidate["reason"]
-            for candidate in document["selection"]["candidates"]
-        }[removed] == "excluded_by_user"
     else:
-        assert document["selection"]["emphasis"] == "new-business"
-        assert document["selection"]["emphasis_override"] == "new-business"
+        assert body["analysis"]["emphasis"] == "new-business"
+        assert body["analysis"]["user_override"] == {"emphasis": "new-business"}
         assert state["application"]["emphasis"] == "new-business"
-        seed_draft(api_worker.services, application_id)
-        content = stored_document(api_worker.services, application_id).content
-        assert content is not None
-        assert content.emphasis.value == "new-business"
-        assert content.selection is not None
-        assert content.selection.emphasis_override is not None
 
 
 RIVERSIDE_POSTING = (
@@ -288,9 +258,8 @@ def test_the_api_refuses_decisions_it_cannot_act_on_without_writing(
 ) -> None:
     """Every refusal of a decision request, none of which is a 500.
 
-    Both kinds at once: a fact overlay is decided against candidate accounting the
-    new analysis has not produced yet, so it stays a second command, and the refusal
-    leaves no row anywhere.
+    A fact overlay: there is no selection to decide, so the field is unknown and the
+    request is refused before a command is built, leaving no row anywhere.
 
     Nothing at all: an empty form would put a decision in the history nobody made.
 
@@ -321,18 +290,12 @@ def test_the_api_refuses_decisions_it_cannot_act_on_without_writing(
     }
 
     before = persisted_counts(database_engine)
-    both = _post(
+    overlay = _post(
         api_paused,
         decisions_path,
-        {
-            **named,
-            "profile_override": "account-manager",
-            "excluded_fact_ids": ["sales.achievement.retention"],
-        },
+        {**named, "excluded_fact_ids": ["sales.achievement.retention"]},
     )
-    assert both.status_code == 412, both.text
-    assert both.json()["code"] == "PRECONDITION_FAILED"
-    assert "fact overlay" in both.json()["detail"]
+    assert overlay.status_code == 422, overlay.text
     assert persisted_counts(database_engine) == before
 
     empty = _post(api_paused, decisions_path, named)
@@ -355,7 +318,7 @@ def test_the_api_refuses_decisions_it_cannot_act_on_without_writing(
         {
             "application_id": application_id,
             "expected_analysis_id": analysis_id,
-            "pinned_fact_ids": ["sales.summary.new_business"],
+            "emphasis_override": "new-business",
         },
     )
     assert unnamed_document.status_code == 412, unnamed_document.text
@@ -373,33 +336,23 @@ def test_the_api_refuses_decisions_it_cannot_act_on_without_writing(
     assert unnamed_analysis.status_code == 422, unnamed_analysis.text
     assert persisted_counts(database_engine) == before
 
-    # A selection overlay naming both sources goes through; it is what moves the
-    # document the next request still names.
-    pinned = _post(
-        api_paused, decisions_path, {**named, "pinned_fact_ids": ["sales.summary.new_business"]}
-    )
-    assert pinned.status_code == 201, pinned.text
-
     stale_document = _post(
-        api_paused, decisions_path, {**named, "pinned_fact_ids": ["sales.summary.account"]}
+        api_paused,
+        decisions_path,
+        {**named, "expected_document_hash": "0" * 64, "emphasis_override": "new-business"},
     )
     assert stale_document.status_code == 409, stale_document.text
     assert stale_document.json()["code"] == "DOCUMENT_CHANGED"
+    assert persisted_counts(database_engine) == before
 
-    replacement = _existing_analysis(
-        api_paused, application_id, transaction_manager, application_projection_reader
-    )
+    # A decision naming both sources goes through, and makes the analysis it was
+    # made against stale for the next request.
+    applied = _post(api_paused, decisions_path, {**named, "emphasis_override": "new-business"})
+    assert applied.status_code == 201, applied.text
+    replacement = applied.json()["job_analysis_id"]
     with transaction_manager.read() as tx:
         analyses_before = len(application_projection_reader.analyses(tx, application_id))
-    stale_analysis = _post(
-        api_paused,
-        decisions_path,
-        {
-            **named,
-            "expected_document_hash": pinned.json()["document_hash"],
-            "emphasis_override": "new-business",
-        },
-    )
+    stale_analysis = _post(api_paused, decisions_path, {**named, "language_override": "he"})
     assert stale_analysis.status_code == 409, stale_analysis.text
     assert "active JobAnalysis moved" in stale_analysis.text
     with transaction_manager.read() as tx:
@@ -407,51 +360,7 @@ def test_the_api_refuses_decisions_it_cannot_act_on_without_writing(
     assert _state(api_paused, application_id)["latest_analysis_id"] == replacement
 
 
-# --- the document selection ---------------------------------------------------
-
-
-def test_the_selection_change_returns_the_selection_and_its_readable_accounting(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    """`200`, synchronously, with no provider anywhere near it (§14)."""
-    application_id = _application(api_worker.services, "Deterministic Selection Co")
-    analysis_id = _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )
-
-    initial = _document(api_worker, application_id)
-    candidates = initial["selection"]["candidates"]
-    assert initial["analysis_id"] == analysis_id
-    assert candidates
-    assert all(candidate["text"] for candidate in candidates)
-    assert any(candidate["user_selectable"] for candidate in candidates)
-    assert any(not candidate["user_selectable"] for candidate in candidates)
-    pinned = next(
-        candidate["fact_id"]
-        for candidate in candidates
-        if candidate["section"] == "Core Skills" and candidate["outcome"] == "omitted"
-    )
-
-    response = _post(
-        api_worker,
-        f"/applications/{application_id}/document/selection",
-        {"expected_document_hash": initial["document_hash"], "pinned_fact_ids": [pinned]},
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["document_id"] == initial["id"]
-    assert body["document_hash"] != initial["document_hash"]
-    document = _document(api_worker, application_id)
-    assert document["document_hash"] == body["document_hash"]
-    assert document["analysis_id"] == analysis_id
-    assert pinned in document["selection"]["selected_fact_ids"]
-    assert document["selection"]["pinned_fact_ids"] == [pinned]
-    assert document["selection"]["excluded_fact_ids"] == []
-    assert {
-        candidate["fact_id"]: candidate["outcome"]
-        for candidate in document["selection"]["candidates"]
-    }[pinned] == "pinned"
+# --- the document's analysis pin ----------------------------------------------
 
 
 def test_a_later_analysis_reaches_the_document_only_through_build_from_analysis(
@@ -479,31 +388,6 @@ def test_a_later_analysis_reaches_the_document_only_through_build_from_analysis(
     assert state["document_analysis_id"] == replacement
     assert "DOCUMENT_ON_OLDER_ANALYSIS" not in {warning["code"] for warning in state["warnings"]}
     assert _document(api_worker, application_id)["content"] is None
-
-
-def test_an_overlay_the_engine_cannot_honour_is_refused_rather_than_trimmed(
-    api_worker, transaction_manager, application_projection_reader
-) -> None:
-    """Excluding a heading is refused at the boundary, not silently ignored.
-
-    The alternative is a selection that quietly contains what the user asked to
-    remove, or a document with bullets under no role.
-    """
-    application_id = _application(api_worker.services, "Impossible Overlay Co")
-    _existing_analysis(
-        api_worker, application_id, transaction_manager, application_projection_reader
-    )
-    token = _document(api_worker, application_id)["document_hash"]
-
-    response = _post(
-        api_worker,
-        f"/applications/{application_id}/document/selection",
-        {"expected_document_hash": token, "excluded_fact_ids": ["sales.role.leader.title"]},
-    )
-
-    assert response.status_code == 412, response.text
-    assert response.json()["code"] == "PRECONDITION_FAILED"
-    assert _document(api_worker, application_id)["document_hash"] == token
 
 
 def test_a_context_operation_blocks_voluntary_editing_and_the_command(

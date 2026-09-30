@@ -55,7 +55,7 @@ def test_commands_require_sources_owned_by_the_named_application(services) -> No
     )
     seed_existing_analysis(services, mine)
     with pytest.raises(errors.LineageBroken):
-        services.selection.build_from_analysis(
+        services.repin.build_from_analysis(
             BuildFromAnalysisCommand(
                 application_id=mine.application_id,
                 analysis_id=analysed.analysis_id,

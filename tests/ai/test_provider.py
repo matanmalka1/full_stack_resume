@@ -36,9 +36,7 @@ from cv_engine.application.ports import (
     DraftResumeContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
-    SelectionPlanContext,
 )
-from cv_engine.application.ports.outbound import SelectionSectionContext
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.providers import (
     ClaimProposal,
@@ -47,7 +45,6 @@ from cv_engine.domain.contracts.providers import (
     DraftProposal,
     ProposedClaim,
     SectionProposal,
-    SelectionProposal,
 )
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
 from cv_engine.infrastructure.providers import TASK_OUTPUT_MODELS
@@ -58,20 +55,6 @@ ANALYSIS_CONTEXT = AnalysisContext(
     candidate_facts=[],
 )
 
-SELECTION_CONTEXT = SelectionPlanContext(
-    job_analysis={"track": "sales"},
-    allowed_facts=[{"fact_id": "a.b"}],
-    deterministic_selection={"selected_fact_ids": ["a.b"], "non_excludable_fact_ids": []},
-    sections=[
-        SelectionSectionContext(
-            section="Professional Summary",
-            fact_ids=["a.b"],
-            max_claims=1,
-            fixed_fact_ids=[],
-            max_additional_pins=1,
-        )
-    ],
-)
 DRAFT_CONTEXT = DraftResumeContext(
     job_analysis={"track": "sales"},
     job_text="Account manager role",
@@ -79,6 +62,7 @@ DRAFT_CONTEXT = DraftResumeContext(
     language="en",
     sections=[{"section": "Experience", "allowed_fact_ids": ["a.b"], "claims": []}],
     allowed_facts=[{"fact_id": "a.b"}],
+    guidance={"required_tags": []},
 )
 REVIEW_CONTEXT = AssessClaimSupportContext(
     language="en",
@@ -110,7 +94,6 @@ ANALYSIS = AnalysisProposal(
     summary="r",
     keywords=["k"],
 )
-SELECTION = SelectionProposal(pinned_fact_ids=["a.b"], excluded_fact_ids=[], rationale="r")
 DRAFT = DraftProposal(
     claims=[ProposedClaim(section="Experience", claim_id="c1", text="t", fact_ids=["a.b"])],
     rationale="r",
@@ -133,7 +116,6 @@ REVIEW = ClaimSupportProposal(
 #: remembered.
 TASKS = [
     ("propose_analysis", ANALYSIS_CONTEXT, ANALYSIS),
-    ("propose_selection_plan", SELECTION_CONTEXT, SELECTION),
     ("draft_resume", DRAFT_CONTEXT, DRAFT),
     ("assess_claim_support", REVIEW_CONTEXT, REVIEW),
     ("regenerate_section", SECTION_CONTEXT, SECTION),
@@ -308,8 +290,8 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
 
     # The rules the tasks rely on are in that one prompt. Analysis splits a
     # sentence only into self-contained quotes and judges qualitative and
-    # frequency wording semantically; selection respects each section's pin capacity and allowed
-    # facts.
+    # frequency wording semantically; drafting chooses by keeping claims, weighs guidance
+    # without treating it as fact, and cites only each section's allowed facts.
     prompt = task_contracts.prompt_text
     for rule in (
         "return each as its own requirement only if every one of them can be quoted",
@@ -321,10 +303,10 @@ def test_the_system_prompt_and_versions_come_from_the_contract_file(
         "identifiable substantive condition",
         "frequency or habit wording",
         "explicit duration or quantity threshold",
-        "max_additional_pins",
-        "Count each proposed pin not already",
-        "The engine still validates the complete overlay",
-        "Each supplied section names its",
+        "Return only the claims you keep",
+        "a heading left without one fails the draft",
+        "never license wording the kept facts do not support",
+        "Each section names its `allowed_fact_ids`",
         "A fact absent from this section's `allowed_fact_ids`",
     ):
         assert rule in prompt, rule

@@ -10,6 +10,7 @@ from helpers import (
     edit_document_claim,
     seed_document,
     seed_draft,
+    seed_existing_analysis,
     stored_document,
 )
 from operations_support import (
@@ -29,15 +30,13 @@ import cv_engine.infrastructure.rendering as rendering_adapter
 from cv_engine.application.commands import (
     AnalyzeCommand,
     ApproveDocumentCommand,
+    BuildFromAnalysisCommand,
     DraftCommand,
     IngestCommand,
-    ProposeSelectionCommand,
     RenderCommand,
     UpdateDocumentCommand,
-    UpdateSelectionCommand,
 )
 from cv_engine.application.errors import (
-    REGENERATION_REQUIRED,
     MissingFactRendering,
     PreconditionFailed,
     StateConflict,
@@ -58,7 +57,6 @@ from cv_engine.application.operations import (
     OperationStatus,
     OperationType,
 )
-from cv_engine.domain.contracts.providers import SelectionProposal
 from cv_engine.domain.document import PreparationState
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
 from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
@@ -600,7 +598,7 @@ def _submit_draft(services: Services, application_id: str, document_hash: str):
 def test_create_draft_activates_only_against_the_hash_it_froze(
     ai_services: Services, fake_openai, monkeypatch, race_phase
 ) -> None:
-    """A selection change before execution or activation yields SOURCE_CHANGED.
+    """A document change before execution or activation yields SOURCE_CHANGED.
 
     The failure is not retryable; a new Operation against the current hash is how
     the user continues, and it writes the content.
@@ -612,12 +610,13 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
     fake_openai.script_draft()
     queued = _submit_draft(services, application_id, document.document_hash)
 
-    def move_selection():
-        services.selection.update_selection(
-            UpdateSelectionCommand(
+    def move_document():
+        newer = seed_existing_analysis(services, ingested)
+        services.repin.build_from_analysis(
+            BuildFromAnalysisCommand(
                 application_id=application_id,
+                analysis_id=newer.analysis_id,
                 expected_document_hash=document.document_hash,
-                emphasis_override=document.selection.emphasis.value,
             )
         )
 
@@ -625,12 +624,12 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
 
     def prepare_then_move(*args, **kwargs):
         prepared = prepare(*args, **kwargs)
-        move_selection()
+        move_document()
         return prepared
 
     with monkeypatch.context() as patch:
         if race_phase == "queued":
-            move_selection()
+            move_document()
         else:
             patch.setattr(services.drafts, "prepare", prepare_then_move)
         failed = _run(services, queued.id)
@@ -730,79 +729,10 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
     assert len([path for path in attempts.rglob("*.pdf")]) == 1
 
 
-def test_an_ai_selection_proposal_is_provenance_on_the_selection_it_activates(
-    ai_services: Services, fake_openai
-) -> None:
-    """§14 `propose_selection`: activated through the same policy, recorded as `ai`.
-
-    Under `update_selection`'s content rule: offered over content still in its
-    canonical wording, refused once the draft carries authored wording. The rationale is kept verbatim
-    and never read back.
-    """
-    services = ai_services
-    ingested, _analysis = seed_document(services, "Proposal Co")
-    application_id = ingested.application_id
-    document = stored_document(services, application_id)
-    fake_openai.script(
-        "propose_selection_plan",
-        SelectionProposal(pinned_fact_ids=[], excluded_fact_ids=[], rationale="keep it"),
-    )
-    queued = services.operation_submissions.submit_selection_proposal(
-        ProposeSelectionCommand(
-            application_id=application_id, expected_document_hash=document.document_hash
-        ),
-        idempotency_key=new_id(),
-        analysis_service=services.analysis,
-    )
-    completed = _run(services, queued.id)
-    assert completed.status is OperationStatus.SUCCEEDED, completed.safe_failure_detail
-
-    proposed = stored_document(services, application_id)
-    assert proposed.selection.proposed_by == "ai"
-    assert proposed.selection.proposal_rationale == "keep it"
-    assert proposed.selection.selected_fact_ids == document.selection.selected_fact_ids
-    assert proposed.document_hash != document.document_hash
-    outputs = {(item.output_type, item.active) for item in completed.outputs}
-    assert ("cv_document", True) in outputs and ("provider_response", True) in outputs
-
-    seed_draft(services, application_id)
-    # Content in its canonical wording is offered a proposal; activation would drop it.
-    assert (
-        "propose_selection" in services.queries.application_detail(application_id).available_actions
-    )
-
-    drafted = stored_document(services, application_id)
-    assert drafted.content is not None
-    claim = next(
-        claim
-        for section in drafted.content.sections
-        for claim in section.claims
-        if claim.claim_type == "canonical" and claim.style in {"paragraph", "bullet", "item"}
-    )
-    edit_document_claim(
-        services, application_id, claim.claim_id, list(claim.fact_ids), text="My own wording"
-    )
-    assert (
-        "propose_selection"
-        not in services.queries.application_detail(application_id).available_actions
-    )
-    with pytest.raises(PreconditionFailed) as refused:
-        services.operation_submissions.submit_selection_proposal(
-            ProposeSelectionCommand(
-                application_id=application_id,
-                expected_document_hash=stored_document(services, application_id).document_hash,
-            ),
-            idempotency_key=new_id(),
-            analysis_service=services.analysis,
-        )
-    assert refused.value.code == REGENERATION_REQUIRED
-
-
 @pytest.mark.parametrize("outcome", ["cancel", "edit"])
 def test_render_discards_unactivated_files(
     approved_application, deterministic_renderer, monkeypatch, outcome
 ):
-    from helpers import edit_document_claim
 
     setup = approved_application("Render Activation Race")
     services, app_id = setup

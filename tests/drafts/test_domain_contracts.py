@@ -52,7 +52,7 @@ def test_a_validation_reports_pass_is_derived_from_its_findings() -> None:
         issues=[
             ValidationIssue(
                 group="profile",
-                code="emphasis-coverage-low",
+                code="future-soft-finding",
                 message="x",
                 hard=False,
             )

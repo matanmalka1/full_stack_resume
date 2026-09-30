@@ -94,7 +94,6 @@ def test_browser_analysis_through_ready_and_submission(
         assert [call.task for call in fake_openai.calls] == [
             "propose_analysis",
             "propose_analysis",
-            "propose_selection_plan",
             "draft_resume",
         ]
     finally:

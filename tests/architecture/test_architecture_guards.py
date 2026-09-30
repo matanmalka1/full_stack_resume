@@ -638,8 +638,8 @@ def test_every_operation_records_the_knowledge_scope_its_activation_checks() -> 
     dependency, and every stage after it against the dependencies it actually
     consumes. If a submitter freezes one scope and the handler compares the
     other, the two can never match, and the operation fails SOURCE_CHANGED on
-    every run with nothing wrong. That is exactly what happened to
-    `propose_selection_plan` when only one side was moved.
+    every run with nothing wrong. That is exactly what happened to a selection
+    task, since removed, when only one side was moved.
 
     Derived from the composition registry, so a new operation type is paired
     here the moment it is wired rather than when someone remembers to add it.
@@ -914,7 +914,7 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
     allowed = {
         "ApplicationService",
         "AnalysisService",
-        "SelectionChangeService",
+        "RepinService",
         "OperationRunner",
         "OperationSubmissionService",
         "OperationLifecycleService",

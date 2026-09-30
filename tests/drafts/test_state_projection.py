@@ -29,12 +29,9 @@ from cv_engine.application.commands import (
     RenderCommand,
     SubmissionCommand,
     UpdateDocumentCommand,
-    UpdateSelectionCommand,
 )
 from cv_engine.application.errors import (
     DOCUMENT_CHANGED,
-    REGENERATION_REQUIRED,
-    PreconditionFailed,
     StateConflict,
 )
 from cv_engine.domain.document import ContentCheck, PreparationState
@@ -89,8 +86,7 @@ def test_document_journey_from_analysis_to_submission(
 ) -> None:
     """§5.1 and §14: analysis creates the document; each step moves exactly one stamp.
 
-    The first analysis creates the document pinned to it with its deterministic
-    selection and no content. Draft, check, approve and render then reach Ready;
+    The first analysis creates the document pinned to it with no content. Draft, check, approve and render then reach Ready;
     re-approving a current approval changes nothing; submitting copies what was sent
     with a checksum per file, transitions to `applied` once, and leaves the document
     exactly as it was.
@@ -101,13 +97,11 @@ def test_document_journey_from_analysis_to_submission(
 
     document = stored_document(services, application_id)
     assert document.analysis_id == analysis.analysis_id
-    assert document.content is None and document.selection.selected_fact_ids
+    assert document.content is None
     detail = _detail(services, application_id)
     assert detail.preparation_state is PreparationState.READY_TO_DRAFT
     assert detail.recommended_action == "create_draft"
-    assert {"create_draft", "update_selection", "propose_selection"} <= set(
-        detail.available_actions
-    )
+    assert "create_draft" in detail.available_actions
 
     document_hash = _draft(services, application_id)
     detail = _detail(services, application_id)
@@ -198,8 +192,7 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
     An unsupported free-text line is saved as pending, returns the approved document
     to draft and outdates its check without any invalidating write, and blocks
     approval through the fresh check approve runs itself. A stale token writes
-    nothing; a selection change needing wording judgment is refused. Removing the
-    line lets the document be approved again.
+    nothing. Removing the line lets the document be approved again.
     """
     ingested, _analysis = seed_document(services, "Editor Co")
     application_id = ingested.application_id
@@ -234,15 +227,6 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
         services.drafts.update_document(stale)
     assert conflict.value.code == DOCUMENT_CHANGED
     current = stored_document(services, application_id)
-    with pytest.raises(PreconditionFailed) as refused:
-        services.selection.update_selection(
-            UpdateSelectionCommand(
-                application_id=application_id,
-                expected_document_hash=edited.document_hash,
-                emphasis_override=current.selection.emphasis.value,
-            )
-        )
-    assert refused.value.code == REGENERATION_REQUIRED
     assert persisted_counts(database_engine) == before
     assert stored_document(services, application_id) == current
 
@@ -308,35 +292,33 @@ def test_a_fact_edit_by_hand_moves_the_basis_without_a_write(
     assert stored_document(services, application_id) == document
 
 
-def test_a_deleted_fact_before_drafting_offers_only_resolutions_that_apply(
+def test_a_deleted_fact_before_drafting_blocks_nothing(
     services: Services, project_root: Path
 ) -> None:
-    """§7 and §9: a review reason names its resolutions; content actions need content.
+    """§3 and §7: a document without content depends on no fact.
 
-    `FACT_DELETED_REQUIRES_RESOLUTION` lists edit and regeneration among its
-    resolutions, but with no content yet the commands would refuse them, so the
-    projection offers only the selection change.
+    Deleting a fact its Profile offers raises no review reason before drafting; the
+    next draft simply cannot choose it.
     """
-    ingested, _analysis = seed_document(services, "Deleted Early Co")
+    ingested, analysis = seed_document(services, "Deleted Early Co")
     application_id = ingested.application_id
     document = stored_document(services, application_id)
     assert document.content is None
-    fact_id = document.selection.selected_fact_ids[0]
-    source = next(
-        path
+    profile = services.knowledge.load().profiles.get(analysis.analysis.profile)
+    pool = {fact_id for spec in profile.sections for fact_id in spec.fact_ids}
+    source, data, fact = next(
+        (path, data, item)
         for path in sorted((project_root / "base").glob("*.json"))
-        if any(
-            item.get("fact_id") == fact_id
-            for item in json.loads(path.read_text(encoding="utf-8")).get("facts", [])
-        )
+        for data in [json.loads(path.read_text(encoding="utf-8"))]
+        for item in data.get("facts", [])
+        if item.get("fact_id") in pool and item.get("resume_style") == "bullet"
     )
-    data = json.loads(source.read_text(encoding="utf-8"))
-    next(item for item in data["facts"] if item["fact_id"] == fact_id)["status"] = "deleted"
+    fact["status"] = "deleted"
     source.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     detail = _detail(services, application_id)
-    assert [reason.code for reason in detail.review_reasons] == ["FACT_DELETED_REQUIRES_RESOLUTION"]
-    assert "update_selection" in detail.available_actions
+    assert detail.review_reasons == []
+    assert "create_draft" in detail.available_actions
     assert not {"edit", "regenerate_section", "regenerate_claim"} & set(detail.available_actions)
 
 
@@ -346,7 +328,7 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     """§5.5: a later analysis never touches the document; only the explicit re-pin does.
 
     The Ready document stays Ready and submittable with `DOCUMENT_ON_OLDER_ANALYSIS`.
-    `build_from_analysis` then replaces the analysis and selection, drops the content
+    `build_from_analysis` then replaces the analysis, drops the content
     and every stamp, and deletes the old rendered files, while the Submission keeps
     its own copies.
     """
@@ -370,7 +352,7 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     submitted = _submit(services, application_id, document_hash)
     assert submitted.warnings == ["DOCUMENT_ON_OLDER_ANALYSIS"]
 
-    rebuilt = services.selection.build_from_analysis(
+    rebuilt = services.repin.build_from_analysis(
         BuildFromAnalysisCommand(
             application_id=application_id,
             analysis_id=newer.analysis_id,
@@ -401,8 +383,12 @@ def test_a_newer_analysis_warns_until_build_from_analysis_repins(
     assert services.payloads.verify_payload(sent.pdf_path, sent.pdf_sha256) == "ok"
 
 
-def test_profile_and_policy_changes_warn_without_changing_basis(approved_application, project_root):
-    """§3/§8: built_with changes are warnings; the basis is document plus facts."""
+def test_profile_changes_warn_and_policy_changes_do_not(approved_application, project_root):
+    """§3/§8: a Profile change is a warning; the basis is document plus facts.
+
+    Emphasis policy is guidance the writer received, so a change to it warns about
+    nothing.
+    """
     from cv_engine.application.services.documents import current_basis
 
     setup = approved_application("Build Warnings")
@@ -425,12 +411,16 @@ def test_profile_and_policy_changes_warn_without_changing_basis(approved_applica
     policy.write_text(json.dumps(payload))
     assert current_basis(document, services.knowledge.load()) == before
     detail = services.queries.application_detail(app_id)
-    assert {"PROFILE_CHANGED", "POLICY_CHANGED"} <= {w.code for w in detail.warnings}
+    codes = {w.code for w in detail.warnings}
+    assert "PROFILE_CHANGED" in codes and "POLICY_CHANGED" not in codes
     assert detail.preparation_state is PreparationState.APPROVED
     assert stored_document(services, app_id) == document
 
 
-def test_analysis_decisions_refuse_to_discard_manual_wording(drafted_application):
+def test_an_emphasis_decision_creates_an_analysis_and_keeps_manual_wording(
+    drafted_application,
+):
+    """§13: Emphasis is classification, so the document and its wording stay as they are."""
     from helpers import edit_document_claim
 
     from cv_engine.application.commands import ApplyAnalysisDecisionsCommand
@@ -444,15 +434,21 @@ def test_analysis_decisions_refuse_to_discard_manual_wording(drafted_application
         services, app_id, claim.claim_id, list(claim.fact_ids), text="Unsupported wording"
     )
     before = stored_document(services, app_id)
-    with pytest.raises(PreconditionFailed) as error:
-        services.analysis.apply_analysis_decisions(
-            ApplyAnalysisDecisionsCommand(
-                application_id=app_id,
-                job_analysis_id=document.analysis_id,
-                expected_analysis_id=document.analysis_id,
-                expected_document_hash=edited.document_hash,
-                emphasis_override=document.selection.emphasis.value,
-            )
+    analysis = services.analysis.document_source(app_id).analysis
+    profile = services.knowledge.load().profiles.get(analysis.profile)
+    other = next(emphasis for emphasis in profile.allowed_emphases if emphasis != analysis.emphasis)
+
+    result = services.analysis.apply_analysis_decisions(
+        ApplyAnalysisDecisionsCommand(
+            application_id=app_id,
+            job_analysis_id=document.analysis_id,
+            expected_analysis_id=document.analysis_id,
+            expected_document_hash=edited.document_hash,
+            emphasis_override=other.value,
         )
-    assert error.value.code == REGENERATION_REQUIRED
+    )
+
+    assert result.created_analysis and result.analysis.emphasis is other
     assert stored_document(services, app_id) == before
+    detail = services.queries.application_detail(app_id)
+    assert "DOCUMENT_ON_OLDER_ANALYSIS" in {w.code for w in detail.warnings}

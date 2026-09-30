@@ -152,7 +152,6 @@ def test_a_failed_render_changes_nothing_and_its_retry_is_new_work(
         "html_path",
         "pdf_path",
         "content",
-        "selection",
     ):
         assert getattr(after, field) == getattr(before, field), field
     state = _get(api_worker, f"/applications/{setup.application_id}").json()
