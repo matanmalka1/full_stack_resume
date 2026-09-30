@@ -362,6 +362,21 @@ def _replace_claim(draft: DraftDocument, claim_id: str, replacement: ClaimLine) 
     raise KeyError(claim_id)
 
 
+def restore_claims(
+    draft: DraftDocument, original: DraftDocument, claim_ids: set[str]
+) -> DraftDocument:
+    """`draft` with each named claim put back exactly as `original` holds it.
+
+    How a withheld proposal leaves its line: the wording, links, type and proof it
+    had before, not a partial mix. A claim `original` does not hold is left alone.
+    """
+    before = {claim.claim_id: claim for claim in draft_claims(original)}
+    restored = draft.model_copy(deep=True)
+    for claim_id in claim_ids & set(before):
+        _replace_claim(restored, claim_id, before[claim_id].model_copy(deep=True))
+    return _reseal(restored)
+
+
 def _reseal(draft: DraftDocument) -> DraftDocument:
     """Restate the content hash after an edit."""
     return draft.model_copy(update={"content_hash": draft_content_hash(draft)})

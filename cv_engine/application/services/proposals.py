@@ -9,16 +9,19 @@ does, and this module reads the result.
 The difference is what happens to a line that cannot be authorized. §14 saves a
 user's unsupported free text as a `pending` claim, because the user is mid-edit
 and their words are theirs. A provider is not mid-edit: an unsupported proposed
-line is a wrong answer to a task, and invariant 11 plus test-plan §6 require it
-to fail rather than be silently dropped or quietly downgraded. `ProposalRejected`
-is that refusal, and it names the claims that caused it.
+line is a wrong answer to a task, so none of its wording reaches the document.
+It is withheld - the line keeps the wording it had before the Operation - and
+listed, never silently dropped or quietly downgraded. Only a Proposal none of
+whose lines survives is refused whole, as `ProposalRejected`.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal
 
 from ...domain.claim_review import (
     REVIEW_POLICY_VERSION,
@@ -129,25 +132,25 @@ def analysis_fact_context(facts: FactStore) -> list[dict[str, object]]:
     ]
 
 
-def refuse_facts_outside_the_pool(
-    proposed_fact_ids: set[str],
-    allowed: set[str],
-    *,
-    task: str,
-) -> None:
-    """Refuse a Proposal that names a fact the task was not given.
+Verdict = Literal["uncertain", "unsupported", "unattested", "refused"]
 
-    Checked separately from support validation because the two catch different
-    mistakes. A fact outside the pool that happens to support the wording would
-    pass `validate_derived_wording` and still be a Profile violation: the plan
-    and the Profile decide what this document may contain, not the provider.
+
+@dataclass(frozen=True)
+class WithheldClaim:
+    """One proposed line the engine did not authorize, and why.
+
+    `text` and `fact_ids` are the refused proposal, not what the document holds:
+    the document keeps the line as it was before the Operation. `detail` is the
+    engine's own sentence for logs and the refusal message, never shown as-is.
     """
-    outside = sorted(proposed_fact_ids - allowed)
-    if outside:
-        raise ProposalRejected(
-            f"{task} named facts outside the allowed pool: {', '.join(outside)}",
-            unsupported=outside,
-        )
+
+    claim_id: str
+    text: str
+    fact_ids: list[str]
+    verdict: Verdict
+    detail: str
+    problems: list[ReviewProblemCode] = field(default_factory=list)
+    rationale: str | None = None
 
 
 def apply_proposed_claims(
@@ -157,41 +160,59 @@ def apply_proposed_claims(
     allowed: set[str],
     *,
     task: str,
-    allow_semantic_review: bool = False,
-) -> DraftDocument:
-    """Apply proposed wording through the deterministic edit path, or refuse.
+) -> tuple[DraftDocument, list[WithheldClaim]]:
+    """Apply proposed wording through the deterministic edit path, line by line.
 
     Each proposed line is applied with `apply_claim_edit`, which is the one
     authority on whether wording is canonical, derivable from its facts, or
-    unsupported. A line that comes back `pending` was not authorized, and the
-    whole Proposal is refused: partially applying it would leave the draft
-    holding some of an answer the engine rejected, and the user would have no
-    way to tell which half.
+    unsupported. A line the engine refuses - a fact outside the pool, no linked
+    fact, wording the edit path rejects - is withheld: the draft keeps that line
+    exactly as it was, and the refusal is returned with it. One bad line costs only
+    itself: none of its content reaches the draft, and the lines beside it stand.
 
-    The refusal carries every unauthorized claim rather than the first, so one
-    round trip reports the whole problem.
+    A line that comes back `pending` goes on to semantic review. A claim ID the
+    draft does not hold names no line, so it is ignored; a Proposal holding nothing
+    but such IDs, or nothing at all, is refused whole. Whether enough survived to be
+    worth writing is the caller's decision, after review.
     """
-    proposed_ids = {fact_id for claim in proposed for fact_id in claim.fact_ids}
-    refuse_facts_outside_the_pool(proposed_ids, allowed, task=task)
-
+    if not proposed:
+        raise ProposalRejected(f"{task} proposed no claims", unsupported=[])
     original = {claim.claim_id: claim for claim in draft_claims(draft)}
-    known = set(original)
-    unknown = sorted({str(claim.claim_id) for claim in proposed if claim.claim_id not in known})
-    if unknown:
+    unknown = sorted({str(claim.claim_id) for claim in proposed if claim.claim_id not in original})
+    if len(unknown) == len({str(claim.claim_id) for claim in proposed}):
         raise ProposalRejected(
             f"{task} named claims that are not in this draft: {', '.join(unknown)}",
             unsupported=unknown,
         )
-    if not proposed:
-        raise ProposalRejected(f"{task} proposed no claims", unsupported=[])
 
     updated = draft
-    for claim in proposed:
-        if not claim.fact_ids:
-            raise ProposalRejected(
-                f"{task} proposed a claim with no supporting fact: {claim.claim_id}",
-                unsupported=[str(claim.claim_id)],
+    withheld: list[WithheldClaim] = []
+
+    def withhold(claim: ProposedClaim, detail: str) -> None:
+        withheld.append(
+            WithheldClaim(
+                claim_id=str(claim.claim_id),
+                text=claim.text,
+                fact_ids=list(claim.fact_ids),
+                verdict="refused",
+                detail=detail,
             )
+        )
+
+    for claim in proposed:
+        if claim.claim_id not in original:
+            continue
+        outside = sorted(set(claim.fact_ids) - allowed)
+        if outside:
+            # Checked apart from support: a fact outside the pool that happens to
+            # support the wording would pass `validate_derived_wording` and still be
+            # a Profile violation - the plan and the Profile decide what this
+            # document may contain, not the provider.
+            withhold(claim, f"{task} named facts outside the allowed pool: {', '.join(outside)}")
+            continue
+        if not claim.fact_ids:
+            withhold(claim, f"{task} proposed a claim with no supporting fact: {claim.claim_id}")
+            continue
         current = next(line for line in draft_claims(updated) if line.claim_id == claim.claim_id)
         if (
             current.claim_type != "pending"
@@ -214,23 +235,9 @@ def apply_proposed_claims(
                 text=claim.text,
             )
         except (KeyError, ValueError) as exc:
-            raise ProposalRejected(
-                f"{task} proposed wording the engine refused: {exc}",
-                unsupported=[str(claim.claim_id)],
-            ) from exc
+            withhold(claim, f"{task} proposed wording the engine refused: {exc}")
 
-    touched = {str(claim.claim_id) for claim in proposed}
-    unsupported = sorted(
-        line.claim_id
-        for line in draft_claims(updated)
-        if line.claim_id in touched and line.claim_type == "pending"
-    )
-    if unsupported and not allow_semantic_review:
-        raise ProposalRejected(
-            f"{task} proposed wording its facts do not support: {', '.join(unsupported)}",
-            unsupported=unsupported,
-        )
-    return updated
+    return updated, withheld
 
 
 def _review_sources(
@@ -252,47 +259,74 @@ def _review_sources(
     return sources
 
 
-def authorize_semantically_reviewed_claims(
+def review_semantically(
     draft: DraftDocument,
     proposal: ClaimSupportProposal,
     facts: FactStore,
     evidence: ProviderEvidence,
     claim_ids: set[str] | None = None,
-) -> DraftDocument:
-    """Apply only complete, positive, source-attested semantic review evidence.
+) -> tuple[DraftDocument, list[WithheldClaim]]:
+    """Authorize each pending claim whose review is complete, positive and source-attested.
 
     `claim_ids` narrows the review to the claims an Operation produced or was asked to
     review. Without it every pending claim in the draft is in scope, which made one
     unsupported line the user wrote elsewhere fail a regeneration it had no part in.
+
+    Judged line by line. A claim the reviewer left out, or assessed more than once,
+    has no usable evidence and is `unattested`; an assessment for a claim outside the
+    scope attests nothing and is ignored. A line not authorized stays `pending` in the
+    returned draft and is listed with its verdict - what happens to it is the
+    caller's decision.
     """
     pending = {
         claim.claim_id: claim
         for claim in draft_claims(draft)
         if claim.claim_type == "pending" and (claim_ids is None or claim.claim_id in claim_ids)
     }
+    counted = Counter(item.claim_id for item in proposal.assessments)
     assessments = {item.claim_id: item for item in proposal.assessments}
-    if len(assessments) != len(proposal.assessments) or set(assessments) != set(pending):
-        missing = sorted(set(pending) - set(assessments))
-        extra = sorted(set(assessments) - set(pending))
-        raise ProposalRejected(
-            "assess_claim_support did not cover the exact pending claims; "
-            f"missing={missing}, extra={extra}",
-            unsupported=missing + extra,
-        )
 
     updated = draft
-    refused: dict[str, list[ReviewProblemCode]] = {}
-    uncertain: list[str] = []
-    unsupported: list[str] = []
+    withheld: list[WithheldClaim] = []
     for claim_id, claim in pending.items():
+
+        def withhold(
+            verdict: Verdict,
+            detail: str,
+            problems: list[ReviewProblemCode] | None = None,
+            rationale: str | None = None,
+            *,
+            claim=claim,
+        ) -> None:
+            withheld.append(
+                WithheldClaim(
+                    claim_id=claim.claim_id,
+                    text=claim.text,
+                    fact_ids=list(claim.fact_ids),
+                    verdict=verdict,
+                    detail=detail,
+                    problems=problems or [],
+                    rationale=rationale,
+                )
+            )
+
+        if counted[claim_id] != 1:
+            withhold(
+                "unattested",
+                f"assess_claim_support assessed claim {claim_id} {counted[claim_id]} times",
+                ["invalid-review-evidence"],
+            )
+            continue
         assessment = assessments[claim_id]
-        if assessment.verdict == "uncertain":
-            uncertain.append(claim_id)
+        rationale = assessment.rationale.strip() or None
+        if assessment.verdict in ("uncertain", "unsupported"):
+            withhold(
+                assessment.verdict,
+                f"semantic review found claim {claim_id} {assessment.verdict}",
+                rationale=rationale,
+            )
             continue
-        if assessment.verdict == "unsupported":
-            unsupported.append(claim_id)
-            continue
-        problems = {
+        problems: set[ReviewProblemCode] = {
             problem.code
             for problem in review_problems(
                 claim_id=claim_id,
@@ -305,10 +339,19 @@ def authorize_semantically_reviewed_claims(
             )
         }
         if "unsupported-review-number" in problems and not problems & SHAPE_PROBLEMS:
-            unsupported.append(claim_id)
+            withhold(
+                "unsupported",
+                f"claim {claim_id} states a number its facts do not carry",
+                rationale=rationale,
+            )
             continue
         if problems:
-            refused[claim_id] = sorted(problems)
+            withhold(
+                "unattested",
+                f"semantic review did not authorize claim {claim_id}",
+                sorted(problems),
+                rationale,
+            )
             continue
         updated = authorize_reviewed_claim(
             updated,
@@ -328,59 +371,69 @@ def authorize_semantically_reviewed_claims(
                 ],
             ),
         )
-    if unsupported or uncertain or refused:
-        # Capture from the exact in-memory draft and Knowledge used by this review.
-        # Reconstructing from today's document or facts on a later GET would invent
-        # historical evidence. The reviewer's explanation is kept with its line: without
-        # it the user sees a near-identical sentence refused and cannot tell why. A line
-        # the reviewer called supported but whose evidence failed the deterministic check
-        # is kept too, with the checks it failed - otherwise that refusal names nothing.
-        rejected = []
-        for section in draft.sections:
-            heading = None
-            for claim in section.claims:
-                if claim.style == "heading":
-                    heading = claim.text
-                if (
-                    claim.claim_id not in unsupported
-                    and claim.claim_id not in uncertain
-                    and claim.claim_id not in refused
-                ):
-                    continue
-                rejected.append(
-                    RejectedClaimReview(
-                        claim_id=claim.claim_id,
-                        section=section.name,
-                        heading=heading,
-                        text=claim.text,
-                        verdict=(
-                            "unsupported"
-                            if claim.claim_id in unsupported
-                            else "uncertain"
-                            if claim.claim_id in uncertain
-                            else "unattested"
-                        ),
-                        sources=_review_sources(facts, claim.fact_ids, draft.language),
-                        rationale=assessments[claim.claim_id].rationale.strip() or None,
-                        problems=refused.get(claim.claim_id, []),
-                    )
-                )
-        error = (
-            ClaimReviewUnsupported(
-                f"semantic review found unsupported claims: {', '.join(sorted(unsupported))}",
-                unsupported=sorted(unsupported),
+    return updated, withheld
+
+
+def withheld_reason(
+    draft: DraftDocument, withheld: list[WithheldClaim], facts: FactStore
+) -> ClaimReviewReason:
+    """The withheld lines as a client reads them, in document order.
+
+    Captured from the exact in-memory draft and Knowledge the Operation used.
+    Reconstructing from today's document or facts on a later GET would invent
+    historical evidence. The reviewer's explanation is kept with its line: without it
+    the user sees a near-identical sentence refused and cannot tell why.
+    """
+    by_id = {item.claim_id: item for item in withheld}
+    placed: list[tuple[str, str | None, str]] = [
+        (draft.headline.claim_id, None, "headline"),
+        *((claim.claim_id, None, "contacts") for claim in draft.contacts),
+    ]
+    for section in draft.sections:
+        heading = None
+        for claim in section.claims:
+            if claim.style == "heading":
+                heading = claim.text
+            placed.append((claim.claim_id, heading, section.name))
+    return ClaimReviewReason(
+        claims=[
+            RejectedClaimReview(
+                claim_id=claim_id,
+                section=section,
+                heading=heading,
+                text=by_id[claim_id].text,
+                verdict=by_id[claim_id].verdict,
+                sources=_review_sources(facts, by_id[claim_id].fact_ids, draft.language),
+                rationale=by_id[claim_id].rationale,
+                problems=by_id[claim_id].problems,
             )
-            if unsupported
-            else ClaimReviewUncertain(
-                f"semantic review was uncertain about claims: {', '.join(sorted(uncertain))}",
-                unsupported=sorted(uncertain),
-            )
-            if uncertain
-            else ProposalRejected(
-                f"semantic review did not authorize claims: {', '.join(sorted(refused))}",
-                unsupported=sorted(refused),
-            )
+            for claim_id, heading, section in placed
+            if claim_id in by_id
+        ]
+    )
+
+
+def refusal(
+    draft: DraftDocument, withheld: list[WithheldClaim], facts: FactStore
+) -> ProposalRejected:
+    """The one refusal for a Proposal none of whose lines was authorized.
+
+    A reviewer's `unsupported` verdict outranks `uncertain`, which outranks a
+    deterministic refusal: the code names the strongest finding, and the reason
+    carries every line.
+    """
+    verdicts = {item.verdict for item in withheld}
+    names = sorted(item.claim_id for item in withheld)
+    error: ProposalRejected
+    if "unsupported" in verdicts:
+        error = ClaimReviewUnsupported(
+            f"semantic review found unsupported claims: {', '.join(names)}", unsupported=names
         )
-        error.review_reason = ClaimReviewReason(claims=rejected)
-        raise error
-    return updated
+    elif "uncertain" in verdicts:
+        error = ClaimReviewUncertain(
+            f"semantic review was uncertain about claims: {', '.join(names)}", unsupported=names
+        )
+    else:
+        error = ProposalRejected("; ".join(item.detail for item in withheld), unsupported=names)
+    error.review_reason = withheld_reason(draft, withheld, facts)
+    return error
