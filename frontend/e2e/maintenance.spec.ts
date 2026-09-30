@@ -3,8 +3,9 @@ import { expect, json, test } from "./fixtures";
 
 const report = {
   passed: false,
-  artifact_versions_checked: 2,
-  problems: ["missing artifact: artifacts/outputs/revision-1/resume.pdf"],
+  payloads_checked: 2,
+  ai_calls_checked: 1,
+  problems: ["AI call response hash mismatch: ai-call-1"],
   fact_lifecycle: {
     passed: false,
     fact_counts: { canonical: 2, pending: 1 },
@@ -28,10 +29,10 @@ test.describe("the facts integrity check", () => {
     await page.getByRole("button", { name: "הפעלה" }).click();
 
     await expect(
-      page.getByText("1 אי־התאמות בעובדות, 1 בעיות בתוצרים — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
+      page.getByText("1 אי־התאמות בעובדות, 1 בעיות בקבצים או בקריאות AI — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
     ).toBeVisible();
     await page.getByText("הבעיות שנמצאו (2)").click();
-    await expect(page.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf")).toBeVisible();
+    await expect(page.getByText("AI call response hash mismatch: ai-call-1")).toBeVisible();
     await expect(page.getByText("fact audit mismatch")).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
