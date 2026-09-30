@@ -454,15 +454,19 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
         if claim.claim_type == "canonical" and claim.style in {"paragraph", "bullet", "item"}
     )
     wording = f"Proven experience: {claim.text}"
+    # The writer keeps every line of the frame, so every role keeps its bullets, and
+    # rewords one of them.
     fake_openai.script_draft(
         DraftProposal(
             claims=[
                 ProposedClaim(
-                    section=section.name,
-                    claim_id=claim.claim_id,
-                    text=wording,
-                    fact_ids=list(claim.fact_ids),
+                    section=line_section.name,
+                    claim_id=line.claim_id,
+                    text=wording if line.claim_id == claim.claim_id else line.text,
+                    fact_ids=list(line.fact_ids),
                 )
+                for line_section in working.content.sections
+                for line in line_section.claims
             ],
             rationale="Tailored emphasis",
         ),
