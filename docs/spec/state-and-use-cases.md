@@ -403,9 +403,12 @@ For `CLAIM_REVIEW_UNCERTAIN` and `CLAIM_REVIEW_UNSUPPORTED`, a newly recorded fa
 includes a `failure_reason` with `code=claim_review` and `claims`: claim ID, section,
 preceding heading (nullable), proposed text, the policy's rejected verdict, each
 cited canonical fact's ID, meaning and rendering as read for that review, and the
-reviewer's explanation for that line (`rationale`, nullable). In a mixed failure both
-uncertain and unsupported lines are included; unsupported determines the Operation
-failure code. This is inactive diagnostic context, not an accepted proposal or an
+reviewer's explanation for that line (`rationale`, nullable). The same reason is
+recorded on an `INVALID_OUTPUT` failure where the reviewer answered `supported` but its
+evidence failed the deterministic review check: such a line has verdict `unattested` and
+`problems`, the closed codes of the checks it failed (empty for every other verdict). In
+a mixed failure every refused line is included; unsupported, then uncertain, determines
+the Operation failure code. This is inactive diagnostic context, not an accepted proposal or an
 approval record. The explanation is the reviewer's opinion, shown as plain text to help
 the user find what to fix; it is never evidence and authorizes nothing. Other provider
 output, responses, credentials and internal paths are excluded. Existing failure records

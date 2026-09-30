@@ -427,6 +427,10 @@ recorded, labeled as the reviewer's reading rather than proof. This context is r
 reconstructed from the current document or fact store. Older failures without recorded
 context retain generic guidance; missing historical content is never invented.
 
+A `supported` answer whose evidence fails the deterministic review check is refused as
+invalid output; the same panel shows that line as unattested, with the failed checks in
+the reader's words, because the reviewer's own explanation reads as approval.
+
 The panel distinguishes an uncertain verdict from an unsupported one and offers the
 existing editor and fact lifecycle as resolution paths. A claim link opens the current
 document at that claim if it still exists; the displayed failure context remains
