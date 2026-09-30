@@ -34,7 +34,7 @@ interface WorkflowActionsProps {
 }
 
 export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operationLive, plan }: WorkflowActionsProps) => {
-  const { analyze, commandsBlocked, draft, error, provider, rebuild, settings, workInFlight } = useWorkflowCommands(
+  const { analyze, commandsBlocked, draft, error, rebuild, settings, workInFlight } = useWorkflowCommands(
     detail,
     plan,
     onQueued,
@@ -56,11 +56,12 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
      where the analysis it re-runs is on screen, in the diagnostics tab. The first analyze
      of an Application that has none stays exactly here: there is no analysis yet for a
      diagnostics tab to show. */
-  /* A first analysis with no provider cannot be pressed, so the bar leads with the one
-     thing that unblocks it. The inert analysis button stays beside it, secondary, so the
-     step still names its action. */
-  const providerMissing =
-    plan.analyze !== null && !plan.analyze.reanalysis && settings !== undefined && !aiRegenerationAvailable(settings);
+  /* A first analysis or a generate with no provider cannot be pressed, so the bar leads
+     with the one thing that unblocks it. The inert button stays beside it, secondary, so
+     the step still names its action. */
+  const aiMissing = settings !== undefined && !aiRegenerationAvailable(settings);
+  const offersAiStep = (plan.analyze !== null && !plan.analyze.reanalysis) || plan.createDraft !== null;
+  const providerMissing = aiMissing && offersAiStep;
   const analyzeButton =
     plan.analyze === null || plan.analyze.reanalysis ? null : (
       <Button
@@ -86,12 +87,13 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
   const draftButton =
     plan.createDraft === null ? null : (
       <Button
-        disabled={workInFlight || settings === undefined}
+        aria-describedby={providerMissing ? analyzeReasonId : undefined}
+        disabled={workInFlight || settings === undefined || aiMissing}
         key="draft"
         onClick={() => draft.mutate()}
         pending={draft.isPending}
         pendingLabel="יוצר טיוטה…"
-        variant={plan.createDraft.emphasized ? "primary" : "secondary"}
+        variant={plan.createDraft.emphasized && !providerMissing ? "primary" : "secondary"}
       >
         יצירת טיוטה
       </Button>
@@ -149,16 +151,13 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
       </p>
     );
   /* The generate note names its sources and its cost in one sentence, in the bar beside
-     the button it describes. Which cost is read from the same `provider` value the
-     command is sent with, so the sentence cannot describe a run different from the one
-     the press would start. */
+     the button it describes, or why it cannot be pressed. */
   const draftNote =
     plan.createDraft === null || settings === undefined ? undefined : (
-      <p className="text-support leading-6 text-cv-text-muted">
-        הטיוטה נבנית מהניתוח ומהעובדות שנבחרו.{" "}
-        {provider === undefined
-          ? "היא נוצרת ברקע, בלי קריאת AI."
-          : "היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
+      <p className="text-support leading-6 text-cv-text-muted" id={analyzeReasonId}>
+        {aiMissing
+          ? "יצירת הטיוטה דורשת ספק AI, ועדיין לא הוגדר כזה."
+          : "ה־AI בוחר את העובדות, אלא אם כבר בחרת אותן, ומנסח מהן את הטיוטה. היצירה כוללת קריאת AI בתשלום, והעבודה מתבצעת ברקע."}
       </p>
     );
 

@@ -11,8 +11,13 @@ from cv_engine.application.commands import (
     CheckDocumentCommand,
     IngestCommand,
 )
+from cv_engine.application.ports.documents import DocumentBody
 from cv_engine.application.services.analysis.preparation import PreparedAnalysis
-from cv_engine.application.services.documents import build_document_selection, built_with
+from cv_engine.application.services.documents import (
+    build_document_selection,
+    built_with,
+    compose_content,
+)
 from cv_engine.domain.contracts.analysis import JobAnalysis
 from cv_engine.domain.contracts.analysis_proposal import AnalysisProposal
 from cv_engine.domain.contracts.taxonomy import Emphasis, ProfileName, Track
@@ -25,6 +30,7 @@ from cv_engine.infrastructure.persistence.documents import (
 from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.paths import AppPaths
+from cv_engine.util import utc_now
 
 
 def artifact_store(root: Path) -> FilesystemArtifactStore:
@@ -207,6 +213,46 @@ def seed_document(
         )
     )
     return ingested, seed_existing_analysis(services, ingested, **analysis_values)
+
+
+def composed_content(services: Services, application_id: str):
+    """The engine's frame for the document: its selection laid out as canonical claims.
+
+    What `create_draft` hands the provider to word.
+    """
+    source = services.drafts.document_source(application_id)
+    document = source.document
+    return compose_content(
+        application_id,
+        document.analysis_id,
+        source.job_snapshot_id,
+        source.analysis,
+        document.selection,
+        services.drafts.load_knowledge(),
+    )
+
+
+def seed_draft(services: Services, application_id: str):
+    """Persist existing content for downstream tests without invoking AI.
+
+    The content is the engine's frame with its canonical wording, as a
+    `draft_resume` that echoed every claim (`fake_provider.echo_draft`) leaves it.
+    """
+    content = composed_content(services, application_id)
+    document = stored_document(services, application_id)
+    transactions = services_transactions(services)
+    with transactions.write() as tx:
+        return SqlAlchemyDocumentStore(transactions).update_body(
+            tx,
+            application_id,
+            document.document_hash,
+            DocumentBody(
+                analysis_id=document.analysis_id,
+                selection=document.selection,
+                content=content,
+            ),
+            updated_at=utc_now(),
+        )
 
 
 def validate_active_draft(services: Services, application_id: str):

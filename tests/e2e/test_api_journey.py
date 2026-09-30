@@ -176,6 +176,7 @@ def test_the_full_api_journey_reaches_ready_offline(
     token = read.json()["document_hash"]
 
     # --- Draft ----------------------------------------------------------
+    fake_openai.script_draft()
     drafted = _run_operation(
         ai_api_worker,
         _post(ai_api_worker, f"{document_path}/draft", {"expected_document_hash": token}),
@@ -329,6 +330,7 @@ def test_the_review_journey_resolves_once_and_reaches_ready(
     ] == ["hard"]
 
     token = state["document_hash"]
+    fake_openai.script_draft()
     _run_operation(
         ai_api_worker,
         _post(ai_api_worker, f"{document_path}/draft", {"expected_document_hash": token}),

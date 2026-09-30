@@ -6,7 +6,12 @@ from threading import Barrier, Event, Lock, Thread
 
 import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
-from helpers import edit_document_claim, seed_document, stored_document
+from helpers import (
+    edit_document_claim,
+    seed_document,
+    seed_draft,
+    stored_document,
+)
 from operations_support import (
     _claim_operation,
     _enqueue_operation,
@@ -593,16 +598,18 @@ def _submit_draft(services: Services, application_id: str, document_hash: str):
 
 @pytest.mark.parametrize("race_phase", ["queued", "prepared"])
 def test_create_draft_activates_only_against_the_hash_it_froze(
-    services: Services, monkeypatch, race_phase
+    ai_services: Services, fake_openai, monkeypatch, race_phase
 ) -> None:
     """A selection change before execution or activation yields SOURCE_CHANGED.
 
     The failure is not retryable; a new Operation against the current hash is how
     the user continues, and it writes the content.
     """
+    services = ai_services
     ingested, _analysis = seed_document(services, "Race Co")
     application_id = ingested.application_id
     document = stored_document(services, application_id)
+    fake_openai.script_draft()
     queued = _submit_draft(services, application_id, document.document_hash)
 
     def move_selection():
@@ -639,9 +646,11 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
     assert succeeded.status is OperationStatus.SUCCEEDED, succeeded.safe_failure_detail
     written = stored_document(services, application_id)
     assert written.content is not None
-    assert [(item.output_type, item.output_id, item.active) for item in succeeded.outputs] == [
-        ("cv_document", written.id, True)
-    ]
+    outputs = [(item.output_type, item.active) for item in succeeded.outputs]
+    assert sorted(outputs) == [("cv_document", True), ("provider_response", True)]
+    assert ("cv_document", written.id) in {
+        (item.output_type, item.output_id) for item in succeeded.outputs
+    }
     with pytest.raises(PreconditionFailed):
         _submit_draft(services, application_id, written.document_hash)
 
@@ -657,12 +666,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
     """
     ingested, _analysis = seed_document(services, "Render Co")
     application_id = ingested.application_id
-    document_hash = services.drafts.draft(
-        DraftCommand(
-            application_id=application_id,
-            expected_document_hash=stored_document(services, application_id).document_hash,
-        )
-    ).document_hash
+    document_hash = seed_draft(services, application_id).document_hash
     assert services.draft_approval.approve_document(
         ApproveDocumentCommand(
             application_id=application_id, expected_document_hash=document_hash, client="web"
@@ -731,8 +735,8 @@ def test_an_ai_selection_proposal_is_provenance_on_the_selection_it_activates(
 ) -> None:
     """§14 `propose_selection`: activated through the same policy, recorded as `ai`.
 
-    Under `update_selection`'s content rule: offered over engine-composed content,
-    refused once the draft carries authored wording. The rationale is kept verbatim
+    Under `update_selection`'s content rule: offered over content still in its
+    canonical wording, refused once the draft carries authored wording. The rationale is kept verbatim
     and never read back.
     """
     services = ai_services
@@ -761,10 +765,8 @@ def test_an_ai_selection_proposal_is_provenance_on_the_selection_it_activates(
     outputs = {(item.output_type, item.active) for item in completed.outputs}
     assert ("cv_document", True) in outputs and ("provider_response", True) in outputs
 
-    services.drafts.draft(
-        DraftCommand(application_id=application_id, expected_document_hash=proposed.document_hash)
-    )
-    # Engine-composed content is offered a proposal; activation would recompose it.
+    seed_draft(services, application_id)
+    # Content in its canonical wording is offered a proposal; activation would drop it.
     assert (
         "propose_selection" in services.queries.application_detail(application_id).available_actions
     )

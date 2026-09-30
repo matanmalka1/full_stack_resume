@@ -240,12 +240,13 @@ and preservation of the original snapshot. It runs without a provider; no analys
 or asynchronous Operation is requested, so this journey needs no worker.
 
 `frontend/e2e/integration/preparation.spec.ts` covers the successful analysis →
-deterministic draft → check → approve → render → Ready → submission journey through
+AI draft → check → approve → render → Ready → submission journey through
 the browser and real API, including reloads, a real PDF download, and persisted
 submission history. Pytest runs the real Operation worker outside the API process
 against the same isolated PostgreSQL database and temporary artifact root. Only the
-analysis provider transport is scripted; `OPENAI_API_KEY` stays unset, and the test
-asserts no provider calls occur downstream of analysis. Chromium renders the PDF.
+provider transport is scripted (`draft_resume` echoes the frame it is sent);
+`OPENAI_API_KEY` stays unset, and the test asserts no provider calls occur downstream of
+the draft. Chromium renders the PDF.
 This is offline integration evidence, not a live-provider smoke test. Both browser
 journeys are launched by `tests/e2e/test_browser_api_journey.py`.
 
@@ -334,7 +335,8 @@ ingest → analyze → draft → check → approve → render → ready → subm
 `tests/e2e/test_pipeline_end_to_end.py` — the gate `CLAUDE.md` requires for a change to
 a stored value's meaning, a public signature, or a projection field. Services against a
 fresh database with `OPENAI_API_KEY` asserted unset; the analysis is pre-seeded
-(creating one needs a provider, product-spec §2). Reconcile must pass, account for
+(creating one needs a provider, product-spec §2) and `create_draft` runs as its
+Operation over the scripted transport, which echoes the frame it is sent. Reconcile must pass, account for
 every stored payload, and report no orphans; companion tests prove it reports tampering
 without repair.
 

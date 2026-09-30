@@ -37,7 +37,7 @@ class DraftActivation:
             prepared.expected_document_hash,
             DocumentBody(
                 analysis_id=document.analysis_id,
-                selection=document.selection,
+                selection=prepared.selection or document.selection,
                 content=prepared.content,
             ),
             updated_at=utc_now(),

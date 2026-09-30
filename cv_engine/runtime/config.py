@@ -83,9 +83,8 @@ SETTINGS: dict[str, Setting] = {
         # Read through the config contract rather than from `os.environ` at the
         # point of use, so that one layer decides where a credential comes from
         # and one flag decides how it is shown. Absent means no AI adapter is
-        # built at all, which is what keeps the deterministic workflow reaching
-        # Ready with nothing configured - and `environment_only` is what keeps
-        # `unset OPENAI_API_KEY` sufficient to mean absent.
+        # built at all, and the AI commands refuse - and `environment_only` is
+        # what keeps `unset OPENAI_API_KEY` sufficient to mean absent.
         Setting(
             "openai_api_key",
             "OPENAI_API_KEY",

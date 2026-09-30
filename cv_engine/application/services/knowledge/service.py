@@ -48,7 +48,7 @@ from ...knowledge_mutations import PrepareKnowledgeMutation
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import TransactionManager
-from ..documents import build_document_selection, compose_content
+from ..documents import build_document_selection
 from .mutations import KnowledgeMutationEngine
 
 
@@ -427,20 +427,12 @@ class FactLifecycleService(KnowledgeMutationEngine):
             )
             if fact_id not in selection.selected_fact_ids:
                 raise ValueError("confirmed fact was not selected by the document's selection")
-            content = document.content
-            if content is not None:
-                if carries_authored_wording(content):
-                    raise ValueError(
-                        "the document carries wording a deterministic rebuild would discard; "
-                        "select the fact after regenerating instead"
-                    )
-                content = compose_content(
-                    application_id,
-                    document.analysis_id,
-                    analysis_record["job_snapshot_id"],
-                    analysis,
-                    selection,
-                    proposed,
+            # The selection change drops the content, to be drafted again; wording
+            # that drop would discard refuses it instead.
+            if document.content is not None and carries_authored_wording(document.content):
+                raise ValueError(
+                    "the document carries wording a selection change would discard; "
+                    "select the fact after regenerating instead"
                 )
         except OSError as exc:
             raise InfrastructureFailure(f"could not prepare Knowledge mutation: {exc}") from exc
@@ -483,9 +475,7 @@ class FactLifecycleService(KnowledgeMutationEngine):
                 "type": "document_selection",
                 "application_id": application_id,
                 "expected_document_hash": expected_document_hash,
-                "analysis_id": document.analysis_id,
                 "selection": selection.model_dump(mode="json"),
-                "content": None if content is None else content.model_dump(mode="json"),
                 "updated_at": utc_now(),
             }
         )

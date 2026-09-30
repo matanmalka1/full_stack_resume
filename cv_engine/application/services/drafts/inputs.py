@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ....domain.contracts.drafts import DraftDocument
+from ....domain.contracts.selection import SelectionManifest
 from ..proposals import ProviderEvidence
 
 
@@ -14,29 +15,17 @@ class PreparedDraft:
 
     Activation writes `content` only while the document still holds
     `expected_document_hash` (§14): anything that changed the document while this
-    ran discards it.
+    ran discards it. `selection` is the AI-proposed selection the content was
+    composed from, written with it; `None` keeps the document's own.
     """
 
     application_id: str
     expected_document_hash: str
     content: DraftDocument
-    evidence: ProviderEvidence | None = None
+    evidence: ProviderEvidence
     review_evidence: ProviderEvidence | None = None
-
-
-@dataclass(frozen=True)
-class DeterministicRun:
-    """What produced a draft when no provider was involved.
-
-    `none` rather than a contract and prompt version: the deterministic composer
-    runs under no AI task contract and reads no prompt, so naming one would be a
-    value the run never had.
-    """
-
-    provider: str = "deterministic"
-    model: str = "rules-v1"
-    task_contract_version: str = "none"
-    prompt_version: str = "none"
+    selection: SelectionManifest | None = None
+    selection_evidence: ProviderEvidence | None = None
 
 
 @dataclass(frozen=True)

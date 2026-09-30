@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ....domain.contracts.drafts import DraftDocument
 from ....domain.contracts.knowledge import Fact
 from ....domain.contracts.selection import SelectionManifest
 from ....domain.facts import FactStore
@@ -36,7 +35,7 @@ from ...knowledge_mutations import (
     PrepareKnowledgeMutation,
     StagedKnowledgeFile,
 )
-from ...ports.documents import DocumentBody, DocumentStore
+from ...ports.documents import DocumentStore
 from ...ports.knowledge_lifecycle import KnowledgeLifecycleStore
 from ...ports.outbound import KnowledgeStore
 from ...ports.transactions import TransactionManager, WriteTransaction
@@ -117,16 +116,13 @@ class KnowledgeMutationEngine:
                     created_at=action["created_at"],
                 )
             elif action.get("type") == "document_selection":
-                content = action.get("content")
-                self.documents.update_body(
+                # Rendered files it releases are left to orphan maintenance: nothing
+                # here runs after the journal's commit.
+                self.documents.replace_selection(
                     tx,
                     action["application_id"],
                     action["expected_document_hash"],
-                    DocumentBody(
-                        analysis_id=action["analysis_id"],
-                        selection=SelectionManifest.model_validate(action["selection"]),
-                        content=None if content is None else DraftDocument.model_validate(content),
-                    ),
+                    SelectionManifest.model_validate(action["selection"]),
                     updated_at=action["updated_at"],
                 )
             else:

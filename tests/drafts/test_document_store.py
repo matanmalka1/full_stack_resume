@@ -12,11 +12,13 @@ from __future__ import annotations
 import inspect
 
 import pytest
-from helpers import seed_document, services_transactions, stored_document
+from helpers import seed_document, seed_draft, services_transactions, stored_document
 
+from cv_engine.application.commands import UpdateSelectionCommand
 from cv_engine.application.errors import DOCUMENT_CHANGED, StateConflict
 from cv_engine.application.ports.documents import DocumentBody, DocumentStore, RenderedFiles
 from cv_engine.domain.contracts.validation import ValidationReport
+from cv_engine.domain.document import PreparationState
 from cv_engine.runtime.composition import Services
 from cv_engine.util import utc_now
 
@@ -43,6 +45,7 @@ def test_every_hash_guarded_write_refuses_a_moved_document_and_writes_nothing(
     now = utc_now()
     arguments = {
         "update_body": (body,),
+        "replace_selection": (document.selection,),
         "repin": (body, document.built_with),
         "stamp_check": (ValidationReport.from_findings({"content": True}, []), MOVED),
         "stamp_approval": (MOVED,),
@@ -81,7 +84,7 @@ def test_first_analysis_and_document_commit_together_or_not_at_all(
     """§13 atomicity moved from the obsolete analysis/selection-plan HTTP scenario."""
     from helpers import persisted_counts, seed_existing_analysis
 
-    from cv_engine.application.commands import DraftCommand, IngestCommand
+    from cv_engine.application.commands import IngestCommand
     from cv_engine.domain.document import PreparationState
     from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
 
@@ -120,13 +123,41 @@ def test_first_analysis_and_document_commit_together_or_not_at_all(
     assert services.queries.application_detail(ingested.application_id).preparation_state is (
         PreparationState.READY_TO_DRAFT
     )
-    services.drafts.draft(
-        DraftCommand(
-            application_id=ingested.application_id,
-            expected_document_hash=document.document_hash,
+    seed_draft(services, ingested.application_id)
+    assert stored_document(services, ingested.application_id).content is not None
+
+
+def test_a_selection_change_drops_ready_content_and_releases_its_files(ready_application):
+    """§14: content is composed only by `create_draft`, so a selection change drops it.
+
+    Content still in its canonical wording goes with every stamp built on it, and the
+    rendered files nothing references any more are deleted after commit.
+    """
+    setup = ready_application("Selection Drop Co")
+    services, application_id = setup
+    ready = stored_document(services, application_id)
+    assert ready.content is not None and ready.pdf_path is not None and ready.html_path is not None
+
+    changed = services.selection.update_selection(
+        UpdateSelectionCommand(
+            application_id=application_id,
+            expected_document_hash=ready.document_hash,
+            emphasis_override=ready.selection.emphasis.value,
         )
     )
-    assert stored_document(services, ingested.application_id).content is not None
+
+    document = stored_document(services, application_id)
+    assert document.document_hash == changed.document_hash
+    assert document.content is None
+    assert document.selection.emphasis_override == ready.selection.emphasis
+    assert (document.approved_basis, document.rendered_basis, document.pdf_path) == (
+        None,
+        None,
+        None,
+    )
+    assert changed.preparation_state is PreparationState.READY_TO_DRAFT
+    assert not (services.paths.root / ready.pdf_path).exists()
+    assert not (services.paths.root / ready.html_path).exists()
 
 
 def test_application_commands_refuse_stale_hash_before_work(ready_application):
@@ -152,8 +183,9 @@ def test_application_commands_refuse_stale_hash_before_work(ready_application):
     section = next(s for s in document.content.sections if s.claims)
     claim = section.claims[0]
     commands = [
-        lambda: services.drafts.draft(
-            DraftCommand(application_id=application_id, expected_document_hash=MOVED)
+        lambda: services.drafts.prepare(
+            DraftCommand(application_id=application_id, expected_document_hash=MOVED),
+            operation_id="stale-draft",
         ),
         lambda: services.drafts.update_document(
             UpdateDocumentCommand(

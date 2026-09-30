@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from helpers import approve_active_draft, seed_document, stored_document
+from helpers import approve_active_draft, seed_document, seed_draft, stored_document
 
-from cv_engine.application.commands import DraftCommand, RenderCommand
+from cv_engine.application.commands import RenderCommand
 from cv_engine.domain.draft_markdown import serialize_markdown
 from cv_engine.infrastructure.rendering import render_html
 from cv_engine.util import sha256_text
@@ -46,11 +46,7 @@ def _build_case(services, case: dict):
         language_override=overrides.get("language") or case["language"],
     )
     document = stored_document(services, ingested.application_id)
-    services.drafts.draft(
-        DraftCommand(
-            application_id=ingested.application_id, expected_document_hash=document.document_hash
-        )
-    )
+    seed_draft(services, ingested.application_id)
     document = stored_document(services, ingested.application_id)
     knowledge = services.knowledge.load()
     return SimpleNamespace(

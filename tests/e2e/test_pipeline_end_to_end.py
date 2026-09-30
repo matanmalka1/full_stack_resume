@@ -1,10 +1,21 @@
-"""§14 acceptance: the service pipeline reaches Ready with no AI key."""
+"""§14 acceptance: the service pipeline reaches Ready with no AI key.
+
+The two AI steps run without one too: the analysis is seeded as existing, and
+`create_draft` answers through the fake transport, so every line of the
+application layer between them is production code.
+"""
 
 from __future__ import annotations
 
 import os
 
-from helpers import persisted_counts, seed_document, stored_document, stored_submissions
+from foreground import foreground_executor
+from helpers import (
+    persisted_counts,
+    seed_document,
+    stored_document,
+    stored_submissions,
+)
 
 from cv_engine.application.commands import (
     ApproveDocumentCommand,
@@ -15,20 +26,26 @@ from cv_engine.application.commands import (
     UpdateDocumentCommand,
 )
 from cv_engine.domain.document import PreparationState
-from cv_engine.util import utc_now
+from cv_engine.util import new_id, utc_now
 
 
-def test_deterministic_pipeline_reaches_ready_and_reconciles(
-    services, deterministic_renderer, database_engine
+def test_pipeline_reaches_ready_and_reconciles(
+    ai_services, fake_openai, deterministic_renderer, database_engine
 ):
     assert os.environ.get("OPENAI_API_KEY") is None
+    services = ai_services
     ingested, analysis = seed_document(services, "Pipeline Co")
     app_id = ingested.application_id
     assert analysis.created_document
     document = stored_document(services, app_id)
-    services.drafts.draft(
-        DraftCommand(application_id=app_id, expected_document_hash=document.document_hash)
+    fake_openai.script_draft()
+    queued = services.operation_submissions.submit_draft(
+        DraftCommand(application_id=app_id, expected_document_hash=document.document_hash),
+        idempotency_key=new_id(),
+        draft_service=services.drafts,
     )
+    drafted = foreground_executor(services).execute(queued.id)
+    assert drafted.status.value == "succeeded", drafted.safe_failure_detail
     document = stored_document(services, app_id)
     assert document.content is not None
     section = next(

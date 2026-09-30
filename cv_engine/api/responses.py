@@ -5,11 +5,6 @@ claim regeneration, AI plan proposal, render - returns the same thing: the
 Operation the client is now to poll. Writing that in each router is how one of
 them ends up returning `200`, or `202` with no `Location`, and a client that
 polls one endpoint successfully then cannot poll another.
-
-The helper sets the status itself rather than relying on the route's
-`status_code`, because `POST /analyses/{id}/selection-plans` is specified as
-`201` for deterministic mode and `202` for AI proposal mode: one route, two
-statuses, decided per request.
 """
 
 from __future__ import annotations

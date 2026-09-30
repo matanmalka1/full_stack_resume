@@ -1,7 +1,7 @@
-"""§14: deterministic, synchronous changes to the document's selection and its pin.
+"""§14: synchronous changes to the document's selection and its pin.
 
-`update_selection` changes the selection in place (and the content with it, when
-that is deterministic). `build_from_analysis` is the only command that changes the
+`update_selection` changes the selection in place and drops the content with it:
+content is composed only by `create_draft`. `build_from_analysis` is the only command that changes the
 document's `analysis_id`: it re-pins, rebuilds the selection, drops the content, and
 clears every stamp in the same write.
 """
@@ -22,12 +22,12 @@ from ...ports.documents import DocumentBody, DocumentFileStore, DocumentStore
 from ..documents import (
     build_document_selection,
     built_with,
+    changed_selection,
     current_basis,
     load_knowledge,
     read_document_source,
     refuse_deleted,
     require_hash,
-    selection_change_body,
 )
 
 
@@ -54,17 +54,18 @@ class SelectionChangeService:
     def update_selection(self, command: UpdateSelectionCommand) -> DocumentMutationResult:
         """§14 `update_selection`: pin, exclude, or set the Emphasis override.
 
-        Validated against the document's analysis and the current Knowledge. With no
-        content only the selection changes; with content the change is applied
-        atomically when deterministic, and refused with `REGENERATION_REQUIRED`
-        (writing nothing) when it needs wording judgment.
+        Validated against the document's analysis and the current Knowledge. Content
+        nobody has worded is dropped with the change, and the document is drafted
+        again; content carrying wording is refused with `REGENERATION_REQUIRED`
+        (writing nothing). Rendered files the document no longer references are
+        discarded after commit.
         """
         with self.transactions.read() as tx:
             source = read_document_source(tx, self.documents, self.sources, command.application_id)
         refuse_deleted(command.application_id, source.deleted_at)
         require_hash(source.document, command.expected_document_hash)
         knowledge = load_knowledge(self.knowledge)
-        body = selection_change_body(
+        selection = changed_selection(
             source,
             knowledge,
             pinned_fact_ids=command.pinned_fact_ids,
@@ -73,20 +74,22 @@ class SelectionChangeService:
         )
         emphasis_changed = (
             command.emphasis_override is not None
-            and body.selection.emphasis_override != source.document.selection.emphasis_override
+            and selection.emphasis_override != source.document.selection.emphasis_override
         )
         with self.transactions.write() as tx:
-            updated = self.documents.update_body(
+            updated, released = self.documents.replace_selection(
                 tx,
                 command.application_id,
                 command.expected_document_hash,
-                body,
+                selection,
                 updated_at=utc_now(),
             )
             if emphasis_changed:
                 self.analyses.set_matching_emphasis(
-                    tx, command.application_id, body.selection.emphasis.value
+                    tx, command.application_id, selection.emphasis.value
                 )
+        if released is not None:
+            self.files.discard(released)
         new_basis = current_basis(updated, knowledge)
         return DocumentMutationResult(
             application_id=command.application_id,

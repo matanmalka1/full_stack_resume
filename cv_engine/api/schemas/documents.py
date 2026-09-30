@@ -65,7 +65,7 @@ class BuildFromAnalysisRequest(DocumentActionRequest):
 
 
 class CreateDraftRequest(DocumentActionRequest):
-    provider: Literal["deterministic", "openai"] = "deterministic"
+    provider: Literal["openai"] = "openai"
 
 
 class RegenerateDocumentSectionRequest(DocumentActionRequest):

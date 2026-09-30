@@ -21,8 +21,10 @@ from foreground import foreground_executor
 from helpers import (
     ACCOUNT_MANAGER_JOB,
     analysis_proposal,
+    composed_content,
     edit_document_claim,
     seed_analysis_for_command,
+    seed_draft,
     services_transactions,
     stored_document,
 )
@@ -95,12 +97,7 @@ def _analyzed(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
 
 def _drafted(services, company: str, transaction_manager, application_projection_reader):
     ingested, analysed = _analyzed(services, company)
-    services.drafts.draft(
-        DraftCommand(
-            application_id=ingested.application_id,
-            expected_document_hash=stored_document(services, ingested.application_id).document_hash,
-        )
-    )
+    seed_draft(services, ingested.application_id)
     working = stored_document(services, ingested.application_id)
     return ingested, analysed, working
 
@@ -232,8 +229,6 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
         0,
         UpdateSettings(
             auto_generate_when_review_not_required=False,
-            ai_enabled_override=None,
-            default_execution_mode="deterministic",
             default_ai_model="gpt-5.6-luna",
             default_reasoning_effort="high",
             ui_density="comfortable",
@@ -252,8 +247,6 @@ def test_ai_preferences_are_frozen_before_settings_can_change(
         1,
         UpdateSettings(
             auto_generate_when_review_not_required=False,
-            ai_enabled_override=None,
-            default_execution_mode="deterministic",
             default_ai_model="gpt-5.6-terra",
             default_reasoning_effort="low",
             ui_density="comfortable",
@@ -344,16 +337,9 @@ def test_draft_resume_commits_wording_its_facts_support(
     )
     # Build a supported document from the existing analysis first, so the
     # proposal can echo wording the validation contract accepts.
-    prepared = ai_services.drafts.prepare(
-        DraftCommand(
-            application_id=ingested.application_id,
-            expected_document_hash=stored_document(
-                ai_services, ingested.application_id
-            ).document_hash,
-        )
-    )
+    frame = composed_content(ai_services, ingested.application_id)
     working = stored_document(ai_services, ingested.application_id).model_copy(
-        update={"content": prepared.content}
+        update={"content": frame}
     )
     assert working.content is not None
     composite = next(
@@ -387,8 +373,7 @@ def test_draft_resume_commits_wording_its_facts_support(
                 ]
             ),
         )
-    fake_openai.script(
-        "draft_resume",
+    fake_openai.script_draft(
         DraftProposal(
             claims=[
                 ProposedClaim(
@@ -443,6 +428,48 @@ def test_draft_resume_commits_wording_its_facts_support(
     assert actual.content.sections == working.content.sections
 
 
+@pytest.mark.parametrize("user_chose", [False, True])
+def test_create_draft_chooses_the_facts_unless_the_user_already_did(
+    ai_services, fake_openai: FakeOpenAI, user_chose: bool
+) -> None:
+    """The AI selects the facts of an untouched selection; a user's choice is kept."""
+    ingested, _analysed = _analyzed(ai_services, "Selecting Draft Co")
+    application_id = ingested.application_id
+    document = stored_document(ai_services, application_id)
+    if user_chose:
+        ai_services.selection.update_selection(
+            UpdateSelectionCommand(
+                application_id=application_id,
+                expected_document_hash=document.document_hash,
+                emphasis_override=document.selection.emphasis.value,
+            )
+        )
+        document = stored_document(ai_services, application_id)
+    fake_openai.script_draft()
+
+    completed = _run(
+        ai_services,
+        ai_services.operation_submissions.submit_draft(
+            DraftCommand(
+                application_id=application_id, expected_document_hash=document.document_hash
+            ),
+            idempotency_key=new_id(),
+            draft_service=ai_services.drafts,
+        ),
+    )
+
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+    drafted = stored_document(ai_services, application_id)
+    assert drafted.content is not None
+    if user_chose:
+        assert fake_openai.calls_for("propose_selection_plan") == []
+        assert drafted.selection == document.selection
+    else:
+        assert len(fake_openai.calls_for("propose_selection_plan")) == 1
+        assert drafted.selection.proposed_by == "ai"
+        assert drafted.selection.proposal_rationale == "keep the engine's selection"
+
+
 def test_draft_resume_accepts_separately_reviewed_paraphrase(
     ai_services,
     fake_openai: FakeOpenAI,
@@ -457,16 +484,9 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
             job_snapshot_id=ingested.job_snapshot_id,
         ),
     )
-    prepared = ai_services.drafts.prepare(
-        DraftCommand(
-            application_id=ingested.application_id,
-            expected_document_hash=stored_document(
-                ai_services, ingested.application_id
-            ).document_hash,
-        )
-    )
+    frame = composed_content(ai_services, ingested.application_id)
     working = stored_document(ai_services, ingested.application_id).model_copy(
-        update={"content": prepared.content}
+        update={"content": frame}
     )
     assert working.content is not None
     section, claim = next(
@@ -476,8 +496,7 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
         if claim.claim_type == "canonical" and claim.style in {"paragraph", "bullet", "item"}
     )
     wording = f"Proven experience: {claim.text}"
-    fake_openai.script(
-        "draft_resume",
+    fake_openai.script_draft(
         DraftProposal(
             claims=[
                 ProposedClaim(
@@ -523,7 +542,8 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    assert sum(output.output_type == "provider_response" for output in completed.outputs) == 2
+    # The selection, the wording, and the review of the changed line.
+    assert sum(output.output_type == "provider_response" for output in completed.outputs) == 3
     assert any(output.output_type == "cv_document" for output in completed.outputs)
     assert len(fake_openai.calls_for("assess_claim_support")) == 1
     actual = stored_document(ai_services, ingested.application_id)
@@ -550,7 +570,7 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     assert "provider_artifact_version_id" not in public_evidence_fields
     assert "input_hash" not in public_evidence_fields
 
-    # AI wording is authored wording: a selection change would rebuild it away, so both
+    # AI wording is authored wording: a selection change would drop it, so both
     # selection paths refuse it (§14) - the proposal before any provider call.
     current = stored_document(ai_services, ingested.application_id)
     with pytest.raises(PreconditionFailed) as refused_change:
@@ -571,7 +591,8 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
             analysis_service=ai_services.analysis,
         )
     assert refused_proposal.value.code == REGENERATION_REQUIRED
-    assert fake_openai.calls_for("propose_selection_plan") == []
+    # The one selection call is the draft's own; the refused proposal made none.
+    assert len(fake_openai.calls_for("propose_selection_plan")) == 1
     assert stored_document(ai_services, ingested.application_id) == current
 
 
@@ -1340,7 +1361,7 @@ def test_analysis_selection_activation_rollback_keeps_durable_inactive_evidence(
 
     baseline = counts()
     if failure_at == "plan":
-        method = "create_document" if kind == "analysis" else "update_body"
+        method = "create_document" if kind == "analysis" else "replace_selection"
         original = getattr(SqlAlchemyDocumentStore, method)
 
         def fail_after_insert(*args, **kwargs):
@@ -1426,7 +1447,7 @@ def test_analysis_selection_activation_shares_one_token_and_has_no_external_io(
 
         return call
 
-    plan_method = "create_document" if kind == "analysis" else "update_body"
+    plan_method = "create_document" if kind == "analysis" else "replace_selection"
     monkeypatch.setattr(
         SqlAlchemyDocumentStore,
         plan_method,

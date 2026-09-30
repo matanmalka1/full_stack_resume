@@ -128,12 +128,10 @@ const renderPage = (entry = "/", aiAvailable = false) => {
   });
   client.setQueryData(settingsQueryKey, {
     settings: {
-      default_execution_mode: "deterministic",
       default_ai_model: "gpt-5.6-terra",
       default_reasoning_effort: "medium",
       available_ai_models: [],
       provider_configured: aiAvailable,
-      ai_enabled: aiAvailable,
     },
     etag: null,
   });
@@ -325,9 +323,7 @@ describe("NewApplicationPage", () => {
       },
       {
         path: ANALYSES_PATH,
-        /* Analysis has one lane and it is the AI one, so the command names its provider
-           unconditionally rather than omitting it for a deterministic run that no longer
-           exists. */
+        /* Analysis is AI-only, so the command names its provider unconditionally. */
         body: { job_snapshot_id: "snap-1", provider: "openai" },
       },
     ]);

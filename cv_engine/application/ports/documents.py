@@ -85,6 +85,23 @@ class DocumentStore(Protocol):
         """
         ...
 
+    def replace_selection(
+        self,
+        tx: WriteTransaction,
+        application_id: str,
+        expected_document_hash: str,
+        selection: SelectionManifest,
+        *,
+        updated_at: str,
+    ) -> tuple[CVDocument, RenderedFiles | None]:
+        """A selection change: new selection, no content, no stamps, same analysis.
+
+        Content is composed only by `create_draft`, so a selection change leaves the
+        document to be drafted again. Returns the rendered files the document no
+        longer references, for the caller to discard after commit.
+        """
+        ...
+
     def repin(
         self,
         tx: WriteTransaction,

@@ -150,17 +150,15 @@ class BuildFromAnalysisCommand(BoundaryDTO):
 
 
 class DraftCommand(BoundaryDTO):
-    """§14 `create_draft`, in either mode, against the document the client read.
+    """§14 `create_draft` against the document the client read.
 
-    `provider` is explicit and has no `auto` value. Deterministic is the default
-    because the deterministic workflow must reach Ready with no key configured;
-    asking for `openai` without a configured provider is a refusal, never a silent
-    fall back to the default.
+    Drafting is AI-only: there is no deterministic form to fall back to, so asking
+    for it without a configured provider is a refusal.
     """
 
     application_id: str
     expected_document_hash: str = DocumentHash
-    provider: Literal["deterministic", "openai"] = "deterministic"
+    provider: Literal["openai"] = "openai"
     model: str | None = None
     reasoning_effort: str | None = None
 

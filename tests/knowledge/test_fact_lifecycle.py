@@ -8,6 +8,7 @@ from helpers import (
     approve_active_draft,
     edit_document_claim,
     seed_analysis_for_command,
+    seed_draft,
     services_transactions,
     stored_document,
     validate_active_draft,
@@ -18,7 +19,7 @@ from sqlalchemy import delete, update
 from sqlalchemy.exc import ProgrammingError
 
 from cv_engine.api.schemas.facts import CaptureClaimFactRequest
-from cv_engine.application.commands import AnalyzeCommand, BuildFromAnalysisCommand, DraftCommand
+from cv_engine.application.commands import AnalyzeCommand, BuildFromAnalysisCommand
 from cv_engine.application.errors import (
     KnowledgeRejected,
     MissingFactRendering,
@@ -362,6 +363,8 @@ def test_confirm_and_use_is_one_journaled_fact_profile_and_document_command(
     assert result.fact.status is FactStatus.CANONICAL
     document = stored_document(services, application_id)
     assert created.fact.fact_id in document.selection.selected_fact_ids
+    # The canonical content is dropped with the selection change, to be drafted again.
+    assert document.content is None
     assert document.id == result.document_id
     assert document.document_hash == result.document_hash != setup.document_hash
     events = services.knowledge_queries.fact_history(created.fact.fact_id).events
@@ -455,7 +458,7 @@ def test_document_selection_failure_restores_both_knowledge_files_and_quarantine
         raise ValueError("simulated document selection constraint failure")
 
     _transactions, store = _knowledge_persistence(services)
-    monkeypatch.setattr(type(services.drafts.documents), "update_body", refuse_plan)
+    monkeypatch.setattr(type(services.drafts.documents), "replace_selection", refuse_plan)
     with pytest.raises(KnowledgeRejected, match="document selection constraint failure"):
         services.knowledge_lifecycle.confirm_and_use_fact(
             created.fact.fact_id,
@@ -696,12 +699,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
             expected_document_hash=stored_document(services, app_id).document_hash,
         )
     )
-    services.drafts.draft(
-        DraftCommand(
-            application_id=app_id,
-            expected_document_hash=stored_document(services, app_id).document_hash,
-        )
-    )
+    seed_draft(services, app_id)
     assert validate_active_draft(services, app_id).passed
     selected = _working_claim(services, app_id, "sales.leadership.pipeline_review")
     assert selected.claim_type == "canonical"

@@ -16,12 +16,10 @@ from .ai_configuration import (
     normalize_reasoning_effort,
 )
 from .commands import BoundaryDTO
-from .errors import PreconditionFailed
 
 if TYPE_CHECKING:
     from .ports.transactions import ReadTransaction, TransactionManager, WriteTransaction
 
-ExecutionMode = Literal["deterministic", "ai"]
 UiDensity = Literal["comfortable", "compact"]
 UiTextSize = Literal["normal", "large"]
 UiTheme = Literal["system", "light", "dark"]
@@ -30,8 +28,6 @@ UiTheme = Literal["system", "light", "dark"]
 class StoredSettings(BoundaryDTO):
     edit_version: int = 0
     auto_generate_when_review_not_required: bool = False
-    ai_enabled_override: bool | None = None
-    default_execution_mode: ExecutionMode = "deterministic"
     default_ai_model: AIModel | None = None
     default_reasoning_effort: ReasoningEffort = DEFAULT_REASONING_EFFORT
     ui_density: UiDensity = "comfortable"
@@ -43,9 +39,6 @@ class StoredSettings(BoundaryDTO):
 class SettingsView(BoundaryDTO):
     edit_version: int
     auto_generate_when_review_not_required: bool
-    ai_enabled: bool
-    ai_enabled_override: bool | None
-    default_execution_mode: ExecutionMode
     default_ai_model: AIModel
     default_reasoning_effort: ReasoningEffort
     available_ai_models: list[AIModelOption]
@@ -58,8 +51,6 @@ class SettingsView(BoundaryDTO):
 
 class UpdateSettings(BoundaryDTO):
     auto_generate_when_review_not_required: bool
-    ai_enabled_override: bool | None = None
-    default_execution_mode: ExecutionMode
     default_ai_model: AIModel
     default_reasoning_effort: ReasoningEffort
     ui_density: UiDensity
@@ -101,7 +92,6 @@ class SettingsService:
         self.runtime_default_model = normalize_ai_model(runtime_default_model)
 
     def _view(self, stored: StoredSettings) -> SettingsView:
-        enabled = self.provider_configured and stored.ai_enabled_override is not False
         selected_model = normalize_ai_model(stored.default_ai_model or self.runtime_default_model)
         return SettingsView(
             **stored.model_dump(mode="python", exclude={"default_ai_model"}),
@@ -119,7 +109,6 @@ class SettingsService:
                 )
                 for item in AI_MODELS
             ],
-            ai_enabled=enabled,
             provider_configured=self.provider_configured,
         )
 
@@ -131,11 +120,6 @@ class SettingsService:
     def update(self, expected_edit_version: int, command: UpdateSettings) -> SettingsView:
         normalize_ai_model(command.default_ai_model)
         normalize_reasoning_effort(command.default_reasoning_effort)
-        enabled = self.provider_configured and command.ai_enabled_override is not False
-        if command.default_execution_mode == "ai" and not (self.provider_configured and enabled):
-            raise PreconditionFailed(
-                "AI cannot be the default execution mode until it is enabled and configured"
-            )
         with self.transactions.write() as tx:
             stored = self.repo.update_settings(tx, expected_edit_version, command)
         return self._view(stored)

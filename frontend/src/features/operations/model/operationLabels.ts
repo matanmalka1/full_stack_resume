@@ -95,17 +95,10 @@ export const failureTones: Partial<Record<OperationStatus, Tone>> = {
    PROVIDER_NOT_CONFIGURED; runs recorded before that code existed carry PROVIDER_REFUSED,
    and for those the Settings read is what tells the two apart. Either way the reader is
    told what is missing and where it is fixed. */
-export const missingProviderPresentation = (providerConfigured: boolean): FailurePresentation =>
-  providerConfigured
-    ? {
-        title: "ה־AI כבוי בהגדרות",
-        guidance: "הבקשה לא נשלחה לספק ושום דבר לא השתנה במועמדות. אחרי הפעלת ה־AI בהגדרות אפשר להריץ את הפעולה שוב.",
-      }
-    : {
-        title: "לא הוגדר ספק AI",
-        guidance:
-          "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI והפעלתו בהגדרות אפשר להריץ את הפעולה שוב.",
-      };
+export const missingProviderPresentation: FailurePresentation = {
+  title: "לא הוגדר ספק AI",
+  guidance: "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI אפשר להריץ את הפעולה שוב.",
+};
 
 /* The same run once a provider is usable again: nothing was sent then, and it can be
    run now. */
@@ -252,8 +245,7 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
   },
   PROVIDER_NOT_CONFIGURED: {
     title: "לא הוגדר ספק AI",
-    guidance:
-      "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI והפעלתו בהגדרות אפשר להריץ את הפעולה שוב.",
+    guidance: "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI אפשר להריץ את הפעולה שוב.",
   },
   CANCELLED_BEFORE_ACTIVATION: {
     title: "הפעולה בוטלה לפני הפעלת התוצאה",

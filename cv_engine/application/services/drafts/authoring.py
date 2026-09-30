@@ -12,6 +12,7 @@ from __future__ import annotations
 from ....domain.contracts.analysis import JobAnalysis
 from ....domain.contracts.drafts import DraftDocument
 from ....domain.contracts.providers import ProposedClaim
+from ....domain.contracts.selection import SelectionManifest
 from ....domain.document import content_check, preparation_state
 from ....domain.drafts import add_claim, apply_claim_edit, draft_claims, remove_claim, reorder_draft
 from ....domain.knowledge import Knowledge
@@ -19,7 +20,7 @@ from ....util import utc_now
 from ...commands import (
     DocumentMutationResult,
     DraftCommand,
-    DraftResult,
+    ProposeSelectionCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RegenerationResult,
@@ -45,6 +46,8 @@ from ...ports import (
 from ...ports.analysis_plans import AnalysisKnowledgeSource, AnalysisSelectionSourceReader
 from ...ports.documents import DocumentBody, DocumentStore
 from ...ports.drafts import DraftEvidencePreserver
+from ...transactions import assert_external_io_allowed
+from ..analysis.selection_plans import AnalysisSelectionService
 from ..documents import (
     DocumentSource,
     compose_content,
@@ -79,6 +82,16 @@ def _changed_claim_ids(before: DraftDocument, after: DraftDocument) -> set[str]:
     }
 
 
+def user_chose_selection(selection: SelectionManifest) -> bool:
+    """Whether the document's selection carries a choice `create_draft` must keep."""
+    return bool(
+        selection.pinned_fact_ids
+        or selection.excluded_fact_ids
+        or selection.emphasis_override is not None
+        or selection.proposed_by is not None
+    )
+
+
 class DraftAuthoringService:
     def __init__(
         self,
@@ -109,6 +122,10 @@ class DraftAuthoringService:
     def load_knowledge(self) -> Knowledge:
         return load_knowledge(self._knowledge)
 
+    @staticmethod
+    def assert_provider_io_allowed() -> None:
+        assert_external_io_allowed("draft provider execution")
+
     def document_source(self, application_id: str) -> DocumentSource:
         with self.transactions.read() as tx:
             return read_document_source(tx, self.documents, self.sources, application_id)
@@ -131,33 +148,20 @@ class DraftAuthoringService:
     def preserve(self, application_id, operation_id, task, provenance):
         return self.evidence.preserve(application_id, operation_id, task, provenance)
 
-    def activate(self, prepared: PreparedDraft) -> DraftResult:
-        with self.transactions.write() as tx:
-            return self.activation.activate_generation(tx, prepared)
-
     def activate_regeneration(self, prepared: PreparedRegeneration) -> RegenerationResult:
         with self.transactions.write() as tx:
             return self.activation.activate_regeneration(tx, prepared)
 
-    def draft(self, command: DraftCommand) -> DraftResult:
-        """The deterministic `create_draft`, prepared and activated in the caller.
-
-        The Operation is the product path; this is the same two phases without a
-        runner, used where the deterministic chain is driven directly. AI mode has
-        no synchronous form.
-        """
-        if command.provider != "deterministic":
-            raise PreconditionFailed(
-                "AI generation runs as an Operation; there is no synchronous form"
-            )
-        return self.activate(self.prepare(command))
-
-    def prepare(self, command: DraftCommand, *, operation_id: str | None = None) -> PreparedDraft:
+    def prepare(self, command: DraftCommand, *, operation_id: str) -> PreparedDraft:
         """Compose the document's content without changing durable state.
 
-        The deterministic path builds the canonical DraftDocument from the document's
-        analysis and selection. AI mode asks `draft_resume` for wording over that
-        composition; `operation_id` is where its sanitized response is preserved.
+        The provider chooses the facts and then words them. A selection the user has not
+        touched is replaced by a `propose_selection_plan` overlay, validated by the same
+        selection policy `propose_selection` passes; a selection the user already chose
+        - pins, exclusions, an emphasis, or an activated AI proposal - is kept as it is.
+        The engine lays that selection out as the frame the provider writes into, and
+        `draft_resume` proposes the wording over it. `operation_id` is where every
+        sanitized response is preserved.
         """
         source = self._target(command.application_id, command.expected_document_hash)
         document = source.document
@@ -167,36 +171,45 @@ class DraftAuthoringService:
                 "again from its analysis"
             )
         knowledge = self.load_knowledge()
-        content = compose_content(
+        selection = document.selection
+        selection_evidence: ProviderEvidence | None = None
+        if not user_chose_selection(selection):
+            proposed = AnalysisSelectionService.prepare_selection_proposal(
+                self,
+                ProposeSelectionCommand(
+                    application_id=command.application_id,
+                    expected_document_hash=command.expected_document_hash,
+                    model=command.model,
+                    reasoning_effort=command.reasoning_effort,
+                ),
+                operation_id=operation_id,
+            )
+            selection, selection_evidence = proposed.selection, proposed.evidence
+        frame = compose_content(
             command.application_id,
             document.analysis_id,
             source.job_snapshot_id,
             source.analysis,
-            document.selection,
+            selection,
             knowledge,
         )
-        evidence: ProviderEvidence | None = None
-        review_evidence: ProviderEvidence | None = None
-        if command.provider == "openai":
-            if operation_id is None:
-                raise PreconditionFailed(
-                    "AI generation runs as an Operation; there is no synchronous form"
-                )
-            content, evidence, review_evidence = self._propose_wording(
-                command.application_id,
-                operation_id,
-                content,
-                source.analysis,
-                knowledge,
-                model=command.model,
-                reasoning_effort=command.reasoning_effort,
-            )
+        content, evidence, review_evidence = self._propose_wording(
+            command.application_id,
+            operation_id,
+            frame,
+            source.analysis,
+            knowledge,
+            model=command.model,
+            reasoning_effort=command.reasoning_effort,
+        )
         return PreparedDraft(
             application_id=command.application_id,
             expected_document_hash=command.expected_document_hash,
             content=content,
             evidence=evidence,
             review_evidence=review_evidence,
+            selection=None if selection_evidence is None else selection,
+            selection_evidence=selection_evidence,
         )
 
     def _propose_wording(

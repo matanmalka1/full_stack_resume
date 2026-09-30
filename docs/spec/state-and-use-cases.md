@@ -349,7 +349,7 @@ Types:
 | --- | --- | --- |
 | `analyze_job` | its JobSnapshot (ID and hash) and a Knowledge context hash | required |
 | `propose_selection` | `expected_document_hash` | required |
-| `create_draft` | `expected_document_hash` | `deterministic` (model `rules-v1`) or `openai` |
+| `create_draft` | `expected_document_hash` | required |
 | `regenerate_section` | `expected_document_hash` | required |
 | `regenerate_claim` | `expected_document_hash` | required |
 | `render_document` | `expected_document_hash` | none (Playwright) |
@@ -556,9 +556,10 @@ eligibility. The effective `emphasis` is recorded separately from the nullable
 `emphasis_override`.
 
 - `content IS NULL`: only the selection changes.
-- Content composed by the engine: content is recomposed from the new selection in the
-  same write.
-- Content carrying manual or AI wording a rebuild would discard: refused with
+- Content in its canonical wording: dropped in the same write, with every check,
+  approval and render stamp; the rendered files are released and deleted best-effort
+  after commit. The document returns to `ready_to_draft` for a new `create_draft`.
+- Content carrying manual or AI wording the drop would discard: refused with
   `REGENERATION_REQUIRED` (412); nothing is written.
 
 ### `propose_selection(application_id, expected_document_hash, model?, reasoning_effort?)`
@@ -568,8 +569,8 @@ exclusions, rationale). Content carrying manual or AI wording is refused with
 `REGENERATION_REQUIRED` (412) when the Operation is requested, before any provider
 call. Activation re-checks the hash under the row lock, reruns selection policy against
 the Knowledge loaded for activation, and writes as `update_selection` does: with
-`content IS NULL` only the selection changes; engine-composed content is recomposed
-from the new selection in the same write. The
+`content IS NULL` only the selection changes; content in its canonical wording is
+dropped in the same write. The
 activated selection records `proposed_by = "ai"` and `proposal_rationale` as provenance;
 activation never reads them. Engine and user selections leave both null.
 
@@ -585,9 +586,13 @@ are deleted best-effort after commit.
 
 ### `create_draft(application_id, expected_document_hash, provider, model?, reasoning_effort?)`
 
-Operation, only while `content IS NULL`. `provider = deterministic` composes the
-canonical DraftDocument from the analysis and selection with no AI. `provider = openai`
-uses the `draft_resume` Proposal and semantic review. Activation writes `content` only
+Operation, only while `content IS NULL`. `provider` is always `openai`; there is no
+rules-based form. An untouched selection (no pins, exclusions, Emphasis override, or
+`proposed_by`) is first replaced by a `propose_selection_plan` overlay validated by
+selection policy and recorded as `proposed_by = ai`; a selection the user chose is kept.
+The engine composes the frame from the analysis and that selection, and `draft_resume`
+proposes its wording, activated through semantic review. Selection and content are
+written in one activation. Activation writes `content` only
 while `document_hash == expected_document_hash`. A selected fact without a rendering in
 the document language fails with `MISSING_FACT_RENDERING`.
 
@@ -757,9 +762,9 @@ pending -> canonical
 Preconditions, checked before any write: the document exists and matches the hash
 (`DOCUMENT_CHANGED`, 409); it is built on `job_analysis_id`; the analysis belongs to the
 Application and its Profile is `profile`. The selection step removes the fact from the
-exclusions and rebuilds the selection; the fact must end up selected. Engine-composed
-content is recomposed; content with wording a rebuild would discard refuses the whole
-command. Every transition gets its own event; the document write commits with the fact
+exclusions and rebuilds the selection; the fact must end up selected. Content in its
+canonical wording is dropped, to be drafted again; content with wording the drop would
+discard refuses the whole command. Every transition gets its own event; the document write commits with the fact
 events. Partial completion is never visible.
 
 ### `create_fact_from_claim(application_id, claim_id, ...)`
@@ -858,10 +863,9 @@ and the allowlisted model catalog.
 
 ### `update_settings(If-Match, settings)`
 
-Writable fields: `ui_theme`, `ui_density`, `ui_text_size`, `default_execution_mode`
-(`deterministic` | `ai`), `default_ai_model` and `default_reasoning_effort` (closed
-backend allowlists), `auto_generate_when_review_not_required`, and
-`ai_enabled_override`. The write is optimistic on `edit_version`; a mismatch is 409 and
+Writable fields: `ui_theme`, `ui_density`, `ui_text_size`, `default_ai_model` and
+`default_reasoning_effort` (closed backend allowlists), and
+`auto_generate_when_review_not_required`. The write is optimistic on `edit_version`; a mismatch is 409 and
 changes nothing, and each successful write increments it. On conflict the client keeps
 its local edits, reads the current version, and lets the user choose what to reapply;
 there is no automatic overwrite. Arbitrary model IDs, per-task overrides, timezone, and
