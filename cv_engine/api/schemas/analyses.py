@@ -65,10 +65,8 @@ class CreateAnalysisRequest(ClassificationOverrides):
 class ApplyAnalysisDecisionsRequest(ClassificationOverrides):
     """One review-form submission (§13).
 
-    Carries analysis and selection decisions because one form may submit both.
-    Track/Profile/language create a new JobAnalysis; Emphasis and the fact overlay
-    change only the document's selection, in place. Two overlay lists, not three:
-    explicit inclusion is a pin.
+    Every decision it carries - Track, Profile, language, Emphasis - is
+    classification, and a change to any of them creates a new JobAnalysis.
     """
 
     application_id: str
@@ -80,17 +78,14 @@ class ApplyAnalysisDecisionsRequest(ClassificationOverrides):
     #: A decision made against a document that has since moved is refused rather
     #: than applied to one the user never saw.
     expected_document_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    pinned_fact_ids: list[str] = []
-    excluded_fact_ids: list[str] = []
 
 
 class AnalysisDecisionsResponse(HttpSchema):
     """Which analysis is in force after the decision, and whether it is a new one.
 
-    `job_analysis_id` names the analysis the client should work from now: the
-    new one when the decision changed meaning, the original when only the
-    selection moved. `created_analysis` is what tells the two apart. Neither
-    branch re-pins the document; `document_hash` is its token now.
+    `job_analysis_id` names the analysis the client should work from now, the new
+    one every decision creates. The decision never re-pins the document;
+    `document_hash` is its token now.
     """
 
     application_id: str
