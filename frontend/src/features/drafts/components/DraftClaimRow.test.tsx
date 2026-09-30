@@ -120,7 +120,7 @@ describe("DraftClaimRow", () => {
 
   it("does not remove the line until the confirmation dialog is accepted", () => {
     const rowActions = actions();
-    render(<DraftClaimRow actions={rowActions} claim={claim} facts={facts} removal={{ route: "selection" }} />);
+    render(<DraftClaimRow actions={rowActions} claim={claim} facts={facts} removal={{ route: "patch" }} />);
 
     fireEvent.click(screen.getByRole("button", { name: "הסרת השורה" }));
     expect(rowActions.onRemove).not.toHaveBeenCalled();

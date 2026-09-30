@@ -14,7 +14,7 @@ import {
   factHistoryQueryOptions,
   factsQueryPrefix,
 } from "@/api/facts";
-import { type DocumentRead, documentQueryKey } from "@/api/documents";
+import { documentQueryKey } from "@/api/documents";
 import type { EditableDocument } from "../model/drafts.types";
 import { routePaths } from "@/app/routePaths";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -129,20 +129,16 @@ export const ClaimFactResolution = ({
         throw new Error("Confirm and use requires the document's analysis and Profile");
       }
       await beforeResolve?.();
-      /* The selection step is guarded by the document hash. `beforeResolve` settles the
-         autosave and reads the document back, so the cached read is the one to name. */
-      const current = queryClient.getQueryData<DocumentRead>(documentQueryKey(applicationId));
       return confirmAndUseFact(factId, {
         application_id: applicationId,
         job_analysis_id: analysisId,
         profile,
         section,
-        expected_document_hash: current?.document.document_hash ?? draft.document_hash,
         reason: "confirmed from the contextual draft claim flow",
       });
     },
-    /* Confirming reaches past the fact store: it changes the document's selection, so the
-       document and its projection are out of date too. */
+    /* Confirming reaches past the fact store: the document's review reasons and the
+       Profile's pool move with it, so the document and its projection are re-read too. */
     onSuccess: async () => {
       void queryClient.invalidateQueries({ queryKey: factsQueryPrefix });
       void queryClient.invalidateQueries({ queryKey: factHistoryQueryKey });
@@ -221,7 +217,7 @@ export const ClaimFactResolution = ({
         // role="status" is a Callout prop, not a DOM role; Callout already renders an
         // <output> for it.
         // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
-        <Callout className="mt-4" role="status" title="העובדה אושרה ונבחרה" tone="success">
+        <Callout className="mt-4" role="status" title="העובדה אושרה וצורפה לפרופיל" tone="success">
           אישור העובדה אינו בודק את השורה או את הטיוטה. אם הטיוטה סומנה כלא עדכנית, יש לעדכן אותה מההתראה שבמסך.
         </Callout>
       ) : (

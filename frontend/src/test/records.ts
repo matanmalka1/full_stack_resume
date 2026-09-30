@@ -66,18 +66,8 @@ export const cvDocument = (overrides: Partial<CVDocument> = {}): CVDocument => (
   application_id: "app-1",
   analysis_id: "analysis-1",
   document_hash: HASH,
-  built_with: { profile_version: "profile-1", selection_policy_version: "policy-1" },
+  built_with: { profile_version: "profile-1" },
   language: "en",
-  selection: {
-    emphasis: "development-balanced",
-    emphasis_override: null,
-    selected_fact_ids: [],
-    pinned_fact_ids: [],
-    excluded_fact_ids: [],
-    proposed_by: null,
-    proposal_rationale: null,
-    candidates: [],
-  },
   content: {},
   outline: {
     headline: {

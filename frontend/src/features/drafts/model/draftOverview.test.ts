@@ -16,8 +16,6 @@ const line = (claim_id: string, claim_type: DraftClaim["claim_type"], fact_ids: 
 const fact = (fact_id: string, overrides: Partial<DraftFact> = {}): DraftFact => ({
   fact_id,
   linked_claim_ids: [],
-  outcome: "selected",
-  reason: null,
   section: "Experience",
   text: fact_id,
   ...overrides,
@@ -54,26 +52,12 @@ describe("summarizeContent", () => {
 });
 
 describe("summarizeSelection", () => {
-  it("counts only what the selection ranked, and offers only omitted facts nothing rests on", () => {
+  it("counts the facts section lines use, not the headline's or contacts'", () => {
     const summary = summarizeSelection(
-      documentWith(
-        [],
-        [
-          fact("selected"),
-          fact("pinned", { outcome: "pinned" }),
-          fact("rescued", { outcome: "rescued" }),
-          fact("budget", { outcome: "omitted", reason: "below_section_budget" }),
-          fact("budget-2", { outcome: "omitted", reason: "below_section_budget" }),
-          fact("user", { outcome: "omitted", reason: "excluded_by_user" }),
-          fact("still-linked", { outcome: "omitted", linked_claim_ids: ["c"] }),
-          fact("contact", { outcome: null }),
-        ],
-      ),
+      documentWith([], [fact("a"), fact("b"), fact("contact", { section: null }), fact("title", { section: null })]),
     );
 
-    expect(summary.included).toBe(3);
-    expect(summary.pinned).toBe(1);
-    expect(summary.omitted.map((item) => item.fact_id)).toEqual(["budget", "budget-2", "user"]);
+    expect(summary.included).toBe(2);
   });
 });
 

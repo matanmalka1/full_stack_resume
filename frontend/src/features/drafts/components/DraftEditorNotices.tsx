@@ -12,7 +12,6 @@ interface DraftEditorNoticesProps {
      past. */
   dirty: boolean;
   regenerationError: unknown;
-  selectionError: unknown;
 }
 
 /* What the editor's own commands have to say, in one place under the outline they act on.
@@ -21,12 +20,7 @@ interface DraftEditorNoticesProps {
    the reader has already scrolled past. Each notice is silent unless it applies, and none
    of them decides anything: the errors are the server's, and the two conditions are the
    editor's own state. */
-export const DraftEditorNotices = ({
-  aiUnavailable,
-  dirty,
-  regenerationError,
-  selectionError,
-}: DraftEditorNoticesProps) => (
+export const DraftEditorNotices = ({ aiUnavailable, dirty, regenerationError }: DraftEditorNoticesProps) => (
   <>
     {aiUnavailable ? (
       <Callout title="יצירה מחדש באמצעות AI אינה זמינה" tone="neutral">
@@ -52,13 +46,5 @@ export const DraftEditorNotices = ({
         יצירה מחדש מוקפאת על הגרסה השמורה של הטיוטה, ולכן היא זמינה רק אחרי שהשמירה הסתיימה.
       </p>
     ) : null}
-
-    {selectionError === null || selectionError === undefined ? null : (
-      <ErrorCallout
-        error={selectionError}
-        fallbackDetail="הטיוטה לא השתנתה. אפשר לנסות שוב."
-        title="בחירת העובדות לא שונתה"
-      />
-    )}
   </>
 );

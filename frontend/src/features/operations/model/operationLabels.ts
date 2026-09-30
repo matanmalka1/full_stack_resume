@@ -30,7 +30,6 @@ export const statusLabels: Record<OperationStatus, string> = {
    heading untranslated. */
 export const operationTypeLabels: Record<OperationType, string> = {
   analyze_job: "ניתוח המשרה",
-  propose_selection: "בחירת העובדות",
   create_draft: "יצירת הטיוטה",
   regenerate_section: "יצירה מחדש של פרק",
   regenerate_claim: "יצירה מחדש של טענה",

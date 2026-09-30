@@ -376,11 +376,7 @@ export const DraftClaimRow = ({ actions, claim, factResolution, facts, move, rem
           open={confirmingRemoval}
           title="הסרת השורה?"
         >
-          <p dir="auto">
-            {removal.route === "selection"
-              ? "הפעולה מחריגה את העובדה שמאחורי השורה ובונה את הטיוטה מחדש בלעדיה. אפשר לבטל את ההסרה זמן קצר לאחר מכן."
-              : "השורה תוסר מהטיוטה. אפשר לבטל את ההסרה זמן קצר לאחר מכן."}
-          </p>
+          <p dir="auto">השורה תוסר מהטיוטה. אפשר לבטל את ההסרה זמן קצר לאחר מכן.</p>
         </Dialog>
       )}
     </li>

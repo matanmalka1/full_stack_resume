@@ -43,25 +43,16 @@ export const summarizeContent = (draft: EditableDocument): ContentSummary => {
 };
 
 export interface SelectionSummary {
-  /* Facts the selection put into the document, whichever way it decided. */
+  /* Facts the content's section lines use. The headline and contacts are not counted:
+     they come from the Profile and the candidate, not from the draft's choice. */
   included: number;
-  /* Of those, the ones fixed by an explicit decision rather than the ranking. */
-  pinned: number;
-  /* Facts the selection weighed and left out, with nothing in the draft resting on them. */
-  omitted: EditableDocument["facts"];
 }
 
-/* The selection's accounting, read from the document's own `facts`. Only facts the
-   selection actually ranked count: `outcome` is null for a fact nothing weighed, such as
-   a contact line's source. */
-export const summarizeSelection = (draft: EditableDocument): SelectionSummary => {
-  const ranked = draft.facts.filter((fact) => fact.outcome !== null && fact.outcome !== undefined);
-  return {
-    included: ranked.filter((fact) => fact.outcome !== "omitted").length,
-    pinned: ranked.filter((fact) => fact.outcome === "pinned").length,
-    omitted: ranked.filter((fact) => fact.outcome === "omitted" && fact.linked_claim_ids.length === 0),
-  };
-};
+/* The draft's choice, read from the document's own `facts`: every fact a section line
+   links. */
+export const summarizeSelection = (draft: EditableDocument): SelectionSummary => ({
+  included: draft.facts.filter((fact) => fact.section != null).length,
+});
 
 /* The three things this step is made of, in the order the reader does them. */
 export type DraftStepId = "review" | "check" | "approve";

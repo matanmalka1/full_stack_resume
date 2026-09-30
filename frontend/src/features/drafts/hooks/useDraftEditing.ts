@@ -3,14 +3,7 @@ import { useCallback } from "react";
 
 import { applicationDetailQueryKey } from "@/api/applications";
 import type { DraftClaim } from "@/api/contracts";
-import {
-  documentQueryKey,
-  documentQueryOptions,
-  regenerateClaim,
-  regenerateSection,
-  selectionOverlay,
-  updateSelection,
-} from "@/api/documents";
+import { documentQueryKey, documentQueryOptions, regenerateClaim, regenerateSection } from "@/api/documents";
 import { type QueuedOperation, operationQueryKey } from "@/api/operations";
 import { aiRegenerationAvailable } from "@/api/settings";
 import { useSettings } from "@/api/useSettings";
@@ -56,8 +49,6 @@ export interface DraftEditing {
   regenerateSection: (section: string) => void;
   regenerationError: unknown;
   saveState: AutosaveState;
-  selectionError: unknown;
-  selectionPending: boolean;
   history: {
     canRedo: boolean;
     canUndo: boolean;
@@ -113,33 +104,6 @@ export const useDraftEditing = ({
     queueEdit: (claim, text) => autosave.queueEdit({ claim_id: claim.claim_id, fact_ids: claim.fact_ids, text }),
   });
 
-  /* §14 `update_selection`: the overlay is absolute, so every change starts from what the
-     document's selection currently holds and adds one decision to it. Sending only what
-     moved would drop every pin and exclusion the user made before. The hash sent is the
-     one read back after the buffer settled, so the change is addressed to the document the
-     user's last edit produced. */
-  const selection = useMutation({
-    mutationFn: async (change: { pinned?: string[]; excluded?: string[] }) => {
-      if (draft === undefined) {
-        throw new Error("a selection change was offered before the document arrived");
-      }
-      if (!(await autosave.settle())) {
-        throw new Error("Selection cannot change until local draft edits are saved");
-      }
-      const current = await queryClient.fetchQuery({ ...documentQueryOptions(applicationId), staleTime: 0 });
-      const overlay = selectionOverlay(current.document);
-      return updateSelection(applicationId, current.document.document_hash, {
-        pinned_fact_ids: [...new Set([...overlay.pinned_fact_ids, ...(change.pinned ?? [])])],
-        excluded_fact_ids: [...new Set([...overlay.excluded_fact_ids, ...(change.excluded ?? [])])],
-      });
-    },
-    onSuccess: () => {
-      /* Selection and content changed together, and the hash with them. Nothing from the
-         response is seeded: the refreshed reads report the document that now exists. */
-      onSaved();
-    },
-  });
-
   const regeneration = useMutation({
     mutationFn: async (target: { claimId?: string; keepText?: boolean; section?: string }) => {
       if (draft === undefined) {
@@ -173,20 +137,14 @@ export const useDraftEditing = ({
     autosave.pendingAdditions.length > 0 ||
     Object.keys(autosave.pendingClaimOrders).length > 0;
 
-  /* Which command removes a line is `removability`'s answer, not a guess made here: the
-     patch takes the unauthorized claims, and a fact-authorized one is removed by
-     excluding the facts behind it. */
+  /* Whether a line can go is `removability`'s answer, not a guess made here; every
+     removable line goes through the patch. */
   const removeClaim = (claim: DraftClaim) => {
     if (draft === undefined) {
       return;
     }
-    const { route } = removability(claim, draft, draft);
-
-    if (route === "patch") {
+    if (removability(claim, draft).route === "patch") {
       autosave.queueRemoval(claim.claim_id);
-    }
-    if (route === "selection") {
-      selection.mutate({ excluded: claim.fact_ids });
     }
   };
 
@@ -230,8 +188,6 @@ export const useDraftEditing = ({
     regenerateSection: (section) => regeneration.mutate({ section }),
     regenerationError: regeneration.error,
     saveState: autosave,
-    selectionError: selection.error,
-    selectionPending: selection.isPending,
     visibleDraft: history.visibleDraft,
   };
 };

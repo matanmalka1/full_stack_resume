@@ -213,14 +213,8 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
   return {
     track: isTrack(analysis.track) ? analysis.track : null,
     profile: isProfileName(analysis.profile) ? analysis.profile : null,
-    /* Emphasis is effective at document-selection level. The Application scalar follows
-       the document's selection, while the immutable analysis keeps the classification value
-       it originally carried. */
-    emphasis: isEmphasis(detail.application.emphasis)
-      ? detail.application.emphasis
-      : isEmphasis(analysis.emphasis)
-        ? analysis.emphasis
-        : null,
+    /* An Emphasis decision creates a new analysis, so the analysis carries it. */
+    emphasis: isEmphasis(analysis.emphasis) ? analysis.emphasis : null,
     language: isLanguage(analysis.language) ? analysis.language : null,
     fit: isFitLevel(record.fit_level) ? record.fit_level : null,
     fitScore: finiteFraction(record.fit_score),

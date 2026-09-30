@@ -152,16 +152,12 @@ test.describe("accessibility", () => {
           text: "Owned the CRM migration end to end.",
           linked_claim_ids: ["c-1"],
           section: "Core Skills",
-          outcome: "selected",
-          reason: null,
         },
         {
           fact_id: "f-mail",
           text: "candidate@example.com",
           linked_claim_ids: ["c-mail"],
           section: null,
-          outcome: null,
-          reason: null,
         },
       ],
     });

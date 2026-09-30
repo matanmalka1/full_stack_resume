@@ -19,11 +19,9 @@ const destinations: Record<string, (applicationId: string) => string> = {
   /* `MatchingConfigurationEditor` is a control inside `PreparationView`, which this screen
      renders, so the action resolves to the screen already holding it. */
   edit_matching_configuration: routePaths.application,
-  /* Re-pinning the document to a newer analysis, and the fact selection screen with its AI
-     proposal, sit beside the analysis they are decided against. */
+  /* Re-pinning the document to a newer analysis sits beside the analysis it is decided
+     against. */
   build_from_analysis: routePaths.application,
-  update_selection: routePaths.application,
-  propose_selection: routePaths.application,
   create_draft: routePaths.application,
   /* The Draft Editor is where the patch is issued, so the commands it carries all lead
      to it. The regeneration commands and the fact resolution are controls on that screen
@@ -63,7 +61,6 @@ type ResumeProjection = Pick<
 
 const operationActions: Record<OperationType, string> = {
   analyze_job: "analyze",
-  propose_selection: "propose_selection",
   create_draft: "create_draft",
   regenerate_section: "regenerate_section",
   regenerate_claim: "regenerate_claim",

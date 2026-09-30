@@ -215,7 +215,7 @@ export const WorkflowActions = ({ detail, hasRecommendation, onQueued, operation
             <p className="text-support leading-6 text-cv-text-muted">
               {plan.buildFromAnalysis.discardsContent
                 ? "בנייה מחדש מעבירה את המסמך לניתוח החדש ומוחקת את תוכן הטיוטה הנוכחית."
-                : "בנייה מחדש מעבירה את המסמך לניתוח החדש, עם בחירת העובדות שהמנוע מציע לו."}
+                : "בנייה מחדש מעבירה את המסמך לניתוח החדש, וממנו תיווצר הטיוטה."}
             </p>
           )}
         </section>

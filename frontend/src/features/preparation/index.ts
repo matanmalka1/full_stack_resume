@@ -57,6 +57,3 @@ export {
   reasonTitle,
   warningTitle,
 } from "./model/preparationLabels";
-/* The selection is edited on one screen. The draft editor links here rather than offering
-   a second editor of its own. */
-export { factSelectionAnchor } from "./stages/content/factSelectionAnchor";

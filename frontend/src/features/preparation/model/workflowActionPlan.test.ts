@@ -49,19 +49,6 @@ describe("rebuilding from a newer analysis", () => {
 });
 
 describe("recommended action destinations", () => {
-  it("handles the fact selection on the preparation screen", () => {
-    const plan = workflowActionPlan(
-      detail({
-        preparation_state: "ready_to_draft",
-        available_actions: ["update_selection", "propose_selection", "create_draft"],
-        recommended_action: "update_selection",
-      }),
-    );
-
-    expect(plan.selection).toEqual({ emphasized: true });
-    expect(plan.unbuiltRecommendation).toBeNull();
-  });
-
   /* The claim-level commands are controls in the editor, so a recommendation naming one of
      them is not unbuilt: a screen exists and the reason callouts beside this one link to it. */
   it("does not call a claim-level recommendation unbuilt", () => {

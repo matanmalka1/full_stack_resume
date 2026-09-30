@@ -14,11 +14,9 @@ import type {
   DocumentMutation,
   DraftClaim,
   Operation,
-  ProposeSelectionRequest,
   RegenerateDocumentClaimRequest,
   RegenerateDocumentSectionRequest,
   UpdateDocumentRequest,
-  UpdateSelectionRequest,
 } from "./contracts";
 import { type QueuedOperation, queuedOperation } from "./operations";
 
@@ -127,59 +125,6 @@ export const updateDocument = async (
     etag,
   });
   return { mutation: response.data, etag: response.etag };
-};
-
-export interface SelectionOverlay {
-  pinned_fact_ids: string[];
-  excluded_fact_ids: string[];
-}
-
-/* The document's own overlay, read back from the selection rather than remembered in
-   component state. Both lists are absolute, not deltas: `update_selection` replaces the
-   overlay with what it is sent, so a change that sent only what moved would silently drop
-   every earlier decision. */
-export const selectionOverlay = (document: CVDocument): SelectionOverlay => ({
-  pinned_fact_ids: [...document.selection.pinned_fact_ids],
-  excluded_fact_ids: [...document.selection.excluded_fact_ids],
-});
-
-/* §14 `update_selection`: synchronous and deterministic. With content present it updates
-   selection and content together, or refuses with `412` when the change needs wording
-   judgment - which is the case §14 sends to regeneration. `emphasis_override` is sent only
-   when it is being decided: absent means "leave the effective Emphasis as it is". */
-export const updateSelection = async (
-  applicationId: string,
-  expectedDocumentHash: string,
-  overlay: SelectionOverlay,
-  emphasisOverride?: NonNullable<UpdateSelectionRequest["emphasis_override"]>,
-): Promise<DocumentMutation> => {
-  const body: UpdateSelectionRequest = {
-    expected_document_hash: expectedDocumentHash,
-    ...overlay,
-    ...(emphasisOverride === undefined ? {} : { emphasis_override: emphasisOverride }),
-  };
-  const response = await apiRequest<DocumentMutation>(documentPath(applicationId, "/selection"), {
-    method: "POST",
-    body,
-  });
-  return response.data;
-};
-
-/* §14 `propose_selection`: an AI Operation whose output is only a Proposal. Activation
-   repeats `update_selection`'s checks and discards the result if the document moved. */
-export const proposeSelection = async (
-  applicationId: string,
-  expectedDocumentHash: string,
-  idempotencyKey: string,
-): Promise<QueuedOperation> => {
-  const body: Omit<ProposeSelectionRequest, "provider"> = { expected_document_hash: expectedDocumentHash };
-  return queuedOperation(
-    await apiRequest<Operation>(documentPath(applicationId, "/selection-proposals"), {
-      method: "POST",
-      body,
-      idempotencyKey,
-    }),
-  );
 };
 
 /* §14 `build_from_analysis`: synchronous. Re-pins the document to the named analysis with
