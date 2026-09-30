@@ -68,10 +68,9 @@ describe("ReadyPage", () => {
       "href",
       "/applications/app-1/draft",
     );
-    const technicalDetails = screen.getByText("פרטים טכניים");
-    expect(screen.getByText(HASH)).not.toBeVisible();
-    fireEvent.click(technicalDetails);
-    expect(screen.getByText(HASH)).toBeVisible();
+    expect(screen.queryByText("פרטים טכניים")).not.toBeInTheDocument();
+    expect(screen.queryByText("חתימת המסמך")).not.toBeInTheDocument();
+    expect(screen.queryByText("תצלום משרה")).not.toBeInTheDocument();
   });
 
   it("records a submission against the exact Ready document hash", async () => {
