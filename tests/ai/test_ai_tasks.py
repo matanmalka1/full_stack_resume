@@ -14,6 +14,7 @@ prompt-injection fixtures. The transport half is `test_provider.py`.
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 
 import pytest
 from fake_provider import FakeOpenAI, HTTPStatus, Timeout, envelope, refusal_envelope
@@ -29,6 +30,7 @@ from helpers import (
     stored_document,
 )
 
+from cv_engine.application.ai_configuration import execution_cost, usd
 from cv_engine.application.commands import (
     AnalyzeCommand,
     CreateJobSnapshotCommand,
@@ -441,12 +443,19 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
     assert used(drafted.content) < used(frame)
 
 
+@pytest.mark.parametrize("reviewer_times_out_once", [False, True])
 def test_draft_resume_accepts_separately_reviewed_paraphrase(
     ai_services,
     fake_openai: FakeOpenAI,
     transaction_manager,
     application_projection_reader,
+    reviewer_times_out_once: bool,
 ) -> None:
+    """A reviewed paraphrase activates, and the Operation reports what every call cost.
+
+    With the reviewer timing out once, the automatic retry runs the writer again, so
+    the Operation owns three billed calls: both writer answers and the review.
+    """
     ingested = _ingested(ai_services, "Reviewed Draft Co")
     seed_analysis_for_command(
         ai_services,
@@ -469,23 +478,26 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     wording = f"Proven experience: {claim.text}"
     # The writer keeps every line of the frame, so every role keeps its bullets, and
     # rewords one of them.
+    writer = DraftProposal(
+        claims=[
+            ProposedClaim(
+                section=line_section.name,
+                claim_id=line.claim_id,
+                text=wording if line.claim_id == claim.claim_id else line.text,
+                fact_ids=list(line.fact_ids),
+            )
+            for line_section in working.content.sections
+            for line in line_section.claims
+        ],
+        rationale="Tailored emphasis",
+    )
+    # A retried writer is a new provider response, with its own identity.
     fake_openai.script_draft(
-        DraftProposal(
-            claims=[
-                ProposedClaim(
-                    section=line_section.name,
-                    claim_id=line.claim_id,
-                    text=wording if line.claim_id == claim.claim_id else line.text,
-                    fact_ids=list(line.fact_ids),
-                )
-                for line_section in working.content.sections
-                for line in line_section.claims
-            ],
-            rationale="Tailored emphasis",
-        ),
+        writer, *([envelope(writer, id="resp_writer_retry")] if reviewer_times_out_once else [])
     )
     fake_openai.script(
         "assess_claim_support",
+        *([Timeout()] if reviewer_times_out_once else []),
         ClaimSupportProposal(
             assessments=[
                 ClaimSupportAssessment(
@@ -517,10 +529,23 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    # The choice with its wording, and the review of the changed line.
-    assert sum(output.output_type == "provider_response" for output in completed.outputs) == 2
+    # The choice with its wording, and the review of the changed line; after a retry,
+    # the first writer answer as well.
+    calls = 3 if reviewer_times_out_once else 2
+    assert sum(output.output_type == "provider_response" for output in completed.outputs) == calls
     assert any(output.output_type == "cv_document" for output in completed.outputs)
-    assert len(fake_openai.calls_for("assess_claim_support")) == 1
+    assert len(fake_openai.calls_for("draft_resume")) == calls - 1
+    assert len(fake_openai.calls_for("assess_claim_support")) == calls - 1
+    # Every billed call counts, the retried writer included; the timed-out review
+    # returned no response and carries no usage.
+    assert completed.input_tokens == 11 * calls
+    assert completed.cached_input_tokens == 3 * calls
+    assert completed.output_tokens == 22 * calls
+    assert completed.total_tokens == 33 * calls
+    one_call = execution_cost(
+        completed.model, input_tokens=11, cached_input_tokens=3, output_tokens=22
+    )
+    assert completed.cost_usd == usd(Decimal(one_call["total_usd"]) * calls)
     actual = stored_document(ai_services, ingested.application_id)
     assert actual.content is not None
     reviewed = next(
