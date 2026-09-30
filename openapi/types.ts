@@ -251,7 +251,7 @@ export interface paths {
         put?: never;
         /**
          * Re-pin the document to a newer analysis
-         * @description `200` with a document that has a fresh selection and no content.
+         * @description `200` with a document pinned to the named analysis and no content.
          */
         post: operations["build_from_analysis_api_v1_applications__application_id__document_build_from_analysis_post"];
         delete?: never;
@@ -434,49 +434,6 @@ export interface paths {
          * @description `202`; admission refuses with `412` unless the document is approved.
          */
         post: operations["render_document_api_v1_applications__application_id__document_render_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/applications/{application_id}/document/selection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Change the document's fact selection deterministically
-         * @description `200`; `412` when the change needs wording judgment and a regeneration instead.
-         *
-         *     Dumped as JSON: `emphasis_override` is a `StrEnum` on the schema and a plain string
-         *     on the command and in the stored selection.
-         */
-        post: operations["update_selection_api_v1_applications__application_id__document_selection_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/applications/{application_id}/document/selection-proposals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ask the provider to propose a selection
-         * @description `202` and a `Location`. No provider call happens inside this request.
-         */
-        post: operations["propose_selection_api_v1_applications__application_id__document_selection_proposals_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -835,10 +792,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Confirm, attach, and select one fact as one command
-         * @description One logical command: it confirms, attaches, and adds the fact to the
-         *     document's selection, or it reports a complete failure. There is no partial outcome to
-         *     report, so there is no partial success status.
+         * Confirm one fact and attach it to a Profile section as one command
+         * @description One logical command: it confirms the fact and attaches it to the Profile
+         *     section, or it reports a complete failure. There is no partial outcome to report, so
+         *     there is no partial success status. The document is not written.
          */
         post: operations["confirm_and_use_fact_api_v1_facts__fact_id__confirm_and_use_post"];
         delete?: never;
@@ -1070,10 +1027,9 @@ export interface components {
          * AnalysisDecisionsResponse
          * @description Which analysis is in force after the decision, and whether it is a new one.
          *
-         *     `job_analysis_id` names the analysis the client should work from now: the
-         *     new one when the decision changed meaning, the original when only the
-         *     selection moved. `created_analysis` is what tells the two apart. Neither
-         *     branch re-pins the document; `document_hash` is its token now.
+         *     `job_analysis_id` names the analysis the client should work from now, the new
+         *     one every decision creates. The decision never re-pins the document;
+         *     `document_hash` is its token now.
          */
         AnalysisDecisionsResponse: {
             /** Analysis */
@@ -1399,31 +1355,19 @@ export interface components {
          * ApplyAnalysisDecisionsRequest
          * @description One review-form submission (§13).
          *
-         *     Carries analysis and selection decisions because one form may submit both.
-         *     Track/Profile/language create a new JobAnalysis; Emphasis and the fact overlay
-         *     change only the document's selection, in place. Two overlay lists, not three:
-         *     explicit inclusion is a pin.
+         *     Every decision it carries - Track, Profile, language, Emphasis - is
+         *     classification, and a change to any of them creates a new JobAnalysis.
          */
         ApplyAnalysisDecisionsRequest: {
             /** Application Id */
             application_id: string;
             emphasis_override?: components["schemas"]["Emphasis"] | null;
-            /**
-             * Excluded Fact Ids
-             * @default []
-             */
-            excluded_fact_ids: string[];
             /** Expected Analysis Id */
             expected_analysis_id: string;
             /** Expected Document Hash */
             expected_document_hash?: string | null;
             /** Language Override */
             language_override?: ("en" | "he") | null;
-            /**
-             * Pinned Fact Ids
-             * @default []
-             */
-            pinned_fact_ids: string[];
             profile_override?: components["schemas"]["ProfileName"] | null;
             track_override?: components["schemas"]["Track"] | null;
         };
@@ -1543,8 +1487,6 @@ export interface components {
         BuiltWithResponse: {
             /** Profile Version */
             profile_version: string;
-            /** Selection Policy Version */
-            selection_policy_version: string;
         };
         /**
          * CaptureClaimFactRequest
@@ -1681,13 +1623,11 @@ export interface components {
         };
         /**
          * ConfirmAndUseFactRequest
-         * @description Confirm, attach, and select one fact as a single recoverable command.
+         * @description Confirm one fact and attach it to a Profile section as one recoverable command.
          */
         ConfirmAndUseFactRequest: {
             /** Application Id */
             application_id: string;
-            /** Expected Document Hash */
-            expected_document_hash: string;
             /** Job Analysis Id */
             job_analysis_id: string;
             /** Profile */
@@ -1865,24 +1805,6 @@ export interface components {
             /** Expected Document Hash */
             expected_document_hash: string;
         };
-        /** DocumentCandidateResponse */
-        DocumentCandidateResponse: {
-            /** Fact Id */
-            fact_id: string;
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            outcome: "pinned" | "selected" | "rescued" | "omitted";
-            /** Reason */
-            reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
-            /** Section */
-            section: string;
-            /** Text */
-            text?: string | null;
-            /** User Selectable */
-            user_selectable: boolean;
-        };
         /**
          * DocumentCheckResponse
          * @description `check` and `approve`. A failed check is `200` with `passed=false` (§22).
@@ -1963,29 +1885,8 @@ export interface components {
             } | null;
             outline?: components["schemas"]["DraftOutlineResponse"] | null;
             preparation_state: components["schemas"]["PreparationState"];
-            selection: components["schemas"]["DocumentSelectionResponse"];
             /** Updated At */
             updated_at: string;
-        };
-        /**
-         * DocumentSelectionResponse
-         * @description The selection with its candidate accounting (§20).
-         */
-        DocumentSelectionResponse: {
-            /** Candidates */
-            candidates: components["schemas"]["DocumentCandidateResponse"][];
-            emphasis: components["schemas"]["Emphasis"];
-            emphasis_override?: components["schemas"]["Emphasis"] | null;
-            /** Excluded Fact Ids */
-            excluded_fact_ids: string[];
-            /** Pinned Fact Ids */
-            pinned_fact_ids: string[];
-            /** Proposal Rationale */
-            proposal_rationale?: string | null;
-            /** Proposed By */
-            proposed_by?: "ai" | null;
-            /** Selected Fact Ids */
-            selected_fact_ids: string[];
         };
         /**
          * DraftClaimResponse
@@ -2018,15 +1919,12 @@ export interface components {
         };
         /**
          * DraftFactResponse
-         * @description One fact the content uses, or one the document's selection considered.
+         * @description One fact the content's claims link.
          *
          *     `text` is nullable: a fact the store can no longer resolve is already
-         *     reported as a stale reason by the state projection, and a read that raised
-         *     over it would turn an explainable staleness into a `500`.
-         *
-         *     `outcome` is null for a fact the selection never ranked - a contact, or a fact
-         *     a manual relink attached. That null is what says no include/exclude decision
-         *     applies to it, so no second flag is needed to say the same thing.
+         *     reported as a review reason by the state projection, and a read that raised
+         *     over it would turn an explainable staleness into a `500`. `section` is the
+         *     content section whose claims first link it, null for the headline and contacts.
          */
         DraftFactResponse: {
             /** Fact Id */
@@ -2036,10 +1934,6 @@ export interface components {
              * @default []
              */
             linked_claim_ids: string[];
-            /** Outcome */
-            outcome?: ("pinned" | "selected" | "rescued" | "omitted") | null;
-            /** Reason */
-            reason?: ("below_section_budget" | "not_relevant_to_emphasis" | "evicted_by_required_tag_rescue" | "not_in_profile_pool" | "excluded_by_user") | null;
             /** Section */
             section?: string | null;
             /** Text */
@@ -2642,7 +2536,7 @@ export interface components {
          * OperationType
          * @enum {string}
          */
-        OperationType: "analyze_job" | "propose_selection" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document";
+        OperationType: "analyze_job" | "create_draft" | "regenerate_section" | "regenerate_claim" | "render_document";
         /**
          * OrphanInventoryResponse
          * @description Observed candidates have no database reference and were stored over an hour ago.
@@ -2687,17 +2581,6 @@ export interface components {
          * @enum {string}
          */
         ProfileName: "development" | "field-sales" | "account-manager" | "key-account-manager" | "sdr-bdr" | "account-executive" | "business-development" | "sales-management" | "tech-sales" | "pre-sales-solutions-consultant";
-        /** ProposeSelectionRequest */
-        ProposeSelectionRequest: {
-            /** Expected Document Hash */
-            expected_document_hash: string;
-            /**
-             * Provider
-             * @default openai
-             * @constant
-             */
-            provider: "openai";
-        };
         /** ReasonResponse */
         ReasonResponse: {
             /** Allowed Resolution Actions */
@@ -2990,29 +2873,6 @@ export interface components {
              * @default []
              */
             claim_removals: string[];
-        };
-        /**
-         * UpdateSelectionRequest
-         * @description A deterministic selection change (§14 `update_selection`).
-         *
-         *     Two lists, not three: explicit inclusion is a pin, and what ends up selected is a
-         *     response field. `emphasis_override` null means "leave the effective Emphasis as it
-         *     is", not "clear the override".
-         */
-        UpdateSelectionRequest: {
-            emphasis_override?: components["schemas"]["Emphasis"] | null;
-            /**
-             * Excluded Fact Ids
-             * @default []
-             */
-            excluded_fact_ids: string[];
-            /** Expected Document Hash */
-            expected_document_hash: string;
-            /**
-             * Pinned Fact Ids
-             * @default []
-             */
-            pinned_fact_ids: string[];
         };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {
@@ -3820,79 +3680,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DocumentActionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OperationResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    update_selection_api_v1_applications__application_id__document_selection_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateSelectionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentMutationResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    propose_selection_api_v1_applications__application_id__document_selection_proposals_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional. A retry that reuses the key of an Operation which already exists returns that Operation instead of queueing a second attempt. Omitted, the boundary generates a key. */
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProposeSelectionRequest"];
             };
         };
         responses: {
