@@ -27,19 +27,19 @@ from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
-from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.documents import (
     SqlAlchemyDocumentStore,
     SqlAlchemyDocumentSubmissionStore,
 )
+from cv_engine.infrastructure.persistence.initial_recruitment_events import (
+    SqlAlchemyInitialRecruitmentEventWriter,
+)
+from cv_engine.infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
 )
 from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
-from cv_engine.infrastructure.persistence.recruitment_store import (
-    SqlAlchemyInitialRecruitmentEventWriter,
-)
 from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import (
     app_settings,

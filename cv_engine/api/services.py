@@ -31,7 +31,7 @@ from ..application.services.operations import (
 from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
-from ..application.settings import SettingsService
+from ..application.services.settings import SettingsService
 
 
 @dataclass(frozen=True)

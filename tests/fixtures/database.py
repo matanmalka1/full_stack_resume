@@ -18,9 +18,9 @@ from cv_engine.infrastructure.persistence.analysis_plans import SqlAlchemyAnalys
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
-from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
 from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
+from cv_engine.infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.tables import metadata
 from cv_engine.runtime.config import resolve_config

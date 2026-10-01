@@ -27,7 +27,7 @@ from cv_engine.infrastructure.document_files import DocumentFiles
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
-from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
+from cv_engine.infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.tables import cv_documents, submissions
 from cv_engine.util import utc_now
 
