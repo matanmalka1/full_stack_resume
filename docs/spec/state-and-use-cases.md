@@ -339,9 +339,12 @@ the Application applied.
 
 Status: `queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`.
 
-Phase: `queued`, `waiting_for_application`, `waiting_for_render_slot`,
-`waiting_for_ai_slot`, `pre_execution_check`, `executing`, `pre_activation_check`,
-`activating`, `completed`.
+Phase: `queued`, `waiting_for_application`, `waiting_for_render_slot`, `executing`,
+`completed`. A row stores `queued`, `executing`, or `completed`. The two waiting phases
+are derived when a queued Operation is read: `waiting_for_application` while another
+Operation of its Application runs, `waiting_for_render_slot` while another render runs
+(architecture.md §10). A claim moves the Operation straight to `executing`; the checks
+before execution and before activation are not phases of their own.
 
 Types:
 
@@ -840,7 +843,7 @@ The Operation read (§11).
 
 ### `cancel_operation(operation_id)`
 
-A queued Operation becomes `cancelled` immediately and releases its resource leases. A
+A queued Operation becomes `cancelled` immediately. A
 running one records `cancellation_requested_at`; any later output is registered
 inactive and never activated.
 

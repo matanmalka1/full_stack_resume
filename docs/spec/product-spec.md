@@ -260,7 +260,7 @@ decision.
     content, and touch no immutable table. A deleted Application or fact leaves default
     listings but stays reachable by ID, with every record produced from it preserved.
 21. API and worker concurrency stays correct through the document hash, optimistic
-    versions, atomic PostgreSQL claims, resource leases, idempotency keys, and
+    versions, atomic PostgreSQL claims guarded by unique indexes, idempotency keys, and
     commit-time precondition checks.
 22. A fresh installation starts with an empty database — no users — and proves itself
     through its own workflow.
@@ -753,7 +753,7 @@ creates a new Operation that references the original and copies its model and ef
 The Operation itself is never retried automatically: one provider call is retried at
 most once where it is safe (§12), and a browser that failed to start is started once
 more, both only while the Operation is still running, held, and not cancelled. Types, phases, failure codes,
-resources, and idempotency are state-and-use-cases.md §11 and §19 and architecture.md
+concurrency rules, and idempotency are state-and-use-cases.md §11 and §19 and architecture.md
 §10.
 
 ## 19. API and UX contracts

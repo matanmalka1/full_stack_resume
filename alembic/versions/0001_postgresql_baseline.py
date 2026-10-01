@@ -40,8 +40,8 @@ DO $$
 DECLARE table_name text;
 DECLARE missing_exceptions text[];
 DECLARE mutable_exceptions constant text[] := ARRAY[
-  'applications', 'cv_documents', 'operations', 'operation_resource_leases',
-  'operation_outputs', 'knowledge_mutation_journal', 'app_settings'
+  'applications', 'cv_documents', 'operations', 'operation_outputs',
+  'knowledge_mutation_journal', 'app_settings'
 ];
 BEGIN
   SELECT array_agg(exception_name ORDER BY exception_name) INTO missing_exceptions
@@ -374,7 +374,6 @@ def upgrade() -> None:
         sa.Column("payload_hash", sa.Text(), nullable=False),
         sa.Column("idempotency_key", sa.Text(), nullable=False),
         sa.Column("sources_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("resources_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("provider", sa.Text(), nullable=True),
         sa.Column("model", sa.Text(), nullable=True),
         sa.Column("reasoning_effort", sa.Text(), nullable=True),
@@ -420,6 +419,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "withheld_claims IS NULL OR (jsonb_typeof(withheld_claims) = 'object' AND withheld_claims ? 'code')",
             name=op.f("ck_operations_withheld_claims_shape"),
+        ),
+        sa.CheckConstraint(
+            "phase IN ('queued', 'executing', 'completed')",
+            name=op.f("ck_operations_phase"),
         ),
         sa.CheckConstraint(
             "operation_type IN ('analyze_job', 'create_draft', 'regenerate_section', 'regenerate_claim', 'render_document')",
@@ -485,6 +488,22 @@ def upgrade() -> None:
         "operations",
         ["status", "created_at", "id"],
         unique=False,
+    )
+    # The claim guards (architecture.md §10): a second running Operation for the same
+    # Application, or a second running render, is refused by the database itself.
+    op.create_index(
+        "uq_operations_running_application",
+        "operations",
+        ["application_id"],
+        unique=True,
+        postgresql_where=sa.text("status = 'running'"),
+    )
+    op.create_index(
+        "uq_operations_running_render",
+        "operations",
+        ["operation_type"],
+        unique=True,
+        postgresql_where=sa.text("status = 'running' AND operation_type = 'render_document'"),
     )
     op.create_table(
         "ai_calls",
@@ -726,39 +745,6 @@ def upgrade() -> None:
         ["operation_id", "created_at", "id"],
         unique=False,
     )
-    op.create_table(
-        "operation_resource_leases",
-        sa.Column("resource_kind", sa.Text(), nullable=False),
-        sa.Column("resource_key", sa.Text(), nullable=False),
-        sa.Column("slot", sa.Integer(), nullable=False),
-        sa.Column("operation_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("lease_owner", sa.Text(), nullable=False),
-        sa.CheckConstraint(
-            "resource_kind IN ('application_mutation', 'render_browser', 'ai')",
-            name=op.f("ck_operation_resource_leases_resource_kind"),
-        ),
-        sa.CheckConstraint("slot >= 0", name=op.f("ck_operation_resource_leases_slot_nonnegative")),
-        sa.ForeignKeyConstraint(
-            ["operation_id"],
-            ["operations.id"],
-            name=op.f("fk_operation_resource_leases_operation_id_operations"),
-        ),
-        sa.PrimaryKeyConstraint(
-            "resource_kind", "resource_key", "slot", name=op.f("pk_operation_resource_leases")
-        ),
-        sa.UniqueConstraint(
-            "operation_id",
-            "resource_kind",
-            "resource_key",
-            name=op.f("uq_operation_resource_leases_operation_id_resource_kind_resource_key"),
-        ),
-    )
-    op.create_index(
-        "idx_operation_resource_leases_operation",
-        "operation_resource_leases",
-        ["operation_id"],
-        unique=False,
-    )
     # Mutable by design (state-and-use-cases.md §2), so it is a mutable table exception.
     op.create_table(
         "cv_documents",
@@ -899,8 +885,6 @@ def downgrade() -> None:
     op.drop_index("idx_submissions_application", table_name="submissions")
     op.drop_table("submissions")
     op.drop_table("cv_documents")
-    op.drop_index("idx_operation_resource_leases_operation", table_name="operation_resource_leases")
-    op.drop_table("operation_resource_leases")
     op.drop_index("idx_operation_outputs_operation", table_name="operation_outputs")
     op.drop_table("operation_outputs")
     op.drop_table("job_analyses")
@@ -908,6 +892,8 @@ def downgrade() -> None:
     op.drop_table("recruitment_events")
     op.drop_index("idx_ai_calls_operation", table_name="ai_calls")
     op.drop_table("ai_calls")
+    op.drop_index("uq_operations_running_render", table_name="operations")
+    op.drop_index("uq_operations_running_application", table_name="operations")
     op.drop_index("idx_operations_claimable", table_name="operations")
     op.drop_index("idx_operations_application_status", table_name="operations")
     op.drop_table("operations")

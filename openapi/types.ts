@@ -2295,7 +2295,7 @@ export interface components {
          * OperationPhase
          * @enum {string}
          */
-        OperationPhase: "queued" | "waiting_for_application" | "waiting_for_render_slot" | "waiting_for_ai_slot" | "pre_execution_check" | "executing" | "pre_activation_check" | "activating" | "completed";
+        OperationPhase: "queued" | "waiting_for_application" | "waiting_for_render_slot" | "executing" | "completed";
         /**
          * OperationResponse
          * @description The §11 Operation query fields, and nothing wider.

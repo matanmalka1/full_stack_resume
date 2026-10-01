@@ -49,11 +49,7 @@ export const phaseLabels: Record<OperationPhase, string> = {
   queued: "ממתינה בתור",
   waiting_for_application: "ממתינה למועמדות",
   waiting_for_render_slot: "ממתינה לתור הרינדור",
-  waiting_for_ai_slot: "ממתינה לתור המודל",
-  pre_execution_check: "בדיקה לפני ביצוע",
   executing: "בביצוע",
-  pre_activation_check: "בדיקה לפני הפעלת התוצר",
-  activating: "מפעילה את התוצר",
   completed: "הושלמה",
 };
 

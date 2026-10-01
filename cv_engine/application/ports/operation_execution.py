@@ -8,7 +8,6 @@ from ..operations import (
     ClaimReviewReason,
     FailureReason,
     OperationFailureCode,
-    OperationPhase,
     PersistedOperation,
 )
 from .transactions import ReadTransaction, WriteTransaction
@@ -37,15 +36,6 @@ class OperationExecutionStore(Protocol):
         self, tx: WriteTransaction, *, now: str | None = None
     ) -> list[str]: ...
     def lock_application(self, tx: WriteTransaction, application_id: str) -> None: ...
-    def set_operation_phase(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        phase: OperationPhase,
-        *,
-        runner_id: str,
-        message: str = "",
-    ) -> None: ...
     def cancellation_requested(self, tx: ReadTransaction, operation_id: str) -> bool: ...
 
     def execution_still_owned(

@@ -41,7 +41,6 @@ from cv_engine.application.operations import (
     OperationContractError,
     OperationFailureCode,
     OperationOutputReference,
-    OperationPhase,
     OperationSources,
     OperationStatus,
     OperationType,
@@ -669,13 +668,6 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
     calls = {
-        "set_operation_phase": lambda runner: _execution_write(
-            services,
-            "set_operation_phase",
-            operation.id,
-            OperationPhase.EXECUTING,
-            runner_id=runner,
-        ),
         "fail_operation": lambda runner: _execution_write(
             services,
             "fail_operation",

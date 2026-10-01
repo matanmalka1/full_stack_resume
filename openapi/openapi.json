@@ -3743,11 +3743,7 @@
           "queued",
           "waiting_for_application",
           "waiting_for_render_slot",
-          "waiting_for_ai_slot",
-          "pre_execution_check",
           "executing",
-          "pre_activation_check",
-          "activating",
           "completed"
         ],
         "title": "OperationPhase",

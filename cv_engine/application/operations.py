@@ -92,12 +92,17 @@ class OperationPhase(StrEnum):
     QUEUED = "queued"
     WAITING_FOR_APPLICATION = "waiting_for_application"
     WAITING_FOR_RENDER_SLOT = "waiting_for_render_slot"
-    WAITING_FOR_AI_SLOT = "waiting_for_ai_slot"
-    PRE_EXECUTION_CHECK = "pre_execution_check"
     EXECUTING = "executing"
-    PRE_ACTIVATION_CHECK = "pre_activation_check"
-    ACTIVATING = "activating"
     COMPLETED = "completed"
+
+
+#: What a row stores. The two waiting phases are never written: a queued Operation is
+#: read as waiting while what it waits for is running, so the phase cannot go stale.
+STORED_OPERATION_PHASES = (
+    OperationPhase.QUEUED,
+    OperationPhase.EXECUTING,
+    OperationPhase.COMPLETED,
+)
 
 
 class OperationFailureCode(StrEnum):
@@ -124,19 +129,8 @@ class OperationFailureCode(StrEnum):
     PROVIDER_NOT_CONFIGURED = "PROVIDER_NOT_CONFIGURED"
 
 
-class OperationResourceKind(StrEnum):
-    APPLICATION_MUTATION = "application_mutation"
-    RENDER_BROWSER = "render_browser"
-    AI = "ai"
-
-
 class OperationModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class OperationResource(OperationModel):
-    kind: OperationResourceKind
-    key: str
 
 
 class OperationSources(OperationModel):
@@ -337,7 +331,6 @@ class PersistedOperation(OperationView):
     payload_hash: str
     idempotency_key: str
     sources: OperationSources
-    resources: tuple[OperationResource, ...]
     lease_owner: str | None = None
     attempts_completed: int = Field(ge=0)
     technical_log_reference: str | None = None
@@ -363,26 +356,6 @@ def as_operation_view(record: OperationView) -> OperationView:
     return OperationView.model_validate(
         {name: getattr(record, name) for name in OperationView.model_fields}
     )
-
-
-def required_operation_resources(request: CreateOperation) -> tuple[OperationResource, ...]:
-    """Derive lock requirements so callers cannot weaken concurrency policy."""
-    resources = [
-        OperationResource(
-            kind=OperationResourceKind.APPLICATION_MUTATION,
-            key=request.application_id,
-        )
-    ]
-    if request.operation_type is OperationType.RENDER_DOCUMENT:
-        resources.append(OperationResource(kind=OperationResourceKind.RENDER_BROWSER, key="global"))
-    always_ai = {
-        OperationType.CREATE_DRAFT,
-        OperationType.REGENERATE_SECTION,
-        OperationType.REGENERATE_CLAIM,
-    }
-    if request.operation_type in always_ai or request.provider not in (None, "deterministic"):
-        resources.append(OperationResource(kind=OperationResourceKind.AI, key="global"))
-    return tuple(resources)
 
 
 _ALLOWED_TRANSITIONS: dict[OperationStatus, frozenset[OperationStatus]] = {

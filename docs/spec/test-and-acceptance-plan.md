@@ -146,8 +146,11 @@ Evidence: `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
   refused. Worker startup interrupts every claimed Operation, a second worker is
   refused while one holds the worker lock, and a worker whose lock session is
   terminated stops and frees the slot.
-- Application and global render leases queue contending work with an observable
-  waiting phase; the AI resource admits two and queues the third.
+- The claim guards admit one running Operation per Application and one running render,
+  decided by PostgreSQL between separate sessions; contending work stays queued with a
+  waiting phase read from what is running. AI and render work of different Applications
+  run side by side. A claim the guards refuse moves on to the next candidate; any other
+  unique violation is raised.
 - Startup interrupts work held by previous runners; shutdown prevents activation.
 - `SOURCE_CHANGED` is checked before execution and again before activation; every
   Operation records the knowledge scope its activation checks.

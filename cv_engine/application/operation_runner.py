@@ -12,7 +12,6 @@ from .operations import (
     FailureReason,
     OperationFailureCode,
     OperationOutputReference,
-    OperationPhase,
     OperationStatus,
     OperationType,
     PersistedOperation,
@@ -169,17 +168,6 @@ class OperationRunner:
                 tx, operation_id, runner_id=self.runner_id
             )
 
-    def _set_phase(self, operation_id: str, phase: OperationPhase) -> PersistedOperation:
-        with self.transactions.write() as tx:
-            self.execution_store.set_operation_phase(
-                tx, operation_id, phase, runner_id=self.runner_id
-            )
-            operation = self.execution_store.operation(tx, operation_id)
-        self.record_event(
-            "operation.phase_changed", "INFO", operation, {"runner_id": self.runner_id}
-        )
-        return operation
-
     def _complete(self, operation_id: str) -> PersistedOperation:
         with self.transactions.write() as tx:
             return self.execution_store.complete_operation(
@@ -251,12 +239,10 @@ class OperationRunner:
             )
             return self._fail(operation.id, error)
         try:
-            operation = self._set_phase(operation.id, OperationPhase.PRE_EXECUTION_CHECK)
             with self.transactions.read() as tx:
                 handler.verify_sources(tx, operation)
             if self._cancelled(operation.id):
                 return self._complete(operation.id)
-            self._set_phase(operation.id, OperationPhase.EXECUTING)
             prepared = handler.execute(
                 operation,
                 lambda operation_id=operation.id: self._still_owned(operation_id),
@@ -335,24 +321,15 @@ class OperationRunner:
         prepared: PreparedOperation,
         handler: OperationHandler,
     ) -> PersistedOperation:
-        phase_events = []
         terminal_failure: OperationExecutionError | None = None
         with self.transactions.write() as tx:
             store = self.execution_store
             store.lock_application(tx, operation.application_id)
             operation = store.operation(tx, operation.id)
-            store.set_operation_phase(
-                tx, operation.id, OperationPhase.PRE_ACTIVATION_CHECK, runner_id=self.runner_id
-            )
-            phase_events.append(store.operation(tx, operation.id))
             handler.verify_sources(tx, operation)
             if store.cancellation_requested(tx, operation.id):
                 result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
             else:
-                store.set_operation_phase(
-                    tx, operation.id, OperationPhase.ACTIVATING, runner_id=self.runner_id
-                )
-                phase_events.append(store.operation(tx, operation.id))
                 activated = handler.activate(tx, operation, prepared)
                 known = {(item.output_type, item.output_id) for item in prepared.outputs}
                 if prepared.activate_outputs:
@@ -392,10 +369,6 @@ class OperationRunner:
                         operation.id,
                         type(logging_error).__name__,
                     )
-        for phase_operation in phase_events:
-            self.record_event(
-                "operation.phase_changed", "INFO", phase_operation, {"runner_id": self.runner_id}
-            )
         if terminal_failure is not None:
             # Committed evidence: the runner must not discard what activation kept.
             terminal_failure.activated = True
