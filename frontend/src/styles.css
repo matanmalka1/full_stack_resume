@@ -156,6 +156,11 @@
 
 html {
   direction: rtl;
+  /* A pinned CommitBar covers the bottom of the viewport. Whatever the browser scrolls
+     into view - a focused control, a find match, a linked claim - stops above it rather
+     than landing underneath. The bar measures itself into this variable (`CommitBar`);
+     with no bar on the page it is unset and nothing is reserved. */
+  scroll-padding-bottom: var(--cv-commit-bar-clearance, 0px);
 }
 
 /* One scrollbar for the whole product. Every scroll area - the page, a dialog body, the

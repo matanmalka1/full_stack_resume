@@ -32,7 +32,10 @@ export const operationTypeLabels: Record<OperationType, string> = {
   analyze_job: "ניתוח המשרה",
   create_draft: "יצירת הטיוטה",
   regenerate_section: "יצירה מחדש של פרק",
-  regenerate_claim: "יצירה מחדש של טענה",
+  /* One Operation type for two commands: rewording a line, and reviewing the user's own
+     wording as written (`keep_text`). The record does not say which, so the label names
+     both rather than calling a review a rewrite. */
+  regenerate_claim: "ניסוח או בדיקה של שורה",
   render_document: "יצירת קובץ קורות החיים",
 };
 

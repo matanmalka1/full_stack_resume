@@ -29,7 +29,7 @@ def test_canonical_fact_store_has_unique_stable_ids(fact_store) -> None:
     assert identity.renderings == {"en": "Matan Malka", "he": "מתן מלכה"}
     assert (
         facts.get("sales.metric.team_size").renderings["en"]
-        == "Managed a team of 2-3 sales representatives."
+        == "Managed a team of approximately 2-3 sales representatives."
     )
     assert "YoY" not in facts.get("sales.metric.performance").renderings["en"]
     assert (

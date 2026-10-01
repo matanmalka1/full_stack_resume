@@ -2,7 +2,7 @@ import { ArrowLeft, OctagonAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { formatDateTime } from "@/utils/formatDateTime";
+import { DateTime } from "@/ui/DateTime";
 import type { AutosaveState } from "../hooks/useDraftAutosave";
 import { type ContentSummary, type DraftStepId, draftSteps } from "../model/draftOverview";
 import type { EditableDocument } from "../model/drafts.types";
@@ -58,7 +58,9 @@ export const DraftProgress = ({ actions, content, detail, dirty, draft, saveStat
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-cv-text-muted">
         <DraftSaveState dirty={dirty} state={saveState} />
-        <span>עודכנה {formatDateTime(draft.updated_at, "short")}</span>
+        <span>
+          עודכנה <DateTime format="short" value={draft.updated_at} />
+        </span>
         {actions}
       </div>
     </div>

@@ -1001,7 +1001,7 @@ describe("DraftEditorPage regeneration", () => {
     fireEvent.click(regenerate);
 
     /* The overlay, not the route: the editor's own heading is still on screen under it. */
-    expect(await screen.findByRole("heading", { name: "הרצת יצירה מחדש של טענה" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "הרצת ניסוח או בדיקה של שורה" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "טיוטה ואימות" })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find((entry) => String(entry[0]).endsWith("/regenerate-claim"));
     /* The document's hash is its whole identity: a save landing mid flight changes it, so
@@ -1062,6 +1062,51 @@ describe("DraftEditorPage regeneration", () => {
     await screen.findByText("Owned the CRM migration.");
     finishOperation(jsonResponse(completed));
     await waitFor(() => expect(documentReads).toBeGreaterThanOrEqual(2));
+  });
+
+  it.each([
+    ["still holds the refused wording", "Claimed ten years of CRM work.", true],
+    ["no longer holds it", "Owned the CRM migration.", false],
+  ])("keeps a refused review's status row only while the line %s", async (_case, refusedText, shown) => {
+    const refused: Operation = {
+      id: "op-review",
+      application_id: "app-1",
+      operation_type: "regenerate_claim",
+      status: "failed",
+      phase: "completed",
+      is_terminal: true,
+      available_actions: ["retry"],
+      outputs: [],
+      message: "",
+      created_at: "2026-08-24T07:00:00Z",
+      failure_code: "CLAIM_REVIEW_UNSUPPORTED",
+      failure_reason: {
+        code: "claim_review",
+        claims: [
+          {
+            claim_id: "c-1",
+            section: "Core Skills",
+            text: refusedText,
+            verdict: "unsupported",
+            sources: [{ fact_id: "f-1", meaning: "Owned the CRM migration.", rendering: "Owned the CRM migration." }],
+          },
+        ],
+      },
+    };
+    const outline = baseOutline();
+    outline.sections[0]!.claims[0] = { ...outline.sections[0]!.claims[0]!, text: "Claimed ten years of CRM work." };
+    stubReads({
+      detail: () => jsonResponse(detail({ latest_operation: refused })),
+      operation: () => jsonResponse(refused),
+      document: () => jsonResponse(draft(outline)),
+    });
+
+    renderPage();
+
+    await screen.findByText("Claimed ten years of CRM work.");
+    const row = screen.queryByRole("button", { name: /· נכשלה.*פירוט ההרצה/ });
+    if (shown) expect(row).toBeInTheDocument();
+    else expect(row).not.toBeInTheDocument();
   });
 
   it("withholds regeneration while an edit is still unsaved, and says why", async () => {

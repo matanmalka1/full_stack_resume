@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { applicationDetailQueryOptions, invalidateApplicationViews } from "@/api/applications";
-import { documentQueryKey, documentQueryOptions } from "@/api/documents";
+import { documentQueryKey, documentQueryOptions, outlineClaims } from "@/api/documents";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { routePaths } from "@/app/routePaths";
 import { useRequiredParam } from "@/app/useRequiredParam";
@@ -299,6 +299,16 @@ export const DraftEditorPage = () => {
      by the progress strip, the list of what blocks approval, and the account of how the
      content was built, so the three never count differently. */
   const content = useMemo(() => (draft === undefined ? undefined : summarizeContent(draft)), [draft]);
+  /* A refused review is history once no line it refused still reads as it was refused -
+     edited, undone, or removed. Its status row would otherwise stay red over a document
+     that no longer holds the wording, until some later run happened to replace it. */
+  const reviewSettled = useMemo(() => {
+    if (draft === undefined || operation?.status !== "failed" || operation.failure_reason?.code !== "claim_review") {
+      return false;
+    }
+    const current = new Map(outlineClaims(draft.outline).map((claim) => [claim.claim_id, claim.text]));
+    return operation.failure_reason.claims.every((refused) => current.get(refused.claim_id) !== refused.text);
+  }, [draft, operation]);
   const selection = useMemo(() => (draft === undefined ? undefined : summarizeSelection(draft)), [draft]);
 
   return (
@@ -360,7 +370,7 @@ export const DraftEditorPage = () => {
               inline={renderState.inFlight || renderFinished}
               inlineNote="הגרסה אושרה. כשקובצי ה־HTML וה־PDF יהיו מוכנים, המסך יעבור לקורות החיים המוכנים למסירה."
               onQueued={watch}
-              operation={operation}
+              operation={reviewSettled ? undefined : operation}
               pending={pending}
               settled={settled}
             />
