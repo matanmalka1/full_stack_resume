@@ -97,9 +97,9 @@ class ObjectStore(Protocol):
         """Return the whole payload stored under `key`.
 
         One read. A caller that needs the hash of what it received must compute
-        it over these bytes, not reopen the key, or it reintroduces the
-        time-of-check/time-of-use window `PayloadStore.open_artifact` exists to
-        close. Raises `ObjectNotFound` when the key holds nothing.
+        it over these bytes, not reopen the key, or the bytes it hashed and the
+        bytes it used can differ. Raises `ObjectNotFound` when the key holds
+        nothing.
         """
         ...
 

@@ -44,9 +44,7 @@ export const analysisViewState = ({
   /* Success belongs to processing until the projection exposes the exact product. This
      also covers re-analysis: the presence of an older analysis is not evidence
      that the projection has caught up with the Operation that just replaced it. */
-  const activatedAnalysisId = operation.outputs.find(
-    (output) => output.active && output.output_type === "job_analysis",
-  )?.output_id;
+  const activatedAnalysisId = operation.outputs.find((output) => output.output_type === "job_analysis")?.output_id;
   if (activatedAnalysisId !== undefined) {
     if (detail.latest_analysis_id === activatedAnalysisId) {
       return "content";

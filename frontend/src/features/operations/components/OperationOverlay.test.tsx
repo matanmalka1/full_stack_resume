@@ -189,18 +189,18 @@ describe("OperationReport", () => {
   });
 
   it("prefers a specific waiting phase over a generic running status", () => {
-    renderOverlay({ operation: operation({ phase: "waiting_for_ai_slot" }) });
+    renderOverlay({ operation: operation({ phase: "waiting_for_application" }) });
 
-    expect(screen.getByRole("status")).toHaveTextContent("ממתינה לתור המודל");
+    expect(screen.getByRole("status")).toHaveTextContent("ממתינה למועמדות");
     expect(screen.queryByText(/מתבצעת/)).not.toBeInTheDocument();
   });
 
   it("lets terminal status override the operation's last phase", () => {
-    renderPanel(operation({ status: "succeeded", phase: "activating", is_terminal: true }));
+    renderPanel(operation({ status: "succeeded", phase: "executing", is_terminal: true }));
 
     expect(screen.getByText("הושלמה")).toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.queryByText("מפעילה את התוצר")).not.toBeInTheDocument();
+    expect(screen.queryByText("בביצוע")).not.toBeInTheDocument();
   });
 
   it("offers a re-run of finished work as a secondary action", () => {
@@ -509,7 +509,9 @@ describe("OperationOverlay", () => {
 
     expect(panel()).toHaveTextContent("הרצת ניתוח המשרה");
     expect(panel()).toHaveTextContent("מתבצעת");
-    expect(within(panel()).getByRole("list", { name: "שלבי ההרצה" })).toBeInTheDocument();
+    const steps = within(panel()).getByRole("list", { name: "שלבי ההרצה" });
+    expect(within(steps).getByText("בתור")).toBeInTheDocument();
+    expect(within(steps).getByText("ביצוע").closest("li")).toHaveAttribute("aria-current", "step");
     expect(overlay().open).toBe(false);
 
     /* The full report is still a press away while the run lasts. */

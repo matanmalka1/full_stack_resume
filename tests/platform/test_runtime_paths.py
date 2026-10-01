@@ -81,7 +81,7 @@ def test_the_suite_never_runs_against_the_configured_runtime_database(
 
     Every fixture TRUNCATEs the whole schema, so reading the configured URL
     directly meant a run emptied the running system and left its last test's
-    rows behind - orphan `artifact_versions` pointing into a deleted tmp root.
+    rows behind - orphan payload references pointing into a deleted tmp root.
     """
     configured = "postgresql+psycopg://cv:cv@127.0.0.1:5433/cv"
 

@@ -12,7 +12,6 @@ from .operations import (
     FailureReason,
     OperationFailureCode,
     OperationOutputReference,
-    OperationPhase,
     OperationStatus,
     OperationType,
     PersistedOperation,
@@ -30,7 +29,6 @@ class OperationExecutionError(RuntimeError):
         safe_detail: str,
         *,
         technical_log_reference: str | None = None,
-        outputs: Sequence[OperationOutputReference] = (),
         reason: FailureReason | None = None,
     ):
         super().__init__(safe_detail)
@@ -38,10 +36,6 @@ class OperationExecutionError(RuntimeError):
         self.safe_detail = safe_detail
         self.reason = reason
         self.technical_log_reference = technical_log_reference
-        self.outputs = tuple(outputs)
-        #: Set when the failure is raised after an activation that committed, so the
-        #: runner does not discard what that activation kept.
-        self.activated = False
 
 
 class WorkerAlreadyRunning(RuntimeError):
@@ -60,9 +54,6 @@ class SourceChanged(OperationExecutionError):
 @dataclass(frozen=True)
 class PreparedOperation:
     value: Any = None
-    outputs: tuple[OperationOutputReference, ...] = ()
-    activate_outputs: bool = True
-    terminal_failure: OperationExecutionError | None = None
     #: Proposed lines the execution withheld; recorded only if the Operation succeeds.
     withheld_claims: ClaimReviewReason | None = None
 
@@ -169,17 +160,6 @@ class OperationRunner:
                 tx, operation_id, runner_id=self.runner_id
             )
 
-    def _set_phase(self, operation_id: str, phase: OperationPhase) -> PersistedOperation:
-        with self.transactions.write() as tx:
-            self.execution_store.set_operation_phase(
-                tx, operation_id, phase, runner_id=self.runner_id
-            )
-            operation = self.execution_store.operation(tx, operation_id)
-        self.record_event(
-            "operation.phase_changed", "INFO", operation, {"runner_id": self.runner_id}
-        )
-        return operation
-
     def _complete(self, operation_id: str) -> PersistedOperation:
         with self.transactions.write() as tx:
             return self.execution_store.complete_operation(
@@ -188,10 +168,6 @@ class OperationRunner:
 
     def _fail(self, operation_id: str, error: OperationExecutionError) -> PersistedOperation:
         with self.transactions.write() as tx:
-            for output in error.outputs:
-                self.execution_store.record_operation_output(
-                    tx, operation_id, output.output_type, output.output_id, active=False
-                )
             return self.execution_store.fail_operation(
                 tx,
                 operation_id,
@@ -201,17 +177,6 @@ class OperationRunner:
                 technical_log_reference=error.technical_log_reference,
                 reason=error.reason,
             )
-
-    def _record_inactive_outputs(
-        self, operation_id: str, outputs: Sequence[OperationOutputReference]
-    ) -> None:
-        if not outputs:
-            return
-        with self.transactions.write() as tx:
-            for output in outputs:
-                self.execution_store.record_operation_output(
-                    tx, operation_id, output.output_type, output.output_id, active=False
-                )
 
     def claim_next(self) -> PersistedOperation | None:
         with self.transactions.write() as tx:
@@ -251,12 +216,10 @@ class OperationRunner:
             )
             return self._fail(operation.id, error)
         try:
-            operation = self._set_phase(operation.id, OperationPhase.PRE_EXECUTION_CHECK)
             with self.transactions.read() as tx:
                 handler.verify_sources(tx, operation)
             if self._cancelled(operation.id):
                 return self._complete(operation.id)
-            self._set_phase(operation.id, OperationPhase.EXECUTING)
             prepared = handler.execute(
                 operation,
                 lambda operation_id=operation.id: self._still_owned(operation_id),
@@ -265,7 +228,6 @@ class OperationRunner:
             if error.code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION:
                 # A retry was due but the Operation was cancelled or lost to another
                 # runner: it ends as its own record says, not as a provider failure.
-                self._record_inactive_outputs(operation.id, error.outputs)
                 return self._complete(operation.id)
             if error.technical_log_reference is None:
                 error.technical_log_reference = self._record_technical_failure(
@@ -283,15 +245,13 @@ class OperationRunner:
                     ),
                 ),
             )
-        self._record_inactive_outputs(operation.id, prepared.outputs)
         if self._cancelled(operation.id):
             self._discard(handler, operation, prepared)
             return self._complete(operation.id)
         try:
             result = self._activate(operation, prepared, handler)
         except OperationExecutionError as error:
-            if not error.activated:
-                self._discard(handler, operation, prepared)
+            self._discard(handler, operation, prepared)
             if error.technical_log_reference is None:
                 error.technical_log_reference = self._record_technical_failure(
                     error.__cause__ or error, operation.id, error.code
@@ -335,51 +295,24 @@ class OperationRunner:
         prepared: PreparedOperation,
         handler: OperationHandler,
     ) -> PersistedOperation:
-        phase_events = []
-        terminal_failure: OperationExecutionError | None = None
         with self.transactions.write() as tx:
             store = self.execution_store
             store.lock_application(tx, operation.application_id)
             operation = store.operation(tx, operation.id)
-            store.set_operation_phase(
-                tx, operation.id, OperationPhase.PRE_ACTIVATION_CHECK, runner_id=self.runner_id
-            )
-            phase_events.append(store.operation(tx, operation.id))
             handler.verify_sources(tx, operation)
             if store.cancellation_requested(tx, operation.id):
                 result = store.complete_operation(tx, operation.id, runner_id=self.runner_id)
             else:
-                store.set_operation_phase(
-                    tx, operation.id, OperationPhase.ACTIVATING, runner_id=self.runner_id
-                )
-                phase_events.append(store.operation(tx, operation.id))
-                activated = handler.activate(tx, operation, prepared)
-                known = {(item.output_type, item.output_id) for item in prepared.outputs}
-                if prepared.activate_outputs:
-                    for output in prepared.outputs:
-                        store.activate_operation_output(
-                            tx, operation.id, output.output_type, output.output_id
-                        )
-                for output in activated:
-                    if (output.output_type, output.output_id) not in known:
-                        store.record_operation_output(
-                            tx, operation.id, output.output_type, output.output_id, active=True
-                        )
-                terminal_failure = prepared.terminal_failure
-                if terminal_failure is None:
-                    result = store.complete_operation(
-                        tx,
-                        operation.id,
-                        runner_id=self.runner_id,
-                        withheld_claims=prepared.withheld_claims,
+                for output in handler.activate(tx, operation, prepared):
+                    store.record_operation_output(
+                        tx, operation.id, output.output_type, output.output_id
                     )
-                else:
-                    # A terminal validation result is still immutable evidence.  The
-                    # handler has recorded it against the inactive output above; commit
-                    # that evidence before the runner moves the Operation to failed in
-                    # its own transaction.  Raising inside this scope used to roll the
-                    # ValidationRun back and leave the UI with only a generic code.
-                    result = store.operation(tx, operation.id)
+                result = store.complete_operation(
+                    tx,
+                    operation.id,
+                    runner_id=self.runner_id,
+                    withheld_claims=prepared.withheld_claims,
+                )
         if result.status is OperationStatus.SUCCEEDED:
             try:
                 handler.after_activation(operation, prepared)
@@ -392,12 +325,4 @@ class OperationRunner:
                         operation.id,
                         type(logging_error).__name__,
                     )
-        for phase_operation in phase_events:
-            self.record_event(
-                "operation.phase_changed", "INFO", phase_operation, {"runner_id": self.runner_id}
-            )
-        if terminal_failure is not None:
-            # Committed evidence: the runner must not discard what activation kept.
-            terminal_failure.activated = True
-            raise terminal_failure
         return result

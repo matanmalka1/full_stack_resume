@@ -40,8 +40,8 @@ DO $$
 DECLARE table_name text;
 DECLARE missing_exceptions text[];
 DECLARE mutable_exceptions constant text[] := ARRAY[
-  'applications', 'cv_documents', 'operations', 'operation_resource_leases',
-  'operation_outputs', 'knowledge_mutation_journal', 'app_settings'
+  'applications', 'cv_documents', 'operations', 'knowledge_mutation_journal',
+  'app_settings'
 ];
 BEGIN
   SELECT array_agg(exception_name ORDER BY exception_name) INTO missing_exceptions
@@ -62,7 +62,7 @@ BEGIN
     EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_immutable_change()', 'no_update_' || table_name, table_name);
     EXECUTE format('CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_immutable_change()', 'no_delete_' || table_name, table_name);
   END LOOP;
-  FOREACH table_name IN ARRAY ARRAY['operations', 'operation_outputs', 'knowledge_mutation_journal']
+  FOREACH table_name IN ARRAY ARRAY['operations', 'knowledge_mutation_journal']
   LOOP
     EXECUTE format('CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_protected_delete()', 'prevent_delete_' || table_name, table_name);
   END LOOP;
@@ -79,23 +79,6 @@ BEGIN
 END; $$;
 CREATE TRIGGER prevent_update_terminal_operations BEFORE UPDATE ON operations
 FOR EACH ROW EXECUTE FUNCTION cv_guard_terminal_operation_update();
-
-CREATE FUNCTION cv_guard_operation_output_activation() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE operation_status text; operation_cancellation_requested_at timestamptz;
-BEGIN
-  SELECT status, cancellation_requested_at INTO operation_status, operation_cancellation_requested_at
-  FROM operations WHERE id = OLD.operation_id;
-  IF NOT (OLD.active = FALSE AND NEW.active = TRUE AND NEW.activated_at IS NOT NULL
-    AND OLD.id = NEW.id AND OLD.operation_id = NEW.operation_id
-    AND OLD.output_type = NEW.output_type AND OLD.output_id = NEW.output_id
-    AND OLD.created_at = NEW.created_at AND operation_status = 'running'
-    AND operation_cancellation_requested_at IS NULL) THEN
-    RAISE EXCEPTION 'invalid operation output update';
-  END IF;
-  RETURN NEW;
-END; $$;
-CREATE TRIGGER valid_operation_output_activation BEFORE UPDATE ON operation_outputs
-FOR EACH ROW EXECUTE FUNCTION cv_guard_operation_output_activation();
 
 CREATE FUNCTION cv_guard_knowledge_mutation_transition() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -374,7 +357,6 @@ def upgrade() -> None:
         sa.Column("payload_hash", sa.Text(), nullable=False),
         sa.Column("idempotency_key", sa.Text(), nullable=False),
         sa.Column("sources_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("resources_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("provider", sa.Text(), nullable=True),
         sa.Column("model", sa.Text(), nullable=True),
         sa.Column("reasoning_effort", sa.Text(), nullable=True),
@@ -392,7 +374,6 @@ def upgrade() -> None:
         sa.Column("withheld_claims", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("technical_log_reference", sa.Text(), nullable=True),
         sa.Column("retry_of_operation_id", sa.UUID(as_uuid=False), nullable=True),
-        sa.Column("attempts_completed", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.CheckConstraint(
             "(status IN ('succeeded', 'failed', 'cancelled', 'interrupted')) = (finished_at IS NOT NULL)",
             name=op.f("ck_operations_terminal_finished_at"),
@@ -422,6 +403,10 @@ def upgrade() -> None:
             name=op.f("ck_operations_withheld_claims_shape"),
         ),
         sa.CheckConstraint(
+            "phase IN ('queued', 'executing', 'completed')",
+            name=op.f("ck_operations_phase"),
+        ),
+        sa.CheckConstraint(
             "operation_type IN ('analyze_job', 'create_draft', 'regenerate_section', 'regenerate_claim', 'render_document')",
             name=op.f("ck_operations_operation_type"),
         ),
@@ -437,19 +422,12 @@ def upgrade() -> None:
             "status != 'failed' OR failure_code IS NOT NULL", name=op.f("ck_operations_failed_code")
         ),
         sa.CheckConstraint(
-            "status != 'running' OR lease_owner IS NOT NULL",
+            "(status = 'running') = (lease_owner IS NOT NULL)",
             name=op.f("ck_operations_running_lease"),
         ),
         sa.CheckConstraint(
             "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted')",
             name=op.f("ck_operations_status"),
-        ),
-        sa.CheckConstraint(
-            "status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted') OR lease_owner IS NULL",
-            name=op.f("ck_operations_terminal_lease"),
-        ),
-        sa.CheckConstraint(
-            "attempts_completed >= 0", name=op.f("ck_operations_attempts_completed_nonnegative")
         ),
         sa.CheckConstraint(
             "length(payload_hash) = 64", name=op.f("ck_operations_payload_hash_length")
@@ -485,6 +463,22 @@ def upgrade() -> None:
         "operations",
         ["status", "created_at", "id"],
         unique=False,
+    )
+    # The claim guards (architecture.md §10): a second running Operation for the same
+    # Application, or a second running render, is refused by the database itself.
+    op.create_index(
+        "uq_operations_running_application",
+        "operations",
+        ["application_id"],
+        unique=True,
+        postgresql_where=sa.text("status = 'running'"),
+    )
+    op.create_index(
+        "uq_operations_running_render",
+        "operations",
+        ["operation_type"],
+        unique=True,
+        postgresql_where=sa.text("status = 'running' AND operation_type = 'render_document'"),
     )
     op.create_table(
         "ai_calls",
@@ -700,13 +694,7 @@ def upgrade() -> None:
         sa.Column("operation_id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("output_type", sa.Text(), nullable=False),
         sa.Column("output_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("active", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.CheckConstraint(
-            "active = (activated_at IS NOT NULL)",
-            name=op.f("ck_operation_outputs_active_activation"),
-        ),
         sa.ForeignKeyConstraint(
             ["operation_id"],
             ["operations.id"],
@@ -724,39 +712,6 @@ def upgrade() -> None:
         "idx_operation_outputs_operation",
         "operation_outputs",
         ["operation_id", "created_at", "id"],
-        unique=False,
-    )
-    op.create_table(
-        "operation_resource_leases",
-        sa.Column("resource_kind", sa.Text(), nullable=False),
-        sa.Column("resource_key", sa.Text(), nullable=False),
-        sa.Column("slot", sa.Integer(), nullable=False),
-        sa.Column("operation_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("lease_owner", sa.Text(), nullable=False),
-        sa.CheckConstraint(
-            "resource_kind IN ('application_mutation', 'render_browser', 'ai')",
-            name=op.f("ck_operation_resource_leases_resource_kind"),
-        ),
-        sa.CheckConstraint("slot >= 0", name=op.f("ck_operation_resource_leases_slot_nonnegative")),
-        sa.ForeignKeyConstraint(
-            ["operation_id"],
-            ["operations.id"],
-            name=op.f("fk_operation_resource_leases_operation_id_operations"),
-        ),
-        sa.PrimaryKeyConstraint(
-            "resource_kind", "resource_key", "slot", name=op.f("pk_operation_resource_leases")
-        ),
-        sa.UniqueConstraint(
-            "operation_id",
-            "resource_kind",
-            "resource_key",
-            name=op.f("uq_operation_resource_leases_operation_id_resource_kind_resource_key"),
-        ),
-    )
-    op.create_index(
-        "idx_operation_resource_leases_operation",
-        "operation_resource_leases",
-        ["operation_id"],
         unique=False,
     )
     # Mutable by design (state-and-use-cases.md §2), so it is a mutable table exception.
@@ -899,8 +854,6 @@ def downgrade() -> None:
     op.drop_index("idx_submissions_application", table_name="submissions")
     op.drop_table("submissions")
     op.drop_table("cv_documents")
-    op.drop_index("idx_operation_resource_leases_operation", table_name="operation_resource_leases")
-    op.drop_table("operation_resource_leases")
     op.drop_index("idx_operation_outputs_operation", table_name="operation_outputs")
     op.drop_table("operation_outputs")
     op.drop_table("job_analyses")
@@ -908,6 +861,8 @@ def downgrade() -> None:
     op.drop_table("recruitment_events")
     op.drop_index("idx_ai_calls_operation", table_name="ai_calls")
     op.drop_table("ai_calls")
+    op.drop_index("uq_operations_running_render", table_name="operations")
+    op.drop_index("uq_operations_running_application", table_name="operations")
     op.drop_index("idx_operations_claimable", table_name="operations")
     op.drop_index("idx_operations_application_status", table_name="operations")
     op.drop_table("operations")
@@ -921,7 +876,6 @@ def downgrade() -> None:
     op.drop_table("applications")
     op.drop_table("app_settings")
     op.execute("DROP FUNCTION cv_guard_knowledge_mutation_transition()")
-    op.execute("DROP FUNCTION cv_guard_operation_output_activation()")
     op.execute("DROP FUNCTION cv_guard_terminal_operation_update()")
     op.execute("DROP FUNCTION cv_reject_protected_delete()")
     op.execute("DROP FUNCTION cv_reject_immutable_change()")

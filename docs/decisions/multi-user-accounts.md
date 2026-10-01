@@ -159,8 +159,11 @@ avoid.
    the existing installation assigned to its one user (§4).
 5. **Repository and query isolation:** every service resolves through the `Actor`
    (architecture §18.3); every list, count, and duplicate check scoped.
-6. **Idempotency, leases, and worker isolation:** the per-Application idempotency key,
-   the per-user AI slot, owner derived from the Operation's Application.
+6. **Idempotency, fairness, and worker isolation:** the per-Application idempotency key,
+   fairness between users in the claim order (a user with nothing running is served
+   first; architecture §18.3), owner derived from the Operation's Application. The
+   per-user AI slot first planned here is replaced: the lease table it would have used
+   is gone, and a slot would leave a thread idle while a lone user waits.
 7. **Auth API and frontend:** `login`, `logout`, `logout-all`, `me`, `change-password`,
    `deactivate_account`; the sign-in and account screens, the auth state, clearing
    per-user browser state. From here every route requires a session.

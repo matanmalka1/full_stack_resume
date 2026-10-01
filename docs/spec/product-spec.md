@@ -244,9 +244,9 @@ decision.
     rules-based form to fall back to. The user may retry. A proposed line withheld under
     §10.1 is not a fallback: it keeps the wording it already held, and the Operation
     reports it.
-13. Provider, cancelled, or stale output may exist as inactive immutable evidence. It
-    becomes current only through a successful commit against its original
-    preconditions.
+13. Provider, cancelled, or stale output never becomes current state. It becomes current
+    only through a successful commit against its original preconditions; every provider
+    call stays in the immutable AI call log either way.
 14. Preparation and recruitment are independent lifecycles.
 15. Recruitment history is append-only. Corrections add events and never rewrite past
     ones.
@@ -260,7 +260,7 @@ decision.
     content, and touch no immutable table. A deleted Application or fact leaves default
     listings but stays reachable by ID, with every record produced from it preserved.
 21. API and worker concurrency stays correct through the document hash, optimistic
-    versions, atomic PostgreSQL claims, resource leases, idempotency keys, and
+    versions, atomic PostgreSQL claims guarded by unique indexes, idempotency keys, and
     commit-time precondition checks.
 22. A fresh installation starts with an empty database — no users — and proves itself
     through its own workflow.
@@ -426,7 +426,7 @@ pool, no linked fact, wording the edit path rejects) is withheld the same way; a
 the document does not hold names no line and is ignored. Only when every line the answer
 named is withheld does the Operation fail, with `unsupported` (`CLAIM_REVIEW_UNSUPPORTED`),
 then `uncertain` (`CLAIM_REVIEW_UNCERTAIN`), then `INVALID_OUTPUT` as its code: both
-provider responses stay as inactive evidence, the document is unchanged, and retry or
+provider calls stay in the AI call log, the document is unchanged, and retry or
 correction is offered. A single-line task (`regenerate_claim`, or a review of the user's
 own wording) therefore succeeds or fails whole. Review failure, cancellation, invalid
 output, missing assertion coverage, or stale evidence never makes wording eligible.
@@ -753,7 +753,7 @@ creates a new Operation that references the original and copies its model and ef
 The Operation itself is never retried automatically: one provider call is retried at
 most once where it is safe (§12), and a browser that failed to start is started once
 more, both only while the Operation is still running, held, and not cancelled. Types, phases, failure codes,
-resources, and idempotency are state-and-use-cases.md §11 and §19 and architecture.md
+concurrency rules, and idempotency are state-and-use-cases.md §11 and §19 and architecture.md
 §10.
 
 ## 19. API and UX contracts

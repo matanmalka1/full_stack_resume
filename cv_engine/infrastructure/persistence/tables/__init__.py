@@ -17,7 +17,6 @@ from .shared import (
     applications,
     audit_records,
     operation_outputs,
-    operation_resource_leases,
     operations,
 )
 from .tracking import recruitment_events, submissions
@@ -37,7 +36,6 @@ __all__ = [
     "ai_calls",
     "audit_records",
     "operations",
-    "operation_resource_leases",
     "operation_outputs",
     "app_settings",
     "fact_events",

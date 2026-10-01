@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import delete, insert, null, select, update
-from sqlalchemy.engine import Connection
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy import exists, insert, null, select, update
+from sqlalchemy.exc import DBAPIError
 
 from ...application.errors import StateConflict, UnknownRecord
 from ...application.operations import (
@@ -19,29 +18,27 @@ from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import new_id, utc_now
 from .analysis_sql import _lock_application
 from .connection import SqlAlchemyTransactionManager
-from .operation_sql import _operation_record, _release
-from .tables import operation_outputs, operation_resource_leases, operations
+from .operation_sql import _operation_record
+from .tables import operation_outputs, operations
 
-_RESOURCE_CAPACITY = {"application_mutation": 1, "render_browser": 1, "ai": 2}
-
-
-def _waiting_phase(resource_kind: str) -> tuple[str, str]:
-    if resource_kind == "render_browser":
-        return OperationPhase.WAITING_FOR_RENDER_SLOT.value, "Waiting for render slot."
-    if resource_kind == "ai":
-        return OperationPhase.WAITING_FOR_AI_SLOT.value, "Waiting for AI slot."
-    return OperationPhase.WAITING_FOR_APPLICATION.value, "Waiting for application operation."
+#: The partial unique indexes that refuse a second running Operation (architecture.md
+#: §10). A claim that violates one of these lost to work already running and moves on;
+#: any other unique violation is a real error and is raised.
+CLAIM_GUARDS = frozenset({"uq_operations_running_application", "uq_operations_running_render"})
 
 
-def _release_acquired(connection: Connection, acquired: list[tuple[str, str, int]]) -> None:
-    for kind, key, slot in acquired:
-        connection.execute(
-            delete(operation_resource_leases).where(
-                operation_resource_leases.c.resource_kind == kind,
-                operation_resource_leases.c.resource_key == key,
-                operation_resource_leases.c.slot == slot,
-            )
-        )
+def _lost_claim(error: DBAPIError) -> bool:
+    """A claim another claimant won: a serialization failure, or a claim-guard violation.
+
+    Under REPEATABLE READ, SKIP LOCKED only skips a row locked now; a row a rival
+    claimed and committed after this snapshot is refused with 40001. A guard
+    violation is told apart from every other 23505 by the index it names.
+    """
+    sqlstate = getattr(error.orig, "sqlstate", None)
+    if sqlstate == "40001":
+        return True
+    diag = getattr(error.orig, "diag", None)
+    return sqlstate == "23505" and getattr(diag, "constraint_name", None) in CLAIM_GUARDS
 
 
 class SqlAlchemyOperationExecutionStore:
@@ -62,89 +59,54 @@ class SqlAlchemyOperationExecutionStore:
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
         try:
+            # One savepoint per candidate: a lost claim rolls back to it and leaves the
+            # caller's transaction usable for the next candidate.
             with connection.begin_nested():
                 row = (
                     connection.execute(
-                        select(operations)
+                        select(operations.c.id, operations.c.status)
                         .where(operations.c.id == operation_id)
                         .with_for_update(skip_locked=True)
                     )
                     .mappings()
                     .one_or_none()
                 )
+                if row is None or row["status"] != OperationStatus.QUEUED.value:
+                    changed = 0
+                else:
+                    # The claim guards decide here, atomically: the unique check is not
+                    # snapshot-bound, so a rival's committed running row is seen, and an
+                    # uncommitted one is waited for.
+                    changed = connection.execute(
+                        update(operations)
+                        .where(operations.c.id == operation_id, operations.c.status == "queued")
+                        .values(
+                            status="running",
+                            phase=OperationPhase.EXECUTING.value,
+                            message="",
+                            started_at=timestamp,
+                            lease_owner=runner_id,
+                        )
+                    ).rowcount
         except DBAPIError as error:
-            # SKIP LOCKED only skips a row that is locked now. A rival that claimed
-            # and committed after this transaction's snapshot leaves the row unlocked
-            # but updated, and REPEATABLE READ refuses to lock it with 40001. That is
-            # the same lost claim as a skipped row; the savepoint keeps the caller's
-            # transaction usable.
-            if getattr(error.orig, "sqlstate", None) != "40001":
+            if not _lost_claim(error):
                 raise
             return None
         if row is None:
-            # A concurrent runner may already hold this row. Waiting for it at
-            # REPEATABLE READ turns the normal claim race into PostgreSQL's
-            # ``could not serialize access due to concurrent update``. A
-            # skipped existing row is simply a lost claim; only an actually
+            # A row locked by a concurrent claimant is a lost claim; only an actually
             # unknown identifier is an error.
-            exists = connection.execute(
+            known = connection.execute(
                 select(operations.c.id).where(operations.c.id == operation_id)
             ).scalar_one_or_none()
-            if exists is None:
+            if known is None:
                 raise UnknownRecord("operation does not exist")
             return None
-        if row["status"] != OperationStatus.QUEUED.value:
-            return None
-        acquired: list[tuple[str, str, int]] = []
-        blocked_kind = None
-        for resource in row["resources_json"]:
-            kind, key = resource["kind"], resource["key"]
-            for slot in range(_RESOURCE_CAPACITY[kind]):
-                try:
-                    with connection.begin_nested():
-                        connection.execute(
-                            insert(operation_resource_leases).values(
-                                resource_kind=kind,
-                                resource_key=key,
-                                slot=slot,
-                                operation_id=operation_id,
-                                lease_owner=runner_id,
-                            )
-                        )
-                except IntegrityError:
-                    continue
-                acquired.append((kind, key, slot))
-                break
-            else:
-                blocked_kind = kind
-                break
-        if blocked_kind is not None:
-            _release_acquired(connection, acquired)
-            phase, message = _waiting_phase(blocked_kind)
-            connection.execute(
-                update(operations)
-                .where(operations.c.id == operation_id, operations.c.status == "queued")
-                .values(phase=phase, message=message)
-            )
-            return None
-        changed = connection.execute(
-            update(operations)
-            .where(operations.c.id == operation_id, operations.c.status == "queued")
-            .values(
-                status="running",
-                phase=OperationPhase.PRE_EXECUTION_CHECK.value,
-                message="",
-                started_at=timestamp,
-                lease_owner=runner_id,
-            )
-        ).rowcount
         if changed != 1:
-            _release_acquired(connection, acquired)
             return None
         current = (
             connection.execute(select(operations).where(operations.c.id == operation_id))
             .mappings()
-            .one_or_none()
+            .one()
         )
         return _operation_record(current, connection)
 
@@ -157,10 +119,27 @@ class SqlAlchemyOperationExecutionStore:
     ) -> PersistedOperation | None:
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
+        running = operations.alias("running")
+        # Skipping what would only lose to running work is an optimisation that keeps
+        # a busy Application from being retried on every poll; the claim guards in
+        # `claim_operation` are what make the rule hold.
         candidates = (
             connection.execute(
                 select(operations.c.id)
-                .where(operations.c.status == "queued")
+                .where(
+                    operations.c.status == "queued",
+                    ~exists().where(
+                        running.c.status == "running",
+                        running.c.application_id == operations.c.application_id,
+                    ),
+                    ~(
+                        (operations.c.operation_type == "render_document")
+                        & exists().where(
+                            running.c.status == "running",
+                            running.c.operation_type == "render_document",
+                        )
+                    ),
+                )
                 .order_by(operations.c.created_at, operations.c.id)
             )
             .scalars()
@@ -175,32 +154,28 @@ class SqlAlchemyOperationExecutionStore:
     def interrupt_claims_from_previous_runners(
         self, tx: WriteTransaction, *, now: str | None = None
     ) -> list[str]:
-        """Interrupt every claimed Operation, for a fresh worker's one-time sweep.
+        """Interrupt every running Operation, for a fresh worker's one-time sweep.
 
         Called once, before this worker has claimed anything of its own. Only
-        one worker runs at a time (`worker_exclusivity`), so any claim still on
-        a row belongs to a worker that no longer exists. An external call it
-        made is never resumed.
+        one worker runs at a time (`worker_exclusivity`), so any running row
+        belongs to a worker that no longer exists. An external call it made is
+        never resumed.
         """
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
         identifiers = list(
             connection.execute(
                 select(operations.c.id)
-                .where(
-                    operations.c.status.in_(("queued", "running")),
-                    operations.c.lease_owner.is_not(None),
-                )
+                .where(operations.c.status == OperationStatus.RUNNING.value)
                 .order_by(operations.c.created_at, operations.c.id)
             ).scalars()
         )
         for identifier in identifiers:
-            _release(connection, identifier)
             connection.execute(
                 update(operations)
                 .where(
                     operations.c.id == identifier,
-                    operations.c.status.in_(("queued", "running")),
+                    operations.c.status == OperationStatus.RUNNING.value,
                 )
                 .values(
                     status="interrupted",
@@ -220,28 +195,6 @@ class SqlAlchemyOperationExecutionStore:
             .one_or_none()
         )
         return _operation_record(row, connection)
-
-    def set_operation_phase(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        phase: OperationPhase,
-        *,
-        runner_id: str,
-        message: str = "",
-    ) -> None:
-        connection = self._transactions.connection_for(tx, access="write")
-        changed = connection.execute(
-            update(operations)
-            .where(
-                operations.c.id == operation_id,
-                operations.c.status == "running",
-                operations.c.lease_owner == runner_id,
-            )
-            .values(phase=phase.value, message=message)
-        ).rowcount
-        if changed != 1:
-            raise StateConflict("operation lease is not owned by this runner")
 
     def cancellation_requested(self, tx: ReadTransaction, operation_id: str) -> bool:
         connection = self._transactions.connection_for(tx)
@@ -282,11 +235,12 @@ class SqlAlchemyOperationExecutionStore:
         operation_id: str,
         output_type: str,
         output_id: str,
-        *,
-        active: bool = False,
-        created_at: str | None = None,
     ) -> str:
-        timestamp = created_at or utc_now()
+        """Record what an activation produced, in the activation's own transaction.
+
+        Only a running Operation with no cancellation asked may record one, so an
+        output exists exactly when the Operation succeeded with it.
+        """
         identifier = new_id()
         connection = self._transactions.connection_for(tx, access="write")
         operation = (
@@ -300,61 +254,21 @@ class SqlAlchemyOperationExecutionStore:
         )
         if operation is None:
             raise UnknownRecord("operation does not exist")
-        if active and (
+        if (
             operation["status"] != OperationStatus.RUNNING.value
             or operation["cancellation_requested_at"] is not None
         ):
-            raise StateConflict("operation output cannot be activated")
-        existing = connection.execute(
-            select(operation_outputs.c.id).where(
-                operation_outputs.c.operation_id == operation_id,
-                operation_outputs.c.output_type == output_type,
-                operation_outputs.c.output_id == output_id,
-            )
-        ).scalar_one_or_none()
-        if existing is not None:
-            return existing
+            raise StateConflict("operation output cannot be recorded")
         connection.execute(
             insert(operation_outputs).values(
                 id=identifier,
                 operation_id=operation_id,
                 output_type=output_type,
                 output_id=output_id,
-                active=active,
-                created_at=timestamp,
-                activated_at=timestamp if active else None,
+                created_at=utc_now(),
             )
         )
         return identifier
-
-    def activate_operation_output(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        output_type: str,
-        output_id: str,
-        *,
-        now: str | None = None,
-    ) -> None:
-        timestamp = now or utc_now()
-        connection = self._transactions.connection_for(tx, access="write")
-        try:
-            changed = connection.execute(
-                update(operation_outputs)
-                .where(
-                    operation_outputs.c.operation_id == operation_id,
-                    operation_outputs.c.output_type == output_type,
-                    operation_outputs.c.output_id == output_id,
-                    operation_outputs.c.active.is_(False),
-                )
-                .values(active=True, activated_at=timestamp)
-            ).rowcount
-        except DBAPIError as error:
-            if "invalid operation output update" in str(error.orig):
-                raise StateConflict("operation output cannot be activated") from error
-            raise
-        if changed != 1:
-            raise StateConflict("operation output cannot be activated")
 
     def complete_operation(
         self,
@@ -380,7 +294,6 @@ class SqlAlchemyOperationExecutionStore:
         )
         if row is None:
             raise StateConflict("operation lease is not owned by this runner")
-        _release(connection, operation_id)
         if row["cancellation_requested_at"] is not None:
             status = OperationStatus.CANCELLED.value
             failure_code = OperationFailureCode.CANCELLED_BEFORE_ACTIVATION.value
@@ -410,7 +323,6 @@ class SqlAlchemyOperationExecutionStore:
                     null() if withheld_claims is None else withheld_claims.model_dump(mode="json")
                 ),
                 lease_owner=None,
-                attempts_completed=operations.c.attempts_completed + 1,
             )
         )
         current = (
@@ -434,7 +346,6 @@ class SqlAlchemyOperationExecutionStore:
     ) -> PersistedOperation:
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
-        _release(connection, operation_id)
         changed = connection.execute(
             update(operations)
             .where(
@@ -454,7 +365,6 @@ class SqlAlchemyOperationExecutionStore:
                 # refuses a JSON scalar.
                 failure_reason=null() if reason is None else reason.model_dump(mode="json"),
                 technical_log_reference=technical_log_reference,
-                attempts_completed=operations.c.attempts_completed + 1,
                 lease_owner=None,
             )
         ).rowcount

@@ -19,7 +19,7 @@ from operations_support import (
 )
 from pydantic import ValidationError
 from sqlalchemy import delete, update
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
@@ -40,8 +40,6 @@ from cv_engine.application.operations import (
     OperationAction,
     OperationContractError,
     OperationFailureCode,
-    OperationOutputReference,
-    OperationPhase,
     OperationSources,
     OperationStatus,
     OperationType,
@@ -197,7 +195,6 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     ).run(operation.id)
     assert result.status is OperationStatus.FAILED
     assert result.failure_code is OperationFailureCode.PROVIDER_TIMEOUT
-    assert result.attempts_completed == 1
     assert attempts == 1
 
     stopped_operation = _operation_for_runner(services, "Stopped Retry Co")
@@ -533,82 +530,58 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, databa
             connection.execute(delete(operations).where(operations.c.id == created.id))
 
 
-def test_output_after_cancellation_stays_inactive_and_cannot_be_activated(
-    services,
-) -> None:
-    """Output after cancellation stays inactive and can never be activated later.
+def test_an_output_is_recorded_only_by_a_running_uncancelled_operation(services) -> None:
+    """An output exists exactly when the Operation succeeded with it.
 
-    An output the runner created after cancellation is recorded inactive. At the
-    store, completing a cancelled Operation records cancellation rather than
-    success, and neither activation nor `active=True` on recording can bring an
-    output back once cancellation closed the window.
+    Activation records outputs in the transaction that completes the Operation. A
+    cancellation that arrives during execution ends the run as cancelled with no
+    output, and the store refuses a recording once cancellation closed the window,
+    for an unknown Operation, and as a second copy of the same output.
     """
     operation = _operation_for_runner(services, "Cancel Output Co")
-    inactive_output_id = new_id()
 
     def execute(_operation, _still_owned):
         services.operation_lifecycle.cancel(operation.id)
-        return PreparedOperation(
-            outputs=(
-                OperationOutputReference(
-                    output_type="job_analysis", output_id=inactive_output_id, active=False
-                ),
-            )
-        )
+        return PreparedOperation()
 
+    activated = []
     result = _runner(
         services,
-        {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
+        {
+            OperationType.ANALYZE_JOB: _Handler(
+                execute=execute,
+                activate=lambda *_args: activated.append(True) or (),
+            )
+        },
         runner_id="runner-cancel",
     ).run(operation.id)
 
     assert result.status is OperationStatus.CANCELLED
     assert result.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
-    assert result.outputs[0].active is False
+    assert result.outputs == []
+    assert activated == [], "a cancelled run never reaches activation"
 
-    operation = _queued(services, "Cancel Co", key="cancel-request")
+    operation = _queued(services, "Output Co", key="output-request")
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+    output_id = new_id()
+    _execution_write(services, "record_operation_output", operation.id, "job_analysis", output_id)
+    with pytest.raises(IntegrityError):
+        _execution_write(
+            services, "record_operation_output", operation.id, "job_analysis", output_id
+        )
+    with pytest.raises(UnknownRecord):
+        _execution_write(services, "record_operation_output", new_id(), "job_analysis", new_id())
+
     services.operation_lifecycle.cancel(operation.id)
+    with pytest.raises(StateConflict, match="cannot be recorded"):
+        _execution_write(
+            services, "record_operation_output", operation.id, "job_analysis", new_id()
+        )
 
     completed = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
     assert completed.status is OperationStatus.CANCELLED
     assert completed.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
     assert completed.finished_at
-
-    operation = _queued(services, "Output Co", key="output-request")
-    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
-
-    output_id = new_id()
-    _execution_write(services, "record_operation_output", operation.id, "job_analysis", output_id)
-    _execution_write(services, "activate_operation_output", operation.id, "job_analysis", output_id)
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "job_analysis", output_id
-        )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "job_analysis", new_id()
-        )
-
-    with pytest.raises(UnknownRecord):
-        _execution_write(services, "record_operation_output", new_id(), "job_analysis", new_id())
-
-    # Cancellation closes the window: an output may still be recorded, but it
-    # cannot be activated either by the activation method or by active=True on
-    # the recording method.
-    services.operation_lifecycle.cancel(operation.id)
-    cancelled_output_id = new_id()
-    _execution_write(
-        services, "record_operation_output", operation.id, "job_analysis", cancelled_output_id
-    )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "job_analysis", cancelled_output_id
-        )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "record_operation_output", operation.id, "job_analysis", new_id(), active=True
-        )
 
 
 # --- execution-store methods against real PostgreSQL -------------------------
@@ -669,13 +642,6 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
     calls = {
-        "set_operation_phase": lambda runner: _execution_write(
-            services,
-            "set_operation_phase",
-            operation.id,
-            OperationPhase.EXECUTING,
-            runner_id=runner,
-        ),
         "fail_operation": lambda runner: _execution_write(
             services,
             "fail_operation",

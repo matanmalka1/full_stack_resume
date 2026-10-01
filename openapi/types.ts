@@ -2274,15 +2274,9 @@ export interface components {
         OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_QUOTA_EXHAUSTED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "CLAIM_REVIEW_UNCERTAIN" | "CLAIM_REVIEW_UNSUPPORTED" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION" | "PROVIDER_NOT_CONFIGURED";
         /**
          * OperationOutputResponse
-         * @description One immutable output an Operation produced.
-         *
-         *     Existence and activation are separate (§11): a failed or cancelled Operation
-         *     may own an output that was registered as inactive evidence, so `active` is
-         *     reported rather than inferred from the status.
+         * @description One record a succeeded Operation activated (§11).
          */
         OperationOutputResponse: {
-            /** Active */
-            active: boolean;
             /** Output Id */
             output_id: string;
             /**
@@ -2295,7 +2289,7 @@ export interface components {
          * OperationPhase
          * @enum {string}
          */
-        OperationPhase: "queued" | "waiting_for_application" | "waiting_for_render_slot" | "waiting_for_ai_slot" | "pre_execution_check" | "executing" | "pre_activation_check" | "activating" | "completed";
+        OperationPhase: "queued" | "waiting_for_application" | "waiting_for_render_slot" | "executing" | "completed";
         /**
          * OperationResponse
          * @description The §11 Operation query fields, and nothing wider.

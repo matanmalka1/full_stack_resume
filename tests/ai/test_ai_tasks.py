@@ -668,9 +668,7 @@ def test_regeneration_commits_against_the_exact_frozen_version(
     assert completed.status.value == "succeeded", completed.safe_failure_detail
     updated = stored_document(ai_services, ingested.application_id)
     assert updated.id == working.id
-    assert any(
-        output.output_type == "cv_document" and output.active for output in completed.outputs
-    )
+    assert any(output.output_type == "cv_document" for output in completed.outputs)
 
 
 def test_the_users_own_wording_is_reviewed_as_written_and_nothing_else(
@@ -1305,7 +1303,6 @@ def test_one_call_is_retried_once_only_where_the_policy_allows(
 
     assert completed.status.value == status, completed.safe_failure_detail
     assert (completed.failure_code and completed.failure_code.value) == code
-    assert completed.attempts_completed == 1
     logged = _ai_calls(transaction_manager, ingested.application_id)
     assert [row["outcome"] for row in logged] == outcomes
     assert [row["attempt"] for row in logged] == list(range(1, len(outcomes) + 1))
@@ -1564,7 +1561,7 @@ def test_analysis_activation_shares_one_token_and_has_no_external_io(
     # The document, the analysis and document outputs, and completion: one scope.
     assert len(tokens) == 4 and all(token is tokens[0] for token in tokens)
     assert not tokens[0].active
-    assert all(output.active for output in completed.outputs)
+    assert {output.output_type for output in completed.outputs} == {"job_analysis", "cv_document"}
     assert len(_ai_calls(transaction_manager, ingested.application_id)) == 1
 
 

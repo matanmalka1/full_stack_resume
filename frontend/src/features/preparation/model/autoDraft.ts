@@ -39,11 +39,9 @@ export const autoDraftSources = (
   }
   /* A historical successful analyze cannot authorize drafting a document built on a
      different analysis: only the run that produced the document's own analysis continues
-     into it. Inactive outputs (including those produced after cancellation) confer no
-     authority. */
+     into it. A cancelled or failed run has no outputs, so it confers no authority. */
   const activated = operation.outputs.some(
-    (output) =>
-      output.active && output.output_type === "job_analysis" && output.output_id === detail.document_analysis_id,
+    (output) => output.output_type === "job_analysis" && output.output_id === detail.document_analysis_id,
   );
   if (!activated) {
     return null;
@@ -96,8 +94,5 @@ export const autoDraftIsContinuing = (
     return false;
   const capturedTime = Date.parse(detail.latest_snapshot.captured_at);
   const finishedTime = operation.finished_at == null ? NaN : Date.parse(operation.finished_at);
-  return (
-    !(capturedTime > finishedTime) &&
-    operation.outputs.some((output) => output.active && output.output_type === "job_analysis")
-  );
+  return !(capturedTime > finishedTime) && operation.outputs.some((output) => output.output_type === "job_analysis");
 };

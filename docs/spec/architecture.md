@@ -212,7 +212,7 @@ source files are valid inputs; a changed context produces `knowledge_changed` or
 PostgreSQL holds structured state and relationships: Applications and their recruitment
 projection, recruitment and audit history, JobSnapshot metadata, JobAnalyses, the one
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
-the AI call log (`ai_calls`, §11), Submissions, Operations and their resource leases,
+the AI call log (`ai_calls`, §11), Submissions, Operations,
 fact events, the Knowledge mutation journal, and safe settings. *Designed, not built (§18):*
 also users, sessions, single-use tokens, account events, rate-limit buckets, and
 per-user facts, CandidateContext, Profile binding, and settings.
@@ -404,33 +404,40 @@ Operation is an application and infrastructure concern, not the central domain
 aggregate. Types, statuses, phases, failure codes, and idempotency are
 state-and-use-cases.md §11 and §19. This section covers execution.
 
-**Resources.** Required resources are derived from the request
-(`required_operation_resources`), so a caller cannot weaken concurrency policy:
+**Concurrency rules.** Two rules hold for every Operation, and the database enforces both,
+not the runner:
 
-- one mutating Operation per Application (every type)
-- one global render/browser slot (`render_document`)
-- two global AI slots (every AI task, including `analyze_job` and `create_draft`)
+- one running Operation per Application (every type), by the partial unique index
+  `uq_operations_running_application` on `application_id` where `status = 'running'`
+- one running render (`render_document`) anywhere, by `uq_operations_running_render`
 
-*Designed, not built (§18.3):* a fourth resource, one AI slot per user (key: the owning
-user's ID), so one user cannot hold both global AI slots; the rest of that user's AI
-work queues.
-
-Locks are resource-specific: a render for one Application does not block analysis for
-another. Contention is queueing, not failure; a waiting Operation stays `queued` with an
-observable waiting phase until a claim succeeds or the user cancels.
+A render for one Application does not block analysis for another. Contention is
+queueing, not failure: a waiting Operation stays `queued`, and its phase reads
+`waiting_for_application` or `waiting_for_render_slot` while what it waits for is
+running. That phase is derived when the Operation is read, never written, so it cannot
+go stale. How much work runs at once is a separate question with one answer, the
+worker's thread count (concurrency 2); there is no separate AI limit, and AI work for
+different Applications runs side by side up to that count. *Designed, not built
+(§18.3):* fairness between users is decided by the order in which the next Operation is
+claimed, not by a limit.
 
 **Claiming.** The worker (`runtime/execution.py`) runs a thread pool (concurrency 2,
-poll 0.25 s). A claim selects a queued row with `FOR UPDATE SKIP LOCKED`, inserts
-resource slot rows, and records the worker as `lease_owner`. A lost race between the
-worker's threads — a skipped row or a `40001` serialization failure — is a lost claim,
-not an error. Claims do not expire and there is no heartbeat: only a new worker's
-startup releases them.
+poll 0.25 s). A claim walks the queued Operations oldest first, skipping one whose
+Application, or for a render the render rule, is already running - an optimisation;
+the indexes are the guard. For each candidate, inside a savepoint, it locks the row
+with `FOR UPDATE SKIP LOCKED` and sets `status = 'running'`, the phase `executing`, and
+the worker as `lease_owner`. The unique check is not bound to the transaction's
+snapshot: a rival's committed running row is seen, and an uncommitted one is waited for.
+A lost race - a skipped row, a `40001` serialization failure, or a `23505` violation
+naming one of the two indexes - rolls back to the savepoint and moves to the next
+candidate; any other `23505` is an error and is raised. Claims do not expire and there
+is no heartbeat: only a new worker's startup releases them.
 
 **One worker.** The worker holds a PostgreSQL session advisory lock for its whole life
 (`worker_exclusivity`); a second worker is refused at start and exits. With that
-guarantee, startup changes every `queued`/`running` row that has a `lease_owner` to
-`interrupted` and releases its slots: every such claim belongs to a worker that no
-longer exists. An external call is never resumed. The lock lives on a dedicated
+guarantee, startup changes every `running` row to `interrupted`, which frees what it
+held: every such row belongs to a worker that no longer exists. Only a running row has a
+`lease_owner`; the schema enforces that both are set together. An external call is never resumed. The lock lives on a dedicated
 connection, so a crash releases it with the session.
 
 The session can also end under a live worker (terminated, or a server restart). The
@@ -443,7 +450,7 @@ whatever it still holds.
 
 **Records.** An Operation stores its type, secret-free payload and hash (a payload with
 a secret-named key is refused), idempotency key, provider/model/reasoning effort, frozen
-sources (`OperationSources`), required resources, lifecycle timestamps, lease owner,
+sources (`OperationSources`), lifecycle timestamps, lease owner,
 cancellation request, phase and message, failure detail and log reference,
 retry reference, and outputs.
 
@@ -454,7 +461,7 @@ activation. `SOURCE_CHANGED` fails the Operation without changing the document.
 held by this runner, and not asked to cancel. Provider calls happen outside scopes, and
 each attempt is appended to the AI call log (§11) in its own short scope as soon as it
 ends, so neither cancellation nor activation rollback can erase it. Activation locks
-the Application, reloads Operation and lease state, rechecks sources and cancellation,
+the Application, reloads the Operation and its lease owner, rechecks sources and cancellation,
 then atomically activates use-case state, outputs, and completion. Post-commit
 projections and file logging run after the scope closes.
 
@@ -785,10 +792,12 @@ analysis = analyses.get_for_application(tx, analysis_id, application.id)
   there: `UNIQUE (application_id, operation_type, idempotency_key)` on `operations`
   replaces `UNIQUE (operation_type, idempotency_key)`. There is no separate receipts
   table (dropped in revision `0003`).
-- **Resource leases.** `application_mutation` is keyed by the Application ID, which is
-  already owned. The render slot and the two AI slots are global on purpose: they
-  bound machine and provider load, not access, and hold no data. The per-user AI slot
-  (§10) is keyed by the owner's user ID, derived as below.
+- **Concurrency.** The per-Application rule is keyed by the Application, which is already
+  owned. The render rule and the worker's thread count are global on purpose: they
+  bound machine and provider load, not access, and hold no data. Fairness between
+  users is in the claim order: a free worker thread takes the oldest queued Operation of
+  a user with nothing running before any other, so one user's queue cannot hold back
+  another's, and a user alone still gets every thread. No per-user slot is stored.
 - **The worker never trusts the payload for identity.** An Operation's owner is
   `operations.application_id → applications.user_id`, read from the database when the
   Operation is claimed. The payload carries no `user_id`; a payload that names one is

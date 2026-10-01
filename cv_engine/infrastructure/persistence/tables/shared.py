@@ -23,17 +23,16 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
-    PrimaryKeyConstraint,
     String,
     Table,
     Text,
     UniqueConstraint,
-    false,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from ....application.ai_configuration import AI_MODEL_IDS, REASONING_EFFORTS
+from ....application.operations import STORED_OPERATION_PHASES
 from ._helpers import IsoDate, IsoTimestamp, sequence_column, sql_values
 from ._metadata import metadata
 
@@ -152,7 +151,6 @@ operations = Table(
     Column("payload_hash", Text, nullable=False),
     Column("idempotency_key", Text, nullable=False),
     Column("sources_json", JSONB, nullable=False),
-    Column("resources_json", JSONB, nullable=False),
     Column("provider", Text),
     Column("model", Text),
     Column("reasoning_effort", Text),
@@ -173,7 +171,6 @@ operations = Table(
     Column("withheld_claims", JSONB),
     Column("technical_log_reference", Text),
     Column("retry_of_operation_id", UUID(as_uuid=False), ForeignKey("operations.id")),
-    Column("attempts_completed", Integer, nullable=False, server_default=text("0")),
     CheckConstraint(
         f"operation_type IN ({sql_values(OPERATION_TYPES)})",
         name="operation_type",
@@ -189,15 +186,16 @@ operations = Table(
         name="status",
     ),
     CheckConstraint(
+        f"phase IN ({sql_values(tuple(phase.value for phase in STORED_OPERATION_PHASES))})",
+        name="phase",
+    ),
+    CheckConstraint(
         f"failure_code IS NULL OR failure_code IN ({sql_values(OPERATION_FAILURE_CODES)})",
         name="failure_code",
     ),
-    CheckConstraint("attempts_completed >= 0", name="attempts_completed_nonnegative"),
-    CheckConstraint("status != 'running' OR lease_owner IS NOT NULL", name="running_lease"),
-    CheckConstraint(
-        "status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted') OR lease_owner IS NULL",
-        name="terminal_lease",
-    ),
+    # A claim sets both at once and every exit clears both: the lease is the running
+    # runner's fencing token and exists nowhere else.
+    CheckConstraint("(status = 'running') = (lease_owner IS NOT NULL)", name="running_lease"),
     CheckConstraint(
         "(status IN ('succeeded', 'failed', 'cancelled', 'interrupted')) = "
         "(finished_at IS NOT NULL)",
@@ -245,26 +243,21 @@ Index(
     operations.c.created_at,
     operations.c.id,
 )
-
-operation_resource_leases = Table(
-    "operation_resource_leases",
-    metadata,
-    Column("resource_kind", Text, nullable=False),
-    Column("resource_key", Text, nullable=False),
-    Column("slot", Integer, nullable=False),
-    Column("operation_id", UUID(as_uuid=False), ForeignKey("operations.id"), nullable=False),
-    Column("lease_owner", Text, nullable=False),
-    CheckConstraint(
-        "resource_kind IN ('application_mutation', 'render_browser', 'ai')",
-        name="resource_kind",
-    ),
-    CheckConstraint("slot >= 0", name="slot_nonnegative"),
-    PrimaryKeyConstraint("resource_kind", "resource_key", "slot"),
-    UniqueConstraint("operation_id", "resource_kind", "resource_key"),
+# The claim guards (architecture.md §10): the database itself refuses a second running
+# Operation for one Application, and a second running render anywhere. A claim that
+# loses to either is told apart by the index name (`CLAIM_GUARDS` in
+# operation_execution.py).
+Index(
+    "uq_operations_running_application",
+    operations.c.application_id,
+    unique=True,
+    postgresql_where=text("status = 'running'"),
 )
 Index(
-    "idx_operation_resource_leases_operation",
-    operation_resource_leases.c.operation_id,
+    "uq_operations_running_render",
+    operations.c.operation_type,
+    unique=True,
+    postgresql_where=text("status = 'running' AND operation_type = 'render_document'"),
 )
 
 operation_outputs = Table(
@@ -274,10 +267,7 @@ operation_outputs = Table(
     Column("operation_id", UUID(as_uuid=False), ForeignKey("operations.id"), nullable=False),
     Column("output_type", Text, nullable=False),
     Column("output_id", UUID(as_uuid=False), nullable=False),
-    Column("active", Boolean, nullable=False, server_default=false()),
     Column("created_at", IsoTimestamp(), nullable=False),
-    Column("activated_at", IsoTimestamp()),
-    CheckConstraint("active = (activated_at IS NOT NULL)", name="active_activation"),
     UniqueConstraint("operation_id", "output_type", "output_id"),
 )
 Index(
