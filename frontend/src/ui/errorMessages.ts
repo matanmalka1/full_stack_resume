@@ -86,7 +86,6 @@ const problemMessages: Record<string, ProblemMessage> = {
   },
   PROVIDER_UNAVAILABLE: providerFailure,
   PROVIDER_REFUSED: providerFailure,
-  PROVIDER_SCHEMA_VIOLATION: providerFailure,
   PROVIDER_INVALID_OUTPUT: providerFailure,
   DEPENDENCY_UNAVAILABLE: { reason: "שירות שהמערכת נשענת עליו אינו זמין כרגע.", action: retryLater },
   SERVICE_UNAVAILABLE: { reason: "השרת אינו זמין כרגע.", action: retryLater },

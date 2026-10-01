@@ -803,13 +803,13 @@ describe("ApplicationPage at the preparation route", () => {
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
   });
 
-  /* A refusal with no provider is fixed in Settings, not in the posting, so the posting
+  /* A run with no provider is fixed in Settings, not in the posting, so the posting
      stays folded away like on any other visit instead of opening with its edit action. */
   it("keeps the posting folded when analysis failed for want of a provider", async () => {
     const failed = queued({
       status: "failed",
       is_terminal: true,
-      failure_code: "PROVIDER_REFUSED",
+      failure_code: "PROVIDER_NOT_CONFIGURED",
       available_actions: ["retry"],
     });
     vi.stubGlobal(

@@ -82,10 +82,8 @@ export const failureTones: Partial<Record<OperationStatus, Tone>> = {
   interrupted: "warning",
 };
 
-/* A run that could not reach a provider because none is usable. The server reports it as
-   PROVIDER_NOT_CONFIGURED; runs recorded before that code existed carry PROVIDER_REFUSED,
-   and for those the Settings read is what tells the two apart. Either way the reader is
-   told what is missing and where it is fixed. */
+/* A run that could not reach a provider because none was configured
+   (PROVIDER_NOT_CONFIGURED): the reader is told what is missing and where it is fixed. */
 export const missingProviderPresentation: FailurePresentation = {
   title: "לא הוגדר ספק AI",
   guidance: "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI אפשר להריץ את הפעולה שוב.",
@@ -218,10 +216,6 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
     title: "הבדיקה מצאה טענה שאינה נתמכת בעובדות",
     guidance: "הניסוח לא הופעל ודבר לא השתנה. יש ליצור ניסוח חדש או להסיר את הטענה שאינה נתמכת.",
   },
-  SCHEMA_VIOLATION: {
-    title: "תשובת הספק לא הייתה במבנה הנדרש",
-    guidance: providerOutputGuidance,
-  },
   RENDER_FAILED: {
     title: "יצירת קובץ קורות החיים נכשלה",
     guidance: "הגרסה שאושרה נשמרה והתוצר שנכשל לא הופעל. יש לתקן את הסיבה שמופיעה למעלה לפני יצירה מחדש.",
@@ -245,6 +239,6 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
   },
   CANCELLED_BEFORE_ACTIVATION: {
     title: "הפעולה בוטלה לפני הפעלת התוצאה",
-    guidance: "תוצאה שהושלמה לאחר בקשת הביטול נשמרת כראיה לא פעילה ואינה מחליפה את המצב הקיים.",
+    guidance: "שום תוצאה לא הופעלה והמצב הקיים נשמר. קריאות ה־AI שכבר בוצעו נשמרות ביומן הקריאות.",
   },
 };

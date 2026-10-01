@@ -375,10 +375,9 @@ Failure codes:
 SOURCE_CHANGED               PROVIDER_TIMEOUT           PROVIDER_RATE_LIMITED
 PROVIDER_QUOTA_EXHAUSTED     PROVIDER_UNAVAILABLE       PROVIDER_REFUSED
 PROVIDER_NOT_CONFIGURED
-INVALID_OUTPUT               SCHEMA_VIOLATION           CLAIM_REVIEW_UNCERTAIN
-CLAIM_REVIEW_UNSUPPORTED     RENDER_FAILED              BROWSER_START_FAILED
-MISSING_FACT_RENDERING       VALIDATION_EXECUTION_FAILED
-CANCELLED_BEFORE_ACTIVATION
+INVALID_OUTPUT               CLAIM_REVIEW_UNCERTAIN     CLAIM_REVIEW_UNSUPPORTED
+RENDER_FAILED                BROWSER_START_FAILED       MISSING_FACT_RENDERING
+VALIDATION_EXECUTION_FAILED  CANCELLED_BEFORE_ACTIVATION
 ```
 
 Every code is final: the runner never retries an Operation. A provider call is retried
@@ -396,7 +395,9 @@ more by the render handler.
   nothing was sent. `PROVIDER_REFUSED`: a provider answered and declined.
 - `CLAIM_REVIEW_UNCERTAIN`: the semantic reviewer could not establish support for a
   proposed wording. `CLAIM_REVIEW_UNSUPPORTED`: it found the wording exceeds or
-  contradicts the cited facts. Malformed reviewer output is `INVALID_OUTPUT`. A writing
+  contradicts the cited facts. Malformed output - an answer the output schema refuses,
+  from any task - is `INVALID_OUTPUT`; the AI call log keeps the precise outcome
+  (`schema_violation`). A writing
   Operation fails with these codes only when every line its answer named was withheld,
   and then the document is unchanged; otherwise it succeeds with `withheld_claims`.
 

@@ -163,12 +163,8 @@ class ProviderRefused(ProviderFailure):
     """The provider declined to answer the task."""
 
 
-class ProviderSchemaViolation(ProviderFailure):
-    """The provider returned output that is not the requested schema."""
-
-
 class ProviderInvalidOutput(ProviderFailure):
-    """The provider returned a well-formed schema whose content cannot be used."""
+    """The provider's output cannot be used: outside the requested schema, or in it but unusable."""
 
 
 class ExecutionStopped(ApplicationError):
