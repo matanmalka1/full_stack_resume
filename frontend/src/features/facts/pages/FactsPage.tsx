@@ -2,7 +2,7 @@ import { useState } from "react";
 import { BookOpen, Plus } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import { Button } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { Card } from "@/ui/Card";

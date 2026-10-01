@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { useAiAvailability } from "@/api/useSettings";
+import { useAiAvailability } from "@/features/settings";
 import { cx } from "@/ui/cx";
 import { Dialog } from "@/ui/Dialog";
 import { IconButton } from "@/ui/IconButton";

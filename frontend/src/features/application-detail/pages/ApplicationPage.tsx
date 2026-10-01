@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
-import { useRequiredParam } from "@/app/useRequiredParam";
+import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
 import { problemSentence } from "@/ui/errorMessages";

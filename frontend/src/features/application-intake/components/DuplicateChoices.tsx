@@ -2,8 +2,8 @@ import { Building2, ChevronLeft, FileText, Link2, type LucideIcon } from "lucide
 import { Link } from "react-router-dom";
 
 import type { DuplicateMatch, DuplicateMatchReason } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
-import { applicationLabel } from "@/features/applications";
+import { routePaths } from "@/navigation/routePaths";
+import { applicationLabel } from "@/features/application-detail";
 import { Callout } from "@/ui/Callout";
 
 interface ReasonPresentation {

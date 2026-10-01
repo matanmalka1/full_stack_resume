@@ -44,6 +44,28 @@
       }
     },
     {
+      "files": ["src/features/**", "src/ui/**", "src/navigation/**", "src/api/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/app/*", "@/app"],
+                "message": "app/ composes features and is consumed by nothing: move what you need to navigation/, ui/, api/ or the owning feature."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "src/ui/QueryState.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
       "files": ["e2e/**"],
       "rules": {
         "no-restricted-imports": [

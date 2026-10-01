@@ -2,9 +2,9 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useAiAvailability } from "@/api/useSettings";
-import { routePaths } from "@/app/routePaths";
-import { isJobTextWithinBudget } from "@/features/applications";
+import { useAiAvailability } from "@/features/settings";
+import { routePaths } from "@/navigation/routePaths";
+import { isJobTextWithinBudget } from "@/features/application-detail";
 import { WizardStepShell } from "@/features/preparation";
 import { useAppForm } from "@/hooks/useAppForm";
 import { Button } from "@/ui/Button";

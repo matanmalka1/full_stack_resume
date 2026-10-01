@@ -3,8 +3,8 @@ import { NavLink } from "react-router-dom";
 
 import { cx } from "@/ui/cx";
 import { Tooltip } from "@/ui/Tooltip";
-import { boardPath } from "../boardReturn";
-import { routePaths } from "../routePaths";
+import { boardPath } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
 
 const areas = () => [
   { icon: LayoutDashboard, key: routePaths.home, label: "לוח המועמדויות", to: boardPath() },

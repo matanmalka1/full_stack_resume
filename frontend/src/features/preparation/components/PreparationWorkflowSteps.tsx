@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { boardPath, boardReturnState } from "@/app/boardReturn";
+import { boardPath, boardReturnState } from "@/navigation/boardReturn";
 import { type WorkflowStep, WorkflowStepsRail } from "./WorkflowStepsRail";
 import {
   type StageDestinations,

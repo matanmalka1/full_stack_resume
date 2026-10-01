@@ -10,7 +10,7 @@ import type { DraftClaim } from "@/api/contracts";
 import { confirmAndUseFact, factHistoryQueryOptions, invalidateFactViews } from "@/api/facts";
 import { documentQueryKey } from "@/api/documents";
 import type { EditableDocument } from "../model/drafts.types";
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import {
   emptyFactForm,
