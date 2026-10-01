@@ -3711,12 +3711,8 @@
       },
       "OperationOutputResponse": {
         "additionalProperties": false,
-        "description": "One immutable output an Operation produced.\n\nExistence and activation are separate (§11): a failed or cancelled Operation\nmay own an output that was registered as inactive evidence, so `active` is\nreported rather than inferred from the status.",
+        "description": "One record a succeeded Operation activated (§11).",
         "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
           "output_id": {
             "title": "Output Id",
             "type": "string"
@@ -3732,8 +3728,7 @@
         },
         "required": [
           "output_type",
-          "output_id",
-          "active"
+          "output_id"
         ],
         "title": "OperationOutputResponse",
         "type": "object"

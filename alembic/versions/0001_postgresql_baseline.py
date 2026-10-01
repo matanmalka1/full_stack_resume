@@ -40,8 +40,8 @@ DO $$
 DECLARE table_name text;
 DECLARE missing_exceptions text[];
 DECLARE mutable_exceptions constant text[] := ARRAY[
-  'applications', 'cv_documents', 'operations', 'operation_outputs',
-  'knowledge_mutation_journal', 'app_settings'
+  'applications', 'cv_documents', 'operations', 'knowledge_mutation_journal',
+  'app_settings'
 ];
 BEGIN
   SELECT array_agg(exception_name ORDER BY exception_name) INTO missing_exceptions
@@ -62,7 +62,7 @@ BEGIN
     EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_immutable_change()', 'no_update_' || table_name, table_name);
     EXECUTE format('CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_immutable_change()', 'no_delete_' || table_name, table_name);
   END LOOP;
-  FOREACH table_name IN ARRAY ARRAY['operations', 'operation_outputs', 'knowledge_mutation_journal']
+  FOREACH table_name IN ARRAY ARRAY['operations', 'knowledge_mutation_journal']
   LOOP
     EXECUTE format('CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_protected_delete()', 'prevent_delete_' || table_name, table_name);
   END LOOP;
@@ -79,23 +79,6 @@ BEGIN
 END; $$;
 CREATE TRIGGER prevent_update_terminal_operations BEFORE UPDATE ON operations
 FOR EACH ROW EXECUTE FUNCTION cv_guard_terminal_operation_update();
-
-CREATE FUNCTION cv_guard_operation_output_activation() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE operation_status text; operation_cancellation_requested_at timestamptz;
-BEGIN
-  SELECT status, cancellation_requested_at INTO operation_status, operation_cancellation_requested_at
-  FROM operations WHERE id = OLD.operation_id;
-  IF NOT (OLD.active = FALSE AND NEW.active = TRUE AND NEW.activated_at IS NOT NULL
-    AND OLD.id = NEW.id AND OLD.operation_id = NEW.operation_id
-    AND OLD.output_type = NEW.output_type AND OLD.output_id = NEW.output_id
-    AND OLD.created_at = NEW.created_at AND operation_status = 'running'
-    AND operation_cancellation_requested_at IS NULL) THEN
-    RAISE EXCEPTION 'invalid operation output update';
-  END IF;
-  RETURN NEW;
-END; $$;
-CREATE TRIGGER valid_operation_output_activation BEFORE UPDATE ON operation_outputs
-FOR EACH ROW EXECUTE FUNCTION cv_guard_operation_output_activation();
 
 CREATE FUNCTION cv_guard_knowledge_mutation_transition() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -391,7 +374,6 @@ def upgrade() -> None:
         sa.Column("withheld_claims", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("technical_log_reference", sa.Text(), nullable=True),
         sa.Column("retry_of_operation_id", sa.UUID(as_uuid=False), nullable=True),
-        sa.Column("attempts_completed", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.CheckConstraint(
             "(status IN ('succeeded', 'failed', 'cancelled', 'interrupted')) = (finished_at IS NOT NULL)",
             name=op.f("ck_operations_terminal_finished_at"),
@@ -440,19 +422,12 @@ def upgrade() -> None:
             "status != 'failed' OR failure_code IS NOT NULL", name=op.f("ck_operations_failed_code")
         ),
         sa.CheckConstraint(
-            "status != 'running' OR lease_owner IS NOT NULL",
+            "(status = 'running') = (lease_owner IS NOT NULL)",
             name=op.f("ck_operations_running_lease"),
         ),
         sa.CheckConstraint(
             "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted')",
             name=op.f("ck_operations_status"),
-        ),
-        sa.CheckConstraint(
-            "status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted') OR lease_owner IS NULL",
-            name=op.f("ck_operations_terminal_lease"),
-        ),
-        sa.CheckConstraint(
-            "attempts_completed >= 0", name=op.f("ck_operations_attempts_completed_nonnegative")
         ),
         sa.CheckConstraint(
             "length(payload_hash) = 64", name=op.f("ck_operations_payload_hash_length")
@@ -719,13 +694,7 @@ def upgrade() -> None:
         sa.Column("operation_id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("output_type", sa.Text(), nullable=False),
         sa.Column("output_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("active", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.CheckConstraint(
-            "active = (activated_at IS NOT NULL)",
-            name=op.f("ck_operation_outputs_active_activation"),
-        ),
         sa.ForeignKeyConstraint(
             ["operation_id"],
             ["operations.id"],
@@ -907,7 +876,6 @@ def downgrade() -> None:
     op.drop_table("applications")
     op.drop_table("app_settings")
     op.execute("DROP FUNCTION cv_guard_knowledge_mutation_transition()")
-    op.execute("DROP FUNCTION cv_guard_operation_output_activation()")
     op.execute("DROP FUNCTION cv_guard_terminal_operation_update()")
     op.execute("DROP FUNCTION cv_reject_protected_delete()")
     op.execute("DROP FUNCTION cv_reject_immutable_change()")

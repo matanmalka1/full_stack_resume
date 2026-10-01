@@ -36,7 +36,7 @@ const succeeded = () =>
   queued({
     status: "succeeded",
     is_terminal: true,
-    outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+    outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
   });
 
 describe("autoDraftSources", () => {
@@ -51,7 +51,7 @@ describe("autoDraftSources", () => {
   it.each([
     "blocked",
     "other-analysis",
-    "inactive-output",
+    "no-output",
     "cancelled",
     "deleted",
     "has-content",
@@ -64,10 +64,7 @@ describe("autoDraftSources", () => {
     if (scenario === "blocked")
       projection.blocked_actions = [{ action: "create_draft", reasons: ["KNOWLEDGE_QUARANTINED"] }];
     if (scenario === "other-analysis") projection.document_analysis_id = "analysis-2";
-    if (scenario === "inactive-output")
-      operation.outputs.forEach((output) => {
-        output.active = false;
-      });
+    if (scenario === "no-output") operation.outputs = [];
     if (scenario === "cancelled") operation.status = "cancelled";
     if (scenario === "deleted") projection.application.deleted_at = "2026-09-14T07:00:00Z";
     if (scenario === "has-content") projection.preparation_state = "draft_in_progress";

@@ -47,19 +47,7 @@ class OperationExecutionStore(Protocol):
         operation_id: str,
         output_type: str,
         output_id: str,
-        *,
-        active: bool = False,
-        created_at: str | None = None,
     ) -> str: ...
-    def activate_operation_output(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        output_type: str,
-        output_id: str,
-        *,
-        now: str | None = None,
-    ) -> None: ...
     def complete_operation(
         self,
         tx: WriteTransaction,

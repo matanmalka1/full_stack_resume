@@ -211,7 +211,6 @@ OperationOutputType = Literal["job_analysis", "cv_document"]
 class OperationOutputReference(OperationModel):
     output_type: OperationOutputType
     output_id: str
-    active: bool
 
 
 class PdfPageLimitReason(OperationModel):
@@ -332,7 +331,6 @@ class PersistedOperation(OperationView):
     idempotency_key: str
     sources: OperationSources
     lease_owner: str | None = None
-    attempts_completed: int = Field(ge=0)
     technical_log_reference: str | None = None
 
 

@@ -130,7 +130,6 @@ class SqlAlchemyOperationClientStore:
                     message="Cancelled before execution.",
                     finished_at=timestamp,
                     cancellation_requested_at=timestamp,
-                    lease_owner=None,
                 )
             )
         elif row["status"] == OperationStatus.RUNNING.value:

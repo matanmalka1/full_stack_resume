@@ -64,9 +64,7 @@ from .failures import failure_code_for, failure_reason_for, safe_failure_detail_
 
 
 def _document_output(document_id: str) -> tuple[OperationOutputReference, ...]:
-    return (
-        OperationOutputReference(output_type="cv_document", output_id=document_id, active=True),
-    )
+    return (OperationOutputReference(output_type="cv_document", output_id=document_id),)
 
 
 def verify_document_hash(
@@ -137,8 +135,8 @@ class AITaskHandler:
 
     Written once because the alternative is three copies of the same
     `except` ladder, and a fourth task added later would get whichever copy its
-    author happened to read. Provider evidence is no concern of a handler: every
-    attempt is already in the AI call log before the service returns or raises.
+    author happened to read. Logging provider calls is no concern of a handler:
+    every attempt is already in the AI call log before the service returns or raises.
     """
 
     service: Any
@@ -248,9 +246,7 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
         except StateConflict as exc:
             raise SourceChanged("The analysis context changed before activation.") from exc
         outputs = [
-            OperationOutputReference(
-                output_type="job_analysis", output_id=result.analysis_id, active=True
-            )
+            OperationOutputReference(output_type="job_analysis", output_id=result.analysis_id)
         ]
         if result.created_document and result.document_id is not None:
             outputs.extend(_document_output(result.document_id))

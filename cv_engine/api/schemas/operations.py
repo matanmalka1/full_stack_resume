@@ -19,16 +19,10 @@ from .health import HttpSchema
 
 
 class OperationOutputResponse(HttpSchema):
-    """One immutable output an Operation produced.
-
-    Existence and activation are separate (§11): a failed or cancelled Operation
-    may own an output that was registered as inactive evidence, so `active` is
-    reported rather than inferred from the status.
-    """
+    """One record a succeeded Operation activated (§11)."""
 
     output_type: OperationOutputType
     output_id: str
-    active: bool
 
 
 class OperationResponse(HttpSchema):

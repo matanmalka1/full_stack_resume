@@ -435,9 +435,9 @@ is no heartbeat: only a new worker's startup releases them.
 
 **One worker.** The worker holds a PostgreSQL session advisory lock for its whole life
 (`worker_exclusivity`); a second worker is refused at start and exits. With that
-guarantee, startup changes every `queued`/`running` row that has a `lease_owner` to
-`interrupted`, which frees what it held: every such claim belongs to a worker that no
-longer exists. An external call is never resumed. The lock lives on a dedicated
+guarantee, startup changes every `running` row to `interrupted`, which frees what it
+held: every such row belongs to a worker that no longer exists. Only a running row has a
+`lease_owner`; the schema enforces that both are set together. An external call is never resumed. The lock lives on a dedicated
 connection, so a crash releases it with the session.
 
 The session can also end under a live worker (terminated, or a server restart). The

@@ -54,24 +54,3 @@ class ValidationReport(StrictModel):
         if hard_issues:
             raise ValueError(f"report claims to have passed with hard failures: {hard_issues}")
         return self
-
-
-class ReadyQualification(StrictModel):
-    """Current integrity projection for one immutable approved revision."""
-
-    application_id: str
-    approved_revision_id: str
-    pdf_artifact_version_id: str | None = None
-    html_artifact_version_id: str | None = None
-    ready_qualified: bool
-    validation: ValidationReport
-
-    @model_validator(mode="after")
-    def qualification_agrees_with_evidence(self) -> ReadyQualification:
-        if self.ready_qualified != self.validation.passed:
-            raise ValueError("ready_qualified must be derived from its validation evidence")
-        if self.ready_qualified and self.pdf_artifact_version_id is None:
-            raise ValueError("ready_qualified requires an exact PDF artifact version")
-        if self.ready_qualified and self.html_artifact_version_id is None:
-            raise ValueError("ready_qualified requires an exact HTML artifact version")
-        return self

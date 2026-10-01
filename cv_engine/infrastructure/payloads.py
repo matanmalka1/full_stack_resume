@@ -27,9 +27,6 @@ class PayloadPaths(Protocol):
     @property
     def artifacts_root(self) -> Path: ...
 
-    @property
-    def temp_root(self) -> Path: ...
-
 
 #: A payload writer is handed the bytes it must produce rather than a path to
 #: write them to. The filesystem signature `Callable[[Path], object]` could not
@@ -40,22 +37,15 @@ PayloadValidator = Callable[[bytes], bool | None]
 #: Immutable payload references are project-relative POSIX strings
 #: (`artifacts/snapshots/app/id.txt`), and object keys are relative to the
 #: artifact root (`snapshots/app/id.txt`). The two differ by exactly this
-#: prefix. The reference format is frozen - `artifact_versions` rows carry it
-#: and `ArtifactStore.resolve` reads it - so the conversion happens here rather
-#: than the stored string changing to match the key.
+#: prefix: JobSnapshot and Submission rows carry the reference, and the
+#: conversion happens here rather than in every reader.
 _REFERENCE_PREFIX = "artifacts"
 
 
 @dataclass(frozen=True, slots=True)
 class StoredPayload:
-    """One committed immutable payload, as the registration boundary sees it.
+    """One committed immutable payload, as the registration boundary sees it."""
 
-    `path` stays a `Path` because `commit_revision` and the render targets are
-    expressed in paths and because nothing outside this module reads it. It is
-    derived from the key, never the other way round.
-    """
-
-    path: Path
     project_relative: str
     sha256: str
     size: int
@@ -65,22 +55,16 @@ class PayloadStore:
     """Immutable v2 payload storage, independent of database registration."""
 
     _OUTPUT_SUFFIXES = {".html", ".pdf"}
-    #: Read size for streaming a payload outward. Bounded so a download
-    #: never holds a whole artifact in memory the way a `read_bytes` would.
-    _STREAM_CHUNK_BYTES = 64 * 1024
 
     def __init__(self, paths: PayloadPaths, object_store: ObjectStore | None = None):
         """Storage is injected; application paths supply the local layout.
 
         `object_store` defaults to a `LocalObjectStore` over the application's
         artifact root, so a caller that configures nothing keeps exactly the
-        behaviour it had. The roots stay because references are project-relative
-        and because `render_targets` must still hand
-        Chromium a real path.
+        behaviour it had. The roots stay because references are project-relative.
         """
         self._project_root = Path(paths.root).resolve()
         self._artifacts_root = resolve_within(self._project_root, paths.artifacts_root)
-        self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
@@ -127,12 +111,7 @@ class PayloadStore:
         return relative_within(self._artifacts_root, approved).as_posix()
 
     def _reference_for_key(self, key: str) -> str:
-        """The stored reference for one object key.
-
-        `artifact_versions` rows carry project-relative strings and
-        `ArtifactStore.resolve` joins them onto the project root. That format
-        is frozen, so the prefix is added here rather than the rows changing.
-        """
+        """The stored, project-relative reference for one object key."""
         return f"{_REFERENCE_PREFIX}/{key}"
 
     def _key_for_reference(self, reference: str) -> str:
@@ -146,23 +125,12 @@ class PayloadStore:
         approved = self._approved_destination(candidate)
         return relative_within(self._artifacts_root, approved).as_posix()
 
-    def _path_for_key(self, key: str) -> Path:
-        return resolve_within(self._artifacts_root, key)
-
     def snapshot_path(self, application_id: str, snapshot_id: str) -> Path:
         return self._target(
             "snapshots",
             self._component(application_id, name="application_id"),
             f"{self._component(snapshot_id, name='snapshot_id')}.txt",
         )
-
-    def reference_for(self, destination: Path) -> str:
-        """The stored reference `destination` would receive, without writing anything.
-
-        Pure and side-effect-free: it lets a caller compute the physical
-        key(s) a write is about to produce *before* writing.
-        """
-        return self._reference_for_key(self._key(destination))
 
     def submission_path(self, application_id: str, submission_id: str, *, suffix: str) -> Path:
         """Where one Submission's copy of a rendered file belongs (state-and-use-cases §18).
@@ -251,7 +219,6 @@ class PayloadStore:
             raise FileExistsError(f"immutable payload already exists: {key}") from exc
 
         return StoredPayload(
-            path=self._path_for_key(key),
             project_relative=self._reference_for_key(key),
             sha256=stored.sha256,
             size=stored.size,

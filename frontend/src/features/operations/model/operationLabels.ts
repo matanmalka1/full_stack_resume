@@ -60,13 +60,9 @@ const outputTypeLabels: Record<OperationOutput["output_type"], string> = {
   cv_document: "קורות החיים",
 };
 
-/* §11 separates existence from activation: a failed or cancelled Operation can own an
-   output that was recorded as inactive evidence. Only the active ones are results, so
-   only they are named - an inactive output reported as something the operation produced
-   would claim the state changed when it did not. */
-export const activeOutputLabels = (operation: Operation): string[] =>
+/* What a succeeded Operation activated (§11); a failed or cancelled one has no outputs. */
+export const outputLabels = (operation: Operation): string[] =>
   operation.outputs
-    .filter((output) => output.active)
     .map((output) => outputTypeLabels[output.output_type])
     .filter((label): label is string => label !== undefined);
 

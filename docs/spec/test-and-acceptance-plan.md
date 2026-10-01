@@ -135,7 +135,7 @@ Evidence: `tests/platform/` (`test_transactions.py`, `test_persistence_constrain
 - The project root is fixed below the install location.
 
 Evidence: `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
-`test_runtime_paths.py`), `tests/artifacts/` (`test_artifacts_api.py`,
+`test_runtime_paths.py`), `tests/artifacts/` (`test_document_files_api.py`,
 `test_payload_store.py`).
 
 ### 3.5 Operations
@@ -154,8 +154,8 @@ Evidence: `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
 - Startup interrupts work held by previous runners; shutdown prevents activation.
 - `SOURCE_CHANGED` is checked before execution and again before activation; every
   Operation records the knowledge scope its activation checks.
-- Output created after cancellation stays inactive and registered; activation and
-  completion share one transaction.
+- An Operation output is recorded only by its activation, in the transaction that
+  completes the Operation; a cancelled run records none.
 - Retry is new work; the old key returns the old result; safe messages are separate
   from technical detail.
 
@@ -355,7 +355,7 @@ recorded only while `document_hash` equals the attempt's expected hash; a retry 
 new Operation; Ready requires `rendered_basis == approved_basis == basis`.
 
 Evidence: `tests/operations/test_operation_runner.py`,
-`tests/artifacts/test_artifacts_api.py`.
+`tests/artifacts/test_document_files_api.py`.
 
 ### 5.5 Ready, then a newer analysis
 

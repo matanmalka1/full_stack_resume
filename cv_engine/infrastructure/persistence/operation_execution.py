@@ -154,22 +154,19 @@ class SqlAlchemyOperationExecutionStore:
     def interrupt_claims_from_previous_runners(
         self, tx: WriteTransaction, *, now: str | None = None
     ) -> list[str]:
-        """Interrupt every claimed Operation, for a fresh worker's one-time sweep.
+        """Interrupt every running Operation, for a fresh worker's one-time sweep.
 
         Called once, before this worker has claimed anything of its own. Only
-        one worker runs at a time (`worker_exclusivity`), so any claim still on
-        a row belongs to a worker that no longer exists. An external call it
-        made is never resumed.
+        one worker runs at a time (`worker_exclusivity`), so any running row
+        belongs to a worker that no longer exists. An external call it made is
+        never resumed.
         """
         timestamp = now or utc_now()
         connection = self._transactions.connection_for(tx, access="write")
         identifiers = list(
             connection.execute(
                 select(operations.c.id)
-                .where(
-                    operations.c.status.in_(("queued", "running")),
-                    operations.c.lease_owner.is_not(None),
-                )
+                .where(operations.c.status == OperationStatus.RUNNING.value)
                 .order_by(operations.c.created_at, operations.c.id)
             ).scalars()
         )
@@ -178,7 +175,7 @@ class SqlAlchemyOperationExecutionStore:
                 update(operations)
                 .where(
                     operations.c.id == identifier,
-                    operations.c.status.in_(("queued", "running")),
+                    operations.c.status == OperationStatus.RUNNING.value,
                 )
                 .values(
                     status="interrupted",
@@ -238,11 +235,12 @@ class SqlAlchemyOperationExecutionStore:
         operation_id: str,
         output_type: str,
         output_id: str,
-        *,
-        active: bool = False,
-        created_at: str | None = None,
     ) -> str:
-        timestamp = created_at or utc_now()
+        """Record what an activation produced, in the activation's own transaction.
+
+        Only a running Operation with no cancellation asked may record one, so an
+        output exists exactly when the Operation succeeded with it.
+        """
         identifier = new_id()
         connection = self._transactions.connection_for(tx, access="write")
         operation = (
@@ -256,61 +254,21 @@ class SqlAlchemyOperationExecutionStore:
         )
         if operation is None:
             raise UnknownRecord("operation does not exist")
-        if active and (
+        if (
             operation["status"] != OperationStatus.RUNNING.value
             or operation["cancellation_requested_at"] is not None
         ):
-            raise StateConflict("operation output cannot be activated")
-        existing = connection.execute(
-            select(operation_outputs.c.id).where(
-                operation_outputs.c.operation_id == operation_id,
-                operation_outputs.c.output_type == output_type,
-                operation_outputs.c.output_id == output_id,
-            )
-        ).scalar_one_or_none()
-        if existing is not None:
-            return existing
+            raise StateConflict("operation output cannot be recorded")
         connection.execute(
             insert(operation_outputs).values(
                 id=identifier,
                 operation_id=operation_id,
                 output_type=output_type,
                 output_id=output_id,
-                active=active,
-                created_at=timestamp,
-                activated_at=timestamp if active else None,
+                created_at=utc_now(),
             )
         )
         return identifier
-
-    def activate_operation_output(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        output_type: str,
-        output_id: str,
-        *,
-        now: str | None = None,
-    ) -> None:
-        timestamp = now or utc_now()
-        connection = self._transactions.connection_for(tx, access="write")
-        try:
-            changed = connection.execute(
-                update(operation_outputs)
-                .where(
-                    operation_outputs.c.operation_id == operation_id,
-                    operation_outputs.c.output_type == output_type,
-                    operation_outputs.c.output_id == output_id,
-                    operation_outputs.c.active.is_(False),
-                )
-                .values(active=True, activated_at=timestamp)
-            ).rowcount
-        except DBAPIError as error:
-            if "invalid operation output update" in str(error.orig):
-                raise StateConflict("operation output cannot be activated") from error
-            raise
-        if changed != 1:
-            raise StateConflict("operation output cannot be activated")
 
     def complete_operation(
         self,
@@ -365,7 +323,6 @@ class SqlAlchemyOperationExecutionStore:
                     null() if withheld_claims is None else withheld_claims.model_dump(mode="json")
                 ),
                 lease_owner=None,
-                attempts_completed=operations.c.attempts_completed + 1,
             )
         )
         current = (
@@ -408,7 +365,6 @@ class SqlAlchemyOperationExecutionStore:
                 # refuses a JSON scalar.
                 failure_reason=null() if reason is None else reason.model_dump(mode="json"),
                 technical_log_reference=technical_log_reference,
-                attempts_completed=operations.c.attempts_completed + 1,
                 lease_owner=None,
             )
         ).rowcount

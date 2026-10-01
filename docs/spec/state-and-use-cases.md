@@ -400,9 +400,9 @@ more by the render handler.
   Operation fails with these codes only when every line its answer named was withheld,
   and then the document is unchanged; otherwise it succeeds with `withheld_claims`.
 
-Output existence and activation are separate: a failed or cancelled Operation may own
-an output that never activated. An output reference is one of `job_analysis` or
-`cv_document`. Provider calls are not outputs; every attempt an Operation made is in the
+An output is what a succeeded Operation activated, recorded in the transaction that
+completed it; a failed or cancelled Operation has none. An output reference is one of
+`job_analysis` or `cv_document`. Provider calls are not outputs; every attempt an Operation made is in the
 AI call log, keyed by the Operation, whatever the Operation's outcome.
 
 The Operation read returns status, phase, message, timestamps, failure code, safe
@@ -427,7 +427,7 @@ recorded on an `INVALID_OUTPUT` failure where the reviewer answered `supported` 
 evidence failed the deterministic review check: such a line has verdict `unattested` and
 `problems`, the closed codes of the checks it failed (empty for every other verdict). In
 a mixed failure every refused line is included; unsupported, then uncertain, determines
-the Operation failure code. This is inactive diagnostic context, not an accepted proposal or an
+the Operation failure code. This is diagnostic context, not an accepted proposal or an
 approval record. The explanation is the reviewer's opinion, shown as plain text to help
 the user find what to fix; it is never evidence and authorizes nothing. Other provider
 output, responses, credentials and internal paths are excluded. Existing failure records
@@ -577,8 +577,8 @@ ordered assertion-to-source mapping. The answer is judged line by line (product-
 §10.1): a line becomes state only through a hard check it passes or a fully `supported`,
 attested review, and any other line is withheld - it keeps exactly the wording, links and
 proof it held before the Operation. The Operation succeeds with `withheld_claims` unless
-every line its answer named was withheld; then it fails (§11) with inactive provider
-evidence and the document unchanged. Unsupported manual text is saved as a
+every line its answer named was withheld; then it fails (§11) with the provider calls in
+the AI call log and the document unchanged. Unsupported manual text is saved as a
 pending, unlinked claim; it is never rejected or discarded, and it cannot pass the check.
 
 ### `read_document(application_id)`
@@ -844,8 +844,8 @@ The Operation read (§11).
 ### `cancel_operation(operation_id)`
 
 A queued Operation becomes `cancelled` immediately. A
-running one records `cancellation_requested_at`; any later output is registered
-inactive and never activated.
+running one records `cancellation_requested_at`; it then ends `cancelled` without
+activating anything, and records no output.
 
 ### `retry_operation(operation_id, Idempotency-Key?)`
 

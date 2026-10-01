@@ -115,7 +115,6 @@ def test_post_analysis_uses_ai_operation_and_creates_the_document(
     # reports what it cost.
     outputs = {item["output_type"]: item["output_id"] for item in completed["outputs"]}
     assert set(outputs) == {"job_analysis", "cv_document"}
-    assert all(item["active"] for item in completed["outputs"])
     assert completed["total_tokens"] == 33
     document = _document(ai_api_worker, application_id)
     assert document["id"] == outputs["cv_document"]

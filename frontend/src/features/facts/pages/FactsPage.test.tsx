@@ -241,7 +241,7 @@ describe("Facts integrity check", () => {
     const item = fact();
     const report = reconciliationReport({
       passed: false,
-      problems: ["missing artifact: artifacts/outputs/revision-1/resume.pdf"],
+      problems: ["AI call response hash mismatch: ai-call-1"],
       fact_lifecycle: { ...reconciliationReport().fact_lifecycle, passed: false, problems: ["fact audit mismatch"] },
     });
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
@@ -264,7 +264,7 @@ describe("Facts integrity check", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("הבעיות שנמצאו (2)")).toBeInTheDocument();
     expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
-    expect(screen.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf")).toBeInTheDocument();
+    expect(screen.getByText("AI call response hash mismatch: ai-call-1")).toBeInTheDocument();
     /* The report describes the store as it is now, so the pool is refetched behind it. */
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/v1/facts")).toHaveLength(2),

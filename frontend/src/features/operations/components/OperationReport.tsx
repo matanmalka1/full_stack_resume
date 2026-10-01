@@ -15,7 +15,7 @@ import { ClaimReviewClarification } from "./ClaimReviewClarification";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import {
-  activeOutputLabels,
+  outputLabels,
   failurePresentations,
   failureTones,
   joinHebrewList,
@@ -121,7 +121,7 @@ export const OperationReport = ({
   /* A run that succeeded with some proposed lines withheld: the result stands, and those
      lines - each back to its wording before the run - are listed so none changes unseen. */
   const withheld = operation.status === "succeeded" ? (operation.withheld_claims ?? null) : null;
-  const produced = activeOutputLabels(operation);
+  const produced = outputLabels(operation);
   /* A finished run says what it came to in one line - unless it failed, where the reason
      below is that line and a second, vaguer one above it only delayed it. */
   const outcome =

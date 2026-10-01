@@ -26,7 +26,7 @@ from operations_support import (
     _stored_request,
 )
 from sqlalchemy import select, text, update
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 import cv_engine.infrastructure.rendering as rendering_adapter
 from cv_engine.application.commands import (
@@ -452,20 +452,23 @@ def test_startup_interrupts_work_held_by_previous_runners_and_one_worker_runs(
     services,
     database_engine,
 ) -> None:
-    """Startup interrupts every claimed Operation, which is safe only with one worker.
+    """Startup interrupts every running Operation, which is safe only with one worker.
 
-    Any claim left on a row belongs to a worker that no longer exists, queued or
-    running. An unclaimed queued Operation is left for the new worker. The
-    advisory lock is what makes "no other worker is alive" true: a second
-    holder is refused, and the slot frees when the first lets go.
+    A running row belongs to a worker that no longer exists; only a running row can
+    hold a lease, which the schema enforces. A queued Operation is left for the new
+    worker. The advisory lock is what makes "no other worker is alive" true: a
+    second holder is refused, and the slot frees when the first lets go.
     """
-    queued = _operation_for_runner(services, "Claimed Queued Co")
     running = _operation_for_runner(services, "Claimed Running Co")
     waiting = _operation_for_runner(services, "Unclaimed Co")
+    with pytest.raises(IntegrityError, match="ck_operations_running_lease"):
+        with database_engine.begin() as connection:
+            connection.execute(
+                update(operations)
+                .where(operations.c.id == waiting.id)
+                .values(lease_owner="dead-runner")
+            )
     with database_engine.begin() as connection:
-        connection.execute(
-            update(operations).where(operations.c.id == queued.id).values(lease_owner="dead-runner")
-        )
         connection.execute(
             update(operations)
             .where(operations.c.id == running.id)
@@ -474,8 +477,7 @@ def test_startup_interrupts_work_held_by_previous_runners_and_one_worker_runs(
 
     interrupted = _execution_write(services, "interrupt_claims_from_previous_runners")
 
-    assert sorted(interrupted) == sorted([queued.id, running.id])
-    assert _operation(services, queued.id).status is OperationStatus.INTERRUPTED
+    assert interrupted == [running.id]
     assert _operation(services, running.id).status is OperationStatus.INTERRUPTED
     assert _operation(services, waiting.id).status is OperationStatus.QUEUED
 
@@ -548,27 +550,23 @@ def test_worker_stops_when_its_lock_session_ends(services, database_engine) -> N
 def test_runner_activates_outputs_and_completes_in_one_activation_transaction(services) -> None:
     operation = _operation_for_runner(services)
     output_id = new_id()
-    prepared = PreparedOperation(
-        value={"proposal": "validated"},
-        outputs=(
-            OperationOutputReference(
-                output_type="job_analysis",
-                output_id=output_id,
-                active=False,
-            ),
-        ),
-    )
     runner = _runner(
         services,
-        {OperationType.ANALYZE_JOB: _Handler(execute=lambda *_args: prepared)},
+        {
+            OperationType.ANALYZE_JOB: _Handler(
+                execute=lambda *_args: PreparedOperation(value={"proposal": "validated"}),
+                activate=lambda *_args: (
+                    OperationOutputReference(output_type="job_analysis", output_id=output_id),
+                ),
+            )
+        },
         runner_id="foreground-test",
     )
 
     result = runner.run(operation.id)
 
     assert result.status is OperationStatus.SUCCEEDED
-    assert result.attempts_completed == 1
-    assert [(item.output_id, item.active) for item in result.outputs] == [(output_id, True)]
+    assert [item.output_id for item in result.outputs] == [output_id]
 
 
 def test_source_changed_is_checked_before_execution_and_again_before_activation(services) -> None:
@@ -636,7 +634,6 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     assert completed.outputs == []
     with pytest.raises(StateConflict, match="cannot be retried"):
         services.operation_lifecycle.retry(completed.id, idempotency_key="meaningless-retry")
-    assert completed.attempts_completed == 1
     assert attempts == 1
 
 
@@ -765,8 +762,7 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
     assert succeeded.status is OperationStatus.SUCCEEDED, succeeded.safe_failure_detail
     written = stored_document(services, application_id)
     assert written.content is not None
-    outputs = [(item.output_type, item.active) for item in succeeded.outputs]
-    assert outputs == [("cv_document", True)]
+    assert [item.output_type for item in succeeded.outputs] == ["cv_document"]
     # The writer's call is in the AI call log, and the Operation reports its usage.
     assert succeeded.total_tokens is not None
     assert ("cv_document", written.id) in {

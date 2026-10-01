@@ -240,7 +240,7 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -290,7 +290,7 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const drafted = queued({
@@ -878,7 +878,7 @@ describe("ApplicationPage at the preparation route", () => {
       status: "succeeded",
       is_terminal: true,
       available_actions: [],
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return Promise.reject(new TypeError("response lost"));
@@ -942,7 +942,7 @@ describe("ApplicationPage at the preparation route", () => {
     const analyzed = queued({
       status: "succeeded",
       is_terminal: true,
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

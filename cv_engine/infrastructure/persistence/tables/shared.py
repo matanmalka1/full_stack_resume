@@ -27,7 +27,6 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
-    false,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -172,7 +171,6 @@ operations = Table(
     Column("withheld_claims", JSONB),
     Column("technical_log_reference", Text),
     Column("retry_of_operation_id", UUID(as_uuid=False), ForeignKey("operations.id")),
-    Column("attempts_completed", Integer, nullable=False, server_default=text("0")),
     CheckConstraint(
         f"operation_type IN ({sql_values(OPERATION_TYPES)})",
         name="operation_type",
@@ -195,12 +193,9 @@ operations = Table(
         f"failure_code IS NULL OR failure_code IN ({sql_values(OPERATION_FAILURE_CODES)})",
         name="failure_code",
     ),
-    CheckConstraint("attempts_completed >= 0", name="attempts_completed_nonnegative"),
-    CheckConstraint("status != 'running' OR lease_owner IS NOT NULL", name="running_lease"),
-    CheckConstraint(
-        "status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted') OR lease_owner IS NULL",
-        name="terminal_lease",
-    ),
+    # A claim sets both at once and every exit clears both: the lease is the running
+    # runner's fencing token and exists nowhere else.
+    CheckConstraint("(status = 'running') = (lease_owner IS NOT NULL)", name="running_lease"),
     CheckConstraint(
         "(status IN ('succeeded', 'failed', 'cancelled', 'interrupted')) = "
         "(finished_at IS NOT NULL)",
@@ -272,10 +267,7 @@ operation_outputs = Table(
     Column("operation_id", UUID(as_uuid=False), ForeignKey("operations.id"), nullable=False),
     Column("output_type", Text, nullable=False),
     Column("output_id", UUID(as_uuid=False), nullable=False),
-    Column("active", Boolean, nullable=False, server_default=false()),
     Column("created_at", IsoTimestamp(), nullable=False),
-    Column("activated_at", IsoTimestamp()),
-    CheckConstraint("active = (activated_at IS NOT NULL)", name="active_activation"),
     UniqueConstraint("operation_id", "output_type", "output_id"),
 )
 Index(

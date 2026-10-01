@@ -107,7 +107,6 @@ class OperationWorker:
         failure_code = operation.failure_code.value if operation.failure_code is not None else None
         fields = {
             "runner_id": self.runner.runner_id,
-            "attempts_completed": operation.attempts_completed,
             "duration_ms": duration_ms,
             "error_code": failure_code,
             "technical_log_reference": operation.technical_log_reference,

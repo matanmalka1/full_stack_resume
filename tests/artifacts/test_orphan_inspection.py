@@ -21,13 +21,12 @@ def _age(path) -> None:
 
 
 def _store(services, application_id: str, *, old: bool) -> str:
+    destination = services.payloads.snapshot_path(application_id, "snapshot")
     stored = services.payloads.commit(
-        services.payloads.snapshot_path(application_id, "snapshot"),
-        payload=b"job text",
-        validate=lambda _payload: True,
+        destination, payload=b"job text", validate=lambda _payload: True
     )
     if old:
-        _age(stored.path)
+        _age(destination)
     return stored.project_relative
 
 

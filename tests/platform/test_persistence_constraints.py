@@ -62,12 +62,11 @@ MUTABLE_TABLES = frozenset(
         "applications",  # the current recruitment projection and tracking fields
         "cv_documents",  # the one mutable resume document (product invariant 3)
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
-        "operation_outputs",  # permits exactly one inactive-to-active transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
     }
 )
-DELETE_ONLY_TABLES = frozenset({"operations", "operation_outputs", "knowledge_mutation_journal"})
+DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal"})
 
 IMMUTABLE_MESSAGE = "immutable record"
 

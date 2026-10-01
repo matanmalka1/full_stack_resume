@@ -46,7 +46,3 @@ def serialize_markdown(draft: DraftDocument) -> str:
             lines.extend(_render_claim(claim))
             lines.append("")
     return "\n".join(lines).rstrip() + "\n"
-
-
-def parse_draft(manifest: str) -> DraftDocument:
-    return DraftDocument.model_validate_json(manifest)

@@ -134,12 +134,10 @@ def _operation_record(row: Any, connection: Connection) -> PersistedOperation:
         withheld_claims=record["withheld_claims"],
         technical_log_reference=record["technical_log_reference"],
         retry_of_operation_id=record["retry_of_operation_id"],
-        attempts_completed=record["attempts_completed"],
         outputs=[
             OperationOutputReference(
                 output_type=output["output_type"],
                 output_id=output["output_id"],
-                active=bool(output["active"]),
             )
             for output in outputs
         ],
@@ -151,7 +149,6 @@ def _outputs(connection: Connection, operation_id: str) -> list[Any]:
         select(
             operation_outputs.c.output_type,
             operation_outputs.c.output_id,
-            operation_outputs.c.active,
         )
         .where(operation_outputs.c.operation_id == operation_id)
         .order_by(operation_outputs.c.created_at, operation_outputs.c.id)
