@@ -108,6 +108,14 @@ recruitment and submission, knowledge, Operations, maintenance, settings).
 
 Services return Pydantic boundary DTOs, never database rows or filesystem paths.
 
+Services live under `services/` and the ports they depend on under `ports/`. Modules
+directly under `application/` hold what several of those share: contracts that a port
+and its service both name (`operations.py`, `settings.py`, `knowledge_mutations.py`),
+pure policy (`state.py`, `transactions.py`), the error taxonomy, and the Operation
+runner, which is the worker's entry point rather than a service. Where a top-level module
+shares its name with a service, the module holds that service's contracts and the
+service lives under `services/`.
+
 ### 3.3 Infrastructure
 
 Infrastructure implements the ports: SQLAlchemy Core persistence, PostgreSQL
