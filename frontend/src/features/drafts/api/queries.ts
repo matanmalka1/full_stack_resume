@@ -6,7 +6,7 @@ import { documentQueryOptions } from "@/api/documents";
 import { useWatchedOperation } from "@/features/operations";
 import { type EditableDocument, isEditable } from "../model/drafts.types";
 
-export interface DraftDocument {
+interface DraftDocument {
   applicationError: unknown;
   /* See `useWatchedOperation`. */
   awaitingRecord: boolean;

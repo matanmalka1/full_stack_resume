@@ -8,7 +8,7 @@ export interface FactPoolEntry {
   outOfSync: boolean;
 }
 
-export interface FactPool {
+interface FactPool {
   entries: FactPoolEntry[];
   outOfSyncCount: number;
 }

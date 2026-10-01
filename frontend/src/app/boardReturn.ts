@@ -48,7 +48,7 @@ export const boardPath = (): string => {
    for the reader and mark it for a moment - and never as a filter or an order: the board
    stays exactly as it was left. History state rather than the query string, so a shared
    or reloaded board URL carries no trace of it. */
-export interface BoardReturnState {
+interface BoardReturnState {
   returnedFrom: string;
 }
 

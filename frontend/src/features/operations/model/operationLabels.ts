@@ -110,7 +110,7 @@ export const terminalSummaries: Partial<Record<OperationStatus, string>> = {
   interrupted: "הפעולה נקטעה ולא יצרה תוצאה.",
 };
 
-export interface FailurePresentation {
+interface FailurePresentation {
   title: string;
   guidance: string;
 }

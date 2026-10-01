@@ -186,23 +186,6 @@ def load_candidate_context(knowledge_root: Path, facts: FactStore) -> CandidateC
     return build_candidate_context(payload, facts, origin=str(path))
 
 
-def seed_fact_before_project(
-    base_dir: Path, source_name: str, payload: dict, *, canonical: bool = False
-) -> Fact:
-    """Seed bootstrap Knowledge before its journal exists.
-
-    Normal commands must use ``FactLifecycleService``. This helper exists only for
-    constructing an isolated test Knowledge fixture before services
-    and database are created.
-    """
-    store = load_fact_store(base_dir)
-    record = build_new_fact(store, source_name, payload, canonical=canonical)
-    path = base_dir / source_name
-    source = parse_fact_source(path.read_text(encoding="utf-8"), origin=str(path))
-    _write_fact_source(path, with_new_fact(source, record, canonical=canonical))
-    return record.model_copy(update={"source_file": f"base/{source_name}"})
-
-
 class FileKnowledge:
     """Knowledge as it is actually stored: version-controlled files.
 

@@ -59,7 +59,6 @@ from ..documents import load_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
 from ..rendering import ExecutedRender, RenderingService
-from .common import analysis_knowledge_context_hash
 from .failures import failure_code_for, failure_reason_for, safe_failure_detail_for
 
 
@@ -215,9 +214,7 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
 
         if self.sources.knowledge_is_prepared(tx):
             raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
-        if operation.sources.knowledge_context_hash != analysis_knowledge_context_hash(
-            self.load_knowledge()
-        ):
+        if operation.sources.knowledge_context_hash != self.load_knowledge().context_hash():
             raise SourceChanged("Knowledge changed before analysis activation.")
 
     def execute(self, operation, still_owned) -> PreparedOperation:

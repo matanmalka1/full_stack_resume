@@ -356,36 +356,5 @@ def as_operation_view(record: OperationView) -> OperationView:
     )
 
 
-_ALLOWED_TRANSITIONS: dict[OperationStatus, frozenset[OperationStatus]] = {
-    OperationStatus.QUEUED: frozenset(
-        {
-            OperationStatus.RUNNING,
-            OperationStatus.CANCELLED,
-            OperationStatus.INTERRUPTED,
-        }
-    ),
-    OperationStatus.RUNNING: frozenset(
-        {
-            OperationStatus.SUCCEEDED,
-            OperationStatus.FAILED,
-            OperationStatus.CANCELLED,
-            OperationStatus.INTERRUPTED,
-        }
-    ),
-    OperationStatus.SUCCEEDED: frozenset(),
-    OperationStatus.FAILED: frozenset(),
-    OperationStatus.CANCELLED: frozenset(),
-    OperationStatus.INTERRUPTED: frozenset(),
-}
-
-
-def require_operation_transition(current: OperationStatus, target: OperationStatus) -> None:
-    """Refuse lifecycle rewrites and transitions not approved by the specification."""
-    if target not in _ALLOWED_TRANSITIONS[current]:
-        raise OperationContractError(
-            f"invalid Operation transition: {current.value} -> {target.value}"
-        )
-
-
 def is_terminal_operation(status: OperationStatus) -> bool:
     return status in TERMINAL_OPERATION_STATUSES

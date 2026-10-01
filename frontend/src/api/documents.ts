@@ -37,7 +37,7 @@ export type DocumentOutline = NonNullable<CVDocument["outline"]>;
    A read that returned only the body would leave the ETag to be captured somewhere else,
    and the one thing an optimistic save must never do is send a token that came from a
    different read than the content the user was looking at. */
-export interface DocumentRead {
+interface DocumentRead {
   document: CVDocument;
   etag: string | null;
 }
@@ -104,7 +104,7 @@ export interface DocumentPatch {
   claim_orders?: Record<string, string[]>;
 }
 
-export interface DocumentSave {
+interface DocumentSave {
   mutation: DocumentMutation;
   etag: string | null;
 }

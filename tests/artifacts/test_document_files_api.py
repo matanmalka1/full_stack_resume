@@ -13,10 +13,13 @@ when it answers and refuses anything that is not Ready at that moment.
 
 from __future__ import annotations
 
+from urllib.parse import unquote
+
 from api_harness import MUTATION_HEADERS
 from helpers import stored_document
 
 from cv_engine.api.app import API_PREFIX
+from cv_engine.api.responses import content_disposition
 
 
 def _post(harness, path: str, body: dict | None = None, **headers):
@@ -132,6 +135,28 @@ def test_the_ready_pdf_is_the_rendered_file_and_nothing_else_is(
     refused = _get(api_worker, f"/applications/{unrendered.application_id}/document/pdf")
     assert refused.status_code == 412, refused.text
     assert refused.json()["code"] == "DOCUMENT_NOT_READY"
+
+
+def test_the_download_header_cannot_be_broken_by_the_candidate_name() -> None:
+    """The candidate half of the filename is Knowledge data, not a trusted string.
+
+    A quote, a backslash, a path separator, a control character or a non-ASCII
+    letter in it never reaches the quoted `filename` as is, and `filename*` still
+    carries the exact name, percent-encoded.
+    """
+    name = 'Dana "x"; filename=evil.exe\\/\r\nSet-Cookie: a=b דנה - Sales - CV.pdf'
+    header = content_disposition(name)
+
+    quoted = header.split('filename="', 1)[1].split('"', 1)[0]
+    assert set(quoted) <= set(map(chr, range(0x20, 0x7F))) - set('"\\/')
+    assert header.count('"') == 2
+    assert "\r" not in header and "\n" not in header
+    encoded = header.split("filename*=UTF-8''", 1)[1]
+    assert unquote(encoded) == name
+    assert content_disposition("Dana Levi - Sales - CV.pdf") == (
+        'attachment; filename="Dana Levi - Sales - CV.pdf"; '
+        "filename*=UTF-8''Dana%20Levi%20-%20Sales%20-%20CV.pdf"
+    )
 
 
 def test_the_preview_is_the_current_content_inline_and_safe_to_frame(
