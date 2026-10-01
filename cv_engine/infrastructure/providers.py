@@ -1,18 +1,13 @@
 """The OpenAI adapter: strict Structured Outputs in, typed Proposals out.
 
-Two layers, deliberately separate.
-
-`StructuredOutputClient` is *transport*. It knows the Responses API, the strict
-JSON-Schema envelope, how to classify one attempt's outcome, and how to sanitize
-a response. It knows nothing about job analyses or drafts, nothing about the
-database, and never retries: each call is one attempt, returned as an
-`AICallRecord` whatever its outcome.
-
-`OpenAIProvider` is the *contract*. It implements `application.ports.AIProvider`,
-one method per task, and it holds the only mapping from a task name to its
-output model. It cannot save state: it has no repository, no payload store, and
-no local path context, so what it returns stays a Proposal until the application commits
-it. Logging each attempt and deciding whether to try again belong to the application.
+`OpenAIProvider` implements `application.ports.AIProvider`, one method per task,
+over one HTTP attempt per call. It knows the Responses API, the strict
+JSON-Schema envelope, how to classify an attempt's outcome and how to sanitize a
+response, and it holds the only mapping from a task name to its output model.
+It cannot save state and never retries: it has no repository, no payload store
+and no local path context, so what it returns is an `AIAttempt` - an
+`AICallRecord` whatever the outcome, and a Proposal only on success. Logging each
+attempt and deciding whether to try again belong to the application.
 
 Nothing here reads a task-contract version or a prompt version. Both arrive as
 `TaskContracts`, loaded from the Knowledge files that declare them, so the
@@ -33,12 +28,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from email.utils import parsedate_to_datetime
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
 
 from ..application.ai_configuration import (
-    DEFAULT_REASONING_EFFORT,
     PRICING_SOURCE,
     PRICING_VERSION,
     execution_cost,
@@ -97,28 +91,6 @@ _REDACTED_KEYS = frozenset(
 #: Dropped whole: keeping the item and redacting its contents would still
 #: preserve its token counts and ordering as a shadow of the reasoning.
 _REDACTED_ITEM_TYPES = frozenset({"reasoning"})
-
-
-class StructuredOutputClient(Protocol):
-    """Transport: one strict Structured Outputs attempt, whatever its outcome.
-
-    Deliberately stringly-typed in `task`, because at this level a task *is*
-    just the schema name that goes into the request. The typed contract is one
-    layer up, where the six tasks have six different inputs.
-    """
-
-    name: str
-    model: str
-
-    def attempt(
-        self,
-        task: str,
-        payload: dict[str, Any],
-        output_model: type[OutputT],
-        *,
-        contracts: TaskContracts,
-        input_model: type[BaseModel] | None = None,
-    ) -> tuple[AICallRecord, OutputT | None]: ...
 
 
 def _strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -280,17 +252,28 @@ class _TransportFailure(Exception):
         self.detail = detail
 
 
-class OpenAIResponsesProvider:
-    """Responses API adapter using strict Structured Outputs, one attempt per call.
+#: The one mapping from a contracted task name to the model its output must
+#: satisfy. Derived from here by both the request schema and the parse, so a
+#: task cannot be requested under one schema and validated against another.
+TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
+    "propose_analysis": AnalysisProposal,
+    "draft_resume": DraftProposal,
+    "assess_claim_support": ClaimSupportProposal,
+    "regenerate_section": SectionProposal,
+    "regenerate_claim": ClaimProposal,
+}
 
-    It intentionally uses the standard library HTTP client so the provider
-    boundary does not add an SDK dependency. The response is still validated by
+
+class OpenAIProvider:
+    """The five contracted tasks over the Responses API, one HTTP attempt per call.
+
+    Strict Structured Outputs over the standard-library HTTP client, so the
+    provider boundary adds no SDK dependency; the answer is still validated by
     the shared Pydantic output contract before it can enter core state.
 
-    `attempt` never raises for a classified outcome: a refusal, a schema
-    violation, an HTTP error and a transport failure all come back as an
-    `AICallRecord`, so the application can log the attempt before it decides
-    whether to try again. It never retries by itself.
+    An Operation supplies the model and reasoning effort it froze at submission.
+    The task-contract model remains a backend-only fallback for direct
+    application calls; it is never accepted from an HTTP request.
 
     The API key is supplied by the caller - resolved through the config
     contract, not read from the environment here - and held only on this
@@ -303,31 +286,32 @@ class OpenAIResponsesProvider:
 
     def __init__(
         self,
+        contracts: TaskContracts,
         *,
-        model: str,
-        reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+        default_model: str,
         api_key: str | None = None,
         timeout: int = 90,
     ):
-        self.model = normalize_ai_model(model)
-        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
-        self.api_key = api_key
-        if not self.api_key:
+        if not api_key:
             raise ProviderRefused("OPENAI_API_KEY is required when provider=openai")
+        self._contracts = contracts
+        self._default_model = default_model
+        self.api_key = api_key
         self.timeout = timeout
 
     def _request_body(
         self,
         task: str,
         payload: dict[str, Any],
-        output_model: type[OutputT],
-        contracts: TaskContracts,
+        output_model: type[StrictModel],
+        model: str,
+        reasoning_effort: str,
     ) -> dict[str, Any]:
         return {
-            "model": self.model,
-            "reasoning": {"effort": self.reasoning_effort},
+            "model": model,
+            "reasoning": {"effort": reasoning_effort},
             "input": [
-                {"role": "system", "content": contracts.prompt_text},
+                {"role": "system", "content": self._contracts.prompt_text},
                 {"role": "user", "content": canonical_json({"task": task, "input": payload})},
             ],
             "text": {
@@ -394,17 +378,40 @@ class OpenAIResponsesProvider:
                 "The AI provider did not answer; it may have processed the request.",
             ) from exc
 
-    def attempt(
+    def _run(
         self,
         task: str,
-        payload: dict[str, Any],
-        output_model: type[OutputT],
+        context: StrictModel,
         *,
-        contracts: TaskContracts,
-        input_model: type[BaseModel] | None = None,
-    ) -> tuple[AICallRecord, OutputT | None]:
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+    ) -> AIAttempt[Any]:
+        """One HTTP attempt for one task, whatever its outcome.
+
+        Never raises for a classified outcome: a refusal, a schema violation, an
+        HTTP error and a transport failure all come back in the `AIAttempt`'s
+        record, so the application can log the attempt before it decides whether
+        to try again. It never retries by itself.
+        """
+        assert_external_io_allowed("provider execution")
+        contracts = self._contracts
         contract = contracts.get(task)
-        body = self._request_body(task, payload, output_model, contracts)
+        output_model = TASK_OUTPUT_MODELS[task]
+        # The contract file names the input and output models. Checked here
+        # rather than trusted, because a name nobody enforces is a comment: a
+        # contract that says `AnalysisProposal` while the code sends
+        # something else would persist a false `output_schema_version` into an
+        # immutable record, and every test would still pass.
+        declared = {"input": contract.input, "output": contract.output}
+        actual = {"input": type(context).__name__, "output": output_model.__name__}
+        if declared != actual:
+            raise KnowledgeRejected(
+                f"AI task contract {task} declares {declared} but the engine sends {actual}"
+            )
+        selected_model = normalize_ai_model(model or contract.model or self._default_model)
+        selected_effort = normalize_reasoning_effort(reasoning_effort)
+        payload = context.model_dump(mode="json")
+        body = self._request_body(task, payload, output_model, selected_model, selected_effort)
         started_at = _precise_now()
         started = time.monotonic()
 
@@ -413,11 +420,11 @@ class OpenAIResponsesProvider:
             return AICallRecord(
                 task=task,
                 provider=self.name,
-                model=self.model,
-                reasoning_effort=self.reasoning_effort,
+                model=selected_model,
+                reasoning_effort=selected_effort,
                 task_contract_version=contract.version,
                 input_schema_version=contract.input_schema_version,
-                input_schema_hash=schema_hash(model_schema(input_model)),
+                input_schema_hash=schema_hash(model_schema(type(context))),
                 output_schema_version=contract.output_schema_version,
                 output_schema_hash=schema_hash(body["text"]["format"]["schema"]),
                 prompt_version=contracts.prompt_version,
@@ -438,10 +445,10 @@ class OpenAIResponsesProvider:
         try:
             answer = self._post(body)
         except _TransportFailure as failure:
-            return record(failure.outcome, failure.detail, error_type=failure.error_type), None
+            return AIAttempt(record(failure.outcome, failure.detail, error_type=failure.error_type))
 
         if answer.status >= 300:
-            return self._http_failure(answer, record), None
+            return AIAttempt(self._http_failure(answer, record))
 
         sanitized = _sanitized_body(answer.content_type, answer.body)
         try:
@@ -449,16 +456,15 @@ class OpenAIResponsesProvider:
         except ValueError:
             envelope = None
         if not isinstance(envelope, dict):
-            return (
+            return AIAttempt(
                 record(
                     "schema_violation",
                     "The AI provider response is not a JSON object.",
                     http_status=answer.status,
                     sanitized_response=sanitized,
-                ),
-                None,
+                )
             )
-        usage, pricing, cost = self._usage(envelope)
+        usage, pricing, cost = _usage(envelope, selected_model)
         answered: dict[str, Any] = {
             "http_status": answer.status,
             "response_id": envelope.get("id"),
@@ -475,19 +481,18 @@ class OpenAIResponsesProvider:
             if isinstance(content, dict) and content.get("type") == "output_text"
         ]
         if not texts:
-            return record("refused", "The AI provider refused the request.", **answered), None
+            return AIAttempt(record("refused", "The AI provider refused the request.", **answered))
         try:
             parsed = output_model.model_validate_json("".join(texts))
         except (ValidationError, ValueError):
-            return (
+            return AIAttempt(
                 record(
                     "schema_violation",
                     f"The AI provider output does not satisfy the {task} schema.",
                     **answered,
-                ),
-                None,
+                )
             )
-        return (
+        return AIAttempt(
             record(
                 "succeeded",
                 "",
@@ -521,123 +526,6 @@ class OpenAIResponsesProvider:
                 )
             return record("rate_limited", "The AI provider rate limited the request.", **fields)
         return record("http_error", f"The AI provider returned HTTP {answer.status}.", **fields)
-
-    def _usage(self, envelope: dict[str, Any]):
-        """Usage, its price snapshot and cost - each None when not reported in full.
-
-        A usage the provider did not report, or reported inconsistently, is unknown;
-        so is a cost that needs a count the provider left out. None is never read
-        as zero.
-        """
-        raw = envelope.get("usage")
-        if not isinstance(raw, dict):
-            return None, None, None
-        details = raw.get("input_tokens_details")
-        if not isinstance(details, dict):
-            return None, None, None
-        try:
-            usage = ProviderUsage(
-                input_tokens=raw["input_tokens"],
-                cached_input_tokens=details["cached_tokens"],
-                cache_write_tokens=details.get("cache_write_tokens"),
-                output_tokens=raw["output_tokens"],
-                total_tokens=raw["total_tokens"],
-            )
-        except (KeyError, TypeError, ValidationError):
-            return None, None, None
-        definition = model_definition(self.model)
-        pricing = ProviderPricing(
-            version=PRICING_VERSION,
-            source=PRICING_SOURCE,
-            input_per_million_usd=format(definition.input_per_million_usd, "f"),
-            cached_input_per_million_usd=format(definition.cached_input_per_million_usd, "f"),
-            cache_write_per_million_usd=format(
-                definition.cache_write_per_million_usd or Decimal(0), "f"
-            ),
-            output_per_million_usd=format(definition.output_per_million_usd, "f"),
-            long_context_threshold_tokens=definition.long_context_threshold_tokens,
-            long_context_input_multiplier=format(definition.long_context_input_multiplier, "f"),
-            long_context_output_multiplier=format(definition.long_context_output_multiplier, "f"),
-        )
-        cost = execution_cost(
-            self.model,
-            input_tokens=usage.input_tokens,
-            cached_input_tokens=usage.cached_input_tokens,
-            cache_write_tokens=usage.cache_write_tokens,
-            output_tokens=usage.output_tokens,
-        )
-        return usage, pricing, None if cost is None else ProviderCost(**cost)
-
-
-#: The one mapping from a contracted task name to the model its output must
-#: satisfy. Derived from here by both the request schema and the parse, so a
-#: task cannot be requested under one schema and validated against another.
-TASK_OUTPUT_MODELS: dict[str, type[StrictModel]] = {
-    "propose_analysis": AnalysisProposal,
-    "draft_resume": DraftProposal,
-    "assess_claim_support": ClaimSupportProposal,
-    "regenerate_section": SectionProposal,
-    "regenerate_claim": ClaimProposal,
-}
-
-
-class OpenAIProvider:
-    """The five contracted tasks, behind the application's `AIProvider` port.
-
-    An Operation supplies the model and reasoning values it froze at submission.
-    The task-contract model remains a backend-only fallback for direct application
-    calls; it is never accepted from an HTTP request.
-    """
-
-    def __init__(
-        self,
-        contracts: TaskContracts,
-        *,
-        default_model: str,
-        api_key: str | None = None,
-        client_factory: Any = None,
-    ):
-        self._contracts = contracts
-        self._default_model = default_model
-        self._client_factory = client_factory or (
-            lambda model, effort: OpenAIResponsesProvider(
-                model=model, reasoning_effort=effort, api_key=api_key
-            )
-        )
-
-    def _run(
-        self,
-        task: str,
-        context: StrictModel,
-        *,
-        model: str | None = None,
-        reasoning_effort: str | None = None,
-    ) -> AIAttempt[Any]:
-        assert_external_io_allowed("provider execution")
-        contract = self._contracts.get(task)
-        output_model = TASK_OUTPUT_MODELS[task]
-        # The contract file names the input and output models. Checked here
-        # rather than trusted, because a name nobody enforces is a comment: a
-        # contract that says `AnalysisProposal` while the code sends
-        # something else would persist a false `output_schema_version` into an
-        # immutable record, and every test would still pass.
-        declared = {"input": contract.input, "output": contract.output}
-        actual = {"input": type(context).__name__, "output": output_model.__name__}
-        if declared != actual:
-            raise KnowledgeRejected(
-                f"AI task contract {task} declares {declared} but the engine sends {actual}"
-            )
-        selected_model = normalize_ai_model(model or contract.model or self._default_model)
-        selected_effort = normalize_reasoning_effort(reasoning_effort)
-        client: StructuredOutputClient = self._client_factory(selected_model, selected_effort)
-        record, proposal = client.attempt(
-            task,
-            context.model_dump(mode="json"),
-            output_model,
-            contracts=self._contracts,
-            input_model=type(context),
-        )
-        return AIAttempt(record=record, proposal=proposal)
 
     def propose_analysis(
         self,
@@ -702,3 +590,50 @@ class OpenAIProvider:
             AIAttempt[ClaimProposal],
             self._run("regenerate_claim", context, model=model, reasoning_effort=reasoning_effort),
         )
+
+
+def _usage(envelope: dict[str, Any], model: str):
+    """Usage, its price snapshot and cost - each None when not reported in full.
+
+    A usage the provider did not report, or reported inconsistently, is unknown;
+    so is a cost that needs a count the provider left out. None is never read
+    as zero.
+    """
+    raw = envelope.get("usage")
+    if not isinstance(raw, dict):
+        return None, None, None
+    details = raw.get("input_tokens_details")
+    if not isinstance(details, dict):
+        return None, None, None
+    try:
+        usage = ProviderUsage(
+            input_tokens=raw["input_tokens"],
+            cached_input_tokens=details["cached_tokens"],
+            cache_write_tokens=details.get("cache_write_tokens"),
+            output_tokens=raw["output_tokens"],
+            total_tokens=raw["total_tokens"],
+        )
+    except (KeyError, TypeError, ValidationError):
+        return None, None, None
+    definition = model_definition(model)
+    pricing = ProviderPricing(
+        version=PRICING_VERSION,
+        source=PRICING_SOURCE,
+        input_per_million_usd=format(definition.input_per_million_usd, "f"),
+        cached_input_per_million_usd=format(definition.cached_input_per_million_usd, "f"),
+        cache_write_per_million_usd=format(
+            definition.cache_write_per_million_usd or Decimal(0), "f"
+        ),
+        output_per_million_usd=format(definition.output_per_million_usd, "f"),
+        long_context_threshold_tokens=definition.long_context_threshold_tokens,
+        long_context_input_multiplier=format(definition.long_context_input_multiplier, "f"),
+        long_context_output_multiplier=format(definition.long_context_output_multiplier, "f"),
+    )
+    cost = execution_cost(
+        model,
+        input_tokens=usage.input_tokens,
+        cached_input_tokens=usage.cached_input_tokens,
+        cache_write_tokens=usage.cache_write_tokens,
+        output_tokens=usage.output_tokens,
+    )
+    return usage, pricing, None if cost is None else ProviderCost(**cost)

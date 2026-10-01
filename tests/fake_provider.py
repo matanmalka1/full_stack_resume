@@ -27,7 +27,7 @@ from io import BytesIO
 from typing import Any
 
 from cv_engine.domain.contracts.providers import DraftProposal, ProposedClaim
-from cv_engine.infrastructure.providers import OpenAIProvider, OpenAIResponsesProvider
+from cv_engine.infrastructure.providers import OpenAIProvider
 
 
 @dataclass(frozen=True)
@@ -176,12 +176,4 @@ class FakeOpenAI:
         return self
 
     def provider(self, contracts, *, default_model: str = "gpt-5.6-terra") -> OpenAIProvider:
-        return OpenAIProvider(
-            contracts,
-            default_model=default_model,
-            client_factory=lambda model, effort: OpenAIResponsesProvider(
-                model=model,
-                reasoning_effort=effort,
-                api_key="test-key",
-            ),
-        )
+        return OpenAIProvider(contracts, default_model=default_model, api_key="test-key")
