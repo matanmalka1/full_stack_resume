@@ -1,7 +1,7 @@
 import type { ApplicationDetail, Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 
-export type AnalysisViewState = "loading" | "processing" | "analysis_failed" | "content";
+type AnalysisViewState = "loading" | "processing" | "analysis_failed" | "content";
 
 /* The preparation page is one product state at a time. The projection and the watched
    Operation can briefly describe different moments of the same run: an analyze Operation

@@ -9,7 +9,7 @@ import { confirmUnload } from "@/utils/confirmUnload";
 
 const AUTOSAVE_DEBOUNCE_MS = 700;
 
-export type AutosaveStatus = "idle" | "saving" | "saved" | "failed" | "conflict";
+type AutosaveStatus = "idle" | "saving" | "saved" | "failed" | "conflict";
 
 export interface AutosaveState {
   status: AutosaveStatus;

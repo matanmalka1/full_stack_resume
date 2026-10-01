@@ -12,7 +12,6 @@ from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.infrastructure.payloads import PayloadStore
 from cv_engine.infrastructure.persistence import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.tables import applications
-from cv_engine.infrastructure.providers import OpenAIResponsesProvider
 from cv_engine.util import new_id
 
 
@@ -147,14 +146,13 @@ def _knowledge_refuses(transactions, scope, app_paths, **_fixtures) -> None:
 
 def _provider_refuses(transactions, scope, task_contracts, fake_openai, **_fixtures) -> None:
     provider = fake_openai.provider(task_contracts)
-    transport = OpenAIResponsesProvider(model="gpt-5.6-terra", api_key="test-key")
     with getattr(transactions, scope)():
         with pytest.raises(RuntimeError, match="provider execution"):
             provider.propose_analysis(
                 AnalysisContext(job_text="job", candidate_facts=[], overrides={})
             )
         with pytest.raises(RuntimeError, match="provider HTTP request"):
-            transport._post({})
+            provider._post({})
     assert fake_openai.calls == []
 
 

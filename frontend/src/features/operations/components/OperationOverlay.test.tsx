@@ -289,10 +289,9 @@ describe("OperationReport", () => {
     expect(alert).not.toHaveTextContent("חסימה");
   });
 
-  /* The backend files "no provider configured" under PROVIDER_REFUSED. With Settings
-     saying no provider exists, the report names that cause, says the request went
-     nowhere, and offers Settings rather than a retry that would fail the same way. */
-  it("routes a refusal with no provider configured to Settings", () => {
+  /* PROVIDER_REFUSED means a provider answered and declined; a missing provider has its
+     own code. Settings showing no provider does not turn a refusal into that case. */
+  it("reports a refusal as a refusal whatever Settings say", () => {
     const queryClient = client();
     const settings = settingsFixture({ provider_configured: false });
     queryClient.setQueryData(settingsQueryKey, { settings, etag: null });
@@ -307,12 +306,10 @@ describe("OperationReport", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("לא הוגדר ספק AI");
-    expect(screen.queryByText("ספק הבינה המלאכותית סירב לבקשה")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("ספק הבינה המלאכותית סירב לבקשה");
+    expect(screen.queryByText("לא הוגדר ספק AI")).not.toBeInTheDocument();
     /* The reason is the report's line on a failure; no vaguer one above it. */
     expect(screen.queryByText("הפעולה נכשלה ולא יצרה תוצאה.")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "פתיחת ההגדרות" })).toHaveAttribute("href", "/settings");
-    expect(screen.queryByRole("button", { name: "ניסיון חוזר" })).not.toBeInTheDocument();
   });
 
   /* A failure recorded before the structured reason existed carries only the English
@@ -487,17 +484,17 @@ describe("OperationOverlay", () => {
     vi.useRealTimers();
   });
 
-  /* Once a provider is available, a refused run no longer blocks anything: the row says
-     it can be tried again and stops wearing the blocker tone. */
-  it("stops presenting a refused run as an open blocker once a provider is available", () => {
-    const refused = failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] });
+  /* Once a provider is available, a run that had none no longer blocks anything: the row
+     says it can be tried again and stops wearing the blocker tone. */
+  it("stops presenting a run without a provider as an open blocker once one is available", () => {
+    const refused = failed({ failure_code: "PROVIDER_NOT_CONFIGURED", available_actions: ["retry"] });
     renderOverlay({ operation: refused, settled: true }, settingsFixture({ provider_configured: true }));
 
     expect(chip()).toHaveTextContent("נכשלה · אפשר לנסות שוב");
   });
 
-  it("keeps a refused run a plain failure while no provider is available", () => {
-    const refused = failed({ failure_code: "PROVIDER_REFUSED", available_actions: ["retry"] });
+  it("keeps a run without a provider a plain failure while none is available", () => {
+    const refused = failed({ failure_code: "PROVIDER_NOT_CONFIGURED", available_actions: ["retry"] });
     renderOverlay({ operation: refused, settled: true }, settingsFixture());
 
     expect(chip()).toHaveTextContent("נכשלה");

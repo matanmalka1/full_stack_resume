@@ -4,6 +4,13 @@ Status: implemented (2026-09-28). The specifications describe this model and are
 authoritative; this record keeps why, what was not built, and how the old model maps onto
 the new one. The three-wave execution plan is closed and lives in Git history.
 
+Superseded in part (2026-10-01). The tables this record kept for provider evidence are
+gone: `artifacts`, `artifact_versions`, the `provider_response` output type and inactive
+Operation outputs were replaced by the append-only AI call log (`ai_calls`,
+architecture.md §11), and `operation_resource_leases` by partial unique indexes on
+`operations` (architecture.md §10). `payload_write_leases` no longer exists either. The mapping table in §4 records the state at
+2026-09-28 and is left as it was.
+
 ## 1. Why
 
 Approval currently freezes the draft into an immutable ApprovedRevision and closes the

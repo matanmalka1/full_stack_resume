@@ -152,8 +152,8 @@ Evidence: `tests/platform/` (`test_api_foundation.py`, `test_settings.py`,
   run side by side. A claim the guards refuse moves on to the next candidate; any other
   unique violation is raised.
 - Startup interrupts work held by previous runners; shutdown prevents activation.
-- `SOURCE_CHANGED` is checked before execution and again before activation; every
-  Operation records the knowledge scope its activation checks.
+- `SOURCE_CHANGED` is checked before execution and again before activation; an
+  analysis records the Knowledge context hash its activation re-checks.
 - An Operation output is recorded only by its activation, in the transaction that
   completes the Operation; a cancelled run records none.
 - Retry is new work; the old key returns the old result; safe messages are separate

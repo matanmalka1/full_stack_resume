@@ -59,7 +59,6 @@ from ..documents import load_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
 from ..rendering import ExecutedRender, RenderingService
-from .common import analysis_knowledge_context_hash
 from .failures import failure_code_for, failure_reason_for, safe_failure_detail_for
 
 
@@ -140,11 +139,6 @@ class AITaskHandler:
     """
 
     service: Any
-    task: str
-    knowledge: AnalysisKnowledgeSource
-
-    def load_knowledge(self):
-        return load_knowledge(self.knowledge)
 
     def after_activation(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
         pass
@@ -169,15 +163,8 @@ class AITaskHandler:
         )
 
 
-class AnalysisTaskHandler(AITaskHandler):
-    service: AnalysisService
-    sources: AnalysisContextSourceReader
-
-
-class AnalysisOperationHandler(AnalysisTaskHandler):
+class AnalysisOperationHandler(AITaskHandler):
     """`analyze_job`, bound to its input JobSnapshot rather than to a document."""
-
-    task = "propose_analysis"
 
     def __init__(
         self,
@@ -215,8 +202,9 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
 
         if self.sources.knowledge_is_prepared(tx):
             raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
-        if operation.sources.knowledge_context_hash != analysis_knowledge_context_hash(
-            self.load_knowledge()
+        if (
+            operation.sources.knowledge_context_hash
+            != load_knowledge(self.knowledge).context_hash()
         ):
             raise SourceChanged("Knowledge changed before analysis activation.")
 
@@ -255,7 +243,6 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
 
 class DraftTaskHandler(AITaskHandler):
     service: DraftAuthoringService
-    knowledge: AnalysisKnowledgeSource
     documents: DocumentStore
 
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
@@ -265,19 +252,15 @@ class DraftTaskHandler(AITaskHandler):
 class DraftOperationHandler(DraftTaskHandler):
     """`create_draft`: AI content, written only at the frozen hash."""
 
-    task = "draft_resume"
-
     def __init__(
         self,
         service: DraftAuthoringService,
         documents: DocumentStore,
         activation: DraftActivation,
-        knowledge: AnalysisKnowledgeSource,
     ):
         self.service = service
         self.documents = documents
         self.activation = activation
-        self.knowledge = knowledge
 
     @staticmethod
     def _command(operation: PersistedOperation) -> DraftCommand:
@@ -326,18 +309,13 @@ class RegenerationOperationHandler(DraftTaskHandler):
         service: DraftAuthoringService,
         documents: DocumentStore,
         activation: DraftActivation,
-        knowledge: AnalysisKnowledgeSource,
         *,
-        task: str,
+        command_type: type[RegenerateSectionCommand] | type[RegenerateClaimCommand],
     ):
         self.service = service
         self.documents = documents
         self.activation = activation
-        self.knowledge = knowledge
-        self.task = task
-        self._command_type = (
-            RegenerateSectionCommand if task == "regenerate_section" else RegenerateClaimCommand
-        )
+        self._command_type = command_type
 
     def _command(self, operation: PersistedOperation):
         return self._command_type.model_validate(operation.payload)

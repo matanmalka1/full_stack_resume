@@ -4,7 +4,6 @@ import { useLocation } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import type { ProblemDetails } from "@/api/client";
-import { useAiAvailability } from "@/api/useSettings";
 import { useRequiredParam } from "@/app/useRequiredParam";
 import { Callout } from "@/ui/Callout";
 import { Disclosure } from "@/ui/Disclosure";
@@ -114,14 +113,10 @@ export const ApplicationPage = () => {
   });
   const pending = watched === undefined && viewState === "processing" ? analysisPending : undefined;
   /* A failed analysis opens the posting for repair, because a malformed posting is one
-     cause the reader can fix there. A refusal with no usable provider is not one of
+     cause the reader can fix there. A run with no provider configured is not one of
      them: the fix is in Settings, and an open posting with an edit action pointed the
      reader at the wrong place. */
-  const ai = useAiAvailability();
-  const postingRepairRelevant =
-    viewState === "analysis_failed" &&
-    watched?.failure_code !== "PROVIDER_NOT_CONFIGURED" &&
-    !(watched?.failure_code === "PROVIDER_REFUSED" && ai === "missing");
+  const postingRepairRelevant = viewState === "analysis_failed" && watched?.failure_code !== "PROVIDER_NOT_CONFIGURED";
   const operationLive = isOperationLive({
     awaitingRecord,
     continuation,

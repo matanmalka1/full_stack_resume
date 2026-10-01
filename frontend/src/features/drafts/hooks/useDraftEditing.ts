@@ -25,7 +25,7 @@ interface UseDraftEditingOptions {
   operationLive: boolean;
 }
 
-export interface DraftEditing {
+interface DraftEditing {
   /* AI regeneration is configured off or has no provider. Distinct from "still asking
      Settings", so the screen never claims unavailability it has not established. */
   aiUnavailable: boolean;

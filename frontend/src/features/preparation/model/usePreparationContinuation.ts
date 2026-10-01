@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-export interface PreparationContinuation {
+interface PreparationContinuation {
   applicationId: string;
   draftOperationId?: string;
 }

@@ -46,6 +46,11 @@ def accepted_operation(response: Response, operation: OperationView) -> Operatio
 _UNRESERVED = frozenset(string.ascii_letters + string.digits + "-._~")
 
 
+#: Printable ASCII a quoted `filename` may carry as is: no control characters, no
+#: `"` or `\\` (quoted-string delimiters), and no `/` (a path separator).
+_FALLBACK_SAFE = frozenset(chr(code) for code in range(0x20, 0x7F)) - set('"\\/')
+
+
 def _percent_encode(value: str) -> str:
     return "".join(
         character
@@ -70,10 +75,17 @@ def content_disposition(filename: str) -> str:
     first time it is inconvenient stops being a guard - and the replacement is
     ten lines with no network in them.
 
-    The name comes from the renderer's recruiter filename (`filename_for`); this
-    function does not sanitize it further.
+    The name comes from the renderer's recruiter filename (`filename_for`), and its
+    candidate half is the candidate's own name as Knowledge holds it - nothing
+    upstream promises it is header-safe. So both spellings are made safe here, at
+    the header: `filename*` is percent-encoded, which leaves no quote, separator or
+    control character, and the ASCII fallback keeps printable ASCII only, without
+    the `"` and `\\` that would end or escape the quoted string, and without the
+    path separators a browser would otherwise have to strip.
     """
-    ascii_fallback = filename.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    ascii_fallback = "".join(
+        character if character in _FALLBACK_SAFE else "_" for character in filename
+    )
     return (
         f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{_percent_encode(filename)}"
     )

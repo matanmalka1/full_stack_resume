@@ -8,6 +8,7 @@ from typing import Protocol
 from .. import __version__
 from ..api import ApiLimits, ApiServices, InstanceIdentity
 from ..api.app import API_VERSION
+from ..application.commands import RegenerateClaimCommand, RegenerateSectionCommand
 from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
@@ -341,24 +342,19 @@ def build_services(
                 rendering_service, documents, analysis_sources, resolved_activation_knowledge
             ),
             OperationType.CREATE_DRAFT: DraftOperationHandler(
-                draft_service,
-                documents,
-                draft_service.activation,
-                resolved_activation_knowledge,
+                draft_service, documents, draft_service.activation
             ),
             OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
                 draft_service,
                 documents,
                 draft_service.activation,
-                resolved_activation_knowledge,
-                task="regenerate_section",
+                command_type=RegenerateSectionCommand,
             ),
             OperationType.REGENERATE_CLAIM: RegenerationOperationHandler(
                 draft_service,
                 documents,
                 draft_service.activation,
-                resolved_activation_knowledge,
-                task="regenerate_claim",
+                command_type=RegenerateClaimCommand,
             ),
             OperationType.ANALYZE_JOB: AnalysisOperationHandler(
                 analysis_service,

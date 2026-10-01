@@ -117,7 +117,6 @@ class OperationFailureCode(StrEnum):
     INVALID_OUTPUT = "INVALID_OUTPUT"
     CLAIM_REVIEW_UNCERTAIN = "CLAIM_REVIEW_UNCERTAIN"
     CLAIM_REVIEW_UNSUPPORTED = "CLAIM_REVIEW_UNSUPPORTED"
-    SCHEMA_VIOLATION = "SCHEMA_VIOLATION"
     RENDER_FAILED = "RENDER_FAILED"
     BROWSER_START_FAILED = "BROWSER_START_FAILED"
     MISSING_FACT_RENDERING = "MISSING_FACT_RENDERING"
@@ -354,37 +353,6 @@ def as_operation_view(record: OperationView) -> OperationView:
     return OperationView.model_validate(
         {name: getattr(record, name) for name in OperationView.model_fields}
     )
-
-
-_ALLOWED_TRANSITIONS: dict[OperationStatus, frozenset[OperationStatus]] = {
-    OperationStatus.QUEUED: frozenset(
-        {
-            OperationStatus.RUNNING,
-            OperationStatus.CANCELLED,
-            OperationStatus.INTERRUPTED,
-        }
-    ),
-    OperationStatus.RUNNING: frozenset(
-        {
-            OperationStatus.SUCCEEDED,
-            OperationStatus.FAILED,
-            OperationStatus.CANCELLED,
-            OperationStatus.INTERRUPTED,
-        }
-    ),
-    OperationStatus.SUCCEEDED: frozenset(),
-    OperationStatus.FAILED: frozenset(),
-    OperationStatus.CANCELLED: frozenset(),
-    OperationStatus.INTERRUPTED: frozenset(),
-}
-
-
-def require_operation_transition(current: OperationStatus, target: OperationStatus) -> None:
-    """Refuse lifecycle rewrites and transitions not approved by the specification."""
-    if target not in _ALLOWED_TRANSITIONS[current]:
-        raise OperationContractError(
-            f"invalid Operation transition: {current.value} -> {target.value}"
-        )
 
 
 def is_terminal_operation(status: OperationStatus) -> bool:

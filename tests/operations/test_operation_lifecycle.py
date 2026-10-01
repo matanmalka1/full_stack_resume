@@ -38,7 +38,6 @@ from cv_engine.application.operation_runner import (
 from cv_engine.application.operations import (
     CreateOperation,
     OperationAction,
-    OperationContractError,
     OperationFailureCode,
     OperationSources,
     OperationStatus,
@@ -46,7 +45,6 @@ from cv_engine.application.operations import (
     as_operation_view,
     available_operation_actions,
     is_terminal_operation,
-    require_operation_transition,
 )
 from cv_engine.domain.contracts.providers import (
     AICallRecord,
@@ -95,23 +93,8 @@ def test_operation_lifecycle_transitions_are_forward_only_and_terminal_is_final(
     refuses every transition; and the actions a status offers are derived from the
     lifecycle, including the terminal failures no retry can fix.
     """
-    transitions = [
-        (OperationStatus.QUEUED, OperationStatus.RUNNING),
-        (OperationStatus.QUEUED, OperationStatus.CANCELLED),
-        (OperationStatus.QUEUED, OperationStatus.INTERRUPTED),
-        (OperationStatus.RUNNING, OperationStatus.SUCCEEDED),
-        (OperationStatus.RUNNING, OperationStatus.FAILED),
-        (OperationStatus.RUNNING, OperationStatus.CANCELLED),
-        (OperationStatus.RUNNING, OperationStatus.INTERRUPTED),
-    ]
-    for current, target in transitions:
-        require_operation_transition(current, target)
-
     for terminal in list(OperationStatus)[2:]:
         assert is_terminal_operation(terminal)
-        for target in OperationStatus:
-            with pytest.raises(OperationContractError):
-                require_operation_transition(terminal, target)
 
     assert {case[0] for case in _OPERATION_ACTION_CASES} == set(OperationStatus)
     for status, cancellation_requested_at, failure_code, expected in _OPERATION_ACTION_CASES:

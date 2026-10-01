@@ -175,7 +175,3 @@ def gaps(requirements: Sequence[Requirement], facts: FactStore) -> list[Gap]:
             )
         )
     return projected
-
-
-def hard_gaps(requirements: Sequence[Requirement], facts: FactStore) -> list[Gap]:
-    return [gap for gap in gaps(requirements, facts) if gap.severity == "hard"]

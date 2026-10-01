@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from fake_provider import FakeOpenAI
-from knowledge_seed import V2_IDENTITY_FACT, write_canonical_sources
+from knowledge_seed import V2_IDENTITY_FACT, seed_fact, write_canonical_sources
 
 from cv_engine.domain.analysis.requirements.concepts import RequirementConceptStore
 from cv_engine.domain.contracts.analysis import JobAnalysis
@@ -21,7 +21,6 @@ from cv_engine.infrastructure.knowledge import (
     load_presentations,
     load_profile_store,
     load_requirement_concepts,
-    seed_fact_before_project,
 )
 from cv_engine.runtime.composition import Services, build_services
 from cv_engine.runtime.paths import AppPaths
@@ -36,7 +35,7 @@ def project_root(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     write_canonical_sources(root / "base")
-    seed_fact_before_project(root / "base", "common.json", dict(V2_IDENTITY_FACT), canonical=True)
+    seed_fact(root / "base", "common.json", dict(V2_IDENTITY_FACT), canonical=True)
     shutil.copy2(SOURCE_ROOT / "base/candidate.json", root / "base/candidate.json")
     for name in ("profiles", "rendering", "ai", "config"):
         shutil.copytree(SOURCE_ROOT / name, root / name)

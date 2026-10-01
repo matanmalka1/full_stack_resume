@@ -208,7 +208,7 @@ class OperationRunner:
         handler = self.handlers.get(operation.operation_type)
         if handler is None:
             error = OperationExecutionError(
-                OperationFailureCode.SCHEMA_VIOLATION,
+                OperationFailureCode.VALIDATION_EXECUTION_FAILED,
                 "No executor is registered for this Operation type.",
             )
             error.technical_log_reference = self._record_technical_failure(

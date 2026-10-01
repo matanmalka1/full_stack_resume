@@ -1271,7 +1271,7 @@ RATE_LIMITED = HTTPStatus(429, headers=(("Retry-After", "3"),))
         ),
         # Never retried: a refusal, a schema violation, a client error.
         ([refusal_envelope()], "failed", "PROVIDER_REFUSED", ["refused"], []),
-        ([envelope('{"track": "sales"}')], "failed", "SCHEMA_VIOLATION", ["schema_violation"], []),
+        ([envelope('{"track": "sales"}')], "failed", "INVALID_OUTPUT", ["schema_violation"], []),
         ([HTTPStatus(400)], "failed", "PROVIDER_REFUSED", ["http_error"], []),
     ],
 )

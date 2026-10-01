@@ -18,7 +18,6 @@ from ...errors import (
     ProviderQuotaExhausted,
     ProviderRateLimited,
     ProviderRefused,
-    ProviderSchemaViolation,
     ProviderTimeout,
     ProviderUnavailable,
     StateConflict,
@@ -39,7 +38,6 @@ FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
     ProviderQuotaExhausted: OperationFailureCode.PROVIDER_QUOTA_EXHAUSTED,
     ProviderUnavailable: OperationFailureCode.PROVIDER_UNAVAILABLE,
     ProviderRefused: OperationFailureCode.PROVIDER_REFUSED,
-    ProviderSchemaViolation: OperationFailureCode.SCHEMA_VIOLATION,
     ProviderInvalidOutput: OperationFailureCode.INVALID_OUTPUT,
     ClaimReviewUncertain: OperationFailureCode.CLAIM_REVIEW_UNCERTAIN,
     ClaimReviewUnsupported: OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED,
@@ -66,7 +64,6 @@ _FAILURE_DETAIL: dict[OperationFailureCode, str] = {
     OperationFailureCode.PROVIDER_UNAVAILABLE: "The AI provider was unavailable.",
     OperationFailureCode.PROVIDER_REFUSED: "The AI provider refused the request.",
     OperationFailureCode.PROVIDER_NOT_CONFIGURED: "No AI provider is configured.",
-    OperationFailureCode.SCHEMA_VIOLATION: "The AI provider returned an invalid schema.",
     OperationFailureCode.INVALID_OUTPUT: "The AI proposal was rejected.",
     OperationFailureCode.CLAIM_REVIEW_UNCERTAIN: (
         "Semantic review could not establish support for the proposed claim."

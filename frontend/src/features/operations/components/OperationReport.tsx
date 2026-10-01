@@ -88,13 +88,11 @@ export const OperationReport = ({
   const { settings } = useSettings();
   const ai = aiAvailability(settings);
   const providerUsable = ai === "available";
-  /* A run that needed a provider and had none: the server's own code, or - for a run
-     recorded before that code existed - a refusal while Settings still show no usable
-     provider. Settings is the fix while it is still true, and a retry would fail the same
-     way; once a provider is usable, the run can simply be tried again. */
+  /* A run that needed a provider and had none. Settings is the fix while that is still
+     true, and a retry would fail the same way; once a provider is usable, the run can
+     simply be tried again. */
   const notConfigured = operation.failure_code === "PROVIDER_NOT_CONFIGURED";
-  const missingProvider =
-    settings !== undefined && !providerUsable && (notConfigured || operation.failure_code === "PROVIDER_REFUSED");
+  const missingProvider = settings !== undefined && !providerUsable && notConfigured;
   const failure = missingProvider
     ? missingProviderPresentation
     : notConfigured && providerUsable

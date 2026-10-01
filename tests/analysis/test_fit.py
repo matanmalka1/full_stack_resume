@@ -16,7 +16,6 @@ from cv_engine.domain.analysis.projection import (
     fit_level,
     fit_score,
     gaps,
-    hard_gaps,
 )
 from cv_engine.domain.contracts.analysis import FitLevel, Requirement
 
@@ -149,7 +148,9 @@ def test_hard_gaps_cap_the_level_however_well_the_rest_scored(
     score = fit_score(requirements)
     assert score is not None and score > FIT_SCORE_HIGH_THRESHOLD
     assert fit_level(requirements) is level
-    assert [gap.requirement_id for gap in hard_gaps(requirements, fact_store)] == hard_gap_ids
+    assert [
+        gap.requirement_id for gap in gaps(requirements, fact_store) if gap.severity == "hard"
+    ] == hard_gap_ids
 
 
 def test_a_gap_exposes_the_analysis_shortfall_reason(fact_store) -> None:
