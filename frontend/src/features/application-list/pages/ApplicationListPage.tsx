@@ -3,8 +3,8 @@ import { X } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import type { ApplicationListItem, RecruitmentStatus } from "@/api/contracts";
-import { returnedApplicationId } from "@/app/boardReturn";
-import { routePaths } from "@/app/routePaths";
+import { returnedApplicationId } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
 import { RecruitmentUpdateDialog } from "@/features/recruitment";
 import { Button, buttonClasses } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";

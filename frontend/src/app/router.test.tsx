@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { NewApplicationPage } from "@/features/application-intake/pages/NewApplicationPage";
 import { ApplicationListPage } from "@/features/application-list/pages/ApplicationListPage";
-import { ApplicationPage } from "@/features/applications/pages/ApplicationPage";
-import { ApplicationResumePage } from "@/features/applications/pages/ApplicationResumePage";
+import { ApplicationPage } from "@/features/application-detail/pages/ApplicationPage";
+import { ApplicationResumePage } from "@/features/application-detail/pages/ApplicationResumePage";
 import { DraftEditorPage } from "@/features/drafts/pages/DraftEditorPage";
 import { ReadyPage } from "@/features/ready/pages/ReadyPage";
 import { RootRouteErrorBoundary, RouteErrorBoundary } from "./layout/RouteErrorBoundary";

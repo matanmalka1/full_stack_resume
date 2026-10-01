@@ -7,7 +7,7 @@ import { isTerminalOperation } from "@/api/operations";
 import { IconButton } from "@/ui/IconButton";
 import { Tooltip } from "@/ui/Tooltip";
 import { cx } from "@/ui/cx";
-import { sourceHostname } from "@/features/applications";
+import { sourceHostname } from "@/features/application-detail";
 import { preparationResumeDestination } from "@/features/preparation";
 
 /* Terminal only means polling may stop. A failed or interrupted run remains the most

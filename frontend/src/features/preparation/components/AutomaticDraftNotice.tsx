@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 
 import type { ApplicationDetail } from "@/api/contracts";
-import { useSettings } from "@/api/useSettings";
-import { routePaths } from "@/app/routePaths";
+import { useSettings } from "@/features/settings";
+import { routePaths } from "@/navigation/routePaths";
 import { Callout } from "@/ui/Callout";
 import { autoDraftIsAnticipated } from "../model/autoDraft";
 

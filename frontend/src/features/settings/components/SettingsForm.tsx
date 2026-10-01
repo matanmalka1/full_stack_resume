@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiProblem } from "@/api/client";
 import type { Settings, UpdateSettingsRequest } from "@/api/contracts";
 import { type SettingsRead, readSettings, settingsQueryKey, updateSettings } from "@/api/settings";
-import { useDisplaySettingsPreview } from "@/app/layout/DisplaySettingsPreview";
+import { useDisplaySettingsPreview } from "./DisplaySettingsPreview";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { useAppForm } from "@/hooks/useAppForm";
 import { ActionBar } from "@/ui/ActionBar";

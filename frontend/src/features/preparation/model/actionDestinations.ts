@@ -1,5 +1,5 @@
 import type { ApplicationDetail, ApplicationListItem, OperationType } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 
 /* Which backend action names this frontend has actually built a screen for.
 

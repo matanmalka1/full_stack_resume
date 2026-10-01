@@ -12,7 +12,7 @@ import { cx } from "@/ui/cx";
 import { DateTime } from "@/ui/DateTime";
 import { wrapDialogFocus } from "@/ui/dialogFocus";
 import { LiveRegion } from "@/ui/LiveRegion";
-import { routePaths } from "../routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import { type ApplicationSearch, type GlobalSearchItem, useApplicationSearch } from "./useApplicationSearch";
 
 /* oxlint-disable jsx-a11y/no-noninteractive-element-interactions */

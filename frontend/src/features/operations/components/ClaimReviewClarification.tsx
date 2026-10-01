@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { Operation } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { StatusBadge } from "@/ui/StatusBadge";
 
