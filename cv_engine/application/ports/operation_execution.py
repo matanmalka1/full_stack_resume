@@ -47,6 +47,10 @@ class OperationExecutionStore(Protocol):
         message: str = "",
     ) -> None: ...
     def cancellation_requested(self, tx: ReadTransaction, operation_id: str) -> bool: ...
+
+    def execution_still_owned(
+        self, tx: ReadTransaction, operation_id: str, *, runner_id: str
+    ) -> bool: ...
     def record_operation_output(
         self,
         tx: WriteTransaction,
@@ -66,14 +70,6 @@ class OperationExecutionStore(Protocol):
         *,
         now: str | None = None,
     ) -> None: ...
-    def record_operation_attempt(
-        self,
-        tx: WriteTransaction,
-        operation_id: str,
-        *,
-        runner_id: str,
-        retry_at: str | None = None,
-    ) -> int: ...
     def complete_operation(
         self,
         tx: WriteTransaction,

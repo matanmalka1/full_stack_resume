@@ -132,23 +132,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/applications/{application_id}/artifacts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List registered artifact metadata for an application */
-        get: operations["artifact_versions_api_v1_applications__application_id__artifacts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/applications/{application_id}/close": {
         parameters: {
             query?: never;
@@ -588,58 +571,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/artifacts/{artifact_version_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read one registered artifact's metadata and download eligibility
-         * @description `200` with the registration and whether its payload verifies (§20).
-         *
-         *     `downloadable` is answered by running the same verification the download
-         *     runs, so the two cannot disagree.
-         */
-        get: operations["artifact_detail_api_v1_artifacts__artifact_version_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/artifacts/{artifact_version_id}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download one registered artifact by ID
-         * @description `200` and the bytes; `412` when the stored payload does not verify.
-         *
-         *     A `404` means no such registration. A `412` means the registration exists
-         *     and its payload failed containment, presence, or its hash - three separate
-         *     codes, because "somebody moved it" and "somebody changed it" are different
-         *     findings and a client should not have to guess which it hit.
-         *
-         *     `Content-Length` is set from the size the store measured after verifying
-         *     the hash, so a client can show progress against a number that was true of
-         *     the exact bytes being sent.
-         */
-        get: operations["download_artifact_api_v1_artifacts__artifact_version_id__download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/facts": {
         parameters: {
             query?: never;
@@ -993,6 +924,8 @@ export interface components {
     schemas: {
         /** AIModelOptionResponse */
         AIModelOptionResponse: {
+            /** Cache Write Per Million Usd */
+            cache_write_per_million_usd: string | null;
             /** Cached Input Per Million Usd */
             cached_input_per_million_usd: string;
             /**
@@ -1367,86 +1300,6 @@ export interface components {
             language_override?: ("en" | "he") | null;
             profile_override?: components["schemas"]["ProfileName"] | null;
             track_override?: components["schemas"]["Track"] | null;
-        };
-        /**
-         * ArtifactVersionDetailResponse
-         * @description Registered metadata plus verified download eligibility (§20).
-         */
-        ArtifactVersionDetailResponse: {
-            /** Artifact Id */
-            artifact_id: string;
-            /** Artifact Type */
-            artifact_type: string;
-            /** Content Hash */
-            content_hash: string;
-            /** Created At */
-            created_at: string;
-            /** Downloadable */
-            downloadable: boolean;
-            /** Emphasis */
-            emphasis?: string | null;
-            /** Facts Version */
-            facts_version?: string | null;
-            /** Id */
-            id: string;
-            /** Job Snapshot Id */
-            job_snapshot_id?: string | null;
-            /** Lifecycle Status */
-            lifecycle_status: string;
-            /** Logical Name */
-            logical_name: string;
-            /** Metadata */
-            metadata: {
-                [key: string]: unknown;
-            };
-            /** Profile */
-            profile?: string | null;
-            /** Size */
-            size?: number | null;
-            /** Track */
-            track?: string | null;
-            /** Unavailable Reason */
-            unavailable_reason?: string | null;
-            /** Version Number */
-            version_number: number;
-        };
-        /** ArtifactVersionResponse */
-        ArtifactVersionResponse: {
-            /** Artifact Id */
-            artifact_id: string;
-            /** Artifact Type */
-            artifact_type: string;
-            /** Content Hash */
-            content_hash: string;
-            /** Created At */
-            created_at: string;
-            /** Emphasis */
-            emphasis?: string | null;
-            /** Facts Version */
-            facts_version?: string | null;
-            /** Id */
-            id: string;
-            /** Job Snapshot Id */
-            job_snapshot_id?: string | null;
-            /** Lifecycle Status */
-            lifecycle_status: string;
-            /** Logical Name */
-            logical_name: string;
-            /** Metadata */
-            metadata: {
-                [key: string]: unknown;
-            };
-            /** Profile */
-            profile?: string | null;
-            /** Track */
-            track?: string | null;
-            /** Version Number */
-            version_number: number;
-        };
-        /** ArtifactVersionsResponse */
-        ArtifactVersionsResponse: {
-            /** Items */
-            items: components["schemas"]["ArtifactVersionResponse"][];
         };
         /**
          * AttachFactRequest
@@ -2418,7 +2271,7 @@ export interface components {
          * OperationFailureCode
          * @enum {string}
          */
-        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "CLAIM_REVIEW_UNCERTAIN" | "CLAIM_REVIEW_UNSUPPORTED" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION" | "PROVIDER_NOT_CONFIGURED";
+        OperationFailureCode: "SOURCE_CHANGED" | "PROVIDER_TIMEOUT" | "PROVIDER_RATE_LIMITED" | "PROVIDER_QUOTA_EXHAUSTED" | "PROVIDER_UNAVAILABLE" | "PROVIDER_REFUSED" | "INVALID_OUTPUT" | "CLAIM_REVIEW_UNCERTAIN" | "CLAIM_REVIEW_UNSUPPORTED" | "SCHEMA_VIOLATION" | "RENDER_FAILED" | "BROWSER_START_FAILED" | "MISSING_FACT_RENDERING" | "VALIDATION_EXECUTION_FAILED" | "CANCELLED_BEFORE_ACTIVATION" | "PROVIDER_NOT_CONFIGURED";
         /**
          * OperationOutputResponse
          * @description One immutable output an Operation produced.
@@ -2436,13 +2289,13 @@ export interface components {
              * Output Type
              * @enum {string}
              */
-            output_type: "job_analysis" | "cv_document" | "provider_response";
+            output_type: "job_analysis" | "cv_document";
         };
         /**
          * OperationPhase
          * @enum {string}
          */
-        OperationPhase: "queued" | "waiting_for_application" | "waiting_for_render_slot" | "waiting_for_ai_slot" | "pre_execution_check" | "executing" | "retry_wait" | "pre_activation_check" | "activating" | "completed";
+        OperationPhase: "queued" | "waiting_for_application" | "waiting_for_render_slot" | "waiting_for_ai_slot" | "pre_execution_check" | "executing" | "pre_activation_check" | "activating" | "completed";
         /**
          * OperationResponse
          * @description The §11 Operation query fields, and nothing wider.
@@ -2476,6 +2329,8 @@ export interface components {
              * @description Commands currently accepted, derived by the application layer.
              */
             readonly available_actions: components["schemas"]["OperationAction"][];
+            /** Cache Write Tokens */
+            cache_write_tokens?: number | null;
             /** Cached Input Tokens */
             cached_input_tokens?: number | null;
             /** Cancellation Requested At */
@@ -2594,15 +2449,18 @@ export interface components {
          * ReconciliationResponse
          * @description Whether stored evidence and the fact lifecycle agree.
          *
-         *     `problems` describes stored artifacts; the lifecycle keeps its own list, so
+         *     `problems` describes stored payloads and logged AI calls; the lifecycle keeps its
+         *     own list, so
          *     a reader can tell which half is broken instead of seeing one merged list.
          */
         ReconciliationResponse: {
-            /** Artifact Versions Checked */
-            artifact_versions_checked: number;
+            /** Ai Calls Checked */
+            ai_calls_checked: number;
             fact_lifecycle: components["schemas"]["FactLifecycleReportResponse"];
             /** Passed */
             passed: boolean;
+            /** Payloads Checked */
+            payloads_checked: number;
             /** Problems */
             problems: string[];
         };
@@ -3147,37 +3005,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OperationResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    artifact_versions_api_v1_applications__application_id__artifacts_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                application_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ArtifactVersionsResponse"];
                 };
             };
             /** @description The request did not match the API contract. */
@@ -3966,68 +3793,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmissionResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    artifact_detail_api_v1_artifacts__artifact_version_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                artifact_version_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ArtifactVersionDetailResponse"];
-                };
-            };
-            /** @description The request did not match the API contract. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    download_artifact_api_v1_artifacts__artifact_version_id__download_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                artifact_version_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The registered payload, under a safe delivery filename. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/octet-stream": string;
                 };
             };
             /** @description The request did not match the API contract. */

@@ -519,6 +519,7 @@ describe("ApplicationPage at the preparation route", () => {
       reasoning_effort: "high",
       input_tokens: 11,
       cached_input_tokens: 3,
+      cache_write_tokens: 5,
       output_tokens: 22,
       total_tokens: 33,
       cost_usd: "0.00002806",
@@ -541,6 +542,9 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.getByText("$0.000028")).toBeInTheDocument();
     expect(screen.getByText("מאמץ חשיבה")).toBeInTheDocument();
     expect(screen.getByText("גבוה")).toBeInTheDocument();
+    /* Cache writes are billed at their own rate, so they are shown beside cache reads. */
+    expect(screen.getByText("כתיבה למטמון")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
   });
 
   it("does not present a superseded analysis as the one in force", async () => {

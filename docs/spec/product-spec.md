@@ -549,10 +549,20 @@ reasoning effort is `low`/`medium`/`high`, and both are frozen into each Operati
 it is queued, so a later settings change cannot alter queued work. There is no dynamic
 model discovery.
 
-**Provenance.** Parsed output and a sanitized raw response are kept as immutable
-provider evidence. Response ID, model, usage (cached input separately), latency, hashes,
-refusal and error metadata, contract and prompt versions, the dated USD price snapshot,
-and derived cost are recorded. Secrets and hidden reasoning are never kept.
+**Provenance.** Every provider call attempt - successful, refused, failed, or without
+an answer - is appended to the AI call log as soon as it ends: its sanitized response
+in canonical JSON form and that form's hash, response ID, model, outcome, error type
+and code, usage (cached input and cache-write input separately), latency, hashes, the
+task-contract, schema and prompt versions and hashes, the dated USD price snapshot, and
+derived cost. The log is append-only. The request payload is not kept; its hash is.
+Secrets and hidden reasoning are never kept. A usage or cost the provider did not
+report is unknown, never zero, and an Operation's totals are unknown when any of its
+attempts' are - except an attempt proven never delivered, which used nothing. A billing
+refusal (`PROVIDER_QUOTA_EXHAUSTED`) is reported apart from a rate limit, because the
+user fixes it in the provider account rather than by waiting. A provider call is retried at most once, per call, only where the
+second attempt cannot duplicate a processed request or the provider asks for it
+(architecture.md §11); a failure that may have reached the provider is never retried
+automatically.
 
 **Untrusted input.** Job text and user content are data. They may shape proposed
 content but never policy, allowed facts, validation, approval, or output schemas.
@@ -659,15 +669,16 @@ validate against current Knowledge rather than trusting `built_with`. `facts_has
 only the facts the document depends on, so an unrelated fact change does not move its
 basis.
 
-**Retention.** Nothing deletes an immutable payload: snapshots, provider evidence, and
-Submission files stay forever. Replaced document content is not archived —
+**Retention.** Nothing deletes an immutable record: snapshots, Submission files, and the
+AI call log stay forever. Replaced document content is not archived —
 `build_from_analysis` and editing overwrite it — and superseded rendered files are
 working outputs deleted best-effort. Only a Submission keeps what was sent.
 
 **Maintenance.** Maintenance is an operator task, not a user one: once accounts ship,
 reconciliation and orphan inspection span every user and move from the API to the
-operator CLI (§22). Reconciliation checks every registered payload against its hash and the
-fact lifecycle against its trail, reports both halves, and repairs nothing. Orphan
+operator CLI (§22). Reconciliation checks every registered payload against its hash, every
+logged AI call's sanitized response against its hash, and the fact lifecycle against its
+trail, reports each, and repairs nothing. Orphan
 inspection lists unreferenced payloads older than one hour and deletes nothing
 (state-and-use-cases.md §19b). Schema upgrade is the explicit `alembic upgrade head`;
 PostgreSQL and bucket backup are the environment's responsibility.
@@ -737,9 +748,11 @@ closed vocabulary that the UI explains without parsing text. The UI polls and sh
 backend's status, phase, and message; there is no fabricated progress.
 
 Queued cancellation is immediate. Running cancellation is best-effort and prevents
-activation; later output is kept as inactive evidence. Retry creates a new Operation
-that references the original and copies its model and effort. Transient provider and
-browser failures are retried once automatically. Types, phases, failure codes,
+activation; a provider call that already happened stays in the AI call log. Retry
+creates a new Operation that references the original and copies its model and effort.
+The Operation itself is never retried automatically: one provider call is retried at
+most once where it is safe (§12), and a browser that failed to start is started once
+more, both only while the Operation is still running, held, and not cancelled. Types, phases, failure codes,
 resources, and idempotency are state-and-use-cases.md §11 and §19 and architecture.md
 §10.
 
@@ -839,7 +852,7 @@ the operator's.
 
 **Account deactivation** is the only way an account ends: deactivate, revoke every
 session, and anonymize the personal data held in mutable fields — the exact list is
-state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, JobSnapshots, provider evidence, audit and fact events
+state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, JobSnapshots, the AI call log, audit and fact events
 — stay, owned by a user row that no longer identifies anyone and that nobody can sign
 in to. A hard delete is not a product capability.
 

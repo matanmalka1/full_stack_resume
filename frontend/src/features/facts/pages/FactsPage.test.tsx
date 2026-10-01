@@ -260,7 +260,7 @@ describe("Facts integrity check", () => {
     fireEvent.click(await screen.findByRole("button", { name: "הפעלה" }));
 
     expect(
-      await screen.findByText("1 אי־התאמות בעובדות, 1 בעיות בתוצרים — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
+      await screen.findByText("1 אי־התאמות בעובדות, 1 בעיות בקבצים או בקריאות AI — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
     ).toBeInTheDocument();
     expect(screen.getByText("הבעיות שנמצאו (2)")).toBeInTheDocument();
     expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
@@ -286,7 +286,7 @@ describe("Facts integrity check", () => {
     renderRoute("/facts", "/facts", <FactsPage />);
     fireEvent.click(await screen.findByRole("button", { name: "הפעלה" }));
 
-    expect(await screen.findByText("תקין — 4 עובדות, 4 גרסאות תוצר.")).toBeInTheDocument();
+    expect(await screen.findByText("תקין — 4 עובדות, 4 קבצים שמורים, 2 קריאות AI.")).toBeInTheDocument();
     expect(screen.queryByText(/הבעיות שנמצאו/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "בדיקה מחדש" })).toBeInTheDocument();
   });

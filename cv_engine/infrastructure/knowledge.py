@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ..application.errors import KnowledgeRejected
 from ..application.knowledge_mutations import (
@@ -66,9 +67,8 @@ def load_task_contracts(knowledge_root: Path) -> TaskContracts:
         raise KnowledgeRejected("AI task contracts must be an object")
     prompt = document.get("prompt")
     tasks = document.get("tasks")
-    version = document.get("version")
-    if not isinstance(version, str) or not isinstance(prompt, dict) or not isinstance(tasks, dict):
-        raise KnowledgeRejected("AI task contracts must declare version, prompt, and tasks")
+    if not isinstance(prompt, dict) or not isinstance(tasks, dict):
+        raise KnowledgeRejected("AI task contracts must declare prompt and tasks")
     prompt_version = prompt.get("version")
     prompt_file = prompt.get("file")
     if not isinstance(prompt_version, str) or not isinstance(prompt_file, str):
@@ -82,11 +82,11 @@ def load_task_contracts(knowledge_root: Path) -> TaskContracts:
     for name, entry in tasks.items():
         if not isinstance(entry, dict):
             raise KnowledgeRejected(f"AI task contract {name} must be an object")
-        task_version = entry.get("version", version)
+        task_version = entry.get("version")
         # The input and output schema versions default to the task's own version
         # rather than to a literal, so a task that declares one version declares
         # all three consistently and cannot end up with an invented default.
-        fields = {
+        fields: dict[str, Any] = {
             "input": entry.get("input"),
             "input_schema_version": entry.get("input_schema_version", task_version),
             "output": entry.get("output"),
@@ -107,7 +107,6 @@ def load_task_contracts(knowledge_root: Path) -> TaskContracts:
     if not declared:
         raise KnowledgeRejected("AI task contracts declare no tasks")
     return TaskContracts(
-        version=version,
         prompt_version=prompt_version,
         prompt_hash=sha256_text(prompt_text),
         prompt_text=prompt_text,

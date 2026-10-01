@@ -81,7 +81,7 @@ class TaskContract:
 
 @dataclass(frozen=True)
 class TaskContracts:
-    """The single source for contract version, prompt version, and prompt text.
+    """The single source for task contract versions, prompt version, and prompt text.
 
     `ai/contracts/task_contracts.json` and the prompt it names are Knowledge
     files (architecture §6.3), so they load through the Knowledge port like
@@ -91,10 +91,11 @@ class TaskContracts:
     could disagree about what ran. There is now one.
 
     `prompt_hash` is the exact identity. The version is the label a human
-    reads; the hash is what proves which bytes the provider was given.
+    reads; the hash is what proves which bytes the provider was given. The file
+    itself carries no version: a call is identified by its task contract version,
+    its input and output schema versions and hashes, and its prompt version and hash.
     """
 
-    version: str
     prompt_version: str
     prompt_hash: str
     prompt_text: str

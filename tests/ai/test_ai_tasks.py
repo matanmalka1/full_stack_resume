@@ -13,7 +13,7 @@ prompt-injection fixtures. The transport half is `test_provider.py`.
 
 from __future__ import annotations
 
-import json
+import urllib.error
 from decimal import Decimal
 
 import pytest
@@ -29,6 +29,7 @@ from helpers import (
     services_transactions,
     stored_document,
 )
+from sqlalchemy import select
 
 from cv_engine.application.ai_configuration import execution_cost, usd
 from cv_engine.application.commands import (
@@ -40,7 +41,12 @@ from cv_engine.application.commands import (
     RegenerateSectionCommand,
 )
 from cv_engine.application.errors import StateConflict
-from cv_engine.application.operations import ClaimReviewReason, OperationFailureCode
+from cv_engine.application.operations import (
+    ClaimReviewReason,
+    OperationAction,
+    OperationFailureCode,
+    available_operation_actions,
+)
 from cv_engine.application.settings import UpdateSettings
 from cv_engine.domain.analysis.projection import fit_level, fit_score
 from cv_engine.domain.contracts.providers import (
@@ -53,7 +59,8 @@ from cv_engine.domain.contracts.providers import (
     SectionProposal,
 )
 from cv_engine.domain.drafts import draft_claims
-from cv_engine.util import new_id, sha256_text
+from cv_engine.infrastructure.persistence.tables import ai_calls, operations
+from cv_engine.util import canonical_json, new_id, sha256_text
 
 #: One valid reading, for tests whose subject is the machinery around the call
 #: rather than what was read.
@@ -119,12 +126,17 @@ def _run(services, operation_view):
     return foreground_executor(services).execute(operation_view.id)
 
 
-def _provider_artifacts(
-    services, application_id: str, transaction_manager, application_projection_reader
-) -> list[dict]:
+def _ai_calls(transaction_manager, application_id: str) -> list[dict]:
+    """Every logged provider attempt of the Application's Operations, in order."""
     with transaction_manager.read() as tx:
-        rows = application_projection_reader.artifact_versions(tx, application_id)
-    return [row for row in rows if row["artifact_type"] == "provider_response"]
+        connection = transaction_manager.connection_for(tx)
+        rows = connection.execute(
+            select(ai_calls)
+            .join(operations, operations.c.id == ai_calls.c.operation_id)
+            .where(operations.c.application_id == application_id)
+            .order_by(ai_calls.c.started_at, ai_calls.c.id)
+        ).mappings()
+        return [dict(row) for row in rows]
 
 
 def _analysis_operation(
@@ -443,19 +455,23 @@ def test_create_draft_keeps_the_claims_the_writer_chose_and_its_structure(
     assert used(drafted.content) < used(frame)
 
 
-@pytest.mark.parametrize("reviewer_times_out_once", [False, True])
+@pytest.mark.parametrize("reviewer_undelivered_once", [False, True])
 def test_draft_resume_accepts_separately_reviewed_paraphrase(
     ai_services,
     fake_openai: FakeOpenAI,
     transaction_manager,
-    application_projection_reader,
-    reviewer_times_out_once: bool,
+    monkeypatch,
+    reviewer_undelivered_once: bool,
 ) -> None:
-    """A reviewed paraphrase activates, and the Operation reports what every call cost.
+    """A reviewed paraphrase activates, and every provider attempt is logged.
 
-    With the reviewer timing out once, the automatic retry runs the writer again, so
-    the Operation owns three billed calls: both writer answers and the review.
+    A review that provably never reached the provider is retried by itself: the
+    writer's answer, already logged, is not asked for again. The undelivered attempt
+    is logged too; it used nothing, so the Operation's totals are the two calls that
+    were delivered, not unknown.
     """
+    delays: list[float] = []
+    monkeypatch.setattr(ai_services.drafts.ai_calls, "sleeper", delays.append)
     ingested = _ingested(ai_services, "Reviewed Draft Co")
     seed_analysis_for_command(
         ai_services,
@@ -491,13 +507,11 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
         ],
         rationale="Tailored emphasis",
     )
-    # A retried writer is a new provider response, with its own identity.
-    fake_openai.script_draft(
-        writer, *([envelope(writer, id="resp_writer_retry")] if reviewer_times_out_once else [])
-    )
+    fake_openai.script_draft(writer)
+    undelivered = urllib.error.URLError(ConnectionRefusedError(111, "refused"))
     fake_openai.script(
         "assess_claim_support",
-        *([Timeout()] if reviewer_times_out_once else []),
+        *([undelivered] if reviewer_undelivered_once else []),
         ClaimSupportProposal(
             assessments=[
                 ClaimSupportAssessment(
@@ -529,23 +543,37 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     completed = _run(ai_services, queued)
 
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    # The choice with its wording, and the review of the changed line; after a retry,
-    # the first writer answer as well.
-    calls = 3 if reviewer_times_out_once else 2
-    assert sum(output.output_type == "provider_response" for output in completed.outputs) == calls
-    assert any(output.output_type == "cv_document" for output in completed.outputs)
-    assert len(fake_openai.calls_for("draft_resume")) == calls - 1
-    assert len(fake_openai.calls_for("assess_claim_support")) == calls - 1
-    # Every billed call counts, the retried writer included; the timed-out review
-    # returned no response and carries no usage.
-    assert completed.input_tokens == 11 * calls
-    assert completed.cached_input_tokens == 3 * calls
-    assert completed.output_tokens == 22 * calls
-    assert completed.total_tokens == 33 * calls
+    assert [output.output_type for output in completed.outputs] == ["cv_document"]
+    # The writer is called once either way; only the review is attempted again.
+    assert len(fake_openai.calls_for("draft_resume")) == 1
+    reviews = 2 if reviewer_undelivered_once else 1
+    assert len(fake_openai.calls_for("assess_claim_support")) == reviews
+    assert len(delays) == reviews - 1
+    logged = [
+        (row["task"], row["attempt"], row["outcome"])
+        for row in _ai_calls(transaction_manager, ingested.application_id)
+    ]
+    assert logged == [
+        ("draft_resume", 1, "succeeded"),
+        *([("assess_claim_support", 1, "not_delivered")] if reviewer_undelivered_once else []),
+        ("assess_claim_support", reviews, "succeeded"),
+    ]
+    # Every delivered call counts once - the writer and the successful review; an
+    # undelivered attempt adds zero.
+    assert completed.input_tokens == 11 * 2
+    assert completed.cached_input_tokens == 3 * 2
+    assert completed.cache_write_tokens == 0
+    assert completed.output_tokens == 22 * 2
+    assert completed.total_tokens == 33 * 2
     one_call = execution_cost(
-        completed.model, input_tokens=11, cached_input_tokens=3, output_tokens=22
+        completed.model,
+        input_tokens=11,
+        cached_input_tokens=3,
+        cache_write_tokens=0,
+        output_tokens=22,
     )
-    assert completed.cost_usd == usd(Decimal(one_call["total_usd"]) * calls)
+    assert one_call is not None
+    assert completed.cost_usd == usd(Decimal(one_call["total_usd"]) * 2)
     actual = stored_document(ai_services, ingested.application_id)
     assert actual.content is not None
     reviewed = next(
@@ -567,7 +595,7 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
     assert public_reviewed.review_evidence is not None
     assert public_reviewed.review_evidence.assertions[0].source_quotes == [claim.text]
     public_evidence_fields = type(public_reviewed.review_evidence).model_fields
-    assert "provider_artifact_version_id" not in public_evidence_fields
+    assert "ai_call_id" not in public_evidence_fields
     assert "input_hash" not in public_evidence_fields
 
 
@@ -813,21 +841,16 @@ def test_a_valid_fact_id_with_unapproved_wording_fails_with_the_review_outcome(
     unchanged = stored_document(ai_services, ingested.application_id)
     assert unchanged.document_hash == working.document_hash
 
-    # §6 invariant 15: the refused output exists, and never becomes current.
-    # One lifecycle status for every provider response. Whether the answer was
-    # used is recorded by the Operation's status and by its output's `active`
-    # flag; a third copy in the artifact row would be a third thing that can
-    # disagree with the other two.
-    artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert artifacts
-    assert all(artifact["lifecycle_status"] == "provider-output" for artifact in artifacts)
-    references = [
-        output for output in completed.outputs if output.output_type == "provider_response"
+    # §6 invariant 15: the refused answers exist in the AI call log - the writer's
+    # and the reviewer's - and never become current: the Operation failed and the
+    # document is unchanged.
+    logged = [
+        (row["task"], row["outcome"])
+        for row in _ai_calls(transaction_manager, ingested.application_id)
+        if row["operation_id"] == completed.id
     ]
-    assert {output.output_id for output in references} == {artifact["id"] for artifact in artifacts}
-    assert all(not output.active for output in references)
+    assert logged == [("regenerate_claim", "succeeded"), ("assess_claim_support", "succeeded")]
+    assert all(output.output_type != "cv_document" for output in completed.outputs)
 
 
 def test_a_fact_outside_the_claims_own_support_is_refused(
@@ -958,14 +981,10 @@ def test_a_provider_failure_or_absence_never_produces_a_deterministic_result(
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.PROVIDER_REFUSED
-    artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert artifacts == []  # the one call failed, so nothing was preserved
-    assert {output.output_id for output in completed.outputs} == {
-        artifact["id"] for artifact in artifacts
-    }
-    assert all(not output.active for output in completed.outputs)
+    # The one attempt is logged as the HTTP error it was; nothing else exists.
+    logged = _ai_calls(transaction_manager, ingested.application_id)
+    assert [(row["outcome"], row["http_status"]) for row in logged] == [("http_error", 400)]
+    assert completed.outputs == []
     with transaction_manager.read() as tx:
         assert application_projection_reader.analyses(tx, ingested.application_id) == []
 
@@ -1007,63 +1026,44 @@ def test_a_successful_run_registers_the_sanitized_response_with_full_provenance(
     )
     assert completed.status.value == "succeeded", completed.safe_failure_detail
 
-    # One call, so one provider response: the analysis no longer registers an
-    # extraction artifact beside a classification one.
-    artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert len(artifacts) == 1
-    matching = [row for row in artifacts if row["logical_name"] == "propose_analysis"]
-    assert len(matching) == 1
-    row = matching[0]
-    assert row["logical_name"] == "propose_analysis"
-    assert row["lifecycle_status"] == "provider-output"
-    assert row["path"].startswith("artifacts/provider/")
-    assert row["path"].endswith(".json")
+    # One call, so one logged attempt.
+    [row] = _ai_calls(transaction_manager, ingested.application_id)
+    assert row["operation_id"] == completed.id
+    assert (row["task"], row["attempt"], row["outcome"]) == ("propose_analysis", 1, "succeeded")
 
-    stored = (app_paths.root / row["path"]).read_text(encoding="utf-8")
+    stored = canonical_json(row["sanitized_response"])
     for secret in ("sk-live", "hidden thinking", "hidden chain of thought", "Bearer"):
         assert secret not in stored
     assert '"reasoning"' not in stored
     assert "account-manager" in stored
+    # The hash is of the canonical form of what is stored, read back from JSONB.
+    assert row["sanitized_response_hash"] == sha256_text(stored)
 
-    reference = next(
-        output
-        for output in completed.outputs
-        if output.output_type == "provider_response" and output.output_id == row["id"]
+    assert row["provider"] == "openai"
+    assert row["model"] == "gpt-5.6-terra"
+    assert row["response_id"] == "resp_fake_1"
+    assert row["reasoning_effort"] == "medium"
+    usage = (
+        row["input_tokens"],
+        row["cached_input_tokens"],
+        row["cache_write_tokens"],
+        row["output_tokens"],
+        row["total_tokens"],
     )
-    assert reference.output_id == row["id"]
-    assert reference.active is True
-
-    metadata = json.loads(row["metadata_json"])
-    assert metadata["raw_output_hash"] == sha256_text(stored)
-    assert metadata["provider"] == "openai"
-    assert metadata["model"] == "gpt-5.6-terra"
-    assert metadata["response_id"] == "resp_fake_1"
-    assert metadata["reasoning_effort"] == "medium"
-    assert metadata["usage"] == {
-        "input_tokens": 11,
-        "cached_input_tokens": 3,
-        "output_tokens": 22,
-        "total_tokens": 33,
-    }
-    assert metadata["pricing"]["version"] == "openai-2026-09-03"
-    assert metadata["cost"]["total_usd"] == "0.00028060"
-    assert metadata["task"] == "propose_analysis"
-    assert metadata["prompt_version"] and metadata["prompt_hash"]
-    assert metadata["task_contract_version"] and metadata["system_version"]
-    assert metadata["input_schema_version"] and metadata["output_schema_version"]
-    assert metadata["latency_ms"] >= 0
-    for name in (
-        "input_hash",
-        "output_hash",
-        "raw_output_hash",
-        "input_schema_hash",
-        "output_schema_hash",
-    ):
-        assert len(metadata[name]) == 64
+    assert usage == (11, 3, 0, 22, 33)
+    assert row["pricing"]["version"] == "openai-2026-09-30"
+    assert row["pricing"]["cache_write_per_million_usd"] == "2.50"
+    assert str(row["cost_usd"]) == "0.00028060"
+    assert completed.cost_usd == "0.00028060"
+    assert row["prompt_version"] and row["prompt_hash"]
+    assert row["task_contract_version"]
+    assert row["input_schema_version"] and row["output_schema_version"]
+    assert row["knowledge_context_hash"]
+    assert row["latency_ms"] >= 0 and row["finished_at"] >= row["started_at"]
+    for name in ("input_hash", "output_hash", "input_schema_hash", "output_schema_hash"):
+        assert len(row[name]) == 64
     # Nothing that could carry a credential or a chain of thought.
-    assert {"api_key", "authorization", "headers", "reasoning"}.isdisjoint(metadata)
+    assert {"api_key", "authorization", "headers", "reasoning"}.isdisjoint(row)
 
 
 def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_evidence(
@@ -1079,15 +1079,14 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
     activation: the user cancels (requested from inside `execute`, the only
     window in which this can happen), or a newer job snapshot arrives so the
     pre-activation source check fails. Either way the payload must not be left
-    on disk with nothing naming it - the row exists, the Operation output refers
-    to it, and the reference is inactive because nothing was committed.
+    unrecorded: the attempt is in the AI call log, and nothing was committed.
     """
     ingested = _ingested(ai_services, "Cancelled Co")
     queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     original = ai_services.analysis.prepare
 
-    def prepare_then_cancel(command, *, operation_id=None):
-        prepared = original(command, operation_id=operation_id)
+    def prepare_then_cancel(command, *, operation_id=None, still_owned=None):
+        prepared = original(command, operation_id=operation_id, still_owned=still_owned)
         ai_services.operation_lifecycle.cancel(operation_id)
         return prepared
 
@@ -1097,17 +1096,11 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
         completed = _run(ai_services, queued)
 
         assert completed.status.value == "cancelled"
-        # One call, so one preserved response - registered, and referenced
-        # inactive.
-        artifacts = _provider_artifacts(
-            ai_services, ingested.application_id, transaction_manager, application_projection_reader
-        )
-        assert len(artifacts) == 1, "a preserved response was left unregistered"
-        references = [
-            output for output in completed.outputs if output.output_type == "provider_response"
+        # One call, so one logged attempt, whatever happened after it.
+        logged = _ai_calls(transaction_manager, ingested.application_id)
+        assert [(row["operation_id"], row["outcome"]) for row in logged] == [
+            (completed.id, "succeeded")
         ]
-        assert {output.output_id for output in references} == {row["id"] for row in artifacts}
-        assert all(not output.active for output in references)
         assert len(fake_openai.calls_for("propose_analysis")) == 1
         # Cancellation prevents activation, so nothing was committed.
         assert not any(output.output_type == "job_analysis" for output in completed.outputs)
@@ -1121,8 +1114,8 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
     queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     original = ai_services.analysis.prepare
 
-    def prepare_then_move_the_source(command, *, operation_id=None):
-        prepared = original(command, operation_id=operation_id)
+    def prepare_then_move_the_source(command, *, operation_id=None, still_owned=None):
+        prepared = original(command, operation_id=operation_id, still_owned=still_owned)
         ai_services.applications.create_job_snapshot(
             CreateJobSnapshotCommand(
                 application_id=ingested.application_id,
@@ -1138,17 +1131,11 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
 
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.SOURCE_CHANGED
-    # One call, so one preserved response - registered, and referenced
-    # inactive.
-    artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert len(artifacts) == 1, "a preserved response was left unregistered"
-    references = [
-        output for output in completed.outputs if output.output_type == "provider_response"
+    logged = _ai_calls(transaction_manager, ingested.application_id)
+    assert [(row["operation_id"], row["outcome"]) for row in logged] == [
+        (completed.id, "succeeded")
     ]
-    assert {output.output_id for output in references} == {row["id"] for row in artifacts}
-    assert all(not output.active for output in references)
+    assert completed.outputs == []
     assert len(fake_openai.calls_for("propose_analysis")) - calls_before == 1
 
 
@@ -1237,50 +1224,126 @@ def test_each_task_context_carries_its_minimal_fact_pool_and_nothing_else(
 # --------------------------------------------------------------------------
 
 
-def test_retry_policy_distinguishes_transient_from_terminal_provider_failures(
-    ai_services, fake_openai: FakeOpenAI
+UNDELIVERED = urllib.error.URLError(ConnectionRefusedError(111, "refused"))
+RATE_LIMITED = HTTPStatus(429, headers=(("Retry-After", "3"),))
+
+
+@pytest.mark.parametrize(
+    ("answers", "status", "code", "outcomes", "delays"),
+    [
+        # Retried once: provably never sent, a rate limit with a short Retry-After,
+        # and the 5xx the provider asks callers to retry.
+        ([UNDELIVERED, ANALYSIS], "succeeded", None, ["not_delivered", "succeeded"], [1.5]),
+        ([RATE_LIMITED, ANALYSIS], "succeeded", None, ["rate_limited", "succeeded"], [3.0]),
+        ([HTTPStatus(503), ANALYSIS], "succeeded", None, ["http_error", "succeeded"], [1.5]),
+        ([HTTPStatus(500), ANALYSIS], "succeeded", None, ["http_error", "succeeded"], [1.5]),
+        # Retried once, and that is all.
+        (
+            [UNDELIVERED, UNDELIVERED],
+            "failed",
+            "PROVIDER_UNAVAILABLE",
+            ["not_delivered", "not_delivered"],
+            [1.5],
+        ),
+        # Never retried: the provider may have processed - and billed - the request.
+        ([Timeout()], "failed", "PROVIDER_TIMEOUT", ["outcome_unknown"], []),
+        ([ConnectionResetError()], "failed", "PROVIDER_UNAVAILABLE", ["outcome_unknown"], []),
+        (
+            [urllib.error.URLError(TimeoutError())],
+            "failed",
+            "PROVIDER_TIMEOUT",
+            ["outcome_unknown"],
+            [],
+        ),
+        # Never retried: no Retry-After, one past the limit, or a billing refusal.
+        ([HTTPStatus(429)], "failed", "PROVIDER_RATE_LIMITED", ["rate_limited"], []),
+        (
+            [HTTPStatus(429, headers=(("Retry-After", "600"),))],
+            "failed",
+            "PROVIDER_RATE_LIMITED",
+            ["rate_limited"],
+            [],
+        ),
+        (
+            [HTTPStatus(429, body='{"error": {"code": "credit_balance_exhausted"}}')],
+            "failed",
+            "PROVIDER_QUOTA_EXHAUSTED",
+            ["quota_exhausted"],
+            [],
+        ),
+        # Never retried: a refusal, a schema violation, a client error.
+        ([refusal_envelope()], "failed", "PROVIDER_REFUSED", ["refused"], []),
+        ([envelope('{"track": "sales"}')], "failed", "SCHEMA_VIOLATION", ["schema_violation"], []),
+        ([HTTPStatus(400)], "failed", "PROVIDER_REFUSED", ["http_error"], []),
+    ],
+)
+def test_one_call_is_retried_once_only_where_the_policy_allows(
+    ai_services,
+    fake_openai: FakeOpenAI,
+    transaction_manager,
+    monkeypatch,
+    answers,
+    status,
+    code,
+    outcomes,
+    delays,
 ) -> None:
-    """§6: one transient retry, and zero retries for terminal failures."""
-    fake_openai.script("propose_analysis", Timeout(), ANALYSIS)
-    ingested = _ingested(ai_services, "Transient Co")
+    """§6: the retry policy of one provider call, every attempt logged as it ends.
+
+    The runner never retries; the application retries one call at most once, and
+    only where a second attempt cannot double what the first one did or the
+    provider asks for it. Every attempt, failed ones included, is in the log.
+    """
+    slept: list[float] = []
+    monkeypatch.setattr(ai_services.analysis.ai_calls, "sleeper", slept.append)
+    monkeypatch.setattr(ai_services.analysis.ai_calls, "backoff", lambda: 1.5)
+    fake_openai.script("propose_analysis", *answers)
+    ingested = _ingested(ai_services, "Retry Policy Co")
     completed = _run(
         ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
     )
 
-    assert completed.status.value == "succeeded", completed.safe_failure_detail
-    assert len(fake_openai.calls_for("propose_analysis")) == 2
-    assert completed.attempts_completed == 2
-
-    fake_openai.scripts["propose_analysis"].clear()
-    calls_before = len(fake_openai.calls_for("propose_analysis"))
-    fake_openai.script("propose_analysis", HTTPStatus(429))
-    ingested = _ingested(ai_services, "Persistent Co")
-    completed = _run(
-        ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
-    )
-
-    assert completed.status.value == "failed"
-    assert completed.failure_code is OperationFailureCode.PROVIDER_RATE_LIMITED
-    assert len(fake_openai.calls_for("propose_analysis")) - calls_before == 2
-
-    terminal_cases = [
-        (refusal_envelope(), OperationFailureCode.PROVIDER_REFUSED),
-        (envelope('{"track": "sales"}'), OperationFailureCode.SCHEMA_VIOLATION),
-        (HTTPStatus(400), OperationFailureCode.PROVIDER_REFUSED),
-    ]
-    for index, (answer, expected) in enumerate(terminal_cases):
-        fake_openai.scripts["propose_analysis"].clear()
-        calls_before = len(fake_openai.calls_for("propose_analysis"))
-        fake_openai.script("propose_analysis", answer)
-        ingested = _ingested(ai_services, f"Terminal {index} Co")
-        completed = _run(
-            ai_services, _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    assert completed.status.value == status, completed.safe_failure_detail
+    assert (completed.failure_code and completed.failure_code.value) == code
+    assert completed.attempts_completed == 1
+    logged = _ai_calls(transaction_manager, ingested.application_id)
+    assert [row["outcome"] for row in logged] == outcomes
+    assert [row["attempt"] for row in logged] == list(range(1, len(outcomes) + 1))
+    assert len(fake_openai.calls_for("propose_analysis")) == len(outcomes)
+    assert slept == delays
+    if status == "failed":
+        # No failure here is retried again automatically, and none forbids the user
+        # from retrying once they have fixed the cause - a quota included.
+        actions = available_operation_actions(
+            completed.status, completed.cancellation_requested_at, completed.failure_code
         )
+        assert OperationAction.RETRY in actions
 
-        assert completed.status.value == "failed", index
-        assert completed.failure_code is expected, index
-        assert len(fake_openai.calls_for("propose_analysis")) - calls_before == 1, index
-        assert completed.attempts_completed == 1, index
+
+def test_a_due_retry_is_not_started_once_the_operation_is_cancelled(
+    ai_services, fake_openai: FakeOpenAI, transaction_manager, monkeypatch
+) -> None:
+    """A retry starts only while the Operation is running, held, and not cancelled.
+
+    Cancelled during the wait before the second attempt: no second call is made,
+    the first attempt stays in the log, and the Operation ends cancelled rather
+    than as the provider failure that asked for the retry.
+    """
+    ingested = _ingested(ai_services, "Cancel During Retry Co")
+    queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    fake_openai.scripts["propose_analysis"] = [UNDELIVERED, ANALYSIS]
+
+    def cancel_while_waiting(_seconds: float) -> None:
+        ai_services.operation_lifecycle.cancel(queued.id)
+
+    monkeypatch.setattr(ai_services.analysis.ai_calls, "sleeper", cancel_while_waiting)
+    completed = _run(ai_services, queued)
+
+    assert completed.status.value == "cancelled"
+    assert completed.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
+    assert len(fake_openai.calls_for("propose_analysis")) == 1
+    logged = _ai_calls(transaction_manager, ingested.application_id)
+    assert [row["outcome"] for row in logged] == ["not_delivered"]
 
 
 def test_a_stale_draft_version_is_refused_before_any_provider_call(
@@ -1368,8 +1431,8 @@ def analysis_operation_run(ai_services, fake_openai):
 
 
 @pytest.mark.parametrize("kind", ["analysis"])
-@pytest.mark.parametrize("failure_at", ["plan", "evidence", "completion"])
-def test_analysis_activation_rollback_keeps_durable_inactive_evidence(
+@pytest.mark.parametrize("failure_at", ["plan", "outputs", "completion"])
+def test_analysis_activation_rollback_keeps_the_logged_call(
     ai_services,
     analysis_operation_run,
     kind,
@@ -1411,7 +1474,7 @@ def test_analysis_activation_rollback_keeps_durable_inactive_evidence(
 
         monkeypatch.setattr(SqlAlchemyDocumentStore, method, fail_after_insert)
     else:
-        method = "activate_operation_output" if failure_at == "evidence" else "complete_operation"
+        method = "record_operation_output" if failure_at == "outputs" else "complete_operation"
         original = getattr(SqlAlchemyOperationExecutionStore, method)
 
         def fail_after_write(*args, **kwargs):
@@ -1424,17 +1487,13 @@ def test_analysis_activation_rollback_keeps_durable_inactive_evidence(
     assert completed.status.value == "failed"
     assert completed.failure_code is OperationFailureCode.VALIDATION_EXECUTION_FAILED
     assert counts() == baseline
-    evidence = [output for output in completed.outputs if output.output_type == "provider_response"]
-    assert len(evidence) == 1 and not evidence[0].active
-    assert len(completed.outputs) == 1
-    artifacts = _provider_artifacts(
-        ai_services, ingested.application_id, transaction_manager, application_projection_reader
-    )
-    assert len(artifacts) == 1 and artifacts[0]["id"] == evidence[0].output_id
-    assert (
-        ai_services.payloads.verify_payload(artifacts[0]["path"], artifacts[0]["content_hash"])
-        == "ok"
-    )
+    assert completed.outputs == []
+    # The attempt was logged in its own scope before activation, so rolling the
+    # activation back cannot take the evidence of the billed call with it.
+    logged = _ai_calls(transaction_manager, ingested.application_id)
+    assert [(row["operation_id"], row["outcome"]) for row in logged] == [
+        (completed.id, "succeeded")
+    ]
 
 
 @pytest.mark.parametrize("kind", ["analysis"])
@@ -1494,7 +1553,7 @@ def test_analysis_activation_shares_one_token_and_has_no_external_io(
         plan_method,
         tracked(getattr(SqlAlchemyDocumentStore, plan_method)),
     )
-    for method in ("activate_operation_output", "complete_operation"):
+    for method in ("record_operation_output", "complete_operation"):
         monkeypatch.setattr(
             SqlAlchemyOperationExecutionStore,
             method,
@@ -1502,89 +1561,50 @@ def test_analysis_activation_shares_one_token_and_has_no_external_io(
         )
     completed = _run(ai_services, queued)
     assert completed.status.value == "succeeded", completed.safe_failure_detail
-    assert len(tokens) == 3 and all(token is tokens[0] for token in tokens)
+    # The document, the analysis and document outputs, and completion: one scope.
+    assert len(tokens) == 4 and all(token is tokens[0] for token in tokens)
     assert not tokens[0].active
     assert all(output.active for output in completed.outputs)
-    assert (
-        len(
-            _provider_artifacts(
-                ai_services,
-                ingested.application_id,
-                transaction_manager,
-                application_projection_reader,
-            )
-        )
-        == 1
-    )
+    assert len(_ai_calls(transaction_manager, ingested.application_id)) == 1
 
 
-def test_retry_reuses_the_same_provider_output_without_rewriting_evidence(
+def test_a_retried_operation_logs_its_own_attempts_and_never_rewrites_the_first(
     ai_services,
     fake_openai,
     monkeypatch,
     transaction_manager,
-    application_projection_reader,
 ) -> None:
-    """A retry that gets the same response reuses its evidence; a new one adds one.
+    """A retry is a new Operation: its calls are its own, the original's stay as logged.
 
-    Either way the cancelled attempt's evidence is left byte-for-byte as it was
-    and stays inactive, and only the retry's output is active.
+    The cancelled Operation keeps the attempt it made, byte for byte, and the retry
+    appends its own under its own Operation - even when the provider happens to
+    answer with the same response identity.
     """
     prepare = ai_services.analysis.prepare
-    for same_response in (True, False):
-        ingested = _ingested(ai_services, f"Evidence Retry {same_response} Co")
-        queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
+    ingested = _ingested(ai_services, "Retry Log Co")
+    queued = _analysis_operation(ai_services, ingested, fake_openai=fake_openai)
 
-        def prepare_then_cancel(command, *, operation_id=None, ingested=ingested, queued=queued):
-            value = prepare(command, operation_id=operation_id)
-            # Idempotent re-registration within one Operation also keeps one output.
-            repeated = ai_services.analysis.preserve(
-                ingested.application_id,
-                queued.id,
-                value.evidence.task,
-                value.evidence.provenance,
-            )
-            assert repeated.artifact_version_id == value.evidence.artifact_version_id
-            ai_services.operation_lifecycle.cancel(queued.id)
-            return value
+    def prepare_then_cancel(command, *, operation_id=None, still_owned=None):
+        value = prepare(command, operation_id=operation_id, still_owned=still_owned)
+        ai_services.operation_lifecycle.cancel(queued.id)
+        return value
 
-        monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
-        cancelled = _run(ai_services, queued)
-        assert cancelled.status.value == "cancelled"
-        original_artifacts = _provider_artifacts(
-            ai_services,
-            ingested.application_id,
-            transaction_manager,
-            application_projection_reader,
-        )
-        assert len(original_artifacts) == 1
-        monkeypatch.setattr(ai_services.analysis, "prepare", prepare)
-        if not same_response:
-            fake_openai.scripts["propose_analysis"] = [
-                envelope(analysis_proposal(), id="resp_distinct_retry")
-            ]
-        retried = ai_services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
-        completed = _run(ai_services, retried)
-        assert completed.status.value == "succeeded", completed.safe_failure_detail
-        after = _provider_artifacts(
-            ai_services,
-            ingested.application_id,
-            transaction_manager,
-            application_projection_reader,
-        )
-        assert len(after) == (1 if same_response else 2), same_response
-        assert (
-            next(row for row in after if row["id"] == original_artifacts[0]["id"])
-            == original_artifacts[0]
-        )
-        first = next(
-            output for output in cancelled.outputs if output.output_type == "provider_response"
-        )
-        second = next(
-            output for output in completed.outputs if output.output_type == "provider_response"
-        )
-        assert (first.output_id == second.output_id) is same_response
-        assert not first.active and second.active
-        original_operation = ai_services.operation_lifecycle.get(queued.id)
-        assert original_operation.status.value == "cancelled"
-        assert all(not output.active for output in original_operation.outputs)
+    monkeypatch.setattr(ai_services.analysis, "prepare", prepare_then_cancel)
+    cancelled = _run(ai_services, queued)
+    assert cancelled.status.value == "cancelled"
+    [original] = _ai_calls(transaction_manager, ingested.application_id)
+    assert original["operation_id"] == queued.id
+
+    monkeypatch.setattr(ai_services.analysis, "prepare", prepare)
+    retried = ai_services.operation_lifecycle.retry(queued.id, idempotency_key=new_id())
+    completed = _run(ai_services, retried)
+    assert completed.status.value == "succeeded", completed.safe_failure_detail
+
+    logged = _ai_calls(transaction_manager, ingested.application_id)
+    assert [(row["operation_id"], row["attempt"]) for row in logged] == [
+        (queued.id, 1),
+        (retried.id, 1),
+    ]
+    assert logged[0] == original
+    assert logged[0]["response_id"] == logged[1]["response_id"] == "resp_fake_1"
+    assert ai_services.operation_lifecycle.get(queued.id).outputs == []

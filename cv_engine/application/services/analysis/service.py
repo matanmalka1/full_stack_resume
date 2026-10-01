@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from ....domain.contracts.document import CVDocument
-from ....domain.contracts.providers import ProviderTaskResult
 from ....domain.knowledge import Knowledge
-from ....util import new_id
 from ...commands import (
     AnalysisDecisionsResult,
     AnalysisResult,
     AnalyzeCommand,
     ApplyAnalysisDecisionsCommand,
 )
-from ...errors import InfrastructureFailure, LineageBroken, ProviderNotConfigured, StateConflict
+from ...errors import LineageBroken, ProviderNotConfigured, StateConflict
 from ...ports import AIProvider, TransactionManager
 from ...ports.analysis_plans import (
     AnalysisContextSource,
@@ -21,10 +21,9 @@ from ...ports.analysis_plans import (
     AnalysisStore,
 )
 from ...ports.documents import DocumentStore
-from ...ports.provider_evidence import ProviderEvidenceStore, StoredProviderResponse
 from ...transactions import assert_external_io_allowed
+from ..ai_calls import AICallRunner
 from ..documents import DocumentSource, load_knowledge, read_document_source
-from ..proposals import ProviderEvidence
 from .activation import AnalysisActivation
 from .correction import AnalysisCorrection
 from .preparation import AnalysisPreparation, PreparedAnalysis
@@ -40,7 +39,7 @@ class AnalysisService:
         analyses: AnalysisStore,
         sources: AnalysisContextSourceReader,
         documents: DocumentStore,
-        evidence: ProviderEvidenceStore,
+        ai_calls: AICallRunner,
         knowledge: AnalysisKnowledgeSource,
         payloads: AnalysisPayloadStore,
         provider: AIProvider | None,
@@ -49,7 +48,7 @@ class AnalysisService:
         self.analyses = analyses
         self.sources = sources
         self.documents = documents
-        self.evidence = evidence
+        self.ai_calls = ai_calls
         self._knowledge = knowledge
         self.snapshot_payloads = payloads
         self._provider = provider
@@ -101,66 +100,17 @@ class AnalysisService:
             raise ProviderNotConfigured("AI mode was requested but no provider is configured")
         return self._provider
 
-    def preserve(
-        self,
-        application_id: str,
-        operation_id: str,
-        task: str,
-        provenance: ProviderTaskResult,
-    ) -> ProviderEvidence:
-        assert_external_io_allowed("provider response preservation")
-        with self.transactions.read() as tx:
-            response = self.evidence.find_response(
-                tx, application_id, operation_id, task, provenance
-            )
-        if response is None:
-            artifact_version_id = new_id()
-            try:
-                payload = self.snapshot_payloads.commit_provider_response(
-                    application_id,
-                    operation_id,
-                    artifact_version_id,
-                    provenance.sanitized_response,
-                )
-            except (OSError, ValueError) as exc:
-                raise InfrastructureFailure(
-                    f"could not preserve the provider response: {exc}"
-                ) from exc
-            response = StoredProviderResponse(artifact_version_id, payload)
-        if (
-            self.snapshot_payloads.verify_payload(
-                response.payload.reference, response.payload.sha256
-            )
-            != "ok"
-        ):
-            raise InfrastructureFailure("preserved provider response failed payload verification")
-        with self.transactions.write() as tx:
-            registered = self.evidence.register_inactive(
-                tx,
-                application_id,
-                operation_id,
-                task,
-                provenance,
-                response,
-            )
-        if registered != response:
-            if (
-                self.snapshot_payloads.verify_payload(
-                    registered.payload.reference, registered.payload.sha256
-                )
-                != "ok"
-            ):
-                raise InfrastructureFailure(
-                    "preserved provider response failed payload verification"
-                )
-        response = registered
-        return ProviderEvidence(task, response.artifact_version_id, response.payload, provenance)
-
     def prepare(
-        self, command: AnalyzeCommand, *, operation_id: str | None = None
+        self,
+        command: AnalyzeCommand,
+        *,
+        operation_id: str | None = None,
+        still_owned: Callable[[], bool] = lambda: True,
     ) -> PreparedAnalysis:
         assert_external_io_allowed("analysis preparation")
-        return AnalysisPreparation.prepare(self, command, operation_id=operation_id)
+        return AnalysisPreparation.prepare(
+            self, command, operation_id=operation_id, still_owned=still_owned
+        )
 
     def activate(self, command: AnalyzeCommand, prepared: PreparedAnalysis) -> AnalysisResult:
         with self.transactions.write() as tx:

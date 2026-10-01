@@ -128,9 +128,10 @@ export const settings = (overrides: Partial<Settings> = {}): Settings => ({
       label: "GPT-5.6 Luna",
       input_per_million_usd: "0.20",
       cached_input_per_million_usd: "0.02",
+      cache_write_per_million_usd: "0.25",
       output_per_million_usd: "1.20",
       recommended: false,
-      pricing_version: "openai-2026-09-03",
+      pricing_version: "openai-2026-09-30",
       pricing_source: "https://developers.openai.com/api/docs/models/compare",
     },
     {
@@ -138,9 +139,10 @@ export const settings = (overrides: Partial<Settings> = {}): Settings => ({
       label: "GPT-5.6 Terra",
       input_per_million_usd: "2.00",
       cached_input_per_million_usd: "0.20",
+      cache_write_per_million_usd: "2.50",
       output_per_million_usd: "12.00",
       recommended: true,
-      pricing_version: "openai-2026-09-03",
+      pricing_version: "openai-2026-09-30",
       pricing_source: "https://developers.openai.com/api/docs/models/compare",
     },
   ],
@@ -154,7 +156,8 @@ export const settings = (overrides: Partial<Settings> = {}): Settings => ({
 
 export const reconciliationReport = (overrides: Partial<ReconciliationReport> = {}): ReconciliationReport => ({
   passed: true,
-  artifact_versions_checked: 4,
+  payloads_checked: 4,
+  ai_calls_checked: 2,
   problems: [],
   fact_lifecycle: {
     passed: true,

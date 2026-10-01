@@ -65,5 +65,5 @@ class DraftActivation:
             document_id=updated.id,
             document_hash=updated.document_hash,
             regenerated_claim_ids=list(prepared.claim_ids),
-            provider_artifact_version_id=prepared.evidence.artifact_version_id,
+            ai_call_id=prepared.ai_call_id,
         )

@@ -12,10 +12,9 @@ from .knowledge import fact_events, knowledge_mutation_journal
 from .prep import cv_documents, job_analyses, job_snapshots
 from .shared import (
     OPERATION_FAILURE_CODES,
+    ai_calls,
     app_settings,
     applications,
-    artifact_versions,
-    artifacts,
     audit_records,
     operation_outputs,
     operation_resource_leases,
@@ -35,8 +34,7 @@ __all__ = [
     "cv_documents",
     "recruitment_events",
     "submissions",
-    "artifacts",
-    "artifact_versions",
+    "ai_calls",
     "audit_records",
     "operations",
     "operation_resource_leases",

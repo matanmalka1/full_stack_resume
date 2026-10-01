@@ -19,7 +19,6 @@ from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
 from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
 from cv_engine.infrastructure.persistence.documents import SqlAlchemyDocumentStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
@@ -135,11 +134,6 @@ def analysis_plan_store(transaction_manager):
 @pytest.fixture
 def document_store(transaction_manager):
     return SqlAlchemyDocumentStore(transaction_manager)
-
-
-@pytest.fixture
-def artifact_catalog(transaction_manager):
-    return SqlAlchemyArtifactCatalog(transaction_manager)
 
 
 @pytest.fixture

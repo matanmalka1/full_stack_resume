@@ -18,6 +18,7 @@ from ..application.ports import (
     RevisionPayloadStore,
 )
 from ..application.ports.analysis_plans import AnalysisKnowledgeSource, AnalysisPayloadStore
+from ..application.services.ai_calls import AICallRunner
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
@@ -55,13 +56,13 @@ from ..infrastructure.persistence import (
     create_database_engine,
     current_database_revision,
 )
+from ..infrastructure.persistence.ai_calls import SqlAlchemyAICallLog
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisContextSourceReader
 from ..infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
 from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
-from ..infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
 from ..infrastructure.persistence.documents import (
     SqlAlchemyDocumentStore,
@@ -77,7 +78,6 @@ from ..infrastructure.persistence.knowledge_lifecycle import (
 from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
-from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
 from ..infrastructure.persistence.recruitment_store import (
     SqlAlchemyInitialRecruitmentEventWriter,
@@ -231,7 +231,7 @@ def build_services(
     analysis_plans = SqlAlchemyAnalysisPlanRepository(transactions)
     analysis_sources = SqlAlchemyAnalysisContextSourceReader(transactions)
     application_projections = SqlAlchemyApplicationProjectionReader(transactions)
-    evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
+    ai_calls = AICallRunner(transactions=transactions, log=SqlAlchemyAICallLog(transactions))
     operation_client = SqlAlchemyOperationClientStore(transactions)
     operation_execution = SqlAlchemyOperationExecutionStore(transactions)
     knowledge_queries = KnowledgeQueryService(
@@ -262,12 +262,11 @@ def build_services(
         analyses=analysis_plans,
         sources=analysis_sources,
         documents=documents,
-        evidence=evidence_store,
+        ai_calls=ai_calls,
         knowledge=resolved_knowledge,
         payloads=resolved_payloads,
         provider=resolved_provider,
     )
-    draft_catalog = SqlAlchemyArtifactCatalog(transactions)
     draft_history = DraftHistoryService(
         transactions=transactions,
         documents=documents,
@@ -297,7 +296,7 @@ def build_services(
         sources=analysis_sources,
         knowledge=resolved_knowledge,
         provider=resolved_provider,
-        evidence=analysis_service,
+        ai_calls=ai_calls,
         snapshot_payloads=resolved_payloads,
     )
     draft_validation = DraftValidationService(
@@ -319,7 +318,6 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         files=document_files,
-        catalog=draft_catalog,
         knowledge=resolved_knowledge,
         renderer=resolved_renderer,
         payloads=resolved_payloads,

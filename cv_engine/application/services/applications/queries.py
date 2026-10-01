@@ -5,7 +5,6 @@ from datetime import date
 from ....domain.contracts.recruitment import ApplicationStatus
 from ....domain.document import basis, content_check, preparation_state
 from ....domain.recruitment import user_transition_targets
-from ...artifacts import verify_artifact
 from ...errors import (
     # Re-exported: the API and test suite catch WorkflowError from here, and
     # it is bound to the taxonomy's base class, so every refusal below is caught.
@@ -21,14 +20,11 @@ from ...queries import (
     ApplicationDetailView,
     ApplicationListQuery,
     ApplicationListView,
-    ArtifactVersionDetailView,
-    ArtifactVersionsView,
     DocumentView,
     SubmissionsView,
     analysis_view,
     application_list_item_view,
     application_view,
-    artifact_version_view,
     document_view,
     narrow_application_list,
     recruitment_timeline_view,
@@ -80,10 +76,6 @@ class ApplicationQueryService:
         except ValueError as exc:
             raise KnowledgeRejected(str(exc)) from exc
 
-    def _artifact_versions(self, application_id: str):
-        with self._transactions.read() as tx:
-            return self._projections.artifact_versions(tx, application_id)
-
     def job_snapshot_history(self, application_id: str) -> JobSnapshotHistoryView:
         with self._transactions.read() as transaction:
             self._projections.application(transaction, application_id)
@@ -108,46 +100,6 @@ class ApplicationQueryService:
                 )
             )
         return JobSnapshotHistoryView(active_job_snapshot_id=active["id"], items=items)
-
-    def artifact_versions(self, application_id: str) -> ArtifactVersionsView:
-        try:
-            with self._transactions.read() as tx:
-                self._projections.application(tx, application_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown application: {application_id}") from exc
-        try:
-            return ArtifactVersionsView(
-                items=[
-                    artifact_version_view(row) for row in self._artifact_versions(application_id)
-                ]
-            )
-        except (TypeError, ValueError) as exc:
-            raise InfrastructureFailure(f"stored artifact projection is invalid: {exc}") from exc
-
-    def artifact_version(self, artifact_version_id: str) -> ArtifactVersionDetailView:
-        """§20: one registered artifact's metadata and its download eligibility.
-
-        By ID, like every other artifact surface. The stored path is read here
-        and handed straight to the verification port; it never reaches the view,
-        which is why the view and the detail view are the same field set plus
-        three answers about availability.
-        """
-        try:
-            with self._transactions.read() as tx:
-                record = self._projections.artifact_version(tx, artifact_version_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown artifact version: {artifact_version_id}") from exc
-        try:
-            view = artifact_version_view(record)
-        except (TypeError, ValueError) as exc:
-            raise InfrastructureFailure(f"stored artifact projection is invalid: {exc}") from exc
-        availability = verify_artifact(self.snapshot_payloads, view, record["path"])
-        return ArtifactVersionDetailView(
-            **view.model_dump(mode="python"),
-            downloadable=availability.downloadable,
-            size=availability.size,
-            unavailable_reason=availability.reason,
-        )
 
     def _state_inputs(self, transaction: ReadTransaction, application_record, knowledge):
         application_id = application_record["id"]

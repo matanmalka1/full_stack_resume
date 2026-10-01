@@ -111,11 +111,12 @@ def test_post_analysis_uses_ai_operation_and_creates_the_document(
     assert response.status_code == 202, response.text
     completed = ai_api_worker.wait_for_operation(response.json()["id"])
     assert completed["status"] == "succeeded", completed
-    # Each scripted provider call also lands as its own provider_response output,
-    # preserved for provenance beside the analysis and the document it created.
+    # The provider call is in the AI call log, not among the outputs; the Operation
+    # reports what it cost.
     outputs = {item["output_type"]: item["output_id"] for item in completed["outputs"]}
-    assert set(outputs) == {"job_analysis", "cv_document", "provider_response"}
+    assert set(outputs) == {"job_analysis", "cv_document"}
     assert all(item["active"] for item in completed["outputs"])
+    assert completed["total_tokens"] == 33
     document = _document(ai_api_worker, application_id)
     assert document["id"] == outputs["cv_document"]
     assert document["analysis_id"] == outputs["job_analysis"]

@@ -59,7 +59,6 @@ from cv_engine.application.operations import (
 )
 from cv_engine.domain.document import PreparationState
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.operation_execution import (
     SqlAlchemyOperationExecutionStore,
@@ -75,24 +74,6 @@ from cv_engine.infrastructure.persistence.worker_lock import (
 from cv_engine.runtime.composition import Services
 from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
-
-
-def _artifact_version(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).artifact_version(tx, *args)
-
-
-def _artifact_versions(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).artifact_versions(tx, *args)
-
-
-def _latest_artifact_version(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(tx, *args)
 
 
 def test_racing_claimants_produce_one_claim_and_one_execution(
@@ -434,7 +415,7 @@ def test_runner_activates_outputs_and_completes_in_one_activation_transaction(se
         value={"proposal": "validated"},
         outputs=(
             OperationOutputReference(
-                output_type="provider_response",
+                output_type="job_analysis",
                 output_id=output_id,
                 active=False,
             ),
@@ -488,7 +469,7 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     )
     attempts = 0
 
-    def prepare_that_fails(_command, *, operation_id=None):
+    def prepare_that_fails(_command, *, operation_id=None, still_owned=None):
         nonlocal attempts
         attempts += 1
         raise MissingFactRendering("situational.agentic_multi_agent", "he")
@@ -551,9 +532,9 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
         services.operation_lifecycle.operations, "request_cancellation", cancel_after_runner_write
     )
 
-    def execute(_operation, cancellation_requested):
+    def execute(_operation, still_owned):
         started.set()
-        while not cancellation_requested():
+        while still_owned():
             Event().wait(0.01)
         return PreparedOperation()
 
@@ -646,7 +627,9 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
     written = stored_document(services, application_id)
     assert written.content is not None
     outputs = [(item.output_type, item.active) for item in succeeded.outputs]
-    assert sorted(outputs) == [("cv_document", True), ("provider_response", True)]
+    assert outputs == [("cv_document", True)]
+    # The writer's call is in the AI call log, and the Operation reports its usage.
+    assert succeeded.total_tokens is not None
     assert ("cv_document", written.id) in {
         (item.output_type, item.output_id) for item in succeeded.outputs
     }

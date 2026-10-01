@@ -95,7 +95,6 @@ class OperationPhase(StrEnum):
     WAITING_FOR_AI_SLOT = "waiting_for_ai_slot"
     PRE_EXECUTION_CHECK = "pre_execution_check"
     EXECUTING = "executing"
-    RETRY_WAIT = "retry_wait"
     PRE_ACTIVATION_CHECK = "pre_activation_check"
     ACTIVATING = "activating"
     COMPLETED = "completed"
@@ -105,6 +104,9 @@ class OperationFailureCode(StrEnum):
     SOURCE_CHANGED = "SOURCE_CHANGED"
     PROVIDER_TIMEOUT = "PROVIDER_TIMEOUT"
     PROVIDER_RATE_LIMITED = "PROVIDER_RATE_LIMITED"
+    #: The account has no credit or hit a spend or usage limit: fixed in billing, not
+    #: by waiting. Never retried automatically; a manual retry stays available.
+    PROVIDER_QUOTA_EXHAUSTED = "PROVIDER_QUOTA_EXHAUSTED"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_REFUSED = "PROVIDER_REFUSED"
     INVALID_OUTPUT = "INVALID_OUTPUT"
@@ -120,16 +122,6 @@ class OperationFailureCode(StrEnum):
     #: PROVIDER_REFUSED, which means a provider answered and refused: the fix for
     #: this one is configuration, and nothing was ever sent.
     PROVIDER_NOT_CONFIGURED = "PROVIDER_NOT_CONFIGURED"
-
-
-TRANSIENT_FAILURE_CODES = frozenset(
-    {
-        OperationFailureCode.PROVIDER_TIMEOUT,
-        OperationFailureCode.PROVIDER_RATE_LIMITED,
-        OperationFailureCode.PROVIDER_UNAVAILABLE,
-        OperationFailureCode.BROWSER_START_FAILED,
-    }
-)
 
 
 class OperationResourceKind(StrEnum):
@@ -217,9 +209,9 @@ class CreateOperation(OperationModel):
 
 
 #: What an Operation can own as an output. Closed: analysis activates a JobAnalysis,
-#: document-mutating operations name the CVDocument they changed, and every provider
-#: call registers its response as evidence.
-OperationOutputType = Literal["job_analysis", "cv_document", "provider_response"]
+#: and document-mutating operations name the CVDocument they changed. Provider calls
+#: are not outputs: they are in the AI call log, keyed by the Operation.
+OperationOutputType = Literal["job_analysis", "cv_document"]
 
 
 class OperationOutputReference(OperationModel):
@@ -331,6 +323,7 @@ class OperationView(OperationModel):
     reasoning_effort: ReasoningEffort | None = None
     input_tokens: int | None = None
     cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
     cost_usd: str | None = None
@@ -347,7 +340,6 @@ class PersistedOperation(OperationView):
     resources: tuple[OperationResource, ...]
     lease_owner: str | None = None
     attempts_completed: int = Field(ge=0)
-    next_attempt_at: str | None = None
     technical_log_reference: str | None = None
 
 
@@ -426,10 +418,3 @@ def require_operation_transition(current: OperationStatus, target: OperationStat
 
 def is_terminal_operation(status: OperationStatus) -> bool:
     return status in TERMINAL_OPERATION_STATUSES
-
-
-def allows_automatic_retry(code: OperationFailureCode, attempts_completed: int) -> bool:
-    """Exactly one automatic retry is available for classified transient failures."""
-    if attempts_completed < 1:
-        raise OperationContractError("attempts_completed must include the failed attempt")
-    return code in TRANSIENT_FAILURE_CODES and attempts_completed == 1

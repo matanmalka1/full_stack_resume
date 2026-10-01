@@ -9,9 +9,10 @@ that the fake works.
 Scripts are per task. A script entry is either a Proposal model (answered
 normally), an `HTTPStatus` (answered with that status), a `Timeout` (the request
 never returns), a raw dict (used as the response envelope verbatim, which is
-how a schema-violating or refusing answer is expressed), or a function of the
-request's task input returning any of those (for an answer that depends on
-what the application sent, such as `echo_draft`).
+how a schema-violating or refusing answer is expressed), an exception (raised
+from `urlopen` as the transport would), or a function of the request's task input
+returning any of those (for an answer that depends on what the application sent,
+such as `echo_draft`).
 """
 
 from __future__ import annotations
@@ -31,10 +32,11 @@ from cv_engine.infrastructure.providers import OpenAIProvider, OpenAIResponsesPr
 
 @dataclass(frozen=True)
 class HTTPStatus:
-    """Answer this call with an HTTP status instead of a body."""
+    """Answer this call with an HTTP status instead of a body, and optional headers."""
 
     code: int
     body: str = '{"error": {"message": "scripted"}}'
+    headers: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -50,8 +52,13 @@ class Call:
 
 
 class _Response:
+    """What `urlopen` returns: a status, headers, and a body read once."""
+
     def __init__(self, body: bytes):
         self.body = body
+        self.status = 200
+        self.headers = Message()
+        self.headers["Content-Type"] = "application/json"
 
     def __enter__(self):
         return self
@@ -75,7 +82,7 @@ def envelope(payload: Any, **extra: Any) -> dict[str, Any]:
         "output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}],
         "usage": {
             "input_tokens": 11,
-            "input_tokens_details": {"cached_tokens": 3},
+            "input_tokens_details": {"cached_tokens": 3, "cache_write_tokens": 0},
             "output_tokens": 22,
             "total_tokens": 33,
         },
@@ -146,14 +153,17 @@ class FakeOpenAI:
         if isinstance(answer, Timeout):
             raise TimeoutError("scripted timeout")
         if isinstance(answer, HTTPStatus):
+            headers = Message()
+            for name, value in answer.headers:
+                headers[name] = value
             raise urllib.error.HTTPError(
                 "https://api.openai.com/v1/responses",
                 answer.code,
                 "scripted",
-                Message(),
+                headers,
                 BytesIO(answer.body.encode()),
             )
-        if isinstance(answer, OSError):
+        if isinstance(answer, BaseException):
             raise answer
         document = answer if isinstance(answer, dict) else envelope(answer)
         return _Response(json.dumps(document).encode())

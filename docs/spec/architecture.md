@@ -212,8 +212,8 @@ source files are valid inputs; a changed context produces `knowledge_changed` or
 PostgreSQL holds structured state and relationships: Applications and their recruitment
 projection, recruitment and audit history, JobSnapshot metadata, JobAnalyses, the one
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
-provider-evidence artifacts, Submissions, Operations and their resource leases, fact
-events, the Knowledge mutation journal, and safe settings. *Designed, not built (§18):*
+the AI call log (`ai_calls`, §11), Submissions, Operations and their resource leases,
+fact events, the Knowledge mutation journal, and safe settings. *Designed, not built (§18):*
 also users, sessions, single-use tokens, account events, rate-limit buckets, and
 per-user facts, CandidateContext, Profile binding, and settings.
 
@@ -246,7 +246,6 @@ The key layout is the same either way, and `PayloadStore` refuses any other:
 ```text
 {artifacts_root}/ or {bucket}/{prefix}/
   snapshots/{application_id}/{snapshot_id}.txt
-  provider/{application_id}/{operation_id}/{artifact_version_id}.json
   submissions/{application_id}/{submission_id}/resume.html
   submissions/{application_id}/{submission_id}/resume.pdf
 ```
@@ -269,6 +268,8 @@ What stays out of the object store, by decision:
   them as the document's `html_path`/`pdf_path`. Chromium writes real files to real
   paths, and these are mutable working outputs, not immutable records.
 - **Knowledge sources** are version-controlled inputs, not artifacts.
+- **Provider responses** live in the AI call log in PostgreSQL (§11), not as payload
+  files: each is a sanitized JSON object in canonical form with its hash beside it.
 
 A Submission copies the document's `content` inline and its active HTML and PDF into
 submission-owned keys, recording a SHA-256 per file. On the local store the copied file
@@ -328,8 +329,8 @@ Validation runs on the bytes before the key is claimed, so a payload that fails 
 occupies its key. The write refuses to replace an existing payload: `O_EXCL` locally, a
 conditional PUT (`IfNoneMatch: "*"`) on S3 and R2. The store hashes the bytes it stored
 in the same pass, and that digest is what the caller registers. Every physical key embeds
-a freshly minted ID (snapshot, artifact version, or Submission), so a retry writes new
-keys and never overwrites an earlier attempt's.
+a freshly minted ID (snapshot or Submission), so a retry writes new keys and never
+overwrites an earlier attempt's.
 
 Before registration a payload is invisible to queries. If registration fails, no row
 references it and it is an orphan.
@@ -343,13 +344,14 @@ registrations; their volume is assumed small for a single-user tool, not measure
 **Orphan inspection** (`MaintenanceService.inspect_orphans`; route in
 state-and-use-cases.md §19b) lists stored payloads that no database row references and
 that were stored longer than `ORPHAN_MIN_AGE` (one hour) ago, and deletes nothing. Every
-writer — JobSnapshot intake, provider evidence, `submit_application` — stores and
-registers within one command, so a younger unregistered payload is most likely a write
+writer — JobSnapshot intake and `submit_application` — stores and registers within one
+command, so a younger unregistered payload is most likely a write
 still in progress and is left out of the report. The age comes from the store itself:
 file mtime locally, `LastModified` on S3.
 
-Reconciliation verifies every registered artifact's payload hash and the fact lifecycle,
-reporting both halves without short-circuiting.
+Reconciliation verifies every registered payload's hash (`payloads_checked`), every
+logged AI call's sanitized response against its hash (`ai_calls_checked`), and the fact
+lifecycle, reporting each without short-circuiting.
 
 ### 7.2 Knowledge mutation journal
 
@@ -447,18 +449,22 @@ retry reference, and outputs.
 
 **Execution.** Handlers implement `verify_sources`, `execute`, `activate`,
 `after_activation`, and `discard`. Commit checks run before execution and before
-activation. `SOURCE_CHANGED` keeps any immutable output as inactive evidence and fails
-the Operation without changing the document. Provider calls and payload preservation
-happen outside scopes; prepared evidence is registered as inactive in short scopes
-before activation, and neither cancellation nor activation rollback erases it.
-Re-registering the same provider output does not duplicate evidence. Activation locks
+activation. `SOURCE_CHANGED` fails the Operation without changing the document.
+`execute` is handed `execution_still_owned`: true while the Operation is `running`,
+held by this runner, and not asked to cancel. Provider calls happen outside scopes, and
+each attempt is appended to the AI call log (§11) in its own short scope as soon as it
+ends, so neither cancellation nor activation rollback can erase it. Activation locks
 the Application, reloads Operation and lease state, rechecks sources and cancellation,
 then atomically activates use-case state, outputs, and completion. Post-commit
 projections and file logging run after the scope closes.
 
 **Cancel and retry.** Queued cancellation is immediate. Running cancellation is best
-effort and cancels activation. A user retry creates another Operation. One automatic
-retry, after a short delay, is allowed only for the transient codes.
+effort and cancels activation. A user retry creates another Operation. The runner never
+retries: a provider call is retried at most once by the application, per call (§11),
+and a render whose browser failed to start is started once more by its handler; both
+only while `execution_still_owned` holds. An execution that stopped because a due retry
+found the Operation cancelled or no longer held ends it as its record says, cancelled,
+not as the failure that asked for the retry.
 
 ## 11. AI adapter
 
@@ -492,11 +498,63 @@ evidence merely because it agrees arithmetically with the proposed coverage; it 
 trace to canonical structured evidence or stay unresolved. Malformed thresholds are
 invalid output.
 
-**Provenance.** Calls are stateless. The model and reasoning effort are frozen when an
-Operation is submitted. Model, provider, reasoning effort, task-contract version, prompt
-version/hash, input/output schema hashes, usage, latency, response ID, dated pricing,
-derived USD cost, and output hashes are stored. The sanitized raw response is an
-immutable payload (§6.2); sanitization removes secrets and excludes hidden reasoning.
+**One attempt per call.** Calls are stateless, and the model and reasoning effort are
+frozen when an Operation is submitted. The adapter makes exactly one HTTP request per call and
+returns an `AICallRecord` whatever happened: success, refusal, schema violation, HTTP
+error, or transport failure. It never retries and never touches the database. The
+application (`services/ai_calls.py`) appends each record to the AI call log in its own
+short write scope *before* deciding anything else, then applies the retry policy.
+Retrying one call never repeats another: a reviewer retry leaves the writer's logged
+answer as it was.
+
+| Outcome | How it is known | Retried |
+| --- | --- | --- |
+| `not_delivered` | `URLError` whose reason is a failed name lookup or a refused connection | once, after 1-3 s |
+| `outcome_unknown` | any other transport failure: a timeout, reset or disconnect while sending or waiting, or a failure whose stage cannot be proven | never - the provider may have processed and billed it |
+| `rate_limited` | 429 that is not a billing refusal | once, only with a `Retry-After` of at most 20 s |
+| `quota_exhausted` | 429 with a billing `error.code` or `error.type = insufficient_quota`; fails the Operation as `PROVIDER_QUOTA_EXHAUSTED`, not as a rate limit | never |
+| `http_error` | 500, or 503 (honouring `Retry-After` up to 20 s) | once - duplicate risk is not zero, a 5xx can follow processing |
+| `http_error` | any other status | never |
+| `refused`, `schema_violation` | a 200 answer without structured text, or with text the output schema refuses | never |
+
+A retry starts only while `execution_still_owned` holds, checked before and after the
+wait.
+
+**The AI call log.** `ai_calls` holds one append-only row per attempt; its only lineage
+is `operation_id`. `attempt` is the ordinal of the call for its task within the
+Operation, assigned by the store under the Operation's row lock; how many attempts are
+allowed is application policy, not a storage invariant. Appending requires only that
+the Operation exists: a billed call is recorded even after the Operation was cancelled
+or its runner lost the lease. Each row records the provider, model, reasoning effort,
+task-contract version, input and output schema versions and hashes, prompt version and
+hash, input hash, the Knowledge context hash, outcome, HTTP status, provider error type
+and code, `Retry-After`, response ID, the sanitized response and its hash, output hash,
+usage (input, cached input, cache-write, output, total), the dated price snapshot,
+derived USD cost, latency, and start and end time. The request payload itself is not
+kept: the input hash and the Operation's frozen sources name what was sent.
+
+A call's identity is its task-contract version, its input and output schema versions
+and hashes, and its prompt version and hash. The contract file carries no version of its
+own.
+
+**Evidence form.** `sanitized_response` is the provider's JSON envelope with credential-
+and reasoning-shaped keys and reasoning items removed, stored as a JSON object; a body
+that is not a JSON object is kept as `{content_type, body_text, truncated}` with
+`body_text` truncated and credential-shaped runs redacted. The bytes the provider sent
+are not kept. `sanitized_response_hash` is `sha256(canonical_json(sanitized_response))`
+- sorted keys, compact separators, UTF-8 - which reconciliation recomputes from the
+stored value.
+
+**Usage and cost.** Every input token is billed once: ordinary input is `input_tokens -
+cached_tokens - cache_write_tokens`, and cached and cache-write input have their own
+rates in the price snapshot (cache writes cost 1.25x ordinary input on GPT-5.6 and
+later). A usage the provider did not report in full, or reported inconsistently, is
+unknown; so is a cost that needs a count it left out. None is never read as zero. An
+Operation's usage and cost are the sums over every logged attempt, each once. An
+attempt proven never delivered (`not_delivered`) used nothing and adds zero - a derived
+value, not an invented one. Any other attempt without the value - a rate limit, a quota
+refusal, an HTTP error, an unknown outcome - makes that total NULL: a failed request
+still counts against the provider's limits and is not guaranteed to be free.
 
 ## 12. HTTP API
 
@@ -512,8 +570,8 @@ generated from it. The handwritten `frontend/src/api/client.ts` owns HTTP mechan
 Errors are RFC-style Problem Details with a stable code and safe context. Technical
 detail stays in the structured logs.
 
-Artifact endpoints take IDs only. They resolve a registered reference, verify the stored
-hash, and stream it with a friendly filename. Containment belongs to the store:
+No endpoint takes a storage location: the document's rendered PDF is addressed by its
+Application and streamed with a friendly filename. Containment belongs to the store:
 `LocalObjectStore` keeps keys below `artifacts_root` and refuses traversal and symlink
 escape; `S3ObjectStore` validates the key. Nothing above the store handles a filesystem
 path. Request bodies are bounded (`CV_API_MAX_BODY_BYTES`, default 2 MiB); oversize is
@@ -562,8 +620,8 @@ The OpenAI key is environment-only backend configuration. React sees only whethe
 configured. Logs and Operation payloads are redacted and never contain keys,
 authorization headers, or secrets.
 
-Job and user text is untrusted; prompt contracts isolate it from policy. Artifact access
-resolves registered references only, never a caller-supplied location. No endpoint
+Job and user text is untrusted; prompt contracts isolate it from policy. Stored files are
+reached through registered references only, never a caller-supplied location. No endpoint
 accepts arbitrary local paths or arbitrary file uploads.
 
 ## 15. Runtime behavior
@@ -621,7 +679,8 @@ Provenance and compatibility track, each where it applies:
 - domain document and analysis contract versions
 - Knowledge versions (reported by `/health`)
 - rendering, validator, and review policy versions
-- task-contract version, prompt version/hash, input/output schema hashes
+- per AI call: task-contract version, prompt version and hash, input and output schema
+  versions and hashes (the contract file itself carries no version)
 
 The product version does not substitute for any of them.
 

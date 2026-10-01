@@ -1,9 +1,10 @@
 """Whole-instance reconciliation and read-only orphan inspection.
 
-Reconciliation spans two subjects that no product service owns together:
-stored artifact evidence checked against the database, and the fact lifecycle
-checked against its audit trail. Both must agree for an instance to be sound,
-so they are reported as one result rather than two a caller has to combine.
+Reconciliation spans subjects that no product service owns together: stored
+payloads checked against the hashes they were registered with, each logged AI
+call's sanitized response checked against its hash, and the fact lifecycle
+checked against its audit trail. All must agree for an instance to be sound, so
+they are reported as one result rather than several a caller has to combine.
 
 Orphan inspection (architecture.md §7.1) is the third. It lists stored payloads
 that nothing references, and deletes nothing: no path in the system deletes an
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from ...util import canonical_json, sha256_text
 from ..commands import ReconciliationResult
 from ..maintenance import ORPHAN_MIN_AGE, OrphanInventory
 from ..ports import RevisionPayloadStore
@@ -53,7 +55,8 @@ class MaintenanceService:
         """
         with self.transactions.read() as tx:
             problems = self.inspection.integrity_problems(tx)
-            inventory = self.inspection.artifact_inventory(tx)
+            inventory = self.inspection.registered_payloads(tx)
+            calls = self.inspection.ai_call_evidence(tx)
         checked = 0
         for row in inventory:
             checked += 1
@@ -64,10 +67,19 @@ class MaintenanceService:
                 problems.append(f"artifact hash mismatch: {row['path']}")
             elif verification == "unresolvable":
                 problems.append(f"unresolvable artifact reference: {row['path']}")
+        for call in calls:
+            # The hash is of the canonical form, so it is recomputed from the stored
+            # value itself: any change to the logged response shows up here.
+            if (
+                sha256_text(canonical_json(call["sanitized_response"]))
+                != call["sanitized_response_hash"]
+            ):
+                problems.append(f"AI call response hash mismatch: {call['id']}")
         fact_lifecycle = self.knowledge.reconcile_facts()
         return ReconciliationResult(
             passed=not problems and fact_lifecycle.passed,
-            artifact_versions_checked=checked,
+            payloads_checked=checked,
+            ai_calls_checked=len(calls),
             problems=problems,
             fact_lifecycle=fact_lifecycle,
         )

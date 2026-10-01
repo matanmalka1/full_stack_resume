@@ -19,7 +19,7 @@ from ...domain.contracts.validation import ValidationReport
 from ...domain.document import DocumentState, document_state
 from ...domain.knowledge import Knowledge
 from ...util import new_id, utc_now
-from ..artifacts import ArtifactDelivery, DocumentPdfDelivery, deliver_artifact
+from ..artifacts import DocumentPdfDelivery
 from ..commands import RenderCommand, RenderResult
 from ..errors import (
     DOCUMENT_NOT_APPROVED,
@@ -29,15 +29,13 @@ from ..errors import (
     LineageBroken,
     PreconditionFailed,
     StateConflict,
-    UnknownRecord,
     ValidationBlocked,
 )
 from ..ports import Renderer, SnapshotPayloadStore
 from ..ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
-from ..ports.artifact_catalog import ArtifactCatalog
 from ..ports.documents import DocumentFileStore, DocumentStore, RenderedFiles
 from ..ports.transactions import TransactionManager, WriteTransaction
-from ..queries import DocumentPdfPreviewView, DocumentPreviewView, artifact_version_view
+from ..queries import DocumentPdfPreviewView, DocumentPreviewView
 from .documents import (
     DocumentSource,
     current_basis,
@@ -77,7 +75,6 @@ class RenderingService:
         documents: DocumentStore,
         sources: AnalysisContextSourceReader,
         files: DocumentFileStore,
-        catalog: ArtifactCatalog,
         knowledge: AnalysisKnowledgeSource,
         renderer: Renderer,
         payloads: SnapshotPayloadStore,
@@ -86,7 +83,6 @@ class RenderingService:
         self._documents = documents
         self._sources = sources
         self.files = files
-        self._catalog = catalog
         self._knowledge = knowledge
         self.renderer = renderer
         self.payloads = payloads
@@ -313,12 +309,3 @@ class RenderingService:
         if document.content is None:
             raise PreconditionFailed("the document has no content to preview yet")
         return document, document.content, self.load_knowledge()
-
-    def download_artifact(self, artifact_version_id: str) -> ArtifactDelivery:
-        """One registered provider-response artifact, addressed by ID and nothing else."""
-        try:
-            with self._transactions.read() as tx:
-                record = self._catalog.artifact_version(tx, artifact_version_id)
-        except UnknownRecord as exc:
-            raise UnknownRecord(f"unknown artifact version: {artifact_version_id}") from exc
-        return deliver_artifact(self.payloads, artifact_version_view(record), record["path"])

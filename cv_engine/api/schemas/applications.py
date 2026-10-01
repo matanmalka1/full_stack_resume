@@ -223,27 +223,6 @@ class ApplicationListResponse(HttpSchema):
     recruitment_status_counts: dict[CorrectableStatus, int] = {}
 
 
-class ArtifactVersionResponse(HttpSchema):
-    id: str
-    artifact_id: str
-    artifact_type: str
-    logical_name: str
-    version_number: int
-    lifecycle_status: str
-    content_hash: str
-    created_at: str
-    track: str | None = None
-    profile: str | None = None
-    emphasis: str | None = None
-    facts_version: str | None = None
-    job_snapshot_id: str | None = None
-    metadata: dict[str, Any]
-
-
-class ArtifactVersionsResponse(HttpSchema):
-    items: list[ArtifactVersionResponse]
-
-
 class CloseApplicationResponse(HttpSchema):
     application_id: str
     current_status: str

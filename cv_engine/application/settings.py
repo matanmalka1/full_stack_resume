@@ -71,6 +71,7 @@ class AIModelOption(BoundaryDTO):
     label: str
     input_per_million_usd: str
     cached_input_per_million_usd: str
+    cache_write_per_million_usd: str | None
     output_per_million_usd: str
     recommended: bool
     pricing_version: str
@@ -102,6 +103,11 @@ class SettingsService:
                     label=item.label,
                     input_per_million_usd=format(item.input_per_million_usd, "f"),
                     cached_input_per_million_usd=format(item.cached_input_per_million_usd, "f"),
+                    cache_write_per_million_usd=(
+                        None
+                        if item.cache_write_per_million_usd is None
+                        else format(item.cache_write_per_million_usd, "f")
+                    ),
                     output_per_million_usd=format(item.output_per_million_usd, "f"),
                     recommended=item.recommended,
                     pricing_version=PRICING_VERSION,
