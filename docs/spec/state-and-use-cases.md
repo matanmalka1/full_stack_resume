@@ -40,7 +40,7 @@ Immutable or append-only:
 - JobSnapshot and its payload
 - JobAnalysis (one row per analysis; its ID is its identity)
 - Submission, including the content it sent and the files it copied
-- provider-response Artifacts and their payloads
+- the AI call log: one row per provider call attempt, with its sanitized response
 - recruitment, status, audit, and fact lifecycle events
 - *designed, not built (§23):* account events
 - a terminal Operation record
@@ -339,9 +339,12 @@ the Application applied.
 
 Status: `queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`.
 
-Phase: `queued`, `waiting_for_application`, `waiting_for_render_slot`,
-`waiting_for_ai_slot`, `pre_execution_check`, `executing`, `retry_wait`,
-`pre_activation_check`, `activating`, `completed`.
+Phase: `queued`, `waiting_for_application`, `waiting_for_render_slot`, `executing`,
+`completed`. A row stores `queued`, `executing`, or `completed`. The two waiting phases
+are derived when a queued Operation is read: `waiting_for_application` while another
+Operation of its Application runs, `waiting_for_render_slot` while another render runs
+(architecture.md §10). A claim moves the Operation straight to `executing`; the checks
+before execution and before activation are not phases of their own.
 
 Types:
 
@@ -369,32 +372,47 @@ Settings to decide what to run. Retry copies them from the original.
 Failure codes:
 
 ```text
-SOURCE_CHANGED               PROVIDER_TIMEOUT*          PROVIDER_RATE_LIMITED*
-PROVIDER_UNAVAILABLE*        PROVIDER_REFUSED           PROVIDER_NOT_CONFIGURED
-INVALID_OUTPUT               SCHEMA_VIOLATION           CLAIM_REVIEW_UNCERTAIN
-CLAIM_REVIEW_UNSUPPORTED     RENDER_FAILED              BROWSER_START_FAILED*
-MISSING_FACT_RENDERING       VALIDATION_EXECUTION_FAILED
-CANCELLED_BEFORE_ACTIVATION
+SOURCE_CHANGED               PROVIDER_TIMEOUT           PROVIDER_RATE_LIMITED
+PROVIDER_QUOTA_EXHAUSTED     PROVIDER_UNAVAILABLE       PROVIDER_REFUSED
+PROVIDER_NOT_CONFIGURED
+INVALID_OUTPUT               CLAIM_REVIEW_UNCERTAIN     CLAIM_REVIEW_UNSUPPORTED
+RENDER_FAILED                BROWSER_START_FAILED       MISSING_FACT_RENDERING
+VALIDATION_EXECUTION_FAILED  CANCELLED_BEFORE_ACTIVATION
 ```
 
-`*` marks transient codes the runner may retry once automatically.
+Every code is final: the runner never retries an Operation. A provider call is retried
+at most once by the application before its failure is raised, per call and only where
+the policy allows (architecture.md §11); a browser that fails to start is started once
+more by the render handler.
+
+- `PROVIDER_RATE_LIMITED`: the provider throttled the request; slowing down and trying
+  later fixes it. `PROVIDER_QUOTA_EXHAUSTED`: the provider refused for billing - no
+  credit left, or a spend or usage limit reached; waiting does not fix it, a change to
+  the account does. Neither is retried automatically once raised; both keep the manual
+  `retry`, for after the cause is fixed.
 
 - `PROVIDER_NOT_CONFIGURED`: an AI task was requested with no provider configured;
   nothing was sent. `PROVIDER_REFUSED`: a provider answered and declined.
 - `CLAIM_REVIEW_UNCERTAIN`: the semantic reviewer could not establish support for a
   proposed wording. `CLAIM_REVIEW_UNSUPPORTED`: it found the wording exceeds or
-  contradicts the cited facts. Both leave the document unchanged. Malformed reviewer
-  output is `INVALID_OUTPUT`. A writing Operation fails with these codes only when every
-  line its answer named was withheld; otherwise it succeeds with `withheld_claims`.
+  contradicts the cited facts. Malformed output - an answer the output schema refuses,
+  from any task - is `INVALID_OUTPUT`; the AI call log keeps the precise outcome
+  (`schema_violation`). A writing
+  Operation fails with these codes only when every line its answer named was withheld,
+  and then the document is unchanged; otherwise it succeeds with `withheld_claims`.
 
-A failed or cancelled Operation may own inactive immutable output (provider evidence).
-Output existence and activation are separate. An output reference is one of
-`job_analysis`, `cv_document`, or `provider_response`.
+An output is what a succeeded Operation activated, recorded in the transaction that
+completed it; a failed or cancelled Operation has none. An output reference is one of
+`job_analysis` or `cv_document`. Provider calls are not outputs; every attempt an Operation made is in the
+AI call log, keyed by the Operation, whatever the Operation's outcome.
 
 The Operation read returns status, phase, message, timestamps, failure code, safe
 failure detail, structured `failure_reason`, `withheld_claims` (succeeded writing
 Operations only), retry reference, cancellation state,
-output references, provider/model/reasoning/usage metadata, and `available_actions`
+output references, provider/model/reasoning metadata, usage and cost summed over every
+logged provider attempt (input, cached input, cache-write input, output, total, USD; an
+attempt proven never delivered adds zero, and any other attempt without the value makes
+that total NULL), and `available_actions`
 (`cancel`, `retry`). The structured reason is the cause in a closed vocabulary with
 typed parameters (a page count against its limit, a fact missing a rendering in a
 language, a named render check); the detail is the same cause as an English sentence.
@@ -410,7 +428,7 @@ recorded on an `INVALID_OUTPUT` failure where the reviewer answered `supported` 
 evidence failed the deterministic review check: such a line has verdict `unattested` and
 `problems`, the closed codes of the checks it failed (empty for every other verdict). In
 a mixed failure every refused line is included; unsupported, then uncertain, determines
-the Operation failure code. This is inactive diagnostic context, not an accepted proposal or an
+the Operation failure code. This is diagnostic context, not an accepted proposal or an
 approval record. The explanation is the reviewer's opinion, shown as plain text to help
 the user find what to fix; it is never evidence and authorizes nothing. Other provider
 output, responses, credentials and internal paths are excluded. Existing failure records
@@ -499,8 +517,8 @@ history, `export_recruiter_pdf`, `export_decision_markdown`, and previews.
 Asynchronous Operation (`202`). Needs the configured provider; there is no rules-based
 fallback. It runs the `propose_analysis` task (product-spec §12) and receives a
 Proposal: requirements with importance, evidence-linked coverage, shortfall severity and
-reason, and the Track/Profile/Emphasis/language classification. The raw response is
-preserved as provider evidence.
+reason, and the Track/Profile/Emphasis/language classification. Every attempt is
+appended to the AI call log.
 
 Deterministic policy then locates each quoted requirement in the snapshot, checks
 canonical-fact eligibility, refuses positive coverage without evidence, applies
@@ -556,9 +574,12 @@ unsupported content cannot be overridden by approval.
 
 AI wording is proposed, then reviewed by the semantic reviewer against the exact
 proposed claims, section context, linked fact IDs, allowed canonical sources, and an
-ordered assertion-to-source mapping. Only a fully supported result activates.
-Uncertain or unsupported results fail the Operation (§11) with inactive provider
-evidence and leave the document unchanged. Unsupported manual text is saved as a
+ordered assertion-to-source mapping. The answer is judged line by line (product-spec
+§10.1): a line becomes state only through a hard check it passes or a fully `supported`,
+attested review, and any other line is withheld - it keeps exactly the wording, links and
+proof it held before the Operation. The Operation succeeds with `withheld_claims` unless
+every line its answer named was withheld; then it fails (§11) with the provider calls in
+the AI call log and the document unchanged. Unsupported manual text is saved as a
 pending, unlinked claim; it is never rejected or discarded, and it cannot pass the check.
 
 ### `read_document(application_id)`
@@ -823,9 +844,9 @@ The Operation read (§11).
 
 ### `cancel_operation(operation_id)`
 
-A queued Operation becomes `cancelled` immediately and releases its resource leases. A
-running one records `cancellation_requested_at`; any later output is registered
-inactive and never activated.
+A queued Operation becomes `cancelled` immediately. A
+running one records `cancellation_requested_at`; it then ends `cancelled` without
+activating anything, and records no output.
 
 ### `retry_operation(operation_id, Idempotency-Key?)`
 
@@ -876,14 +897,15 @@ become operator CLI commands with the same semantics. No user route reaches them
 ### `reconcile()`
 
 `POST /api/v1/maintenance/reconciliations`. Checks database references and stored
-hashes against the payload store — JobSnapshot payloads, provider-response artifact
-versions, and every Submission file against its SHA-256 — and the fact lifecycle
+hashes against the payload store — JobSnapshot payloads and every Submission file
+against its SHA-256 (`payloads_checked`) — every logged AI call's sanitized response
+against its `sanitized_response_hash` (`ai_calls_checked`), and the fact lifecycle
 against its trail: events for facts that no longer exist, live statuses the trail never
-recorded or contradicts, and prepared or quarantined journal mutations. Both halves
-always run.
+recorded or contradicts, and prepared or quarantined journal mutations. Every part
+always runs.
 
 It reports and never repairs: the records it checks are immutable, and a repair would
-destroy the evidence. `passed` is the conjunction of both halves. A failed
+destroy the evidence. `passed` is the conjunction of every part. A failed
 reconciliation is a successful answer (`200`). The document's rendered files are
 mutable and not checked.
 
@@ -893,9 +915,8 @@ mutable and not checked.
 immutable payload references found in storage that no database row references and that
 were stored longer than one hour ago (`ORPHAN_MIN_AGE`, architecture.md §7.1). A younger
 unregistered payload may still be on its way to registration and is not listed.
-References cover JobSnapshots, Submission files, and every provider-response artifact
-version, including inactive evidence. Rendered document files and files outside managed
-layouts are excluded.
+References cover JobSnapshots and Submission files. Rendered document files and files
+outside managed layouts are excluded.
 
 Storage enumeration happens outside the database read. The result is a read-only,
 non-atomic observation; it changes no reconciliation verdict and deletes nothing.
@@ -929,9 +950,6 @@ storage and is only reported (architecture.md §7.1).
 - **Document previews** (§14).
 - **Operation** (§11).
 - **Facts**: list, detail, history, attachment targets (§17).
-- **Provider-response artifacts**: per-Application artifact versions, one version's
-  metadata, and its payload download, addressed by artifact version ID only and
-  verified for containment and hash on read.
 - **Settings** (§19a) and **health**: runtime and provider configuration status without
   secrets.
 
@@ -1055,7 +1073,7 @@ one transaction:
    `profile_bindings` rows and the user's `user_settings` row are deleted.
 4. **Record** `account_deactivated` in `auth_events`.
 
-Nothing immutable is touched: Submissions, JobSnapshots, provider evidence,
+Nothing immutable is touched: Submissions, JobSnapshots, the AI call log,
 `fact_events`, recruitment and audit events, and terminal Operations stay as written,
 owned by the now-anonymous user (product-spec.md §22). `204`; the cookie is cleared.
 There is no reactivation.

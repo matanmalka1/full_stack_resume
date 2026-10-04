@@ -29,12 +29,14 @@ class FactLifecycleReportResponse(HttpSchema):
 class ReconciliationResponse(HttpSchema):
     """Whether stored evidence and the fact lifecycle agree.
 
-    `problems` describes stored artifacts; the lifecycle keeps its own list, so
+    `problems` describes stored payloads and logged AI calls; the lifecycle keeps its
+    own list, so
     a reader can tell which half is broken instead of seeing one merged list.
     """
 
     passed: bool
-    artifact_versions_checked: int
+    payloads_checked: int
+    ai_calls_checked: int
     problems: list[str]
     fact_lifecycle: FactLifecycleReportResponse
 
@@ -42,7 +44,8 @@ class ReconciliationResponse(HttpSchema):
     def of(cls, result: ReconciliationResult) -> ReconciliationResponse:
         return cls(
             passed=result.passed,
-            artifact_versions_checked=result.artifact_versions_checked,
+            payloads_checked=result.payloads_checked,
+            ai_calls_checked=result.ai_calls_checked,
             problems=list(result.problems),
             fact_lifecycle=FactLifecycleReportResponse(
                 **result.fact_lifecycle.model_dump(mode="json")

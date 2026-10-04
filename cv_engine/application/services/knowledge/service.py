@@ -406,9 +406,8 @@ class FactLifecycleService(KnowledgeMutationEngine):
         except OSError as exc:
             raise InfrastructureFailure(f"could not prepare Knowledge mutation: {exc}") from exc
         except (FactStoreError, ValueError, PreconditionFailed, StateConflict) as exc:
-            if "staged_files" in locals():
-                for staged in staged_files:
-                    self._knowledge.discard_staged(staged)
+            # Nothing to discard here: staging failed before returning any file, and the
+            # stager discards what it staged itself (`stage_confirm_and_use_fact`).
             raise KnowledgeRejected(str(exc)) from exc
 
         facts_version = proposed.facts.version

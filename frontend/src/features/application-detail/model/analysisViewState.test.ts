@@ -59,7 +59,7 @@ describe("analysisViewState", () => {
       status: "succeeded",
       is_terminal: true,
       finished_at: "2026-09-10T08:00:10Z",
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-2", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-2" }],
     });
 
     expect(
@@ -93,7 +93,7 @@ describe("analysisViewState", () => {
           status: "succeeded",
           is_terminal: true,
           finished_at: "2026-09-10T08:00:10Z",
-          outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+          outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
         }),
       }),
     ).toBe("content");
@@ -131,7 +131,7 @@ describe("analysisViewState", () => {
             status,
             is_terminal: true,
             finished_at: "2026-09-10T08:00:10Z",
-            outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+            outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
           }),
         }),
       ).toBe("content");

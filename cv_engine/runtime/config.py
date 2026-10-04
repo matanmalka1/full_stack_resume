@@ -112,8 +112,8 @@ SETTINGS: dict[str, Setting] = {
         # Immutable payload storage. "local" is the default and keeps every
         # payload below the application root; "s3" stores them in a bucket,
         # which is what a deployed installation uses. Nothing else about the
-        # workflow changes - the reference strings recorded in
-        # `artifact_versions` are identical either way.
+        # workflow changes - the payload references JobSnapshots and
+        # Submissions record are identical either way.
         Setting("object_store", "CV_OBJECT_STORE", default="local"),
         Setting("s3_bucket", "CV_S3_BUCKET", default=None),
         Setting("s3_prefix", "CV_S3_PREFIX", default=None),

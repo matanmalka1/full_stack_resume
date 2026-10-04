@@ -16,6 +16,7 @@ from helpers import (
     stored_document,
     stored_submissions,
 )
+from sqlalchemy import text
 
 from cv_engine.application.commands import (
     ApproveDocumentCommand,
@@ -53,7 +54,7 @@ def test_pipeline_reaches_ready_and_reconciles(
         for s in document.content.sections
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
-    edited = services.drafts.update_document(
+    edited = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=document.document_hash,
@@ -89,11 +90,29 @@ def test_pipeline_reaches_ready_and_reconciles(
     assert report.passed, report.problems
     counts = persisted_counts(database_engine)
     submission_files = sum(path is not None for path in (sent.html_path, sent.pdf_path))
-    assert report.artifact_versions_checked == (
-        counts["job_snapshots"] + counts["artifact_versions"] + submission_files
-    )
+    assert report.payloads_checked == counts["job_snapshots"] + submission_files
+    assert report.ai_calls_checked == counts["ai_calls"]
     assert services.maintenance.inspect_orphans().candidates == []
     assert services.queries.application_detail(app_id).application.current_status == "applied"
+
+    # A logged call's response is checked against the hash it was logged under. The
+    # log is append-only, so a tamper needs its trigger switched off - what a
+    # hand-edited database would take - and reconciliation repairs nothing.
+    assert report.ai_calls_checked > 0
+    with database_engine.begin() as connection:
+        connection.execute(text("ALTER TABLE ai_calls DISABLE TRIGGER no_update_ai_calls"))
+        tampered = connection.execute(
+            text(
+                "UPDATE ai_calls SET sanitized_response = sanitized_response || "
+                "'{\"edited\": true}'::jsonb WHERE id = "
+                "(SELECT id FROM ai_calls WHERE sanitized_response IS NOT NULL LIMIT 1) "
+                "RETURNING id"
+            )
+        ).scalar_one()
+        connection.execute(text("ALTER TABLE ai_calls ENABLE TRIGGER no_update_ai_calls"))
+    tampered_report = services.maintenance.reconcile()
+    assert not tampered_report.passed
+    assert f"AI call response hash mismatch: {tampered}" in tampered_report.problems
 
 
 def test_reconcile_reports_tampered_submission_without_repair(submitted_application):

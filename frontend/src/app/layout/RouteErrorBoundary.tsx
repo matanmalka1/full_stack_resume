@@ -6,7 +6,7 @@ import { Card } from "@/ui/Card";
 import { problemSentence } from "@/ui/errorMessages";
 import { PageShell } from "@/ui/PageShell";
 import { reportError } from "@/ui/reportError";
-import { boardPath } from "../boardReturn";
+import { boardPath } from "@/navigation/boardReturn";
 
 interface SafeRouteError {
   title: string;

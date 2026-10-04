@@ -8,6 +8,7 @@ from typing import Protocol
 from .. import __version__
 from ..api import ApiLimits, ApiServices, InstanceIdentity
 from ..api.app import API_VERSION
+from ..application.commands import RegenerateClaimCommand, RegenerateSectionCommand
 from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
@@ -18,10 +19,11 @@ from ..application.ports import (
     RevisionPayloadStore,
 )
 from ..application.ports.analysis_plans import AnalysisKnowledgeSource, AnalysisPayloadStore
+from ..application.services.ai_calls import AICallRunner
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
-from ..application.services.drafts import DraftAuthoringService
+from ..application.services.drafts import DraftAuthoringService, DraftEditingService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.repin import RepinService
@@ -43,7 +45,7 @@ from ..application.services.operations import (
 from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
-from ..application.settings import SettingsService
+from ..application.services.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.document_files import DocumentFiles, SubmissionPayloads
 from ..infrastructure.knowledge import FileKnowledge
@@ -55,13 +57,12 @@ from ..infrastructure.persistence import (
     create_database_engine,
     current_database_revision,
 )
+from ..infrastructure.persistence.ai_calls import SqlAlchemyAICallLog
 from ..infrastructure.persistence.analysis_plans import SqlAlchemyAnalysisPlanRepository
 from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisContextSourceReader
 from ..infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
-from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
-from ..infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
 from ..infrastructure.persistence.documents import (
     SqlAlchemyDocumentStore,
@@ -70,6 +71,10 @@ from ..infrastructure.persistence.documents import (
 from ..infrastructure.persistence.draft_history_sources import (
     SqlAlchemyDraftHistoryApplicationReader,
 )
+from ..infrastructure.persistence.initial_recruitment_events import (
+    SqlAlchemyInitialRecruitmentEventWriter,
+)
+from ..infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from ..infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
@@ -77,11 +82,7 @@ from ..infrastructure.persistence.knowledge_lifecycle import (
 from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspection
 from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
-from ..infrastructure.persistence.provider_evidence import SqlAlchemyProviderEvidenceStore
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
-from ..infrastructure.persistence.recruitment_store import (
-    SqlAlchemyInitialRecruitmentEventWriter,
-)
 from ..infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from ..infrastructure.persistence.worker_lock import worker_exclusivity
 from ..infrastructure.providers import OpenAIProvider
@@ -130,6 +131,7 @@ class Services:
     analysis: AnalysisService
     repin: RepinService
     drafts: DraftAuthoringService
+    draft_editing: DraftEditingService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService
     draft_approval: DraftApprovalService
@@ -231,7 +233,7 @@ def build_services(
     analysis_plans = SqlAlchemyAnalysisPlanRepository(transactions)
     analysis_sources = SqlAlchemyAnalysisContextSourceReader(transactions)
     application_projections = SqlAlchemyApplicationProjectionReader(transactions)
-    evidence_store = SqlAlchemyProviderEvidenceStore(transactions)
+    ai_calls = AICallRunner(transactions=transactions, log=SqlAlchemyAICallLog(transactions))
     operation_client = SqlAlchemyOperationClientStore(transactions)
     operation_execution = SqlAlchemyOperationExecutionStore(transactions)
     knowledge_queries = KnowledgeQueryService(
@@ -262,12 +264,11 @@ def build_services(
         analyses=analysis_plans,
         sources=analysis_sources,
         documents=documents,
-        evidence=evidence_store,
+        ai_calls=ai_calls,
         knowledge=resolved_knowledge,
         payloads=resolved_payloads,
         provider=resolved_provider,
     )
-    draft_catalog = SqlAlchemyArtifactCatalog(transactions)
     draft_history = DraftHistoryService(
         transactions=transactions,
         documents=documents,
@@ -297,7 +298,7 @@ def build_services(
         sources=analysis_sources,
         knowledge=resolved_knowledge,
         provider=resolved_provider,
-        evidence=analysis_service,
+        ai_calls=ai_calls,
         snapshot_payloads=resolved_payloads,
     )
     draft_validation = DraftValidationService(
@@ -319,7 +320,6 @@ def build_services(
         documents=documents,
         sources=analysis_sources,
         files=document_files,
-        catalog=draft_catalog,
         knowledge=resolved_knowledge,
         renderer=resolved_renderer,
         payloads=resolved_payloads,
@@ -343,24 +343,19 @@ def build_services(
                 rendering_service, documents, analysis_sources, resolved_activation_knowledge
             ),
             OperationType.CREATE_DRAFT: DraftOperationHandler(
-                draft_service,
-                documents,
-                draft_service.activation,
-                resolved_activation_knowledge,
+                draft_service, documents, draft_service.activation
             ),
             OperationType.REGENERATE_SECTION: RegenerationOperationHandler(
                 draft_service,
                 documents,
                 draft_service.activation,
-                resolved_activation_knowledge,
-                task="regenerate_section",
+                command_type=RegenerateSectionCommand,
             ),
             OperationType.REGENERATE_CLAIM: RegenerationOperationHandler(
                 draft_service,
                 documents,
                 draft_service.activation,
-                resolved_activation_knowledge,
-                task="regenerate_claim",
+                command_type=RegenerateClaimCommand,
             ),
             OperationType.ANALYZE_JOB: AnalysisOperationHandler(
                 analysis_service,
@@ -425,6 +420,12 @@ def build_services(
         analysis=analysis_service,
         repin=repin_service,
         drafts=draft_service,
+        draft_editing=DraftEditingService(
+            transactions=transactions,
+            documents=documents,
+            sources=analysis_sources,
+            knowledge=resolved_knowledge,
+        ),
         draft_validation=draft_validation,
         draft_history=draft_history,
         draft_approval=draft_approval,
@@ -468,6 +469,7 @@ def build_api_services(
         analysis=services.analysis,
         repin=services.repin,
         drafts=services.drafts,
+        draft_editing=services.draft_editing,
         draft_validation=services.draft_validation,
         draft_history=services.draft_history,
         draft_approval=services.draft_approval,

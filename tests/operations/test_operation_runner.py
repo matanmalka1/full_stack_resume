@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock, Thread
+from time import monotonic
 
 import pytest
 from foreground import ForegroundOperationExecutor, foreground_executor
@@ -25,6 +26,7 @@ from operations_support import (
     _stored_request,
 )
 from sqlalchemy import select, text, update
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 import cv_engine.infrastructure.rendering as rendering_adapter
 from cv_engine.application.commands import (
@@ -59,15 +61,12 @@ from cv_engine.application.operations import (
 )
 from cv_engine.domain.document import PreparationState
 from cv_engine.infrastructure.operation_logging import OperationFailureLogger
-from cv_engine.infrastructure.persistence.artifact_catalog import SqlAlchemyArtifactCatalog
 from cv_engine.infrastructure.persistence.connection import SqlAlchemyTransactionManager
 from cv_engine.infrastructure.persistence.operation_execution import (
     SqlAlchemyOperationExecutionStore,
+    _lost_claim,
 )
-from cv_engine.infrastructure.persistence.tables import (
-    operation_resource_leases,
-    operations,
-)
+from cv_engine.infrastructure.persistence.tables import operations
 from cv_engine.infrastructure.persistence.worker_lock import (
     WORKER_LOCK_KEY,
     worker_exclusivity,
@@ -77,32 +76,14 @@ from cv_engine.runtime.execution import OperationWorker
 from cv_engine.util import new_id
 
 
-def _artifact_version(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).artifact_version(tx, *args)
-
-
-def _artifact_versions(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).artifact_versions(tx, *args)
-
-
-def _latest_artifact_version(services, *args):
-    transactions = services.operation_runner.transactions
-    with transactions.read() as tx:
-        return SqlAlchemyArtifactCatalog(transactions).latest_artifact_version(tx, *args)
-
-
 def test_racing_claimants_produce_one_claim_and_one_execution(
     services,
     database_engine,
 ) -> None:
     """Contending claimants produce one claim and one execution.
 
-    Two runners racing one Operation get one claim, and the loser releases only
-    what it took. The two concrete hosts - foreground executor and worker - contend
+    Two runners racing one Operation get one claim, and the loser writes nothing. The
+    two concrete hosts - foreground executor and worker - contend
     through the same durable claim contract and execute once.
     """
     ingested = services.applications.ingest(
@@ -135,17 +116,9 @@ def test_racing_claimants_produce_one_claim_and_one_execution(
     assert len(claimed) == 1
     winner = claimed[0]
     assert winner.lease_owner in {"runner-a", "runner-b"}
-    # The loser must release only what it took. Releasing by operation_id
-    # deleted the winner's resource slots while it was still running under them.
-    with services.operation_runner.transactions.read() as tx:
-        connection = services.operation_runner.transactions.connection_for(tx)
-        held = connection.execute(
-            select(operation_resource_leases.c.resource_kind).where(
-                operation_resource_leases.c.operation_id == created.id,
-                operation_resource_leases.c.lease_owner == winner.lease_owner,
-            )
-        ).scalars()
-        assert sorted(held) == sorted(resource.kind.value for resource in winner.resources)
+    stored = _operation(services, created.id)
+    assert stored.status is OperationStatus.RUNNING
+    assert stored.lease_owner == winner.lease_owner, "the loser must not overwrite the claim"
 
     operation = _operation_for_runner(services, "Foreground Worker Race Co")
     barrier = Barrier(2)
@@ -237,117 +210,265 @@ def test_worker_logs_claim_and_terminal_result_but_not_an_empty_poll(
         .read_text(encoding="utf-8")
         .splitlines()
     ]
-    assert [entry["event"] for entry in entries] == [
-        "operation.claimed",
-        "operation.phase_changed",
-        "operation.phase_changed",
-        "operation.phase_changed",
-        "operation.phase_changed",
-        "operation.succeeded",
-    ]
-    assert [entry["phase"] for entry in entries if entry["event"] == "operation.phase_changed"] == [
-        OperationPhase.PRE_EXECUTION_CHECK.value,
-        OperationPhase.EXECUTING.value,
-        OperationPhase.PRE_ACTIVATION_CHECK.value,
-        OperationPhase.ACTIVATING.value,
-    ]
+    # A claim moves the Operation straight to `executing`; nothing between the claim
+    # and the end of the run writes a phase, so nothing logs one.
+    assert [entry["event"] for entry in entries] == ["operation.claimed", "operation.succeeded"]
+    assert entries[0]["phase"] == OperationPhase.EXECUTING.value
     assert all(entry["operation_id"] == operation.id for entry in entries)
     assert entries[-1]["duration_ms"] >= 0
 
 
-def test_application_and_global_render_leases_queue_contending_work(services) -> None:
-    first = services.applications.ingest(
+def _application(services, company: str) -> str:
+    return services.applications.ingest(
         IngestCommand(
-            company="Lease A", target_role="Developer", job_text="Python role", client="web"
-        )
-    )
-    second = services.applications.ingest(
-        IngestCommand(
-            company="Lease B",
+            company=company,
             target_role="Developer",
             job_text="Python role",
             acknowledged_duplicates=True,
             client="web",
         )
-    )
-    app_one = _enqueue_operation(services, _stored_request(first.application_id, "app-1"))
-    same_app = _enqueue_operation(services, _stored_request(first.application_id, "app-2"))
-    render_request = CreateOperation(
-        application_id=second.application_id,
+    ).application_id
+
+
+def _render_request(application_id: str, key: str) -> CreateOperation:
+    return CreateOperation(
+        application_id=application_id,
         operation_type=OperationType.RENDER_DOCUMENT,
         payload={"expected_document_hash": "a" * 64},
-        idempotency_key="render-1",
+        idempotency_key=key,
         sources=OperationSources(expected_document_hash="a" * 64),
     )
-    render_one = _enqueue_operation(services, render_request)
-    third = services.applications.ingest(
-        IngestCommand(
-            company="Lease C",
-            target_role="Developer",
-            job_text="Python role",
-            acknowledged_duplicates=True,
-            client="web",
-        )
-    )
-    render_two = _enqueue_operation(
-        services,
-        render_request.model_copy(
-            update={
-                "application_id": third.application_id,
-                "idempotency_key": "render-2",
-            }
-        ),
-    )
 
+
+def _concurrent_claims(database_engine, claims):
+    """Run each `(runner_id, operation_id | None)` claim on its own connection at once.
+
+    `None` claims the next ready Operation, as the worker does. Each claimant has
+    its own transaction manager, so the race is between PostgreSQL sessions and
+    the claim guards decide it, not anything in this process.
+    """
+    barrier = Barrier(len(claims))
+
+    def claim(runner_id: str, operation_id: str | None):
+        transactions = SqlAlchemyTransactionManager(database_engine)
+        execution = SqlAlchemyOperationExecutionStore(transactions)
+        barrier.wait(timeout=5)
+        with transactions.write() as tx:
+            if operation_id is None:
+                return execution.claim_next_operation(tx, runner_id=runner_id)
+            return execution.claim_operation(tx, operation_id, runner_id=runner_id)
+
+    with ThreadPoolExecutor(max_workers=len(claims)) as pool:
+        futures = [pool.submit(claim, runner, operation_id) for runner, operation_id in claims]
+        return [future.result(timeout=10) for future in futures]
+
+
+def test_claim_guards_queue_contending_work_and_derive_the_waiting_phase(services) -> None:
+    """One running Operation per Application and one running render, as read phases.
+
+    A refused claim writes nothing: the waiting phase is read from what is running,
+    so it is exact while the blocker runs and gone the moment it stops.
+    """
+    first = _application(services, "Guard A")
+    second = _application(services, "Guard B")
+    third = _application(services, "Guard C")
+    app_one = _enqueue_operation(services, _stored_request(first, "app-1"))
+    same_app = _enqueue_operation(services, _stored_request(first, "app-2"))
+    render_one = _enqueue_operation(services, _render_request(second, "render-1"))
+    render_two = _enqueue_operation(services, _render_request(third, "render-2"))
+
+    assert _operation(services, same_app.id).phase is OperationPhase.QUEUED
     assert _claim_operation(services, app_one.id, runner_id="runner-a") is not None
     assert _claim_operation(services, same_app.id, runner_id="runner-b") is None
-    assert _operation(services, same_app.id).phase.value == "waiting_for_application"
+    assert _operation(services, same_app.id).phase is OperationPhase.WAITING_FOR_APPLICATION
     assert _claim_operation(services, render_one.id, runner_id="runner-b") is not None
     assert _claim_operation(services, render_two.id, runner_id="runner-c") is None
-    assert _operation(services, render_two.id).phase.value == "waiting_for_render_slot"
+    assert _operation(services, render_two.id).phase is OperationPhase.WAITING_FOR_RENDER_SLOT
+
+    _execution_write(services, "complete_operation", render_one.id, runner_id="runner-b")
+    assert _operation(services, render_two.id).phase is OperationPhase.QUEUED
+    assert _claim_operation(services, render_two.id, runner_id="runner-c") is not None
 
 
-def test_ai_resource_allows_two_operations_and_queues_the_third(services) -> None:
-    operations = []
-    for number in range(3):
-        ingested = services.applications.ingest(
-            IngestCommand(
-                company=f"AI Lease {number}",
-                target_role="Developer",
-                job_text="Python role",
-                acknowledged_duplicates=True,
-                client="web",
+def test_racing_claims_admit_one_per_application_and_one_render(services, database_engine) -> None:
+    """Concurrent sessions: the database admits exactly one where a guard applies.
+
+    Two Operations of one Application, and two renders of different Applications,
+    each produce exactly one claim. An AI Operation and a render of different
+    Applications contend for nothing and both run. Each case races twice: once by
+    Operation identifier (the foreground host) and once through the worker's
+    next-ready claim.
+    """
+    for by_id in (True, False):
+        tag = "id" if by_id else "next"
+        app = _application(services, f"Race Same {tag}")
+        same = [
+            _enqueue_operation(services, _stored_request(app, f"same-{tag}-{n}")) for n in (1, 2)
+        ]
+        claimed = _concurrent_claims(
+            database_engine,
+            [(f"same-{tag}-{n}", same[n].id if by_id else None) for n in (0, 1)],
+        )
+        assert len([result for result in claimed if result is not None]) == 1
+        _finish_running(services, database_engine)
+
+        renders = [
+            _enqueue_operation(
+                services,
+                _render_request(_application(services, f"Race Render {tag} {n}"), f"r-{tag}-{n}"),
             )
+            for n in (1, 2)
+        ]
+        claimed = _concurrent_claims(
+            database_engine,
+            [(f"render-{tag}-{n}", renders[n].id if by_id else None) for n in (0, 1)],
         )
-        request = _stored_request(ingested.application_id, f"ai-{number}").model_copy(
-            update={"provider": "openai", "model": "test-model"}
-        )
-        operations.append(_enqueue_operation(services, request))
+        assert len([result for result in claimed if result is not None]) == 1
+        _finish_running(services, database_engine)
 
-    assert _claim_operation(services, operations[0].id, runner_id="ai-a")
-    assert _claim_operation(services, operations[1].id, runner_id="ai-b")
-    assert _claim_operation(services, operations[2].id, runner_id="ai-c") is None
-    assert _operation(services, operations[2].id).phase.value == "waiting_for_ai_slot"
+        ai = _enqueue_operation(
+            services,
+            _stored_request(_application(services, f"Race AI {tag}"), f"ai-{tag}").model_copy(
+                update={"provider": "openai", "model": "test-model"}
+            ),
+        )
+        render = _enqueue_operation(
+            services,
+            _render_request(_application(services, f"Race Mixed {tag}"), f"mixed-{tag}"),
+        )
+        claimed = _concurrent_claims(
+            database_engine,
+            [
+                (f"ai-{tag}", ai.id if by_id else None),
+                (f"mixed-{tag}", render.id if by_id else None),
+            ],
+        )
+        assert {result.id for result in claimed if result is not None} == {ai.id, render.id}
+        _finish_running(services, database_engine)
+
+
+def _finish_running(services, database_engine) -> None:
+    """End every running Operation through its runner and cancel what lost, between cases."""
+    with database_engine.connect() as connection:
+        rows = connection.execute(
+            select(operations.c.id, operations.c.status, operations.c.lease_owner).where(
+                operations.c.status.in_(("queued", "running"))
+            )
+        ).all()
+    for operation_id, status, owner in rows:
+        if status == "running":
+            _execution_write(services, "complete_operation", operation_id, runner_id=owner)
+        else:
+            services.operation_lifecycle.cancel(operation_id)
+
+
+def test_a_claim_refused_by_a_guard_moves_on_to_the_next_candidate(
+    services, database_engine
+) -> None:
+    """A loser waits only for the winner's commit, then claims other work.
+
+    The rival holds the first Operation of an Application in an uncommitted claim.
+    The next-ready claim cannot see it running yet, so it tries the second
+    Operation of that Application: the unique check waits for the rival's commit,
+    fails on the Application guard, rolls back to its savepoint, and claims the
+    unrelated Operation behind it in the same transaction.
+    """
+    busy = _application(services, "Moves On Busy")
+    free = _application(services, "Moves On Free")
+    held = _enqueue_operation(
+        services, _stored_request(busy, "held"), created_at="2026-08-19T07:00:00+00:00"
+    )
+    blocked = _enqueue_operation(
+        services, _stored_request(busy, "blocked"), created_at="2026-08-19T07:00:01+00:00"
+    )
+    other = _enqueue_operation(
+        services, _stored_request(free, "other"), created_at="2026-08-19T07:00:02+00:00"
+    )
+
+    rival = SqlAlchemyTransactionManager(database_engine)
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        with rival.write() as tx:
+            store = SqlAlchemyOperationExecutionStore(rival)
+            assert store.claim_operation(tx, held.id, runner_id="rival") is not None
+            loser = pool.submit(lambda: _concurrent_claims(database_engine, [("loser", None)])[0])
+            _wait_for_a_lock_wait(database_engine)
+            # Leaving the block commits the rival's claim, which releases the waiter.
+        claimed = loser.result(timeout=10)
+    finally:
+        pool.shutdown(wait=False)
+
+    assert claimed is not None and claimed.id == other.id
+    assert _operation(services, blocked.id).status is OperationStatus.QUEUED
+    assert _operation(services, blocked.id).phase is OperationPhase.WAITING_FOR_APPLICATION
+
+
+def _wait_for_a_lock_wait(database_engine, timeout: float = 5.0) -> None:
+    """Block until some session waits on a lock - the loser on the rival's row."""
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        # A fresh transaction each poll: pg_stat_activity is a snapshot that stays
+        # fixed for the rest of the transaction that first reads it.
+        with database_engine.connect() as connection:
+            waiting = connection.execute(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+                )
+            ).scalar_one()
+        if waiting:
+            return
+        Event().wait(0.02)
+    raise AssertionError("the losing claim never waited on the rival's uncommitted row")
+
+
+@pytest.mark.parametrize(
+    ("sqlstate", "constraint", "lost"),
+    [
+        ("40001", None, True),
+        ("23505", "uq_operations_running_application", True),
+        ("23505", "uq_operations_running_render", True),
+        ("23505", "uq_operations_operation_type_idempotency_key", False),
+        ("23503", None, False),
+    ],
+)
+def test_only_a_serialization_failure_or_a_claim_guard_is_a_lost_claim(
+    sqlstate, constraint, lost
+) -> None:
+    """Any other unique violation is a real error, never swallowed as a lost race."""
+
+    class Diag:
+        constraint_name = constraint
+
+    class Orig(Exception):
+        diag = Diag()
+
+    Orig.sqlstate = sqlstate
+    error = DBAPIError("UPDATE operations", {}, Orig())
+    assert _lost_claim(error) is lost
 
 
 def test_startup_interrupts_work_held_by_previous_runners_and_one_worker_runs(
     services,
     database_engine,
 ) -> None:
-    """Startup interrupts every claimed Operation, which is safe only with one worker.
+    """Startup interrupts every running Operation, which is safe only with one worker.
 
-    Any claim left on a row belongs to a worker that no longer exists, queued or
-    running. An unclaimed queued Operation is left for the new worker. The
-    advisory lock is what makes "no other worker is alive" true: a second
-    holder is refused, and the slot frees when the first lets go.
+    A running row belongs to a worker that no longer exists; only a running row can
+    hold a lease, which the schema enforces. A queued Operation is left for the new
+    worker. The advisory lock is what makes "no other worker is alive" true: a
+    second holder is refused, and the slot frees when the first lets go.
     """
-    queued = _operation_for_runner(services, "Claimed Queued Co")
     running = _operation_for_runner(services, "Claimed Running Co")
     waiting = _operation_for_runner(services, "Unclaimed Co")
+    with pytest.raises(IntegrityError, match="ck_operations_running_lease"):
+        with database_engine.begin() as connection:
+            connection.execute(
+                update(operations)
+                .where(operations.c.id == waiting.id)
+                .values(lease_owner="dead-runner")
+            )
     with database_engine.begin() as connection:
-        connection.execute(
-            update(operations).where(operations.c.id == queued.id).values(lease_owner="dead-runner")
-        )
         connection.execute(
             update(operations)
             .where(operations.c.id == running.id)
@@ -356,8 +477,7 @@ def test_startup_interrupts_work_held_by_previous_runners_and_one_worker_runs(
 
     interrupted = _execution_write(services, "interrupt_claims_from_previous_runners")
 
-    assert sorted(interrupted) == sorted([queued.id, running.id])
-    assert _operation(services, queued.id).status is OperationStatus.INTERRUPTED
+    assert interrupted == [running.id]
     assert _operation(services, running.id).status is OperationStatus.INTERRUPTED
     assert _operation(services, waiting.id).status is OperationStatus.QUEUED
 
@@ -430,27 +550,23 @@ def test_worker_stops_when_its_lock_session_ends(services, database_engine) -> N
 def test_runner_activates_outputs_and_completes_in_one_activation_transaction(services) -> None:
     operation = _operation_for_runner(services)
     output_id = new_id()
-    prepared = PreparedOperation(
-        value={"proposal": "validated"},
-        outputs=(
-            OperationOutputReference(
-                output_type="provider_response",
-                output_id=output_id,
-                active=False,
-            ),
-        ),
-    )
     runner = _runner(
         services,
-        {OperationType.ANALYZE_JOB: _Handler(execute=lambda *_args: prepared)},
+        {
+            OperationType.ANALYZE_JOB: _Handler(
+                execute=lambda *_args: PreparedOperation(value={"proposal": "validated"}),
+                activate=lambda *_args: (
+                    OperationOutputReference(output_type="job_analysis", output_id=output_id),
+                ),
+            )
+        },
         runner_id="foreground-test",
     )
 
     result = runner.run(operation.id)
 
     assert result.status is OperationStatus.SUCCEEDED
-    assert result.attempts_completed == 1
-    assert [(item.output_id, item.active) for item in result.outputs] == [(output_id, True)]
+    assert [item.output_id for item in result.outputs] == [output_id]
 
 
 def test_source_changed_is_checked_before_execution_and_again_before_activation(services) -> None:
@@ -488,7 +604,7 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     )
     attempts = 0
 
-    def prepare_that_fails(_command, *, operation_id=None):
+    def prepare_that_fails(_command, *, operation_id=None, still_owned=None):
         nonlocal attempts
         attempts += 1
         raise MissingFactRendering("situational.agentic_multi_agent", "he")
@@ -518,12 +634,20 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     assert completed.outputs == []
     with pytest.raises(StateConflict, match="cannot be retried"):
         services.operation_lifecycle.retry(completed.id, idempotency_key="meaningless-retry")
-    assert completed.attempts_completed == 1
     assert attempts == 1
 
 
+def _runner_touches_row(database_engine, operation_id: str) -> None:
+    with database_engine.begin() as connection:
+        connection.execute(
+            update(operations)
+            .where(operations.c.id == operation_id, operations.c.status == "running")
+            .values(message="")
+        )
+
+
 def test_worker_shutdown_requests_cancellation_and_prevents_activation(
-    services, monkeypatch
+    services, monkeypatch, database_engine
 ) -> None:
     operation = _operation_for_runner(services, "Worker Shutdown Co")
     started = Event()
@@ -533,27 +657,20 @@ def test_worker_shutdown_requests_cancellation_and_prevents_activation(
     def cancel_after_runner_write(tx, operation_id):
         cancellation_attempts.append(operation_id)
         if len(cancellation_attempts) == 1:
-            # Establish the cancellation snapshot, then commit a runner phase
-            # update on another connection. It must force cancellation to retry.
+            # Establish the cancellation snapshot, then commit a runner write to the
+            # row on another connection. It must force cancellation to retry.
             services.operation_runner.execution_store.operation(tx, operation_id)
             with ThreadPoolExecutor(max_workers=1) as pool:
-                pool.submit(
-                    _execution_write,
-                    services,
-                    "set_operation_phase",
-                    operation_id,
-                    OperationPhase.EXECUTING,
-                    runner_id="shutdown-worker",
-                ).result(timeout=2)
+                pool.submit(_runner_touches_row, database_engine, operation_id).result(timeout=2)
         return original_cancel(tx, operation_id)
 
     monkeypatch.setattr(
         services.operation_lifecycle.operations, "request_cancellation", cancel_after_runner_write
     )
 
-    def execute(_operation, cancellation_requested):
+    def execute(_operation, still_owned):
         started.set()
-        while not cancellation_requested():
+        while still_owned():
             Event().wait(0.01)
         return PreparedOperation()
 
@@ -645,8 +762,9 @@ def test_create_draft_activates_only_against_the_hash_it_froze(
     assert succeeded.status is OperationStatus.SUCCEEDED, succeeded.safe_failure_detail
     written = stored_document(services, application_id)
     assert written.content is not None
-    outputs = [(item.output_type, item.active) for item in succeeded.outputs]
-    assert sorted(outputs) == [("cv_document", True), ("provider_response", True)]
+    assert [item.output_type for item in succeeded.outputs] == ["cv_document"]
+    # The writer's call is in the AI call log, and the Operation reports its usage.
+    assert succeeded.total_tokens is not None
     assert ("cv_document", written.id) in {
         (item.output_type, item.output_id) for item in succeeded.outputs
     }
@@ -702,7 +820,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
         for s in current.content.sections
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
-    changed = services.drafts.update_document(
+    changed = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=current.document_hash,
@@ -788,7 +906,7 @@ def test_successful_rerender_discards_superseded_files(ready_application):
         for s in before.content.sections
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
-    edited = services.drafts.update_document(
+    edited = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=before.document_hash,

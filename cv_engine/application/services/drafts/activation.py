@@ -49,8 +49,8 @@ class DraftActivation:
     ) -> RegenerationResult:
         """Commit regenerated wording against the exact hash that was read.
 
-        The provider evidence is already registered (inactive); the runner activates
-        it in this same transaction, together with the wording it produced.
+        Every provider call is already in the AI call log; the runner completes the
+        Operation in this same transaction, together with the wording it produced.
         """
         document = self._current(tx, prepared.application_id, prepared.expected_document_hash)
         updated = self.documents.update_body(
@@ -65,5 +65,5 @@ class DraftActivation:
             document_id=updated.id,
             document_hash=updated.document_hash,
             regenerated_claim_ids=list(prepared.claim_ids),
-            provider_artifact_version_id=prepared.evidence.artifact_version_id,
+            ai_call_id=prepared.ai_call_id,
         )

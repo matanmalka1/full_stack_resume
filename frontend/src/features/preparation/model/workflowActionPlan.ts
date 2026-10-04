@@ -1,5 +1,5 @@
 import type { ApplicationDetail } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import { actionDestination } from "./actionDestinations";
 import { actionLabel } from "./preparationLabels";
 

@@ -7,6 +7,7 @@ from ...errors import (
     ClaimReviewUncertain,
     ClaimReviewUnsupported,
     DependencyUnavailable,
+    ExecutionStopped,
     InfrastructureFailure,
     LineageBroken,
     MissingFactRendering,
@@ -14,37 +15,35 @@ from ...errors import (
     ProposalRejected,
     ProviderInvalidOutput,
     ProviderNotConfigured,
+    ProviderQuotaExhausted,
     ProviderRateLimited,
     ProviderRefused,
-    ProviderSchemaViolation,
     ProviderTimeout,
     ProviderUnavailable,
     StateConflict,
 )
 from ...operations import FailureReason, MissingFactRenderingReason, OperationFailureCode
 
-#: How a classified failure becomes an Operation failure code, and therefore
-#: whether it is retried. Resolved through the exception's MRO, so a subclass
-#: nobody registered inherits its parent's classification rather than falling
-#: through to a generic execution failure.
+#: How a classified failure becomes an Operation failure code. Resolved through
+#: the exception's MRO, so a subclass nobody registered inherits its parent's
+#: classification rather than falling through to a generic execution failure.
 #:
-#: Exactly four of these are transient (`TRANSIENT_FAILURE_CODES`), and
-#: `allows_automatic_retry` gives each of them one attempt. Everything else -
-#: refusal, schema violation, business validation, an unsupported claim, a
-#: conflict, a stale source - is terminal on the first failure, which is what
-#: test-plan §6 requires. That policy is not restated here; it follows from the
-#: code this table chooses.
+#: No code here is retried by the runner. A provider call is retried, at most once
+#: and only where it is safe, by the application before the failure is raised
+#: (`services/ai_calls.py`); a browser that fails to start is retried by the render
+#: handler. What reaches this table is final.
 FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
     ProviderTimeout: OperationFailureCode.PROVIDER_TIMEOUT,
     ProviderRateLimited: OperationFailureCode.PROVIDER_RATE_LIMITED,
+    ProviderQuotaExhausted: OperationFailureCode.PROVIDER_QUOTA_EXHAUSTED,
     ProviderUnavailable: OperationFailureCode.PROVIDER_UNAVAILABLE,
     ProviderRefused: OperationFailureCode.PROVIDER_REFUSED,
-    ProviderSchemaViolation: OperationFailureCode.SCHEMA_VIOLATION,
     ProviderInvalidOutput: OperationFailureCode.INVALID_OUTPUT,
     ClaimReviewUncertain: OperationFailureCode.CLAIM_REVIEW_UNCERTAIN,
     ClaimReviewUnsupported: OperationFailureCode.CLAIM_REVIEW_UNSUPPORTED,
     ProposalRejected: OperationFailureCode.INVALID_OUTPUT,
     ProviderNotConfigured: OperationFailureCode.PROVIDER_NOT_CONFIGURED,
+    ExecutionStopped: OperationFailureCode.CANCELLED_BEFORE_ACTIVATION,
     DependencyUnavailable: OperationFailureCode.PROVIDER_REFUSED,
     StateConflict: OperationFailureCode.SOURCE_CHANGED,
     LineageBroken: OperationFailureCode.SOURCE_CHANGED,
@@ -59,10 +58,12 @@ FAILURE_CODE_BY_ERROR: dict[type[ApplicationError], OperationFailureCode] = {
 _FAILURE_DETAIL: dict[OperationFailureCode, str] = {
     OperationFailureCode.PROVIDER_TIMEOUT: "The AI provider did not answer in time.",
     OperationFailureCode.PROVIDER_RATE_LIMITED: "The AI provider rate limited the request.",
+    OperationFailureCode.PROVIDER_QUOTA_EXHAUSTED: (
+        "The AI provider account has no remaining credit or reached a spend or usage limit."
+    ),
     OperationFailureCode.PROVIDER_UNAVAILABLE: "The AI provider was unavailable.",
     OperationFailureCode.PROVIDER_REFUSED: "The AI provider refused the request.",
     OperationFailureCode.PROVIDER_NOT_CONFIGURED: "No AI provider is configured.",
-    OperationFailureCode.SCHEMA_VIOLATION: "The AI provider returned an invalid schema.",
     OperationFailureCode.INVALID_OUTPUT: "The AI proposal was rejected.",
     OperationFailureCode.CLAIM_REVIEW_UNCERTAIN: (
         "Semantic review could not establish support for the proposed claim."

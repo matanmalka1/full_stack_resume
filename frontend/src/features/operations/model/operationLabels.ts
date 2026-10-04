@@ -52,32 +52,20 @@ export const phaseLabels: Record<OperationPhase, string> = {
   queued: "ממתינה בתור",
   waiting_for_application: "ממתינה למועמדות",
   waiting_for_render_slot: "ממתינה לתור הרינדור",
-  waiting_for_ai_slot: "ממתינה לתור המודל",
-  pre_execution_check: "בדיקה לפני ביצוע",
   executing: "בביצוע",
-  retry_wait: "המתנה לפני ניסיון חוזר",
-  pre_activation_check: "בדיקה לפני הפעלת התוצר",
-  activating: "מפעילה את התוצר",
   completed: "הושלמה",
 };
 
-/* What an operation produced, named for the reader.
-
-   `provider_response` is deliberately absent. It is registered as an output, but it is
-   the provider's own text, and this screen states elsewhere that it shows no provider
-   text. It stays in the record and out of the result line. */
-const outputTypeLabels: Partial<Record<OperationOutput["output_type"], string>> = {
+/* What an operation produced, named for the reader. Provider calls are not outputs: they
+   live in the AI call log, and this screen shows no provider text. */
+const outputTypeLabels: Record<OperationOutput["output_type"], string> = {
   job_analysis: "ניתוח המשרה",
   cv_document: "קורות החיים",
 };
 
-/* §11 separates existence from activation: a failed or cancelled Operation can own an
-   output that was recorded as inactive evidence. Only the active ones are results, so
-   only they are named - an inactive output reported as something the operation produced
-   would claim the state changed when it did not. */
-export const activeOutputLabels = (operation: Operation): string[] =>
+/* What a succeeded Operation activated (§11); a failed or cancelled one has no outputs. */
+export const outputLabels = (operation: Operation): string[] =>
   operation.outputs
-    .filter((output) => output.active)
     .map((output) => outputTypeLabels[output.output_type])
     .filter((label): label is string => label !== undefined);
 
@@ -97,10 +85,8 @@ export const failureTones: Partial<Record<OperationStatus, Tone>> = {
   interrupted: "warning",
 };
 
-/* A run that could not reach a provider because none is usable. The server reports it as
-   PROVIDER_NOT_CONFIGURED; runs recorded before that code existed carry PROVIDER_REFUSED,
-   and for those the Settings read is what tells the two apart. Either way the reader is
-   told what is missing and where it is fixed. */
+/* A run that could not reach a provider because none was configured
+   (PROVIDER_NOT_CONFIGURED): the reader is told what is missing and where it is fixed. */
 export const missingProviderPresentation: FailurePresentation = {
   title: "לא הוגדר ספק AI",
   guidance: "הבקשה לא נשלחה לשום ספק ושום דבר לא השתנה במועמדות. אחרי הגדרת ספק AI אפשר להריץ את הפעולה שוב.",
@@ -125,7 +111,7 @@ export const terminalSummaries: Partial<Record<OperationStatus, string>> = {
   interrupted: "הפעולה נקטעה ולא יצרה תוצאה.",
 };
 
-export interface FailurePresentation {
+interface FailurePresentation {
   title: string;
   guidance: string;
 }
@@ -205,8 +191,13 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
     guidance: providerRetryGuidance,
   },
   PROVIDER_RATE_LIMITED: {
-    title: "ספק הבינה המלאכותית הגביל את הבקשה",
+    title: "ספק הבינה המלאכותית הגביל את קצב הבקשות",
     guidance: providerRetryGuidance,
+  },
+  PROVIDER_QUOTA_EXHAUSTED: {
+    title: "נגמרה המכסה או היתרה בחשבון ספק הבינה המלאכותית",
+    guidance:
+      "המתנה לא תפתור את זה. יש להוסיף יתרה או להגדיל את מגבלת ההוצאה או השימוש בחשבון הספק, ואז לנסות שוב. המצב הקיים נשמר.",
   },
   PROVIDER_UNAVAILABLE: {
     title: "ספק הבינה המלאכותית אינו זמין",
@@ -227,10 +218,6 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
   CLAIM_REVIEW_UNSUPPORTED: {
     title: "הבדיקה מצאה טענה שאינה נתמכת בעובדות",
     guidance: "הניסוח לא הופעל ודבר לא השתנה. יש ליצור ניסוח חדש או להסיר את הטענה שאינה נתמכת.",
-  },
-  SCHEMA_VIOLATION: {
-    title: "תשובת הספק לא הייתה במבנה הנדרש",
-    guidance: providerOutputGuidance,
   },
   RENDER_FAILED: {
     title: "יצירת קובץ קורות החיים נכשלה",
@@ -255,6 +242,6 @@ export const failurePresentations: Record<OperationFailureCode, FailurePresentat
   },
   CANCELLED_BEFORE_ACTIVATION: {
     title: "הפעולה בוטלה לפני הפעלת התוצאה",
-    guidance: "תוצאה שהושלמה לאחר בקשת הביטול נשמרת כראיה לא פעילה ואינה מחליפה את המצב הקיים.",
+    guidance: "שום תוצאה לא הופעלה והמצב הקיים נשמר. קריאות ה־AI שכבר בוצעו נשמרות ביומן הקריאות.",
   },
 };

@@ -12,9 +12,7 @@ from __future__ import annotations
 import string
 
 from fastapi import Response, status
-from fastapi.responses import StreamingResponse
 
-from ..application.artifacts import ArtifactDelivery
 from ..application.operations import OperationView
 from .schemas.operations import OperationResponse
 from .versioning import API_PREFIX
@@ -48,6 +46,11 @@ def accepted_operation(response: Response, operation: OperationView) -> Operatio
 _UNRESERVED = frozenset(string.ascii_letters + string.digits + "-._~")
 
 
+#: Printable ASCII a quoted `filename` may carry as is: no control characters, no
+#: `"` or `\\` (quoted-string delimiters), and no `/` (a path separator).
+_FALLBACK_SAFE = frozenset(chr(code) for code in range(0x20, 0x7F)) - set('"\\/')
+
+
 def _percent_encode(value: str) -> str:
     return "".join(
         character
@@ -72,51 +75,17 @@ def content_disposition(filename: str) -> str:
     first time it is inconvenient stops being a guard - and the replacement is
     ten lines with no network in them.
 
-    The name is already free of quotes, separators, and control characters when
-    it gets here: `application.artifacts.safe_filename` guarantees that before
-    the name reaches transport, so a filename cannot inject a second parameter.
+    The name comes from the renderer's recruiter filename (`filename_for`), and its
+    candidate half is the candidate's own name as Knowledge holds it - nothing
+    upstream promises it is header-safe. So both spellings are made safe here, at
+    the header: `filename*` is percent-encoded, which leaves no quote, separator or
+    control character, and the ASCII fallback keeps printable ASCII only, without
+    the `"` and `\\` that would end or escape the quoted string, and without the
+    path separators a browser would otherwise have to strip.
     """
-    ascii_fallback = filename.encode("ascii", "replace").decode("ascii").replace("?", "_")
+    ascii_fallback = "".join(
+        character if character in _FALLBACK_SAFE else "_" for character in filename
+    )
     return (
         f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{_percent_encode(filename)}"
-    )
-
-
-def artifact_response(delivery: ArtifactDelivery) -> StreamingResponse:
-    """The one place a verified delivery becomes an HTTP response.
-
-    Shared by the plain artifact download and the recruiter export so the two
-    cannot drift into sending the same bytes under different headers - which is
-    the same reason `accepted_operation` exists for `202`.
-
-    `Content-Length` is the size the store measured *after* verifying the hash,
-    so it describes the exact bytes being sent. The `ETag` is the registered
-    content hash: an immutable payload's hash is a perfect validator, and a
-    client that already holds it never needs the body again.
-    """
-    return StreamingResponse(
-        delivery.stream.chunks(),
-        media_type=delivery.media_type,
-        headers={
-            "Content-Disposition": content_disposition(delivery.filename),
-            "Content-Length": str(delivery.size),
-            "ETag": f'"{delivery.content_hash}"',
-        },
-    )
-
-
-def inline_html_response(delivery: ArtifactDelivery) -> StreamingResponse:
-    """Frame verified HTML without duplicating artifact verification or download policy."""
-    return StreamingResponse(
-        delivery.stream.chunks(),
-        media_type="text/html; charset=utf-8",
-        headers={
-            "Content-Length": str(delivery.size),
-            "ETag": f'"{delivery.content_hash}"',
-            "Content-Security-Policy": (
-                "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'"
-            ),
-            "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "no-store",
-        },
     )

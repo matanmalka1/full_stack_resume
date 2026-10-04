@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
-from ..application.services.drafts import DraftAuthoringService
+from ..application.services.drafts import DraftAuthoringService, DraftEditingService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.repin import RepinService
@@ -31,7 +31,7 @@ from ..application.services.operations import (
 from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
-from ..application.settings import SettingsService
+from ..application.services.settings import SettingsService
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,7 @@ class ApiServices:
     analysis: AnalysisService
     repin: RepinService
     drafts: DraftAuthoringService
+    draft_editing: DraftEditingService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService
     draft_approval: DraftApprovalService

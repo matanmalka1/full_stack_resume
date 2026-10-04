@@ -1,12 +1,19 @@
 # Feature modules
 
-Each directory in this folder owns one business capability. Its `index.ts` is the
-public interface consumed by `app/`; route components live in `pages/`, reusable
-feature UI lives in `components/`, and non-UI domain presentation belongs in `model/`.
+Each directory in this folder owns one business capability. Route components live in
+`pages/`, reusable feature UI lives in `components/`, and non-UI domain presentation
+belongs in `model/`.
 
-`app/` owns composition and routing, and a feature may use another feature only
-through an explicitly exported interface, not through its route page or a deep
-internal import.
+A feature's `index.ts` is its public interface, and a feature may use another feature
+only through it, never through a route page or a deep internal import. A feature that
+nothing else consumes has no `index.ts`. Route pages are the one exception: `app/router.tsx`
+lazy-loads each page by its path, because a page reached through `index.ts` would land
+in the entry bundle instead of its own chunk.
+
+`app/` owns composition and routing and is consumed by nothing: route paths, the board
+return, and route parameters live in `src/navigation/`, shared by `app/` and the
+features alike. oxlint refuses an `@/app/` import outside `app/` and tests. Its one
+exception is `ui/QueryState.tsx`, which renders the app's `NotFoundPage` on a 404.
 
 ## Where server state lives
 

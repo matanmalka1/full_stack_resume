@@ -27,19 +27,19 @@ from cv_engine.infrastructure.persistence.analysis_sql import _analysis_record
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
-from cv_engine.infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.documents import (
     SqlAlchemyDocumentStore,
     SqlAlchemyDocumentSubmissionStore,
 )
+from cv_engine.infrastructure.persistence.initial_recruitment_events import (
+    SqlAlchemyInitialRecruitmentEventWriter,
+)
+from cv_engine.infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
 from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
 )
 from cv_engine.infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
-from cv_engine.infrastructure.persistence.recruitment_store import (
-    SqlAlchemyInitialRecruitmentEventWriter,
-)
 from cv_engine.infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from cv_engine.infrastructure.persistence.tables import (
     app_settings,
@@ -62,13 +62,11 @@ MUTABLE_TABLES = frozenset(
         "applications",  # the current recruitment projection and tracking fields
         "cv_documents",  # the one mutable resume document (product invariant 3)
         "operations",  # mutable only until a terminal status; terminal rows have a trigger
-        "operation_resource_leases",  # ephemeral claim coordination
-        "operation_outputs",  # permits exactly one inactive-to-active transition
         "knowledge_mutation_journal",  # permits one prepared-to-terminal transition
         "app_settings",  # safe mutable Web preferences, guarded by edit_version
     }
 )
-DELETE_ONLY_TABLES = frozenset({"operations", "operation_outputs", "knowledge_mutation_journal"})
+DELETE_ONLY_TABLES = frozenset({"operations", "knowledge_mutation_journal"})
 
 IMMUTABLE_MESSAGE = "immutable record"
 

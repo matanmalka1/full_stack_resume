@@ -19,7 +19,7 @@ from operations_support import (
 )
 from pydantic import ValidationError
 from sqlalchemy import delete, update
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from cv_engine.application.commands import (
     AnalyzeCommand,
@@ -38,19 +38,21 @@ from cv_engine.application.operation_runner import (
 from cv_engine.application.operations import (
     CreateOperation,
     OperationAction,
-    OperationContractError,
     OperationFailureCode,
-    OperationOutputReference,
-    OperationPhase,
     OperationSources,
     OperationStatus,
     OperationType,
-    allows_automatic_retry,
     as_operation_view,
     available_operation_actions,
     is_terminal_operation,
-    require_operation_transition,
 )
+from cv_engine.domain.contracts.providers import (
+    AICallRecord,
+    ProviderCost,
+    ProviderPricing,
+    ProviderUsage,
+)
+from cv_engine.infrastructure.persistence.ai_calls import SqlAlchemyAICallLog
 from cv_engine.infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
@@ -58,7 +60,19 @@ from cv_engine.infrastructure.persistence.tables import (
     OPERATION_FAILURE_CODES,
     operations,
 )
-from cv_engine.util import new_id
+from cv_engine.util import canonical_json, new_id, sha256_text
+
+PRICING = ProviderPricing(
+    version="test",
+    source="test",
+    input_per_million_usd="2",
+    cached_input_per_million_usd="0.2",
+    cache_write_per_million_usd="2.5",
+    output_per_million_usd="12",
+    long_context_threshold_tokens=272000,
+    long_context_input_multiplier="2",
+    long_context_output_multiplier="1.5",
+)
 
 
 def _active_operation(services, *args):
@@ -79,23 +93,8 @@ def test_operation_lifecycle_transitions_are_forward_only_and_terminal_is_final(
     refuses every transition; and the actions a status offers are derived from the
     lifecycle, including the terminal failures no retry can fix.
     """
-    transitions = [
-        (OperationStatus.QUEUED, OperationStatus.RUNNING),
-        (OperationStatus.QUEUED, OperationStatus.CANCELLED),
-        (OperationStatus.QUEUED, OperationStatus.INTERRUPTED),
-        (OperationStatus.RUNNING, OperationStatus.SUCCEEDED),
-        (OperationStatus.RUNNING, OperationStatus.FAILED),
-        (OperationStatus.RUNNING, OperationStatus.CANCELLED),
-        (OperationStatus.RUNNING, OperationStatus.INTERRUPTED),
-    ]
-    for current, target in transitions:
-        require_operation_transition(current, target)
-
     for terminal in list(OperationStatus)[2:]:
         assert is_terminal_operation(terminal)
-        for target in OperationStatus:
-            with pytest.raises(OperationContractError):
-                require_operation_transition(terminal, target)
 
     assert {case[0] for case in _OPERATION_ACTION_CASES} == set(OperationStatus)
     for status, cancellation_requested_at, failure_code, expected in _OPERATION_ACTION_CASES:
@@ -149,57 +148,55 @@ def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> 
         CreateOperation(payload={"provider": {"api-key": "must-not-persist"}}, **common)
 
 
-def test_failure_classification_and_retry_budget(
+def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     services,
     monkeypatch,
 ) -> None:
-    """Failure classification and the retry budget, from the policy to the runner.
+    """The runner records one execution; retrying a provider call is the application's.
 
-    Only the four transient codes earn one automatic retry. The runner takes it
-    after a transient failure; an unclassified exception keeps its detail out of
-    the result; and an unclassified infrastructure failure is the default arm,
-    `VALIDATION_EXECUTION_FAILED`, and stops on the first attempt - which is what
-    stops a message that merely *reads* like a timeout from buying a second
-    provider call.
+    A transient failure reaching the runner is final: whatever could be retried was
+    retried inside `execute`, per call, before it was raised. A failure the
+    application raised because a due retry found the Operation cancelled ends the
+    Operation as cancelled, not as that failure. An unclassified exception keeps its
+    detail out of the result, and an unclassified infrastructure failure is the
+    default arm, `VALIDATION_EXECUTION_FAILED`.
     """
     assert tuple(code.value for code in OperationFailureCode) == OPERATION_FAILURE_CODES
-    transient_codes = [
-        OperationFailureCode.PROVIDER_TIMEOUT,
-        OperationFailureCode.PROVIDER_RATE_LIMITED,
-        OperationFailureCode.PROVIDER_UNAVAILABLE,
-        OperationFailureCode.BROWSER_START_FAILED,
-    ]
-    for code in transient_codes:
-        assert allows_automatic_retry(code, attempts_completed=1), code
-        assert not allows_automatic_retry(code, attempts_completed=2), code
-        assert not allows_automatic_retry(OperationFailureCode.INVALID_OUTPUT, 1)
-
-        with pytest.raises(OperationContractError):
-            allows_automatic_retry(code, attempts_completed=0)
 
     operation = _operation_for_runner(services, "Retry Co")
     attempts = 0
-    delays = []
 
-    def execute(_operation, _cancelled):
+    def execute(_operation, _still_owned):
         nonlocal attempts
         attempts += 1
-        if attempts == 1:
-            raise OperationExecutionError(
-                OperationFailureCode.PROVIDER_TIMEOUT, "Provider timed out."
-            )
-        return PreparedOperation()
+        raise OperationExecutionError(OperationFailureCode.PROVIDER_TIMEOUT, "Provider timed out.")
 
     result = _runner(
         services,
         {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
         runner_id="runner-retry",
-        sleeper=delays.append,
     ).run(operation.id)
-    assert result.status is OperationStatus.SUCCEEDED
-    assert result.attempts_completed == 2
-    assert attempts == 2
-    assert delays == [0.25]
+    assert result.status is OperationStatus.FAILED
+    assert result.failure_code is OperationFailureCode.PROVIDER_TIMEOUT
+    assert attempts == 1
+
+    stopped_operation = _operation_for_runner(services, "Stopped Retry Co")
+
+    def execute_until_cancelled(operation, still_owned):
+        assert still_owned()
+        services.operation_lifecycle.cancel(operation.id)
+        assert not still_owned()
+        raise OperationExecutionError(
+            OperationFailureCode.CANCELLED_BEFORE_ACTIVATION, "The Operation was cancelled."
+        )
+
+    stopped = _runner(
+        services,
+        {OperationType.ANALYZE_JOB: _Handler(execute=execute_until_cancelled)},
+        runner_id="runner-stopped",
+    ).run(stopped_operation.id)
+    assert stopped.status is OperationStatus.CANCELLED
+    assert stopped.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
 
     failed_operation = _operation_for_runner(services, "Technical Failure Co")
     failed = _runner(
@@ -227,7 +224,7 @@ def test_failure_classification_and_retry_budget(
     )
     attempts = 0
 
-    def prepare_that_fails(_command, *, operation_id=None):
+    def prepare_that_fails(_command, *, operation_id=None, still_owned=None):
         nonlocal attempts
         attempts += 1
         raise InfrastructureFailure("provider request timed out")
@@ -367,6 +364,124 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
     assert _operation(ai_services, first).status is OperationStatus.SUCCEEDED
 
 
+def test_operation_usage_and_cost_sum_every_logged_call_once(services, database_engine) -> None:
+    """An Operation reports what all its logged provider calls cost, and never guesses.
+
+    Every attempt counts once, whatever its outcome. An attempt proven never delivered
+    adds zero. Any other call that carries no value for a total makes that total NULL,
+    rather than the sum of the calls that do.
+    """
+    created = _operation_for_runner(services, "Cost Totals Co")
+    log = SqlAlchemyAICallLog(services.operation_runner.transactions)
+
+    def append(task, *, usage=None, cost=None, outcome=None):
+        record = AICallRecord(
+            task=task,
+            provider="openai",
+            model="gpt-5.6-terra",
+            task_contract_version="1",
+            input_schema_version="1",
+            input_schema_hash="i",
+            output_schema_version="1",
+            output_schema_hash="o",
+            prompt_version="p",
+            prompt_hash="h",
+            input_hash="x",
+            outcome=outcome or ("succeeded" if usage else "outcome_unknown"),
+            sanitized_response={"id": task} if usage else None,
+            sanitized_response_hash=(sha256_text(canonical_json({"id": task})) if usage else None),
+            output_hash="out" if usage else None,
+            usage=None if usage is None else ProviderUsage(**usage),
+            pricing=None if cost is None else PRICING,
+            cost=None
+            if cost is None
+            else ProviderCost(input_usd=cost, output_usd="0", total_usd=cost),
+            latency_ms=5,
+            started_at="2026-09-30T00:00:00+00:00",
+            finished_at="2026-09-30T00:00:01+00:00",
+        )
+        with services.operation_runner.transactions.write() as tx:
+            return log.append(tx, created.id, record, knowledge_context_hash="k")
+
+    def totals():
+        view = _operation(services, created.id)
+        return (
+            view.input_tokens,
+            view.cached_input_tokens,
+            view.cache_write_tokens,
+            view.output_tokens,
+            view.total_tokens,
+            view.cost_usd,
+        )
+
+    assert totals() == (None, None, None, None, None, None)
+
+    # An Operation whose only attempt never reached the provider used nothing.
+    only_undelivered = _operation_for_runner(services, "Undelivered Totals Co")
+    with services.operation_runner.transactions.write() as tx:
+        log.append(
+            tx,
+            only_undelivered.id,
+            AICallRecord(
+                task="propose_analysis",
+                provider="openai",
+                model="gpt-5.6-terra",
+                task_contract_version="1",
+                input_schema_version="1",
+                input_schema_hash="i",
+                output_schema_version="1",
+                output_schema_hash="o",
+                prompt_version="p",
+                prompt_hash="h",
+                input_hash="x",
+                outcome="not_delivered",
+                latency_ms=1,
+                started_at="2026-09-30T00:00:00+00:00",
+                finished_at="2026-09-30T00:00:01+00:00",
+            ),
+            knowledge_context_hash="k",
+        )
+    undelivered_view = _operation(services, only_undelivered.id)
+    assert (undelivered_view.total_tokens, undelivered_view.cost_usd) == (0, "0.00000000")
+
+    writer = append(
+        "draft_resume",
+        usage={
+            "input_tokens": 10,
+            "cached_input_tokens": 2,
+            "cache_write_tokens": 3,
+            "output_tokens": 5,
+            "total_tokens": 15,
+        },
+        cost="0.00010000",
+    )
+    assert (writer.attempt, totals()) == (1, (10, 2, 3, 5, 15, "0.00010000"))
+
+    review = append(
+        "assess_claim_support",
+        usage={
+            "input_tokens": 4,
+            "cached_input_tokens": 0,
+            "cache_write_tokens": 1,
+            "output_tokens": 1,
+            "total_tokens": 5,
+        },
+        cost="0.00002500",
+    )
+    assert (review.attempt, totals()) == (1, (14, 2, 4, 6, 20, "0.00012500"))
+
+    # An attempt proven never delivered used nothing: it adds zero, not an unknown.
+    undelivered = append("assess_claim_support", outcome="not_delivered")
+    assert undelivered.attempt == 2
+    assert totals() == (14, 2, 4, 6, 20, "0.00012500")
+
+    # One whose outcome is unknown may have been billed: its usage is unknown, and
+    # so is every total.
+    retried = append("assess_claim_support")
+    assert retried.attempt == 3
+    assert totals() == (None, None, None, None, None, None)
+
+
 def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, database_engine) -> None:
     ingested = services.applications.ingest(
         IngestCommand(
@@ -398,82 +513,58 @@ def test_terminal_operation_rows_cannot_be_rewritten_or_deleted(services, databa
             connection.execute(delete(operations).where(operations.c.id == created.id))
 
 
-def test_output_after_cancellation_stays_inactive_and_cannot_be_activated(
-    services,
-) -> None:
-    """Output after cancellation stays inactive and can never be activated later.
+def test_an_output_is_recorded_only_by_a_running_uncancelled_operation(services) -> None:
+    """An output exists exactly when the Operation succeeded with it.
 
-    An output the runner created after cancellation is recorded inactive. At the
-    store, completing a cancelled Operation records cancellation rather than
-    success, and neither activation nor `active=True` on recording can bring an
-    output back once cancellation closed the window.
+    Activation records outputs in the transaction that completes the Operation. A
+    cancellation that arrives during execution ends the run as cancelled with no
+    output, and the store refuses a recording once cancellation closed the window,
+    for an unknown Operation, and as a second copy of the same output.
     """
     operation = _operation_for_runner(services, "Cancel Output Co")
-    inactive_output_id = new_id()
 
-    def execute(_operation, _cancelled):
+    def execute(_operation, _still_owned):
         services.operation_lifecycle.cancel(operation.id)
-        return PreparedOperation(
-            outputs=(
-                OperationOutputReference(
-                    output_type="provider_response", output_id=inactive_output_id, active=False
-                ),
-            )
-        )
+        return PreparedOperation()
 
+    activated = []
     result = _runner(
         services,
-        {OperationType.ANALYZE_JOB: _Handler(execute=execute)},
+        {
+            OperationType.ANALYZE_JOB: _Handler(
+                execute=execute,
+                activate=lambda *_args: activated.append(True) or (),
+            )
+        },
         runner_id="runner-cancel",
     ).run(operation.id)
 
     assert result.status is OperationStatus.CANCELLED
     assert result.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
-    assert result.outputs[0].active is False
+    assert result.outputs == []
+    assert activated == [], "a cancelled run never reaches activation"
 
-    operation = _queued(services, "Cancel Co", key="cancel-request")
+    operation = _queued(services, "Output Co", key="output-request")
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
+    output_id = new_id()
+    _execution_write(services, "record_operation_output", operation.id, "job_analysis", output_id)
+    with pytest.raises(IntegrityError):
+        _execution_write(
+            services, "record_operation_output", operation.id, "job_analysis", output_id
+        )
+    with pytest.raises(UnknownRecord):
+        _execution_write(services, "record_operation_output", new_id(), "job_analysis", new_id())
+
     services.operation_lifecycle.cancel(operation.id)
+    with pytest.raises(StateConflict, match="cannot be recorded"):
+        _execution_write(
+            services, "record_operation_output", operation.id, "job_analysis", new_id()
+        )
 
     completed = _execution_write(services, "complete_operation", operation.id, runner_id="owner")
     assert completed.status is OperationStatus.CANCELLED
     assert completed.failure_code is OperationFailureCode.CANCELLED_BEFORE_ACTIVATION
     assert completed.finished_at
-
-    operation = _queued(services, "Output Co", key="output-request")
-    _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
-
-    output_id = new_id()
-    _execution_write(services, "record_operation_output", operation.id, "job_analysis", output_id)
-    _execution_write(services, "activate_operation_output", operation.id, "job_analysis", output_id)
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "job_analysis", output_id
-        )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "job_analysis", new_id()
-        )
-
-    with pytest.raises(UnknownRecord):
-        _execution_write(services, "record_operation_output", new_id(), "job_analysis", new_id())
-
-    # Cancellation closes the window: an output may still be recorded, but it
-    # cannot be activated either by the activation method or by active=True on
-    # the recording method.
-    services.operation_lifecycle.cancel(operation.id)
-    cancelled_output_id = new_id()
-    _execution_write(
-        services, "record_operation_output", operation.id, "job_analysis", cancelled_output_id
-    )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "activate_operation_output", operation.id, "job_analysis", cancelled_output_id
-        )
-    with pytest.raises(StateConflict, match="cannot be activated"):
-        _execution_write(
-            services, "record_operation_output", operation.id, "job_analysis", new_id(), active=True
-        )
 
 
 # --- execution-store methods against real PostgreSQL -------------------------
@@ -512,14 +603,7 @@ def test_claim_next_operation_takes_the_oldest_ready_operation_or_nothing(servic
     assert claimed is not None
     assert claimed.id == first.id, "the older queued operation is taken first"
 
-    # A retry that is not due yet is not ready, so the queue skips past it.
-    _execution_write(
-        services,
-        "record_operation_attempt",
-        first.id,
-        runner_id="runner-a",
-        retry_at="2026-08-19T09:00:00+00:00",
-    )
+    # The claimed one is running, so the queue moves on to the next.
     again = _claim_next_operation(services, runner_id="runner-b", now="2026-08-19T08:00:00+00:00")
     assert again is not None
     assert again.id == second.id
@@ -531,7 +615,7 @@ def test_claim_next_operation_takes_the_oldest_ready_operation_or_nothing(servic
 
 
 def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(services) -> None:
-    """One contract, five entry points.
+    """One contract, every lease-owning entry point.
 
     Each of these updates `WHERE status='running' AND lease_owner=?` and raises
     when that matches nothing. Parameterised over the calls rather than written
@@ -541,16 +625,6 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
     _claim_operation(services, operation.id, runner_id="owner", now="2026-08-19T08:00:00+00:00")
 
     calls = {
-        "set_operation_phase": lambda runner: _execution_write(
-            services,
-            "set_operation_phase",
-            operation.id,
-            OperationPhase.EXECUTING,
-            runner_id=runner,
-        ),
-        "record_operation_attempt": lambda runner: _execution_write(
-            services, "record_operation_attempt", operation.id, runner_id=runner
-        ),
         "fail_operation": lambda runner: _execution_write(
             services,
             "fail_operation",
@@ -570,7 +644,14 @@ def test_lease_owning_methods_refuse_a_runner_that_does_not_hold_the_lease(servi
             f"{name} must not change the operation when it refuses"
         )
 
-    assert (
-        _execution_write(services, "record_operation_attempt", operation.id, runner_id="owner") == 1
-    )
-    assert _operation(services, operation.id).phase is OperationPhase.RETRY_WAIT
+    # Whether another provider call may start is the same ownership, read without
+    # writing: running, held by this runner, and not asked to cancel.
+    with services.operation_runner.transactions.read() as tx:
+        store = services.operation_runner.execution_store
+        assert store.execution_still_owned(tx, operation.id, runner_id="owner")
+        assert not store.execution_still_owned(tx, operation.id, runner_id="impostor")
+    services.operation_lifecycle.cancel(operation.id)
+    with services.operation_runner.transactions.read() as tx:
+        assert not services.operation_runner.execution_store.execution_still_owned(
+            tx, operation.id, runner_id="owner"
+        )

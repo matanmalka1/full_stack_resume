@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import insert, select, update
 
 from ...application.errors import IDEMPOTENCY_KEY_REUSED, StateConflict, UnknownRecord
 from ...application.operations import (
@@ -8,17 +8,12 @@ from ...application.operations import (
     OperationPhase,
     OperationStatus,
     PersistedOperation,
-    required_operation_resources,
 )
 from ...application.ports.transactions import ReadTransaction, WriteTransaction
 from ...util import utc_now
 from .connection import SqlAlchemyTransactionManager
-from .operation_sql import _operation_record, _outputs
-from .tables import (
-    applications,
-    operation_resource_leases,
-    operations,
-)
+from .operation_sql import _operation_record
+from .tables import applications, operations
 
 
 class SqlAlchemyOperationClientStore:
@@ -77,7 +72,7 @@ class SqlAlchemyOperationClientStore:
                     "idempotency key already used with a different Operation payload",
                     code=IDEMPOTENCY_KEY_REUSED,
                 )
-            return _operation_record(existing, _outputs(connection, existing["id"]))
+            return _operation_record(existing, connection)
         connection.execute(
             insert(operations).values(
                 id=operation_id,
@@ -87,10 +82,6 @@ class SqlAlchemyOperationClientStore:
                 payload_hash=request.payload_hash,
                 idempotency_key=request.idempotency_key,
                 sources_json=request.sources.model_dump(mode="json"),
-                resources_json=[
-                    resource.model_dump(mode="json")
-                    for resource in required_operation_resources(request)
-                ],
                 provider=request.provider,
                 model=request.model,
                 reasoning_effort=request.reasoning_effort,
@@ -106,7 +97,7 @@ class SqlAlchemyOperationClientStore:
             .mappings()
             .one()
         )
-        return _operation_record(row, [])
+        return _operation_record(row, connection)
 
     def operation(self, tx: ReadTransaction, operation_id: str) -> PersistedOperation:
         connection = self._transactions.connection_for(tx)
@@ -115,7 +106,7 @@ class SqlAlchemyOperationClientStore:
             .mappings()
             .one_or_none()
         )
-        return _operation_record(row, _outputs(connection, operation_id))
+        return _operation_record(row, connection)
 
     def request_cancellation(
         self, tx: WriteTransaction, operation_id: str, *, now: str | None = None
@@ -131,11 +122,6 @@ class SqlAlchemyOperationClientStore:
             raise UnknownRecord("operation does not exist")
         if row["status"] == OperationStatus.QUEUED.value:
             connection.execute(
-                delete(operation_resource_leases).where(
-                    operation_resource_leases.c.operation_id == operation_id
-                )
-            )
-            connection.execute(
                 update(operations)
                 .where(operations.c.id == operation_id, operations.c.status == "queued")
                 .values(
@@ -144,7 +130,6 @@ class SqlAlchemyOperationClientStore:
                     message="Cancelled before execution.",
                     finished_at=timestamp,
                     cancellation_requested_at=timestamp,
-                    lease_owner=None,
                 )
             )
         elif row["status"] == OperationStatus.RUNNING.value:
@@ -162,4 +147,4 @@ class SqlAlchemyOperationClientStore:
             .mappings()
             .one()
         )
-        return _operation_record(current, _outputs(connection, operation_id))
+        return _operation_record(current, connection)

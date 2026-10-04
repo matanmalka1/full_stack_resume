@@ -21,7 +21,7 @@ class ClaimReviewAssertion(StrictModel):
 
 class ClaimReviewEvidence(StrictModel):
     policy_version: str = Field(min_length=1)
-    provider_artifact_version_id: str = Field(min_length=1)
+    ai_call_id: str = Field(min_length=1)
     input_hash: str = Field(min_length=1)
     assertions: list[ClaimReviewAssertion]
 

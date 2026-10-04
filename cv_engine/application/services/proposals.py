@@ -18,8 +18,6 @@ whose lines survives is refused whole, as `ProposalRejected`.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -34,7 +32,6 @@ from ...domain.contracts.knowledge import FactStatus
 from ...domain.contracts.providers import (
     ClaimSupportProposal,
     ProposedClaim,
-    ProviderTaskResult,
 )
 from ...domain.drafts import (
     apply_claim_edit,
@@ -44,43 +41,7 @@ from ...domain.drafts import (
 from ...domain.facts import FactStore, FactStoreError
 from ..errors import ClaimReviewUncertain, ClaimReviewUnsupported, ProposalRejected
 from ..operations import ClaimReviewReason, ClaimReviewSource, RejectedClaimReview
-from ..ports import SnapshotPayload
-
-
-@dataclass(frozen=True)
-class ProviderEvidence:
-    """One preserved provider response, before it is registered.
-
-    The payload is on disk and the `ArtifactVersion` row exists: both are
-    written in the execute phase, so a cancellation between execution and
-    activation cannot leave a payload nothing points at. What is still open is
-    *activation*, which the Operation output's `active` flag carries.
-
-    Carried as one value so a caller cannot register the row for one response
-    and the payload for another.
-    """
-
-    task: str
-    artifact_version_id: str
-    payload: SnapshotPayload
-    provenance: ProviderTaskResult
-
-
-@contextmanager
-def evidence_attached(evidence: ProviderEvidence) -> Iterator[None]:
-    """Carry the already-preserved response out with a refusal of its content.
-
-    The payload is written before the Proposal is checked, because checking is
-    what may reject it and the bytes are what a rejection is evidence of. If the
-    check then refuses, the refusal has to name the payload - otherwise the file
-    is on disk with no row pointing at it, which is exactly the orphan the
-    filesystem-first order exists to make reconcilable rather than routine.
-    """
-    try:
-        yield
-    except ProposalRejected as exc:
-        exc.evidence = evidence
-        raise
+from .ai_calls import RecordedCall
 
 
 def fact_context(facts: FactStore, fact_ids: list[str], language: str) -> list[dict[str, object]]:
@@ -261,9 +222,8 @@ def _review_sources(
 
 def review_semantically(
     draft: DraftDocument,
-    proposal: ClaimSupportProposal,
+    review: RecordedCall[ClaimSupportProposal],
     facts: FactStore,
-    evidence: ProviderEvidence,
     claim_ids: set[str] | None = None,
 ) -> tuple[DraftDocument, list[WithheldClaim]]:
     """Authorize each pending claim whose review is complete, positive and source-attested.
@@ -283,6 +243,7 @@ def review_semantically(
         for claim in draft_claims(draft)
         if claim.claim_type == "pending" and (claim_ids is None or claim.claim_id in claim_ids)
     }
+    proposal = review.proposal
     counted = Counter(item.claim_id for item in proposal.assessments)
     assessments = {item.claim_id: item for item in proposal.assessments}
 
@@ -359,8 +320,8 @@ def review_semantically(
             facts,
             ClaimReviewEvidence(
                 policy_version=REVIEW_POLICY_VERSION,
-                provider_artifact_version_id=evidence.artifact_version_id,
-                input_hash=evidence.provenance.input_hash,
+                ai_call_id=review.ai_call_id,
+                input_hash=review.record.input_hash,
                 assertions=[
                     ClaimReviewAssertion(
                         claim_quote=item.claim_quote,

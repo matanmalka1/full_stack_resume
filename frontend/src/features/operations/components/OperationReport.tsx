@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 import type { Operation } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { aiAvailability } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
-import { routePaths } from "@/app/routePaths";
+import { useSettings } from "@/features/settings";
+import { routePaths } from "@/navigation/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 import { reportError } from "@/ui/reportError";
@@ -15,7 +15,7 @@ import { ClaimReviewClarification } from "./ClaimReviewClarification";
 import { OperationExecutionDetails } from "./OperationExecutionDetails";
 import { OperationPhaseSteps } from "./OperationPhaseSteps";
 import {
-  activeOutputLabels,
+  outputLabels,
   failurePresentations,
   failureTones,
   joinHebrewList,
@@ -88,13 +88,11 @@ export const OperationReport = ({
   const { settings } = useSettings();
   const ai = aiAvailability(settings);
   const providerUsable = ai === "available";
-  /* A run that needed a provider and had none: the server's own code, or - for a run
-     recorded before that code existed - a refusal while Settings still show no usable
-     provider. Settings is the fix while it is still true, and a retry would fail the same
-     way; once a provider is usable, the run can simply be tried again. */
+  /* A run that needed a provider and had none. Settings is the fix while that is still
+     true, and a retry would fail the same way; once a provider is usable, the run can
+     simply be tried again. */
   const notConfigured = operation.failure_code === "PROVIDER_NOT_CONFIGURED";
-  const missingProvider =
-    settings !== undefined && !providerUsable && (notConfigured || operation.failure_code === "PROVIDER_REFUSED");
+  const missingProvider = settings !== undefined && !providerUsable && notConfigured;
   const failure = missingProvider
     ? missingProviderPresentation
     : notConfigured && providerUsable
@@ -121,7 +119,7 @@ export const OperationReport = ({
   /* A run that succeeded with some proposed lines withheld: the result stands, and those
      lines - each back to its wording before the run - are listed so none changes unseen. */
   const withheld = operation.status === "succeeded" ? (operation.withheld_claims ?? null) : null;
-  const produced = activeOutputLabels(operation);
+  const produced = outputLabels(operation);
   /* A finished run says what it came to in one line - unless it failed, where the reason
      below is that line and a second, vaguer one above it only delayed it. */
   const outcome =

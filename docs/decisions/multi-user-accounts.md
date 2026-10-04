@@ -64,7 +64,7 @@ isolation.
 9. **An account ends by deactivation, never deletion.** The contract is deactivate,
    revoke every session, and anonymize the PII in a named list of mutable fields
    (state-and-use-cases §23). Immutable triggers are not bypassed for a user lifecycle, and immutable records (Submissions, JobSnapshots,
-   provider evidence, audit, fact events) stay, owned by a user row that no longer
+   the AI call log, audit, fact events) stay, owned by a user row that no longer
    identifies anyone. A hard delete is only ever an explicit, separately approved
    operator procedure, never part of the API.
 10. **Rate limiting and AI quota live in PostgreSQL.** There is no Redis (architecture
@@ -159,8 +159,11 @@ avoid.
    the existing installation assigned to its one user (§4).
 5. **Repository and query isolation:** every service resolves through the `Actor`
    (architecture §18.3); every list, count, and duplicate check scoped.
-6. **Idempotency, leases, and worker isolation:** the per-Application idempotency key,
-   the per-user AI slot, owner derived from the Operation's Application.
+6. **Idempotency, fairness, and worker isolation:** the per-Application idempotency key,
+   fairness between users in the claim order (a user with nothing running is served
+   first; architecture §18.3), owner derived from the Operation's Application. The
+   per-user AI slot first planned here is replaced: the lease table it would have used
+   is gone, and a slot would leave a thread idle while a lone user waits.
 7. **Auth API and frontend:** `login`, `logout`, `logout-all`, `me`, `change-password`,
    `deactivate_account`; the sign-in and account screens, the auth state, clearing
    per-user browser state. From here every route requires a session.
@@ -179,7 +182,7 @@ avoid.
 ## 6. Open items
 
 1. **PII retained in immutable records after deactivation.** JobSnapshots,
-   Submissions, provider evidence, and `fact_events.fact_json` keep the candidate's name
+   Submissions, the AI call log (`ai_calls`), and `fact_events.fact_json` keep the candidate's name
    and contacts. Anonymization makes them unreachable and unlinked to an identity; it
    does not erase them. Whether that is acceptable matters once there is a second user;
    it is a legal decision, not a technical one.

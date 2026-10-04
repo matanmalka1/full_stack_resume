@@ -1,5 +1,5 @@
 import type { ApplicationDetail, PreparationState } from "@/api/contracts";
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 
 /* The ordered stages of the CV wizard, and the only place their Hebrew names live.
 

@@ -53,6 +53,7 @@ const useRowGroups = (operation: Operation): [string, Row[]][] => {
         ["עלות", operation.cost_usd == null ? null : formatUsd(operation.cost_usd)],
         ["טוקני קלט", operation.input_tokens],
         ["קלט מהמטמון", operation.cached_input_tokens],
+        ["כתיבה למטמון", operation.cache_write_tokens],
         ["טוקני פלט", operation.output_tokens],
         ["סך הטוקנים", operation.total_tokens],
       ],

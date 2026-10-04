@@ -37,7 +37,6 @@ from ..analysis.service import AnalysisService
 from ..documents import DocumentSource, refuse_deleted, require_hash
 from ..drafts import DraftAuthoringService
 from ..rendering import RenderingService
-from .common import analysis_knowledge_context_hash
 
 
 class OperationSubmissionService:
@@ -121,9 +120,7 @@ class OperationSubmissionService:
             sources=OperationSources(
                 job_snapshot_id=command.job_snapshot_id,
                 job_snapshot_hash=snapshot.source_hash,
-                knowledge_context_hash=analysis_knowledge_context_hash(
-                    analysis_service.load_knowledge()
-                ),
+                knowledge_context_hash=analysis_service.load_knowledge().context_hash(),
             ),
             provider=command.provider,
             model=command.model,

@@ -26,7 +26,7 @@ def test_reorder_preserves_claims_and_exact_undo_restores_the_hash(drafted_appli
     assert before.content is not None
     section = next(s for s in before.content.sections if len(s.claims) > 1)
     order = [c.claim_id for c in section.claims]
-    changed = services.drafts.update_document(
+    changed = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=before.document_hash,
@@ -34,7 +34,7 @@ def test_reorder_preserves_claims_and_exact_undo_restores_the_hash(drafted_appli
         )
     )
     assert changed.document_hash != before.document_hash
-    restored = services.drafts.update_document(
+    restored = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=changed.document_hash,

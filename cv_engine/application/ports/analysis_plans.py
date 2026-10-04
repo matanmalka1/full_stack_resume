@@ -8,7 +8,6 @@ from typing import Protocol
 from ...domain.contracts.analysis import JobAnalysis
 from ...domain.knowledge import Knowledge
 from .transactions import ReadTransaction, WriteTransaction
-from .values import SnapshotPayload
 
 
 @dataclass(frozen=True)
@@ -34,19 +33,9 @@ class AnalysisContextSource:
 
 
 class AnalysisPayloadStore(Protocol):
-    """Only snapshot reads and verified provider-response preservation."""
+    """Only verified JobSnapshot reads."""
 
     def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
-
-    def commit_provider_response(
-        self,
-        application_id: str,
-        operation_id: str,
-        artifact_id: str,
-        sanitized_json: str,
-    ) -> SnapshotPayload: ...
-
-    def verify_payload(self, reference: str, expected_hash: str) -> str: ...
 
 
 class AnalysisKnowledgeSource(Protocol):

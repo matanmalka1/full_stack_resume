@@ -23,7 +23,6 @@ def payload_store(tmp_path: Path) -> PayloadStore:
 def test_immutable_payload_families_include_submissions(payload_store: PayloadStore):
     destinations = [
         payload_store.snapshot_path("app", "snapshot"),
-        payload_store.provider_path("app", "operation", "response"),
         *(
             payload_store.submission_path("app", "submission", suffix=suffix)
             for suffix in ("html", "pdf")
@@ -34,7 +33,7 @@ def test_immutable_payload_families_include_submissions(payload_store: PayloadSt
         stored = payload_store.commit(
             destination, payload=payload, validate=lambda value: bool(value)
         )
-        assert stored.path.read_bytes() == payload
+        assert destination.read_bytes() == payload
         assert stored.sha256 == hashlib.sha256(payload).hexdigest()
         assert payload_store.verify_payload(stored.project_relative, stored.sha256) == "ok"
         with pytest.raises(FileExistsError):
@@ -58,7 +57,6 @@ def test_commit_validates_before_storing_and_keys_each_attempt_immutably(
     stored = payload_store.commit(destination, payload=content, validate=validate)
 
     assert observed == [content]
-    assert stored.path == destination
     assert stored.project_relative == "artifacts/snapshots/app/snapshot.txt"
     assert stored.sha256 == hashlib.sha256(content).hexdigest()
     assert stored.size == len(content)
@@ -111,8 +109,8 @@ def test_traversal_symlink_and_unapproved_destinations_are_refused(
             payload=b"no",
             validate=lambda _payload: True,
         )
-    # The revision model's layouts are retired: architecture §6.2 approves only
-    # snapshots, provider evidence and Submission files.
+    # Retired layouts stay refused: architecture §6.2 approves only JobSnapshots
+    # and Submission files.
     for retired in (
         "revisions/app/rev/attempt/resume.json",
         "outputs/app/rev/id.pdf",

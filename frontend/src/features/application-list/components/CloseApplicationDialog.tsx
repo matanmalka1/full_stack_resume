@@ -1,6 +1,6 @@
 import type { ApplicationListItem } from "@/api/contracts";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { applicationLabel } from "@/features/applications";
+import { applicationLabel } from "@/features/application-detail";
 
 interface CloseApplicationDialogProps {
   application: ApplicationListItem | null;

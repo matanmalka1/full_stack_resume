@@ -10,6 +10,7 @@ class AIModelOptionResponse(HttpSchema):
     label: str
     input_per_million_usd: str
     cached_input_per_million_usd: str
+    cache_write_per_million_usd: str | None
     output_per_million_usd: str
     recommended: bool
     pricing_version: str

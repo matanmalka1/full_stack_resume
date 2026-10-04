@@ -240,7 +240,7 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -290,7 +290,7 @@ describe("ApplicationPage at the preparation route", () => {
       is_terminal: true,
       phase: "completed",
       available_actions: [],
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const drafting = queued({ id: "op-draft", operation_type: "create_draft" });
     const drafted = queued({
@@ -519,6 +519,7 @@ describe("ApplicationPage at the preparation route", () => {
       reasoning_effort: "high",
       input_tokens: 11,
       cached_input_tokens: 3,
+      cache_write_tokens: 5,
       output_tokens: 22,
       total_tokens: 33,
       cost_usd: "0.00002806",
@@ -541,6 +542,9 @@ describe("ApplicationPage at the preparation route", () => {
     expect(screen.getByText("$0.000028")).toBeInTheDocument();
     expect(screen.getByText("מאמץ חשיבה")).toBeInTheDocument();
     expect(screen.getByText("גבוה")).toBeInTheDocument();
+    /* Cache writes are billed at their own rate, so they are shown beside cache reads. */
+    expect(screen.getByText("כתיבה למטמון")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
   });
 
   it("does not present a superseded analysis as the one in force", async () => {
@@ -799,13 +803,13 @@ describe("ApplicationPage at the preparation route", () => {
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
   });
 
-  /* A refusal with no provider is fixed in Settings, not in the posting, so the posting
+  /* A run with no provider is fixed in Settings, not in the posting, so the posting
      stays folded away like on any other visit instead of opening with its edit action. */
   it("keeps the posting folded when analysis failed for want of a provider", async () => {
     const failed = queued({
       status: "failed",
       is_terminal: true,
-      failure_code: "PROVIDER_REFUSED",
+      failure_code: "PROVIDER_NOT_CONFIGURED",
       available_actions: ["retry"],
     });
     vi.stubGlobal(
@@ -874,7 +878,7 @@ describe("ApplicationPage at the preparation route", () => {
       status: "succeeded",
       is_terminal: true,
       available_actions: [],
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") return Promise.reject(new TypeError("response lost"));
@@ -938,7 +942,7 @@ describe("ApplicationPage at the preparation route", () => {
     const analyzed = queued({
       status: "succeeded",
       is_terminal: true,
-      outputs: [{ output_type: "job_analysis", output_id: "analysis-1", active: true }],
+      outputs: [{ output_type: "job_analysis", output_id: "analysis-1" }],
     });
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

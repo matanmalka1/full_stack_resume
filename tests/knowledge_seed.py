@@ -26,6 +26,14 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from cv_engine.domain.facts import (
+    build_new_fact,
+    parse_fact_source,
+    render_fact_source,
+    with_new_fact,
+)
+from cv_engine.infrastructure.knowledge import load_fact_store
+
 SEED_DIR = Path(__file__).parent / "fixtures/seed"
 SEED_SOURCES = ("common.json", "sales.json", "development.json", "situational_skills.json")
 
@@ -51,6 +59,20 @@ def write_canonical_sources(base_dir: Path) -> list[Path]:
         shutil.copy2(SEED_DIR / name, target)
         written.append(target)
     return written
+
+
+def seed_fact(base_dir: Path, source_name: str, payload: dict, *, canonical: bool = False) -> None:
+    """Write one fact into a seed source before the project, its journal or a database exist.
+
+    A fixture-only shortcut: everything after bootstrap goes through
+    `FactLifecycleService`, as a real new fact does.
+    """
+    record = build_new_fact(load_fact_store(base_dir), source_name, payload, canonical=canonical)
+    path = base_dir / source_name
+    source = parse_fact_source(path.read_text(encoding="utf-8"), origin=str(path))
+    path.write_text(
+        render_fact_source(with_new_fact(source, record, canonical=canonical)), encoding="utf-8"
+    )
 
 
 def facts_in(text: str) -> dict[str, dict[str, Any]]:

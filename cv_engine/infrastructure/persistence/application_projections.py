@@ -12,10 +12,9 @@ from ...application.operations import (
 )
 from ...application.ports.transactions import ReadTransaction
 from .analysis_sql import _analysis_record
-from .artifacts_sql import _artifact_version, _artifact_versions
 from .base import json_text_record
 from .connection import SqlAlchemyTransactionManager
-from .operation_sql import _operation_record, _outputs
+from .operation_sql import _operation_record
 from .tables import (
     applications,
     audit_records,
@@ -112,12 +111,6 @@ class SqlAlchemyApplicationProjectionReader:
             raise UnknownRecord(f"no job analysis {analysis_id}")
         return _analysis_record(row)
 
-    def artifact_versions(self, tx: ReadTransaction, application_id: str):
-        return _artifact_versions(self._connection(tx), application_id)
-
-    def artifact_version(self, tx: ReadTransaction, artifact_version_id: str):
-        return _artifact_version(self._connection(tx), artifact_version_id)
-
     def recruitment_events(self, tx: ReadTransaction, application_id: str):
         cols = tuple(c for c in recruitment_events.c if c.name != "seq")
         rows = (
@@ -172,11 +165,7 @@ class SqlAlchemyApplicationProjectionReader:
         else:
             query = query.order_by(operations.c.created_at.desc(), operations.c.id.desc())
         row = connection.execute(query.limit(1)).mappings().one_or_none()
-        return (
-            None
-            if row is None
-            else as_operation_view(_operation_record(row, _outputs(connection, row["id"])))
-        )
+        return None if row is None else as_operation_view(_operation_record(row, connection))
 
     def active_operation(self, tx: ReadTransaction, application_id: str) -> OperationView | None:
         return self._operation(tx, application_id, active=True)

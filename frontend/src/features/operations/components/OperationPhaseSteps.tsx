@@ -5,7 +5,7 @@ import type { OperationPhase } from "@/api/contracts";
 import { cx } from "@/ui/cx";
 import { operationPhaseStep, operationPhaseSteps } from "../model/operationPhases";
 
-/* Where a live run is, as four named steps. It replaces a bar that swept back and forth:
+/* Where a live run is, as named steps. It replaces a bar that swept back and forth:
    Operations report no percentage, so the bar looked like progress while measuring
    nothing, and the phase the record does report went unshown.
 

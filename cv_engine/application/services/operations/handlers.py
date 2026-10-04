@@ -15,7 +15,6 @@ unapproved, and check/approve/render validate against the current context.
 from __future__ import annotations
 
 import re
-from dataclasses import fields
 from typing import Any
 
 from ....domain.contracts.validation import ValidationReport
@@ -29,6 +28,7 @@ from ...commands import (
 from ...errors import (
     ApplicationError,
     DependencyUnavailable,
+    ExecutionStopped,
     InfrastructureFailure,
     KnowledgeRejected,
     LineageBroken,
@@ -58,16 +58,12 @@ from ..analysis.service import AnalysisService
 from ..documents import load_knowledge
 from ..drafts import DraftAuthoringService, PreparedDraft, PreparedRegeneration
 from ..drafts.activation import DraftActivation
-from ..proposals import ProviderEvidence
 from ..rendering import ExecutedRender, RenderingService
-from .common import analysis_knowledge_context_hash
 from .failures import failure_code_for, failure_reason_for, safe_failure_detail_for
 
 
 def _document_output(document_id: str) -> tuple[OperationOutputReference, ...]:
-    return (
-        OperationOutputReference(output_type="cv_document", output_id=document_id, active=True),
-    )
+    return (OperationOutputReference(output_type="cv_document", output_id=document_id),)
 
 
 def verify_document_hash(
@@ -134,162 +130,41 @@ def _render_failure_reason(report: ValidationReport) -> FailureReason:
 
 
 class AITaskHandler:
-    """What the three AI-only handlers share: classification and evidence.
+    """What the three AI-only handlers share: classification.
 
     Written once because the alternative is three copies of the same
     `except` ladder, and a fourth task added later would get whichever copy its
-    author happened to read.
+    author happened to read. Logging provider calls is no concern of a handler:
+    every attempt is already in the AI call log before the service returns or raises.
     """
 
     service: Any
-    task: str
 
     def after_activation(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
         pass
 
-    def verify_external_sources(self, operation: PersistedOperation) -> None:
-        del operation
-
     def discard(self, operation: PersistedOperation, prepared: PreparedOperation) -> None:
-        """Nothing to clean up: provider evidence is immutable and stays inactive."""
+        """Nothing to clean up: the AI call log is immutable and outlives the result."""
         del operation, prepared
-
-    @classmethod
-    def evidence_outputs(cls, prepared_value: Any) -> tuple[OperationOutputReference, ...]:
-        """Every provider response an executed AI task produced, as inactive outputs.
-
-        Handed to the runner from `execute` rather than returned from `activate`,
-        which is what makes it survive a cancellation. The runner records
-        `prepared.outputs` as inactive *before* it re-checks cancellation, and
-        activates them only inside a successful commit - so a cancelled or
-        stale Operation ends holding exactly what §18 says it should: every
-        completed output, recorded, inactive.
-        """
-        return tuple(
-            OperationOutputReference(
-                output_type="provider_response",
-                output_id=evidence.artifact_version_id,
-                active=False,
-            )
-            for field in fields(prepared_value)
-            for evidence in (getattr(prepared_value, field.name),)
-            if isinstance(evidence, ProviderEvidence)
-        )
 
     def prepared(self, value: Any) -> PreparedOperation:
         return PreparedOperation(
-            value=value,
-            outputs=self.evidence_outputs(value),
-            withheld_claims=getattr(value, "withheld_claims", None),
+            value=value, withheld_claims=getattr(value, "withheld_claims", None)
         )
-
-    def _preserve_rejected(
-        self, operation: PersistedOperation, error: ApplicationError
-    ) -> tuple[OperationOutputReference, ...]:
-        """Record a refused provider answer as inactive immutable evidence.
-
-        Two shapes arrive here. A `ProposalRejected` carries evidence that
-        `preserve` already wrote and registered, so only the Operation output
-        reference is missing. An adapter-level refusal or schema violation
-        carries raw sanitized bytes and nothing else, so the payload is
-        committed and registered here - it is the only place those bytes still
-        exist.
-
-        Registering the first kind twice would violate `artifact_versions.path`
-        UNIQUE, which is the constraint that makes "one payload, one row" a
-        property of the schema rather than of this function remembering.
-
-        A failure here is swallowed deliberately. The Operation already has a
-        classified failure the user needs to see; replacing that diagnosis with
-        an error about storing evidence for it would be a worse report.
-        """
-        # Earlier successful calls survive a later call's failure too.
-        completed = getattr(error, "completed_evidence", ())
-        evidence = getattr(error, "evidence", None)
-        provenance = getattr(error, "provenance", None)
-        outputs = [
-            OperationOutputReference(
-                output_type="provider_response", output_id=item.artifact_version_id, active=False
-            )
-            for item in completed
-        ]
-        try:
-            if evidence is not None and any(
-                item.artifact_version_id == evidence.artifact_version_id for item in completed
-            ):
-                return tuple(outputs)
-            if evidence is not None:
-                artifact_version_id = evidence.artifact_version_id
-            elif provenance is not None:
-                artifact_version_id = self.service.preserve(
-                    operation.application_id, operation.id, provenance.task, provenance
-                ).artifact_version_id
-            else:
-                return tuple(outputs)
-            outputs.append(
-                OperationOutputReference(
-                    output_type="provider_response", output_id=artifact_version_id, active=False
-                )
-            )
-        except ApplicationError:
-            pass
-        return tuple(outputs)
 
     def _classified(
         self, operation: PersistedOperation, error: ApplicationError
     ) -> OperationExecutionError:
-        code = failure_code_for(error)
-        outputs = self._preserve_rejected(operation, error)
+        del operation
         return OperationExecutionError(
-            code,
+            failure_code_for(error),
             safe_failure_detail_for(error),
-            outputs=outputs,
             reason=failure_reason_for(error),
         )
 
 
-class RegisteredEvidenceTaskHandler(AITaskHandler):
-    """AI task whose service registers provider evidence before activation."""
-
-    service: Any
-    knowledge: AnalysisKnowledgeSource
-
-    def load_knowledge(self):
-        return load_knowledge(self.knowledge)
-
-    def _preserve_rejected(
-        self, operation: PersistedOperation, error: ApplicationError
-    ) -> tuple[OperationOutputReference, ...]:
-        # Completed evidence already includes its durable inactive output registration.
-        if getattr(error, "evidence", None) is not None or getattr(error, "completed_evidence", ()):
-            return ()
-        provenance = getattr(error, "provenance", None)
-        if provenance is not None:
-            try:
-                evidence = self.service.preserve(
-                    operation.application_id, operation.id, provenance.task, provenance
-                )
-                return (
-                    OperationOutputReference(
-                        output_type="provider_response",
-                        output_id=evidence.artifact_version_id,
-                        active=False,
-                    ),
-                )
-            except ApplicationError:
-                return ()
-        return ()
-
-
-class AnalysisTaskHandler(RegisteredEvidenceTaskHandler):
-    service: AnalysisService
-    sources: AnalysisContextSourceReader
-
-
-class AnalysisOperationHandler(AnalysisTaskHandler):
+class AnalysisOperationHandler(AITaskHandler):
     """`analyze_job`, bound to its input JobSnapshot rather than to a document."""
-
-    task = "propose_analysis"
 
     def __init__(
         self,
@@ -327,20 +202,24 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
 
         if self.sources.knowledge_is_prepared(tx):
             raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
-        if operation.sources.knowledge_context_hash != analysis_knowledge_context_hash(
-            self.load_knowledge()
+        if (
+            operation.sources.knowledge_context_hash
+            != load_knowledge(self.knowledge).context_hash()
         ):
             raise SourceChanged("Knowledge changed before analysis activation.")
 
-    def execute(self, operation, cancellation_requested) -> PreparedOperation:
-        if cancellation_requested():
+    def execute(self, operation, still_owned) -> PreparedOperation:
+        if not still_owned():
             return PreparedOperation()
         try:
             return self.prepared(
-                self.service.prepare(self._command(operation), operation_id=operation.id)
+                self.service.prepare(
+                    self._command(operation), operation_id=operation.id, still_owned=still_owned
+                )
             )
         except (
             DependencyUnavailable,
+            ExecutionStopped,
             InfrastructureFailure,
             MissingFactRendering,
             ProposalRejected,
@@ -355,18 +234,15 @@ class AnalysisOperationHandler(AnalysisTaskHandler):
         except StateConflict as exc:
             raise SourceChanged("The analysis context changed before activation.") from exc
         outputs = [
-            OperationOutputReference(
-                output_type="job_analysis", output_id=result.analysis_id, active=True
-            )
+            OperationOutputReference(output_type="job_analysis", output_id=result.analysis_id)
         ]
         if result.created_document and result.document_id is not None:
             outputs.extend(_document_output(result.document_id))
         return tuple(outputs)
 
 
-class DraftTaskHandler(RegisteredEvidenceTaskHandler):
+class DraftTaskHandler(AITaskHandler):
     service: DraftAuthoringService
-    knowledge: AnalysisKnowledgeSource
     documents: DocumentStore
 
     def verify_sources(self, tx: ReadTransaction, operation: PersistedOperation) -> None:
@@ -376,33 +252,32 @@ class DraftTaskHandler(RegisteredEvidenceTaskHandler):
 class DraftOperationHandler(DraftTaskHandler):
     """`create_draft`: AI content, written only at the frozen hash."""
 
-    task = "draft_resume"
-
     def __init__(
         self,
         service: DraftAuthoringService,
         documents: DocumentStore,
         activation: DraftActivation,
-        knowledge: AnalysisKnowledgeSource,
     ):
         self.service = service
         self.documents = documents
         self.activation = activation
-        self.knowledge = knowledge
 
     @staticmethod
     def _command(operation: PersistedOperation) -> DraftCommand:
         return DraftCommand.model_validate(operation.payload)
 
-    def execute(self, operation, cancellation_requested) -> PreparedOperation:
-        if cancellation_requested():
+    def execute(self, operation, still_owned) -> PreparedOperation:
+        if not still_owned():
             return PreparedOperation()
         try:
             return self.prepared(
-                self.service.prepare(self._command(operation), operation_id=operation.id)
+                self.service.prepare(
+                    self._command(operation), operation_id=operation.id, still_owned=still_owned
+                )
             )
         except (
             DependencyUnavailable,
+            ExecutionStopped,
             InfrastructureFailure,
             MissingFactRendering,
             ProposalRejected,
@@ -434,38 +309,36 @@ class RegenerationOperationHandler(DraftTaskHandler):
         service: DraftAuthoringService,
         documents: DocumentStore,
         activation: DraftActivation,
-        knowledge: AnalysisKnowledgeSource,
         *,
-        task: str,
+        command_type: type[RegenerateSectionCommand] | type[RegenerateClaimCommand],
     ):
         self.service = service
         self.documents = documents
         self.activation = activation
-        self.knowledge = knowledge
-        self.task = task
-        self._command_type = (
-            RegenerateSectionCommand if task == "regenerate_section" else RegenerateClaimCommand
-        )
+        self._command_type = command_type
 
     def _command(self, operation: PersistedOperation):
         return self._command_type.model_validate(operation.payload)
 
-    def execute(self, operation, cancellation_requested) -> PreparedOperation:
-        if cancellation_requested():
+    def execute(self, operation, still_owned) -> PreparedOperation:
+        if not still_owned():
             return PreparedOperation()
         try:
             command = self._command(operation)
             if isinstance(command, RegenerateSectionCommand):
                 result = self.service.prepare_section_regeneration(
-                    command, operation_id=operation.id
+                    command, operation_id=operation.id, still_owned=still_owned
                 )
             elif isinstance(command, RegenerateClaimCommand):
-                result = self.service.prepare_claim_regeneration(command, operation_id=operation.id)
+                result = self.service.prepare_claim_regeneration(
+                    command, operation_id=operation.id, still_owned=still_owned
+                )
             else:
                 raise TypeError("regeneration handler parsed an invalid command")
             return self.prepared(result)
         except (
             DependencyUnavailable,
+            ExecutionStopped,
             InfrastructureFailure,
             ProposalRejected,
             StateConflict,
@@ -523,9 +396,6 @@ class RenderOperationHandler:
         if self.sources.knowledge_is_prepared(tx):
             raise KnowledgeRejected("Knowledge has an uncommitted prepared mutation")
 
-    def verify_external_sources(self, operation: PersistedOperation) -> None:
-        del operation
-
     def _fail(
         self,
         operation: PersistedOperation,
@@ -542,8 +412,8 @@ class RenderOperationHandler:
         )
         return error
 
-    def execute(self, operation, cancellation_requested) -> PreparedOperation:
-        if cancellation_requested():
+    def execute(self, operation, still_owned) -> PreparedOperation:
+        if not still_owned():
             return PreparedOperation()
         try:
             prepared = self.service.prepare(self._command(operation))
@@ -560,16 +430,23 @@ class RenderOperationHandler:
                 safe_failure_detail_for(exc),
                 reason=failure_reason_for(exc),
             ) from exc
-        try:
-            executed = self.service.execute(prepared)
-        except InfrastructureFailure as exc:
-            message = str(exc).casefold()
-            code = (
-                OperationFailureCode.BROWSER_START_FAILED
-                if "browser" in message and "start" in message
-                else OperationFailureCode.RENDER_FAILED
-            )
-            raise self._fail(operation, code, "Rendering failed.", None) from exc
+        # A browser that fails to start rendered nothing, so it is started once more
+        # while the Operation is still this runner's; every other failure is final.
+        for attempt in (1, 2):
+            try:
+                executed = self.service.execute(prepared)
+                break
+            except InfrastructureFailure as exc:
+                message = str(exc).casefold()
+                code = (
+                    OperationFailureCode.BROWSER_START_FAILED
+                    if "browser" in message and "start" in message
+                    else OperationFailureCode.RENDER_FAILED
+                )
+                if code is OperationFailureCode.BROWSER_START_FAILED and attempt == 1:
+                    if still_owned():
+                        continue
+                raise self._fail(operation, code, "Rendering failed.", None) from exc
         if not executed.report.passed:
             self.service.discard(executed.files)
             raise self._fail(

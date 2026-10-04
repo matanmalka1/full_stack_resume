@@ -12,7 +12,7 @@ export class ApiProblem extends Error {
   }
 }
 
-export interface ApiRequestOptions {
+interface ApiRequestOptions {
   method?: "GET" | "POST" | "PATCH";
   body?: unknown;
   etag?: string;

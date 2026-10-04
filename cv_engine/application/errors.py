@@ -33,13 +33,6 @@ class ApplicationError(RuntimeError):
     def __init__(self, message: str, *, code: str | None = None):
         super().__init__(message)
         self.code = code or _default_code(type(self))
-        # Provider evidence already preserved by earlier steps of the same
-        # command, attached by a caller that catches a later step's failure
-        # (analysis.py's multi-step provider flow). Declared here, not just
-        # assigned at the raise site, so `getattr(error, "completed_evidence",
-        # ())` in the Operation handler has a real attribute to fall back to
-        # rather than a name that only some subclasses happen to carry.
-        self.completed_evidence: tuple[Any, ...] = ()
 
 
 class UnknownRecord(ApplicationError):
@@ -118,10 +111,6 @@ class ArtifactPayloadMissing(PreconditionFailed):
     """A registered artifact payload is no longer on disk."""
 
 
-class ArtifactHashMismatch(PreconditionFailed):
-    """A registered artifact payload no longer matches its registered hash."""
-
-
 class DependencyUnavailable(ApplicationError):
     """A required collaborator was not configured."""
 
@@ -148,36 +137,10 @@ class InfrastructureFailure(ApplicationError):
 class ProviderFailure(InfrastructureFailure):
     """Base class for a classified AI provider execution failure.
 
-    `provenance` is present when the provider answered and the answer was
-    refused - a schema violation above all. Product specification §6 invariant
-    15 lets a refused output exist as inactive immutable evidence, so the
-    sanitized bytes travel with the refusal rather than being dropped at the
-    raise site, which is the only place they still exist.
-
-    It carries the whole `ProviderTaskResult`, not just the bytes, because a
-    refusal is exactly when the question "which model, under which contract,
-    refused this" has to be answerable. The parsed output is empty; everything
-    else is as real as it is on a successful call.
-
-    Typed loosely for the same reason `ProposalRejected.evidence` is: the value
-    is a domain type, and the taxonomy is what the layers that own those types
-    depend on.
+    Raised by the application after the failed attempt is already in the AI call
+    log, so it carries no evidence of its own: the log is where the refused or
+    unanswered call lives.
     """
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        code: str | None = None,
-        provenance: Any = None,
-    ):
-        super().__init__(message, code=code)
-        self.provenance = provenance
-        # Set by a caller that already preserved a response this failure is
-        # about (analysis.py, mirroring `evidence_attached` for
-        # `ProposalRejected`), so the Operation handler can register it as
-        # inactive evidence instead of leaving an orphaned payload behind.
-        self.evidence: Any = None
 
 
 class ProviderTimeout(ProviderFailure):
@@ -185,7 +148,11 @@ class ProviderTimeout(ProviderFailure):
 
 
 class ProviderRateLimited(ProviderFailure):
-    """The provider answered 429."""
+    """The provider answered 429 for a rate limit: slow down and try later."""
+
+
+class ProviderQuotaExhausted(ProviderFailure):
+    """The provider refused for billing: no credit left, or a spend or usage limit hit."""
 
 
 class ProviderUnavailable(ProviderFailure):
@@ -196,12 +163,16 @@ class ProviderRefused(ProviderFailure):
     """The provider declined to answer the task."""
 
 
-class ProviderSchemaViolation(ProviderFailure):
-    """The provider returned output that is not the requested schema."""
-
-
 class ProviderInvalidOutput(ProviderFailure):
-    """The provider returned a well-formed schema whose content cannot be used."""
+    """The provider's output cannot be used: outside the requested schema, or in it but unusable."""
+
+
+class ExecutionStopped(ApplicationError):
+    """A retry was due, but the Operation was cancelled or is no longer this runner's.
+
+    Not a provider failure: the attempt before it is already logged, and the
+    Operation ends as its cancellation or lost lease says, not as a provider error.
+    """
 
 
 class ProposalRejected(PreconditionFailed):
@@ -216,19 +187,13 @@ class ProposalRejected(PreconditionFailed):
     `unsupported` names the claims that failed semantic support, so the failure
     detail can say which lines were refused rather than only that something
     was. The wording itself is not echoed: it is provider text, and it is
-    already preserved in the sanitized response artifact.
+    already in the AI call log's sanitized response.
     """
 
     def __init__(self, message: str, *, unsupported: list[str] | None = None):
         super().__init__(message)
         self.unsupported = list(unsupported or [])
         self.review_reason: ClaimReviewReason | None = None
-        # Set by the service that already preserved the response this refusal is
-        # about, so the handler can register it as inactive evidence instead of
-        # leaving an orphaned payload behind. Typed loosely because the value is
-        # an application-services type and nothing in the taxonomy may import
-        # one - the taxonomy is what those services depend on.
-        self.evidence: Any = None
 
 
 class ClaimReviewUncertain(ProposalRejected):

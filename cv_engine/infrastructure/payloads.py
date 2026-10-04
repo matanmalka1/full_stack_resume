@@ -1,20 +1,12 @@
 from __future__ import annotations
 
-import json
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from ..application.errors import (
-    ArtifactContainmentRefused,
-    ArtifactHashMismatch,
-    ArtifactPayloadMissing,
-    InfrastructureFailure,
-)
 from ..application.ports import (
-    ArtifactStream,
     SnapshotPayload,
 )
 from ..application.transactions import assert_external_io_allowed
@@ -35,9 +27,6 @@ class PayloadPaths(Protocol):
     @property
     def artifacts_root(self) -> Path: ...
 
-    @property
-    def temp_root(self) -> Path: ...
-
 
 #: A payload writer is handed the bytes it must produce rather than a path to
 #: write them to. The filesystem signature `Callable[[Path], object]` could not
@@ -48,22 +37,15 @@ PayloadValidator = Callable[[bytes], bool | None]
 #: Immutable payload references are project-relative POSIX strings
 #: (`artifacts/snapshots/app/id.txt`), and object keys are relative to the
 #: artifact root (`snapshots/app/id.txt`). The two differ by exactly this
-#: prefix. The reference format is frozen - `artifact_versions` rows carry it
-#: and `ArtifactStore.resolve` reads it - so the conversion happens here rather
-#: than the stored string changing to match the key.
+#: prefix: JobSnapshot and Submission rows carry the reference, and the
+#: conversion happens here rather than in every reader.
 _REFERENCE_PREFIX = "artifacts"
 
 
 @dataclass(frozen=True, slots=True)
 class StoredPayload:
-    """One committed immutable payload, as the registration boundary sees it.
+    """One committed immutable payload, as the registration boundary sees it."""
 
-    `path` stays a `Path` because `commit_revision` and the render targets are
-    expressed in paths and because nothing outside this module reads it. It is
-    derived from the key, never the other way round.
-    """
-
-    path: Path
     project_relative: str
     sha256: str
     size: int
@@ -73,22 +55,16 @@ class PayloadStore:
     """Immutable v2 payload storage, independent of database registration."""
 
     _OUTPUT_SUFFIXES = {".html", ".pdf"}
-    #: Read size for streaming a payload outward. Bounded so a download
-    #: never holds a whole artifact in memory the way a `read_bytes` would.
-    _STREAM_CHUNK_BYTES = 64 * 1024
 
     def __init__(self, paths: PayloadPaths, object_store: ObjectStore | None = None):
         """Storage is injected; application paths supply the local layout.
 
         `object_store` defaults to a `LocalObjectStore` over the application's
         artifact root, so a caller that configures nothing keeps exactly the
-        behaviour it had. The roots stay because references are project-relative
-        and because `render_targets` must still hand
-        Chromium a real path.
+        behaviour it had. The roots stay because references are project-relative.
         """
         self._project_root = Path(paths.root).resolve()
         self._artifacts_root = resolve_within(self._project_root, paths.artifacts_root)
-        self._temp_root = resolve_within(self._project_root, paths.temp_root)
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
@@ -135,12 +111,7 @@ class PayloadStore:
         return relative_within(self._artifacts_root, approved).as_posix()
 
     def _reference_for_key(self, key: str) -> str:
-        """The stored reference for one object key.
-
-        `artifact_versions` rows carry project-relative strings and
-        `ArtifactStore.resolve` joins them onto the project root. That format
-        is frozen, so the prefix is added here rather than the rows changing.
-        """
+        """The stored, project-relative reference for one object key."""
         return f"{_REFERENCE_PREFIX}/{key}"
 
     def _key_for_reference(self, reference: str) -> str:
@@ -154,23 +125,12 @@ class PayloadStore:
         approved = self._approved_destination(candidate)
         return relative_within(self._artifacts_root, approved).as_posix()
 
-    def _path_for_key(self, key: str) -> Path:
-        return resolve_within(self._artifacts_root, key)
-
     def snapshot_path(self, application_id: str, snapshot_id: str) -> Path:
         return self._target(
             "snapshots",
             self._component(application_id, name="application_id"),
             f"{self._component(snapshot_id, name='snapshot_id')}.txt",
         )
-
-    def reference_for(self, destination: Path) -> str:
-        """The stored reference `destination` would receive, without writing anything.
-
-        Pure and side-effect-free: it lets a caller compute the physical
-        key(s) a write is about to produce *before* writing.
-        """
-        return self._reference_for_key(self._key(destination))
 
     def submission_path(self, application_id: str, submission_id: str, *, suffix: str) -> Path:
         """Where one Submission's copy of a rendered file belongs (state-and-use-cases §18).
@@ -200,14 +160,6 @@ class PayloadStore:
         )
         return self._reference(stored)
 
-    def provider_path(self, application_id: str, operation_id: str, artifact_id: str) -> Path:
-        return self._target(
-            "provider",
-            self._component(application_id, name="application_id"),
-            self._component(operation_id, name="operation_id"),
-            f"{self._component(artifact_id, name='artifact_id')}.json",
-        )
-
     def _approved_destination(self, candidate: Path | str) -> Path:
         unresolved = Path(candidate)
         if ".." in unresolved.parts:
@@ -223,9 +175,6 @@ class PayloadStore:
             len(parts) == 3
             and parts[0] == "snapshots"
             and parts[2].endswith(".txt")
-            or len(parts) == 4
-            and parts[0] == "provider"
-            and parts[3].endswith(".json")
             or len(parts) == 4
             and parts[0] == "submissions"
             and parts[3] in {"resume.html", "resume.pdf"}
@@ -270,7 +219,6 @@ class PayloadStore:
             raise FileExistsError(f"immutable payload already exists: {key}") from exc
 
         return StoredPayload(
-            path=self._path_for_key(key),
             project_relative=self._reference_for_key(key),
             sha256=stored.sha256,
             size=stored.size,
@@ -293,108 +241,13 @@ class PayloadStore:
             size=stored.size,
         )
 
-    def commit_provider_response(
-        self,
-        application_id: str,
-        operation_id: str,
-        artifact_id: str,
-        sanitized_json: str,
-    ) -> SnapshotPayload:
-        """Preserve one sanitized provider response as an immutable payload.
-
-        The layout - `provider/{application_id}/{operation_id}/{artifact_id}.json`
-        - is the one architecture §6.2 already approves, and it was already the
-        one `_approved_destination` accepts; Stage G is the first caller. The
-        Operation ID is in the path so a retry, which is a second Operation,
-        cannot land on the first one's evidence.
-
-        The bytes are sanitized before they arrive. This method does not inspect
-        them for secrets, because a store that re-derived that rule could
-        disagree with the adapter that applied it; it validates that they parse
-        as JSON, which is what the approved layout promises about the file.
-
-        Database registration stays with the caller, exactly as it does for
-        revisions and archived drafts: a failure there leaves a reconcilable
-        filesystem orphan rather than a pointer to nothing.
-        """
-        stored = self.commit(
-            self.provider_path(application_id, operation_id, artifact_id),
-            payload=sanitized_json.encode("utf-8"),
-            validate=self._valid_json,
-        )
-        return self._reference(stored)
-
-    def open_artifact(self, reference: str, expected_hash: str) -> ArtifactStream:
-        """Verify one registered immutable payload and hand back exactly those bytes.
-
-        The order is the point. Containment first, through `resolve_within`,
-        which resolves symlinks before it compares - so a link inside the
-        artifact root pointing anywhere else is refused by the same check that
-        refuses `..`, rather than by a second rule that could disagree with it.
-        Then the approved-layout check, so a row pointing at a project file
-        that is not an artifact payload cannot be served. Then the payload is
-        read once, and the hash is computed over the bytes that were read.
-
-        **The hash covers the bytes this returns, not the file it came from.**
-        Verifying the path and then reopening it to stream would leave a
-        time-of-check/time-of-use window: replace the payload in between and the
-        client receives unverified bytes under the previous `ETag` and
-        `Content-Length`, or the file disappears and the read fails after a
-        `200` and its headers have already gone out. Holding an open descriptor
-        does not close that window either - `Path.write_bytes` truncates and
-        rewrites the *same inode*, so a held handle would read the substituted
-        content. Capturing the payload and hashing what was captured is what
-        makes the guarantee hold, and it collapses two reads into one.
-
-        The buffer is the whole payload. That is affordable because artifacts
-        here are one-page CV documents and manifests that this
-        system produced itself - architecture §14 admits no file uploads and no
-        arbitrary paths, so there is no route by which an unbounded payload
-        reaches this method.
-
-        The refusals are classified here because this is the only place that
-        knows which of the three checks failed, and each message names the
-        check rather than the path: what fails containment is exactly what must
-        not be echoed back to a client.
-
-        No `Path` leaves this method.
-        """
-        try:
-            key = self._key_for_reference(reference)
-        except ValueError as exc:
-            raise ArtifactContainmentRefused(
-                "the registered artifact path does not resolve to a contained "
-                "payload inside the artifact root"
-            ) from exc
-        try:
-            payload = self._objects.get(key)
-        except ObjectNotFound as exc:
-            raise ArtifactPayloadMissing("the registered artifact payload is not stored") from exc
-        except InfrastructureFailure:
-            raise
-        except OSError as exc:
-            raise InfrastructureFailure(
-                "the registered artifact payload could not be read"
-            ) from exc
-        actual_hash = sha256_bytes(payload)
-        if actual_hash != expected_hash:
-            raise ArtifactHashMismatch(
-                f"artifact payload hash mismatch: expected {expected_hash}, got {actual_hash}"
-            )
-
-        def chunks() -> Iterator[bytes]:
-            for offset in range(0, len(payload), self._STREAM_CHUNK_BYTES):
-                yield payload[offset : offset + self._STREAM_CHUNK_BYTES]
-
-        return ArtifactStream(size=len(payload), chunks=chunks)
-
     def verify_payload(self, reference: str, expected_hash: str) -> str:
         """Classify one registered payload as ok, missing, tampered, or unresolvable.
 
         Ready qualification re-derives itself from stored evidence, and it used
         to do that by resolving the reference to a filesystem path and hashing
-        the file. That is a fourth read path into immutable payloads, alongside
-        `open_artifact`, `read_snapshot` and `commit`, and it is the only one
+        the file. That is a third read path into immutable payloads, alongside
+        `read_snapshot` and `commit`, and it is the only one
         that never went through the store - so it verified the local disk no
         matter what storage was configured, and would have reported every
         payload missing once storage moved off it.
@@ -438,8 +291,3 @@ class PayloadStore:
             sha256=stored.sha256,
             size=stored.size,
         )
-
-    @staticmethod
-    def _valid_json(payload: bytes) -> bool:
-        json.loads(payload.decode("utf-8"))
-        return True

@@ -7,6 +7,7 @@ knowledge: knowledge queries and fact mutations.
 operations: submission, execution, lifecycle, and replacement.
 recruitment: recruitment status and submissions.
 
-Maintenance, rendering, and shared proposal validation remain standalone modules.
+Maintenance, rendering, settings, and shared proposal validation remain standalone
+modules.
 Import services directly from their owning modules.
 """

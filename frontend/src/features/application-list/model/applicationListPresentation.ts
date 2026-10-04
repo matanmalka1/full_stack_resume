@@ -1,4 +1,4 @@
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import type { ApplicationListItem, PreparationState } from "@/api/contracts";
 import {
   preparationResumeDestination,
@@ -115,7 +115,7 @@ interface AttentionItem {
   title: string;
 }
 
-export interface ApplicationAttention {
+interface ApplicationAttention {
   /* Every title, most severe first: what the badge's `title` and `aria-label` carry. */
   items: AttentionItem[];
   /* What the badge shows: the titles themselves up to two, then the most severe one
@@ -160,7 +160,7 @@ export const applicationAttention = (item: ApplicationListItem): ApplicationAtte
 
 type HubItemType = "attention" | "due_today" | "overdue" | "ready";
 
-export interface HubItem {
+interface HubItem {
   actionLabel: string;
   actionTo: string | null;
   application: ApplicationListItem;

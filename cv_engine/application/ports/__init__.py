@@ -14,7 +14,7 @@ from .knowledge_lifecycle import KnowledgeLifecycleStore
 from .operation_client import OperationClientStore
 from .operation_execution import OperationExecutionStore
 from .outbound import (
-    AIProposal,
+    AIAttempt,
     AIProvider,
     AnalysisContext,
     ArtifactStore,
@@ -27,7 +27,7 @@ from .outbound import (
     RevisionPayloadStore,
     SnapshotPayloadStore,
 )
-from .settings import SettingsStore
+from .settings import SettingsRepository, SettingsStore
 from .transactions import ReadTransaction, TransactionManager, WriteTransaction
 from .values import (
     ArtifactStream,
@@ -39,7 +39,7 @@ from .values import (
 )
 
 __all__ = [
-    "AIProposal",
+    "AIAttempt",
     "AssessClaimSupportContext",
     "AnalysisContext",
     "AIProvider",
@@ -61,6 +61,7 @@ __all__ = [
     "Renderer",
     "ReadTransaction",
     "RevisionPayloadStore",
+    "SettingsRepository",
     "SettingsStore",
     "SnapshotPayload",
     "SnapshotPayloadStore",

@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { documentPdfHref } from "@/api/documents";
-import { routePaths } from "@/app/routePaths";
-import { sourceHostname } from "@/features/applications";
+import { routePaths } from "@/navigation/routePaths";
+import { sourceHostname } from "@/features/application-detail";
 import { preparationResumeDestination, preparationStateLabels, trackLabel } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";

@@ -92,25 +92,31 @@ class OperationPhase(StrEnum):
     QUEUED = "queued"
     WAITING_FOR_APPLICATION = "waiting_for_application"
     WAITING_FOR_RENDER_SLOT = "waiting_for_render_slot"
-    WAITING_FOR_AI_SLOT = "waiting_for_ai_slot"
-    PRE_EXECUTION_CHECK = "pre_execution_check"
     EXECUTING = "executing"
-    RETRY_WAIT = "retry_wait"
-    PRE_ACTIVATION_CHECK = "pre_activation_check"
-    ACTIVATING = "activating"
     COMPLETED = "completed"
+
+
+#: What a row stores. The two waiting phases are never written: a queued Operation is
+#: read as waiting while what it waits for is running, so the phase cannot go stale.
+STORED_OPERATION_PHASES = (
+    OperationPhase.QUEUED,
+    OperationPhase.EXECUTING,
+    OperationPhase.COMPLETED,
+)
 
 
 class OperationFailureCode(StrEnum):
     SOURCE_CHANGED = "SOURCE_CHANGED"
     PROVIDER_TIMEOUT = "PROVIDER_TIMEOUT"
     PROVIDER_RATE_LIMITED = "PROVIDER_RATE_LIMITED"
+    #: The account has no credit or hit a spend or usage limit: fixed in billing, not
+    #: by waiting. Never retried automatically; a manual retry stays available.
+    PROVIDER_QUOTA_EXHAUSTED = "PROVIDER_QUOTA_EXHAUSTED"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_REFUSED = "PROVIDER_REFUSED"
     INVALID_OUTPUT = "INVALID_OUTPUT"
     CLAIM_REVIEW_UNCERTAIN = "CLAIM_REVIEW_UNCERTAIN"
     CLAIM_REVIEW_UNSUPPORTED = "CLAIM_REVIEW_UNSUPPORTED"
-    SCHEMA_VIOLATION = "SCHEMA_VIOLATION"
     RENDER_FAILED = "RENDER_FAILED"
     BROWSER_START_FAILED = "BROWSER_START_FAILED"
     MISSING_FACT_RENDERING = "MISSING_FACT_RENDERING"
@@ -122,29 +128,8 @@ class OperationFailureCode(StrEnum):
     PROVIDER_NOT_CONFIGURED = "PROVIDER_NOT_CONFIGURED"
 
 
-TRANSIENT_FAILURE_CODES = frozenset(
-    {
-        OperationFailureCode.PROVIDER_TIMEOUT,
-        OperationFailureCode.PROVIDER_RATE_LIMITED,
-        OperationFailureCode.PROVIDER_UNAVAILABLE,
-        OperationFailureCode.BROWSER_START_FAILED,
-    }
-)
-
-
-class OperationResourceKind(StrEnum):
-    APPLICATION_MUTATION = "application_mutation"
-    RENDER_BROWSER = "render_browser"
-    AI = "ai"
-
-
 class OperationModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class OperationResource(OperationModel):
-    kind: OperationResourceKind
-    key: str
 
 
 class OperationSources(OperationModel):
@@ -160,7 +145,6 @@ class OperationSources(OperationModel):
     job_analysis_id: str | None = None
     expected_document_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     knowledge_context_hash: str | None = None
-    dependency_hashes: dict[str, str] = {}
 
 
 _SECRET_KEYS = frozenset(
@@ -218,15 +202,14 @@ class CreateOperation(OperationModel):
 
 
 #: What an Operation can own as an output. Closed: analysis activates a JobAnalysis,
-#: document-mutating operations name the CVDocument they changed, and every provider
-#: call registers its response as evidence.
-OperationOutputType = Literal["job_analysis", "cv_document", "provider_response"]
+#: and document-mutating operations name the CVDocument they changed. Provider calls
+#: are not outputs: they are in the AI call log, keyed by the Operation.
+OperationOutputType = Literal["job_analysis", "cv_document"]
 
 
 class OperationOutputReference(OperationModel):
     output_type: OperationOutputType
     output_id: str
-    active: bool
 
 
 class PdfPageLimitReason(OperationModel):
@@ -332,6 +315,7 @@ class OperationView(OperationModel):
     reasoning_effort: ReasoningEffort | None = None
     input_tokens: int | None = None
     cached_input_tokens: int | None = None
+    cache_write_tokens: int | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
     cost_usd: str | None = None
@@ -345,10 +329,7 @@ class PersistedOperation(OperationView):
     payload_hash: str
     idempotency_key: str
     sources: OperationSources
-    resources: tuple[OperationResource, ...]
     lease_owner: str | None = None
-    attempts_completed: int = Field(ge=0)
-    next_attempt_at: str | None = None
     technical_log_reference: str | None = None
 
 
@@ -374,63 +355,5 @@ def as_operation_view(record: OperationView) -> OperationView:
     )
 
 
-def required_operation_resources(request: CreateOperation) -> tuple[OperationResource, ...]:
-    """Derive lock requirements so callers cannot weaken concurrency policy."""
-    resources = [
-        OperationResource(
-            kind=OperationResourceKind.APPLICATION_MUTATION,
-            key=request.application_id,
-        )
-    ]
-    if request.operation_type is OperationType.RENDER_DOCUMENT:
-        resources.append(OperationResource(kind=OperationResourceKind.RENDER_BROWSER, key="global"))
-    always_ai = {
-        OperationType.CREATE_DRAFT,
-        OperationType.REGENERATE_SECTION,
-        OperationType.REGENERATE_CLAIM,
-    }
-    if request.operation_type in always_ai or request.provider not in (None, "deterministic"):
-        resources.append(OperationResource(kind=OperationResourceKind.AI, key="global"))
-    return tuple(resources)
-
-
-_ALLOWED_TRANSITIONS: dict[OperationStatus, frozenset[OperationStatus]] = {
-    OperationStatus.QUEUED: frozenset(
-        {
-            OperationStatus.RUNNING,
-            OperationStatus.CANCELLED,
-            OperationStatus.INTERRUPTED,
-        }
-    ),
-    OperationStatus.RUNNING: frozenset(
-        {
-            OperationStatus.SUCCEEDED,
-            OperationStatus.FAILED,
-            OperationStatus.CANCELLED,
-            OperationStatus.INTERRUPTED,
-        }
-    ),
-    OperationStatus.SUCCEEDED: frozenset(),
-    OperationStatus.FAILED: frozenset(),
-    OperationStatus.CANCELLED: frozenset(),
-    OperationStatus.INTERRUPTED: frozenset(),
-}
-
-
-def require_operation_transition(current: OperationStatus, target: OperationStatus) -> None:
-    """Refuse lifecycle rewrites and transitions not approved by the specification."""
-    if target not in _ALLOWED_TRANSITIONS[current]:
-        raise OperationContractError(
-            f"invalid Operation transition: {current.value} -> {target.value}"
-        )
-
-
 def is_terminal_operation(status: OperationStatus) -> bool:
     return status in TERMINAL_OPERATION_STATUSES
-
-
-def allows_automatic_retry(code: OperationFailureCode, attempts_completed: int) -> bool:
-    """Exactly one automatic retry is available for classified transient failures."""
-    if attempts_completed < 1:
-        raise OperationContractError("attempts_completed must include the failed attempt")
-    return code in TRANSIENT_FAILURE_CODES and attempts_completed == 1

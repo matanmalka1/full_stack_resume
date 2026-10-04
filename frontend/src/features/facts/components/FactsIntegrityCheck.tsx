@@ -11,8 +11,8 @@ import { ErrorCallout } from "@/ui/ErrorCallout";
 import { surfaceClasses } from "@/ui/surface";
 import { toneTextClasses } from "@/ui/tone";
 
-/* The fact store checked against its lifecycle journal, and the stored artifacts against
-   the database. It reports; it never writes. It sits on the facts screen because the
+/* The fact store checked against its lifecycle journal, the stored files against the
+   hashes they were registered with, and each logged AI call's response against its hash. It reports; it never writes. It sits on the facts screen because the
    reader who meets an out-of-sync fact needs the verdict here - and it stays one line:
    the answer is pass or fail, and only a failure has earned the room to explain itself. */
 
@@ -20,11 +20,11 @@ const verdictText = (report: ReconciliationReport): string => {
   const lifecycle = report.fact_lifecycle;
   if (report.passed) {
     const factCount = Object.values(lifecycle.fact_counts).reduce((total, count) => total + count, 0);
-    return `תקין — ${factCount} עובדות, ${report.artifact_versions_checked} גרסאות תוצר.`;
+    return `תקין — ${factCount} עובדות, ${report.payloads_checked} קבצים שמורים, ${report.ai_calls_checked} קריאות AI.`;
   }
   const found = [
     lifecycle.problems.length === 0 ? null : `${lifecycle.problems.length} אי־התאמות בעובדות`,
-    report.problems.length === 0 ? null : `${report.problems.length} בעיות בתוצרים`,
+    report.problems.length === 0 ? null : `${report.problems.length} בעיות בקבצים או בקריאות AI`,
   ].filter((part) => part !== null);
   return `${found.join(", ")} — הבדיקה מדווחת בלבד ואינה מתקנת נתונים.`;
 };

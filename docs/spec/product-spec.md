@@ -244,9 +244,9 @@ decision.
     rules-based form to fall back to. The user may retry. A proposed line withheld under
     §10.1 is not a fallback: it keeps the wording it already held, and the Operation
     reports it.
-13. Provider, cancelled, or stale output may exist as inactive immutable evidence. It
-    becomes current only through a successful commit against its original
-    preconditions.
+13. Provider, cancelled, or stale output never becomes current state. It becomes current
+    only through a successful commit against its original preconditions; every provider
+    call stays in the immutable AI call log either way.
 14. Preparation and recruitment are independent lifecycles.
 15. Recruitment history is append-only. Corrections add events and never rewrite past
     ones.
@@ -260,7 +260,7 @@ decision.
     content, and touch no immutable table. A deleted Application or fact leaves default
     listings but stays reachable by ID, with every record produced from it preserved.
 21. API and worker concurrency stays correct through the document hash, optimistic
-    versions, atomic PostgreSQL claims, resource leases, idempotency keys, and
+    versions, atomic PostgreSQL claims guarded by unique indexes, idempotency keys, and
     commit-time precondition checks.
 22. A fresh installation starts with an empty database — no users — and proves itself
     through its own workflow.
@@ -426,7 +426,7 @@ pool, no linked fact, wording the edit path rejects) is withheld the same way; a
 the document does not hold names no line and is ignored. Only when every line the answer
 named is withheld does the Operation fail, with `unsupported` (`CLAIM_REVIEW_UNSUPPORTED`),
 then `uncertain` (`CLAIM_REVIEW_UNCERTAIN`), then `INVALID_OUTPUT` as its code: both
-provider responses stay as inactive evidence, the document is unchanged, and retry or
+provider calls stay in the AI call log, the document is unchanged, and retry or
 correction is offered. A single-line task (`regenerate_claim`, or a review of the user's
 own wording) therefore succeeds or fails whole. Review failure, cancellation, invalid
 output, missing assertion coverage, or stale evidence never makes wording eligible.
@@ -549,10 +549,20 @@ reasoning effort is `low`/`medium`/`high`, and both are frozen into each Operati
 it is queued, so a later settings change cannot alter queued work. There is no dynamic
 model discovery.
 
-**Provenance.** Parsed output and a sanitized raw response are kept as immutable
-provider evidence. Response ID, model, usage (cached input separately), latency, hashes,
-refusal and error metadata, contract and prompt versions, the dated USD price snapshot,
-and derived cost are recorded. Secrets and hidden reasoning are never kept.
+**Provenance.** Every provider call attempt - successful, refused, failed, or without
+an answer - is appended to the AI call log as soon as it ends: its sanitized response
+in canonical JSON form and that form's hash, response ID, model, outcome, error type
+and code, usage (cached input and cache-write input separately), latency, hashes, the
+task-contract, schema and prompt versions and hashes, the dated USD price snapshot, and
+derived cost. The log is append-only. The request payload is not kept; its hash is.
+Secrets and hidden reasoning are never kept. A usage or cost the provider did not
+report is unknown, never zero, and an Operation's totals are unknown when any of its
+attempts' are - except an attempt proven never delivered, which used nothing. A billing
+refusal (`PROVIDER_QUOTA_EXHAUSTED`) is reported apart from a rate limit, because the
+user fixes it in the provider account rather than by waiting. A provider call is retried at most once, per call, only where the
+second attempt cannot duplicate a processed request or the provider asks for it
+(architecture.md §11); a failure that may have reached the provider is never retried
+automatically.
 
 **Untrusted input.** Job text and user content are data. They may shape proposed
 content but never policy, allowed facts, validation, approval, or output schemas.
@@ -659,15 +669,16 @@ validate against current Knowledge rather than trusting `built_with`. `facts_has
 only the facts the document depends on, so an unrelated fact change does not move its
 basis.
 
-**Retention.** Nothing deletes an immutable payload: snapshots, provider evidence, and
-Submission files stay forever. Replaced document content is not archived —
+**Retention.** Nothing deletes an immutable record: snapshots, Submission files, and the
+AI call log stay forever. Replaced document content is not archived —
 `build_from_analysis` and editing overwrite it — and superseded rendered files are
 working outputs deleted best-effort. Only a Submission keeps what was sent.
 
 **Maintenance.** Maintenance is an operator task, not a user one: once accounts ship,
 reconciliation and orphan inspection span every user and move from the API to the
-operator CLI (§22). Reconciliation checks every registered payload against its hash and the
-fact lifecycle against its trail, reports both halves, and repairs nothing. Orphan
+operator CLI (§22). Reconciliation checks every registered payload against its hash, every
+logged AI call's sanitized response against its hash, and the fact lifecycle against its
+trail, reports each, and repairs nothing. Orphan
 inspection lists unreferenced payloads older than one hour and deletes nothing
 (state-and-use-cases.md §19b). Schema upgrade is the explicit `alembic upgrade head`;
 PostgreSQL and bucket backup are the environment's responsibility.
@@ -737,10 +748,12 @@ closed vocabulary that the UI explains without parsing text. The UI polls and sh
 backend's status, phase, and message; there is no fabricated progress.
 
 Queued cancellation is immediate. Running cancellation is best-effort and prevents
-activation; later output is kept as inactive evidence. Retry creates a new Operation
-that references the original and copies its model and effort. Transient provider and
-browser failures are retried once automatically. Types, phases, failure codes,
-resources, and idempotency are state-and-use-cases.md §11 and §19 and architecture.md
+activation; a provider call that already happened stays in the AI call log. Retry
+creates a new Operation that references the original and copies its model and effort.
+The Operation itself is never retried automatically: one provider call is retried at
+most once where it is safe (§12), and a browser that failed to start is started once
+more, both only while the Operation is still running, held, and not cancelled. Types, phases, failure codes,
+concurrency rules, and idempotency are state-and-use-cases.md §11 and §19 and architecture.md
 §10.
 
 ## 19. API and UX contracts
@@ -839,7 +852,7 @@ the operator's.
 
 **Account deactivation** is the only way an account ends: deactivate, revoke every
 session, and anonymize the personal data held in mutable fields — the exact list is
-state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, JobSnapshots, provider evidence, audit and fact events
+state-and-use-cases.md §23. There is no account deletion. Immutable records — Submissions, JobSnapshots, the AI call log, audit and fact events
 — stay, owned by a user row that no longer identifies anyone and that nobody can sign
 in to. A hard delete is not a product capability.
 

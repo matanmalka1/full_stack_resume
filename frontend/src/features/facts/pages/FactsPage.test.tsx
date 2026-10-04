@@ -241,7 +241,7 @@ describe("Facts integrity check", () => {
     const item = fact();
     const report = reconciliationReport({
       passed: false,
-      problems: ["missing artifact: artifacts/outputs/revision-1/resume.pdf"],
+      problems: ["AI call response hash mismatch: ai-call-1"],
       fact_lifecycle: { ...reconciliationReport().fact_lifecycle, passed: false, problems: ["fact audit mismatch"] },
     });
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
@@ -260,11 +260,11 @@ describe("Facts integrity check", () => {
     fireEvent.click(await screen.findByRole("button", { name: "הפעלה" }));
 
     expect(
-      await screen.findByText("1 אי־התאמות בעובדות, 1 בעיות בתוצרים — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
+      await screen.findByText("1 אי־התאמות בעובדות, 1 בעיות בקבצים או בקריאות AI — הבדיקה מדווחת בלבד ואינה מתקנת נתונים."),
     ).toBeInTheDocument();
     expect(screen.getByText("הבעיות שנמצאו (2)")).toBeInTheDocument();
     expect(screen.getByText("fact audit mismatch")).toBeInTheDocument();
-    expect(screen.getByText("missing artifact: artifacts/outputs/revision-1/resume.pdf")).toBeInTheDocument();
+    expect(screen.getByText("AI call response hash mismatch: ai-call-1")).toBeInTheDocument();
     /* The report describes the store as it is now, so the pool is refetched behind it. */
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter((call) => String(call[0]) === "/api/v1/facts")).toHaveLength(2),
@@ -286,7 +286,7 @@ describe("Facts integrity check", () => {
     renderRoute("/facts", "/facts", <FactsPage />);
     fireEvent.click(await screen.findByRole("button", { name: "הפעלה" }));
 
-    expect(await screen.findByText("תקין — 4 עובדות, 4 גרסאות תוצר.")).toBeInTheDocument();
+    expect(await screen.findByText("תקין — 4 עובדות, 4 קבצים שמורים, 2 קריאות AI.")).toBeInTheDocument();
     expect(screen.queryByText(/הבעיות שנמצאו/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "בדיקה מחדש" })).toBeInTheDocument();
   });

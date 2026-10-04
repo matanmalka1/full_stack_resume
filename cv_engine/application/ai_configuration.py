@@ -17,7 +17,7 @@ ReasoningEffort = Literal["low", "medium", "high"]
 
 DEFAULT_AI_MODEL: AIModel = "gpt-5.6-terra"
 DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium"
-PRICING_VERSION = "openai-2026-09-03"
+PRICING_VERSION = "openai-2026-09-30"
 PRICING_SOURCE = "https://developers.openai.com/api/docs/models/compare"
 
 
@@ -28,6 +28,9 @@ class AIModelDefinition:
     input_per_million_usd: Decimal
     cached_input_per_million_usd: Decimal
     output_per_million_usd: Decimal
+    #: The cache-write input rate; None for a model that charges no cache write.
+    #: GPT-5.6 and later charge 1.25x the uncached input rate (OpenAI Prompt Caching).
+    cache_write_per_million_usd: Decimal | None
     long_context_threshold_tokens: int = 272_000
     long_context_input_multiplier: Decimal = Decimal("2")
     long_context_output_multiplier: Decimal = Decimal("1.5")
@@ -41,6 +44,7 @@ AI_MODELS: tuple[AIModelDefinition, ...] = (
         Decimal("0.20"),
         Decimal("0.02"),
         Decimal("1.20"),
+        Decimal("0.25"),
     ),
     AIModelDefinition(
         "gpt-5.6-terra",
@@ -48,6 +52,7 @@ AI_MODELS: tuple[AIModelDefinition, ...] = (
         Decimal("2.00"),
         Decimal("0.20"),
         Decimal("12.00"),
+        Decimal("2.50"),
         recommended=True,
     ),
     AIModelDefinition(
@@ -56,6 +61,7 @@ AI_MODELS: tuple[AIModelDefinition, ...] = (
         Decimal("4.00"),
         Decimal("0.40"),
         Decimal("20.00"),
+        Decimal("5.00"),
     ),
 )
 AI_MODEL_IDS: tuple[AIModel, ...] = tuple(item.id for item in AI_MODELS)
@@ -100,28 +106,39 @@ def execution_cost(
     *,
     input_tokens: int,
     cached_input_tokens: int,
+    cache_write_tokens: int | None,
     output_tokens: int,
-) -> ExecutionCost:
+) -> ExecutionCost | None:
+    """What one call cost, or None when the usage cannot price it.
+
+    Every input token is billed once, at one of three rates: ordinary input is
+    `input_tokens - cached_input_tokens - cache_write_tokens`, and the other two are
+    billed at the cached and cache-write rates. A model with a cache-write rate needs
+    `cache_write_tokens` to be priced: when the provider did not report it, the cost
+    is unknown, never computed as if no token had been written.
+    """
     definition = model_definition(model)
-    cached = min(max(cached_input_tokens, 0), max(input_tokens, 0))
-    uncached = max(input_tokens, 0) - cached
+    if definition.cache_write_per_million_usd is not None and cache_write_tokens is None:
+        return None
+    written = cache_write_tokens or 0
+    ordinary = input_tokens - cached_input_tokens - written
+    if min(input_tokens, cached_input_tokens, written, output_tokens, ordinary) < 0:
+        raise ValueError("token counts are inconsistent")
     divisor = Decimal(1_000_000)
     long_context = input_tokens > definition.long_context_threshold_tokens
     input_multiplier = definition.long_context_input_multiplier if long_context else Decimal(1)
     output_multiplier = definition.long_context_output_multiplier if long_context else Decimal(1)
     input_cost = (
         (
-            Decimal(uncached) * definition.input_per_million_usd
-            + Decimal(cached) * definition.cached_input_per_million_usd
+            Decimal(ordinary) * definition.input_per_million_usd
+            + Decimal(cached_input_tokens) * definition.cached_input_per_million_usd
+            + Decimal(written) * (definition.cache_write_per_million_usd or Decimal(0))
         )
         * input_multiplier
         / divisor
     )
     output_cost = (
-        Decimal(max(output_tokens, 0))
-        * definition.output_per_million_usd
-        * output_multiplier
-        / divisor
+        Decimal(output_tokens) * definition.output_per_million_usd * output_multiplier / divisor
     )
     return {
         "input_usd": usd(input_cost),

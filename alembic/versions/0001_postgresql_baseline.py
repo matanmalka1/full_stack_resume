@@ -40,8 +40,8 @@ DO $$
 DECLARE table_name text;
 DECLARE missing_exceptions text[];
 DECLARE mutable_exceptions constant text[] := ARRAY[
-  'applications', 'cv_documents', 'operations', 'operation_resource_leases',
-  'operation_outputs', 'knowledge_mutation_journal', 'app_settings'
+  'applications', 'cv_documents', 'operations', 'knowledge_mutation_journal',
+  'app_settings'
 ];
 BEGIN
   SELECT array_agg(exception_name ORDER BY exception_name) INTO missing_exceptions
@@ -62,7 +62,7 @@ BEGIN
     EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_immutable_change()', 'no_update_' || table_name, table_name);
     EXECUTE format('CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_immutable_change()', 'no_delete_' || table_name, table_name);
   END LOOP;
-  FOREACH table_name IN ARRAY ARRAY['operations', 'operation_outputs', 'knowledge_mutation_journal']
+  FOREACH table_name IN ARRAY ARRAY['operations', 'knowledge_mutation_journal']
   LOOP
     EXECUTE format('CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION cv_reject_protected_delete()', 'prevent_delete_' || table_name, table_name);
   END LOOP;
@@ -79,23 +79,6 @@ BEGIN
 END; $$;
 CREATE TRIGGER prevent_update_terminal_operations BEFORE UPDATE ON operations
 FOR EACH ROW EXECUTE FUNCTION cv_guard_terminal_operation_update();
-
-CREATE FUNCTION cv_guard_operation_output_activation() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE operation_status text; operation_cancellation_requested_at timestamptz;
-BEGIN
-  SELECT status, cancellation_requested_at INTO operation_status, operation_cancellation_requested_at
-  FROM operations WHERE id = OLD.operation_id;
-  IF NOT (OLD.active = FALSE AND NEW.active = TRUE AND NEW.activated_at IS NOT NULL
-    AND OLD.id = NEW.id AND OLD.operation_id = NEW.operation_id
-    AND OLD.output_type = NEW.output_type AND OLD.output_id = NEW.output_id
-    AND OLD.created_at = NEW.created_at AND operation_status = 'running'
-    AND operation_cancellation_requested_at IS NULL) THEN
-    RAISE EXCEPTION 'invalid operation output update';
-  END IF;
-  RETURN NEW;
-END; $$;
-CREATE TRIGGER valid_operation_output_activation BEFORE UPDATE ON operation_outputs
-FOR EACH ROW EXECUTE FUNCTION cv_guard_operation_output_activation();
 
 CREATE FUNCTION cv_guard_knowledge_mutation_transition() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -261,29 +244,6 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_table(
-        "artifacts",
-        sa.Column("id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("application_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("artifact_type", sa.Text(), nullable=False),
-        sa.Column("logical_name", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint(
-            "artifact_type = 'provider_response'", name=op.f("ck_artifacts_artifact_type")
-        ),
-        sa.ForeignKeyConstraint(
-            ["application_id"],
-            ["applications.id"],
-            name=op.f("fk_artifacts_application_id_applications"),
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_artifacts")),
-        sa.UniqueConstraint(
-            "application_id",
-            "artifact_type",
-            "logical_name",
-            name=op.f("uq_artifacts_application_id_artifact_type_logical_name"),
-        ),
-    )
-    op.create_table(
         "audit_records",
         sa.Column("id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column(
@@ -397,7 +357,6 @@ def upgrade() -> None:
         sa.Column("payload_hash", sa.Text(), nullable=False),
         sa.Column("idempotency_key", sa.Text(), nullable=False),
         sa.Column("sources_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("resources_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("provider", sa.Text(), nullable=True),
         sa.Column("model", sa.Text(), nullable=True),
         sa.Column("reasoning_effort", sa.Text(), nullable=True),
@@ -415,14 +374,12 @@ def upgrade() -> None:
         sa.Column("withheld_claims", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("technical_log_reference", sa.Text(), nullable=True),
         sa.Column("retry_of_operation_id", sa.UUID(as_uuid=False), nullable=True),
-        sa.Column("attempts_completed", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
             "(status IN ('succeeded', 'failed', 'cancelled', 'interrupted')) = (finished_at IS NOT NULL)",
             name=op.f("ck_operations_terminal_finished_at"),
         ),
         sa.CheckConstraint(
-            "failure_code IS NULL OR failure_code IN ('SOURCE_CHANGED', 'PROVIDER_TIMEOUT', 'PROVIDER_RATE_LIMITED', 'PROVIDER_UNAVAILABLE', 'PROVIDER_REFUSED', 'INVALID_OUTPUT', 'CLAIM_REVIEW_UNCERTAIN', 'CLAIM_REVIEW_UNSUPPORTED', 'SCHEMA_VIOLATION', 'RENDER_FAILED', 'BROWSER_START_FAILED', 'MISSING_FACT_RENDERING', 'VALIDATION_EXECUTION_FAILED', 'CANCELLED_BEFORE_ACTIVATION', 'PROVIDER_NOT_CONFIGURED')",
+            "failure_code IS NULL OR failure_code IN ('SOURCE_CHANGED', 'PROVIDER_TIMEOUT', 'PROVIDER_RATE_LIMITED', 'PROVIDER_QUOTA_EXHAUSTED', 'PROVIDER_UNAVAILABLE', 'PROVIDER_REFUSED', 'INVALID_OUTPUT', 'CLAIM_REVIEW_UNCERTAIN', 'CLAIM_REVIEW_UNSUPPORTED', 'RENDER_FAILED', 'BROWSER_START_FAILED', 'MISSING_FACT_RENDERING', 'VALIDATION_EXECUTION_FAILED', 'CANCELLED_BEFORE_ACTIVATION', 'PROVIDER_NOT_CONFIGURED')",
             name=op.f("ck_operations_failure_code"),
         ),
         sa.CheckConstraint(
@@ -446,6 +403,10 @@ def upgrade() -> None:
             name=op.f("ck_operations_withheld_claims_shape"),
         ),
         sa.CheckConstraint(
+            "phase IN ('queued', 'executing', 'completed')",
+            name=op.f("ck_operations_phase"),
+        ),
+        sa.CheckConstraint(
             "operation_type IN ('analyze_job', 'create_draft', 'regenerate_section', 'regenerate_claim', 'render_document')",
             name=op.f("ck_operations_operation_type"),
         ),
@@ -461,19 +422,12 @@ def upgrade() -> None:
             "status != 'failed' OR failure_code IS NOT NULL", name=op.f("ck_operations_failed_code")
         ),
         sa.CheckConstraint(
-            "status != 'running' OR lease_owner IS NOT NULL",
+            "(status = 'running') = (lease_owner IS NOT NULL)",
             name=op.f("ck_operations_running_lease"),
         ),
         sa.CheckConstraint(
             "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'interrupted')",
             name=op.f("ck_operations_status"),
-        ),
-        sa.CheckConstraint(
-            "status NOT IN ('succeeded', 'failed', 'cancelled', 'interrupted') OR lease_owner IS NULL",
-            name=op.f("ck_operations_terminal_lease"),
-        ),
-        sa.CheckConstraint(
-            "attempts_completed >= 0", name=op.f("ck_operations_attempts_completed_nonnegative")
         ),
         sa.CheckConstraint(
             "length(payload_hash) = 64", name=op.f("ck_operations_payload_hash_length")
@@ -507,7 +461,131 @@ def upgrade() -> None:
     op.create_index(
         "idx_operations_claimable",
         "operations",
-        ["status", "next_attempt_at", "created_at", "id"],
+        ["status", "created_at", "id"],
+        unique=False,
+    )
+    # The claim guards (architecture.md §10): a second running Operation for the same
+    # Application, or a second running render, is refused by the database itself.
+    op.create_index(
+        "uq_operations_running_application",
+        "operations",
+        ["application_id"],
+        unique=True,
+        postgresql_where=sa.text("status = 'running'"),
+    )
+    op.create_index(
+        "uq_operations_running_render",
+        "operations",
+        ["operation_type"],
+        unique=True,
+        postgresql_where=sa.text("status = 'running' AND operation_type = 'render_document'"),
+    )
+    op.create_table(
+        "ai_calls",
+        sa.Column("id", sa.UUID(as_uuid=False), nullable=False),
+        sa.Column("operation_id", sa.UUID(as_uuid=False), nullable=False),
+        sa.Column("task", sa.Text(), nullable=False),
+        sa.Column("attempt", sa.Integer(), nullable=False),
+        sa.Column("provider", sa.Text(), nullable=False),
+        sa.Column("model", sa.Text(), nullable=False),
+        sa.Column("reasoning_effort", sa.Text(), nullable=True),
+        sa.Column("task_contract_version", sa.Text(), nullable=False),
+        sa.Column("input_schema_version", sa.Text(), nullable=False),
+        sa.Column("input_schema_hash", sa.Text(), nullable=False),
+        sa.Column("output_schema_version", sa.Text(), nullable=False),
+        sa.Column("output_schema_hash", sa.Text(), nullable=False),
+        sa.Column("prompt_version", sa.Text(), nullable=False),
+        sa.Column("prompt_hash", sa.Text(), nullable=False),
+        sa.Column("input_hash", sa.Text(), nullable=False),
+        sa.Column("knowledge_context_hash", sa.Text(), nullable=False),
+        sa.Column("outcome", sa.Text(), nullable=False),
+        sa.Column("http_status", sa.Integer(), nullable=True),
+        sa.Column("error_type", sa.Text(), nullable=True),
+        sa.Column("error_code", sa.Text(), nullable=True),
+        sa.Column("retry_after_seconds", sa.Numeric(), nullable=True),
+        sa.Column("response_id", sa.Text(), nullable=True),
+        sa.Column("sanitized_response", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("sanitized_response_hash", sa.Text(), nullable=True),
+        sa.Column("output_hash", sa.Text(), nullable=True),
+        sa.Column("input_tokens", sa.Integer(), nullable=True),
+        sa.Column("cached_input_tokens", sa.Integer(), nullable=True),
+        sa.Column("cache_write_tokens", sa.Integer(), nullable=True),
+        sa.Column("output_tokens", sa.Integer(), nullable=True),
+        sa.Column("total_tokens", sa.Integer(), nullable=True),
+        sa.Column("pricing", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("cost_usd", sa.Numeric(precision=18, scale=8), nullable=True),
+        sa.Column("latency_ms", sa.Integer(), nullable=False),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint(
+            "task IN ('propose_analysis', 'draft_resume', 'assess_claim_support', 'regenerate_section', 'regenerate_claim')",
+            name=op.f("ck_ai_calls_task"),
+        ),
+        sa.CheckConstraint(
+            "outcome IN ('succeeded', 'refused', 'schema_violation', 'rate_limited', 'quota_exhausted', 'http_error', 'not_delivered', 'outcome_unknown')",
+            name=op.f("ck_ai_calls_outcome"),
+        ),
+        sa.CheckConstraint("attempt >= 1", name=op.f("ck_ai_calls_attempt_positive")),
+        sa.CheckConstraint(
+            "retry_after_seconds IS NULL OR retry_after_seconds >= 0",
+            name=op.f("ck_ai_calls_retry_after_nonnegative"),
+        ),
+        sa.CheckConstraint(
+            "sanitized_response IS NULL OR jsonb_typeof(sanitized_response) = 'object'",
+            name=op.f("ck_ai_calls_sanitized_response_shape"),
+        ),
+        sa.CheckConstraint(
+            "(sanitized_response IS NULL) = (sanitized_response_hash IS NULL)",
+            name=op.f("ck_ai_calls_sanitized_response_hash_present"),
+        ),
+        sa.CheckConstraint(
+            "outcome <> 'succeeded' OR (sanitized_response IS NOT NULL AND output_hash IS NOT NULL)",
+            name=op.f("ck_ai_calls_succeeded_has_output"),
+        ),
+        sa.CheckConstraint(
+            "(input_tokens IS NULL OR input_tokens >= 0) AND (cached_input_tokens IS NULL OR cached_input_tokens >= 0) AND (cache_write_tokens IS NULL OR cache_write_tokens >= 0) AND (output_tokens IS NULL OR output_tokens >= 0) AND (total_tokens IS NULL OR total_tokens >= 0)",
+            name=op.f("ck_ai_calls_tokens_nonnegative"),
+        ),
+        sa.CheckConstraint(
+            "cached_input_tokens IS NULL OR cache_write_tokens IS NULL OR input_tokens IS NULL OR cached_input_tokens + cache_write_tokens <= input_tokens",
+            name=op.f("ck_ai_calls_cache_tokens_within_input"),
+        ),
+        sa.CheckConstraint(
+            "total_tokens IS NULL OR input_tokens IS NULL OR total_tokens >= input_tokens",
+            name=op.f("ck_ai_calls_total_covers_input"),
+        ),
+        sa.CheckConstraint(
+            "total_tokens IS NULL OR output_tokens IS NULL OR total_tokens >= output_tokens",
+            name=op.f("ck_ai_calls_total_covers_output"),
+        ),
+        sa.CheckConstraint(
+            "cost_usd IS NULL OR cost_usd >= 0", name=op.f("ck_ai_calls_cost_nonnegative")
+        ),
+        sa.CheckConstraint(
+            "cost_usd IS NULL OR (input_tokens IS NOT NULL AND output_tokens IS NOT NULL AND pricing IS NOT NULL)",
+            name=op.f("ck_ai_calls_cost_has_usage"),
+        ),
+        sa.CheckConstraint("latency_ms >= 0", name=op.f("ck_ai_calls_latency_nonnegative")),
+        sa.CheckConstraint(
+            "finished_at >= started_at", name=op.f("ck_ai_calls_finished_after_started")
+        ),
+        sa.ForeignKeyConstraint(
+            ["operation_id"],
+            ["operations.id"],
+            name=op.f("fk_ai_calls_operation_id_operations"),
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_ai_calls")),
+        sa.UniqueConstraint(
+            "operation_id",
+            "task",
+            "attempt",
+            name=op.f("uq_ai_calls_operation_id_task_attempt"),
+        ),
+    )
+    op.create_index(
+        "idx_ai_calls_operation",
+        "ai_calls",
+        ["operation_id", "started_at", "id"],
         unique=False,
     )
     op.create_table(
@@ -616,13 +694,7 @@ def upgrade() -> None:
         sa.Column("operation_id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("output_type", sa.Text(), nullable=False),
         sa.Column("output_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("active", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("activated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.CheckConstraint(
-            "active = (activated_at IS NOT NULL)",
-            name=op.f("ck_operation_outputs_active_activation"),
-        ),
         sa.ForeignKeyConstraint(
             ["operation_id"],
             ["operations.id"],
@@ -642,85 +714,6 @@ def upgrade() -> None:
         ["operation_id", "created_at", "id"],
         unique=False,
     )
-    op.create_table(
-        "operation_resource_leases",
-        sa.Column("resource_kind", sa.Text(), nullable=False),
-        sa.Column("resource_key", sa.Text(), nullable=False),
-        sa.Column("slot", sa.Integer(), nullable=False),
-        sa.Column("operation_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("lease_owner", sa.Text(), nullable=False),
-        sa.CheckConstraint(
-            "resource_kind IN ('application_mutation', 'render_browser', 'ai')",
-            name=op.f("ck_operation_resource_leases_resource_kind"),
-        ),
-        sa.CheckConstraint("slot >= 0", name=op.f("ck_operation_resource_leases_slot_nonnegative")),
-        sa.ForeignKeyConstraint(
-            ["operation_id"],
-            ["operations.id"],
-            name=op.f("fk_operation_resource_leases_operation_id_operations"),
-        ),
-        sa.PrimaryKeyConstraint(
-            "resource_kind", "resource_key", "slot", name=op.f("pk_operation_resource_leases")
-        ),
-        sa.UniqueConstraint(
-            "operation_id",
-            "resource_kind",
-            "resource_key",
-            name=op.f("uq_operation_resource_leases_operation_id_resource_kind_resource_key"),
-        ),
-    )
-    op.create_index(
-        "idx_operation_resource_leases_operation",
-        "operation_resource_leases",
-        ["operation_id"],
-        unique=False,
-    )
-    op.create_table(
-        "artifact_versions",
-        sa.Column("id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("artifact_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("version_number", sa.Integer(), nullable=False),
-        sa.Column("lifecycle_status", sa.Text(), nullable=False),
-        sa.Column("path", sa.Text(), nullable=False),
-        sa.Column("content_hash", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("track", sa.Text(), nullable=True),
-        sa.Column("profile", sa.Text(), nullable=True),
-        sa.Column("emphasis", sa.Text(), nullable=True),
-        sa.Column("facts_version", sa.Text(), nullable=True),
-        sa.Column("job_snapshot_id", sa.UUID(as_uuid=False), nullable=True),
-        sa.Column(
-            "metadata_json",
-            postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'{}'::jsonb"),
-            nullable=False,
-        ),
-        sa.CheckConstraint(
-            "lifecycle_status = 'provider-output'",
-            name=op.f("ck_artifact_versions_lifecycle_status"),
-        ),
-        sa.CheckConstraint(
-            "version_number > 0", name=op.f("ck_artifact_versions_version_number_positive")
-        ),
-        sa.ForeignKeyConstraint(
-            ["artifact_id"],
-            ["artifacts.id"],
-            name=op.f("fk_artifact_versions_artifact_id_artifacts"),
-        ),
-        sa.ForeignKeyConstraint(
-            ["job_snapshot_id"],
-            ["job_snapshots.id"],
-            name=op.f("fk_artifact_versions_job_snapshot_id_job_snapshots"),
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_artifact_versions")),
-        sa.UniqueConstraint(
-            "artifact_id",
-            "version_number",
-            name=op.f("uq_artifact_versions_artifact_id_version_number"),
-        ),
-        sa.UniqueConstraint("path", name=op.f("uq_artifact_versions_path")),
-    )
-    op.create_index("idx_versions_artifact", "artifact_versions", ["artifact_id"], unique=False)
     # Mutable by design (state-and-use-cases.md §2), so it is a mutable table exception.
     op.create_table(
         "cv_documents",
@@ -861,15 +854,15 @@ def downgrade() -> None:
     op.drop_index("idx_submissions_application", table_name="submissions")
     op.drop_table("submissions")
     op.drop_table("cv_documents")
-    op.drop_index("idx_versions_artifact", table_name="artifact_versions")
-    op.drop_table("artifact_versions")
-    op.drop_index("idx_operation_resource_leases_operation", table_name="operation_resource_leases")
-    op.drop_table("operation_resource_leases")
     op.drop_index("idx_operation_outputs_operation", table_name="operation_outputs")
     op.drop_table("operation_outputs")
     op.drop_table("job_analyses")
     op.drop_index("idx_recruitment_events_application", table_name="recruitment_events")
     op.drop_table("recruitment_events")
+    op.drop_index("idx_ai_calls_operation", table_name="ai_calls")
+    op.drop_table("ai_calls")
+    op.drop_index("uq_operations_running_render", table_name="operations")
+    op.drop_index("uq_operations_running_application", table_name="operations")
     op.drop_index("idx_operations_claimable", table_name="operations")
     op.drop_index("idx_operations_application_status", table_name="operations")
     op.drop_table("operations")
@@ -878,13 +871,11 @@ def downgrade() -> None:
     op.drop_table("fact_events")
     op.drop_index("idx_audit_records_application", table_name="audit_records")
     op.drop_table("audit_records")
-    op.drop_table("artifacts")
     op.drop_index("idx_knowledge_mutation_journal_state", table_name="knowledge_mutation_journal")
     op.drop_table("knowledge_mutation_journal")
     op.drop_table("applications")
     op.drop_table("app_settings")
     op.execute("DROP FUNCTION cv_guard_knowledge_mutation_transition()")
-    op.execute("DROP FUNCTION cv_guard_operation_output_activation()")
     op.execute("DROP FUNCTION cv_guard_terminal_operation_update()")
     op.execute("DROP FUNCTION cv_reject_protected_delete()")
     op.execute("DROP FUNCTION cv_reject_immutable_change()")
