@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { type AiAvailability, aiAvailability, settingsQueryOptions } from "./settings";
-import type { Settings } from "./contracts";
+import { type AiAvailability, aiAvailability, settingsQueryOptions } from "@/api/settings";
+import type { Settings } from "@/api/contracts";
 
 /* App owns the live settings read; every other screen consumes that cache rather than
    opening a request of its own, so this stays `enabled: false` on purpose. What this

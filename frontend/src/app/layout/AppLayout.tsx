@@ -6,7 +6,7 @@ import { settingsQueryOptions } from "@/api/settings";
 import { cx } from "@/ui/cx";
 import { applyTheme, cacheTheme } from "./theme";
 import { AppHeader } from "./AppHeader";
-import { type DisplaySettings, DisplaySettingsPreviewProvider } from "./DisplaySettingsPreview";
+import { type DisplaySettings, DisplaySettingsPreviewProvider } from "@/features/settings";
 import { RouteFocusManager } from "./RouteFocusManager";
 import { useSidebarCollapse } from "./sidebar";
 import { useInWorkflow } from "../workflowRoutes";

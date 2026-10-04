@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { type ApplicationListQuery, applicationListQueryOptions } from "@/api/applications";
-import { rememberBoardQuery } from "@/app/boardReturn";
+import { rememberBoardQuery } from "@/navigation/boardReturn";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { paramsFromQuery, queryFromParams } from "../model/applicationListParams";
 

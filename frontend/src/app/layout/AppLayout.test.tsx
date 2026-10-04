@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { settingsQueryKey } from "@/api/settings";
 import { settings } from "@/test/fixtures";
 import { AppLayout } from "./AppLayout";
-import { useDisplaySettingsPreview } from "./DisplaySettingsPreview";
+import { useDisplaySettingsPreview } from "@/features/settings";
 
 const PreviewControl = () => {
   const setPreview = useDisplaySettingsPreview();

@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import { recordedFailureDetail } from "@/features/operations";
 import { Button, buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";

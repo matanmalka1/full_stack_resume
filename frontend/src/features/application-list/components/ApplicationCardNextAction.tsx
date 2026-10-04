@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { ApplicationListItem } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import {
   actionDescription,
   actionDestination,

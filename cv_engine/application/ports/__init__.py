@@ -27,7 +27,7 @@ from .outbound import (
     RevisionPayloadStore,
     SnapshotPayloadStore,
 )
-from .settings import SettingsStore
+from .settings import SettingsRepository, SettingsStore
 from .transactions import ReadTransaction, TransactionManager, WriteTransaction
 from .values import (
     ArtifactStream,
@@ -61,6 +61,7 @@ __all__ = [
     "Renderer",
     "ReadTransaction",
     "RevisionPayloadStore",
+    "SettingsRepository",
     "SettingsStore",
     "SnapshotPayload",
     "SnapshotPayloadStore",

@@ -5,10 +5,10 @@ import { Link } from "react-router-dom";
 
 import { watchedApplicationDetailQueryOptions } from "@/api/applications";
 import { decisionExportQueryOptions, documentPdfHref, documentQueryOptions } from "@/api/documents";
-import { boardPath, boardReturnState } from "@/app/boardReturn";
-import { routePaths } from "@/app/routePaths";
-import { useRequiredParam } from "@/app/useRequiredParam";
-import { applicationLabel } from "@/features/applications";
+import { boardPath, boardReturnState } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
+import { useRequiredParam } from "@/navigation/useRequiredParam";
+import { applicationLabel } from "@/features/application-detail";
 import { ValidationReportView } from "@/features/drafts";
 import { PreparationAlerts, WizardStepShell } from "@/features/preparation";
 import { Button, buttonClasses } from "@/ui/Button";

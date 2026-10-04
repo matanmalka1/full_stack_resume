@@ -5,7 +5,7 @@ import type { FieldErrors, UseFormRegister } from "react-hook-form";
 import { Field } from "@/ui/Field";
 import { FormSection } from "@/ui/FormSection";
 import { Input } from "@/ui/Input";
-import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "@/features/applications";
+import { LABEL_MAX_CHARACTERS, SOURCE_URL_MAX_CHARACTERS, validateSourceUrl } from "@/features/application-detail";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
 
 const examplePlaceholder = (example: string) => `לדוגמה: \u2066${example}\u2069`;

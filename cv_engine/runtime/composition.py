@@ -45,7 +45,7 @@ from ..application.services.operations import (
 from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
-from ..application.settings import SettingsService
+from ..application.services.settings import SettingsService
 from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.document_files import DocumentFiles, SubmissionPayloads
 from ..infrastructure.knowledge import FileKnowledge
@@ -63,7 +63,6 @@ from ..infrastructure.persistence.analysis_sources import SqlAlchemyAnalysisCont
 from ..infrastructure.persistence.application_projections import (
     SqlAlchemyApplicationProjectionReader,
 )
-from ..infrastructure.persistence.application_store import SqlAlchemyApplicationStore
 from ..infrastructure.persistence.audit_log import SqlAlchemyAuditLog
 from ..infrastructure.persistence.documents import (
     SqlAlchemyDocumentStore,
@@ -72,6 +71,10 @@ from ..infrastructure.persistence.documents import (
 from ..infrastructure.persistence.draft_history_sources import (
     SqlAlchemyDraftHistoryApplicationReader,
 )
+from ..infrastructure.persistence.initial_recruitment_events import (
+    SqlAlchemyInitialRecruitmentEventWriter,
+)
+from ..infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
 from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from ..infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
@@ -80,9 +83,6 @@ from ..infrastructure.persistence.maintenance import SqlAlchemyMaintenanceInspec
 from ..infrastructure.persistence.operation_client import SqlAlchemyOperationClientStore
 from ..infrastructure.persistence.operation_execution import SqlAlchemyOperationExecutionStore
 from ..infrastructure.persistence.recruitment import SqlAlchemyRecruitmentRepository
-from ..infrastructure.persistence.recruitment_store import (
-    SqlAlchemyInitialRecruitmentEventWriter,
-)
 from ..infrastructure.persistence.settings_store import SqlAlchemySettingsStore
 from ..infrastructure.persistence.worker_lock import worker_exclusivity
 from ..infrastructure.providers import OpenAIProvider

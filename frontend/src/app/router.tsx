@@ -72,14 +72,14 @@ export const routes: RouteObject[] = [
           {
             path: "applications/:applicationId",
             lazy: screen(
-              () => import("@/features/applications/pages/ApplicationPage"),
+              () => import("@/features/application-detail/pages/ApplicationPage"),
               (module) => module.ApplicationPage,
             ),
           },
           {
             path: "applications/:applicationId/resume",
             lazy: screen(
-              () => import("@/features/applications/pages/ApplicationResumePage"),
+              () => import("@/features/application-detail/pages/ApplicationResumePage"),
               (module) => module.ApplicationResumePage,
             ),
           },
