@@ -820,7 +820,7 @@ def test_a_failed_render_keeps_the_approval_and_a_retry_reaches_ready(
         for s in current.content.sections
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
-    changed = services.drafts.update_document(
+    changed = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=current.document_hash,
@@ -906,7 +906,7 @@ def test_successful_rerender_discards_superseded_files(ready_application):
         for s in before.content.sections
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
-    edited = services.drafts.update_document(
+    edited = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=before.document_hash,

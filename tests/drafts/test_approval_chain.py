@@ -14,7 +14,7 @@ def test_exact_undo_restores_approval_and_reapproval_refreshes_only_the_check(ap
     assert original.content is not None
     section = next(s for s in original.content.sections if len(s.claims) > 1)
     order = [c.claim_id for c in section.claims]
-    changed = services.drafts.update_document(
+    changed = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=original.document_hash,
@@ -23,7 +23,7 @@ def test_exact_undo_restores_approval_and_reapproval_refreshes_only_the_check(ap
     )
     assert changed.preparation_state is PreparationState.DRAFT_IN_PROGRESS
     validate_active_draft(services, app_id)
-    restored = services.drafts.update_document(
+    restored = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=changed.document_hash,

@@ -318,7 +318,7 @@ def edit_document_claim(
 ):
     from cv_engine.application.commands import ClaimPatch, UpdateDocumentCommand
 
-    return services.drafts.update_document(
+    return services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=stored_document(services, application_id).document_hash,

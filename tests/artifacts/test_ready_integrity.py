@@ -104,7 +104,7 @@ def test_submission_copies_survive_edits_and_database_triggers_refuse_mutation(
         for path in (sent.html_path, sent.pdf_path)
         if path
     }
-    services.drafts.update_document(
+    services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=document.document_hash,

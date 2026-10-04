@@ -54,7 +54,7 @@ def test_pipeline_reaches_ready_and_reconciles(
         for s in document.content.sections
         if len(s.claims) > 1 and all(c.style not in {"heading", "date"} for c in s.claims)
     )
-    edited = services.drafts.update_document(
+    edited = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=document.document_hash,

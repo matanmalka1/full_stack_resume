@@ -1,4 +1,6 @@
-"""§14 document content: generation, autosave, and targeted regeneration.
+"""§14 document content: AI generation and targeted regeneration.
+
+The user's own edits (autosave) are `editing.py`; nothing there reaches a provider.
 
 Every command names the document by its Application and carries the
 `expected_document_hash` the client last read. Generation and regeneration are
@@ -17,26 +19,18 @@ from ....domain.contracts.base import StrictModel
 from ....domain.contracts.drafts import DraftDocument
 from ....domain.contracts.knowledge import EmphasisPolicy, Profile, ResumeSectionSpec
 from ....domain.contracts.providers import ClaimSupportProposal, ProposedClaim
-from ....domain.document import content_check, preparation_state
 from ....domain.drafts import (
-    add_claim,
-    apply_claim_edit,
     draft_claims,
     keep_frame_claims,
-    remove_claim,
-    reorder_draft,
     restore_claims,
 )
 from ....domain.frame import dangling_heading
 from ....domain.knowledge import Knowledge
-from ....util import utc_now
 from ...commands import (
-    DocumentMutationResult,
     DraftCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
     RegenerationResult,
-    UpdateDocumentCommand,
 )
 from ...errors import (
     InfrastructureFailure,
@@ -57,13 +51,12 @@ from ...ports import (
     TransactionManager,
 )
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
-from ...ports.documents import DocumentBody, DocumentStore
+from ...ports.documents import DocumentStore
 from ...transactions import assert_external_io_allowed
 from ..ai_calls import AICallRunner, RecordedCall
 from ..documents import (
     DocumentSource,
     compose_content,
-    current_basis,
     load_knowledge,
     read_document_source,
     refuse_deleted,
@@ -361,82 +354,6 @@ class DraftAuthoringService:
             reasoning_effort=reasoning_effort,
         )
         return updated, reason
-
-    def update_document(self, command: UpdateDocumentCommand) -> DocumentMutationResult:
-        """§14 autosave: apply one structured patch against one exact hash.
-
-        The whole patch commits as a single write. Nothing here validates: §15 owns
-        the content report, and a check on every keystroke would make a passed report
-        mean "recently saved" instead of "recently checked". Editing an approved or
-        ready document is allowed; it changes the basis, so the document returns to
-        draft on the next read.
-        """
-        source = self._target(command.application_id, command.expected_document_hash)
-        document = source.document
-        if document.content is None:
-            raise PreconditionFailed("the document has no content to edit yet; create a draft")
-        knowledge = self.load_knowledge()
-        facts = knowledge.facts
-        patched = document.content
-        for edit in command.claim_edits:
-            try:
-                patched = apply_claim_edit(
-                    patched,
-                    edit.claim_id,
-                    list(edit.fact_ids),
-                    facts,
-                    text=edit.text,
-                    template_id=edit.template_id,
-                    template_version=edit.template_version,
-                )
-            except KeyError as exc:
-                raise UnknownRecord(f"unknown claim in the document: {edit.claim_id}") from exc
-            except ValueError as exc:
-                raise PreconditionFailed(f"claim edit rejected: {exc}") from exc
-        for claim_id in command.claim_removals:
-            try:
-                patched = remove_claim(patched, claim_id)
-            except KeyError as exc:
-                raise UnknownRecord(f"unknown claim in the document: {claim_id}") from exc
-            except ValueError as exc:
-                raise PreconditionFailed(f"claim removal rejected: {exc}") from exc
-        added_claim_ids: set[str] = set()
-        for addition in command.claim_additions:
-            try:
-                patched, new_claim_id = add_claim(patched, addition.section, addition.text)
-            except KeyError as exc:
-                raise UnknownRecord(f"unknown section in the document: {addition.section}") from exc
-            except ValueError as exc:
-                raise PreconditionFailed(f"claim addition rejected: {exc}") from exc
-            added_claim_ids.add(new_claim_id)
-        try:
-            patched = reorder_draft(patched, claim_orders=command.claim_orders)
-        except KeyError as exc:
-            raise UnknownRecord(f"unknown section in the document: {exc.args[0]}") from exc
-        except ValueError as exc:
-            raise PreconditionFailed(f"document reorder rejected: {exc}") from exc
-        with self.transactions.write() as tx:
-            updated = self.documents.update_body(
-                tx,
-                command.application_id,
-                command.expected_document_hash,
-                DocumentBody(analysis_id=document.analysis_id, content=patched),
-                updated_at=utc_now(),
-            )
-        edited = {edit.claim_id for edit in command.claim_edits} | added_claim_ids
-        new_basis = current_basis(updated, knowledge)
-        return DocumentMutationResult(
-            application_id=command.application_id,
-            document_id=updated.id,
-            document_hash=updated.document_hash,
-            preparation_state=preparation_state(updated, new_basis),
-            content_check=content_check(updated, new_basis),
-            pending_claim_ids=sorted(
-                claim.claim_id
-                for claim in draft_claims(patched)
-                if claim.claim_type == "pending" and claim.claim_id in edited
-            ),
-        )
 
     def _regeneration_target(
         self, application_id: str, expected_document_hash: str

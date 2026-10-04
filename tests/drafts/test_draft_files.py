@@ -15,7 +15,7 @@ def test_style_safe_composite_edit_joins_two_canonical_facts(drafted_application
     services, app_id = drafted_application("Composite edit")
     claim = _working_claim(services, app_id, "sales.metric.recurring_customers")
 
-    services.drafts.update_document(
+    services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=app_id,
             expected_document_hash=stored_document(services, app_id).document_hash,

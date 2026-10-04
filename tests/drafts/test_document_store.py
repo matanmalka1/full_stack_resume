@@ -148,7 +148,7 @@ def test_application_commands_refuse_stale_hash_before_work(ready_application):
             DraftCommand(application_id=application_id, expected_document_hash=MOVED),
             operation_id="stale-draft",
         ),
-        lambda: services.drafts.update_document(
+        lambda: services.draft_editing.update_document(
             UpdateDocumentCommand(
                 application_id=application_id,
                 expected_document_hash=MOVED,
