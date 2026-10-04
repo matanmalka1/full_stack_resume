@@ -8,7 +8,7 @@ import { LtrText } from "@/ui/LtrText";
 import { Textarea } from "@/ui/Input";
 import { cx } from "@/ui/cx";
 import { formatBytes } from "@/utils/formatBytes";
-import { isJobTextWithinBudget, JOB_TEXT_REQUIRED_MESSAGE, jobTextByteLength } from "@/features/applications";
+import { isJobTextWithinBudget, JOB_TEXT_REQUIRED_MESSAGE, jobTextByteLength } from "@/features/application-detail";
 import type { ApplicationIntakeFields } from "../model/applicationIntake";
 
 const NOTICE_RATIO = 0.8;

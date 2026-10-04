@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import { ApiProblem } from "@/api/client";
 import { Button } from "@/ui/Button";
 import { applicationDetailQueryOptions } from "@/api/applications";
-import { useRequiredParam } from "@/app/useRequiredParam";
+import { useRequiredParam } from "@/navigation/useRequiredParam";
 import { preparationResumeDestinationFromDetail } from "@/features/preparation";
 import { PageShell } from "@/ui/PageShell";
 import { QueryState } from "@/ui/QueryState";

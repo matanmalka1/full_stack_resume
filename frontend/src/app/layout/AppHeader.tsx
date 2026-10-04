@@ -6,8 +6,8 @@ import { buttonClasses } from "@/ui/Button";
 import { cx } from "@/ui/cx";
 import { Tooltip } from "@/ui/Tooltip";
 import { GlobalSearch } from "../search/GlobalSearch";
-import { boardPath } from "../boardReturn";
-import { routePaths } from "../routePaths";
+import { boardPath } from "@/navigation/boardReturn";
+import { routePaths } from "@/navigation/routePaths";
 import { AppNavigation } from "./AppNavigation";
 
 /* Whether the application is currently talking to the server, anywhere. Decorative: the

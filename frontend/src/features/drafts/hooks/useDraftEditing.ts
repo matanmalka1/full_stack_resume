@@ -6,7 +6,7 @@ import type { DraftClaim } from "@/api/contracts";
 import { documentQueryKey, documentQueryOptions, regenerateClaim, regenerateSection } from "@/api/documents";
 import { type QueuedOperation, operationQueryKey } from "@/api/operations";
 import { aiAvailability } from "@/api/settings";
-import { useSettings } from "@/api/useSettings";
+import { useSettings } from "@/features/settings";
 import type { DraftClaimActions, EditableDocument } from "../model/drafts.types";
 import { removability } from "../model/draftClaims";
 import { type AutosaveState, useDraftAutosave } from "./useDraftAutosave";

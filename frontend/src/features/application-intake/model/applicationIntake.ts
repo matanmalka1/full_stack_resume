@@ -1,5 +1,5 @@
 import type { ApplicationIntake } from "@/api/contracts";
-import { normalizedSourceUrl } from "@/features/applications";
+import { normalizedSourceUrl } from "@/features/application-detail";
 
 export interface ApplicationIntakeFields {
   company: string;

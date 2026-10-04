@@ -2,7 +2,7 @@ import { type ReactElement, useId, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { aiAvailability } from "@/api/settings";
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import type { ApplicationDetail } from "@/api/contracts";
 import { ErrorCallout } from "@/ui/ErrorCallout";
 import { Button, buttonClasses } from "@/ui/Button";

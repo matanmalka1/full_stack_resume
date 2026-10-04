@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { buttonClasses } from "@/ui/Button";
 import { PageShell } from "@/ui/PageShell";
-import { boardPath } from "../boardReturn";
+import { boardPath } from "@/navigation/boardReturn";
 
 /* A URL that matches no route. It offers the way back rather than only reporting the
    miss, because the reader who lands here typed or followed an address and has nothing

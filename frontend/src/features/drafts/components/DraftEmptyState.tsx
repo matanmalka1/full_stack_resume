@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import { buttonClasses } from "@/ui/Button";
 import { Callout } from "@/ui/Callout";
 

@@ -1,4 +1,4 @@
-import { routePaths } from "@/app/routePaths";
+import { routePaths } from "@/navigation/routePaths";
 import type { ApplicationListItem, PreparationState } from "@/api/contracts";
 import {
   preparationResumeDestination,
