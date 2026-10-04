@@ -96,7 +96,7 @@ def update_document(
     Free text no fact authorizes is saved as a pending claim rather than refused (§14);
     it blocks approval, not the save.
     """
-    result = services.drafts.update_document(
+    result = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=parse_document_etag(if_match),

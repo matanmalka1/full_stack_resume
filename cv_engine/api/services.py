@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
-from ..application.services.drafts import DraftAuthoringService
+from ..application.services.drafts import DraftAuthoringService, DraftEditingService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.repin import RepinService
@@ -63,6 +63,7 @@ class ApiServices:
     analysis: AnalysisService
     repin: RepinService
     drafts: DraftAuthoringService
+    draft_editing: DraftEditingService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService
     draft_approval: DraftApprovalService

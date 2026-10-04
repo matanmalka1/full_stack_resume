@@ -836,6 +836,7 @@ def test_transaction_scopes_belong_only_to_entry_point_orchestrators() -> None:
         "DraftHistoryService",
         "DraftApprovalService",
         "DraftAuthoringService",
+        "DraftEditingService",
         "RenderingService",
         "RecruitmentService",
         "SubmissionService",

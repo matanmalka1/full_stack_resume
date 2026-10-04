@@ -201,7 +201,7 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
     assert content is not None
     section = content.sections[0].name
 
-    edited = services.drafts.update_document(
+    edited = services.draft_editing.update_document(
         UpdateDocumentCommand(
             application_id=application_id,
             expected_document_hash=document_hash,
@@ -223,7 +223,7 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
         claim_removals=edited.pending_claim_ids,
     )
     with pytest.raises(StateConflict) as conflict:
-        services.drafts.update_document(stale)
+        services.draft_editing.update_document(stale)
     assert conflict.value.code == DOCUMENT_CHANGED
     current = stored_document(services, application_id)
     assert persisted_counts(database_engine) == before
@@ -237,7 +237,7 @@ def test_edits_outdate_stamps_on_read_and_approval_follows_the_current_check(
     assert "approve" not in detail.available_actions
     assert detail.recommended_action is None
 
-    resolved = services.drafts.update_document(
+    resolved = services.draft_editing.update_document(
         stale.model_copy(update={"expected_document_hash": edited.document_hash})
     )
     assert resolved.content_check is ContentCheck.OUTDATED

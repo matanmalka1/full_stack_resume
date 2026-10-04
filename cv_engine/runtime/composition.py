@@ -23,7 +23,7 @@ from ..application.services.ai_calls import AICallRunner
 from ..application.services.analysis.service import AnalysisService
 from ..application.services.applications.intake import ApplicationService
 from ..application.services.applications.queries import ApplicationQueryService
-from ..application.services.drafts import DraftAuthoringService
+from ..application.services.drafts import DraftAuthoringService, DraftEditingService
 from ..application.services.drafts.approval import DraftApprovalService
 from ..application.services.drafts.history import DraftHistoryService
 from ..application.services.drafts.repin import RepinService
@@ -131,6 +131,7 @@ class Services:
     analysis: AnalysisService
     repin: RepinService
     drafts: DraftAuthoringService
+    draft_editing: DraftEditingService
     draft_validation: DraftValidationService
     draft_history: DraftHistoryService
     draft_approval: DraftApprovalService
@@ -419,6 +420,12 @@ def build_services(
         analysis=analysis_service,
         repin=repin_service,
         drafts=draft_service,
+        draft_editing=DraftEditingService(
+            transactions=transactions,
+            documents=documents,
+            sources=analysis_sources,
+            knowledge=resolved_knowledge,
+        ),
         draft_validation=draft_validation,
         draft_history=draft_history,
         draft_approval=draft_approval,
@@ -462,6 +469,7 @@ def build_api_services(
         analysis=services.analysis,
         repin=services.repin,
         drafts=services.drafts,
+        draft_editing=services.draft_editing,
         draft_validation=services.draft_validation,
         draft_history=services.draft_history,
         draft_approval=services.draft_approval,
