@@ -28,7 +28,7 @@ class SqlAlchemyAnalysisPlanRepository:
         self,
         tx: WriteTransaction,
         application_id: str,
-        snapshot_id: str,
+        job_text_hash: str,
         analysis: JobAnalysis,
         *,
         provider: str,
@@ -39,7 +39,7 @@ class SqlAlchemyAnalysisPlanRepository:
         return _save_analysis(
             self._transactions.connection_for(tx, access="write"),
             application_id,
-            snapshot_id,
+            job_text_hash,
             analysis,
             provider=provider,
             model=model,

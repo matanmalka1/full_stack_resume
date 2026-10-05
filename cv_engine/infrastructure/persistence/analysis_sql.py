@@ -9,7 +9,7 @@ from ...application.errors import StateConflict, UnknownRecord
 from ...application.operations import MATCHING_CONTEXT_OPERATION_TYPES
 from ...domain.contracts.analysis import JobAnalysis
 from ...util import new_id, utc_now
-from .tables import applications, job_analyses, job_snapshots, operations
+from .tables import applications, job_analyses, operations
 
 
 def _lock_application(connection: Connection, application_id: str) -> None:
@@ -26,18 +26,15 @@ def _lock_application(connection: Connection, application_id: str) -> None:
 
 
 def _active_analysis_id(connection: Connection, application_id: str) -> str | None:
-    """The newest analysis of the active JobSnapshot, the one a decision form shows."""
-    active_snapshot_id = connection.execute(
-        select(job_snapshots.c.id)
-        .where(job_snapshots.c.application_id == application_id)
-        .order_by(job_snapshots.c.version_number.desc())
-        .limit(1)
+    """The newest analysis of the current job text, the one a decision form shows."""
+    current_job_text_hash = connection.execute(
+        select(applications.c.job_text_hash).where(applications.c.id == application_id)
     ).scalar_one_or_none()
     return connection.execute(
         select(job_analyses.c.id)
         .where(
             job_analyses.c.application_id == application_id,
-            job_analyses.c.job_snapshot_id == active_snapshot_id,
+            job_analyses.c.job_text_hash == current_job_text_hash,
         )
         .order_by(job_analyses.c.version_number.desc())
         .limit(1)
@@ -108,7 +105,7 @@ def _analysis_record(row: Any) -> dict[str, Any]:
 def _save_analysis(
     connection: Connection,
     application_id: str,
-    snapshot_id: str,
+    job_text_hash: str,
     analysis: JobAnalysis,
     *,
     provider: str,
@@ -129,7 +126,7 @@ def _save_analysis(
     if refuse_matching_context_operation:
         _refuse_matching_context_operation(connection, application_id)
     # Allocated under the lock. Read before it, the highest version is
-    # whatever the snapshot happened to see, and the insert collides on
+    # whatever the transaction snapshot happened to see, and the insert collides on
     # the unique constraint instead of taking the next number.
     version = connection.execute(
         select(
@@ -140,7 +137,7 @@ def _save_analysis(
         insert(job_analyses).values(
             id=analysis_id,
             application_id=application_id,
-            job_snapshot_id=snapshot_id,
+            job_text_hash=job_text_hash,
             version_number=version,
             structured_json=analysis.model_dump(mode="json"),
             provider=provider,

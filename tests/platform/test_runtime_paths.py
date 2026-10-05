@@ -67,7 +67,7 @@ def test_config_precedence_secret_exclusion_and_parsing(tmp_path: Path) -> None:
         "env-file",
     )
     assert resolved.get("openai_api_key") is None
-    assert resolved.describe()["database_url"]["value"] == "***"
+    assert resolved.source("database_url") == "env-file"
     assert parse_env_file("\n# note\nexport A=1\nB='two'\ninvalid\n") == {
         "A": "1",
         "B": "two",

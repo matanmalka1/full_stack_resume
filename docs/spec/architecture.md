@@ -223,7 +223,8 @@ source files are valid inputs; a changed context produces `knowledge_changed` or
 ### 6.1 PostgreSQL
 
 PostgreSQL holds structured state and relationships: Applications and their recruitment
-projection, recruitment and audit history, JobSnapshot metadata, JobAnalyses, the one
+projection and their job text (locked by the first Submission, by trigger
+`lock_submitted_job_text`), recruitment and audit history, JobAnalyses, the one
 mutable `cv_documents` row per Application (fields: state-and-use-cases.md §3),
 the AI call log (`ai_calls`, §11), Submissions, Operations,
 fact events, the Knowledge mutation journal, and safe settings. *Designed, not built (§18):*
@@ -258,13 +259,12 @@ The key layout is the same either way, and `PayloadStore` refuses any other:
 
 ```text
 {artifacts_root}/ or {bucket}/{prefix}/
-  snapshots/{application_id}/{snapshot_id}.txt
   submissions/{application_id}/{submission_id}/resume.html
   submissions/{application_id}/{submission_id}/resume.pdf
 ```
 
 **References are storage-neutral and their format is frozen.** PostgreSQL path fields
-store project-relative strings such as `artifacts/snapshots/{app}/{id}.txt`; the object
+store project-relative strings such as `artifacts/submissions/{app}/{id}/resume.pdf`; the object
 key is the same string without the `artifacts/` prefix. A row is identical under either
 backend, so storage can change without rewriting rows.
 
@@ -276,6 +276,8 @@ What stays out of the object store, by decision:
 
 - **Document content** lives inline in `cv_documents.content`; the document has no
   version history to address.
+- **Job text** lives inline on `applications.job_text`; it is edited in place and has no
+  version history either (`docs/decisions/editable-job-text.md`).
 - **Render targets.** `render_document` writes HTML and PDF to a unique per-attempt
   directory, `{artifacts_root}/documents/{application_id}/{attempt_id}/`, and activates
   them as the document's `html_path`/`pdf_path`. Chromium writes real files to real
@@ -342,7 +344,7 @@ Validation runs on the bytes before the key is claimed, so a payload that fails 
 occupies its key. The write refuses to replace an existing payload: `O_EXCL` locally, a
 conditional PUT (`IfNoneMatch: "*"`) on S3 and R2. The store hashes the bytes it stored
 in the same pass, and that digest is what the caller registers. Every physical key embeds
-a freshly minted ID (snapshot or Submission), so a retry writes new keys and never
+a freshly minted Submission ID, so a retry writes new keys and never
 overwrites an earlier attempt's.
 
 Before registration a payload is invisible to queries. If registration fails, no row
@@ -356,8 +358,8 @@ registrations; their volume is assumed small for a single-user tool, not measure
 
 **Orphan inspection** (`MaintenanceService.inspect_orphans`; route in
 state-and-use-cases.md §19b) lists stored payloads that no database row references and
-that were stored longer than `ORPHAN_MIN_AGE` (one hour) ago, and deletes nothing. Every
-writer — JobSnapshot intake and `submit_application` — stores and registers within one
+that were stored longer than `ORPHAN_MIN_AGE` (one hour) ago, and deletes nothing. The
+one writer — `submit_application` — stores and registers within one
 command, so a younger unregistered payload is most likely a write
 still in progress and is left out of the report. The age comes from the store itself:
 file mtime locally, `LastModified` on S3.
@@ -403,9 +405,10 @@ command semantics.
 
 `CVDocument` records its source — `analysis_id` — and has no draft or
 revision lineage (`docs/decisions/single-document-model.md`). A Submission freezes
-what was sent: `content` (which carries its Application, JobSnapshot, and JobAnalysis
-binding and the coarse fact-store version), `document_hash`, the JobSnapshot ID, and the
-copied files with their SHA-256. It does not record `facts_hash`, the CandidateContext
+what was sent: `content` (which carries its Application, job text hash, and JobAnalysis
+binding and the coarse fact-store version), `document_hash`, the Application's
+`job_text_hash` when it was sent (the Submission locks that text), and the copied files
+with their SHA-256. It does not record `facts_hash`, the CandidateContext
 version, or policy versions (product-spec.md §16).
 
 The fact-store version is coarse audit; `facts_hash` is the document's exact dependency
@@ -516,7 +519,7 @@ pairing attests support, the order attests nothing. Checks apply per line; a lin
 fails keeps its prior wording and is reported (product-spec §10.1). Pre-approval
 validation is synchronous and deterministic over stored evidence and starts no AI work.
 
-**Analysis contract.** Requirement identity is the snapshot plus the requirement's
+**Analysis contract.** Requirement identity is the job text's normalized hash plus the requirement's
 normalized text under a stated identity-algorithm version. The prompt version is
 provenance, not identity input, so rewording a prompt does not turn unchanged
 requirements into new entities. The reader accepts analysis contract `3.0` only and does

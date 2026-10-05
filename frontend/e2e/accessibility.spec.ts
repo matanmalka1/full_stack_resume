@@ -36,7 +36,7 @@ const listItem = (overrides: Partial<ApplicationListItem>): ApplicationListItem 
   content_check: "none",
   review_reasons: [],
   warnings: [],
-  active_job_snapshot_id: "snap-1",
+  job_text_hash: "c".repeat(64),
   available_actions: ["analyze"],
   blocked_actions: [],
   recommended_action: "analyze",
@@ -55,7 +55,7 @@ const board = (): ApplicationListResponse => {
       recruitment_status: "interview",
       preparation_state: "ready",
       content_check: "passed",
-      active_job_snapshot_id: "snap-2",
+      job_text_hash: "d".repeat(64),
       available_actions: ["download"],
       recommended_action: null,
       next_action: "Prepare for the panel",
@@ -177,7 +177,6 @@ test.describe("accessibility", () => {
       }),
     );
     api.stub(`POST ${documentPath}/check`, json(documentCheck()));
-    api.stub("GET /api/v1/applications/app-1/artifacts", json({ items: [] }));
     api.stub("GET /api/v1/facts", json({ items: [] }));
     api.stub("GET /api/v1/facts/history", json({ events: [] }));
 

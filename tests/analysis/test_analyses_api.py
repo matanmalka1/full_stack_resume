@@ -46,10 +46,12 @@ def _existing_analysis(
 ) -> str:
     """Seed an analysis record explicitly; these tests exercise later API decisions."""
     with transaction_manager.read() as tx:
-        snapshot_id = application_projection_reader.latest_snapshot(tx, application_id)["id"]
+        job_text_hash = application_projection_reader.application(tx, application_id)[
+            "job_text_hash"
+        ]
     return seed_existing_analysis(
         harness.services,
-        AnalyzeCommand(application_id=application_id, job_snapshot_id=snapshot_id),
+        AnalyzeCommand(application_id=application_id, job_text_hash=job_text_hash),
         **analysis_values,
     ).analysis_id
 
@@ -102,11 +104,11 @@ def test_post_analysis_uses_ai_operation_and_creates_the_document(
         analysis_proposal(summary="account management role", keywords=["retention"]),
     )
     application_id = _application(ai_api_worker.services, "AI Operation Co")
-    snapshot_id = _state(ai_api_worker, application_id)["active_job_snapshot_id"]
+    job_text_hash = _state(ai_api_worker, application_id)["job_text_hash"]
     response = _post(
         ai_api_worker,
         f"/applications/{application_id}/analyses",
-        {"job_snapshot_id": snapshot_id},
+        {"job_text_hash": job_text_hash},
     )
     assert response.status_code == 202, response.text
     completed = ai_api_worker.wait_for_operation(response.json()["id"])
@@ -300,12 +302,12 @@ def test_the_api_refuses_decisions_it_cannot_act_on_without_writing(
     empty = _post(api_paused, decisions_path, named)
     assert empty.status_code == 412, empty.text
 
-    snapshot_id = _state(api_paused, application_id)["active_job_snapshot_id"]
+    job_text_hash = _state(api_paused, application_id)["job_text_hash"]
     for path, payload in [
         (decisions_path, {**named, "profile_override": "not-a-profile"}),
         (
             f"/applications/{application_id}/analyses",
-            {"job_snapshot_id": snapshot_id, "profile_override": "not-a-profile"},
+            {"job_text_hash": job_text_hash, "profile_override": "not-a-profile"},
         ),
     ]:
         refused = _post(api_paused, path, payload)
@@ -398,12 +400,12 @@ def test_a_context_operation_blocks_voluntary_editing_and_the_command(
     )
     with transaction_manager.read() as tx:
         before = len(application_projection_reader.analyses(tx, application_id))
-    snapshot_id = _state(api_paused, application_id)["active_job_snapshot_id"]
+    job_text_hash = _state(api_paused, application_id)["job_text_hash"]
     token = _document(api_paused, application_id)["document_hash"]
 
     queued = api_paused.client.post(
         f"{API_PREFIX}/applications/{application_id}/analyses",
-        json={"job_snapshot_id": snapshot_id},
+        json={"job_text_hash": job_text_hash},
         headers={**MUTATION_HEADERS, "Idempotency-Key": "competing-analysis"},
     )
     assert queued.status_code == 202, queued.text

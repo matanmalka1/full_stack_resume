@@ -1,4 +1,4 @@
-"""CV-preparation read projections: snapshot and analysis through the CV document."""
+"""CV-preparation read projections: job posting and analysis through the CV document."""
 
 from __future__ import annotations
 
@@ -11,28 +11,14 @@ from ...domain.document import ContentCheck, PreparationState
 from ..commands import BoundaryDTO
 
 
-class JobSnapshotView(BoundaryDTO):
-    id: str
-    application_id: str
-    version_number: int
+class JobPostingView(BoundaryDTO):
+    """The Application's job text, editable until the Application has a Submission."""
+
     job_text: str
     source_url: str | None = None
-    captured_at: str
-    source_metadata: dict[str, Any]
-    source_hash: str
-
-
-class JobSnapshotHistoryItem(BoundaryDTO):
-    id: str
-    version_number: int
-    captured_at: str
-    source_url: str | None
-    job_text: str | None
-
-
-class JobSnapshotHistoryView(BoundaryDTO):
-    active_job_snapshot_id: str
-    items: list[JobSnapshotHistoryItem]
+    job_text_hash: str
+    job_text_updated_at: str
+    locked: bool
 
 
 class GapView(BoundaryDTO):
@@ -54,7 +40,7 @@ class JobAnalysisView(BoundaryDTO):
 
     id: str
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str
     version_number: int
     analysis: JobAnalysis
     fit_level: str

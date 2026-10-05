@@ -46,7 +46,7 @@ class ProposedRequirement(StrictModel):
     """One requirement, as the provider read it.
 
     `text` is the provider's transcription of what the posting asks for. The
-    engine locates it in the snapshot itself rather than asking where it is;
+    engine locates it in the job text itself rather than asking where it is;
     a text it cannot locate is kept and marked unverified, because a
     requirement the model read is still a requirement whether or not the
     engine could match its wording character for character.
@@ -98,7 +98,7 @@ class RequirementSource(StrictModel):
     `verified` is the claim that matters: the posting carries this text.
     `start` and `end` are a display detail, and they are absent whenever the
     match was not a single exact occurrence - picking one occurrence, or
-    pointing into a whitespace-collapsed copy the snapshot does not hold, would
+    pointing into a whitespace-collapsed copy the job text does not hold, would
     be the engine inventing a precision it does not have.
     """
 

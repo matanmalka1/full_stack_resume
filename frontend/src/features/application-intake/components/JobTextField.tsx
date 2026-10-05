@@ -30,7 +30,7 @@ export const JobTextField = ({ error, jobText, onInputChanged, register }: JobTe
         <LtrText>
           {formatBytes(byteLength ?? 0)} / {formatBytes(JOB_TEXT_MAX_BYTES)}
         </LtrText>{" "}
-        {isOverLimit ? "— חורג מגודל התצלום המותר" : "מגודל התצלום המותר"}
+        {isOverLimit ? "— חורג מהגודל המותר" : "מהגודל המותר"}
       </span>
     ) : (
       <span aria-hidden="true" className="font-normal text-cv-text-muted">

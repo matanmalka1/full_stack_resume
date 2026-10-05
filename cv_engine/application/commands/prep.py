@@ -1,4 +1,4 @@
-"""CV-preparation commands and results: snapshot -> analysis -> the one CV document.
+"""CV-preparation commands and results: job text -> analysis -> the one CV document.
 
 These models are deliberately storage-neutral. A client receives identities,
 validated domain documents, and workflow state; local paths are resolved only
@@ -12,7 +12,7 @@ never saw.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -44,11 +44,21 @@ class DuplicateCheckCommand(BoundaryDTO):
     source_url: str | None = None
 
 
-class CreateJobSnapshotCommand(BoundaryDTO):
+#: An exact job text's SHA-256, as an analysis and an edit carry it.
+JobTextHash = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class UpdateJobTextCommand(BoundaryDTO):
+    """Replace the job text the client last read (`expected_job_text_hash`).
+
+    Refused once the Application has a Submission: what was sent stays tied to the
+    posting it was sent for.
+    """
+
     application_id: str
     job_text: str
     source_url: str | None = None
-    source_metadata: dict[str, Any] = {}
+    expected_job_text_hash: str = JobTextHash
     actor_type: Literal["user", "system"] = "user"
     client: WriteClient
 
@@ -74,10 +84,10 @@ class DraftContinuation(BoundaryDTO):
 
 
 class AnalyzeCommand(BoundaryDTO):
-    """§13 `analyze_job`, bound to its input JobSnapshot rather than to a document."""
+    """§13 `analyze_job`, bound to the exact job text the client read, not to a document."""
 
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str = JobTextHash
     track_override: str | None = None
     profile_override: str | None = None
     emphasis_override: str | None = None
@@ -259,7 +269,7 @@ class DuplicateMatch(BoundaryDTO):
 
 class IngestedApplication(BoundaryDTO):
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str
     warnings: list[str] = []
     duplicate_matches: list[DuplicateMatch] = []
 
@@ -268,16 +278,17 @@ class DuplicateCheckResult(BoundaryDTO):
     matches: list[DuplicateMatch] = []
 
 
-class CreatedJobSnapshot(BoundaryDTO):
+class UpdatedJobText(BoundaryDTO):
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str
+    job_text_updated_at: str
 
 
 class AnalysisResult(BoundaryDTO):
     """One activated JobAnalysis and the document it created, if it created one."""
 
     application_id: str
-    job_snapshot_id: str
+    job_text_hash: str
     analysis_id: str
     document_id: str | None = None
     created_document: bool = False

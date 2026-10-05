@@ -20,7 +20,7 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
   content_check: "none",
   review_reasons: [],
   warnings: [],
-  active_job_snapshot_id: "snap-1",
+  job_text_hash: "c".repeat(64),
   available_actions: ["analyze"],
   blocked_actions: [],
   recommended_action: "analyze",
@@ -33,14 +33,11 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     created_at: "2026-08-24T07:00:00Z",
     updated_at: "2026-08-24T07:00:00Z",
   },
-  latest_snapshot: {
-    id: "snap-1",
-    application_id: "app-1",
-    version_number: 1,
+  job_posting: {
     job_text: "Senior Backend Engineer",
-    captured_at: "2026-08-24T07:00:00Z",
-    source_metadata: {},
-    source_hash: "hash-1",
+    job_text_hash: "c".repeat(64),
+    job_text_updated_at: "2026-08-24T07:00:00Z",
+    locked: false,
   },
   ...overrides,
 });
@@ -74,7 +71,7 @@ const analyzed_detail = (overrides: Partial<ApplicationDetail> = {}): Applicatio
     latest_analysis: {
       id: "analysis-1",
       application_id: "app-1",
-      job_snapshot_id: "snap-1",
+      job_text_hash: "c".repeat(64),
       version_number: 1,
       analysis: {
         analysis_version: "3.0",
@@ -435,7 +432,7 @@ describe("ApplicationPage at the preparation route", () => {
     expect(fetchMock.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(0);
   });
 
-  it("analyzes the exact snapshot the projection names and reports the queued Operation", async () => {
+  it("analyzes the exact job text the projection names and reports the queued Operation", async () => {
     /* Routed by URL rather than by call order: once the command is accepted the screen
        watches the Operation it queued, so a fixed queue of answers would leave that read
        unanswered and the overlay would never settle. */
@@ -466,10 +463,10 @@ describe("ApplicationPage at the preparation route", () => {
     const request = fetchMock.mock.calls.find((call) => call[0] === ANALYSES_PATH);
     expect(request?.[0]).toBe(ANALYSES_PATH);
     expect(request?.[1]).toEqual(expect.objectContaining({ method: "POST" }));
-    /* The source is explicit: an analyze command that picked its own snapshot could
+    /* The source is explicit: an analyze command that picked up whatever text is current could
        classify something other than what the screen was showing. The provider is explicit
        for the same reason - analysis runs one AI lane and names it. */
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_text_hash: "c".repeat(64), provider: "openai" });
     expect((request?.[1]?.headers as Headers | undefined)?.get("Idempotency-Key")).not.toBeNull();
   });
 
@@ -565,7 +562,7 @@ describe("ApplicationPage at the preparation route", () => {
             latest_analysis: {
               id: "analysis-1",
               application_id: "app-1",
-              job_snapshot_id: "snap-1",
+              job_text_hash: "c".repeat(64),
               version_number: 1,
               analysis: {
                 analysis_version: "3.0",
@@ -784,10 +781,10 @@ describe("ApplicationPage at the preparation route", () => {
     await clickEnabledButton("ניתוח המשרה");
 
     const request = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
-    /* A fresh analyze command against the snapshot, not a resend of the failed run: it
+    /* A fresh analyze command against the job text, not a resend of the failed run: it
        posts to the analyses collection rather than to that Operation's retry route. */
     expect(request?.[0]).toBe(ANALYSES_PATH);
-    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_snapshot_id: "snap-1", provider: "openai" });
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({ job_text_hash: "c".repeat(64), provider: "openai" });
   });
 
   /* A run with no provider is fixed in Settings, not in the posting, so the posting
@@ -841,7 +838,7 @@ describe("ApplicationPage at the preparation route", () => {
     expect(await screen.findByText("לעובדה development.phdigital.nextjs חסר ניסוח בשפה he.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "עדכון נוסח המשרה" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "עדכון נוסח המשרה" }));
-    expect(screen.getByRole("dialog", { name: "יצירת תצלום משרה חדש" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "עריכת נוסח המשרה" })).toBeInTheDocument();
     expect(screen.getByLabelText("טקסט המשרה")).toHaveValue("Senior Backend Engineer");
   });
 

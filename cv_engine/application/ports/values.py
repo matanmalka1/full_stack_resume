@@ -8,32 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 
 
 @dataclass(frozen=True)
-class DraftPaths:
-    """Where one draft's two payloads ended up."""
-
-    markdown: Path
-    manifest: Path
-
-
-@dataclass(frozen=True)
-class StoredDraft:
-    """A draft as it was stored, with the exact document text that was written.
-
-    The text travels with the locations so a caller can validate what is stored
-    without reading it back, and cannot accidentally validate something else.
-    """
-
-    paths: DraftPaths
-    markdown: str
-
-
-@dataclass(frozen=True)
-class SnapshotPayload:
-    """Storage-neutral metadata for one immutable JobSnapshot payload."""
+class PayloadReference:
+    """Storage-neutral metadata for one immutable stored payload (a Submission file)."""
 
     reference: str
     sha256: str

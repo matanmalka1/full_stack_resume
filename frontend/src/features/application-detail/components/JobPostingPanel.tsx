@@ -6,19 +6,19 @@ import { LtrText } from "@/ui/LtrText";
 import { SectionHeader } from "@/ui/SectionHeader";
 import { SummaryList } from "@/ui/SummaryList";
 import { formatDateTime } from "@/utils/formatDateTime";
-import { JobSnapshotHistory } from "./JobSnapshotHistory";
 import { JobPostingUpdate } from "./JobPostingUpdate";
 import { CopyableTextDisclosure } from "@/ui/CopyableTextDisclosure";
 import { sourceHostname } from "../model/applicationPresentation";
 
-/* The active posting on Job Detail. The projection already carries `latest_snapshot`, so
-   the source remains readable before analysis and after the preparation workflow ends.
+/* The posting on Job Detail. The projection already carries `job_posting`, so the source
+   remains readable before analysis and after the preparation workflow ends.
 
    The posting text itself uses the shared copyable disclosure, so
    the same source reads the same way under both conclusions.
 
-   `latest_snapshot` is the newest immutable snapshot of the Application. */
-export const JobSnapshotPanel = ({
+   `job_posting` is the Application's one job text: edited in place, and locked once the
+   Application has a Submission. */
+export const JobPostingPanel = ({
   detail,
   operationLive,
 }: {
@@ -26,15 +26,14 @@ export const JobSnapshotPanel = ({
   /* The host screen's answer to whether this Application's work is under way. */
   operationLive: boolean;
 }) => {
-  const snapshot = detail.latest_snapshot;
+  const posting = detail.job_posting;
 
   return (
-    <Card aria-labelledby="job-snapshot-heading" className="rounded-surface bg-cv-surface p-4 shadow-surface sm:p-5">
+    <Card aria-labelledby="job-posting-heading" className="rounded-surface bg-cv-surface p-4 shadow-surface sm:p-5">
       <SectionHeader
-        actions={<span className="text-support text-cv-text-muted">גרסה {snapshot.version_number}</span>}
         align="center"
         gap="wide"
-        headingId="job-snapshot-heading"
+        headingId="job-posting-heading"
         headingSize="body"
         spacing="roomy"
         title="מודעת המשרה"
@@ -45,7 +44,7 @@ export const JobSnapshotPanel = ({
       <div className="mt-4 flex flex-col gap-4">
         <SummaryList
           items={[
-            ...(snapshot.source_url == null
+            ...(posting.source_url == null
               ? []
               : [
                   {
@@ -56,19 +55,19 @@ export const JobSnapshotPanel = ({
                     value: (
                       <a
                         className="inline-flex max-w-full items-center gap-1.5 text-cv-accent hover:underline"
-                        href={snapshot.source_url}
+                        href={posting.source_url}
                         rel="noreferrer noopener"
                         target="_blank"
-                        title={snapshot.source_url}
+                        title={posting.source_url}
                       >
                         פתיחת מודעת המקור
-                        <LtrText>({sourceHostname(snapshot.source_url) ?? "המקור השמור"})</LtrText>
+                        <LtrText>({sourceHostname(posting.source_url) ?? "המקור השמור"})</LtrText>
                         <ExternalLink aria-hidden="true" className="size-icon-sm shrink-0" />
                       </a>
                     ),
                   },
                 ]),
-            { term: "נשמר", value: formatDateTime(snapshot.captured_at, "short") },
+            { term: "עודכן", value: formatDateTime(posting.job_text_updated_at, "short") },
           ]}
         />
 
@@ -76,14 +75,9 @@ export const JobSnapshotPanel = ({
           emptyMessage="נוסח המשרה אינו זמין."
           label="נוסח המשרה"
           summary="הצגת נוסח המשרה השמור"
-          text={snapshot.job_text}
+          text={posting.job_text}
         />
       </div>
-      <JobSnapshotHistory
-        key={detail.application.id}
-        applicationId={detail.application.id}
-        activeSnapshotId={snapshot.id}
-      />
     </Card>
   );
 };

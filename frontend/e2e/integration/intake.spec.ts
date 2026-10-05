@@ -34,7 +34,7 @@ test("intake persists through reload and duplicate creation requires acknowledge
   const saved = await request.get(`${applicationsPath}/${applicationId}`);
   expect(saved.status()).toBe(200);
   const original = await saved.json();
-  expect(original.latest_snapshot.job_text).toBe(jobText);
+  expect(original.job_posting.job_text).toBe(jobText);
   expect(original.preparation_state).toBe("needs_analysis");
   expect(original.latest_analysis).toBeNull();
   expect(original.active_operation).toBeNull();
@@ -72,5 +72,5 @@ test("intake persists through reload and duplicate creation requires acknowledge
   expect((await afterAcknowledgement.json()).total).toBe(2);
   const reread = await request.get(`${applicationsPath}/${applicationId}`);
   expect(reread.status()).toBe(200);
-  expect((await reread.json()).latest_snapshot).toEqual(original.latest_snapshot);
+  expect((await reread.json()).job_posting).toEqual(original.job_posting);
 });

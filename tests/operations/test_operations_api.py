@@ -29,7 +29,7 @@ def _queued_analysis(services, company: str, *, idempotency_key: str = "stage-c-
     return services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
         ),
         idempotency_key=idempotency_key,
         analysis_service=services.analysis,

@@ -41,7 +41,7 @@ const application = (number: number): ApplicationListItem =>
     content_check: "none",
     review_reasons: [],
     warnings: [],
-    active_job_snapshot_id: `snapshot-${number}`,
+    job_text_hash: "c".repeat(64),
     available_actions: ["analyze"],
     blocked_actions: [],
     recommended_action: "analyze",

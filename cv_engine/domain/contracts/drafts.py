@@ -1,4 +1,4 @@
-"""Resume claim, draft-document, and working-draft contracts."""
+"""Resume claim and draft-document contracts."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ class ResumeSection(StrictModel):
 class DraftDocument(StrictModel):
     """A draft and the exact chain position it was built from.
 
-    `application_id`, `job_snapshot_id`, and `job_analysis_id` are the binding.
+    `application_id`, `job_text_hash`, and `job_analysis_id` are the binding.
     They are frozen because a draft that can be re-pointed at another owner,
     another job text, or another classification is not evidence of anything: the
     approval, the decision record, and every rendered artifact all inherit their
@@ -85,9 +85,10 @@ class DraftDocument(StrictModel):
     weaken the provenance contract for every caller.
     """
 
-    schema_version: Literal["1.2"] = Field(default="1.2", frozen=True)
+    schema_version: Literal["1.3"] = Field(default="1.3", frozen=True)
     application_id: str = Field(frozen=True)
-    job_snapshot_id: str = Field(frozen=True)
+    #: The exact job text the analysis read (its SHA-256).
+    job_text_hash: str = Field(pattern=r"^[0-9a-f]{64}$", frozen=True)
     job_analysis_id: str = Field(min_length=1, frozen=True)
     language: Literal["en", "he"]
     track: Track

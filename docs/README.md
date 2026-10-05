@@ -11,6 +11,7 @@ Where the authoritative answer lives. One concept, one home; everything else lin
 | Why tailoring works the way it does, and what is still only designed | [`tailoring-decisions.md`](tailoring-decisions.md) |
 | Why there is one mutable CV document per Application | [`decisions/single-document-model.md`](decisions/single-document-model.md) |
 | Why AI chooses a CV's facts and the engine only guards them | [`decisions/ai-owned-selection.md`](decisions/ai-owned-selection.md) |
+| Why the job text is an editable field locked by the first Submission, not versioned snapshots | [`decisions/editable-job-text.md`](decisions/editable-job-text.md) |
 | Why user accounts and per-user isolation, how an existing installation migrates, and the delivery order | [`decisions/multi-user-accounts.md`](decisions/multi-user-accounts.md) |
 | Open frontend UX work | [`frontend-ux.md`](frontend-ux.md) |
 | How to split implementation across parallel agents | [`execution-protocol.md`](execution-protocol.md) |

@@ -25,8 +25,8 @@ export const normalizedSourceUrl = (value: string): string | null => {
   return trimmed === "" ? null : trimmed;
 };
 
-/* The server stores a posting's text as one snapshot and refuses it past this many UTF-8
-   bytes. Both forms that send a posting - intake and a new snapshot from Job Detail -
+/* The server stores a posting's text on the Application and refuses it past this many UTF-8
+   bytes. Both forms that send a posting - intake and the edit on Job Detail -
    check it before sending, so neither discovers the limit by a round trip. */
 export const jobTextByteLength = (jobText: string): number => new TextEncoder().encode(jobText).length;
 

@@ -613,7 +613,7 @@ def test_missing_fact_rendering_is_specific_terminal_failure_with_domain_context
     operation = services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
             language_override="he",
         ),
         idempotency_key="missing-rendering-failure",

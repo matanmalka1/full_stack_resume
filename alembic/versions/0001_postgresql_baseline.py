@@ -22,7 +22,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 INTERNAL_REFERENCES = (
-    "job_snapshot_id",
+    "job_text_hash",
     "document_hash",
     "content",
     "html_path",
@@ -95,6 +95,18 @@ BEGIN
 END; $$;
 CREATE TRIGGER valid_knowledge_mutation_transition BEFORE UPDATE ON knowledge_mutation_journal
 FOR EACH ROW EXECUTE FUNCTION cv_guard_knowledge_mutation_transition();
+
+CREATE FUNCTION cv_guard_submitted_job_text() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (OLD.job_text, OLD.job_text_hash, OLD.job_normalized_hash, OLD.source_url)
+      IS DISTINCT FROM (NEW.job_text, NEW.job_text_hash, NEW.job_normalized_hash, NEW.source_url)
+    AND EXISTS (SELECT 1 FROM submissions WHERE submissions.application_id = OLD.id) THEN
+    RAISE EXCEPTION 'job text is locked after submission';
+  END IF;
+  RETURN NEW;
+END; $$;
+CREATE TRIGGER lock_submitted_job_text BEFORE UPDATE ON applications
+FOR EACH ROW EXECUTE FUNCTION cv_guard_submitted_job_text();
 """
 
 
@@ -161,9 +173,18 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("terminal_outcome", sa.Text(), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("job_text", sa.Text(), nullable=False),
+        sa.Column("job_text_hash", sa.Text(), nullable=False),
+        sa.Column("job_normalized_hash", sa.Text(), nullable=False),
+        sa.Column("source_url", sa.Text(), nullable=True),
+        sa.Column("job_text_updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
             "current_status IN ('saved', 'applied', 'recruiter_screen', 'interview', 'assignment', 'final_stage', 'offer', 'accepted', 'rejected', 'withdrawn', 'closed')",
             name=op.f("ck_applications_current_status"),
+        ),
+        sa.CheckConstraint(
+            "length(job_text_hash) = 64 AND length(job_normalized_hash) = 64",
+            name=op.f("ck_applications_job_text_hash_length"),
         ),
         sa.CheckConstraint("language IN ('en', 'he')", name=op.f("ck_applications_language")),
         sa.CheckConstraint(
@@ -313,40 +334,6 @@ def upgrade() -> None:
     )
     op.create_index(
         "idx_fact_events_fact", "fact_events", ["fact_id", "created_at", "seq"], unique=False
-    )
-    op.create_table(
-        "job_snapshots",
-        sa.Column("id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("application_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("version_number", sa.Integer(), nullable=False),
-        sa.Column("payload_path", sa.Text(), nullable=False),
-        sa.Column("normalized_hash", sa.Text(), nullable=False),
-        sa.Column("source_url", sa.Text(), nullable=True),
-        sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("source_metadata_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("source_hash", sa.Text(), nullable=False),
-        sa.CheckConstraint(
-            "version_number > 0", name=op.f("ck_job_snapshots_version_number_positive")
-        ),
-        sa.ForeignKeyConstraint(
-            ["application_id"],
-            ["applications.id"],
-            name=op.f("fk_job_snapshots_application_id_applications"),
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("pk_job_snapshots")),
-        sa.UniqueConstraint(
-            "application_id",
-            "source_hash",
-            name=op.f("uq_job_snapshots_application_id_source_hash"),
-        ),
-        sa.UniqueConstraint(
-            "application_id", "id", name=op.f("uq_job_snapshots_application_id_id")
-        ),
-        sa.UniqueConstraint(
-            "application_id",
-            "version_number",
-            name=op.f("uq_job_snapshots_application_id_version_number"),
-        ),
     )
     op.create_table(
         "operations",
@@ -661,19 +648,17 @@ def upgrade() -> None:
         "job_analyses",
         sa.Column("id", sa.UUID(as_uuid=False), nullable=False),
         sa.Column("application_id", sa.UUID(as_uuid=False), nullable=False),
-        sa.Column("job_snapshot_id", sa.UUID(as_uuid=False), nullable=False),
+        sa.Column("job_text_hash", sa.Text(), nullable=False),
         sa.Column("version_number", sa.Integer(), nullable=False),
         sa.Column("structured_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("provider", sa.Text(), nullable=False),
         sa.Column("model", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "version_number > 0", name=op.f("ck_job_analyses_version_number_positive")
+            "length(job_text_hash) = 64", name=op.f("ck_job_analyses_job_text_hash_length")
         ),
-        sa.ForeignKeyConstraint(
-            ["application_id", "job_snapshot_id"],
-            ["job_snapshots.application_id", "job_snapshots.id"],
-            name=op.f("fk_job_analyses_application_id_job_snapshot_id_job_snapshots"),
+        sa.CheckConstraint(
+            "version_number > 0", name=op.f("ck_job_analyses_version_number_positive")
         ),
         sa.ForeignKeyConstraint(
             ["application_id"],
@@ -800,7 +785,7 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
             nullable=False,
         ),
-        sa.Column("job_snapshot_id", sa.UUID(as_uuid=False), nullable=True),
+        sa.Column("job_text_hash", sa.Text(), nullable=True),
         sa.Column("document_hash", sa.Text(), nullable=True),
         sa.Column("content", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("html_path", sa.Text(), nullable=True),
@@ -816,7 +801,8 @@ def upgrade() -> None:
             name=op.f("ck_submissions_references"),
         ),
         sa.CheckConstraint(
-            "(document_hash IS NULL OR length(document_hash) = 64) "
+            "(job_text_hash IS NULL OR length(job_text_hash) = 64) "
+            "AND (document_hash IS NULL OR length(document_hash) = 64) "
             "AND (html_sha256 IS NULL OR length(html_sha256) = 64) "
             "AND (pdf_sha256 IS NULL OR length(pdf_sha256) = 64)",
             name=op.f("ck_submissions_hash_length"),
@@ -829,12 +815,6 @@ def upgrade() -> None:
             ["application_id"],
             ["applications.id"],
             name=op.f("fk_submissions_application_id_applications"),
-        ),
-        sa.ForeignKeyConstraint(
-            ["application_id", "job_snapshot_id"],
-            ["job_snapshots.application_id", "job_snapshots.id"],
-            name=op.f("fk_submissions_application_id_job_snapshot_id_job_snapshots"),
-            ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_submissions")),
         sa.UniqueConstraint("html_path", name=op.f("uq_submissions_html_path")),
@@ -866,7 +846,6 @@ def downgrade() -> None:
     op.drop_index("idx_operations_claimable", table_name="operations")
     op.drop_index("idx_operations_application_status", table_name="operations")
     op.drop_table("operations")
-    op.drop_table("job_snapshots")
     op.drop_index("idx_fact_events_fact", table_name="fact_events")
     op.drop_table("fact_events")
     op.drop_index("idx_audit_records_application", table_name="audit_records")
@@ -875,6 +854,7 @@ def downgrade() -> None:
     op.drop_table("knowledge_mutation_journal")
     op.drop_table("applications")
     op.drop_table("app_settings")
+    op.execute("DROP FUNCTION cv_guard_submitted_job_text()")
     op.execute("DROP FUNCTION cv_guard_knowledge_mutation_transition()")
     op.execute("DROP FUNCTION cv_guard_terminal_operation_update()")
     op.execute("DROP FUNCTION cv_reject_protected_delete()")

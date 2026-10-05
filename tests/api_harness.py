@@ -119,7 +119,7 @@ def analyze_offline(harness, application_id: str, job_text: str) -> dict[str, st
     assert detail.status_code == 200, detail.text
     response = harness.client.post(
         f"{API_PREFIX}/applications/{application_id}/analyses",
-        json={"job_snapshot_id": detail.json()["active_job_snapshot_id"]},
+        json={"job_text_hash": detail.json()["job_text_hash"]},
         headers=MUTATION_HEADERS,
     )
     assert response.status_code == 202, response.text

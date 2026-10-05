@@ -3,7 +3,6 @@ import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { ApiProblem, type ApiPath, apiRequest } from "./client";
 import type {
   ActivityFilter,
-  JobSnapshotHistory,
   ApplicationDetail,
   ApplicationIntake,
   ApplicationListResponse,
@@ -11,12 +10,12 @@ import type {
   ApplicationSort,
   CreateAnalysisRequest,
   CreateApplicationRequest,
-  CreateJobSnapshotRequest,
   ClosedApplication,
   CreatedApplication,
   DeletedApplication,
-  CreatedJobSnapshot,
   UpdatedApplicationNotes,
+  UpdatedJobText,
+  UpdateJobTextRequest,
   UpdateApplicationNotesRequest,
   DuplicateCheckResult,
   DuplicateMatch,
@@ -203,8 +202,8 @@ const applicationPath = (applicationId: string): ApiPath => `/api/v1/application
 const applicationNotesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/notes`;
 
-const jobSnapshotsPath = (applicationId: string): ApiPath =>
-  `/api/v1/applications/${encodeURIComponent(applicationId)}/job-snapshots`;
+const jobTextPath = (applicationId: string): ApiPath =>
+  `/api/v1/applications/${encodeURIComponent(applicationId)}/job-text`;
 
 const analysesPath = (applicationId: string): ApiPath =>
   `/api/v1/applications/${encodeURIComponent(applicationId)}/analyses`;
@@ -249,7 +248,7 @@ export const watchedApplicationDetailQueryOptions = (applicationId: string) =>
    recruitment status.
 
    Search, filter, and sort are the server's answer, not this client's. They narrow by
-   `preparation_state`, which §9 computes from a record's snapshots, analyses and CV
+   `preparation_state`, which §9 computes from a record's job text, analyses and CV
    document rather than storing on it - a client that filtered or ordered by it would
    be re-deriving state the projection already owns. The query goes out as query
    parameters and the narrowed rows come back with `total`, the count before narrowing,
@@ -280,46 +279,28 @@ export const applicationListQueryOptions = (query: ApplicationListQuery = {}) =>
     placeholderData: (previous) => previous,
   });
 
-/* A posting that changed after the Application was opened: one more immutable snapshot,
-   never an edit of the one on record. The existing snapshot, the analyses run against it,
-   and every Submission stay exactly as they are; what changes is which snapshot the
-   projection calls active, and the consequences of that - a document built on an older
-   analysis - are the engine's answer rather than this client's.
+/* A posting that changed after the Application was opened: the text is replaced in place.
+   The edit names the text it replaces (`expected_job_text_hash`), so an edit made against
+   a text someone else already changed is refused rather than overwriting it. Analyses of
+   the earlier text stay on record; what follows - an analysis that no longer matches the
+   posting, a document built on it - is the engine's projection rather than this
+   client's. Once the Application has a Submission the text is locked and the edit is
+   refused.
 
-   `source_metadata` is omitted rather than sent empty: the server's default is the absence
-   of the field, and the Web intake has no metadata of its own to state.
-
-   Not idempotency-keyed. This is a synchronous command with no Operation behind it, and
-   the engine already refuses a second snapshot carrying the exact content of one it holds,
-   so a resent create cannot duplicate a posting. */
-export const jobSnapshotHistoryOptions = (applicationId: string, activeSnapshotId: string) =>
-  queryOptions({
-    queryKey: [...applicationDetailQueryKey(applicationId), "job-snapshots", activeSnapshotId],
-    queryFn: async ({ signal }) => {
-      const response = await apiRequest<JobSnapshotHistory>(jobSnapshotsPath(applicationId), { signal });
-      /* The cast above is a promise about the payload, not a check on it. A response that
-         does not keep that promise used to reach the component as a history and take the
-         whole screen down from inside its render, where nothing catches it. Refused here
-         instead, so a payload the contract does not describe surfaces as the failed read
-         this query already knows how to report, beside a panel nobody had opened. */
-      if (!Array.isArray(response.data?.items)) {
-        throw new Error("job snapshot history response did not carry an items array");
-      }
-      return response.data;
-    },
-  });
-
-export const createJobSnapshot = async (
+   Not idempotency-keyed. This is a synchronous command with no Operation behind it, and a
+   resent edit names a hash the first one already replaced, so it cannot apply twice. */
+export const updateJobText = async (
   applicationId: string,
-  posting: { jobText: string; sourceUrl: string | null },
-): Promise<CreatedJobSnapshot> => {
-  const body: Pick<CreateJobSnapshotRequest, "job_text" | "source_url"> = {
+  posting: { jobText: string; sourceUrl: string | null; expectedJobTextHash: string },
+): Promise<UpdatedJobText> => {
+  const body: UpdateJobTextRequest = {
     job_text: posting.jobText,
     source_url: posting.sourceUrl,
+    expected_job_text_hash: posting.expectedJobTextHash,
   };
 
-  const response = await apiRequest<CreatedJobSnapshot>(jobSnapshotsPath(applicationId), {
-    method: "POST",
+  const response = await apiRequest<UpdatedJobText>(jobTextPath(applicationId), {
+    method: "PATCH",
     body,
   });
   return response.data;
@@ -336,19 +317,19 @@ export const updateApplicationNotes = async (
   return response.data;
 };
 
-/* §13: the snapshot is named by the caller. An analyze command that picked its own
-   source could classify something other than what the user was looking at, so the ID
-   comes from the projection the screen is showing rather than from a default.
+/* §13: the job text is named by the caller. An analyze command that picked up whatever
+   text is current could classify something other than what the user was looking at, so
+   the hash comes from the projection the screen is showing rather than from a default.
 
    Analysis is AI-only; the provider is explicit in every queued request.
 */
 export const startAnalysis = async (
   applicationId: string,
-  jobSnapshotId: string,
+  jobTextHash: string,
   idempotencyKey: string,
 ): Promise<QueuedOperation> => {
-  const body: Pick<CreateAnalysisRequest, "job_snapshot_id" | "provider"> = {
-    job_snapshot_id: jobSnapshotId,
+  const body: Pick<CreateAnalysisRequest, "job_text_hash" | "provider"> = {
+    job_text_hash: jobTextHash,
     provider: "openai",
   };
 
@@ -363,7 +344,7 @@ export const startAnalysis = async (
 
 /* §Tracking: archive one Application without deleting anything.
 
-   It is an append-only status transition, not a delete: the record, its snapshots, its
+   It is an append-only status transition, not a delete: the record, its job text, its
    document and every Submission stay exactly as they are, and the Application keeps its row.
    What changes is which board it appears on - a closed Application is not what a board
    of live work is asking about, so the default list filter stops returning it.
@@ -381,7 +362,7 @@ export const closeApplication = async (applicationId: string): Promise<ClosedApp
 
 /* §Tracking: soft-delete one Application, orthogonal to `RecruitmentStatus` and callable
    from any current status including `closed`. Every immutable record it produced -
-   JobSnapshot, JobAnalysis, Artifact, Submission, Operation - stays exactly as it is; only the default list/Dashboard
+   JobAnalysis, Artifact, Submission, Operation - stays exactly as it is; only the default list/Dashboard
    projection and duplicate detection stop surfacing the Application. There is no
    undelete in this phase, so the caller confirms before this is sent. */
 export const deleteApplication = async (applicationId: string): Promise<DeletedApplication> => {

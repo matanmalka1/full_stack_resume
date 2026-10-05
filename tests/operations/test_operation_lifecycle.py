@@ -136,10 +136,7 @@ def test_operation_payload_hash_is_canonical_and_secret_fields_are_refused() -> 
         "application_id": "application-id",
         "operation_type": OperationType.ANALYZE_JOB,
         "idempotency_key": "request-1",
-        "sources": OperationSources(
-            job_snapshot_id="snapshot-id",
-            job_snapshot_hash="a" * 64,
-        ),
+        "sources": OperationSources(job_text_hash="a" * 64),
     }
     first = CreateOperation(payload={"mode": "ai", "options": {"b": 2, "a": 1}}, **common)
     second = CreateOperation(payload={"options": {"a": 1, "b": 2}, "mode": "ai"}, **common)
@@ -234,7 +231,7 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     operation = services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
             provider="openai",
             model="gpt-5.6-luna",
         ),
@@ -255,7 +252,7 @@ def test_the_runner_never_retries_and_a_stopped_retry_is_a_cancellation(
     refused = services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
             provider="openai",
             model="gpt-5.6-luna",
         ),
@@ -364,7 +361,7 @@ def test_operation_creation_is_idempotent_by_key_and_projects_active_work(
     )
     command = AnalyzeCommand(
         application_id=ingested.application_id,
-        job_snapshot_id=ingested.job_snapshot_id,
+        job_text_hash=ingested.job_text_hash,
     )
 
     def submit_and_run() -> str:

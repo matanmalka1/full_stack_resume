@@ -175,7 +175,7 @@ def test_an_internal_submission_records_the_exact_document_and_files(ready_appli
     assert sent.id == result.submission_id
     assert sent.document_hash == document.document_hash
     assert sent.content == document.content
-    assert sent.job_snapshot_id == setup.snapshot_id
+    assert sent.job_text_hash == setup.job_text_hash
     for original, copied, checksum in (
         (document.html_path, sent.html_path, sent.html_sha256),
         (document.pdf_path, sent.pdf_path, sent.pdf_sha256),

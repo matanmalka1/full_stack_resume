@@ -6,9 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from ..application.ports import (
-    SnapshotPayload,
-)
+from ..application.ports import PayloadReference
 from ..application.transactions import assert_external_io_allowed
 from ..util import sha256_bytes
 from .object_store import (
@@ -35,10 +33,10 @@ class PayloadPaths(Protocol):
 PayloadValidator = Callable[[bytes], bool | None]
 
 #: Immutable payload references are project-relative POSIX strings
-#: (`artifacts/snapshots/app/id.txt`), and object keys are relative to the
-#: artifact root (`snapshots/app/id.txt`). The two differ by exactly this
-#: prefix: JobSnapshot and Submission rows carry the reference, and the
-#: conversion happens here rather than in every reader.
+#: (`artifacts/submissions/app/id/resume.pdf`), and object keys are relative to
+#: the artifact root (`submissions/app/id/resume.pdf`). The two differ by exactly
+#: this prefix: Submission rows carry the reference, and the conversion happens
+#: here rather than in every reader.
 _REFERENCE_PREFIX = "artifacts"
 
 
@@ -68,7 +66,7 @@ class PayloadStore:
         self._objects = object_store or LocalObjectStore(self._artifacts_root)
 
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
-        """List managed immutable references; working projections are excluded.
+        """List managed immutable references; files outside the managed layouts are excluded.
 
         No bytes are fetched and no objects are changed. Without
         `modified_before` this observation can include payloads whose writer
@@ -125,13 +123,6 @@ class PayloadStore:
         approved = self._approved_destination(candidate)
         return relative_within(self._artifacts_root, approved).as_posix()
 
-    def snapshot_path(self, application_id: str, snapshot_id: str) -> Path:
-        return self._target(
-            "snapshots",
-            self._component(application_id, name="application_id"),
-            f"{self._component(snapshot_id, name='snapshot_id')}.txt",
-        )
-
     def submission_path(self, application_id: str, submission_id: str, *, suffix: str) -> Path:
         """Where one Submission's copy of a rendered file belongs (state-and-use-cases §18).
 
@@ -151,7 +142,7 @@ class PayloadStore:
 
     def commit_submission_file(
         self, application_id: str, submission_id: str, *, suffix: str, payload: bytes
-    ) -> SnapshotPayload:
+    ) -> PayloadReference:
         """Store one sent file under its Submission; an existing copy is never replaced."""
         stored = self.commit(
             self.submission_path(application_id, submission_id, suffix=suffix),
@@ -172,10 +163,7 @@ class PayloadStore:
         parts = relative.parts
         # The layouts of architecture §6.2, and no others.
         approved = (
-            len(parts) == 3
-            and parts[0] == "snapshots"
-            and parts[2].endswith(".txt")
-            or len(parts) == 4
+            len(parts) == 4
             and parts[0] == "submissions"
             and parts[3] in {"resume.html", "resume.pdf"}
         )
@@ -224,31 +212,13 @@ class PayloadStore:
             size=stored.size,
         )
 
-    def commit_snapshot(
-        self,
-        application_id: str,
-        snapshot_id: str,
-        text: str,
-    ) -> SnapshotPayload:
-        stored = self.commit(
-            self.snapshot_path(application_id, snapshot_id),
-            payload=text.encode("utf-8"),
-            validate=lambda _payload: True,
-        )
-        return SnapshotPayload(
-            reference=stored.project_relative,
-            sha256=stored.sha256,
-            size=stored.size,
-        )
-
     def verify_payload(self, reference: str, expected_hash: str) -> str:
         """Classify one registered payload as ok, missing, tampered, or unresolvable.
 
         Ready qualification re-derives itself from stored evidence, and it used
         to do that by resolving the reference to a filesystem path and hashing
-        the file. That is a third read path into immutable payloads, alongside
-        `read_snapshot` and `commit`, and it is the only one
-        that never went through the store - so it verified the local disk no
+        the file. That was a read path into immutable payloads alongside
+        `commit`, and the only one that never went through the store - so it verified the local disk no
         matter what storage was configured, and would have reported every
         payload missing once storage moved off it.
 
@@ -269,24 +239,9 @@ class PayloadStore:
             return "missing"
         return "ok" if sha256_bytes(payload) == expected_hash else "tampered"
 
-    def read_snapshot(self, reference: str, expected_hash: str) -> str:
-        key = self._key_for_reference(reference)
-        if len(key.split("/")) != 3 or not key.startswith("snapshots/"):
-            raise ValueError(f"payload is not a JobSnapshot: {reference}")
-        try:
-            payload = self._objects.get(key)
-        except ObjectNotFound as exc:
-            raise FileNotFoundError(f"snapshot payload does not exist: {reference}") from exc
-        actual_hash = sha256_bytes(payload)
-        if actual_hash != expected_hash:
-            raise ValueError(
-                f"snapshot payload hash mismatch: expected {expected_hash}, got {actual_hash}"
-            )
-        return payload.decode("utf-8")
-
     @staticmethod
-    def _reference(stored: StoredPayload) -> SnapshotPayload:
-        return SnapshotPayload(
+    def _reference(stored: StoredPayload) -> PayloadReference:
+        return PayloadReference(
             reference=stored.project_relative,
             sha256=stored.sha256,
             size=stored.size,

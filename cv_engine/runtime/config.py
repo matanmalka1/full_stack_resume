@@ -19,12 +19,6 @@ class ConfigError(RuntimeError):
 class Setting:
     """One configurable value and where it may come from.
 
-    `secret` marks a value that carries a credential. It changes nothing about
-    how the value is read or used - only how it is displayed. Masking happens
-    at the display boundary, never in the value handed to a connector: a
-    masked URL that reached `create_engine` would be a connection string
-    pointing at a host called `***`.
-
     `environment_only` refuses file-backed layers for one setting, so it can be
     supplied by a real environment variable and nothing else. It exists for
     `OPENAI_API_KEY`. Everything in this repository - `CLAUDE.md`, the live
@@ -41,7 +35,6 @@ class Setting:
     name: str
     env: str
     default: Any = None
-    secret: bool = False
     environment_only: bool = False
     cast: Callable[[str], Any] | None = None
     """Coerce a string-sourced value (environment, `.env`, project config) to
@@ -70,7 +63,6 @@ SETTINGS: dict[str, Setting] = {
             "database_url",
             "CV_DATABASE_URL",
             default="postgresql+psycopg://cv:cv@127.0.0.1:5433/cv",
-            secret=True,
         ),
         Setting("provider", "CV_PROVIDER", default="openai"),
         # Taken from the catalog rather than restated, because restating it is
@@ -89,7 +81,6 @@ SETTINGS: dict[str, Setting] = {
             "openai_api_key",
             "OPENAI_API_KEY",
             default=None,
-            secret=True,
             environment_only=True,
         ),
         # The host and port the API is actually reached on. They are not the
@@ -112,8 +103,8 @@ SETTINGS: dict[str, Setting] = {
         # Immutable payload storage. "local" is the default and keeps every
         # payload below the application root; "s3" stores them in a bucket,
         # which is what a deployed installation uses. Nothing else about the
-        # workflow changes - the payload references JobSnapshots and
-        # Submissions record are identical either way.
+        # workflow changes - the payload references Submissions record are
+        # identical either way.
         Setting("object_store", "CV_OBJECT_STORE", default="local"),
         Setting("s3_bucket", "CV_S3_BUCKET", default=None),
         Setting("s3_prefix", "CV_S3_PREFIX", default=None),
@@ -125,7 +116,6 @@ SETTINGS: dict[str, Setting] = {
 }
 
 ENV_FILE_NAME = ".env"
-MASK = "***"
 
 
 def parse_env_file(text: str) -> dict[str, str]:
@@ -175,19 +165,6 @@ def env_file_path(project_root: Path | None) -> Path | None:
     return None if project_root is None else Path(project_root) / ENV_FILE_NAME
 
 
-def mask_value(name: str, value: Any) -> Any:
-    """The display form of one setting's value.
-
-    An unset secret shows as `None`, not as `***`: "no key is configured" and
-    "a key is configured and withheld" are different facts, and collapsing
-    them would hide the one that explains why AI mode is off.
-    """
-    setting = SETTINGS.get(name)
-    if setting is None or not setting.secret or value is None or value == "":
-        return value
-    return MASK
-
-
 @dataclass(frozen=True)
 class Resolved:
     value: Any
@@ -211,18 +188,6 @@ class RuntimeConfig:
 
     def source(self, name: str) -> str:
         return self.values[name].source
-
-    def describe(self) -> dict[str, dict[str, Any]]:
-        """The reportable form: secret values masked, sources intact.
-
-        `source` is never masked. Knowing a credential arrived from the
-        environment rather than a `.env` is exactly what makes a stale value
-        diagnosable, and it reveals nothing about the value itself.
-        """
-        return {
-            name: {"value": mask_value(name, resolved.value), "source": resolved.source}
-            for name, resolved in sorted(self.values.items())
-        }
 
 
 def load_project_config(root: Path) -> dict[str, Any]:

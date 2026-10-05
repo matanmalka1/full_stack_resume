@@ -108,6 +108,19 @@ applications = Table(
     # `applications` is already a mutable-exception table, so a nullable
     # column here needs no change to the immutability trigger set.
     Column("deleted_at", IsoTimestamp()),
+    # The job posting, as an ordinary editable field. `job_text_hash` is the exact
+    # text's SHA-256 (what an analysis binds to); `job_normalized_hash` is for
+    # duplicate detection. All four lock once the Application has a Submission
+    # (trigger `lock_submitted_job_text`).
+    Column("job_text", Text, nullable=False),
+    Column("job_text_hash", Text, nullable=False),
+    Column("job_normalized_hash", Text, nullable=False),
+    Column("source_url", Text),
+    Column("job_text_updated_at", IsoTimestamp(), nullable=False),
+    CheckConstraint(
+        "length(job_text_hash) = 64 AND length(job_normalized_hash) = 64",
+        name="job_text_hash_length",
+    ),
     CheckConstraint("language IN ('en', 'he')", name="language"),
     CheckConstraint(
         f"current_status IN ({sql_values(RECRUITMENT_STATUSES)})",

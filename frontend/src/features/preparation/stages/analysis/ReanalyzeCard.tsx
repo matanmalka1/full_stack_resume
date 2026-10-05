@@ -19,7 +19,7 @@ export const ReanalyzeCard = ({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="max-w-md text-support leading-6 text-cv-text-muted">
-          יוצר ניתוח חדש לאותו תצלום משרה.
+          יוצר ניתוח חדש לאותו נוסח משרה.
           {detail.document_id != null ? " המסמך נשאר על הניתוח הנוכחי עד שתבנו אותו מחדש." : null}{" "}
           {ai === "loading"
             ? null

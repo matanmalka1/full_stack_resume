@@ -5,14 +5,13 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from ...application.errors import UnknownRecord
-from ...application.ports.analysis_plans import AnalysisContextSource, AnalysisSnapshotSource
+from ...application.ports.analysis_plans import AnalysisContextSource, AnalysisJobTextSource
 from ...application.ports.transactions import ReadTransaction
 from .analysis_sql import _analysis_record
 from .connection import SqlAlchemyTransactionManager
 from .tables import (
     applications,
     job_analyses,
-    job_snapshots,
     knowledge_mutation_journal,
 )
 
@@ -33,39 +32,28 @@ class SqlAlchemyAnalysisContextSourceReader:
             is not None
         )
 
-    def analysis_source(self, tx: ReadTransaction, job_snapshot_id: str) -> AnalysisSnapshotSource:
-        connection = self._transactions.connection_for(tx)
+    def job_text_source(self, tx: ReadTransaction, application_id: str) -> AnalysisJobTextSource:
         row = (
-            connection.execute(
+            self._transactions.connection_for(tx)
+            .execute(
                 select(
-                    job_snapshots.c.application_id,
-                    job_snapshots.c.id,
-                    job_snapshots.c.payload_path,
-                    job_snapshots.c.source_hash,
-                    job_snapshots.c.normalized_hash,
+                    applications.c.id,
+                    applications.c.job_text,
+                    applications.c.job_text_hash,
+                    applications.c.job_normalized_hash,
                     applications.c.deleted_at,
-                )
-                .join(applications)
-                .where(job_snapshots.c.id == job_snapshot_id)
+                ).where(applications.c.id == application_id)
             )
             .mappings()
             .one_or_none()
         )
         if row is None:
-            raise UnknownRecord(f"unknown job snapshot: {job_snapshot_id}")
-        active_id = connection.execute(
-            select(job_snapshots.c.id)
-            .where(job_snapshots.c.application_id == row["application_id"])
-            .order_by(job_snapshots.c.version_number.desc())
-            .limit(1)
-        ).scalar_one()
-        return AnalysisSnapshotSource(
-            application_id=row["application_id"],
-            job_snapshot_id=row["id"],
-            payload_path=row["payload_path"],
-            source_hash=row["source_hash"],
-            normalized_hash=row["normalized_hash"],
-            active_snapshot_id=active_id,
+            raise UnknownRecord(f"unknown application: {application_id}")
+        return AnalysisJobTextSource(
+            application_id=row["id"],
+            job_text=row["job_text"],
+            job_text_hash=row["job_text_hash"],
+            normalized_hash=row["job_normalized_hash"],
             deleted_at=row["deleted_at"],
         )
 
@@ -78,8 +66,9 @@ class SqlAlchemyAnalysisContextSourceReader:
                 select(
                     job_analyses.c.id,
                     job_analyses.c.application_id,
-                    job_analyses.c.job_snapshot_id,
+                    job_analyses.c.job_text_hash,
                     job_analyses.c.structured_json,
+                    applications.c.job_text_hash.label("current_job_text_hash"),
                     applications.c.deleted_at,
                 )
                 .join(applications)
@@ -90,12 +79,6 @@ class SqlAlchemyAnalysisContextSourceReader:
         )
         if row is None:
             raise UnknownRecord(f"unknown job analysis: {job_analysis_id}")
-        active_snapshot = connection.execute(
-            select(job_snapshots.c.id)
-            .where(job_snapshots.c.application_id == row["application_id"])
-            .order_by(job_snapshots.c.version_number.desc())
-            .limit(1)
-        ).scalar_one()
         active_analysis = connection.execute(
             select(job_analyses.c.id)
             .where(job_analyses.c.application_id == row["application_id"])
@@ -105,9 +88,9 @@ class SqlAlchemyAnalysisContextSourceReader:
         return AnalysisContextSource(
             application_id=row["application_id"],
             job_analysis_id=job_analysis_id,
-            job_snapshot_id=row["job_snapshot_id"],
+            job_text_hash=row["job_text_hash"],
             analysis=_analysis_record(row)["analysis"],
             active_analysis_id=active_analysis,
-            active_snapshot_id=active_snapshot,
+            current_job_text_hash=row["current_job_text_hash"],
             deleted_at=row["deleted_at"],
         )

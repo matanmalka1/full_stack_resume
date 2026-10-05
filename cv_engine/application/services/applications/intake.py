@@ -6,8 +6,6 @@ from typing import Literal
 from ....domain.contracts.records import AuditRecord
 from ....util import new_id, normalized_text, sha256_text, utc_now
 from ...commands import (
-    CreatedJobSnapshot,
-    CreateJobSnapshotCommand,
     DuplicateCheckCommand,
     DuplicateCheckResult,
     DuplicateMatch,
@@ -16,6 +14,8 @@ from ...commands import (
     IngestedApplication,
     UpdateApplicationNotesCommand,
     UpdatedApplicationNotes,
+    UpdatedJobText,
+    UpdateJobTextCommand,
 )
 from ...commands.prep import SOURCE_URL_MAX_CHARACTERS
 from ...errors import (
@@ -23,17 +23,13 @@ from ...errors import (
     # it is bound to the taxonomy's base class, so every refusal below is caught.
     ApplicationIntakeInvalid,
     DuplicateAcknowledgementRequired,
-    InfrastructureFailure,
     PreconditionFailed,
-    StateConflict,
     UnknownRecord,
 )
-from ...ports import SnapshotPayloadStore
 from ...ports.application_intake import (
     AuditLogWriter,
     InitialRecruitmentEventWriter,
     IntakeApplicationStore,
-    JobSnapshotStore,
 )
 from ...ports.transactions import TransactionManager
 
@@ -53,24 +49,20 @@ _MATCH_ORDER: tuple[DuplicateMatchReason, ...] = (
 
 
 class ApplicationService:
-    """Creating an application and its immutable job snapshot."""
+    """Creating an application and editing its job text."""
 
     def __init__(
         self,
         *,
         transactions: TransactionManager,
         applications: IntakeApplicationStore,
-        snapshots: JobSnapshotStore,
         recruitment: InitialRecruitmentEventWriter,
         audit: AuditLogWriter,
-        payloads: SnapshotPayloadStore,
     ):
         self._transactions = transactions
         self._applications = applications
-        self._snapshots = snapshots
         self._recruitment = recruitment
         self._audit = audit
-        self._payloads = payloads
 
     def duplicate_check(self, command: DuplicateCheckCommand) -> DuplicateCheckResult:
         _validate_intake(command.company, command.target_role, command.job_text, command.source_url)
@@ -79,7 +71,7 @@ class ApplicationService:
         title_key = normalized_text(command.target_role)
         by_application: dict[str, dict] = {}
         with self._transactions.read() as tx:
-            stored_inputs = self._snapshots.duplicate_application_inputs(tx)
+            stored_inputs = self._applications.duplicate_application_inputs(tx)
         for row in stored_inputs:
             matched_on = set()
             if command.source_url is not None and row["source_url"] == command.source_url:
@@ -130,11 +122,10 @@ class ApplicationService:
                 "possible duplicate applications require explicit acknowledgement",
                 [match.model_dump(mode="json") for match in duplicates.matches],
             )
+        application_id = new_id()
+        job_text_hash = sha256_text(command.job_text)
+        now = utc_now()
         try:
-            application_id = new_id()
-            snapshot_id = new_id()
-            payload = self._payloads.commit_snapshot(application_id, snapshot_id, command.job_text)
-            now = utc_now()
             with self._transactions.write() as tx:
                 self._applications.insert_application(
                     tx,
@@ -142,18 +133,11 @@ class ApplicationService:
                     company=command.company,
                     target_role=command.target_role,
                     notes="",
-                    created_at=now,
-                )
-                self._snapshots.insert_initial_snapshot(
-                    tx,
-                    snapshot_id=snapshot_id,
-                    application_id=application_id,
-                    payload_path=payload.reference,
-                    source_hash=payload.sha256,
-                    normalized_hash=sha256_text(normalized_text(command.job_text)),
+                    job_text=command.job_text,
+                    job_text_hash=job_text_hash,
+                    job_normalized_hash=sha256_text(normalized_text(command.job_text)),
                     source_url=command.source_url,
-                    source_metadata={},
-                    captured_at=now,
+                    created_at=now,
                 )
                 self._recruitment.insert_initial_saved_event(
                     tx,
@@ -164,85 +148,71 @@ class ApplicationService:
                 )
         except ValueError as exc:
             raise PreconditionFailed(str(exc)) from exc
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not create application: {exc}") from exc
         return IngestedApplication(
             application_id=application_id,
-            job_snapshot_id=snapshot_id,
+            job_text_hash=job_text_hash,
             warnings=_duplicate_warnings(duplicates.matches),
             duplicate_matches=duplicates.matches,
         )
 
-    def create_job_snapshot(self, command: CreateJobSnapshotCommand) -> CreatedJobSnapshot:
+    def update_job_text(self, command: UpdateJobTextCommand) -> UpdatedJobText:
+        """Replace the job text in place; refused once a Submission locked it.
+
+        An unchanged text and URL is not a write. Analyses of the earlier text stay
+        as they are; they are simply no longer of the Application's current text.
+        """
         _validate_job_text(command.job_text)
         _validate_source_url(command.source_url)
-        source_hash = sha256_text(command.job_text)
-        snapshot_id = new_id()
+        job_text_hash = sha256_text(command.job_text)
         normalized_hash = sha256_text(normalized_text(command.job_text))
         now = utc_now()
-        try:
-            with self._transactions.read() as tx:
-                try:
-                    self._applications.get_application(tx, command.application_id)
-                except UnknownRecord as exc:
-                    raise UnknownRecord(f"unknown application: {command.application_id}") from exc
-                duplicate = self._snapshots.snapshot_for_source_hash(
-                    tx, command.application_id, source_hash
-                )
-            if duplicate is not None:
-                raise StateConflict(
-                    "the application already has a snapshot with this exact content"
-                )
-            payload = self._payloads.commit_snapshot(
-                command.application_id, snapshot_id, command.job_text
-            )
-            with self._transactions.write() as tx:
-                self._applications.get_application(tx, command.application_id)
-                if (
-                    self._snapshots.snapshot_for_source_hash(
-                        tx, command.application_id, source_hash
-                    )
-                    is not None
-                ):
-                    raise StateConflict(
-                        "the application already has a snapshot with this exact content"
-                    )
-                self._snapshots.insert_next_snapshot(
-                    tx,
-                    snapshot_id=snapshot_id,
+        with self._transactions.write() as tx:
+            try:
+                current = self._applications.get_application(tx, command.application_id)
+            except UnknownRecord as exc:
+                raise UnknownRecord(f"unknown application: {command.application_id}") from exc
+            if (
+                current["job_text_hash"] == command.expected_job_text_hash
+                and current["job_text_hash"] == job_text_hash
+                and current["source_url"] == command.source_url
+            ):
+                return UpdatedJobText(
                     application_id=command.application_id,
-                    payload_path=payload.reference,
-                    source_hash=payload.sha256,
-                    normalized_hash=normalized_hash,
-                    source_url=command.source_url,
-                    source_metadata=command.source_metadata,
-                    captured_at=now,
+                    job_text_hash=job_text_hash,
+                    job_text_updated_at=current["job_text_updated_at"],
                 )
-                self._audit.insert_audit(
-                    tx,
-                    AuditRecord(
-                        id=new_id(),
-                        application_id=command.application_id,
-                        action="create_job_snapshot",
-                        entity_type="job_snapshot",
-                        entity_id=snapshot_id,
-                        actor_type=command.actor_type,
-                        client=command.client,
-                        occurred_at=now,
-                        details={
-                            "source_hash": payload.sha256,
-                            "normalized_hash": normalized_hash,
-                            "source_url": command.source_url,
-                        },
-                    ),
-                )
-        except ValueError as exc:
-            raise PreconditionFailed(str(exc)) from exc
-        except OSError as exc:
-            raise InfrastructureFailure(f"could not create job snapshot: {exc}") from exc
-        return CreatedJobSnapshot(
+            updated = self._applications.update_job_text(
+                tx,
+                command.application_id,
+                job_text=command.job_text,
+                job_text_hash=job_text_hash,
+                job_normalized_hash=normalized_hash,
+                source_url=command.source_url,
+                expected_job_text_hash=command.expected_job_text_hash,
+                updated_at=now,
+            )
+            self._audit.insert_audit(
+                tx,
+                AuditRecord(
+                    id=new_id(),
+                    application_id=command.application_id,
+                    action="update_job_text",
+                    entity_type="application",
+                    entity_id=command.application_id,
+                    actor_type=command.actor_type,
+                    client=command.client,
+                    occurred_at=now,
+                    details={
+                        "previous_job_text_hash": current["job_text_hash"],
+                        "job_text_hash": job_text_hash,
+                        "source_url": command.source_url,
+                    },
+                ),
+            )
+        return UpdatedJobText(
             application_id=command.application_id,
-            job_snapshot_id=snapshot_id,
+            job_text_hash=job_text_hash,
+            job_text_updated_at=updated["job_text_updated_at"],
         )
 
     def update_notes(self, command: UpdateApplicationNotesCommand) -> UpdatedApplicationNotes:

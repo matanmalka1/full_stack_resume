@@ -8,8 +8,8 @@ from .mappers import (
     document_facts_view,
     document_view,
     draft_outline_view,
+    job_posting_view,
     recruitment_timeline_view,
-    snapshot_view,
     submission_view,
 )
 from .narrowing import (
@@ -27,7 +27,7 @@ from .views_prep import (
     DraftOutlineView,
     DraftSectionView,
     JobAnalysisView,
-    JobSnapshotView,
+    JobPostingView,
 )
 from .views_shared import (
     ActivityFilter,
@@ -72,7 +72,7 @@ __all__ = (
     "DraftOutlineView",
     "DraftSectionView",
     "JobAnalysisView",
-    "JobSnapshotView",
+    "JobPostingView",
     "PreparationState",
     "ReasonView",
     "RecruitmentStatus",
@@ -89,6 +89,6 @@ __all__ = (
     "draft_outline_view",
     "narrow_application_list",
     "recruitment_timeline_view",
-    "snapshot_view",
+    "job_posting_view",
     "submission_view",
 )

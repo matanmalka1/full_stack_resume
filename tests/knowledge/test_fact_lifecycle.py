@@ -639,7 +639,7 @@ def test_captured_claim_becomes_a_usable_fact_end_to_end(drafted_application) ->
         services,
         AnalyzeCommand(
             application_id=app_id,
-            job_snapshot_id=setup.snapshot_id,
+            job_text_hash=setup.job_text_hash,
         ),
     )
     services.draft_editing.build_from_analysis(

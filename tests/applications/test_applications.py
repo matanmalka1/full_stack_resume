@@ -6,8 +6,10 @@ import pytest
 
 from cv_engine.api.app import API_PREFIX, DEFAULT_PORT
 from cv_engine.application.commands import (
-    CreateJobSnapshotCommand,
+    ExternalSubmissionCommand,
     IngestCommand,
+    UpdatedJobText,
+    UpdateJobTextCommand,
 )
 from cv_engine.application.errors import (
     InfrastructureFailure,
@@ -15,128 +17,87 @@ from cv_engine.application.errors import (
     UnknownRecord,
 )
 from cv_engine.infrastructure.persistence.audit_log import SqlAlchemyAuditLog
-from cv_engine.util import new_id, sha256_file, sha256_text
+from cv_engine.util import new_id, sha256_text, utc_now
 
 ALLOWED_ORIGIN = f"http://127.0.0.1:{DEFAULT_PORT}"
 MUTATION_HEADERS = {"Origin": ALLOWED_ORIGIN}
 
 
-def _get_snapshot(transaction_manager, application_projection_reader, application_id, snapshot_id):
-    """Fetch one snapshot by id (no single-snapshot Port method exists)."""
-    with transaction_manager.read() as tx:
-        snapshots = application_projection_reader.snapshots(tx, application_id)
-    return next(snapshot for snapshot in snapshots if snapshot["id"] == snapshot_id)
-
-
-def test_snapshot_write_is_exact_atomic_and_refuses_repeat(
+def test_job_text_is_exact_edited_in_place_locked_by_a_submission_and_atomic(
     services,
     monkeypatch: pytest.MonkeyPatch,
     transaction_manager,
     application_store,
     application_projection_reader,
 ) -> None:
-    """A snapshot payload is committed exactly, before any row names it; the
-    database records roll back together; and a repeat is refused before a write.
+    """The job text is stored exactly on the Application and edited in place.
 
-    A metadata row must never name a snapshot payload that was not committed, so
-    ingest is observed at the moment of the payload commit: the bytes are there,
-    and the Application is not yet. A replacement keeps the historical payload
-    and its lineage exact. A failed audit insert rolls the snapshot metadata back
-    and leaves only an unregistered payload. A failed initial event rolls back
-    the whole ingest.
+    An edit names the text it replaces (`expected_job_text_hash`); an unchanged
+    edit writes nothing; a failed audit insert rolls the edit back; a Submission
+    locks the text; and a failed initial event rolls back the whole ingest.
     """
-    initial_text = "Line one\r\nLine two\n"
-    original_commit = services.payloads.commit_snapshot
-
-    def assert_payload_exists_first(application_id: str, snapshot_id: str, text: str):
-        stored = original_commit(application_id, snapshot_id, text)
-        payload = services.paths.root / stored.reference
-        assert payload.read_bytes() == initial_text.encode("utf-8")
-        assert sha256_text(initial_text) == stored.sha256
-        with pytest.raises(UnknownRecord):
-            with transaction_manager.read() as tx:
-                application_store.get_application(tx, application_id)
-        return stored
-
-    with monkeypatch.context() as patch:
-        patch.setattr(services.payloads, "commit_snapshot", assert_payload_exists_first)
-        created = services.applications.ingest(
-            IngestCommand(
-                company="Snapshot Co", target_role="Developer", job_text=initial_text, client="web"
-            )
+    initial_text = "עברית  English\r\n<script>x</script>\n"
+    created = services.applications.ingest(
+        IngestCommand(
+            company="Job Text Co",
+            target_role="Developer",
+            job_text=initial_text,
+            source_url="https://jobs.example/first",
+            client="web",
         )
-    initial = _get_snapshot(
-        transaction_manager,
-        application_projection_reader,
-        created.application_id,
-        created.job_snapshot_id,
     )
-    assert sha256_file(services.paths.root / initial["payload_path"]) == initial["source_hash"]
+    assert created.job_text_hash == sha256_text(initial_text)
+    detail = services.queries.application_detail(created.application_id)
+    assert detail.job_posting.job_text == initial_text
+    assert detail.job_posting.source_url == "https://jobs.example/first"
+    assert detail.job_posting.locked is False
+    assert detail.job_text_hash == created.job_text_hash
+    assert services.payloads.payload_inventory() == []
+
     replacement_text = "Replacement line one\r\nReplacement line two\n"
 
-    replacement = services.applications.create_job_snapshot(
-        CreateJobSnapshotCommand(
-            application_id=created.application_id,
-            job_text=replacement_text,
-            source_url="https://jobs.example/replacement",
-            source_metadata={"source_label": "updated posting"},
-            actor_type="system",
-            client="worker",
+    def edit(text: str, expected: str, **values) -> UpdatedJobText:
+        return services.applications.update_job_text(
+            UpdateJobTextCommand(
+                application_id=created.application_id,
+                job_text=text,
+                expected_job_text_hash=expected,
+                **{"client": "web", **values},
+            )
         )
-    )
 
-    historical = _get_snapshot(
-        transaction_manager,
-        application_projection_reader,
-        created.application_id,
-        created.job_snapshot_id,
+    with pytest.raises(StateConflict, match="expected_job_text_hash"):
+        edit(replacement_text, sha256_text("not what the client read"))
+    replacement = edit(
+        replacement_text,
+        created.job_text_hash,
+        source_url="https://jobs.example/second",
+        actor_type="system",
+        client="worker",
     )
-    latest = _get_snapshot(
-        transaction_manager,
-        application_projection_reader,
-        created.application_id,
-        replacement.job_snapshot_id,
-    )
-    assert historical == initial
-    assert (
-        services.payloads.read_snapshot(historical["payload_path"], historical["source_hash"])
-        == initial_text
-    )
-    assert services.payloads.read_snapshot(latest["payload_path"], latest["source_hash"]) == (
-        replacement_text
-    )
-    assert latest["version_number"] == 2
+    assert replacement.job_text_hash == sha256_text(replacement_text)
     detail = services.queries.application_detail(created.application_id)
-    assert detail.latest_snapshot.id == replacement.job_snapshot_id
-    assert detail.latest_snapshot.job_text == replacement_text
+    assert detail.job_posting.job_text == replacement_text
+    assert detail.job_posting.source_url == "https://jobs.example/second"
+    assert detail.job_posting.job_text_updated_at == replacement.job_text_updated_at
     with transaction_manager.read() as tx:
         audit = application_projection_reader.audit_records(tx, created.application_id)
     assert len(audit) == 1
-    assert audit[0]["action"] == "create_job_snapshot"
-    assert audit[0]["entity_type"] == "job_snapshot"
-    assert audit[0]["entity_id"] == replacement.job_snapshot_id
+    assert audit[0]["action"] == "update_job_text"
+    assert audit[0]["entity_type"] == "application"
     assert audit[0]["actor_type"] == "system"
     assert audit[0]["client"] == "worker"
-    assert audit[0]["occurred_at"] == latest["captured_at"]
+    assert audit[0]["occurred_at"] == replacement.job_text_updated_at
 
-    def latest_version() -> int:
+    def audit_count() -> int:
         with transaction_manager.read() as tx:
-            return application_projection_reader.latest_snapshot(tx, created.application_id)[
-                "version_number"
-            ]
+            return len(application_projection_reader.audit_records(tx, created.application_id))
 
-    snapshots = services.paths.artifacts_root / "snapshots" / created.application_id
-    files_before = sorted(snapshots.iterdir())
-    with pytest.raises(StateConflict, match="already has a snapshot"):
-        services.applications.create_job_snapshot(
-            CreateJobSnapshotCommand(
-                application_id=created.application_id,
-                job_text=replacement_text,
-                client="web",
-            )
-        )
-    assert sorted(snapshots.iterdir()) == files_before
-    assert latest_version() == 2
+    unchanged = edit(
+        replacement_text, replacement.job_text_hash, source_url="https://jobs.example/second"
+    )
+    assert unchanged == replacement
+    assert audit_count() == 1
 
     def refuse_audit(_repository, _tx, _record) -> None:
         raise InfrastructureFailure("injected audit failure")
@@ -144,17 +105,30 @@ def test_snapshot_write_is_exact_atomic_and_refuses_repeat(
     with monkeypatch.context() as patch:
         patch.setattr(SqlAlchemyAuditLog, "insert_audit", refuse_audit)
         with pytest.raises(InfrastructureFailure, match="injected audit failure"):
-            services.applications.create_job_snapshot(
-                CreateJobSnapshotCommand(
-                    application_id=created.application_id,
-                    job_text="Replacement",
-                    client="web",
-                )
+            edit("Rolled back", replacement.job_text_hash)
+    assert (
+        services.queries.application_detail(created.application_id).job_posting.job_text
+        == replacement_text
+    )
+    assert audit_count() == 1
+
+    services.submission.record_external_submission(
+        ExternalSubmissionCommand(
+            application_id=created.application_id, submitted_at=utc_now(), client="web"
+        )
+    )
+    assert services.queries.application_detail(created.application_id).job_posting.locked
+    with pytest.raises(StateConflict, match="locked"):
+        edit("After submission", replacement.job_text_hash)
+    with pytest.raises(UnknownRecord):
+        services.applications.update_job_text(
+            UpdateJobTextCommand(
+                application_id=new_id(),
+                job_text="Nobody's",
+                expected_job_text_hash=replacement.job_text_hash,
+                client="web",
             )
-    assert latest_version() == 2
-    with transaction_manager.read() as tx:
-        assert len(application_projection_reader.audit_records(tx, created.application_id)) == 1
-    assert len(list(snapshots.iterdir())) == len(files_before) + 1
+        )
 
     def refuse_initial_event(*args, **kwargs):
         raise RuntimeError("event refused")
@@ -179,7 +153,7 @@ def test_snapshot_write_is_exact_atomic_and_refuses_repeat(
     assert all(row["company"] != "Atomic Intake" for row in rows)
 
 
-def test_application_http_create_read_snapshot_and_close_sequence(
+def test_application_http_create_read_edit_and_close_sequence(
     api_paused, services, transaction_manager, application_projection_reader
 ) -> None:
     api = api_paused.client
@@ -195,7 +169,7 @@ def test_application_http_create_read_snapshot_and_close_sequence(
     )
     assert created.status_code == 201
     application_id = created.json()["application_id"]
-    snapshot_id = created.json()["job_snapshot_id"]
+    job_text_hash = created.json()["job_text_hash"]
 
     listed = api.get(f"{API_PREFIX}/applications")
     assert listed.status_code == 200
@@ -203,8 +177,9 @@ def test_application_http_create_read_snapshot_and_close_sequence(
 
     detail = api.get(f"{API_PREFIX}/applications/{application_id}")
     assert detail.status_code == 200
-    assert detail.json()["latest_snapshot"]["id"] == snapshot_id
-    assert detail.json()["latest_snapshot"]["job_text"] == "HTTP initial text\r\n"
+    assert detail.json()["job_text_hash"] == job_text_hash
+    assert detail.json()["job_posting"]["job_text"] == "HTTP initial text\r\n"
+    assert detail.json()["job_posting"]["locked"] is False
 
     notes = api.patch(
         f"{API_PREFIX}/applications/{application_id}/notes",
@@ -227,21 +202,32 @@ def test_application_http_create_read_snapshot_and_close_sequence(
     assert notes_audit["action"] == "update_application_notes"
     assert notes_audit["details_json"] == '{"field":"notes"}'
 
-    replacement = api.post(
-        f"{API_PREFIX}/applications/{application_id}/job-snapshots",
+    job_text_path = f"{API_PREFIX}/applications/{application_id}/job-text"
+    replacement = api.patch(
+        job_text_path,
         headers=MUTATION_HEADERS,
-        json={
-            "job_text": "HTTP replacement text\n",
-            "source_metadata": {"source_label": "revision"},
-        },
+        json={"job_text": "HTTP replacement text\n", "expected_job_text_hash": job_text_hash},
     )
-    assert replacement.status_code == 201
-    replacement_id = replacement.json()["job_snapshot_id"]
+    assert replacement.status_code == 200, replacement.text
+    replacement_hash = replacement.json()["job_text_hash"]
+    assert replacement_hash == sha256_text("HTTP replacement text\n")
+    stale = api.patch(
+        job_text_path,
+        headers=MUTATION_HEADERS,
+        json={"job_text": "Overwrite", "expected_job_text_hash": job_text_hash},
+    )
+    assert stale.status_code == 409
+    missing = api.patch(
+        f"{API_PREFIX}/applications/{new_id()}/job-text",
+        headers=MUTATION_HEADERS,
+        json={"job_text": "Nobody's", "expected_job_text_hash": job_text_hash},
+    )
+    assert missing.status_code == 404
     with transaction_manager.read() as tx:
-        snapshot_audit = application_projection_reader.audit_records(tx, application_id)
-    assert snapshot_audit[-1]["action"] == "create_job_snapshot"
-    assert snapshot_audit[-1]["actor_type"] == "user"
-    assert snapshot_audit[-1]["client"] == "web"
+        job_text_audit = application_projection_reader.audit_records(tx, application_id)
+    assert job_text_audit[-1]["action"] == "update_job_text"
+    assert job_text_audit[-1]["actor_type"] == "user"
+    assert job_text_audit[-1]["client"] == "web"
 
     closed = api.post(
         f"{API_PREFIX}/applications/{application_id}/close",
@@ -252,8 +238,8 @@ def test_application_http_create_read_snapshot_and_close_sequence(
 
     final = api.get(f"{API_PREFIX}/applications/{application_id}")
     assert final.status_code == 200
-    assert final.json()["latest_snapshot"]["id"] == replacement_id
-    assert final.json()["latest_snapshot"]["version_number"] == 2
+    assert final.json()["job_text_hash"] == replacement_hash
+    assert final.json()["job_posting"]["job_text"] == "HTTP replacement text\n"
     assert final.json()["recruitment_status"] == "closed"
 
     # delete_application is orthogonal to RecruitmentStatus and callable
@@ -350,8 +336,6 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(
     assert checked.status_code == 200
     assert checked.json()["matches"] == expected_matches
 
-    snapshots = services.paths.artifacts_root / "snapshots"
-    files_before = sorted(snapshots.rglob("*.txt"))
     listed_before = api.get(f"{API_PREFIX}/applications").json()["items"]
     refused = api.post(
         f"{API_PREFIX}/applications",
@@ -363,7 +347,6 @@ def test_application_http_duplicate_precheck_and_acknowledgement_contract(
     assert refused.json()["context"]["matches"] == expected_matches
     assert api.get(f"{API_PREFIX}/applications").json()["items"] == listed_before
     assert len(listed_before) == 1
-    assert sorted(snapshots.rglob("*.txt")) == files_before
 
     accepted = api.post(
         f"{API_PREFIX}/applications",
@@ -503,64 +486,3 @@ def test_application_list_query_narrows_orders_and_pages_at_the_boundary(
     ):
         refused = api.get(f"{API_PREFIX}/applications", params=params)
         assert refused.status_code == 422, params
-
-
-def test_job_snapshot_history_preserves_exact_sources_and_reports_unreadable_content(
-    api_paused,
-    services,
-    transaction_manager,
-    application_projection_reader,
-) -> None:
-    first = services.applications.ingest(
-        IngestCommand(
-            company="History Co",
-            target_role="Developer",
-            job_text="עברית  English\n<script>x</script>\n",
-            source_url="https://jobs.example/first",
-            client="web",
-        )
-    )
-    path = f"{API_PREFIX}/applications/{first.application_id}/job-snapshots"
-    api = api_paused.client
-    initial = api.get(path)
-    assert initial.status_code == 200
-    assert initial.json()["active_job_snapshot_id"] == first.job_snapshot_id
-    assert len(initial.json()["items"]) == 1
-    second = services.applications.create_job_snapshot(
-        CreateJobSnapshotCommand(
-            application_id=first.application_id,
-            job_text="עברית English\n<script>x</script>\n",
-            source_url="https://jobs.example/second",
-            client="web",
-        )
-    )
-    with transaction_manager.read() as tx:
-        records_before = application_projection_reader.snapshots(tx, first.application_id)
-    history = api.get(path).json()
-    assert history["active_job_snapshot_id"] == second.job_snapshot_id
-    assert [item["id"] for item in history["items"]] == [
-        first.job_snapshot_id,
-        second.job_snapshot_id,
-    ]
-    assert [item["version_number"] for item in history["items"]] == [1, 2]
-    assert [item["job_text"] for item in history["items"]] == [
-        "עברית  English\n<script>x</script>\n",
-        "עברית English\n<script>x</script>\n",
-    ]
-    assert [item["source_url"] for item in history["items"]] == [
-        "https://jobs.example/first",
-        "https://jobs.example/second",
-    ]
-    assert "payload_path" not in history["items"][0]
-    with transaction_manager.read() as tx:
-        assert application_projection_reader.snapshots(tx, first.application_id) == records_before
-    assert api.get(f"{API_PREFIX}/applications/{new_id()}/job-snapshots").status_code == 404
-    # Corrupt only the isolated fixture's historical payload: never trust or
-    # reconstruct it from a live posting, and keep the other version readable.
-    record = records_before[0]
-    payload = services.paths.root / record["payload_path"]
-    payload.write_bytes(b"tampered")
-    unavailable = api.get(path)
-    assert unavailable.status_code == 200
-    assert unavailable.json()["items"][0]["job_text"] is None
-    assert unavailable.json()["items"][1]["job_text"] == history["items"][1]["job_text"]

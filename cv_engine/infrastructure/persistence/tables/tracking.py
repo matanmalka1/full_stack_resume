@@ -6,7 +6,6 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     ForeignKey,
-    ForeignKeyConstraint,
     Index,
     Table,
     Text,
@@ -69,7 +68,7 @@ Index(
 # internal one copies the document content and rendered files it sent, each file with
 # its own SHA-256; an external one carries none of them.
 _INTERNAL_REFERENCES = (
-    "job_snapshot_id",
+    "job_text_hash",
     "document_hash",
     "content",
     "html_path",
@@ -85,7 +84,8 @@ submissions = Table(
     sequence_column("submissions"),
     Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id"), nullable=False),
     Column("submission_type", Text, nullable=False),
-    Column("job_snapshot_id", UUID(as_uuid=False)),
+    # The Application's job text when this was sent; the text locks from here on.
+    Column("job_text_hash", Text),
     Column("document_hash", Text),
     Column("content", JSONB(none_as_null=True)),
     Column("html_path", Text, unique=True),
@@ -104,15 +104,11 @@ submissions = Table(
         name="references",
     ),
     CheckConstraint(
-        "(document_hash IS NULL OR length(document_hash) = 64) "
+        "(job_text_hash IS NULL OR length(job_text_hash) = 64) "
+        "AND (document_hash IS NULL OR length(document_hash) = 64) "
         "AND (html_sha256 IS NULL OR length(html_sha256) = 64) "
         "AND (pdf_sha256 IS NULL OR length(pdf_sha256) = 64)",
         name="hash_length",
-    ),
-    ForeignKeyConstraint(
-        ("application_id", "job_snapshot_id"),
-        ("job_snapshots.application_id", "job_snapshots.id"),
-        ondelete="RESTRICT",
     ),
 )
 Index(

@@ -14,7 +14,7 @@ export interface CreatedIntakeApplication {
 }
 
 /* Creation is deliberately complete before analysis is requested: if queuing analysis
-   fails, the new immutable snapshot still exists and is the destination for recovery.
+   fails, the new Application and its job text still exist and are the destination for recovery.
 
    With no AI provider the request is not sent at all. Analysis is AI-only, so it could
    only be queued to fail, and the reader would land on a failure report for something
@@ -36,8 +36,8 @@ export const createIntakeApplication = async (
   try {
     const { operation } = await startAnalysis(
       created.application_id,
-      created.job_snapshot_id,
-      `create:${created.application_id}:${created.job_snapshot_id}`,
+      created.job_text_hash,
+      `create:${created.application_id}:${created.job_text_hash}`,
     );
 
     /* Seeded here, the same way `useAnalyzeCommand` seeds a re-analysis: the Application

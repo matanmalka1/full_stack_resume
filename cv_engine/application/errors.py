@@ -36,7 +36,7 @@ class ApplicationError(RuntimeError):
 
 
 class UnknownRecord(ApplicationError):
-    """A named application, analysis, snapshot, or artifact does not exist."""
+    """A named application, analysis, or artifact does not exist."""
 
 
 class StateConflict(ApplicationError):

@@ -12,7 +12,6 @@ from ..application.operation_runner import OperationRunner
 from ..application.operations import OperationType
 from ..application.ports import (
     AIProvider,
-    ArtifactStore,
     KnowledgeStore,
     Renderer,
 )
@@ -44,7 +43,6 @@ from ..application.services.recruitment.lifecycle import RecruitmentService
 from ..application.services.recruitment.submission import SubmissionService
 from ..application.services.rendering import RenderingService
 from ..application.services.settings import SettingsService
-from ..infrastructure.artifacts import FilesystemArtifactStore
 from ..infrastructure.document_files import DocumentFiles
 from ..infrastructure.knowledge import FileKnowledge
 from ..infrastructure.object_store import LocalObjectStore, ObjectStore, S3ObjectStore
@@ -73,7 +71,6 @@ from ..infrastructure.persistence.initial_recruitment_events import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
 from ..infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
-from ..infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from ..infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
 )
@@ -110,7 +107,6 @@ class Services:
     database_url: str
     schema_version: str
     knowledge: KnowledgeStore
-    artifacts: ArtifactStore
     payloads: PayloadStore
     applications: ApplicationService
     queries: ApplicationQueryService
@@ -168,7 +164,6 @@ def build_services(
     *,
     database_url: str | None = None,
     knowledge: KnowledgeStore | None = None,
-    artifacts: ArtifactStore | None = None,
     payloads: PayloadStore | None = None,
     renderer: Renderer | None = None,
     provider: AIProvider | None = None,
@@ -186,7 +181,6 @@ def build_services(
     schema_version = current_database_revision(engine) or ""
     transactions = SqlAlchemyTransactionManager(engine)
     intake_applications = SqlAlchemyApplicationStore(transactions)
-    intake_snapshots = SqlAlchemyJobSnapshotStore(transactions)
     intake_recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
     intake_audit = SqlAlchemyAuditLog(transactions)
     knowledge_lifecycle_store = SqlAlchemyKnowledgeLifecycleRepository(transactions)
@@ -202,7 +196,6 @@ def build_services(
     committed_knowledge = CommittedKnowledge(
         resolved_knowledge, transactions=transactions, journal=knowledge_lifecycle_store
     )
-    resolved_artifacts = artifacts or FilesystemArtifactStore(paths)
     resolved_payloads = payloads or PayloadStore(paths, build_object_store(paths, resolved_config))
     resolved_renderer = renderer or PlaywrightRenderer(paths.knowledge_root)
     # Built only when a key is configured. Constructing an adapter that refuses
@@ -246,7 +239,6 @@ def build_services(
         documents=documents,
         ai_calls=ai_calls,
         knowledge=committed_knowledge,
-        payloads=resolved_payloads,
         provider=resolved_provider,
     )
     draft_history = DraftHistoryService(
@@ -279,7 +271,6 @@ def build_services(
         knowledge=committed_knowledge,
         provider=resolved_provider,
         ai_calls=ai_calls,
-        snapshot_payloads=resolved_payloads,
     )
     draft_review = DraftReviewService(
         transactions=transactions,
@@ -375,15 +366,12 @@ def build_services(
         database_url=resolved_database_url,
         schema_version=schema_version,
         knowledge=resolved_knowledge,
-        artifacts=resolved_artifacts,
         payloads=resolved_payloads,
         applications=ApplicationService(
             transactions=transactions,
             applications=intake_applications,
-            snapshots=intake_snapshots,
             recruitment=intake_recruitment,
             audit=intake_audit,
-            payloads=resolved_payloads,
         ),
         queries=ApplicationQueryService(
             transactions=transactions,
@@ -391,7 +379,6 @@ def build_services(
             documents=documents,
             submissions=document_submissions,
             knowledge=committed_knowledge,
-            payloads=resolved_payloads,
         ),
         analysis=analysis_service,
         drafts=draft_service,

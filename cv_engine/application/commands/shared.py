@@ -23,7 +23,7 @@ class ReconciliationResult(BoundaryDTO):
     """
 
     passed: bool
-    #: Registered JobSnapshot and Submission payloads checked against their hashes.
+    #: Registered Submission payloads checked against their hashes.
     payloads_checked: int
     #: Logged AI calls whose sanitized response was checked against its hash.
     ai_calls_checked: int

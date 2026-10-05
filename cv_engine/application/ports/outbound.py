@@ -33,33 +33,10 @@ from ..knowledge_mutations import (
     KnowledgeMutation,
     StagedKnowledgeFile,
 )
-from .values import (
-    SnapshotPayload,
-    StoredDraft,
-    TaskContracts,
-)
+from .values import TaskContracts
 
 
-class ArtifactStore(Protocol):
-    """Publish mutable working projections after authoritative state changes.
-
-    Immutable payload publication belongs to SnapshotPayloadStore and
-    RevisionPayloadStore, never to this working-projection capability.
-    """
-
-    def write_working_draft(self, draft: Any) -> StoredDraft: ...
-
-
-class SnapshotPayloadStore(Protocol):
-    def commit_snapshot(
-        self,
-        application_id: str,
-        snapshot_id: str,
-        text: str,
-    ) -> SnapshotPayload: ...
-
-    def read_snapshot(self, reference: str, expected_hash: str) -> str: ...
-
+class PayloadVerifier(Protocol):
     def verify_payload(self, reference: str, expected_hash: str) -> str:
         """Classify one registered payload without transferring it outward.
 
@@ -72,7 +49,7 @@ class SnapshotPayloadStore(Protocol):
         ...
 
 
-class RevisionPayloadStore(SnapshotPayloadStore, Protocol):
+class PayloadInventory(PayloadVerifier, Protocol):
     def payload_inventory(self, *, modified_before: datetime | None = None) -> list[str]:
         """Read-only observation of managed immutable payload references.
 
@@ -195,7 +172,7 @@ class AIAttempt(Generic[ProposalT]):
 
 
 class AnalysisContext(StrictModel):
-    """`propose_analysis`: the snapshot, the facts it may cite, and the user's choices.
+    """`propose_analysis`: the job text, the facts it may cite, and the user's choices.
 
     One context because there is one call. Classification used to run as a
     second task over the first task's output, which cost a second prompt

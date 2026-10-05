@@ -31,7 +31,7 @@ from ..errors import (
     StateConflict,
     ValidationBlocked,
 )
-from ..ports import Renderer, SnapshotPayloadStore
+from ..ports import PayloadVerifier, Renderer
 from ..ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
 from ..ports.documents import DocumentFileStore, DocumentStore, RenderedFiles
 from ..ports.transactions import TransactionManager, WriteTransaction
@@ -77,7 +77,7 @@ class RenderingService:
         files: DocumentFileStore,
         knowledge: AnalysisKnowledgeSource,
         renderer: Renderer,
-        payloads: SnapshotPayloadStore,
+        payloads: PayloadVerifier,
     ):
         self._transactions = transactions
         self._documents = documents

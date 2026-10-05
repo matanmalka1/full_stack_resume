@@ -1,4 +1,4 @@
-"""CV-preparation tables: snapshot -> analysis -> the one mutable CV document."""
+"""CV-preparation tables: job text analysis -> the one mutable CV document."""
 
 from __future__ import annotations
 
@@ -18,42 +18,24 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from ._helpers import IsoTimestamp
 from ._metadata import metadata
 
-job_snapshots = Table(
-    "job_snapshots",
-    metadata,
-    Column("id", UUID(as_uuid=False), primary_key=True),
-    Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id"), nullable=False),
-    Column("version_number", Integer, nullable=False),
-    Column("payload_path", Text, nullable=False),
-    Column("source_hash", Text, nullable=False),
-    Column("normalized_hash", Text, nullable=False),
-    Column("source_url", Text),
-    Column("captured_at", IsoTimestamp(), nullable=False),
-    Column("source_metadata_json", JSONB, nullable=False),
-    CheckConstraint("version_number > 0", name="version_number_positive"),
-    UniqueConstraint("application_id", "version_number"),
-    UniqueConstraint("application_id", "source_hash"),
-    UniqueConstraint("application_id", "id"),
-)
-
 job_analyses = Table(
     "job_analyses",
     metadata,
     Column("id", UUID(as_uuid=False), primary_key=True),
     Column("application_id", UUID(as_uuid=False), ForeignKey("applications.id"), nullable=False),
-    Column("job_snapshot_id", UUID(as_uuid=False), nullable=False),
+    # The exact job text this analysis read (`applications.job_text_hash` at the
+    # time). Editing the text leaves the analysis valid for the text it read and
+    # no longer current for the Application.
+    Column("job_text_hash", Text, nullable=False),
     Column("version_number", Integer, nullable=False),
     Column("structured_json", JSONB, nullable=False),
     Column("provider", Text, nullable=False),
     Column("model", Text, nullable=False),
     Column("created_at", IsoTimestamp(), nullable=False),
+    CheckConstraint("length(job_text_hash) = 64", name="job_text_hash_length"),
     CheckConstraint("version_number > 0", name="version_number_positive"),
     UniqueConstraint("application_id", "version_number"),
     UniqueConstraint("application_id", "id"),
-    ForeignKeyConstraint(
-        ("application_id", "job_snapshot_id"),
-        ("job_snapshots.application_id", "job_snapshots.id"),
-    ),
 )
 
 

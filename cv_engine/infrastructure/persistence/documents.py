@@ -319,7 +319,7 @@ def _submission_record(row: Any) -> DocumentSubmission:
         id=record["id"],
         application_id=record["application_id"],
         submission_type=record["submission_type"],
-        job_snapshot_id=record["job_snapshot_id"],
+        job_text_hash=record["job_text_hash"],
         document_hash=record["document_hash"],
         content=(
             None if record["content"] is None else DraftDocument.model_validate(record["content"])
@@ -344,7 +344,7 @@ class SqlAlchemyDocumentSubmissionStore:
                 id=submission.id,
                 application_id=submission.application_id,
                 submission_type=submission.submission_type,
-                job_snapshot_id=submission.job_snapshot_id,
+                job_text_hash=submission.job_text_hash,
                 document_hash=submission.document_hash,
                 content=(
                     None

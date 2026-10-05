@@ -32,10 +32,10 @@ from ...commands import (
     RegenerateSectionCommand,
 )
 from ...errors import (
-    InfrastructureFailure,
     PreconditionFailed,
     ProposalRejected,
     ProviderNotConfigured,
+    StateConflict,
     UnknownRecord,
 )
 from ...operations import ClaimReviewReason
@@ -46,7 +46,6 @@ from ...ports import (
     DraftResumeContext,
     RegenerateClaimContext,
     RegenerateSectionContext,
-    SnapshotPayloadStore,
     TransactionManager,
 )
 from ...ports.analysis_plans import AnalysisContextSourceReader, AnalysisKnowledgeSource
@@ -133,7 +132,6 @@ class DraftAuthoringService:
         knowledge: AnalysisKnowledgeSource,
         provider: AIProvider | None,
         ai_calls: AICallRunner,
-        snapshot_payloads: SnapshotPayloadStore,
     ):
         self.transactions = transactions
         self.documents = documents
@@ -141,7 +139,6 @@ class DraftAuthoringService:
         self._knowledge = knowledge
         self._provider = provider
         self.ai_calls = ai_calls
-        self.snapshot_payloads = snapshot_payloads
 
     @property
     def provider(self) -> AIProvider:
@@ -166,14 +163,21 @@ class DraftAuthoringService:
         require_hash(source.document, expected_document_hash)
         return source
 
-    def snapshot_source(self, snapshot_id: str) -> dict:
+    def job_text(self, application_id: str, job_text_hash: str) -> str:
+        """The job text the document's analysis read, while it is still the current one.
+
+        An edited job text replaces the earlier one in place, so a document whose
+        analysis read the earlier text cannot be drafted from it: analyze the new
+        text and build from that analysis first.
+        """
         with self.transactions.read() as tx:
-            analysis_source = self.sources.analysis_source(tx, snapshot_id)
-        return {
-            "id": analysis_source.job_snapshot_id,
-            "payload_path": analysis_source.payload_path,
-            "source_hash": analysis_source.source_hash,
-        }
+            source = self.sources.job_text_source(tx, application_id)
+        if source.job_text_hash != job_text_hash:
+            raise StateConflict(
+                "the job text changed after the document's analysis; analyze the "
+                "current text and build from that analysis before drafting"
+            )
+        return source.job_text
 
     def _call(
         self,
@@ -215,7 +219,7 @@ class DraftAuthoringService:
         frame = compose_content(
             command.application_id,
             document.analysis_id,
-            source.job_snapshot_id,
+            source.job_text_hash,
             source.analysis,
             knowledge,
         )
@@ -271,13 +275,7 @@ class DraftAuthoringService:
                 for fact_id in claim.fact_ids
             }
         )
-        snapshot = self.snapshot_source(frame.job_snapshot_id)
-        try:
-            job_text = self.snapshot_payloads.read_snapshot(
-                snapshot["payload_path"], snapshot["source_hash"]
-            )
-        except (OSError, ValueError) as exc:
-            raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
+        job_text = self.job_text(frame.application_id, frame.job_text_hash)
         context = DraftResumeContext(
             job_analysis={
                 "track": analysis.track.value,

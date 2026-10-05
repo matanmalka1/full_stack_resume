@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import case, select
+from sqlalchemy import case, exists, select
 
 from ...application.errors import UnknownRecord
 from ...application.operations import (
@@ -19,7 +19,6 @@ from .tables import (
     applications,
     audit_records,
     job_analyses,
-    job_snapshots,
     operations,
     recruitment_events,
     submissions,
@@ -35,19 +34,13 @@ class SqlAlchemyApplicationProjectionReader:
 
     @staticmethod
     def _application_projection():
-        source_url = (
-            select(job_snapshots.c.source_url)
-            .where(job_snapshots.c.application_id == applications.c.id)
-            .order_by(job_snapshots.c.version_number.desc())
-            .limit(1)
-            .scalar_subquery()
-        )
-        return select(*applications.c, source_url.label("source_url"))
+        """Every Application column but the job text itself, which only detail reads."""
+        return select(*(column for column in applications.c if column.name != "job_text"))
 
     def application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]:
         row = (
             self._connection(tx)
-            .execute(self._application_projection().where(applications.c.id == application_id))
+            .execute(select(applications).where(applications.c.id == application_id))
             .mappings()
             .one_or_none()
         )
@@ -68,24 +61,12 @@ class SqlAlchemyApplicationProjectionReader:
         )
         return [dict(row) for row in rows]
 
-    def latest_snapshot(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]:
-        rows = self.snapshots(tx, application_id)
-        if not rows:
-            raise UnknownRecord(f"no job snapshot for application {application_id}")
-        return rows[-1]
-
-    def snapshots(self, tx: ReadTransaction, application_id: str) -> list[dict[str, Any]]:
-        rows = (
+    def has_submission(self, tx: ReadTransaction, application_id: str) -> bool:
+        return bool(
             self._connection(tx)
-            .execute(
-                select(job_snapshots)
-                .where(job_snapshots.c.application_id == application_id)
-                .order_by(job_snapshots.c.version_number)
-            )
-            .mappings()
-            .all()
+            .execute(select(exists().where(submissions.c.application_id == application_id)))
+            .scalar_one()
         )
-        return [json_text_record(row, "source_metadata_json") for row in rows]
 
     def analyses(self, tx: ReadTransaction, application_id: str) -> list[dict[str, Any]]:
         rows = (

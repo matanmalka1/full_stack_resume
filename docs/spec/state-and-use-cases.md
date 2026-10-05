@@ -28,16 +28,16 @@ the worker acts for the owner of the Operation. Today there is no authenticated 
 
 Mutable:
 
-- the Application: recruitment status, terminal outcome, notes, next action, and the
-  `deleted_at` disposition
+- the Application: recruitment status, terminal outcome, notes, next action, the
+  `deleted_at` disposition, and the job text until its first Submission
+  (`update_job_text`, §12)
 - exactly one CVDocument per Application, once the first analysis activates
-- the active JobSnapshot pointer
 - the Settings row (one per user once accounts ship)
 - *designed, not built (§23):* the user, their sessions, and their facts' current status
 
 Immutable or append-only:
 
-- JobSnapshot and its payload
+- the job text, once the Application has a Submission
 - JobAnalysis (one row per analysis; its ID is its identity)
 - Submission, including the content it sent and the files it copied
 - the AI call log: one row per provider call attempt, with its sanitized response
@@ -45,15 +45,15 @@ Immutable or append-only:
 - *designed, not built (§23):* account events
 - a terminal Operation record
 
-What is frozen is what left the system or what was observed: the posting as captured,
-the analyses made of it, provider responses, and the CV actually sent. Everything else
+What is frozen is what left the system or what was observed: the posting a CV was sent
+for, the analyses made of a posting, provider responses, and the CV actually sent. Everything else
 is working state the next command may overwrite. There is no approval history, no draft
 history, and no record of a Ready state that was never submitted.
 
 ## 3. The CVDocument and its basis
 
 ```text
-JobSnapshot (immutable)  ->  JobAnalysis (immutable)
+job text (on the Application)  ->  JobAnalysis (immutable, names the job_text_hash it read)
                                    |
                                    v
 CVDocument (mutable, one per Application)
@@ -129,7 +129,7 @@ own restatement of the approval stamps (`DocumentState`) for the commands that c
 them; it is not exposed.
 
 A review reason (§7) is an overlay: it blocks the actions it names and leaves the
-PreparationState as projected. A newer JobSnapshot or JobAnalysis does not change the
+PreparationState as projected. An edited job text or a newer JobAnalysis does not change the
 PreparationState of an existing document; it is reported by the
 `DOCUMENT_ON_OLDER_ANALYSIS` warning.
 
@@ -157,7 +157,7 @@ There is no frozen context and no `stale_reasons` projection:
 - A change to a dependent fact (edit, status transition, replacement, deletion, removal
   from `base/`) changes `facts_hash`, so every stamp is outdated at once. A change to an
   unrelated fact does not.
-- A newer analysis or snapshot is the `DOCUMENT_ON_OLDER_ANALYSIS` warning; the document
+- A newer analysis or an edited job text is the `DOCUMENT_ON_OLDER_ANALYSIS` warning; the document
   stays as it is until `build_from_analysis`.
 - A Profile version change is the `PROFILE_CHANGED` warning, derived from
   `built_with`. Approval and rendering validate
@@ -209,8 +209,8 @@ NEXT_ACTION_OVERDUE
 ```
 
 - `DOCUMENT_ON_OLDER_ANALYSIS`: the document's `analysis_id` is not the newest
-  JobAnalysis of the Application, or its analysis was made of a JobSnapshot other than
-  the active one.
+  JobAnalysis of the Application, or its analysis read a job text other than the
+  Application's current one (`job_text_hash` differs).
 - `PROFILE_CHANGED`: `built_with` differs from the current Profile version.
 - `FACT_SUPERSEDED`: a canonical fact `replaces` a dependent fact. It never rewrites a
   Submission.
@@ -234,7 +234,7 @@ Application detail and every list row return:
   "warnings": [],
   "active_operation": null,
   "latest_operation": null,
-  "active_job_snapshot_id": "...",
+  "job_text_hash": "...",
   "latest_analysis_id": "...",
   "document_id": "...",
   "document_hash": "...",
@@ -247,11 +247,12 @@ Application detail and every list row return:
 }
 ```
 
-All inputs — the Application, snapshots, analyses, document, Operations, and the
+All inputs — the Application with its job text, analyses, document, Operations, and the
 Knowledge the basis is computed from — are captured in one read, and the projection is
 derived from that capture. Action identifiers are stable command names, not UI labels.
-Detail additionally returns `allowed_recruitment_transitions` (§10), the latest
-snapshot and analysis, and the recruitment timeline.
+Detail additionally returns `allowed_recruitment_transitions` (§10), the job posting
+(`job_posting`: text, source URL, `job_text_hash`, `job_text_updated_at`, `locked`), the
+latest analysis, and the recruitment timeline.
 
 - `approved_at` is reported only while `preparation_state` is `approved` or `ready`.
 - `last_render_error` is reported only while its recorded hash equals `document_hash`
@@ -266,7 +267,7 @@ why. A deleted Application allows none.
 
 | Action | The stage allows it when |
 | --- | --- |
-| `analyze` | no JobAnalysis exists for the active JobSnapshot |
+| `analyze` | no JobAnalysis exists for the Application's current `job_text_hash` |
 | `edit_matching_configuration` | a JobAnalysis exists |
 | `build_from_analysis` | a document exists and the newest analysis has a higher version than the document's |
 | `create_draft` | a document exists and `content IS NULL` |
@@ -290,6 +291,7 @@ An allowed action is available unless a blocker withholds it. Then it is in
 | `DOCUMENT_OPERATION_IN_PROGRESS` | `build_from_analysis`, `confirm_and_use_fact`, `create_draft`, `edit`, `regenerate_section`, `regenerate_claim`, `check`, `approve`, `render`, while a `create_draft`, `regenerate_section`, `regenerate_claim` or `render_document` is queued or running |
 | any review reason code (§7) | `approve`, `render`, `submit` |
 | `VALIDATION_FAILED` | `approve`, while `content_check = failed` |
+| `JOB_TEXT_CHANGED` | `create_draft`, while the document's analysis read a job text other than the current one: drafting reads that text, and the edit replaced it |
 
 `download_pdf` has no blocker: a Ready document stays downloadable.
 
@@ -297,7 +299,8 @@ An allowed action is available unless a blocker withholds it. Then it is in
 is an action name, not a separate endpoint.
 
 `recommended_action`, first match wins, then nulled unless available: `analyze` when no
-document exists; `create_draft` when content is NULL; `check` when `content_check` is
+document exists; when content is NULL, `create_draft` if the current job text has an
+analysis and `analyze` otherwise; `check` when `content_check` is
 `none` or `outdated`; otherwise the first available of `approve`, `render`, `submit`.
 
 ## 10. RecruitmentStatus
@@ -350,7 +353,7 @@ Types:
 
 | Type | Bound to | Provider |
 | --- | --- | --- |
-| `analyze_job` | its JobSnapshot (ID and hash) and a Knowledge context hash | required |
+| `analyze_job` | the exact job text (`job_text_hash`) and a Knowledge context hash | required |
 | `create_draft` | `expected_document_hash` | required |
 | `regenerate_section` | `expected_document_hash` | required |
 | `regenerate_claim` | `expected_document_hash` | required |
@@ -475,19 +478,23 @@ Input: company, target role, exact job text, optional source URL,
   the rejected value is never echoed.
 - Reruns duplicate detection; unacknowledged matches are
   `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` (412) with the matches.
-- Writes the JobSnapshot payload, then creates the
-  Application in `saved` with its first snapshot in one transaction.
-- Returns the IDs and duplicate warnings.
+- Creates the Application in `saved` with its job text, `job_text_hash`, and
+  normalized hash in one transaction. No payload file is written.
+- Returns the Application ID, `job_text_hash`, and duplicate warnings.
 
 Synchronous, deterministic, never calls AI. Deleted Applications are excluded from
 duplicate detection.
 
-### `create_job_snapshot`
+### `update_job_text`
 
-Input: Application ID, exact new text, optional URL and source metadata. Creates a new
-immutable snapshot with the next version and makes it active. Text identical to an
-existing snapshot of the Application is refused (409). Older snapshots, analyses, and
-the document are not changed.
+Synchronous. Input: Application ID, exact new text, optional URL, and
+`expected_job_text_hash` (the text the client last read). Replaces the job text in
+place, under the Application row lock, and appends an audit record naming the previous
+and new hash. A mismatched `expected_job_text_hash` is 409 and writes nothing. An
+unchanged text and URL is not a write. Once the Application has a Submission, internal
+or external, the edit is refused (409); the trigger `lock_submitted_job_text` refuses
+the same change in the database. Analyses of the earlier text and the document are not
+changed; they are reported through §8 and §9. There is no version history.
 
 ### `update_application_notes`
 
@@ -513,13 +520,13 @@ one shared precondition: 404 if it does not exist, 409 if it is deleted.
 *Designed, not built (§23):* resolution is always for the signed-in user, and an
 Application of another user is 404 exactly as if it did not exist; this applies to every
 command and query below, including the ones exempt from the deleted check.
-`create_job_snapshot` and `update_application_notes` check existence only. Reads of
-history are exempt by design: the detail projection, document read, JobSnapshot
-history, `export_recruiter_pdf`, `export_decision_markdown`, and previews.
+`update_job_text` and `update_application_notes` check existence only. Reads of
+history are exempt by design: the detail projection, document read,
+`export_recruiter_pdf`, `export_decision_markdown`, and previews.
 
 ## 13. Analysis commands
 
-### `analyze_job(application_id, job_snapshot_id, model?, reasoning_effort?)`
+### `analyze_job(application_id, job_text_hash, model?, reasoning_effort?)`
 
 Asynchronous Operation (`202`). Needs the configured provider; there is no rules-based
 fallback. It runs the `propose_analysis` task (product-spec §12) and receives a
@@ -527,18 +534,21 @@ Proposal: requirements with importance, evidence-linked coverage, shortfall seve
 reason, and the Track/Profile/Emphasis/language classification. Every attempt is
 appended to the AI call log.
 
-Deterministic policy then locates each quoted requirement in the snapshot, checks
+Deterministic policy then locates each quoted requirement in the job text, checks
 canonical-fact eligibility, refuses positive coverage without evidence, applies
 canonical boundary facts, checks Profile legality, and derives requirement identity,
 gaps, Fit, and review routing. A failed check narrows the requirement it names and is
 recorded as an analysis issue; the rest of the reading stands. A check may narrow a
 proposal, never widen it.
 
-Activation writes one immutable JobAnalysis under the Application lock. When the
+Activation writes one immutable JobAnalysis, recording the `job_text_hash` it read,
+under the Application lock. When the
 Application has no document, the same transaction creates it (§3) with `built_with` set
 to the current versions. An existing document is not touched.
 
-Preconditions: the snapshot belongs to the Application; the Application is not deleted.
+Preconditions: `job_text_hash` is the Application's current job text (else 409, at
+queueing and again before activation, where a changed text fails the Operation with
+`SOURCE_CHANGED`); the Application is not deleted.
 
 Fit: `fit_score` is the weighted fraction of requirement coverage (mandatory weighted
 double; `partial` earns half; `unknown` earns zero and is not excluded). `fit`
@@ -650,7 +660,7 @@ write no document field, Artifact, or Operation. 412 while `content IS NULL`.
 Synchronous and deterministic; no provider. Runs the validation contract against the
 current content, the document's analysis, and current Knowledge, and
 stores `content_report`, `passed`, and `checked_basis` in one write — including when
-`passed = false`. Content bound to another Application, analysis, or snapshot fails as
+`passed = false`. Content bound to another Application, analysis, or job text fails as
 `document-binding-mismatch`. A validator execution failure stores nothing and is an
 infrastructure error.
 
@@ -812,11 +822,13 @@ the hash, stamps, and file paths are unchanged, inserts the immutable Submission
 transitions `saved -> applied` when the Application is `saved`, and appends status and
 audit events.
 
-An internal Submission records its content, `document_hash`, the `job_snapshot_id` of
-the document's analysis (FK `RESTRICT`), `html_path`/`html_sha256`,
-`pdf_path`/`pdf_sha256`, `submitted_at`, and metadata.
+An internal Submission records its content, `document_hash`, the Application's
+`job_text_hash` read under the Application row lock, `html_path`/`html_sha256`,
+`pdf_path`/`pdf_sha256`, `submitted_at`, and metadata. Any Submission, internal or
+external, locks the job text (§12 `update_job_text`), so the recorded hash always names
+text the Application still holds.
 
-When the document is on an older analysis or snapshot, the result carries the
+When the document is on an older analysis or job text, the result carries the
 `DOCUMENT_ON_OLDER_ANALYSIS` warning; it is not a precondition. Multiple submissions
 are allowed; later ones add no transition. Submitting does not change the document.
 
@@ -904,7 +916,7 @@ become operator CLI commands with the same semantics. No user route reaches them
 ### `reconcile()`
 
 `POST /api/v1/maintenance/reconciliations`. Checks database references and stored
-hashes against the payload store — JobSnapshot payloads and every Submission file
+hashes against the payload store — every Submission file
 against its SHA-256 (`payloads_checked`) — every logged AI call's sanitized response
 against its `sanitized_response_hash` (`ai_calls_checked`), and the fact lifecycle
 against its trail: events for facts that no longer exist, live statuses the trail never
@@ -922,7 +934,7 @@ mutable and not checked.
 immutable payload references found in storage that no database row references and that
 were stored longer than one hour ago (`ORPHAN_MIN_AGE`, architecture.md §7.1). A younger
 unregistered payload may still be on its way to registration and is not listed.
-References cover JobSnapshots and Submission files. Rendered document files and files
+References cover Submission files. Rendered document files and files
 outside managed layouts are excluded.
 
 Storage enumeration happens outside the database read. The result is a read-only,
@@ -942,14 +954,11 @@ storage and is only reported (architecture.md §7.1).
   preparation-state, preset, and recruitment-status counts from the same projected
   read; each facet ignores its own selected value and respects the other filters.
   Deleted Applications are excluded.
-- **Application detail**: the §9 projection plus the Application, latest snapshot and
+- **Application detail**: the §9 projection plus the Application, its `job_posting`
+  (exact text, source URL, `job_text_hash`, `job_text_updated_at`, `locked`), the latest
   analysis, `allowed_recruitment_transitions`, and the unified recruitment timeline.
   Reachable for a deleted Application.
 - **Duplicate check** (§12).
-- **JobSnapshot history**: the active snapshot ID and every snapshot in version order
-  with ID, version, capture time, source URL, and exact verified text. Unreadable or
-  unverified text is NULL. It never fetches the live posting, repairs a payload, or
-  changes the active snapshot.
 - **CVDocument**: ID, analysis ID, content and its
   outline, language, dependent facts, `built_with`, `document_hash` (ETag), content
   report and `content_check`, `preparation_state`, `approved_at` (as in §9),
@@ -1001,7 +1010,7 @@ The status comes from the refusal's class, never its message:
 | `401` | *designed, not built:* no valid session (`AUTHENTICATION_REQUIRED`), failed sign-in (`INVALID_CREDENTIALS`), or a wrong current password (`REAUTHENTICATION_FAILED`) |
 | `403` | refused Origin or Host (`ORIGIN_NOT_ALLOWED`). Never used for another user's record |
 | `404` | unknown record (`UNKNOWN_RECORD`), including a document not yet created, an unknown route, and — *designed, not built* — a record of another user |
-| `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed status transition; duplicate snapshot; idempotency-key payload mismatch |
+| `409` | state conflict: hash, notes, or settings mismatch; deleted Application; disallowed status transition; job text changed or locked; idempotency-key payload mismatch |
 | `412` | a named state cannot satisfy the command: missing precondition, blocker, review reason, intake refusal, lineage or Knowledge refusal |
 | `413` | body limit exceeded |
 | `422` | request does not match the schema (`REQUEST_VALIDATION_FAILED`) |
@@ -1080,7 +1089,7 @@ one transaction:
    `profile_bindings` rows and the user's `user_settings` row are deleted.
 4. **Record** `account_deactivated` in `auth_events`.
 
-Nothing immutable is touched: Submissions, JobSnapshots, the AI call log,
+Nothing immutable is touched: Submissions, the job text a Submission locked, the AI call log,
 `fact_events`, recruitment and audit events, and terminal Operations stay as written,
 owned by the now-anonymous user (product-spec.md §22). `204`; the cookie is cleared.
 There is no reactivation.

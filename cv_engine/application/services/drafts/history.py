@@ -106,7 +106,7 @@ class DraftHistoryService:
                 "",
                 "## Exact lineage",
                 "",
-                f"- Job snapshot ID: `{source.job_snapshot_id}`",
+                f"- Job text SHA-256: `{source.job_text_hash}`",
                 f"- Job analysis ID: `{document.analysis_id}`",
                 f"- Built with Profile version: `{document.built_with.profile_version}`",
             ]

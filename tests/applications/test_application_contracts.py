@@ -31,18 +31,20 @@ def test_commands_require_sources_owned_by_the_named_application(services) -> No
         IngestCommand(
             company="Theirs Co",
             target_role="Account Manager",
-            job_text=ACCOUNT_MANAGER_JOB,
+            job_text=f"{ACCOUNT_MANAGER_JOB}\nTheirs: a different posting.",
             acknowledged_duplicates=True,
             client="web",
         )
     )
 
-    with pytest.raises(errors.LineageBroken):
+    # An analysis names the job text it reads; another Application's text is not this
+    # one's, so the command is refused before anything is read or written.
+    with pytest.raises(errors.StateConflict, match="job text changed"):
         seed_analysis_for_command(
             services,
             AnalyzeCommand(
                 application_id=mine.application_id,
-                job_snapshot_id=theirs.job_snapshot_id,
+                job_text_hash=theirs.job_text_hash,
             ),
         )
 
@@ -50,7 +52,7 @@ def test_commands_require_sources_owned_by_the_named_application(services) -> No
         services,
         AnalyzeCommand(
             application_id=theirs.application_id,
-            job_snapshot_id=theirs.job_snapshot_id,
+            job_text_hash=theirs.job_text_hash,
         ),
     )
     seed_existing_analysis(services, mine)

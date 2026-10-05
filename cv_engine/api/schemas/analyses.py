@@ -53,11 +53,11 @@ class ClassificationOverrides(HttpSchema):
 class CreateAnalysisRequest(ClassificationOverrides):
     """What `POST /applications/{id}/analyses` accepts.
 
-    `job_snapshot_id` is explicit: an analyze command that picked its own source
-    could classify something other than what the user was looking at.
+    `job_text_hash` is explicit: an analyze command that picked up whatever text is
+    current could classify something other than what the user was looking at.
     """
 
-    job_snapshot_id: str
+    job_text_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     provider: Literal["openai"] = "openai"
 
 

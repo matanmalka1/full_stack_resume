@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
 
-import { createJobSnapshot, invalidateApplicationViews } from "@/api/applications";
+import { invalidateApplicationViews, updateJobText } from "@/api/applications";
 import type { ApplicationDetail } from "@/api/contracts";
 import { isTerminalOperation } from "@/api/operations";
 import { ErrorCallout } from "@/ui/ErrorCallout";
@@ -37,18 +37,18 @@ const serverFields = { job_text: "job_text", source_url: "source_url" } as const
    the duplicate check exists to discourage - and it would have left the recruitment
    timeline, the analyses, the CV document, and the Submissions of the original behind.
 
-   What it creates from Job Detail is a new immutable JobSnapshot, never an edit of the existing one. The
-   snapshot on record is evidence of what the posting said when it was captured, and a
-   posting that later vanishes from the web is exactly what that evidence is for. So the
-   old snapshot stays, the new one becomes the active one, and the engine's own projection
-   is what decides the consequences: the analysis of the older snapshot stops being the
-   active analysis, and a draft built from it is reported stale. Nothing here re-derives
-   that - this screen only sends the posting.
+   The edit replaces the text in place and names the text it replaces by hash, so an edit
+   made against a text that already changed is refused rather than overwriting it. The
+   engine's own projection decides the consequences: the analysis of the earlier text stops
+   being current, and a document built on it is reported as built on an older analysis.
+   Nothing here re-derives that - this screen only sends the posting.
+
+   Once the Application has a Submission the text is locked: what was sent stays tied to
+   the posting it was sent for. The control is then replaced by a note saying so.
 
    The current text is loaded into the field because the common case is a posting that was
    amended rather than rewritten. An unchanged text and URL are refused before the request
-   is sent, as a field error rather than a round trip - the server would refuse the same
-   content anyway, since it holds a snapshot per exact content. */
+   is sent, as a field error rather than a round trip that would change nothing. */
 export const JobPostingUpdate = ({
   detail,
   operationLive,
@@ -60,9 +60,9 @@ export const JobPostingUpdate = ({
 }) => {
   const queryClient = useQueryClient();
   const applicationId = detail.application.id;
-  const snapshot = detail.latest_snapshot;
-  const originalJobText = typeof snapshot.job_text === "string" ? snapshot.job_text : "";
-  const originalSourceUrl = snapshot.source_url ?? null;
+  const posting = detail.job_posting;
+  const originalJobText = posting.job_text;
+  const originalSourceUrl = posting.source_url ?? null;
   const [open, setOpen] = useState(false);
   const {
     formState: { errors },
@@ -73,25 +73,26 @@ export const JobPostingUpdate = ({
   } = useAppForm<PostingFields>({
     defaultValues: {
       job_text: originalJobText,
-      source_url: snapshot.source_url ?? "",
+      source_url: posting.source_url ?? "",
     },
   });
 
-  /* A courtesy, not the safety mechanism: an Operation freezes the sources it named, so
-     a snapshot created mid-run is refused by the engine rather than silently swapping
-     what that run is working from. The disabled control keeps the reader from walking
-     into that refusal. */
+  /* A courtesy, not the safety mechanism: an Operation freezes the job text it named, so
+     an edit made mid-run makes that run fail its source check rather than silently
+     swapping what it is working from. The disabled control keeps the reader from
+     walking into that. */
   const workInFlight =
     operationLive || (detail.active_operation != null && !isTerminalOperation(detail.active_operation));
 
   const create = useMutation({
     mutationFn: (fields: PostingFields) =>
-      createJobSnapshot(applicationId, {
-        /* The snapshot is the posting's exact content, so the text is never trimmed. */
+      updateJobText(applicationId, {
+        /* The stored text is the posting's exact content, so it is never trimmed. */
         jobText: fields.job_text,
         sourceUrl: normalizedSourceUrl(fields.source_url),
+        expectedJobTextHash: posting.job_text_hash,
       }),
-    /* The projection is what reports the new snapshot, the analysis it superseded, and
+    /* The projection is what reports the edited text, the analysis it superseded, and
        the action now recommended. Nothing from the response is seeded into the cache. */
     onSuccess: async () => {
       await invalidateApplicationViews(queryClient, applicationId);
@@ -102,13 +103,21 @@ export const JobPostingUpdate = ({
 
   const closeDialog = () => setOpen(false);
 
+  if (posting.locked) {
+    return (
+      <p className="mt-3 text-support leading-6 text-cv-text-muted">
+        נוסח המשרה נעול: המועמדות כבר הוגשה, והנוסח נשמר כפי שהיה בעת ההגשה.
+      </p>
+    );
+  }
+
   return (
     <div className="mt-3">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <h3 className="text-support font-semibold text-cv-text">המודעה השתנתה?</h3>
           <p className="mt-1 text-support leading-6 text-cv-text-muted">
-            יצירת תצלום חדש מוסיפה את הנוסח המעודכן ושומרת את הגרסה הקודמת ללא שינוי.
+            אפשר לערוך את הנוסח עד להגשת המועמדות. אחרי העריכה יש להריץ ניתוח מחדש.
           </p>
         </div>
         <Button
@@ -127,8 +136,8 @@ export const JobPostingUpdate = ({
       </div>
 
       {create.isSuccess && !open ? (
-        <SuccessNotice className="mt-4" onDismiss={() => create.reset()} title="נשמר תצלום משרה חדש">
-          הגרסה הקודמת נשמרה כפי שהיא. הניתוח הקודם אינו פעיל יותר, ולכן יש להריץ ניתוח מחדש.
+        <SuccessNotice className="mt-4" onDismiss={() => create.reset()} title="נוסח המשרה עודכן">
+          הניתוח הקודם נעשה על הנוסח הקודם ואינו פעיל יותר, ולכן יש להריץ ניתוח מחדש.
         </SuccessNotice>
       ) : null}
 
@@ -142,17 +151,17 @@ export const JobPostingUpdate = ({
               disabled={workInFlight}
               form="job-posting-update-form"
               pending={create.isPending}
-              pendingLabel="שומר תצלום…"
+              pendingLabel="שומר…"
               type="submit"
             >
-              יצירת התצלום החדש
+              שמירת הנוסח
             </Button>
           </>
         }
         headingId="job-posting-update-heading"
         onClose={closeDialog}
         open={open}
-        title="יצירת תצלום משרה חדש"
+        title="עריכת נוסח המשרה"
       >
         <form
           className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pe-1"
@@ -166,8 +175,8 @@ export const JobPostingUpdate = ({
               save and is not started by it: the analyze action on this screen stays the
               one place a run begins. */}
           <p className="text-support leading-6 text-cv-text-muted">
-            הנוסח נשמר כתצלום חדש ובלתי משתנה. התצלום הקודם והניתוחים שנעשו עליו נשמרים כפי שהם. מסמך קורות החיים לא
-            משתנה ויסומן כמבוסס על ניתוח קודם, וניתוח מחדש נשאר פעולה נפרדת.
+            הנוסח החדש מחליף את הנוסח הנוכחי. הניתוחים שנעשו על הנוסח הקודם נשמרים אך אינם פעילים עוד. מסמך קורות החיים
+            לא משתנה ויסומן כמבוסס על ניתוח קודם, וניתוח מחדש נשאר פעולה נפרדת.
           </p>
 
           <Field error={errors.job_text?.message} label="טקסט המשרה">
@@ -179,14 +188,14 @@ export const JobPostingUpdate = ({
                   validate: (value) => {
                     if (value.trim() === "") return JOB_TEXT_REQUIRED_MESSAGE;
                     if (!isJobTextWithinBudget(value)) {
-                      return "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת התצלום.";
+                      return "טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני השמירה.";
                     }
                     /* The save rule: text is sent verbatim and an empty URL becomes `null`.
                        Comparing in that same shape is what "unchanged" means - trimming the
                        text first would call a whitespace-only edit unchanged too. */
                     const unchanged =
                       value === originalJobText && normalizedSourceUrl(getValues("source_url")) === originalSourceUrl;
-                    return !unchanged || "הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה.";
+                    return !unchanged || "הנוסח והכתובת זהים לנוסח השמור. יש לערוך את אחד השדות לפני השמירה.";
                   },
                 })}
                 className="min-h-48 max-h-[55vh] [field-sizing:content]"
@@ -217,7 +226,7 @@ export const JobPostingUpdate = ({
           {create.error === null ? null : (
             <ErrorCallout
               error={create.error}
-              fallbackDetail="לא נוצר תצלום חדש, והטקסט נשאר בטופס. אפשר לנסות שוב."
+              fallbackDetail="הנוסח לא עודכן, והטקסט נשאר בטופס. אפשר לנסות שוב."
               inlineFields={inlineFields}
               title="נוסח המשרה לא נשמר"
             />
@@ -227,7 +236,7 @@ export const JobPostingUpdate = ({
               commands state it: the command is offered, later. */}
           {workInFlight ? (
             <p className="text-support leading-6 text-cv-text-muted">
-              פעולה מתבצעת כעת על המועמדות. יצירת תצלום חדש תהיה זמינה שוב כשהיא תסתיים.
+              פעולה מתבצעת כעת על המועמדות. עריכת הנוסח תהיה זמינה שוב כשהיא תסתיים.
             </p>
           ) : null}
         </form>

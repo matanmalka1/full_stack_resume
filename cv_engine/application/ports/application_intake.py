@@ -17,10 +17,29 @@ class IntakeApplicationStore(Protocol):
         company: str,
         target_role: str,
         notes: str,
+        job_text: str,
+        job_text_hash: str,
+        job_normalized_hash: str,
+        source_url: str | None,
         created_at: str,
     ) -> None: ...
 
     def get_application(self, tx: ReadTransaction, application_id: str) -> dict[str, Any]: ...
+
+    def duplicate_application_inputs(self, tx: ReadTransaction) -> list[dict[str, Any]]: ...
+
+    def update_job_text(
+        self,
+        tx: WriteTransaction,
+        application_id: str,
+        *,
+        job_text: str,
+        job_text_hash: str,
+        job_normalized_hash: str,
+        source_url: str | None,
+        expected_job_text_hash: str,
+        updated_at: str,
+    ) -> dict[str, Any]: ...
 
     def update_application_notes(
         self,
@@ -31,42 +50,6 @@ class IntakeApplicationStore(Protocol):
         *,
         updated_at: str,
     ) -> dict[str, Any]: ...
-
-
-class JobSnapshotStore(Protocol):
-    def duplicate_application_inputs(self, tx: ReadTransaction) -> list[dict[str, Any]]: ...
-
-    def snapshot_for_source_hash(
-        self, tx: ReadTransaction, application_id: str, source_hash: str
-    ) -> dict[str, Any] | None: ...
-
-    def insert_initial_snapshot(
-        self,
-        tx: WriteTransaction,
-        *,
-        snapshot_id: str,
-        application_id: str,
-        payload_path: str,
-        source_hash: str,
-        normalized_hash: str,
-        source_url: str | None,
-        source_metadata: dict[str, Any],
-        captured_at: str,
-    ) -> None: ...
-
-    def insert_next_snapshot(
-        self,
-        tx: WriteTransaction,
-        *,
-        snapshot_id: str,
-        application_id: str,
-        payload_path: str,
-        source_hash: str,
-        normalized_hash: str,
-        source_url: str | None,
-        source_metadata: dict[str, Any],
-        captured_at: str,
-    ) -> None: ...
 
 
 class InitialRecruitmentEventWriter(Protocol):

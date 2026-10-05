@@ -125,7 +125,7 @@ describe("analysisViewState", () => {
         analysisViewState({
           analysisWasQueuedOnCreate: false,
           detail: detail({
-            latest_snapshot: { captured_at: "2026-09-10T08:01:00Z" } as ApplicationDetail["latest_snapshot"],
+            job_posting: { job_text_updated_at: "2026-09-10T08:01:00Z" } as ApplicationDetail["job_posting"],
           }),
           operation: operation({
             status,

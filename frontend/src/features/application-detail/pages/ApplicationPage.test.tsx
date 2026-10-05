@@ -16,7 +16,7 @@ const detail = (): ApplicationDetail =>
     content_check: "none",
     review_reasons: [],
     warnings: [],
-    active_job_snapshot_id: "snap-1",
+    job_text_hash: "c".repeat(64),
     available_actions: ["analyze"],
     blocked_actions: [],
     recommended_action: "analyze",
@@ -31,15 +31,12 @@ const detail = (): ApplicationDetail =>
       created_at: "2026-08-24T07:00:00Z",
       updated_at: "2026-08-25T08:00:00Z",
     },
-    latest_snapshot: {
-      id: "snap-1",
-      application_id: "app-1",
-      version_number: 1,
+    job_posting: {
       job_text: "Senior Backend Engineer",
       source_url: "https://example.com/jobs/1",
-      captured_at: "2026-08-24T07:00:00Z",
-      source_metadata: {},
-      source_hash: "hash-1",
+      job_text_hash: "c".repeat(64),
+      job_text_updated_at: "2026-08-24T07:00:00Z",
+      locked: false,
     },
   }) as ApplicationDetail;
 
@@ -112,15 +109,13 @@ describe("ApplicationPage", () => {
   });
 
   it("links a Ready application to its ready step and to the draft from the workflow spine", async () => {
-    renderPage((input) =>
+    renderPage(() =>
       Promise.resolve(
-        String(input).endsWith("/artifacts")
-          ? jsonResponse({ items: [] })
-          : jsonResponse({
-              ...detail(),
-              preparation_state: "ready",
-              document_id: "doc-1",
-            }),
+        jsonResponse({
+          ...detail(),
+          preparation_state: "ready",
+          document_id: "doc-1",
+        }),
       ),
     );
 
@@ -157,15 +152,6 @@ describe("ApplicationPage", () => {
     expect(screen.queryByRole("button", { name: "עדכון סטטוס ומשימות" })).not.toBeInTheDocument();
   });
 
-  it("does not show provider artifacts in the preparation screen", async () => {
-    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(jsonResponse(detail())));
-    renderPage(fetchMock);
-
-    expect(await screen.findByRole("heading", { name: "ניתוח והתאמה" })).toBeInTheDocument();
-    expect(screen.queryByText("תוצרי המנוע")).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/artifacts"))).toBe(false);
-  });
-
   it("copies the complete stored job text from inside its disclosure", async () => {
     const storedText = "Senior Backend Engineer\n\nResponsibilities:\nBuild reliable services.";
     const writeText = vi.fn(() => Promise.resolve());
@@ -173,14 +159,12 @@ describe("ApplicationPage", () => {
       clipboard: { writeText },
       userAgent: window.navigator.userAgent,
     });
-    renderPage((input) =>
+    renderPage(() =>
       Promise.resolve(
-        String(input).endsWith("/artifacts")
-          ? jsonResponse({ items: [] })
-          : jsonResponse({
-              ...detail(),
-              latest_snapshot: { ...detail().latest_snapshot, job_text: storedText },
-            }),
+        jsonResponse({
+          ...detail(),
+          job_posting: { ...detail().job_posting, job_text: storedText },
+        }),
       ),
     );
 
@@ -193,85 +177,91 @@ describe("ApplicationPage", () => {
     expect(screen.getByText("נוסח המשרה הועתק")).toBeInTheDocument();
   });
 
-  it("captures an amended posting as a new immutable snapshot from Job Detail", async () => {
+  it("edits the posting in place from Job Detail, naming the text it replaces", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).endsWith("/job-snapshots") && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ application_id: "app-1", job_snapshot_id: "snap-2" }));
+      if (String(input).endsWith("/job-text") && init?.method === "PATCH") {
+        return Promise.resolve(
+          jsonResponse({
+            application_id: "app-1",
+            job_text_hash: "d".repeat(64),
+            job_text_updated_at: "2026-08-25T07:00:00Z",
+          }),
+        );
       }
-      return Promise.resolve(
-        String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail()),
-      );
+      return Promise.resolve(jsonResponse(detail()));
     });
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
-    expect(screen.getByRole("dialog", { name: "יצירת תצלום משרה חדש" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "עריכת נוסח המשרה" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
       target: { value: "Senior Backend Engineer, now remote" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת הנוסח" }));
 
-    expect(await screen.findByText("נשמר תצלום משרה חדש")).toBeInTheDocument();
+    expect(await screen.findByText("נוסח המשרה עודכן")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "סגירת ההודעה" }));
     /* The mutation's reset notification is batched, so the callout it controls does not
        drop out of the DOM in the same tick as the click. */
-    await waitFor(() => expect(screen.queryByText("נשמר תצלום משרה חדש")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("נוסח המשרה עודכן")).not.toBeInTheDocument());
     await waitFor(() =>
       expect(
-        fetchMock.mock.calls.some(
-          ([input, init]) => String(input).endsWith("/job-snapshots") && init?.method === "POST",
-        ),
+        fetchMock.mock.calls.some(([input, init]) => String(input).endsWith("/job-text") && init?.method === "PATCH"),
       ).toBe(true),
     );
     const request = fetchMock.mock.calls.find(
-      ([input, init]) => String(input).endsWith("/job-snapshots") && init?.method === "POST",
+      ([input, init]) => String(input).endsWith("/job-text") && init?.method === "PATCH",
     );
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
       job_text: "Senior Backend Engineer, now remote",
       source_url: "https://example.com/jobs/1",
+      expected_job_text_hash: "c".repeat(64),
     });
   });
 
   it("blocks a job posting update that changes nothing, without a request", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) =>
-      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
-    );
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
-    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת הנוסח" }));
 
     expect(
-      await screen.findByText("הנוסח והכתובת זהים לתצלום הקיים. יש לערוך את אחד השדות לפני השמירה."),
+      await screen.findByText("הנוסח והכתובת זהים לנוסח השמור. יש לערוך את אחד השדות לפני השמירה."),
     ).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-text"))).toBe(false);
   });
 
   /* The same budget intake enforces (applicationInput.isJobTextWithinBudget): an oversized
      posting is refused under its field instead of being sent for the server to refuse. */
   it("blocks a job posting update whose text exceeds the byte budget, without a request", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) =>
-      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
-    );
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
     fireEvent.change(screen.getByLabelText("טקסט המשרה"), {
       target: { value: "a".repeat(JOB_TEXT_MAX_BYTES + 1) },
     });
-    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת הנוסח" }));
+
+    expect(await screen.findByText("טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני השמירה.")).toBeInTheDocument();
+    expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("aria-invalid", "true");
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-text"))).toBe(false);
+  });
+
+  it("offers no edit once a submission locked the posting", async () => {
+    renderPage(() =>
+      Promise.resolve(jsonResponse({ ...detail(), job_posting: { ...detail().job_posting, locked: true } })),
+    );
 
     expect(
-      await screen.findByText("טקסט המשרה חורג מהגודל המותר. יש לקצר אותו לפני יצירת התצלום."),
+      await screen.findByText("נוסח המשרה נעול: המועמדות כבר הוגשה, והנוסח נשמר כפי שהיה בעת ההגשה."),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("טקסט המשרה")).toHaveAttribute("aria-invalid", "true");
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
+    expect(screen.queryByRole("button", { name: "עדכון נוסח המשרה" })).not.toBeInTheDocument();
   });
 
   it("blocks a job posting update with a malformed URL, without a request", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) =>
-      Promise.resolve(String(input).endsWith("/artifacts") ? jsonResponse({ items: [] }) : jsonResponse(detail())),
-    );
+    const fetchMock = vi.fn((_input: RequestInfo | URL) => Promise.resolve(jsonResponse(detail())));
     renderPage(fetchMock);
 
     fireEvent.click(await screen.findByRole("button", { name: "עדכון נוסח המשרה" }));
@@ -279,9 +269,9 @@ describe("ApplicationPage", () => {
       target: { value: "Senior Backend Engineer, now remote" },
     });
     fireEvent.change(screen.getByLabelText("כתובת המשרה"), { target: { value: "not-a-url" } });
-    fireEvent.click(screen.getByRole("button", { name: "יצירת התצלום החדש" }));
+    fireEvent.click(screen.getByRole("button", { name: "שמירת הנוסח" }));
 
     expect(await screen.findByText("הכתובת חייבת להתחיל ב-http:// או https:// וללא רווחים.")).toBeInTheDocument();
-    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-snapshots"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/job-text"))).toBe(false);
   });
 });

@@ -45,7 +45,7 @@ def analyzed_application(ai_services: Services, fake_openai: FakeOpenAI):
         queued = ai_services.operation_submissions.submit_analysis(
             AnalyzeCommand(
                 application_id=ingested.application_id,
-                job_snapshot_id=ingested.job_snapshot_id,
+                job_text_hash=ingested.job_text_hash,
             ),
             idempotency_key=new_id(),
             analysis_service=ai_services.analysis,
@@ -56,7 +56,7 @@ def analyzed_application(ai_services: Services, fake_openai: FakeOpenAI):
         return WorkflowSetup(
             ai_services,
             ingested.application_id,
-            ingested.job_snapshot_id,
+            ingested.job_text_hash,
             analysis_id=document.analysis_id,
             document_hash=document.document_hash,
         )
@@ -72,7 +72,7 @@ def document_created(services: Services):
         return WorkflowSetup(
             services,
             ingested.application_id,
-            ingested.job_snapshot_id,
+            ingested.job_text_hash,
             analysis_id=analysis.analysis_id,
             document_hash=document.document_hash,
         )

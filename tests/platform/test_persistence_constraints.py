@@ -35,7 +35,6 @@ from cv_engine.infrastructure.persistence.initial_recruitment_events import (
     SqlAlchemyInitialRecruitmentEventWriter,
 )
 from cv_engine.infrastructure.persistence.intake_application_store import SqlAlchemyApplicationStore
-from cv_engine.infrastructure.persistence.job_snapshots import SqlAlchemyJobSnapshotStore
 from cv_engine.infrastructure.persistence.knowledge_lifecycle import (
     SqlAlchemyKnowledgeLifecycleRepository,
 )
@@ -45,7 +44,7 @@ from cv_engine.infrastructure.persistence.tables import (
     app_settings,
     applications,
     cv_documents,
-    job_snapshots,
+    job_analyses,
     knowledge_mutation_journal,
     metadata,
     submissions,
@@ -102,10 +101,8 @@ def _create_application(
 ):
     digest = sha256_text(text)
     application_id = new_id()
-    snapshot_id = new_id()
     created_at = utc_now()
     application_store = SqlAlchemyApplicationStore(transactions)
-    snapshots = SqlAlchemyJobSnapshotStore(transactions)
     recruitment = SqlAlchemyInitialRecruitmentEventWriter(transactions)
 
     def insert_records(transaction) -> None:
@@ -115,18 +112,11 @@ def _create_application(
             company=company,
             target_role=target_role,
             notes="",
-            created_at=created_at,
-        )
-        snapshots.insert_initial_snapshot(
-            transaction,
-            snapshot_id=snapshot_id,
-            application_id=application_id,
-            payload_path=f"artifacts/snapshots/{company}/snapshot.txt",
-            source_hash=digest,
-            normalized_hash=sha256_text(normalized_text(text)),
+            job_text=text,
+            job_text_hash=digest,
+            job_normalized_hash=sha256_text(normalized_text(text)),
             source_url=None,
-            source_metadata={},
-            captured_at=created_at,
+            created_at=created_at,
         )
         recruitment.insert_initial_saved_event(
             transaction,
@@ -141,7 +131,7 @@ def _create_application(
             insert_records(transaction)
     else:
         insert_records(tx)
-    return application_id, snapshot_id
+    return application_id, digest
 
 
 def test_non_3_analysis_documents_are_rejected_without_an_adapter() -> None:
@@ -289,7 +279,7 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
         )
 
     transactions = SqlAlchemyTransactionManager(database_engine)
-    app_id, snapshot_id = _create_application(
+    app_id, job_text_hash = _create_application(
         transactions, company="Constraint Matrix", target_role="Developer", text="Python role"
     )
     recruitment = SqlAlchemyRecruitmentRepository(transactions)
@@ -348,6 +338,32 @@ def test_constraint_matrix_refuses_what_the_schema_forbids(database_engine) -> N
             == "saved"
         )
 
+    # A Submission locks the job text: the store refuses the edit, and the trigger
+    # refuses a direct write that bypasses the store.
+    with pytest.raises(StateConflict, match="locked"):
+        with transactions.write() as tx:
+            SqlAlchemyApplicationStore(transactions).update_job_text(
+                tx,
+                app_id,
+                job_text="Edited role",
+                job_text_hash=sha256_text("Edited role"),
+                job_normalized_hash=sha256_text(normalized_text("Edited role")),
+                source_url=None,
+                expected_job_text_hash=job_text_hash,
+                updated_at=utc_now(),
+            )
+    with pytest.raises(ProgrammingError, match="job text is locked after submission"):
+        with transactions.write() as tx:
+            transactions.connection_for(tx, access="write").execute(
+                update(applications)
+                .where(applications.c.id == app_id)
+                .values(job_text="Edited role")
+            )
+    with transactions.write() as tx:
+        transactions.connection_for(tx, access="write").execute(
+            update(applications).where(applications.c.id == app_id).values(notes="still mutable")
+        )
+
 
 def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -> None:
     transactions = SqlAlchemyTransactionManager(database_engine)
@@ -356,15 +372,15 @@ def test_connection_policy_transaction_scope_and_foreign_keys(database_engine) -
         with transactions.write() as tx:
             connection = transactions.connection_for(tx, access="write")
             connection.execute(
-                insert(job_snapshots).values(
+                insert(job_analyses).values(
                     id=new_id(),
                     application_id=new_id(),
+                    job_text_hash="0" * 64,
                     version_number=1,
-                    payload_path="artifacts/snapshots/x.txt",
-                    source_hash="hash",
-                    normalized_hash="normalized",
-                    captured_at="2026-01-01T00:00:00+00:00",
-                    source_metadata_json={},
+                    structured_json={},
+                    provider="test",
+                    model="test",
+                    created_at="2026-01-01T00:00:00+00:00",
                 )
             )
 
@@ -616,7 +632,7 @@ def test_immutability_triggers_refuse_real_repository_writes(
 
     The derived test above covers every immutable table, but with foreign keys
     and CHECK constraints suspended. This one keeps them on and uses rows the
-    repository created, so the four tables it can reach cheaply are proven under
+    repository created, so the three tables it can reach cheaply are proven under
     the conditions production actually runs in.
     """
     repository = transaction_manager
@@ -655,7 +671,7 @@ def test_immutability_triggers_refuse_real_repository_writes(
             ),
         )
 
-    for table_name in ("job_snapshots", "recruitment_events", "submissions", "audit_records"):
+    for table_name in ("recruitment_events", "submissions", "audit_records"):
         table = metadata.tables[table_name]
         for statement in (update(table).values(id=table.c.id), delete(table)):
             with pytest.raises(ProgrammingError, match="immutable record"):

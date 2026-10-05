@@ -55,7 +55,7 @@ ALLOWED_INTERNAL = {
     # the two packages mutually dependent and puts a real import cycle one
     # module away. Where an adapter needs part of a runtime object, it declares
     # the members it uses as a local Protocol, as `PayloadStore` and
-    # `FilesystemArtifactStore` both do.
+    # `DocumentFiles` both do.
     "infrastructure": {"domain", "application", "infrastructure", "util"},
 }
 
@@ -278,8 +278,8 @@ def test_dependencies_point_inward() -> None:
     `domain`, `application` and `api` are checked for forbidden externals, outward
     internal imports and (for the two inner layers) storage layout. Infrastructure
     is checked for the import half alone, because it legitimately owns storage:
-    an `infrastructure -> runtime` edge is how `FilesystemArtifactStore` once came
-    to import `runtime.paths`. `api` is a client of the application, so no inner
+    an `infrastructure -> runtime` edge would make adapter and composition root
+    mutually dependent. `api` is a client of the application, so no inner
     layer, adapter or worker may import it. `worker` is the process host that is
     not the API; reaching past the composition root into the database is the
     boundary it must not cross. No module shells out, and the ApplicationStatus

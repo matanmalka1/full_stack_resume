@@ -44,7 +44,7 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
   content_check: "none",
   review_reasons: [],
   warnings: [],
-  active_job_snapshot_id: "snap-1",
+  job_text_hash: "c".repeat(64),
   available_actions: [],
   blocked_actions: [],
   recommended_action: null,
@@ -59,14 +59,11 @@ const detail = (overrides: Partial<ApplicationDetail> = {}): ApplicationDetail =
     next_action: "Follow up",
     next_action_date: "2026-09-05",
   },
-  latest_snapshot: {
-    id: "snap-1",
-    application_id: "app-1",
-    version_number: 1,
+  job_posting: {
     job_text: "Senior Backend Engineer",
-    captured_at: "2026-08-24T07:00:00Z",
-    source_metadata: {},
-    source_hash: "hash-1",
+    job_text_hash: "c".repeat(64),
+    job_text_updated_at: "2026-08-24T07:00:00Z",
+    locked: false,
   },
   ...overrides,
 });

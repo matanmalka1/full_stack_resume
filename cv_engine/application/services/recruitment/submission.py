@@ -112,7 +112,7 @@ class SubmissionService:
             raise InfrastructureFailure(f"could not copy the submitted files: {exc}") from exc
         warnings = ["DOCUMENT_ON_OLDER_ANALYSIS"] if source.on_older_analysis else []
 
-        def insert(tx: WriteTransaction) -> None:
+        def insert(tx: WriteTransaction, application: dict) -> None:
             locked = self._documents.lock_document(tx, command.application_id)
             if locked is None:
                 raise StateConflict("the document no longer exists")
@@ -133,7 +133,9 @@ class SubmissionService:
                     id=submission_id,
                     application_id=command.application_id,
                     submission_type="internal",
-                    job_snapshot_id=source.job_snapshot_id,
+                    # The posting as it stands when this is sent, read under the
+                    # Application lock; from here on the job text cannot change.
+                    job_text_hash=application["job_text_hash"],
                     document_hash=locked.document_hash,
                     content=locked.content,
                     html_path=copied.html_path,
@@ -162,7 +164,7 @@ class SubmissionService:
         self._active_application(command.application_id)
         submission_id = new_id()
 
-        def insert(tx: WriteTransaction) -> None:
+        def insert(tx: WriteTransaction, _application: dict) -> None:
             self._submissions.insert_submission(
                 tx,
                 DocumentSubmission(
@@ -201,10 +203,12 @@ class SubmissionService:
         """Insert the Submission, transition to `applied` once, and audit, atomically."""
         event_id = None
         with self._transactions.write() as tx:
-            application = self._recruitment.application(tx, application_id)
+            # Locked first: it orders this against `update_job_text`, so the job text
+            # the Submission records is the one that stays.
+            application = self._recruitment.lock_application(tx, application_id)
             refuse_deleted(application_id, application.get("deleted_at"))
             current = ApplicationStatus(application["current_status"])
-            insert(tx)
+            insert(tx, application)
             if current is ApplicationStatus.SAVED:
                 event_id = self._recruitment.insert_event(
                     tx,

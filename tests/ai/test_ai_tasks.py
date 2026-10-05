@@ -34,11 +34,11 @@ from sqlalchemy import select
 from cv_engine.application.ai_configuration import execution_cost, usd
 from cv_engine.application.commands import (
     AnalyzeCommand,
-    CreateJobSnapshotCommand,
     DraftCommand,
     IngestCommand,
     RegenerateClaimCommand,
     RegenerateSectionCommand,
+    UpdateJobTextCommand,
 )
 from cv_engine.application.errors import StateConflict
 from cv_engine.application.operations import (
@@ -97,7 +97,7 @@ def _analyzed(services, company: str, job_text: str = ACCOUNT_MANAGER_JOB):
         services,
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
         ),
     )
     return ingested, analysed
@@ -161,7 +161,7 @@ def _analysis_operation(
     return services.operation_submissions.submit_analysis(
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
             provider="openai",
             model=model,
             **overrides,
@@ -275,7 +275,7 @@ def test_draft_resume_commits_wording_its_facts_support(
         ai_services,
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
             track_override="tech-sales",
             profile_override="tech-sales",
             emphasis_override="tech-consultative-sales",
@@ -501,7 +501,7 @@ def test_draft_resume_accepts_separately_reviewed_paraphrase(
         ai_services,
         AnalyzeCommand(
             application_id=ingested.application_id,
-            job_snapshot_id=ingested.job_snapshot_id,
+            job_text_hash=ingested.job_text_hash,
         ),
     )
     frame = composed_content(ai_services, ingested.application_id)
@@ -1099,7 +1099,7 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
 
     Two ways to reach the window after the provider answered and before
     activation: the user cancels (requested from inside `execute`, the only
-    window in which this can happen), or a newer job snapshot arrives so the
+    window in which this can happen), or the job text is edited so the
     pre-activation source check fails. Either way the payload must not be left
     unrecorded: the attempt is in the AI call log, and nothing was committed.
     """
@@ -1138,10 +1138,11 @@ def test_an_operation_stopped_between_the_phases_keeps_its_output_as_inactive_ev
 
     def prepare_then_move_the_source(command, *, operation_id=None, still_owned=None):
         prepared = original(command, operation_id=operation_id, still_owned=still_owned)
-        ai_services.applications.create_job_snapshot(
-            CreateJobSnapshotCommand(
+        ai_services.applications.update_job_text(
+            UpdateJobTextCommand(
                 application_id=ingested.application_id,
                 job_text=f"{ACCOUNT_MANAGER_JOB}\nNew territory ownership.",
+                expected_job_text_hash=ingested.job_text_hash,
                 client="web",
             )
         )

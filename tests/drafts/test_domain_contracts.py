@@ -20,7 +20,7 @@ def test_a_draft_cannot_rewrite_the_provenance_it_is_judged_against(draft_factor
         ("schema_version", "1.0"),
         ("fact_store_version", "0" * 64),
         ("application_id", "another-application"),
-        ("job_snapshot_id", "another-snapshot"),
+        ("job_text_hash", "1" * 64),
         ("job_analysis_id", "another-analysis"),
     ):
         with pytest.raises(ValidationError, match="frozen"):

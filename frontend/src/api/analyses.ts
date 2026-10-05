@@ -191,8 +191,8 @@ const issuesFrom = (value: unknown): AnalysisIssue[] =>
    response. Unreadable requirements are counted so a partially malformed list cannot look
    complete; other unreadable fields stay absent.
 
-   It answers `null` unless the latest analysis is the one of the active posting.
-   `latest_analysis` is the newest analysis of any snapshot; after a new JobSnapshot that
+   It answers `null` unless the latest analysis is the one of the current posting.
+   `latest_analysis` is the newest analysis of any job text; after the text is edited that
    record describes a posting the Application no longer holds, and showing its
    classification as the one under decision would be a real defect. Which analysis the
    *document* is built on is a separate question, answered by `DOCUMENT_ON_OLDER_ANALYSIS`
@@ -202,7 +202,7 @@ export const classificationFromAnalysis = (detail: ApplicationDetail): Classific
   if (record == null || detail.latest_analysis_id == null || record.id !== detail.latest_analysis_id) {
     return null;
   }
-  if (record.job_snapshot_id !== detail.active_job_snapshot_id) {
+  if (record.job_text_hash !== detail.job_text_hash) {
     return null;
   }
 
