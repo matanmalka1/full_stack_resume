@@ -5,8 +5,8 @@ from sqlalchemy import func, insert, select
 
 from cv_engine.application.ports import AnalysisContext
 from cv_engine.application.transactions import (
-    active_transaction_for_tests,
     assert_external_io_allowed,
+    transaction_is_active,
 )
 from cv_engine.infrastructure.knowledge import FileKnowledge
 from cv_engine.infrastructure.payloads import PayloadStore
@@ -38,7 +38,7 @@ def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_en
         assert committed.active
 
     assert not committed.active
-    assert active_transaction_for_tests() is None
+    assert not transaction_is_active()
 
     with pytest.raises(RuntimeError, match="stop"):
         with transactions.write() as rolled_back:
@@ -48,7 +48,7 @@ def test_write_scope_commits_once_rolls_back_on_exception_and_closes(database_en
             raise RuntimeError("stop")
 
     assert not rolled_back.active
-    assert active_transaction_for_tests() is None
+    assert not transaction_is_active()
     with database_engine.connect() as connection:
         counts = {
             application_id: connection.execute(
@@ -85,7 +85,7 @@ def test_scopes_cannot_nest_across_managers_or_be_reused(database_engine) -> Non
             with second.write():
                 pass
 
-    assert active_transaction_for_tests() is None
+    assert not transaction_is_active()
 
     scope = first.read()
     with scope:

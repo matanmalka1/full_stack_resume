@@ -135,7 +135,7 @@ class DraftAuthoringService:
         knowledge: AnalysisKnowledgeSource,
         provider: AIProvider | None,
         ai_calls: AICallRunner,
-        snapshot_payloads: SnapshotPayloadStore | None = None,
+        snapshot_payloads: SnapshotPayloadStore,
     ):
         self.transactions = transactions
         self.documents = documents
@@ -279,14 +279,12 @@ class DraftAuthoringService:
             }
         )
         snapshot = self.snapshot_source(frame.job_snapshot_id)
-        job_text = ""
-        if self.snapshot_payloads is not None and snapshot.get("payload_path"):
-            try:
-                job_text = self.snapshot_payloads.read_snapshot(
-                    snapshot["payload_path"], snapshot["source_hash"]
-                )
-            except (OSError, ValueError) as exc:
-                raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
+        try:
+            job_text = self.snapshot_payloads.read_snapshot(
+                snapshot["payload_path"], snapshot["source_hash"]
+            )
+        except (OSError, ValueError) as exc:
+            raise InfrastructureFailure(f"could not read job snapshot payload: {exc}") from exc
         context = DraftResumeContext(
             job_analysis={
                 "track": analysis.track.value,

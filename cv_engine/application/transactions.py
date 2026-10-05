@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
-from typing import Any
 
 from .ports.transactions import ReadTransaction
 
@@ -31,8 +30,3 @@ def assert_external_io_allowed(operation: str = "external I/O") -> None:
     """Refuse an external side effect while a database transaction is active."""
     if transaction_is_active():
         raise RuntimeError(f"{operation} is forbidden while a database transaction is active")
-
-
-def active_transaction_for_tests() -> Any:
-    """Expose no production capability; allow architecture tests to inspect scope cleanup."""
-    return _active_transaction.get()
